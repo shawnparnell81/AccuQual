@@ -117,12 +117,14 @@ export function FolderExplorerPage() {
   const poolItems = poolFolder ? byParent.get(poolFolder.id) ?? [] : [];
 
   // Deep link from the nav bar's dynamic Documents dropdown (?dept=<id>).
+  // Deliberately depends on folders.length (a stable proxy) instead of
+  // `departments` itself, which is a new array reference every render and
+  // would re-fire this on every render if listed directly.
   useEffect(() => {
     const deptParam = searchParams.get("dept");
     if (deptParam && departments.some((d) => d.id === Number(deptParam))) {
       setActiveDeptId(Number(deptParam));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, folders.length]);
 
   const activeDept = departments.find((d) => d.id === activeDeptId) ?? departments[0];

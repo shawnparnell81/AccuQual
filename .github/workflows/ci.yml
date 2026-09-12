@@ -14,7 +14,11 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        # pgvector/pgvector, not the plain postgres image — same reason as
+        # docker-compose.yml: bundles the pgvector extension the
+        # ai_embeddings table's migration needs (CREATE EXTENSION vector
+        # fails against a plain postgres image).
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: accuqual
           POSTGRES_PASSWORD: accuqual
