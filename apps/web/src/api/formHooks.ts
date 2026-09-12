@@ -36,6 +36,14 @@ export function useCreateFormVersion(formType: string, entityId: number) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["form-data", formType, entityId] });
       queryClient.invalidateQueries({ queryKey: ["form-history", formType, entityId] });
+      // "Save version" on the Calibration Record form also writes a real row
+      // into `calibrations` server-side (see forms.controller.ts's
+      // createVersion) — refresh the equipment list/detail/history queries
+      // (all prefixed "equipment") so the due-date and status color pick it
+      // up immediately instead of waiting for their own next refetch.
+      if (formType === "calibration") {
+        queryClient.invalidateQueries({ queryKey: ["equipment"] });
+      }
     },
   });
 }

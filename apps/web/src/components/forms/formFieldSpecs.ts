@@ -66,11 +66,6 @@ export const FORM_FIELD_SPECS: Record<string, FormField[]> = {
     { name: "description", label: "Change Description", type: "textarea" },
     { name: "impactAssessment", label: "Impact Assessment", type: "textarea" },
   ],
-  calibration: [
-    { name: "equipment", label: "Equipment" },
-    { name: "result", label: "Result" },
-    { name: "notes", label: "Notes", type: "textarea" },
-  ],
   complaint: [
     { name: "description", label: "Complaint Description", type: "textarea" },
     { name: "resolution", label: "Resolution", type: "textarea" },

@@ -10,5 +10,7 @@ export const createEquipmentSchema = z.object({
 export const addCalibrationSchema = z.object({
   performedAt: z.coerce.date(),
   result: z.enum(["pass", "fail", "adjusted"]),
-  certificateUrl: z.string().optional(),
+  technicianName: z.string().optional(),
+  notes: z.string().optional(),
+  certificateUrl: z.string().optional(), // deprecated, kept for backward compatibility — see certificatePath
 });

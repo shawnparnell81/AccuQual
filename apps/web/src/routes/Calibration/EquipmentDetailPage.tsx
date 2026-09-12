@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useRef } from "react";
 import { useParams } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { FileText, Paperclip } from "lucide-react";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
-import { TextField, SelectField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { STATUS_COLORS, calibrationStatusFromDueDate } from "../../components/forms/formulas";
 
@@ -19,23 +19,42 @@ interface CalibrationEvent {
   id: number;
   performedAt: string;
   result: string | null;
+  technicianName: string | null;
+  notes: string | null;
   nextDueAt: string | null;
-  certificateUrl: string | null;
+  certificatePath: string | null;
 }
 
 const equipmentHooks = createResourceHooks<Equipment>("equipment");
 
+function useUploadCertificate(equipmentId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ calibrationId, file }: { calibrationId: number; file: File }) => {
+      const form = new FormData();
+      form.append("file", file);
+      return (await apiClient.post(`/equipment/calibration/${calibrationId}/certificate`, form)).data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["equipment", equipmentId, "calibration"] }),
+  });
+}
+
 /**
- * Equipment detail: calibration history (quick entry) plus the three
- * fillable documents scoped to this asset — the per-event Calibration
- * form, an Asset Maintenance Work Order, and a Gage R&R measurement-system
- * study.
+ * Equipment detail: calibration history plus the three fillable documents
+ * scoped to this asset. The "Calibration Record" form (formType:
+ * "calibration") is the single source of truth for a new calibration event —
+ * clicking its "Log Calibration Event" button (form.data's "Save version"
+ * action, see FormEditor.tsx) is what actually writes a row here and moves
+ * the due-date/status color, not a separate quick-entry form that used to
+ * live on this page and could drift out of sync with it.
  */
 export function EquipmentDetailPage() {
   const { id } = useParams();
   const equipmentId = Number(id);
   const { data: equipment, isLoading } = equipmentHooks.useOne(equipmentId);
-  const queryClient = useQueryClient();
+  const uploadCertificate = useUploadCertificate(equipmentId);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingUploadTarget = useRef<number | null>(null);
 
   const { data: calibrations = [] } = useQuery<CalibrationEvent[]>({
     queryKey: ["equipment", equipmentId, "calibration"],
@@ -48,12 +67,36 @@ export function EquipmentDetailPage() {
   const statusLabel = calibrationStatusFromDueDate(latest?.nextDueAt);
   const statusColors = STATUS_COLORS[statusLabel] ?? { bg: "#EAEAE6", fg: "#66655D" };
 
-  const [entry, setEntry] = useState({ performedAt: "", result: "pass", certificateUrl: "" });
+  function requestUpload(calibrationId: number) {
+    pendingUploadTarget.current = calibrationId;
+    fileInputRef.current?.click();
+  }
+
+  async function viewCertificate(calibrationId: number) {
+    const res = await apiClient.get(`/equipment/calibration/${calibrationId}/certificate`, { responseType: "blob" });
+    const url = URL.createObjectURL(res.data as Blob);
+    window.open(url, "_blank", "noopener,noreferrer");
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
 
   if (isLoading || !equipment) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (
     <div className="flex flex-col gap-4">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          const calibrationId = pendingUploadTarget.current;
+          if (file && calibrationId != null) uploadCertificate.mutate({ calibrationId, file });
+          e.target.value = "";
+          pendingUploadTarget.current = null;
+        }}
+      />
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{equipment.name}</h1>
@@ -76,40 +119,38 @@ export function EquipmentDetailPage() {
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4">
-        <h2 className="mb-3 text-sm font-medium">Calibration History</h2>
-        <ul className="mb-4 flex flex-col gap-2 text-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-medium">Calibration History</h2>
+          <p className="text-xs text-muted-foreground">
+            Open "Calibration Record" above, fill it in, then click <span className="font-medium">Log Calibration Event</span> to add a row here.
+          </p>
+        </div>
+        <ul className="flex flex-col gap-2 text-sm">
           {calibrations.length === 0 && <li className="text-muted-foreground">No calibration events logged yet.</li>}
-          {calibrations.map((c) => (
-            <li key={c.id} className="flex items-center justify-between border-b border-border pb-2">
-              <span>{new Date(c.performedAt).toLocaleDateString()}</span>
-              <span className="capitalize">{c.result ?? "—"}</span>
-              <span className="text-muted-foreground">Next due: {c.nextDueAt ? new Date(c.nextDueAt).toLocaleDateString() : "—"}</span>
-            </li>
-          ))}
-        </ul>
-
-        <form
-          className="grid gap-3 md:grid-cols-4"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            await apiClient.post(`/equipment/${equipmentId}/calibration`, entry);
-            setEntry({ performedAt: "", result: "pass", certificateUrl: "" });
-            queryClient.invalidateQueries({ queryKey: ["equipment", equipmentId, "calibration"] });
-          }}
-        >
-          <TextField label="Performed At" type="date" value={entry.performedAt} onChange={(e) => setEntry({ ...entry, performedAt: e.target.value })} required />
-          <SelectField label="Result" value={entry.result} onChange={(e) => setEntry({ ...entry, result: e.target.value })}>
-            {["pass", "fail", "adjusted"].map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
+          {calibrations
+            .slice()
+            .sort((a, b) => new Date(b.performedAt).getTime() - new Date(a.performedAt).getTime())
+            .map((c) => (
+              <li key={c.id} className="flex flex-col gap-1 border-b border-border pb-2">
+                <div className="flex items-center gap-3">
+                  <span className="w-24 flex-none">{new Date(c.performedAt).toLocaleDateString()}</span>
+                  <span className="w-20 flex-none capitalize">{c.result ?? "—"}</span>
+                  <span className="flex-1 text-muted-foreground">{c.technicianName ?? "No technician recorded"}</span>
+                  <span className="flex-none text-muted-foreground">Next due: {c.nextDueAt ? new Date(c.nextDueAt).toLocaleDateString() : "—"}</span>
+                  {c.certificatePath ? (
+                    <button onClick={() => viewCertificate(c.id)} className="flex-none text-primary hover:opacity-80" aria-label="View certificate">
+                      <FileText size={14} />
+                    </button>
+                  ) : (
+                    <button onClick={() => requestUpload(c.id)} className="flex-none text-muted-foreground hover:text-primary" aria-label="Attach certificate">
+                      <Paperclip size={14} />
+                    </button>
+                  )}
+                </div>
+                {c.notes && <p className="pl-24 text-xs text-muted-foreground">{c.notes}</p>}
+              </li>
             ))}
-          </SelectField>
-          <TextField label="Certificate URL" value={entry.certificateUrl} onChange={(e) => setEntry({ ...entry, certificateUrl: e.target.value })} />
-          <button type="submit" className="w-fit self-end rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground">
-            Log calibration
-          </button>
-        </form>
+        </ul>
       </div>
     </div>
   );
