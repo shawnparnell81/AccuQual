@@ -7,6 +7,7 @@ export interface AuthUser {
   name: string | null;
   tenantId: number | null; // null only for platform admins
   roleName: string | null;
+  department: string | null;
 }
 
 export interface TenantContext {

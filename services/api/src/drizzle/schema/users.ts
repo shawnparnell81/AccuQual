@@ -11,6 +11,14 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   name: text("name"),
   roleId: integer("role_id").references(() => roles.id),
+  // Which department dropdown's permissions (see middleware/departmentAccess.ts)
+  // apply to this user: "quality" | "engineering" | "production" |
+  // "customer_service" | "purchasing" | "material_management" | null.
+  // Independent of roleId — role is job function (manager/operator/auditor),
+  // department is which nav dropdown's RWX rules this user gets. Nullable:
+  // platform_admin/admin bypass the department matrix entirely, and external
+  // supplier/customer portal accounts aren't part of any internal department.
+  department: text("department"),
   tokenVersion: integer("token_version").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),

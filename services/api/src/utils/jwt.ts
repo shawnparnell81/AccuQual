@@ -6,6 +6,7 @@ export interface AccessTokenPayload {
   tenantId: number | null; // null only for platform admins (see modules/platform)
   roleId: number | null;
   roleName: string | null;
+  department: string | null;
 }
 
 export interface RefreshTokenPayload {

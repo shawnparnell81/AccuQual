@@ -12,6 +12,7 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
       email: users.email,
       name: users.name,
       roleId: users.roleId,
+      department: users.department,
       isActive: users.isActive,
       createdAt: users.createdAt,
     })
@@ -27,6 +28,7 @@ export const getUser = asyncHandler(async (req: Request, res: Response) => {
       email: users.email,
       name: users.name,
       roleId: users.roleId,
+      department: users.department,
       isActive: users.isActive,
       createdAt: users.createdAt,
     })
@@ -37,9 +39,9 @@ export const getUser = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const createUser = asyncHandler(async (req: Request, res: Response) => {
-  const { email, password, name, roleId } = req.body;
+  const { email, password, name, roleId, department } = req.body;
   const passwordHash = await bcrypt.hash(password, 10);
-  const [created] = await req.db!.insert(users).values({ email, passwordHash, name, roleId, tenantId: req.tenantId! }).returning();
+  const [created] = await req.db!.insert(users).values({ email, passwordHash, name, roleId, department, tenantId: req.tenantId! }).returning();
   if (!created) throw new AppError("Failed to create user", 500);
   const { passwordHash: _omit, ...safe } = created;
   res.status(201).json(safe);

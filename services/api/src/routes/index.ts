@@ -22,6 +22,7 @@ import { digitalTwinRouter } from "../modules/digital-twin/digital-twin.routes.j
 import { auditTrailRouter } from "../modules/audit-trail/audit-trail.routes.js";
 import { formsRouter } from "../modules/forms/forms.routes.js";
 import { platformRouter } from "../modules/platform/platform.routes.js";
+import { navRouter } from "../modules/nav/nav.routes.js";
 
 export const apiRouter = Router();
 
@@ -48,3 +49,4 @@ apiRouter.use("/digital-twin", digitalTwinRouter);
 apiRouter.use("/audit-trail", auditTrailRouter);
 apiRouter.use("/forms", formsRouter);
 apiRouter.use("/platform", platformRouter);
+apiRouter.use("/nav", navRouter);

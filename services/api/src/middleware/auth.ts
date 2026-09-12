@@ -7,6 +7,7 @@ export interface AuthenticatedUser {
   tenantId: number | null;
   roleId: number | null;
   roleName: string | null;
+  department: string | null;
 }
 
 declare global {
@@ -34,6 +35,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
       tenantId: payload.tenantId,
       roleId: payload.roleId,
       roleName: payload.roleName,
+      department: payload.department,
     };
     next();
   } catch {
