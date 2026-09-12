@@ -45,6 +45,15 @@ export const PERMISSION_MATRIX: Record<ResourceKey, Partial<Record<Department, A
   ppap: { engineering: "edit" },
   apqp: { engineering: "edit" },
   production_log: { production: "read", customer_service: "edit" },
+  // Document Control and Training deliberately aren't given a ResourceKey
+  // here yet (see the Permissions Dictionary and Phase 6's implementation
+  // notes): unlike ncr/capa/audit/calibration/di, these two are read-by-
+  // everyone, write-by-few resources, and Training additionally needs a
+  // per-row check ("is this your own assignment"), not a whole-department
+  // grant. Copying the quality-edit-only pattern here would lock every
+  // non-quality employee out of viewing documents or completing their own
+  // training — a real regression, not hardening. Left for a deliberate,
+  // explicitly-scoped pass instead of guessed here.
 };
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);

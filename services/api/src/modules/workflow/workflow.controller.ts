@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { and, eq } from "drizzle-orm";
 import { workflowDefinitions, workflowRuns } from "../../drizzle/schema/workflow.js";
+import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { runWorkflow, type WorkflowDefinition } from "./workflow-engine.js";
@@ -46,4 +47,39 @@ export const runHandler = asyncHandler(async (req: Request, res: Response) => {
       .where(eq(workflowRuns.id, run.id));
     throw err;
   }
+});
+
+/**
+ * Friendly moduleName -> the real entityType string each module actually
+ * passes to recordAuditTrail (see every controller's recordAuditTrail
+ * calls). Deliberately NOT a generic "any module, any state" endpoint (see
+ * Phase 6's notes) — audit_trail already has everything a transition
+ * history needs, this just gives every module one predictable read shape
+ * instead of the caller having to know each module's internal entityType
+ * naming (some PascalCase, some lowercase — a pre-existing inconsistency).
+ */
+const MODULE_ENTITY_TYPES: Record<string, string> = {
+  calibration: "Equipment",
+  documents: "Document",
+  training: "TrainingAssignment",
+  audit: "Audit",
+  ncr: "ncr",
+  capa: "capa",
+  di: "discrepancy_investigation",
+  suppliers: "Supplier",
+};
+
+/** GET /workflow/history/:moduleName/:recordId — read-only, backed entirely by the existing audit_trail table. */
+export const historyHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { moduleName, recordId } = req.params as { moduleName: string; recordId: string };
+  const entityType = MODULE_ENTITY_TYPES[moduleName];
+  if (!entityType) throw AppError.badRequest(`Unknown moduleName "${moduleName}" — expected one of: ${Object.keys(MODULE_ENTITY_TYPES).join(", ")}`);
+
+  const rows = await req
+    .db!.select()
+    .from(auditTrail)
+    .where(and(eq(auditTrail.entityId, Number(recordId)), eq(auditTrail.entityType, entityType), eq(auditTrail.tenantId, req.tenantId!)));
+
+  const sorted = [...rows].sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
+  res.json(sorted);
 });

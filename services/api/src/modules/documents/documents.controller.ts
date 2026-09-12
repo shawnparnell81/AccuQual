@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createReadStream, existsSync } from "node:fs";
 import { and, eq } from "drizzle-orm";
-import { documents, documentVersions, type Document } from "../../drizzle/schema/documents.js";
+import { documents, documentVersions, type Document, type DocumentVersion } from "../../drizzle/schema/documents.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
@@ -150,13 +150,32 @@ export const listExpiringHandler = asyncHandler(async (req: Request, res: Respon
   res.json(expiring);
 });
 
+interface RetentionDecision {
+  eligible: boolean;
+  reason?: string;
+  action?: "archived" | "deleted";
+}
+
 /**
- * Runs retention synchronously for every obsolete, aged-out document in the
- * tenant — no worker, triggered on demand (POST /documents/retention/apply).
+ * Shared by the bulk sweep (applyRetentionHandler) and the new single-record
+ * action (archiveHandler) so the age-out math can't drift between them.
  * "Aged out" is measured from the current version's approval date, since
  * that's the closest thing this table has to "when did this stop being the
- * active document" (see documents.controller.ts's approveHandler).
+ * active document" (see approveHandler above).
  */
+function decideRetention(doc: Document, currentVersion?: Pick<DocumentVersion, "approvedAt">): RetentionDecision {
+  if (doc.status !== "obsolete") return { eligible: false, reason: `document is "${doc.status}", not "obsolete"` };
+  if (doc.retentionState === "archived") return { eligible: false, reason: "already archived" };
+  if (!currentVersion?.approvedAt) return { eligible: false, reason: "current version was never approved, so there's no date to measure retention from" };
+
+  const ageOutAt = new Date(currentVersion.approvedAt);
+  ageOutAt.setDate(ageOutAt.getDate() + doc.retentionPeriodDays);
+  if (new Date() < ageOutAt) return { eligible: false, reason: `retention period hasn't elapsed yet (ages out ${ageOutAt.toISOString().slice(0, 10)})` };
+
+  return { eligible: true, action: doc.retentionAction === "delete" ? "deleted" : "archived" };
+}
+
+/** Runs retention synchronously for every obsolete, aged-out document in the tenant — no worker, triggered on demand (POST /documents/retention/apply). */
 export const applyRetentionHandler = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = req.tenantId!;
   const db = req.db!;
@@ -165,25 +184,20 @@ export const applyRetentionHandler = asyncHandler(async (req: Request, res: Resp
   const results: { documentId: number; action: string }[] = [];
 
   for (const doc of obsolete) {
-    if (doc.retentionState === "archived") continue;
-
     const [currentVersion] = await db
       .select()
       .from(documentVersions)
       .where(and(eq(documentVersions.documentId, doc.id), eq(documentVersions.tenantId, tenantId), eq(documentVersions.version, doc.currentVersion)));
-    if (!currentVersion?.approvedAt) continue;
 
-    const ageOutAt = new Date(currentVersion.approvedAt);
-    ageOutAt.setDate(ageOutAt.getDate() + doc.retentionPeriodDays);
-    if (new Date() < ageOutAt) continue;
+    const decision = decideRetention(doc, currentVersion);
+    if (!decision.eligible) continue;
 
-    if (doc.retentionAction === "delete") {
+    if (decision.action === "deleted") {
       await db.update(documents).set({ isDeleted: true, updatedAt: new Date() }).where(eq(documents.id, doc.id));
-      results.push({ documentId: doc.id, action: "deleted" });
     } else {
       await db.update(documents).set({ retentionState: "archived", updatedAt: new Date() }).where(eq(documents.id, doc.id));
-      results.push({ documentId: doc.id, action: "archived" });
     }
+    results.push({ documentId: doc.id, action: decision.action! });
 
     await recordAuditTrail(db, {
       tenantId,
@@ -196,4 +210,41 @@ export const applyRetentionHandler = asyncHandler(async (req: Request, res: Resp
   }
 
   res.json({ processed: results.length, results });
+});
+
+/**
+ * On-demand, single-document version of applyRetentionHandler — real, new
+ * (see Phase 6's endpoint list: "archive"). Same eligibility rule as the
+ * bulk sweep, just for one obsolete document instead of waiting for someone
+ * to run the tenant-wide pass.
+ */
+export const archiveHandler = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenantId!;
+  const documentId = Number(req.params.id);
+  const [doc] = await req.db!.select().from(documents).where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId)));
+  if (!doc) throw AppError.notFound("Document");
+
+  const [currentVersion] = await req
+    .db!.select()
+    .from(documentVersions)
+    .where(and(eq(documentVersions.documentId, doc.id), eq(documentVersions.tenantId, tenantId), eq(documentVersions.version, doc.currentVersion)));
+
+  const decision = decideRetention(doc, currentVersion);
+  if (!decision.eligible) throw AppError.badRequest(`Cannot archive this document: ${decision.reason}`);
+
+  const [updated] =
+    decision.action === "deleted"
+      ? await req.db!.update(documents).set({ isDeleted: true, updatedAt: new Date() }).where(eq(documents.id, documentId)).returning()
+      : await req.db!.update(documents).set({ retentionState: "archived", updatedAt: new Date() }).where(eq(documents.id, documentId)).returning();
+
+  await recordAuditTrail(req.db!, {
+    tenantId,
+    entityType: "Document",
+    entityId: documentId,
+    action: "update",
+    changes: { action: "retention", retentionAction: doc.retentionAction },
+    performedBy: req.user?.id,
+  });
+
+  res.json(updated);
 });
