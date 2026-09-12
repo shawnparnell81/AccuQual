@@ -105,14 +105,29 @@ export function ParetoChartForm({ data, onChange }: CustomFormProps) {
       </div>
 
       {chartData.length > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="mb-2 text-sm font-medium">Pareto Diagram</h3>
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 60 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="description" angle={-35} textAnchor="end" interval={0} tick={{ fontSize: 11 }} height={70} />
-              <YAxis yAxisId="left" allowDecimals={false} tickLine={false} axisLine={false} />
-              <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} tickLine={false} axisLine={false} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+              <XAxis
+                dataKey="description"
+                angle={-35}
+                textAnchor="end"
+                interval={0}
+                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                height={70}
+              />
+              <YAxis yAxisId="left" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                domain={[0, 100]}
+                tickFormatter={(v: number) => `${v}%`}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fill: "hsl(var(--muted-foreground))" }}
+              />
               <Tooltip />
               <Bar yAxisId="left" dataKey="quantity" fill="#2451FF" radius={[4, 4, 0, 0]} />
               <Line yAxisId="right" type="monotone" dataKey="cumulativePct" stroke="#C23B2C" strokeWidth={2} dot={{ r: 3 }} />

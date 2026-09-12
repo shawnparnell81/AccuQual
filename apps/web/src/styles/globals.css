@@ -2,30 +2,47 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * AccuQual QMS brand palette — from "ACCUQUAL QMS logo and app color scheme.docx".
+ * One committed dark theme (not a light/dark toggle): deep-space canvas with
+ * neon cyan as the primary accent, plus a status-color set for compliance
+ * states. Values below are the doc's hex codes converted to HSL for
+ * Tailwind's hsl(var(--x)) token convention; the hex is kept in each comment
+ * so the mapping back to the source doc stays traceable.
+ */
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222 47% 11%;
-  --card: 0 0% 100%;
-  --border: 220 13% 91%;
-  --primary: 221 83% 53%;
-  --primary-foreground: 0 0% 100%;
-  --muted: 220 14% 96%;
-  --muted-foreground: 220 9% 46%;
-  --destructive: 0 72% 51%;
-}
+  --background: 210 29% 5%; /* #0A0E12 — Dashboard Background */
+  --foreground: 0 0% 100%; /* #FFFFFF — Primary Typography Core */
+  --card: 216 28% 10%; /* #131922 — Component Container / Section Blocks */
+  --border: 217 33% 17%; /* #1E293B — Layout Component Micro-Borders */
+  --primary: 183 100% 50%; /* #00F3FF — Active Interactive States / Accents (Electric Neon Cyan) */
+  --primary-foreground: 216 33% 3%; /* #05070A — dark text for contrast on the bright cyan accent */
+  --muted: 217 33% 17%; /* #1E293B — subtle recessed surface, same tone as border */
+  --muted-foreground: 215 20% 65%; /* #94A3B8 — Compliance Sub-text Label (slate silver) */
+  --destructive: 341 100% 58%; /* #FF2A6D — Non-Conformance / Rejected Flag (Cyber Magenta) */
 
-.dark {
-  --background: 222 47% 8%;
-  --foreground: 210 40% 98%;
-  --card: 222 47% 11%;
-  --border: 217 19% 22%;
-  --primary: 217 91% 60%;
-  --primary-foreground: 222 47% 11%;
-  --muted: 217 19% 18%;
-  --muted-foreground: 215 20% 65%;
-  --destructive: 0 63% 55%;
+  /* Status Color Architecture — for compliance/workflow badges. */
+  --success: 157 100% 50%; /* #00FF9D — Approved / Compliant (Aurora Mint) */
+  --success-foreground: 216 33% 3%;
+  --warning: 43 100% 51%; /* #FFB703 — Pending Workflows / Audits (Solar Amber) */
+  --warning-foreground: 216 33% 3%;
+  --info: 184 100% 50%; /* #00F0FF — Drafts / In-Progress (System Core Neon Cyan) */
+  --info-foreground: 216 33% 3%;
+
+  /* Logo-only accents — the emblem's secondary ribbon color and its native
+     canvas, not part of the general UI token set. */
+  --brand-header: 216 33% 3%; /* #05070A — App Master Header Frame */
+  --brand-purple: 271 91% 65%; /* #A855F7 — Secondary Ribbon Highlights */
+  --brand-glow: 183 100% 50%; /* #00F3FF at 8% opacity — component glow overlay, see .glow-card */
 }
 
 body {
   @apply bg-background text-foreground;
+}
+
+/* Soft glassmorphism glow the doc specifies for card surfaces — an inset
+   cyan-tinted highlight rather than a hard border treatment. Opt in with
+   className="glow-card" where a container should read as "active" surface. */
+.glow-card {
+  box-shadow: inset 0 1px 0 0 hsl(var(--brand-glow) / 0.08), 0 0 0 1px hsl(var(--brand-glow) / 0.08);
 }

@@ -16,9 +16,9 @@ export function SeverityChart({ data }: { data: SeverityDatum[] }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
       <BarChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="severity" tickLine={false} axisLine={false} />
-        <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+        <XAxis dataKey="severity" tickLine={false} axisLine={false} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+        <YAxis tickLine={false} axisLine={false} allowDecimals={false} tick={{ fill: "hsl(var(--muted-foreground))" }} />
         <Tooltip />
         <Bar dataKey="count" radius={[6, 6, 0, 0]}>
           {data.map((entry) => (

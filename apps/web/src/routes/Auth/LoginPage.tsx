@@ -13,7 +13,7 @@ export function LoginPage() {
   if (accessToken) return <Navigate to="/" replace />;
 
   return (
-    <div className="flex h-screen items-center justify-center bg-muted">
+    <div className="flex h-screen items-center justify-center bg-background">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -21,8 +21,14 @@ export function LoginPage() {
         }}
         className="w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-sm"
       >
-        <h1 className="mb-1 text-xl font-semibold text-primary">AccuQual</h1>
-        <p className="mb-6 text-sm text-muted-foreground">Sign in to your quality management workspace</p>
+        <div className="mb-1 flex items-center gap-3">
+          <img src="/branding/logo-mark.png" alt="" className="h-10 w-10 rounded-lg object-cover" />
+          <div>
+            <h1 className="text-xl font-semibold tracking-wide text-foreground">ACCUQUAL QMS</h1>
+            <p className="text-[10px] tracking-widest text-muted-foreground">ISO 9001 / IATF 16949 COMPLIANT</p>
+          </div>
+        </div>
+        <p className="mb-6 mt-3 text-sm text-muted-foreground">Sign in to your quality management workspace</p>
 
         <div className="flex flex-col gap-4">
           <TextField label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />

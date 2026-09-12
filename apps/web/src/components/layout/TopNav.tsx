@@ -372,9 +372,12 @@ export function TopNav() {
 
 function BrandMark({ tenant }: { tenant: { name: string } | null }) {
   return (
-    <div className="flex flex-col items-start justify-center shrink-0">
-      <span className="font-semibold text-primary leading-tight">AccuQual</span>
-      {tenant && <span className="text-xs text-muted-foreground leading-tight truncate max-w-[10rem]">{tenant.name}</span>}
+    <div className="flex items-center gap-2 shrink-0">
+      <img src="/branding/logo-mark.png" alt="" className="h-8 w-8 rounded-md object-cover" />
+      <div className="flex flex-col items-start justify-center">
+        <span className="font-semibold text-foreground leading-tight tracking-wide">ACCUQUAL QMS</span>
+        {tenant && <span className="text-xs text-muted-foreground leading-tight truncate max-w-[10rem]">{tenant.name}</span>}
+      </div>
     </div>
   );
 }

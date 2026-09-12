@@ -15,7 +15,7 @@ export function RegisterPage() {
   if (accessToken) return <Navigate to="/" replace />;
 
   return (
-    <div className="flex h-screen items-center justify-center bg-muted">
+    <div className="flex h-screen items-center justify-center bg-background">
       <form
         onSubmit={(e) => {
           e.preventDefault();
