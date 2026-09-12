@@ -71,6 +71,13 @@
       "when": 1789240231201,
       "tag": "0009_document_control_workflow",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789247184338,
+      "tag": "0010_training_module_workflow",
+      "breakpoints": true
     }
   ]
 }

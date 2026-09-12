@@ -4,6 +4,7 @@ import { AppError } from "../../utils/appError.js";
 import { logger } from "../../utils/logger.js";
 import * as formsService from "./forms.service.js";
 import { createCalibrationEvent } from "../calibration/calibration.controller.js";
+import { completeTrainingAssignment } from "../training/training.controller.js";
 
 export const getTemplate = asyncHandler(async (req: Request, res: Response) => {
   const template = await formsService.loadTemplate(req.db!, req.tenantId!, req.params.type!);
@@ -49,6 +50,17 @@ export const createVersion = asyncHandler(async (req: Request, res: Response) =>
     await maybeLogCalibrationEvent(req, current.entityId, current.data);
   }
 
+  // Same reasoning as Calibration above: the "Training Record" form's
+  // entityId is the specific trainingAssignments row (one employee's one
+  // assignment to a course) — NOT the course id, which every employee
+  // taking that course would otherwise share and silently overwrite each
+  // other's form_data row. "Save version" (relabeled "Complete Training" for
+  // this formType, see FormEditor.tsx) is what marks that assignment
+  // complete.
+  if (req.params.type === "training" && current.entityId != null) {
+    await maybeCompleteTrainingAssignment(req, current.entityId, current.data);
+  }
+
   res.json(updated);
 });
 
@@ -66,6 +78,25 @@ async function maybeLogCalibrationEvent(req: Request, equipmentId: number, data:
       performedAt,
       result: typeof data.result === "string" ? data.result : undefined,
       technicianName: typeof data.technicianName === "string" ? data.technicianName : undefined,
+      notes: typeof data.notes === "string" ? data.notes : undefined,
+    },
+    req.user?.id
+  );
+}
+
+async function maybeCompleteTrainingAssignment(req: Request, assignmentId: number, data: Record<string, unknown>): Promise<void> {
+  const completionDate = data.completionDate ? new Date(String(data.completionDate)) : null;
+  if (!completionDate || Number.isNaN(completionDate.getTime())) {
+    logger.warn(`Skipped auto-completing training assignment ${assignmentId}: no valid completionDate in the form yet`);
+    return;
+  }
+  await completeTrainingAssignment(
+    req.db!,
+    req.tenantId!,
+    assignmentId,
+    {
+      completedAt: completionDate,
+      trainerName: typeof data.trainerName === "string" ? data.trainerName : undefined,
       notes: typeof data.notes === "string" ? data.notes : undefined,
     },
     req.user?.id

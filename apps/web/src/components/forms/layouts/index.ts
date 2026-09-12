@@ -1,5 +1,6 @@
 import type { FormLayout } from "./types";
 import { calibrationLayout } from "./calibration";
+import { trainingLayout } from "./training";
 import { capaLayout } from "./capa";
 import { ncrLayout } from "./ncr";
 import { fmeaLayout } from "./fmea";
@@ -36,6 +37,7 @@ import { finalInspectionReleaseChecklistLayout } from "./finalInspectionReleaseC
  */
 export const FORM_LAYOUTS: Record<string, FormLayout> = {
   calibration: calibrationLayout,
+  training: trainingLayout,
   capa: capaLayout,
   ncr: ncrLayout,
   fmea: fmeaLayout,

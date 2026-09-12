@@ -49,6 +49,30 @@ export interface AccuQualDocument {
   retentionState: "active" | "archived";
 }
 
+export interface TrainingCourse {
+  id: number;
+  title: string;
+  description: string | null;
+  requiredForRoleId: number | null;
+  documentId: number | null;
+}
+
+export interface TrainingAssignment {
+  id: number;
+  courseId: number;
+  userId: number;
+  status: "assigned" | "in_progress" | "completed" | "overdue";
+  dueAt: string | null;
+  completedAt: string | null;
+  trainerName: string | null;
+  notes: string | null;
+  certificatePath: string | null;
+  userEmail?: string | null;
+  userName?: string | null;
+  courseTitle?: string | null;
+  documentId?: number | null;
+}
+
 export interface DocumentVersion {
   id: number;
   documentId: number;

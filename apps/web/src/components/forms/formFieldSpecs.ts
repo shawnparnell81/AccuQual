@@ -58,10 +58,6 @@ export const FORM_FIELD_SPECS: Record<string, FormField[]> = {
     { name: "name", label: "Supplier Name" },
     { name: "notes", label: "Notes", type: "textarea" },
   ],
-  training: [
-    { name: "course", label: "Course" },
-    { name: "notes", label: "Notes", type: "textarea" },
-  ],
   change: [
     { name: "description", label: "Change Description", type: "textarea" },
     { name: "impactAssessment", label: "Impact Assessment", type: "textarea" },

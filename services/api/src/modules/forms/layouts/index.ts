@@ -1,5 +1,6 @@
 import type { FormLayout } from "./types.js";
 import { calibrationLayout } from "./calibration.js";
+import { trainingLayout } from "./training.js";
 import { capaLayout } from "./capa.js";
 import { ncrLayout } from "./ncr.js";
 import { fmeaLayout } from "./fmea.js";
@@ -37,6 +38,7 @@ import { paretoChartLayout } from "./paretoChart.js";
  */
 export const FORM_LAYOUTS: Record<string, FormLayout> = {
   calibration: calibrationLayout,
+  training: trainingLayout,
   capa: capaLayout,
   ncr: ncrLayout,
   fmea: fmeaLayout,

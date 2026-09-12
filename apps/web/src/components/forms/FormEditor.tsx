@@ -102,7 +102,7 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
 
       <div className="flex flex-wrap gap-2 border-t border-border pt-3">
         <button onClick={() => createVersion.mutate()} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">
-          {formType === "calibration" ? "Log Calibration Event" : "Save version"}
+          {formType === "calibration" ? "Log Calibration Event" : formType === "training" ? "Complete Training" : "Save version"}
         </button>
         <button onClick={() => setShowHistory((s) => !s)} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">
           {showHistory ? "Hide" : "Show"} version history

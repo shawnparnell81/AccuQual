@@ -17,6 +17,7 @@ import { DocumentDetailPage } from "./routes/Documents/DocumentDetailPage";
 import { FolderExplorerPage } from "./routes/Documents/FolderExplorerPage";
 import { TrainingPage } from "./routes/Training/TrainingPage";
 import { TrainingDetailPage } from "./routes/Training/TrainingDetailPage";
+import { EmployeeTrainingHistoryPage } from "./routes/Training/EmployeeTrainingHistoryPage";
 import { ChangePage } from "./routes/Change/ChangePage";
 import { ChangeDetailPage } from "./routes/Change/ChangeDetailPage";
 import { RiskPage } from "./routes/Risk/RiskPage";
@@ -78,6 +79,7 @@ export function App() {
           <Route path="/documents/folders" element={<FolderExplorerPage />} />
           <Route path="/documents/:id" element={<DocumentDetailPage />} />
           <Route path="/training" element={<TrainingPage />} />
+          <Route path="/training/employee/:userId" element={<EmployeeTrainingHistoryPage />} />
           <Route path="/training/:id" element={<TrainingDetailPage />} />
           <Route path="/change" element={<ChangePage />} />
           <Route path="/change/:id" element={<ChangeDetailPage />} />

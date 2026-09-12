@@ -1,21 +1,61 @@
-import { useParams } from "react-router-dom";
+import { useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { FileText, Paperclip } from "lucide-react";
 import { createResourceHooks } from "../../api/resourceHooks";
+import { apiClient } from "../../api/client";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
-
-interface TrainingCourse {
-  id: number;
-  title: string;
-  description: string | null;
-}
+import { TrainingAssignmentModal } from "../../components/training/TrainingAssignmentModal";
+import { TrainingCompletionModal } from "../../components/training/TrainingCompletionModal";
+import { DocumentApprovalModal } from "../../components/documents/DocumentApprovalModal";
+import { DocumentRevisionModal } from "../../components/documents/DocumentRevisionModal";
+import { DocumentRetentionPanel } from "../../components/documents/DocumentRetentionPanel";
+import { DocumentHistoryPanel } from "../../components/documents/DocumentHistoryPanel";
+import type { AccuQualDocument, TrainingAssignment, TrainingCourse } from "../../api/types";
 
 const trainingHooks = createResourceHooks<TrainingCourse>("training");
 
-/** Training course detail: course info plus its fillable training record. */
+const STATUS_COLORS: Record<TrainingAssignment["status"], { bg: string; fg: string }> = {
+  assigned: { bg: "#EAEAE6", fg: "#66655D" },
+  in_progress: { bg: "#FEF3C7", fg: "#92400E" },
+  completed: { bg: "#DCFCE7", fg: "#166534" },
+  overdue: { bg: "#FDE8E8", fg: "#C81E1E" },
+};
+
+/**
+ * Training course detail: the course's material (a controlled document once
+ * linked — reuses Document Control's approval/revision/retention/history
+ * wholesale rather than a parallel "training material" version of the same
+ * system) plus its assignment list, one row per employee with the two ways
+ * to complete it — the real "Training Record" form (entityId = that
+ * assignment, see layouts/training.ts) or the quick TrainingCompletionModal.
+ */
 export function TrainingDetailPage() {
   const { id } = useParams();
   const courseId = Number(id);
   const { data: course, isLoading } = trainingHooks.useOne(courseId);
-  const completeAction = trainingHooks.useAction("complete");
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [completingId, setCompletingId] = useState<number | null>(null);
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [reviseOpen, setReviseOpen] = useState(false);
+
+  const { data: assignments = [] } = useQuery<TrainingAssignment[]>({
+    queryKey: ["training-assignments", courseId],
+    queryFn: async () => (await apiClient.get(`/training/${courseId}/assignments`)).data,
+    enabled: !!course,
+  });
+  const { data: material } = useQuery<AccuQualDocument>({
+    queryKey: ["documents", course?.documentId],
+    queryFn: async () => (await apiClient.get(`/documents/${course!.documentId}`)).data,
+    enabled: !!course?.documentId,
+  });
+
+  async function viewCertificate(assignmentId: number) {
+    const res = await apiClient.get(`/training/assignment/${assignmentId}/certificate`, { responseType: "blob" });
+    const url = URL.createObjectURL(res.data as Blob);
+    window.open(url, "_blank", "noopener,noreferrer");
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
 
   if (isLoading || !course) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
@@ -23,15 +63,81 @@ export function TrainingDetailPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">{course.title}</h1>
-        <div className="flex gap-2">
-          <OpenFormButton formType="training" entityId={course.id} title={`Training Course #${course.id} Record`} label="Training Record" />
-          <button onClick={() => completeAction.mutate({ id: courseId })} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-            Mark all assignments complete
-          </button>
-        </div>
+        <button onClick={() => setAssignOpen(true)} className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">
+          Assign Training
+        </button>
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">{course.description || "No description provided."}</div>
+
+      {material ? (
+        <>
+          <div className="flex items-center justify-between rounded-lg border border-border bg-card p-4">
+            <div>
+              <h2 className="text-sm font-medium">Training Material — {material.title}</h2>
+              <p className="text-sm text-muted-foreground capitalize">Status: {material.status.replace("_", " ")}</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setReviseOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+                Revise
+              </button>
+              <button
+                onClick={() => setApproveOpen(true)}
+                disabled={material.status === "approved" || material.status === "obsolete"}
+                className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-40"
+              >
+                Approve
+              </button>
+            </div>
+          </div>
+          <DocumentRetentionPanel document={material} />
+          <DocumentHistoryPanel documentId={material.id} />
+          <DocumentApprovalModal documentId={material.id} isOpen={approveOpen} onClose={() => setApproveOpen(false)} />
+          <DocumentRevisionModal documentId={material.id} isOpen={reviseOpen} onClose={() => setReviseOpen(false)} />
+        </>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          No controlled document linked to this course's material yet — link one via <code>PATCH /training/{courseId}</code>{" "}
+          <code>{"{ documentId }"}</code> to get approval, revision, expiration, and retention tracking.
+        </p>
+      )}
+
+      <div className="rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-3 text-sm font-medium">Assignments</h2>
+        <ul className="flex flex-col gap-2 text-sm">
+          {assignments.length === 0 && <li className="text-muted-foreground">No employees assigned yet.</li>}
+          {assignments.map((a) => {
+            const colors = STATUS_COLORS[a.status];
+            return (
+              <li key={a.id} className="flex items-center gap-3 border-b border-border pb-2 last:border-0">
+                <Link to={`/training/employee/${a.userId}`} className="w-40 flex-none truncate hover:underline">
+                  {a.userName ?? a.userEmail}
+                </Link>
+                <span className="rounded-full px-2 py-0.5 text-xs font-semibold capitalize" style={{ backgroundColor: colors.bg, color: colors.fg }}>
+                  {a.status.replace("_", " ")}
+                </span>
+                <span className="flex-1 text-xs text-muted-foreground">
+                  {a.completedAt ? `Completed ${new Date(a.completedAt).toLocaleDateString()}` : a.dueAt ? `Due ${new Date(a.dueAt).toLocaleDateString()}` : "No due date"}
+                </span>
+                {a.certificatePath ? (
+                  <button onClick={() => viewCertificate(a.id)} className="flex-none text-primary hover:opacity-80" aria-label="View certificate">
+                    <FileText size={14} />
+                  </button>
+                ) : (
+                  <Paperclip size={14} className="flex-none text-muted-foreground" aria-hidden />
+                )}
+                <OpenFormButton formType="training" entityId={a.id} title={`Training Record — ${a.userName ?? a.userEmail}`} label="Open Record" />
+                <button onClick={() => setCompletingId(a.id)} className="flex-none rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
+                  Quick Complete
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <TrainingAssignmentModal courseId={courseId} isOpen={assignOpen} onClose={() => setAssignOpen(false)} />
+      {completingId !== null && <TrainingCompletionModal assignmentId={completingId} isOpen onClose={() => setCompletingId(null)} />}
     </div>
   );
 }

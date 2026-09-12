@@ -44,6 +44,16 @@ export function useCreateFormVersion(formType: string, entityId: number) {
       if (formType === "calibration") {
         queryClient.invalidateQueries({ queryKey: ["equipment"] });
       }
+      // "Complete Training" (this formType's relabeled "Save version") also
+      // writes a real training_assignments row server-side (see
+      // forms.controller.ts's createVersion) — refresh whichever
+      // course/employee history queries happen to be open. entityId here is
+      // the assignment id, not a course or user id, so there's no single
+      // query key to target — a predicate catches both regardless of which
+      // course/employee they're for.
+      if (formType === "training") {
+        queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === "training-assignments" || query.queryKey[0] === "training-employee-history" });
+      }
     },
   });
 }
