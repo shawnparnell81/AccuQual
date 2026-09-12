@@ -43,6 +43,34 @@ export function ManagementSystemPage() {
             label="Open Management Review"
           />
         </div>
+
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
+          <h2 className="text-sm font-medium">Executive Governance Minutes</h2>
+          <p className="text-sm text-muted-foreground">
+            Strategic management review & resource allocation minutes — executive attendance, strategic
+            performance inputs, and downstream action tracking.
+          </p>
+          <OpenFormButton
+            formType="management_review_minutes"
+            entityId={SINGLETON_ENTITY_ID}
+            title="Executive Governance & System Performance Record"
+            label="Open Executive Governance Minutes"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
+          <h2 className="text-sm font-medium">Monthly Staff Meeting Minutes</h2>
+          <p className="text-sm text-muted-foreground">
+            Operational staff & cross-functional alignment log — safety, operational metrics, quality alerts,
+            training updates, and plant floor action items.
+          </p>
+          <OpenFormButton
+            formType="staff_meeting_minutes"
+            entityId={SINGLETON_ENTITY_ID}
+            title="Operational Staff & Cross-Functional Alignment Log"
+            label="Open Staff Meeting Minutes"
+          />
+        </div>
       </div>
     </div>
   );

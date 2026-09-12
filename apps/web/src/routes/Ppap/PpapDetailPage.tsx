@@ -13,6 +13,7 @@ const DOCUMENTS = [
   { formType: "process_flow_diagram", label: "Process Flow Diagram" },
   { formType: "appearance_approval", label: "Appearance Approval Report" },
   { formType: "dvpr", label: "Design Validation Plan and Report" },
+  { formType: "final_inspection_release_checklist", label: "Final Inspection & Release Checklist" },
 ] as const;
 
 /**

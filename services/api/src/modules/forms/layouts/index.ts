@@ -21,6 +21,9 @@ import { maintenanceWorkOrderLayout } from "./maintenanceWorkOrder.js";
 import { productionOutputLogLayout } from "./productionOutputLog.js";
 import { internalAuditPlanLayout } from "./internalAuditPlan.js";
 import { discrepancyInspectionLayout } from "./discrepancyInspection.js";
+import { managementReviewMinutesLayout } from "./managementReviewMinutes.js";
+import { staffMeetingMinutesLayout } from "./staffMeetingMinutes.js";
+import { finalInspectionReleaseChecklistLayout } from "./finalInspectionReleaseChecklist.js";
 import { gageRRLayout } from "./gageRR.js";
 import { paretoChartLayout } from "./paretoChart.js";
 
@@ -54,6 +57,9 @@ export const FORM_LAYOUTS: Record<string, FormLayout> = {
   production_output_log: productionOutputLogLayout,
   audit_plan: internalAuditPlanLayout,
   discrepancy_inspection: discrepancyInspectionLayout,
+  management_review_minutes: managementReviewMinutesLayout,
+  staff_meeting_minutes: staffMeetingMinutesLayout,
+  final_inspection_release_checklist: finalInspectionReleaseChecklistLayout,
   gage_rr: gageRRLayout,
   pareto_chart: paretoChartLayout,
 };

@@ -35,7 +35,7 @@ DO $$
 DECLARE
   t text;
   tenant_tables text[] := ARRAY[
-    'users', 'documents', 'document_versions', 'ncr', 'ncr_attachments',
+    'users', 'documents', 'document_versions', 'document_folders', 'ncr', 'ncr_attachments',
     'capa', 'eight_d', 'audits', 'audit_items', 'training_courses',
     'training_assignments', 'change_requests', 'risk_assessments', 'fmea_items',
     'ppap_packages', 'discrepancy_investigations', 'suppliers', 'supplier_scorecards', 'equipment', 'calibrations', 'complaints',

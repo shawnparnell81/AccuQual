@@ -13,6 +13,7 @@ import { EightDDetailPage } from "./routes/EightD/EightDDetailPage";
 import { AuditsPage } from "./routes/Audits/AuditsPage";
 import { AuditDetailPage } from "./routes/Audits/AuditDetailPage";
 import { DocumentsPage } from "./routes/Documents/DocumentsPage";
+import { FolderExplorerPage } from "./routes/Documents/FolderExplorerPage";
 import { TrainingPage } from "./routes/Training/TrainingPage";
 import { TrainingDetailPage } from "./routes/Training/TrainingDetailPage";
 import { ChangePage } from "./routes/Change/ChangePage";
@@ -72,6 +73,7 @@ export function App() {
           <Route path="/quality/:id" element={<QualityDetailPage />} />
 
           <Route path="/documents" element={<DocumentsPage />} />
+          <Route path="/documents/folders" element={<FolderExplorerPage />} />
           <Route path="/training" element={<TrainingPage />} />
           <Route path="/training/:id" element={<TrainingDetailPage />} />
           <Route path="/change" element={<ChangePage />} />

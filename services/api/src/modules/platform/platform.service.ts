@@ -45,6 +45,9 @@ const DEFAULT_FORM_TYPES = [
   "production_output_log",
   "gage_rr",
   "pareto_chart",
+  "management_review_minutes",
+  "staff_meeting_minutes",
+  "final_inspection_release_checklist",
 ] as const;
 
 interface CreateTenantInput {

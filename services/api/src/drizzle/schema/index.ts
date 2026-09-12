@@ -11,6 +11,7 @@ export * from "./change.js";
 export * from "./risk.js";
 export * from "./ppap.js";
 export * from "./quality.js";
+export * from "./documentFolders.js";
 export * from "./supplier.js";
 export * from "./calibration.js";
 export * from "./complaints.js";

@@ -21,6 +21,9 @@ import { maintenanceWorkOrderLayout } from "./maintenanceWorkOrder";
 import { productionOutputLogLayout } from "./productionOutputLog";
 import { internalAuditPlanLayout } from "./internalAuditPlan";
 import { discrepancyInspectionLayout } from "./discrepancyInspection";
+import { managementReviewMinutesLayout } from "./managementReviewMinutes";
+import { staffMeetingMinutesLayout } from "./staffMeetingMinutes";
+import { finalInspectionReleaseChecklistLayout } from "./finalInspectionReleaseChecklist";
 
 /**
  * formType -> layout, for every form we've derived from a real pasted
@@ -53,6 +56,9 @@ export const FORM_LAYOUTS: Record<string, FormLayout> = {
   production_output_log: productionOutputLogLayout,
   audit_plan: internalAuditPlanLayout,
   discrepancy_inspection: discrepancyInspectionLayout,
+  management_review_minutes: managementReviewMinutesLayout,
+  staff_meeting_minutes: staffMeetingMinutesLayout,
+  final_inspection_release_checklist: finalInspectionReleaseChecklistLayout,
 };
 
 export function getFormLayout(formType: string): FormLayout | undefined {
