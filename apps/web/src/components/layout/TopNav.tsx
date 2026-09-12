@@ -144,11 +144,13 @@ export function TopNav() {
 
   return (
     <header className="border-b border-border bg-card relative" ref={navRef}>
-      <div className="h-14 flex items-center gap-3 px-4">
+      <div className="min-h-14 flex flex-wrap items-center gap-y-1 gap-x-3 px-4 py-2">
         <BrandMark tenant={tenant} />
 
-        {/* Desktop mega-menu */}
-        <nav className="hidden md:flex flex-1 items-center gap-1 min-w-0">
+        {/* Desktop mega-menu — wraps onto a second line rather than clipping
+            or overlapping the search box when the window is too narrow for
+            every department to fit on one row. */}
+        <nav className="hidden md:flex flex-1 flex-wrap items-center gap-1 min-w-0">
           <NavLink
             to={DASHBOARD_LEAF.path}
             end
