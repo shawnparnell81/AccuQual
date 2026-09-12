@@ -7,6 +7,9 @@ on:
   create:
     tags:
       - "v*"
+  # Lets docker-build (below) be run on demand from the Actions tab, without
+  # making it part of every push — see that job's own comment.
+  workflow_dispatch:
 
 jobs:
   build-and-test:
@@ -82,7 +85,14 @@ jobs:
   docker-build:
     needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    # Disabled on every push/tag for now — there's no Azure Container
+    # Registry configured (ACR_LOGIN_SERVER/ACR_USERNAME/ACR_PASSWORD don't
+    # exist as repo secrets/vars), so this always failed with "Username and
+    # password required." Deployment today is docker compose, not this.
+    # Run it manually from the Actions tab (workflow_dispatch) once a real
+    # registry + those 3 secrets/vars are set up, or restore
+    # `github.ref == 'refs/heads/main'` here to re-enable it on every push.
+    if: github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
         service:
