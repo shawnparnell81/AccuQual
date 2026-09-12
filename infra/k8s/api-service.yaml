@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: accuqual-api
+  namespace: accuqual
+spec:
+  type: ClusterIP
+  selector:
+    app: accuqual-api
+  ports:
+    - port: 3000
+      targetPort: 3000

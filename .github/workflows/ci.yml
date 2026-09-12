@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  create:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: accuqual
+          POSTGRES_PASSWORD: accuqual
+          POSTGRES_DB: accuqual
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U accuqual"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check & run migrations (API)
+        working-directory: services/api
+        env:
+          DATABASE_URL: postgres://accuqual:accuqual@localhost:5432/accuqual
+          JWT_ACCESS_SECRET: ci-access-secret
+          JWT_REFRESH_SECRET: ci-refresh-secret
+        run: |
+          npx tsc --noEmit
+          npm run db:migrate
+
+      - name: Test
+        env:
+          DATABASE_URL: postgres://accuqual:accuqual@localhost:5432/accuqual
+          REDIS_URL: redis://localhost:6379
+          JWT_ACCESS_SECRET: ci-access-secret
+          JWT_REFRESH_SECRET: ci-refresh-secret
+        run: npm test
+
+      - name: Build API
+        run: npm run build --workspace services/api
+
+      - name: Build Web
+        run: npm run build --workspace apps/web
+
+      - name: Build Workers
+        run: |
+          npm run build --workspace workers/workflow-worker
+          npm run build --workspace workers/ai-worker
+          npm run build --workspace workers/digital-twin-worker
+
+  docker-build:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      matrix:
+        service:
+          - { name: api, dockerfile: services/api/Dockerfile }
+          - { name: web, dockerfile: apps/web/Dockerfile }
+          - { name: workflow-worker, dockerfile: workers/workflow-worker/Dockerfile }
+          - { name: ai-worker, dockerfile: workers/ai-worker/Dockerfile }
+          - { name: digital-twin-worker, dockerfile: workers/digital-twin-worker/Dockerfile }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Azure Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.service.dockerfile }}
+          push: true
+          tags: |
+            ${{ vars.ACR_LOGIN_SERVER }}/accuqual-${{ matrix.service.name }}:${{ github.sha }}
+            ${{ vars.ACR_LOGIN_SERVER }}/accuqual-${{ matrix.service.name }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

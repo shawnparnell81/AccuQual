@@ -1,0 +1,81 @@
+services:
+  postgres:
+    # pgvector/pgvector (not the plain postgres image) — bundles the pgvector
+    # extension the ai_embeddings table needs; CREATE EXTENSION would fail
+    # against a plain postgres image (see db/migrate.ts).
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: accuqual
+      POSTGRES_PASSWORD: accuqual
+      POSTGRES_DB: accuqual
+    ports:
+      # Host-side 5433, not 5432 — this machine already has a native
+      # PostgreSQL service bound to 5432. Match this in DATABASE_URL.
+      - "5433:5432"
+    volumes:
+      - accuqual_pg_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    env_file: .env
+    depends_on:
+      - postgres
+      - redis
+      - elasticsearch
+    ports:
+      - "3000:3000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "5183:80" # host port matches apps/web/vite.config.ts's dev port for consistency
+
+  workflow-worker:
+    build:
+      context: .
+      dockerfile: workers/workflow-worker/Dockerfile
+    env_file: .env
+    depends_on:
+      - redis
+      - postgres
+
+  ai-worker:
+    build:
+      context: .
+      dockerfile: workers/ai-worker/Dockerfile
+    env_file: .env
+    depends_on:
+      - redis
+      - postgres
+
+  digital-twin-worker:
+    build:
+      context: .
+      dockerfile: workers/digital-twin-worker/Dockerfile
+    env_file: .env
+    depends_on:
+      - redis
+      - postgres
+
+volumes:
+  accuqual_pg_data:

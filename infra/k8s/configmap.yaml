@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: accuqual-config
+  namespace: accuqual
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  JWT_ACCESS_TTL: "15m"
+  JWT_REFRESH_TTL: "7d"
+  STORAGE_DRIVER: "azure"
+  AZURE_STORAGE_CONTAINER: "accuqual-files"
+  LLM_PROVIDER: "anthropic"
+  LLM_MODEL: "claude-sonnet-5"
+  REDIS_URL: "redis://accuqual-redis:6379"
+  ELASTICSEARCH_URL: "http://accuqual-elasticsearch:9200"
+  VITE_API_BASE_URL: "/api"

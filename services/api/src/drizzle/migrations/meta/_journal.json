@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789134391511,
+      "tag": "0000_aspiring_golden_guardian",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789137126309,
+      "tag": "0001_steep_killer_shrike",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789173195170,
+      "tag": "0002_add_ppap_packages",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789185886443,
+      "tag": "0003_add_discrepancy_investigations",
+      "breakpoints": true
+    }
+  ]
+}

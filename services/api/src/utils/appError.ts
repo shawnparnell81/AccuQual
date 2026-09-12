@@ -1,0 +1,29 @@
+export class AppError extends Error {
+  public readonly statusCode: number;
+  public readonly isOperational: boolean;
+  public readonly details?: unknown;
+
+  constructor(message: string, statusCode = 400, details?: unknown) {
+    super(message);
+    this.statusCode = statusCode;
+    this.isOperational = true;
+    this.details = details;
+    Object.setPrototypeOf(this, AppError.prototype);
+  }
+
+  static notFound(entity = "Resource") {
+    return new AppError(`${entity} not found`, 404);
+  }
+
+  static forbidden(message = "Forbidden") {
+    return new AppError(message, 403);
+  }
+
+  static unauthorized(message = "Unauthorized") {
+    return new AppError(message, 401);
+  }
+
+  static badRequest(message = "Bad request", details?: unknown) {
+    return new AppError(message, 400, details);
+  }
+}

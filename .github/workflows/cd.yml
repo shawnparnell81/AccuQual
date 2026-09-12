@@ -1,0 +1,71 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set AKS context
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ vars.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ vars.AKS_CLUSTER_NAME }}
+
+      - name: Run database migrations
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: |
+          npm install --workspace services/api --include-workspace-root
+          npm run db:migrate --workspace services/api
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f infra/k8s/namespace.yaml
+          kubectl apply -f infra/k8s/configmap.yaml
+          kubectl apply -f infra/k8s/secrets.yaml
+          kubectl apply -f infra/k8s/api-deployment.yaml
+          kubectl apply -f infra/k8s/api-service.yaml
+          kubectl apply -f infra/k8s/web-deployment.yaml
+          kubectl apply -f infra/k8s/web-service.yaml
+          kubectl apply -f infra/k8s/worker-deployment.yaml
+          kubectl apply -f infra/k8s/ingress.yaml
+
+      - name: Roll out new images
+        run: |
+          kubectl set image deployment/accuqual-api api=${{ vars.ACR_LOGIN_SERVER }}/accuqual-api:${{ github.event.workflow_run.head_sha }} -n accuqual
+          kubectl set image deployment/accuqual-web web=${{ vars.ACR_LOGIN_SERVER }}/accuqual-web:${{ github.event.workflow_run.head_sha }} -n accuqual
+          kubectl set image deployment/accuqual-worker workflow-worker=${{ vars.ACR_LOGIN_SERVER }}/accuqual-workflow-worker:${{ github.event.workflow_run.head_sha }} -n accuqual
+          kubectl set image deployment/accuqual-ai-worker ai-worker=${{ vars.ACR_LOGIN_SERVER }}/accuqual-ai-worker:${{ github.event.workflow_run.head_sha }} -n accuqual
+          kubectl set image deployment/accuqual-digital-twin-worker digital-twin-worker=${{ vars.ACR_LOGIN_SERVER }}/accuqual-digital-twin-worker:${{ github.event.workflow_run.head_sha }} -n accuqual
+
+      - name: Wait for rollout health checks
+        run: |
+          kubectl rollout status deployment/accuqual-api -n accuqual --timeout=180s
+          kubectl rollout status deployment/accuqual-web -n accuqual --timeout=120s
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "AccuQual deploy ${{ job.status }} for commit ${{ github.event.workflow_run.head_sha }}"
+            }

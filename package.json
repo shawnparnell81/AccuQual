@@ -1,0 +1,31 @@
+{
+  "name": "accuqual",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AccuQual - Next-generation Quality Management System",
+  "workspaces": [
+    "services/*",
+    "apps/*",
+    "workers/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace services/api",
+    "dev:web": "npm run dev --workspace apps/web",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:generate": "npm run db:generate --workspace services/api",
+    "db:migrate": "npm run db:migrate --workspace services/api",
+    "db:seed": "npm run db:seed --workspace services/api"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.9.0",
+    "eslint": "^9.9.0",
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
