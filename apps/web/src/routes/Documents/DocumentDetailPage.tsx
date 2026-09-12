@@ -6,20 +6,17 @@ import { DocumentHistoryPanel } from "../../components/documents/DocumentHistory
 import { DocumentApprovalModal } from "../../components/documents/DocumentApprovalModal";
 import { DocumentRevisionModal } from "../../components/documents/DocumentRevisionModal";
 import { DocumentRetentionPanel } from "../../components/documents/DocumentRetentionPanel";
+import { StatusBadge } from "../../components/tables/StatusBadge";
 
 const documentHooks = createResourceHooks<AccuQualDocument>("documents");
 
+// "Released" is the ISO document-control term for "approved" — kept as a
+// label override on the shared StatusBadge rather than its own color map.
 const STATUS_LABELS: Record<AccuQualDocument["status"], string> = {
   draft: "Draft",
   in_review: "In Review",
   approved: "Released",
   obsolete: "Obsolete",
-};
-const STATUS_COLORS: Record<AccuQualDocument["status"], { bg: string; fg: string }> = {
-  draft: { bg: "#EAEAE6", fg: "#66655D" },
-  in_review: { bg: "#FEF3C7", fg: "#92400E" },
-  approved: { bg: "#DCFCE7", fg: "#166534" },
-  obsolete: { bg: "#F3F4F6", fg: "#6B7280" },
 };
 
 /**
@@ -38,8 +35,6 @@ export function DocumentDetailPage() {
 
   if (isLoading || !doc) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
-  const statusColors = STATUS_COLORS[doc.status];
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -48,9 +43,7 @@ export function DocumentDetailPage() {
           <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
             <span>{doc.category ?? "Uncategorized"}</span>
             <span>— Rev {doc.currentVersion}</span>
-            <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: statusColors.bg, color: statusColors.fg }}>
-              {STATUS_LABELS[doc.status]}
-            </span>
+            <StatusBadge value={doc.status} label={STATUS_LABELS[doc.status]} />
           </div>
         </div>
         <div className="flex flex-wrap gap-2">

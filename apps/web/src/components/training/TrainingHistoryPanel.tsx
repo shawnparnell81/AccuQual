@@ -2,14 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { FileText } from "lucide-react";
 import { apiClient } from "../../api/client";
+import { StatusBadge } from "../tables/StatusBadge";
+import { AuditTrailList } from "../shared/AuditTrailList";
 import type { TrainingAssignment } from "../../api/types";
-
-const STATUS_COLORS: Record<TrainingAssignment["status"], { bg: string; fg: string }> = {
-  assigned: { bg: "#EAEAE6", fg: "#66655D" },
-  in_progress: { bg: "#FEF3C7", fg: "#92400E" },
-  completed: { bg: "#DCFCE7", fg: "#166534" },
-  overdue: { bg: "#FDE8E8", fg: "#C81E1E" },
-};
 
 async function viewCertificate(assignmentId: number) {
   const res = await apiClient.get(`/training/assignment/${assignmentId}/certificate`, { responseType: "blob" });
@@ -33,7 +28,6 @@ export function TrainingHistoryPanel({ userId }: { userId: number }) {
       <ul className="flex flex-col gap-2 text-sm">
         {sorted.length === 0 && <li className="text-muted-foreground">No training records yet.</li>}
         {sorted.map((r) => {
-          const colors = STATUS_COLORS[r.status];
           return (
             <li key={r.id} className="flex flex-col gap-1 border-b border-border pb-2 last:border-0">
               <div className="flex items-center gap-3">
@@ -46,9 +40,7 @@ export function TrainingHistoryPanel({ userId }: { userId: number }) {
                     r.courseTitle ?? `Course #${r.courseId}`
                   )}
                 </span>
-                <span className="rounded-full px-2 py-0.5 text-xs font-semibold capitalize" style={{ backgroundColor: colors.bg, color: colors.fg }}>
-                  {r.status.replace("_", " ")}
-                </span>
+                <StatusBadge value={r.status} />
                 {r.certificatePath && (
                   <button onClick={() => viewCertificate(r.id)} className="text-primary hover:opacity-80" aria-label="View certificate">
                     <FileText size={14} />
@@ -61,6 +53,12 @@ export function TrainingHistoryPanel({ userId }: { userId: number }) {
                 {r.trainerName && <span>Trainer: {r.trainerName}</span>}
               </div>
               {r.notes && <p className="text-xs text-muted-foreground">{r.notes}</p>}
+              <details className="text-xs">
+                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Audit trail</summary>
+                <div className="mt-1 pl-3">
+                  <AuditTrailList entityType="TrainingAssignment" entityId={r.id} />
+                </div>
+              </details>
             </li>
           );
         })}

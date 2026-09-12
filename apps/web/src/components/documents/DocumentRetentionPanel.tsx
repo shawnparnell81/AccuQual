@@ -2,12 +2,8 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { TextField, SelectField } from "../forms/Field";
+import { StatusBadge } from "../tables/StatusBadge";
 import type { AccuQualDocument } from "../../api/types";
-
-const EXPIRATION_COLORS: Record<string, { bg: string; fg: string }> = {
-  expired: { bg: "#FDE8E8", fg: "#C81E1E" },
-  expiring_soon: { bg: "#FEF3C7", fg: "#92400E" },
-};
 
 /** Computed the same way as the server (documents.controller.ts's expirationStatus) — kept here purely for an instant badge while typing, before the next save round-trips it. */
 function computeExpirationStatus(expirationDate: string | null, warningDays: number): "expired" | "expiring_soon" | null {
@@ -60,19 +56,14 @@ export function DocumentRetentionPanel({ document }: { document: AccuQualDocumen
   });
 
   const status = computeExpirationStatus(form.expirationDate || null, Number(form.expirationWarningDays));
-  const statusColors = status ? EXPIRATION_COLORS[status] : null;
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-medium">Expiration &amp; Retention</h3>
         <div className="flex items-center gap-2">
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold capitalize">{document.retentionState}</span>
-          {status && statusColors && (
-            <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: statusColors.bg, color: statusColors.fg }}>
-              {status === "expired" ? "Expired" : "Expiring Soon"}
-            </span>
-          )}
+          <StatusBadge value={document.retentionState} />
+          {status && <StatusBadge value={status} label={status === "expired" ? "Expired" : "Expiring Soon"} />}
         </div>
       </div>
 

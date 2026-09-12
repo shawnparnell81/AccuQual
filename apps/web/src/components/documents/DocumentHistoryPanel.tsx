@@ -1,15 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { FileText } from "lucide-react";
 import { apiClient } from "../../api/client";
+import { AuditTrailList } from "../shared/AuditTrailList";
 import type { DocumentVersion } from "../../api/types";
-
-interface AuditEntry {
-  id: number;
-  action: string;
-  changes: Record<string, unknown> | null;
-  performedBy: number | null;
-  createdAt: string;
-}
 
 /** A version's fileUrl is either an already-hosted link (the JSON `POST .../version` path) or a real uploaded file streamed via GET /documents/version/:versionId/file (auth required, so fetched as a blob rather than a plain link). */
 async function downloadVersion(version: DocumentVersion) {
@@ -29,13 +22,8 @@ export function DocumentHistoryPanel({ documentId }: { documentId: number }) {
     queryKey: ["document", documentId, "history"],
     queryFn: async () => (await apiClient.get(`/documents/${documentId}/history`)).data,
   });
-  const { data: auditEntries = [] } = useQuery<AuditEntry[]>({
-    queryKey: ["audit-trail", "Document", documentId],
-    queryFn: async () => (await apiClient.get(`/audit-trail/Document/${documentId}`)).data,
-  });
 
   const sortedVersions = [...versions].sort((a, b) => b.version - a.version);
-  const sortedAudit = [...auditEntries].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
     <div className="flex flex-col gap-4">
@@ -68,25 +56,8 @@ export function DocumentHistoryPanel({ documentId }: { documentId: number }) {
 
       <div className="rounded-lg border border-border bg-card p-4">
         <h3 className="mb-3 text-sm font-medium">Audit Trail</h3>
-        <ul className="flex flex-col gap-1.5 text-sm">
-          {sortedAudit.length === 0 && <li className="text-muted-foreground">No audit entries yet.</li>}
-          {sortedAudit.map((entry) => (
-            <li key={entry.id} className="flex items-center justify-between border-b border-border pb-1.5 last:border-0 text-xs">
-              <span className="font-medium capitalize">{(entry.changes?.action as string) ?? entry.action}</span>
-              <span className="flex-1 px-2 text-muted-foreground">{summarizeChanges(entry.changes)}</span>
-              <span className="flex-none text-muted-foreground">{new Date(entry.createdAt).toLocaleString()}</span>
-            </li>
-          ))}
-        </ul>
+        <AuditTrailList entityType="Document" entityId={documentId} />
       </div>
     </div>
   );
-}
-
-function summarizeChanges(changes: Record<string, unknown> | null): string {
-  if (!changes) return "";
-  return Object.entries(changes)
-    .filter(([k, v]) => k !== "action" && v !== undefined && v !== null)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join(", ");
 }

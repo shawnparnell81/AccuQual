@@ -11,16 +11,10 @@ import { DocumentApprovalModal } from "../../components/documents/DocumentApprov
 import { DocumentRevisionModal } from "../../components/documents/DocumentRevisionModal";
 import { DocumentRetentionPanel } from "../../components/documents/DocumentRetentionPanel";
 import { DocumentHistoryPanel } from "../../components/documents/DocumentHistoryPanel";
+import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { AccuQualDocument, TrainingAssignment, TrainingCourse } from "../../api/types";
 
 const trainingHooks = createResourceHooks<TrainingCourse>("training");
-
-const STATUS_COLORS: Record<TrainingAssignment["status"], { bg: string; fg: string }> = {
-  assigned: { bg: "#EAEAE6", fg: "#66655D" },
-  in_progress: { bg: "#FEF3C7", fg: "#92400E" },
-  completed: { bg: "#DCFCE7", fg: "#166534" },
-  overdue: { bg: "#FDE8E8", fg: "#C81E1E" },
-};
 
 /**
  * Training course detail: the course's material (a controlled document once
@@ -107,15 +101,12 @@ export function TrainingDetailPage() {
         <ul className="flex flex-col gap-2 text-sm">
           {assignments.length === 0 && <li className="text-muted-foreground">No employees assigned yet.</li>}
           {assignments.map((a) => {
-            const colors = STATUS_COLORS[a.status];
             return (
               <li key={a.id} className="flex items-center gap-3 border-b border-border pb-2 last:border-0">
                 <Link to={`/training/employee/${a.userId}`} className="w-40 flex-none truncate hover:underline">
                   {a.userName ?? a.userEmail}
                 </Link>
-                <span className="rounded-full px-2 py-0.5 text-xs font-semibold capitalize" style={{ backgroundColor: colors.bg, color: colors.fg }}>
-                  {a.status.replace("_", " ")}
-                </span>
+                <StatusBadge value={a.status} />
                 <span className="flex-1 text-xs text-muted-foreground">
                   {a.completedAt ? `Completed ${new Date(a.completedAt).toLocaleDateString()}` : a.dueAt ? `Due ${new Date(a.dueAt).toLocaleDateString()}` : "No due date"}
                 </span>
