@@ -43,6 +43,13 @@
       "when": 1789223249278,
       "tag": "0005_add_user_department",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789229767115,
+      "tag": "0006_add_document_folder_pdf_path",
+      "breakpoints": true
     }
   ]
 }

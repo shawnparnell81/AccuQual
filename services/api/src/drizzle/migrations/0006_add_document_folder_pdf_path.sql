@@ -1,0 +1,1 @@
+ALTER TABLE "document_folders" ADD COLUMN "pdf_path" text;

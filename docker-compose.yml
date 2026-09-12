@@ -49,6 +49,12 @@ services:
       - elasticsearch
     ports:
       - "3000:3000"
+    volumes:
+      # STORAGE_LOCAL_PATH defaults to ./uploads, resolved from the runtime
+      # image's WORKDIR (/app) — user-uploaded document-folder PDF templates
+      # (and seeded form templates) live here. Without this volume, every
+      # `docker compose build api` throws away anything a user has uploaded.
+      - accuqual_uploads:/app/uploads
 
   web:
     build:
@@ -100,3 +106,4 @@ services:
 
 volumes:
   accuqual_pg_data:
+  accuqual_uploads:

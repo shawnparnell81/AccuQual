@@ -10,9 +10,12 @@ import { tenants } from "./tenants.js";
  * in this same table, to any depth (the seeded default tree is 3 levels:
  * department -> folder -> document type, but nothing enforces that depth).
  *
- * This is deliberately a pure organizational tree, not yet linked to the
- * `documents` table's actual uploaded file records — attaching real files to
- * a leaf folder is a real next step, not attempted here.
+ * Any node — but in practice a leaf (no children) — can carry an attached PDF
+ * via `pdfPath`, uploaded through POST /document-folders/:id/template. One
+ * reserved top-level node per tenant (name === LIBRARY_POOL_NAME) is the
+ * "library pool": moving a leaf there (a plain parentId update, same as any
+ * other move) is how "remove this form, send it back to the library" works —
+ * no separate pool table or status flag needed, it's just another folder.
  */
 export const documentFolders = pgTable("document_folders", {
   id: serial("id").primaryKey(),
@@ -20,8 +23,15 @@ export const documentFolders = pgTable("document_folders", {
   name: text("name").notNull(),
   parentId: integer("parent_id").references((): AnyPgColumn => documentFolders.id),
   sortOrder: integer("sort_order").notNull().default(0),
+  // Path (under STORAGE_LOCAL_PATH) to a user-uploaded PDF attached to this
+  // node — null until someone attaches one; see uploadTemplate in the
+  // controller. Independent of the seeded default taxonomy: any node, seeded
+  // or user-created, can have a PDF attached, replaced, or removed.
+  pdfPath: text("pdf_path"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });
+
+export const LIBRARY_POOL_NAME = "Library Pool";
 
 export type DocumentFolder = typeof documentFolders.$inferSelect;

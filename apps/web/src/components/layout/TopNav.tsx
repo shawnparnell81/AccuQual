@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Building2, ChevronDown, Lock, Menu, Search, X } from "lucide-react";
+import { Building2, ChevronDown, Library, Lock, Menu, Search, X } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { useCurrentTenant, useCurrentUser } from "../../hooks/useAuth";
 import {
@@ -19,7 +19,7 @@ import {
 } from "./navConfig";
 
 type KpiCounts = Partial<Record<(typeof KPI_COUNT_KEYS)[number], number>>;
-type DropdownId = Department | "system";
+type DropdownId = Department | "system" | "library";
 
 // How long the cursor may be off a dropdown (moving from the trigger down into
 // the panel briefly leaves both) before it auto-closes. Long enough that the
@@ -37,6 +37,29 @@ function useKpiCounts() {
   return data ?? {};
 }
 
+interface DocumentFolderNode {
+  id: number;
+  name: string;
+  parentId: number | null;
+}
+
+const LIBRARY_POOL_NAME = "Library Pool";
+
+/**
+ * The Document Library dropdown mirrors whatever the user has saved in the
+ * Folder Explorer (/documents/folders) — same query key, so a save there
+ * invalidates this too. Only top-level nodes (departments) show up here;
+ * the Library Pool is a Folder Explorer concept, not a nav destination.
+ */
+function useDocumentLibraryTopLevel() {
+  const { data = [] } = useQuery({
+    queryKey: ["document-folders"],
+    queryFn: async () => (await apiClient.get<DocumentFolderNode[]>("/document-folders")).data,
+    staleTime: 30_000,
+  });
+  return data.filter((f) => f.parentId === null && f.name !== LIBRARY_POOL_NAME);
+}
+
 /** Read/write access this viewer has on a leaf, given which dropdown it's being shown in. */
 function effectiveAccess(leaf: NavLeaf, department: Department, bypass: boolean): AccessLevel {
   if (bypass) return leaf.access[department] ? "edit" : "none";
@@ -50,6 +73,7 @@ export function TopNav() {
   const isAdmin = user?.roleName === "admin";
   const userDept = user?.department as Department | null | undefined;
   const kpiCounts = useKpiCounts();
+  const documentLibrary = useDocumentLibraryTopLevel();
 
   const [openId, setOpenId] = useState<DropdownId | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -218,6 +242,35 @@ export function TopNav() {
               ))}
             </NavDropdown>
           )}
+
+          {documentLibrary.length > 0 && (
+            <NavDropdown
+              id="library"
+              label="Document Library"
+              // Single column, deliberately — department names here are
+              // user-renamed free text (see Folder Explorer) and can run
+              // long ("Shipping & Receiving"); a 2-column grid's tracks
+              // don't reserve room for that and it overflowed into a
+              // scrollbar instead of wrapping.
+              isOpen={openId === "library"}
+              onOpen={() => openNow("library")}
+              onScheduleClose={() => scheduleClose("library")}
+              onCancelClose={cancelClose}
+            >
+              {documentLibrary.map((dept) => (
+                <Link
+                  key={dept.id}
+                  to={`/documents/folders?dept=${dept.id}`}
+                  title={`Open the ${dept.name} folder in the Document Library`}
+                  onClick={() => setOpenId(null)}
+                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted whitespace-nowrap"
+                >
+                  <Library size={16} />
+                  <span>{dept.name}</span>
+                </Link>
+              ))}
+            </NavDropdown>
+          )}
         </nav>
 
         {/* Quick-nav search — client-side filter over the modules above; not yet
@@ -356,6 +409,37 @@ export function TopNav() {
                         >
                           <item.icon size={16} />
                           <span>{item.label}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {documentLibrary.length > 0 && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setMobileExpanded(mobileExpanded === "library" ? null : "library")}
+                    className={clsx(
+                      "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium",
+                      mobileExpanded === "library" ? "bg-muted" : "text-foreground hover:bg-muted"
+                    )}
+                  >
+                    <span className="flex-1 text-left">Document Library</span>
+                    <ChevronDown size={14} className={clsx("transition-transform", mobileExpanded === "library" && "rotate-180")} />
+                  </button>
+                  {mobileExpanded === "library" && (
+                    <div className="ml-4 flex flex-col gap-0.5 border-l border-border pl-3 py-1">
+                      {documentLibrary.map((dept) => (
+                        <Link
+                          key={dept.id}
+                          to={`/documents/folders?dept=${dept.id}`}
+                          onClick={() => setMobileOpen(false)}
+                          className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+                        >
+                          <Library size={16} />
+                          <span>{dept.name}</span>
                         </Link>
                       ))}
                     </div>
