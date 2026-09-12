@@ -20,3 +20,4 @@ export * from "./ai.js";
 export * from "./digitalTwin.js";
 export * from "./auditTrail.js";
 export * from "./forms.js";
+export * from "./navPreferences.js";

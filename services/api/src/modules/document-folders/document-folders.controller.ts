@@ -46,6 +46,51 @@ async function ensureLibraryPool(db: TenantDb, tenantId: number, topLevel: (type
   return created;
 }
 
+/**
+ * The "few out of the entire library" leaves whose name plainly names one of
+ * the app's real, working QMS modules — linking them means clicking that
+ * document opens the live module instead of (or alongside) a static file.
+ * Order matters: more specific patterns first, so e.g. "Complaint 8Ds"
+ * matches the 8D rule rather than the broader Complaints rule below it.
+ * Anything naming a *procedure about* the process (not the record type
+ * itself) is deliberately excluded — a "Corrective Action Procedure" is an
+ * SOP document, not a CAPA record.
+ */
+const FORM_LINK_RULES: { pattern: RegExp; path: string }[] = [
+  { pattern: /\b8d'?s?\b/i, path: "/8d" },
+  { pattern: /\bcapa\b/i, path: "/capa" },
+  { pattern: /\bcorrective actions?\b/i, path: "/capa" },
+  { pattern: /\bncr'?s?\b/i, path: "/ncr" },
+  { pattern: /\bnonconformance\b/i, path: "/ncr" },
+  { pattern: /\bppap\b/i, path: "/ppap" },
+  { pattern: /\bcalibration\b/i, path: "/calibration" },
+  { pattern: /\bsupplier (audit|scorecard)/i, path: "/suppliers" },
+  { pattern: /\b(customer )?complaints?\b/i, path: "/complaints" },
+  { pattern: /\b(internal|external) audit\b|\baudit checklist\b/i, path: "/audits" },
+  { pattern: /\btraining records?\b/i, path: "/training" },
+  { pattern: /\b(engineering )?change (request|order)/i, path: "/change" },
+  { pattern: /\b[dp]fmea\b/i, path: "/risk" },
+];
+
+/**
+ * Self-heals `linkedPath` onto any leaf (no children) whose name matches a
+ * known QMS module and doesn't already have one — same self-healing pattern
+ * as ensureLibraryPool, so it applies to every tenant (existing or new)
+ * without a one-off migration script. Skips anything naming a *procedure*
+ * (a reference document about the process, not the live record type).
+ */
+async function linkKnownForms(db: TenantDb, tenantId: number, all: (typeof documentFolders.$inferSelect)[]): Promise<void> {
+  const hasChildren = new Set(all.map((f) => f.parentId).filter((id): id is number => id !== null));
+  const toLink = all.filter((f) => !hasChildren.has(f.id) && !f.linkedPath && !/procedure/i.test(f.name));
+
+  for (const leaf of toLink) {
+    const rule = FORM_LINK_RULES.find((r) => r.pattern.test(leaf.name));
+    if (!rule) continue;
+    await db.update(documentFolders).set({ linkedPath: rule.path }).where(and(eq(documentFolders.id, leaf.id), eq(documentFolders.tenantId, tenantId)));
+    leaf.linkedPath = rule.path; // keep the in-memory list the caller returns consistent with what we just wrote
+  }
+}
+
 /** Full flat folder list for the tenant, seeding the default department tree on first use. */
 export const list = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
@@ -56,12 +101,16 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     await seedDefaults(db, tenantId);
     const seeded = await db.select().from(documentFolders).where(eq(documentFolders.tenantId, tenantId));
     const pool = await ensureLibraryPool(db, tenantId, seeded.filter((f) => f.parentId === null));
-    return res.json([...seeded, pool]);
+    const all = [...seeded, pool];
+    await linkKnownForms(db, tenantId, all);
+    return res.json(all);
   }
 
   const pool = await ensureLibraryPool(db, tenantId, existing.filter((f) => f.parentId === null));
   const alreadyIncluded = existing.some((f) => f.id === pool.id);
-  res.json(alreadyIncluded ? existing : [...existing, pool]);
+  const all = alreadyIncluded ? existing : [...existing, pool];
+  await linkKnownForms(db, tenantId, all);
+  res.json(all);
 });
 
 export const create = asyncHandler(async (req: Request, res: Response) => {

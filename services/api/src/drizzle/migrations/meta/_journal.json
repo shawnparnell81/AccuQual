@@ -50,6 +50,13 @@
       "when": 1789229767115,
       "tag": "0006_add_document_folder_pdf_path",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789232454522,
+      "tag": "0007_add_form_links_and_nav_prefs",
+      "breakpoints": true
     }
   ]
 }

@@ -28,6 +28,13 @@ export const documentFolders = pgTable("document_folders", {
   // controller. Independent of the seeded default taxonomy: any node, seeded
   // or user-created, can have a PDF attached, replaced, or removed.
   pdfPath: text("pdf_path"),
+  // A real in-app route (e.g. "/ncr") this leaf corresponds to, for the small
+  // subset of the taxonomy that names an actual built-in QMS record type
+  // (see linkKnownForms in the controller — self-heals per tenant, matching
+  // leaf names against the app's real form types). Independent of pdfPath:
+  // a leaf can be linked to a live module AND still carry its own attached
+  // reference PDF.
+  linkedPath: text("linked_path"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });

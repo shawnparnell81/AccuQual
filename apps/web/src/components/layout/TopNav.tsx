@@ -2,9 +2,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Building2, ChevronDown, Library, Lock, Menu, Search, X } from "lucide-react";
+import { Building2, ChevronDown, Library, Lock, Menu, Search, Settings, X } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { useCurrentTenant, useCurrentUser } from "../../hooks/useAuth";
+import { departmentScope, itemScope, useHiddenNavScopes } from "../../hooks/useNavPreferences";
 import {
   DASHBOARD_LEAF,
   DEPARTMENTS,
@@ -117,12 +118,22 @@ export function TopNav() {
     };
   }, []);
 
-  // Which department groups this viewer gets a dropdown for at all.
-  const visibleGroups = useMemo(
-    () =>
-      NAV_STRUCTURE.filter((g) => g.department === null || isAdmin || isPlatformAdmin || g.department === userDept),
-    [isAdmin, isPlatformAdmin, userDept]
-  );
+  const hiddenScopes = useHiddenNavScopes();
+  const hidden = useMemo(() => new Set(hiddenScopes), [hiddenScopes]);
+
+  // Which department groups this viewer gets a dropdown for at all — then
+  // layer the tenant's own "I don't use this" nav customization on top:
+  // a whole department can be hidden, or just one item within it, and
+  // either can always be turned back on from Settings > Navigation (see
+  // NavigationSettingsPage) since the catalog itself never changes.
+  const visibleGroups = useMemo(() => {
+    return NAV_STRUCTURE.filter((g) => g.department === null || isAdmin || isPlatformAdmin || g.department === userDept)
+      .filter((g) => !hidden.has(departmentScope(g.department ?? "system")))
+      .map((g) => ({
+        ...g,
+        items: g.items.filter((item) => !hidden.has(itemScope(g.department ?? "system", item.key))),
+      }));
+  }, [isAdmin, isPlatformAdmin, userDept, hidden]);
 
   const systemGroup = visibleGroups.find((g) => g.department === null);
   const departmentGroups = visibleGroups.filter((g) => g.department !== null);
@@ -300,6 +311,16 @@ export function TopNav() {
           )}
         </div>
 
+        {/* Customize which departments/items show up in the nav at all. */}
+        <Link
+          to="/settings/navigation"
+          className="hidden md:flex shrink-0 p-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="Customize navigation"
+          title="Customize navigation"
+        >
+          <Settings size={18} />
+        </Link>
+
         {/* Mobile hamburger */}
         <button
           type="button"
@@ -446,6 +467,15 @@ export function TopNav() {
                   )}
                 </div>
               )}
+
+              <Link
+                to="/settings/navigation"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted border-t border-border mt-1 pt-3"
+              >
+                <Settings size={16} />
+                <span>Customize navigation</span>
+              </Link>
             </>
           )}
         </div>

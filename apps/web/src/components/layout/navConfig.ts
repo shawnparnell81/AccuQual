@@ -185,7 +185,16 @@ export const NAV_STRUCTURE: NavGroup[] = [
     // enforces), not governed by the department matrix. See ASSUMPTIONS.
     department: null,
     items: [
-      { key: "documents", label: "Documents", path: "/documents", icon: FileText, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
+      {
+        key: "documents",
+        label: "Document Control",
+        path: "/documents",
+        icon: FileText,
+        access: {},
+        kpi: false,
+        priority: 3,
+        notes: "Master index + controlled-document register — folder browsing lives under Document Library instead",
+      },
       { key: "training", label: "Training", path: "/training", icon: GraduationCap, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
       { key: "change", label: "Change Mgmt", path: "/change", icon: GitBranch, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
       { key: "risk", label: "Risk / FMEA", path: "/risk", icon: ShieldAlert, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },

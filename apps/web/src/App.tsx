@@ -37,6 +37,7 @@ import { WorkflowBuilderPage } from "./routes/Workflow/WorkflowBuilderPage";
 import { AiInsightsPage } from "./routes/AI/AiInsightsPage";
 import { DigitalTwinPage } from "./routes/DigitalTwin/DigitalTwinPage";
 import { PlatformAdminPage } from "./routes/Platform/PlatformAdminPage";
+import { NavigationSettingsPage } from "./routes/Settings/NavigationSettingsPage";
 import { useCurrentUser } from "./hooks/useAuth";
 
 function HomeRoute() {
@@ -95,6 +96,7 @@ export function App() {
           <Route path="/workflow" element={<WorkflowBuilderPage />} />
           <Route path="/ai" element={<AiInsightsPage />} />
           <Route path="/digital-twin" element={<DigitalTwinPage />} />
+          <Route path="/settings/navigation" element={<NavigationSettingsPage />} />
         </Route>
       </Route>
     </Routes>

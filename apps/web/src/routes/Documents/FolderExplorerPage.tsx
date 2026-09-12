@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
-import { Paperclip, FileText, X, Inbox } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Paperclip, FileText, X, Inbox, ArrowUpRight } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
 
@@ -11,6 +11,7 @@ interface DocumentFolder {
   parentId: number | null;
   sortOrder: number;
   pdfPath: string | null;
+  linkedPath: string | null;
 }
 
 const LIBRARY_POOL_NAME = "Library Pool";
@@ -411,9 +412,21 @@ function DocPill({
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      className="inline-flex cursor-grab items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-1 text-xs active:cursor-grabbing"
+      className={`inline-flex cursor-grab items-center gap-1.5 rounded-full border px-3 py-1 text-xs active:cursor-grabbing ${
+        doc.linkedPath ? "border-primary/40 bg-primary/10" : "border-border bg-muted"
+      }`}
       title={doc.pdfPath ? "Has an attached PDF — click the file icon to view it" : "No PDF attached yet"}
     >
+      {doc.linkedPath && (
+        <Link
+          to={doc.linkedPath}
+          className="flex items-center text-primary hover:opacity-80"
+          aria-label={`Open the live ${doc.name} module`}
+          title={`This is a real module — open ${doc.linkedPath}`}
+        >
+          <ArrowUpRight size={12} />
+        </Link>
+      )}
       {doc.name}
       {doc.pdfPath ? (
         <>
