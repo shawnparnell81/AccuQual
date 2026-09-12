@@ -42,6 +42,24 @@ export interface AccuQualDocument {
   currentVersion: number;
   status: "draft" | "in_review" | "approved" | "obsolete";
   ownerId: number | null;
+  expirationDate: string | null;
+  expirationWarningDays: number;
+  retentionPeriodDays: number;
+  retentionAction: "archive" | "delete";
+  retentionState: "active" | "archived";
+}
+
+export interface DocumentVersion {
+  id: number;
+  documentId: number;
+  version: number;
+  fileUrl: string | null;
+  changeNotes: string | null;
+  approvedBy: number | null;
+  approvedAt: string | null;
+  approvalNotes: string | null;
+  createdBy: number | null;
+  createdAt: string;
 }
 
 export interface Supplier {

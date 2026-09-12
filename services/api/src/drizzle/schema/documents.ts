@@ -11,6 +11,18 @@ export const documents = pgTable("documents", {
   status: text("status").notNull().default("draft"), // draft, in_review, approved, obsolete
   ownerId: integer("owner_id").references(() => users.id),
   isDeleted: boolean("is_deleted").notNull().default(false),
+  // Expiration — computed live at read time (documents.controller.ts's
+  // expiringStatus), nothing stored beyond the two inputs. No worker.
+  expirationDate: timestamp("expiration_date"),
+  expirationWarningDays: integer("expiration_warning_days").notNull().default(30),
+  // Retention — only meaningful once status is "obsolete" (see
+  // applyRetention). retentionState starts "active" and only ever becomes
+  // "archived" here; "delete" retentionAction soft-deletes the row instead
+  // (isDeleted, same as the rest of this table) rather than needing a third
+  // retentionState value for it.
+  retentionPeriodDays: integer("retention_period_days").notNull().default(365),
+  retentionAction: text("retention_action").notNull().default("archive"), // archive, delete
+  retentionState: text("retention_state").notNull().default("active"), // active, archived
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });
@@ -24,6 +36,10 @@ export const documentVersions = pgTable("document_versions", {
   changeNotes: text("change_notes"),
   approvedBy: integer("approved_by").references(() => users.id),
   approvedAt: timestamp("approved_at"),
+  // Distinct from changeNotes ("what changed in this revision", written when
+  // the version is created) — this is the approver's own note, written at
+  // approval time.
+  approvalNotes: text("approval_notes"),
   createdBy: integer("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });

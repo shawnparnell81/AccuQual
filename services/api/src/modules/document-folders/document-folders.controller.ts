@@ -1,14 +1,23 @@
 import type { Request, Response } from "express";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { createReadStream, existsSync } from "node:fs";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { documentFolders, LIBRARY_POOL_NAME } from "../../drizzle/schema/documentFolders.js";
+import { documents } from "../../drizzle/schema/documents.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
 import { DEFAULT_DOCUMENT_FOLDERS, type DefaultFolderSeed } from "./defaultDocumentFolders.js";
+import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { expirationStatus } from "../documents/documents.controller.js";
+
+// A separate entityType from "Document" (services/api/src/modules/documents)
+// — document_folders.id and documents.id are different id spaces, and
+// keeping them under distinct entityTypes is what makes an audit_trail row
+// unambiguous about which table entityId points into.
+const AUDIT_ENTITY_TYPE = "DocumentFolder";
 
 /**
  * Inserts one level of the default tree at a time (each level needs the
@@ -91,6 +100,27 @@ async function linkKnownForms(db: TenantDb, tenantId: number, all: (typeof docum
   }
 }
 
+/**
+ * Adds `documentStatus`/`documentExpirationStatus` to any leaf carrying a
+ * `documentId` — one batch query for the whole tree rather than N+1 — so the
+ * Folder Explorer can show "Draft" / "Expiring Soon" / "Expired" without a
+ * per-leaf round trip. Leaves without a linked document are untouched.
+ */
+async function withLinkedDocumentInfo(db: TenantDb, tenantId: number, all: (typeof documentFolders.$inferSelect)[]) {
+  const documentIds = [...new Set(all.map((f) => f.documentId).filter((id): id is number => id !== null))];
+  if (documentIds.length === 0) return all;
+
+  const linked = await db.select().from(documents).where(and(eq(documents.tenantId, tenantId), inArray(documents.id, documentIds)));
+  const byId = new Map(linked.map((d) => [d.id, d]));
+
+  return all.map((f) => {
+    if (f.documentId === null) return f;
+    const doc = byId.get(f.documentId);
+    if (!doc) return f;
+    return { ...f, documentStatus: doc.status, documentExpirationStatus: expirationStatus(doc) };
+  });
+}
+
 /** Full flat folder list for the tenant, seeding the default department tree on first use. */
 export const list = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
@@ -103,14 +133,14 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     const pool = await ensureLibraryPool(db, tenantId, seeded.filter((f) => f.parentId === null));
     const all = [...seeded, pool];
     await linkKnownForms(db, tenantId, all);
-    return res.json(all);
+    return res.json(await withLinkedDocumentInfo(db, tenantId, all));
   }
 
   const pool = await ensureLibraryPool(db, tenantId, existing.filter((f) => f.parentId === null));
   const alreadyIncluded = existing.some((f) => f.id === pool.id);
   const all = alreadyIncluded ? existing : [...existing, pool];
   await linkKnownForms(db, tenantId, all);
-  res.json(all);
+  res.json(await withLinkedDocumentInfo(db, tenantId, all));
 });
 
 export const create = asyncHandler(async (req: Request, res: Response) => {
@@ -132,6 +162,17 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
     .insert(documentFolders)
     .values({ tenantId, name, parentId, sortOrder: siblings.length })
     .returning();
+  if (!created) throw new AppError("Failed to create document folder", 500);
+
+  await recordAuditTrail(db, {
+    tenantId,
+    entityType: AUDIT_ENTITY_TYPE,
+    entityId: created.id,
+    action: "create",
+    changes: { name, parentId },
+    performedBy: req.user?.id,
+  });
+
   res.status(201).json(created);
 });
 
@@ -153,7 +194,12 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
   const tenantId = req.tenantId!;
   const id = Number(req.params.id);
-  const { name, parentId, sortOrder } = req.body as { name?: string; parentId?: number | null; sortOrder?: number };
+  const { name, parentId, sortOrder, documentId } = req.body as {
+    name?: string;
+    parentId?: number | null;
+    sortOrder?: number;
+    documentId?: number | null;
+  };
 
   const [current] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, id), eq(documentFolders.tenantId, tenantId)));
   if (!current) throw AppError.notFound("Document folder");
@@ -171,6 +217,7 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
   if (name !== undefined) patch.name = name;
   if (parentId !== undefined) patch.parentId = parentId;
   if (sortOrder !== undefined) patch.sortOrder = sortOrder;
+  if (documentId !== undefined) patch.documentId = documentId;
 
   const [updated] = await db
     .update(documentFolders)
@@ -178,6 +225,16 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
     .where(and(eq(documentFolders.id, id), eq(documentFolders.tenantId, tenantId)))
     .returning();
   if (!updated) throw AppError.notFound("Document folder");
+
+  await recordAuditTrail(db, {
+    tenantId,
+    entityType: AUDIT_ENTITY_TYPE,
+    entityId: id,
+    action: "update",
+    changes: { name, parentId, sortOrder, documentId },
+    performedBy: req.user?.id,
+  });
+
   res.json(updated);
 });
 
@@ -196,6 +253,16 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
     .where(and(eq(documentFolders.id, id), eq(documentFolders.tenantId, tenantId)))
     .returning();
   if (!deleted) throw AppError.notFound("Document folder");
+
+  await recordAuditTrail(db, {
+    tenantId,
+    entityType: AUDIT_ENTITY_TYPE,
+    entityId: id,
+    action: "delete",
+    changes: { name: deleted.name },
+    performedBy: req.user?.id,
+  });
+
   res.status(204).send();
 });
 
@@ -233,6 +300,16 @@ export const uploadTemplate = asyncHandler(async (req: Request, res: Response) =
     .set({ pdfPath: path, updatedAt: new Date() })
     .where(and(eq(documentFolders.id, id), eq(documentFolders.tenantId, tenantId)))
     .returning();
+
+  await recordAuditTrail(db, {
+    tenantId,
+    entityType: AUDIT_ENTITY_TYPE,
+    entityId: id,
+    action: "update",
+    changes: { action: "upload_template", filename: file.originalname },
+    performedBy: req.user?.id,
+  });
+
   res.status(201).json(updated);
 });
 
@@ -273,5 +350,15 @@ export const removeTemplate = asyncHandler(async (req: Request, res: Response) =
     .set({ pdfPath: null, updatedAt: new Date() })
     .where(and(eq(documentFolders.id, id), eq(documentFolders.tenantId, tenantId)))
     .returning();
+
+  await recordAuditTrail(db, {
+    tenantId,
+    entityType: AUDIT_ENTITY_TYPE,
+    entityId: id,
+    action: "update",
+    changes: { action: "remove_template" },
+    performedBy: req.user?.id,
+  });
+
   res.json(updated);
 });

@@ -12,9 +12,23 @@ interface DocumentFolder {
   sortOrder: number;
   pdfPath: string | null;
   linkedPath: string | null;
+  documentId: number | null;
+  /** Only present when documentId is set — joined server-side, see document-folders.controller.ts's withLinkedDocumentInfo. */
+  documentStatus?: "draft" | "in_review" | "approved" | "obsolete";
+  documentExpirationStatus?: "expired" | "expiring_soon" | null;
 }
 
 const LIBRARY_POOL_NAME = "Library Pool";
+
+/** Badge colors for a leaf linked to a controlled document — expiration takes priority over the plain status when both apply. */
+const DOCUMENT_STATUS_STYLE: Record<string, { backgroundColor: string; color: string }> = {
+  draft: { backgroundColor: "#EAEAE6", color: "#66655D" },
+  in_review: { backgroundColor: "#FEF3C7", color: "#92400E" },
+  approved: { backgroundColor: "#DCFCE7", color: "#166534" },
+  obsolete: { backgroundColor: "#F3F4F6", color: "#6B7280" },
+  expiring_soon: { backgroundColor: "#FEF3C7", color: "#92400E" },
+  expired: { backgroundColor: "#FDE8E8", color: "#C81E1E" },
+};
 
 /** Stable accent per department, cycling if there are ever more than 7. */
 const DEPARTMENT_COLORS = ["#5B5FEA", "#2451FF", "#0E9F6E", "#C2953B", "#8A4FD6", "#D65F8A", "#2AA7B8"];
@@ -430,6 +444,16 @@ function DocPill({
         </Link>
       )}
       {doc.name}
+      {doc.documentId && (
+        <Link
+          to={`/documents/${doc.documentId}`}
+          className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold capitalize hover:opacity-80"
+          style={DOCUMENT_STATUS_STYLE[doc.documentExpirationStatus ?? doc.documentStatus ?? "draft"]}
+          title="Open the controlled document (revision history, approval, retention)"
+        >
+          {(doc.documentExpirationStatus ?? doc.documentStatus ?? "draft").replace("_", " ")}
+        </Link>
+      )}
       {doc.pdfPath ? (
         <>
           <button onClick={viewAttachment} className="text-primary hover:opacity-80" aria-label={`View attached PDF for ${doc.name}`}>

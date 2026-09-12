@@ -1,5 +1,6 @@
 import { pgTable, serial, text, integer, timestamp, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { tenants } from "./tenants.js";
+import { documents } from "./documents.js";
 
 /**
  * A generic, self-referencing folder tree for organizing document types by
@@ -35,6 +36,12 @@ export const documentFolders = pgTable("document_folders", {
   // a leaf can be linked to a live module AND still carry its own attached
   // reference PDF.
   linkedPath: text("linked_path"),
+  // Optional link to a fully version-controlled record in `documents` — for
+  // when a leaf needs real revision/approval/expiration/retention tracking
+  // instead of (or in addition to) a bare pdfPath. Nullable: most leaves
+  // stay simple name-only or pdfPath-only nodes; this is opt-in per leaf via
+  // PATCH /document-folders/:id.
+  documentId: integer("document_id").references(() => documents.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });

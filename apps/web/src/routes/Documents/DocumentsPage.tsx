@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
@@ -15,6 +16,7 @@ const DOCUMENT_CONTROL_INDEX_ENTITY_ID = 1;
  * one destination.
  */
 export function DocumentsPage() {
+  const navigate = useNavigate();
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between rounded-lg border border-border bg-card p-4">
@@ -28,6 +30,7 @@ export function DocumentsPage() {
       <ResourceListPage<AccuQualDocument>
         title="Document Control"
         resource="documents"
+        onRowClick={(d) => navigate(`/documents/${d.id}`)}
         columns={[
           { header: "ID", accessor: (d) => `#${d.id}` },
           { header: "Title", accessor: (d) => d.title },
