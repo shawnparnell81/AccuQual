@@ -8,10 +8,24 @@ RUN npm install --workspace workers/workflow-worker --include-workspace-root
 # ---- Stage 2: build TypeScript ----
 FROM node:20-alpine AS build
 WORKDIR /repo
+# Only the root node_modules is copied — with just this one workspace's
+# package.json present (no other workspace visible), npm workspaces hoists
+# everything here rather than nesting a per-workspace node_modules, so that
+# path never exists; copying it used to fail the build outright.
 COPY --from=deps /repo/node_modules ./node_modules
-COPY --from=deps /repo/workers/workflow-worker/node_modules ./workers/workflow-worker/node_modules
+# `npm run --workspace` needs the root package.json present to resolve which
+# directory that workspace name maps to — a second, previously-masked bug
+# (the build never got this far before the node_modules COPY above was fixed).
+COPY package.json ./
 COPY tsconfig.base.json ./
 COPY workers/workflow-worker ./workers/workflow-worker
+# services/api's own package.json (declares "type": "module") must be present
+# so TypeScript's nearest-ancestor lookup for the copied services/api/src
+# files resolves it instead of falling through to the root package.json
+# (which has no "type", so defaults to CommonJS) — that mismatch made
+# TypeScript instantiate drizzle-orm's types twice (once per module format)
+# and fail with spurious "private property" incompatibility errors.
+COPY services/api/package.json ./services/api/package.json
 COPY services/api/src/drizzle ./services/api/src/drizzle
 COPY services/api/src/modules/workflow ./services/api/src/modules/workflow
 RUN npm run build --workspace workers/workflow-worker
@@ -22,5 +36,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /repo/workers/workflow-worker/dist ./dist
 COPY --from=build /repo/workers/workflow-worker/package.json ./package.json
-COPY --from=deps /repo/workers/workflow-worker/node_modules ./node_modules
+# The hoisted root node_modules, not a per-workspace one (see the build stage's
+# comment) — placed at /app/node_modules so Node's upward module resolution
+# finds it regardless of how deep dist's own layout is.
+COPY --from=deps /repo/node_modules ./node_modules
 CMD ["node", "dist/workers/workflow-worker/src/index.js"]

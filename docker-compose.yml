@@ -34,6 +34,15 @@ services:
       context: .
       dockerfile: services/api/Dockerfile
     env_file: .env
+    # .env's DATABASE_URL/REDIS_URL/ELASTICSEARCH_URL point at `localhost` on
+    # the host-mapped ports (5433 etc.) for running `npm run dev` directly on
+    # the host — inside this container "localhost" is the container itself,
+    # not the other services, so these override with the compose network's
+    # service names and each service's real internal port.
+    environment:
+      DATABASE_URL: postgres://accuqual:accuqual@postgres:5432/accuqual
+      REDIS_URL: redis://redis:6379
+      ELASTICSEARCH_URL: http://elasticsearch:9200
     depends_on:
       - postgres
       - redis
@@ -55,6 +64,10 @@ services:
       context: .
       dockerfile: workers/workflow-worker/Dockerfile
     env_file: .env
+    # See api's own comment above — same localhost-vs-service-name fix.
+    environment:
+      DATABASE_URL: postgres://accuqual:accuqual@postgres:5432/accuqual
+      REDIS_URL: redis://redis:6379
     depends_on:
       - redis
       - postgres
@@ -64,6 +77,10 @@ services:
       context: .
       dockerfile: workers/ai-worker/Dockerfile
     env_file: .env
+    # See api's own comment above — same localhost-vs-service-name fix.
+    environment:
+      DATABASE_URL: postgres://accuqual:accuqual@postgres:5432/accuqual
+      REDIS_URL: redis://redis:6379
     depends_on:
       - redis
       - postgres
@@ -73,6 +90,10 @@ services:
       context: .
       dockerfile: workers/digital-twin-worker/Dockerfile
     env_file: .env
+    # See api's own comment above — same localhost-vs-service-name fix.
+    environment:
+      DATABASE_URL: postgres://accuqual:accuqual@postgres:5432/accuqual
+      REDIS_URL: redis://redis:6379
     depends_on:
       - redis
       - postgres
