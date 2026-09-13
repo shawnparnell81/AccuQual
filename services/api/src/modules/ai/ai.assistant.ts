@@ -9,6 +9,8 @@ import { inventoryItems, inventoryStock, inventoryMovements } from "../../drizzl
 import { audits, auditItems } from "../../drizzle/schema/audits.js";
 import { digitalTwinModels, digitalTwinSimulations } from "../../drizzle/schema/digitalTwin.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
+import { trainingCourses, trainingAssignments } from "../../drizzle/schema/training.js";
+import { equipment, calibrations } from "../../drizzle/schema/calibration.js";
 import { computeSupplierPerformance } from "../supplier/supplier.performance.js";
 import { computeCostingSummary } from "../inventory/inventory.costing.js";
 import { decryptSecret } from "../tenant/crypto.js";
@@ -54,6 +56,37 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
     const [row] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, recordId), eq(inventoryItems.tenantId, tenantId)));
     if (!row) return null;
     return `The user is viewing inventory item "${row.sku}" (${row.description ?? "no description"}). State: ${row.state}. Min level: ${row.minLevel}. Max level: ${row.maxLevel ?? "not set"}.`;
+  }
+  if (module === "supplier") {
+    const [row] = await db.select().from(suppliers).where(and(eq(suppliers.id, recordId), eq(suppliers.tenantId, tenantId)));
+    if (!row) return null;
+    return `The user is viewing Supplier "${row.name}" (status: ${row.status}, recorded risk level: ${row.riskLevel ?? "not set"}). Contact: ${row.contactEmail ?? "none"}.`;
+  }
+  if (module === "training") {
+    const [row] = await db.select().from(trainingCourses).where(and(eq(trainingCourses.id, recordId), eq(trainingCourses.tenantId, tenantId)));
+    if (!row) return null;
+    const assignments = await db.select().from(trainingAssignments).where(and(eq(trainingAssignments.courseId, recordId), eq(trainingAssignments.tenantId, tenantId)));
+    const completed = assignments.filter((a) => a.status === "completed").length;
+    const overdue = assignments.filter((a) => a.status === "overdue").length;
+    const inProgress = assignments.filter((a) => a.status === "in_progress").length;
+    const notStarted = assignments.filter((a) => a.status === "assigned").length;
+    return (
+      `The user is viewing Training Course "${row.title}". Description: ${row.description ?? "none"}. ` +
+      `Assignments: ${assignments.length} total — ${completed} completed, ${overdue} overdue, ${inProgress} in progress, ${notStarted} not started yet.`
+    );
+  }
+  if (module === "calibration") {
+    const [row] = await db.select().from(equipment).where(and(eq(equipment.id, recordId), eq(equipment.tenantId, tenantId)));
+    if (!row) return null;
+    const events = await db.select().from(calibrations).where(and(eq(calibrations.equipmentId, recordId), eq(calibrations.tenantId, tenantId)));
+    const latest = events.length > 0 ? events.reduce((a, b) => (new Date(a.performedAt) > new Date(b.performedAt) ? a : b)) : null;
+    return (
+      `The user is viewing Equipment "${row.name}" (serial: ${row.serialNumber ?? "none"}, location: ${row.location ?? "none"}). ` +
+      `Calibration interval: ${row.calibrationIntervalDays} days. ${events.length} calibration event(s) recorded. ` +
+      (latest
+        ? `Most recent: ${new Date(latest.performedAt).toISOString().slice(0, 10)}, result: ${latest.result ?? "not recorded"}, next due: ${latest.nextDueAt ? new Date(latest.nextDueAt).toISOString().slice(0, 10) : "not set"}.`
+        : "No calibration events recorded yet.")
+    );
   }
   if (module === "audit") {
     const [row] = await db.select().from(audits).where(and(eq(audits.id, recordId), eq(audits.tenantId, tenantId)));

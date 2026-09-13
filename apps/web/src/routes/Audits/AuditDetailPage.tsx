@@ -11,6 +11,7 @@ import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
+import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 
 const auditHooks = createResourceHooks<Audit>("audits");
 
@@ -28,6 +29,7 @@ export function AuditDetailPage() {
   const auditId = Number(id);
   const historyKey: unknown[][] = [["workflow-history", "audit", auditId]];
   const { data: audit, isLoading } = auditHooks.useOne(auditId);
+  useSetAssistantContext("audit", auditId, audit ? audit.name : `Audit #${auditId}`);
   const startAction = useWorkflowAction("audits", "start", { successMessage: "Audit started.", invalidateKeys: historyKey });
   const completeAction = useWorkflowAction("audits", "complete", { successMessage: "Audit marked completed.", invalidateKeys: historyKey });
   const queryClient = useQueryClient();
