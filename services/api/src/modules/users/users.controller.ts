@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { users } from "../../drizzle/schema/users.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
+import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 
 export const listUsers = asyncHandler(async (req: Request, res: Response) => {
   const rows = await req
@@ -56,6 +57,41 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   if (!updated) throw AppError.notFound("User");
   const { passwordHash: _omit, ...safe } = updated;
   res.json(safe);
+});
+
+/**
+ * A user's own theme override — scoped by req.user!.id alone (no admin
+ * check, unlike GET/PATCH /users/:id, since this only ever reads/writes the
+ * caller's own row). This router's withTenantDb already requires a
+ * tenantId to reach here at all, so platform_admin accounts (no tenantId)
+ * hit the same "Missing tenant context" 401 every other /users/* route
+ * already gives them — not something new this endpoint introduces.
+ */
+export const getMyTheme = asyncHandler(async (req: Request, res: Response) => {
+  const [row] = await req.db!.select({ themePreferences: users.themePreferences }).from(users).where(eq(users.id, req.user!.id));
+  res.json(row?.themePreferences ?? {});
+});
+
+export const updateMyTheme = asyncHandler(async (req: Request, res: Response) => {
+  const [existing] = await req.db!.select({ themePreferences: users.themePreferences }).from(users).where(eq(users.id, req.user!.id));
+  const body = req.body as Record<string, string>;
+  // "" clears a field back to unset (follow tenant/default) rather than storing an empty string forever.
+  const patch = Object.fromEntries(Object.entries(body).map(([k, v]) => [k, v === "" ? undefined : v]));
+  const merged = { ...existing?.themePreferences, ...patch };
+  const fieldsChanged = Object.keys(body);
+
+  const [updated] = await req.db!.update(users).set({ themePreferences: merged, updatedAt: new Date() }).where(eq(users.id, req.user!.id)).returning();
+  if (!updated) throw AppError.notFound("User");
+
+  await recordAuditTrail(req.db!, {
+    tenantId: req.tenantId!,
+    entityType: "User",
+    entityId: req.user!.id,
+    action: "update",
+    changes: { fieldsChanged },
+    performedBy: req.user?.id,
+  });
+  res.json(updated.themePreferences);
 });
 
 export const deleteUser = asyncHandler(async (req: Request, res: Response) => {

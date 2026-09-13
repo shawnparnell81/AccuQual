@@ -6,10 +6,12 @@ import { WindowContainer } from "../../window-manager/WindowContainer";
 import { useWindowStore } from "../../window-manager/useWindowStore";
 import { useAuthStore } from "../../store/authStore";
 import { AiAssistantPanelGate } from "../shared/AiAssistantPanel";
+import { useThemeSync } from "../../hooks/useThemeSync";
 
 export function AppLayout() {
   const userTenantId = useAuthStore((s) => s.user?.tenantId);
   const loadForTenant = useWindowStore((s) => s.loadForTenant);
+  useThemeSync();
 
   // Restores only the active tenant's saved windows, and re-runs (clearing the
   // previous tenant's) if the logged-in tenant ever changes — see the

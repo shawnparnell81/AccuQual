@@ -419,6 +419,23 @@ export interface TenantBranding {
   primaryColor?: string;
   pdfHeader?: string;
   pdfFooter?: string;
+  // Theme colors — same object, see tenants.branding's schema comment.
+  secondaryColor?: string;
+  accentColor?: string;
+  backgroundLight?: string;
+  backgroundDark?: string;
+  textLight?: string;
+  textDark?: string;
+  formFieldColor?: string;
+  buttonColor?: string;
+  borderColor?: string;
+}
+
+/** GET/PATCH /users/me/theme — any authenticated user, own row only. Unset fields mean "follow the tenant/default theme" for that field specifically, not an all-or-nothing override. */
+export interface UserThemePreferences {
+  mode?: "light" | "dark" | "system";
+  primaryColor?: string;
+  accentColor?: string;
 }
 
 /** GET/PATCH /tenant/ai-config (admin only) — apiKey is never returned; maskedApiKey/hasApiKey only. Now live: the AI Assistant proxy (POST /ai/assistant) and the AI pipelines use this config's provider/key/model when set, falling back to the global env config otherwise. */

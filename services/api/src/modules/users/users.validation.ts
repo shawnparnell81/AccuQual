@@ -25,3 +25,18 @@ export const updateUserSchema = z.object({
   department: departmentSchema.nullable().optional(),
   isActive: z.boolean().optional(),
 });
+
+/** A user's own theme override — see users.themePreferences. "" clears a color back to following the tenant/default theme, same convention as tenant.validation.ts's updateBrandingSchema. */
+export const updateMyThemeSchema = z.object({
+  mode: z.enum(["light", "dark", "system"]).optional(),
+  primaryColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "must be a hex color like #1a2b3c")
+    .optional()
+    .or(z.literal("")),
+  accentColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "must be a hex color like #1a2b3c")
+    .optional()
+    .or(z.literal("")),
+});

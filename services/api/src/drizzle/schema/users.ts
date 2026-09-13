@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { roles } from "./roles.js";
 import { tenants } from "./tenants.js";
 
@@ -21,6 +21,11 @@ export const users = pgTable("users", {
   department: text("department"),
   tokenVersion: integer("token_version").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
+  // This user's own theme overrides, layered on top of their tenant's theme
+  // (tenants.branding) — see the Theme System review. mode is "light" |
+  // "dark" | "system"; unset means "follow the tenant/default theme" for
+  // every field independently, not an all-or-nothing override.
+  themePreferences: jsonb("theme_preferences").$type<{ mode?: "light" | "dark" | "system"; primaryColor?: string; accentColor?: string }>(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });

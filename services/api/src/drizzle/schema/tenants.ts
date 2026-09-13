@@ -13,7 +13,31 @@ export const tenants = pgTable("tenants", {
   name: text("name").notNull(),
   code: text("code").notNull().unique(),
   status: text("status").notNull().default("active"), // active, inactive (soft-deleted)
-  branding: jsonb("branding").$type<{ logoUrl?: string; primaryColor?: string; pdfHeader?: string; pdfFooter?: string }>().default({}),
+  /**
+   * Theme colors (secondaryColor..borderColor) extend this same object
+   * rather than a parallel "theme" jsonb — they're all one tenant-branding
+   * config a tenant admin edits together, same reasoning as folding
+   * assistantName into aiConfig rather than a new column. All hex strings;
+   * the frontend theme engine (styles/theme.ts) converts each to the HSL
+   * triplet globals.css's CSS custom properties expect, then falls back to
+   * the built-in palette for anything unset — so a tenant can override just
+   * primaryColor and leave the rest on defaults.
+   */
+  branding: jsonb("branding").$type<{
+    logoUrl?: string;
+    primaryColor?: string;
+    pdfHeader?: string;
+    pdfFooter?: string;
+    secondaryColor?: string;
+    accentColor?: string;
+    backgroundLight?: string;
+    backgroundDark?: string;
+    textLight?: string;
+    textDark?: string;
+    formFieldColor?: string;
+    buttonColor?: string;
+    borderColor?: string;
+  }>().default({}),
   /**
    * Per-tenant AI settings. apiKeyEncrypted is real AES-256-GCM ciphertext
    * (see tenant/crypto.ts) — never plaintext, never returned by any GET.

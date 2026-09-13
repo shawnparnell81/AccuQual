@@ -4,13 +4,25 @@
 
 /*
  * AccuQual QMS brand palette — from "ACCUQUAL QMS logo and app color scheme.docx".
- * One committed dark theme (not a light/dark toggle): deep-space canvas with
- * neon cyan as the primary accent, plus a status-color set for compliance
- * states. Values below are the doc's hex codes converted to HSL for
- * Tailwind's hsl(var(--x)) token convention; the hex is kept in each comment
- * so the mapping back to the source doc stays traceable.
+ * Dark-first theme engine: this deep-space/neon-cyan palette is the
+ * long-standing default and stays the un-stamped state (so every existing
+ * session with no theme choice made renders exactly as it always has) —
+ * light mode is the newer, explicitly-opted-into palette, not the other
+ * way around. See lib/theme.ts for how data-theme actually gets set, and
+ * that file's own comment for why colors are also settable as inline
+ * custom properties on top of whichever palette below is active.
+ *
+ * secondary/accent/form-field/button are new tokens this round adds; each
+ * defaults to an alias of an existing, already-audited token (secondary→
+ * muted, accent→primary, form-field→border, button→primary) so nothing
+ * existing changes appearance until a tenant/user actually customizes one.
  */
 :root {
+  /* Tells the browser itself this page is dark by default — without it,
+     some browsers' own auto-dark-mode heuristics can repaint form controls
+     (and in rare cases the page) using their own guessed dark colors on
+     top of ours, fighting the real theme rather than matching it. */
+  color-scheme: dark;
   --background: 210 29% 5%; /* #0A0E12 — Dashboard Background */
   --foreground: 0 0% 100%; /* #FFFFFF — Primary Typography Core */
   --card: 216 28% 10%; /* #131922 — Component Container / Section Blocks */
@@ -29,11 +41,110 @@
   --info: 184 100% 50%; /* #00F0FF — Drafts / In-Progress (System Core Neon Cyan) */
   --info-foreground: 216 33% 3%;
 
+  /* New this round — see the doc comment above on default aliasing. */
+  --secondary: var(--muted);
+  --secondary-foreground: var(--muted-foreground);
+  --accent: var(--primary);
+  --accent-foreground: var(--primary-foreground);
+  --form-field: var(--border);
+  --button: var(--primary);
+  --button-foreground: var(--primary-foreground);
+
   /* Logo-only accents — the emblem's secondary ribbon color and its native
      canvas, not part of the general UI token set. */
   --brand-header: 216 33% 3%; /* #05070A — App Master Header Frame */
   --brand-purple: 271 91% 65%; /* #A855F7 — Secondary Ribbon Highlights */
   --brand-glow: 183 100% 50%; /* #00F3FF at 8% opacity — component glow overlay, see .glow-card */
+}
+
+/*
+ * Light palette — a real second theme (not the "Light" placeholder that
+ * used to sit in Settings > Theme doing nothing), keeping the same brand
+ * hues but re-balanced for a white canvas: the neon cyan/magenta/mint/amber
+ * from the dark palette are too low-contrast on white as-is, so each gets a
+ * darker, more saturated variant of the same hue rather than a different
+ * color entirely.
+ */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --background: 210 40% 98%; /* #F8FAFC */
+  --foreground: 210 29% 5%; /* #0A0E12 — the dark palette's own background color, reused as light-mode text */
+  --card: 0 0% 100%; /* #FFFFFF */
+  --border: 214 32% 91%; /* #E2E8F0 */
+  --primary: 192 91% 36%; /* #0891B2 — same cyan hue as the dark palette's neon accent, darkened for contrast on white */
+  --primary-foreground: 0 0% 100%;
+  --muted: 210 40% 96%; /* #F1F5F9 */
+  --muted-foreground: 215 16% 47%; /* #64748B */
+  --destructive: 347 77% 50%; /* #E11D48 */
+  --success: 160 84% 39%; /* #059669 */
+  --success-foreground: 0 0% 100%;
+  --warning: 32 95% 44%; /* #D97706 */
+  --warning-foreground: 0 0% 100%;
+  --info: 192 91% 36%;
+  --info-foreground: 0 0% 100%;
+
+  --secondary: var(--muted);
+  --secondary-foreground: var(--muted-foreground);
+  --accent: var(--primary);
+  --accent-foreground: var(--primary-foreground);
+  --form-field: var(--border);
+  --button: var(--primary);
+  --button-foreground: var(--primary-foreground);
+}
+
+/* Explicit dark override — wins even if the OS-preference fallback below would otherwise apply, same reasoning the artifact-design 3-state pattern uses for a toggle vs. prefers-color-scheme. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: 210 29% 5%;
+  --foreground: 0 0% 100%;
+  --card: 216 28% 10%;
+  --border: 217 33% 17%;
+  --primary: 183 100% 50%;
+  --primary-foreground: 216 33% 3%;
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 65%;
+  --destructive: 341 100% 58%;
+  --success: 157 100% 50%;
+  --success-foreground: 216 33% 3%;
+  --warning: 43 100% 51%;
+  --warning-foreground: 216 33% 3%;
+  --info: 184 100% 50%;
+  --info-foreground: 216 33% 3%;
+  --secondary: var(--muted);
+  --secondary-foreground: var(--muted-foreground);
+  --accent: var(--primary);
+  --accent-foreground: var(--primary-foreground);
+  --form-field: var(--border);
+  --button: var(--primary);
+  --button-foreground: var(--primary-foreground);
+}
+
+/* Zero-JS fallback for the instant a page loads before lib/theme.ts's applyTheme() stamps a concrete data-theme — real app usage always ends up with an explicit stamp (light/dark/system all resolve to one), so this rarely matters, but it's a real OS-preference match rather than nothing. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --background: 210 40% 98%;
+    --foreground: 210 29% 5%;
+    --card: 0 0% 100%;
+    --border: 214 32% 91%;
+    --primary: 192 91% 36%;
+    --primary-foreground: 0 0% 100%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --destructive: 347 77% 50%;
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+    --warning: 32 95% 44%;
+    --warning-foreground: 0 0% 100%;
+    --info: 192 91% 36%;
+    --info-foreground: 0 0% 100%;
+    --secondary: var(--muted);
+    --secondary-foreground: var(--muted-foreground);
+    --accent: var(--primary);
+    --accent-foreground: var(--primary-foreground);
+    --form-field: var(--border);
+    --button: var(--primary);
+    --button-foreground: var(--primary-foreground);
+  }
 }
 
 body {

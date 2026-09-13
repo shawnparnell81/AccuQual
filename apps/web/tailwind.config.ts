@@ -17,6 +17,19 @@ export default {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
         },
+        secondary: {
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
+        "form-field": "hsl(var(--form-field))",
+        button: {
+          DEFAULT: "hsl(var(--button))",
+          foreground: "hsl(var(--button-foreground))",
+        },
         card: "hsl(var(--card))",
         destructive: "hsl(var(--destructive))",
         // ACCUQUAL QMS Status Color Architecture — compliance/workflow badges.
