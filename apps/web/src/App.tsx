@@ -47,6 +47,10 @@ import { InventoryAlertsPage } from "./routes/Inventory/InventoryAlertsPage";
 import { ErpPurchaseOrdersPage } from "./routes/Erp/ErpPurchaseOrdersPage";
 import { ErpNewPurchaseOrderPage } from "./routes/Erp/ErpNewPurchaseOrderPage";
 import { ErpPurchaseOrderDetailPage } from "./routes/Erp/ErpPurchaseOrderDetailPage";
+import { AdminTenantBrandingPage } from "./routes/Admin/AdminTenantBrandingPage";
+import { AdminTenantTemplatesPage } from "./routes/Admin/AdminTenantTemplatesPage";
+import { AdminTenantAiConfigPage } from "./routes/Admin/AdminTenantAiConfigPage";
+import { AdminDigitalTwinSetupPage } from "./routes/Admin/AdminDigitalTwinSetupPage";
 import { useCurrentUser } from "./hooks/useAuth";
 
 function HomeRoute() {
@@ -116,6 +120,10 @@ export function App() {
           <Route path="/settings" element={<SettingsPage />} />
           {/* Kept working as its own URL (embedded as SettingsPage's "Navigation" tab) — anyone with this link bookmarked shouldn't get a 404. */}
           <Route path="/settings/navigation" element={<NavigationSettingsPage />} />
+          <Route path="/admin/tenant-branding" element={<AdminTenantBrandingPage />} />
+          <Route path="/admin/tenant-templates" element={<AdminTenantTemplatesPage />} />
+          <Route path="/admin/tenant-ai" element={<AdminTenantAiConfigPage />} />
+          <Route path="/admin/digital-twin" element={<AdminDigitalTwinSetupPage />} />
         </Route>
       </Route>
     </Routes>

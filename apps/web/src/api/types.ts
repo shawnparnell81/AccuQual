@@ -381,11 +381,62 @@ export interface AiSuggestion {
   createdAt: string;
 }
 
+export interface TwinNode {
+  id: string;
+  name: string;
+  type: "machine" | "process" | "checkpoint" | "operator";
+  baseDefectRate?: number;
+  throughputPerHour?: number;
+}
+
 export interface DigitalTwinModel {
   id: number;
   name: string;
   description: string | null;
-  modelJson: { nodes: unknown[]; edges: unknown[] };
+  modelJson: { nodes: TwinNode[]; edges: { from: string; to: string }[] };
+}
+
+export interface DigitalTwinSimulation {
+  id: number;
+  modelId: number;
+  inputParameters: Record<string, unknown> | null;
+  results: Record<string, unknown> | null;
+}
+
+export interface IotDevice {
+  id: number;
+  deviceId: string;
+  name: string | null;
+  type: "plc" | "sensor" | "inspection_equipment" | "environmental" | null;
+  digitalTwinModelId: number | null;
+  lastSeenAt: string | null;
+  createdAt: string;
+}
+
+/** GET/PATCH /tenant/branding — real tenants.branding jsonb field. */
+export interface TenantBranding {
+  logoUrl?: string;
+  primaryColor?: string;
+  pdfHeader?: string;
+  pdfFooter?: string;
+}
+
+/** GET/PATCH /tenant/ai-config — apiKey is never returned; maskedApiKey/hasApiKey only. Storage only — the AI pipelines still use the global env config, not this (see the Tenant AI Configuration review). */
+export interface TenantAiConfig {
+  provider: "anthropic" | "openai" | null;
+  modelName: string | null;
+  temperature: number | null;
+  maxTokens: number | null;
+  hasApiKey: boolean;
+  maskedApiKey?: string | null;
+}
+
+/** GET /forms/templates — one entry per real form type (see forms.validation.ts's FORM_TYPES). */
+export interface FormTemplateStatus {
+  formType: string;
+  hasTemplate: boolean;
+  isDefault: boolean | null;
+  uploadedAt: string | null;
 }
 
 export interface WorkflowDefinition {
