@@ -461,6 +461,14 @@ export interface AssistantReply {
   usage: { inputTokens: number; outputTokens: number } | null;
 }
 
+/** GET /search?q=... — one row per real match across NCR/CAPA/PO/Audit/Supplier/Item/Training/Calibration. "WO" is a reserved type never actually returned yet — see search.controller.ts. */
+export interface SearchResult {
+  type: "NCR" | "CAPA" | "PO" | "WO" | "Audit" | "Supplier" | "Item" | "Training" | "Calibration";
+  id: number;
+  label: string;
+  path: string;
+}
+
 /** GET /forms/templates — one entry per real form type (see forms.validation.ts's FORM_TYPES). */
 export interface FormTemplateStatus {
   formType: string;

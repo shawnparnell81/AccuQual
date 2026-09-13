@@ -26,6 +26,7 @@ import { navRouter } from "../modules/nav/nav.routes.js";
 import { inventoryRouter } from "../modules/inventory/inventory.routes.js";
 import { erpRouter } from "../modules/erp/erp.routes.js";
 import { tenantRouter } from "../modules/tenant/tenant.routes.js";
+import { searchRouter } from "../modules/search/search.routes.js";
 
 export const apiRouter = Router();
 
@@ -56,3 +57,4 @@ apiRouter.use("/nav", navRouter);
 apiRouter.use("/inventory", inventoryRouter);
 apiRouter.use("/erp", erpRouter);
 apiRouter.use("/tenant", tenantRouter);
+apiRouter.use("/search", searchRouter);

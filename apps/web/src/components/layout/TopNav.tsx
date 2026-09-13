@@ -6,6 +6,7 @@ import { Building2, ChevronDown, Library, Lock, Menu, Search, Settings, X } from
 import { apiClient } from "../../api/client";
 import { useCurrentTenant, useCurrentUser } from "../../hooks/useAuth";
 import { departmentScope, itemScope, useHiddenNavScopes } from "../../hooks/useNavPreferences";
+import { GlobalSearchResults } from "./GlobalSearchResults";
 import {
   DASHBOARD_LEAF,
   DEPARTMENTS,
@@ -284,8 +285,11 @@ export function TopNav() {
           )}
         </nav>
 
-        {/* Quick-nav search — client-side filter over the modules above; not yet
-            wired to the Elasticsearch cluster (no search API exists for that today). */}
+        {/* Quick-nav search — client-side filter over the modules above, plus
+            the real GET /search results (GlobalSearchResults) for NCR#/CAPA#/
+            PO#/Audit#/Supplier#/Item#/Training#/Calibration# in the same
+            dropdown. Record results open in an internal tab (useOpenTab);
+            module links keep navigating in place as they always have. */}
         <div className="relative hidden md:block w-52 shrink-0">
           <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -294,8 +298,8 @@ export function TopNav() {
             placeholder="Find a module…"
             className="w-full rounded-md border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:ring-1 focus:ring-primary"
           />
-          {searchResults.length > 0 && (
-            <div className="absolute right-0 top-full z-30 mt-1 w-64 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-card p-1 shadow-lg">
+          {query.trim() && (
+            <div className="absolute right-0 top-full z-30 mt-1 w-72 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-card p-1 shadow-lg">
               {searchResults.map((r) => (
                 <Link
                   key={r.key}
@@ -307,6 +311,7 @@ export function TopNav() {
                   <span>{r.label}</span>
                 </Link>
               ))}
+              <GlobalSearchResults query={query} onSelect={() => setQuery("")} />
             </div>
           )}
         </div>
@@ -345,20 +350,29 @@ export function TopNav() {
             />
           </div>
           {query.trim() ? (
-            searchResults.map((r) => (
-              <Link
-                key={r.key}
-                to={r.path}
-                onClick={() => {
+            <>
+              {searchResults.map((r) => (
+                <Link
+                  key={r.key}
+                  to={r.path}
+                  onClick={() => {
+                    setQuery("");
+                    setMobileOpen(false);
+                  }}
+                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+                >
+                  <r.icon size={16} />
+                  <span>{r.label}</span>
+                </Link>
+              ))}
+              <GlobalSearchResults
+                query={query}
+                onSelect={() => {
                   setQuery("");
                   setMobileOpen(false);
                 }}
-                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
-              >
-                <r.icon size={16} />
-                <span>{r.label}</span>
-              </Link>
-            ))
+              />
+            </>
           ) : (
             <>
               <Link
