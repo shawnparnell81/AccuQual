@@ -36,7 +36,7 @@ export interface WorkflowHistoryEntry {
 }
 
 /** Friendly moduleName values the history endpoint accepts — kept in sync with services/api's workflow.controller.ts MODULE_ENTITY_TYPES. */
-export type WorkflowModuleName = "calibration" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory";
+export type WorkflowModuleName = "calibration" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp";
 
 export interface Ncr {
   id: number;
@@ -286,6 +286,56 @@ export interface CostingSummary {
   totalConsumptionCost: number;
   supplierCostDistribution: SupplierCostEntry[];
   days: number;
+}
+
+/** A real, standalone ERP module — no external ERP integration, no automatic inventory movements. See erp.service.ts. */
+export type PurchaseOrderStatus = "draft" | "sent" | "partially_received" | "received" | "cancelled";
+
+export interface ErpPoLineItem {
+  id: number;
+  purchaseOrderId: number;
+  itemId: number;
+  quantity: number;
+  unitCost: string | null;
+  notes: string | null;
+  sku: string | null;
+  description: string | null;
+  /** Real sum across every receiving document filed against this line — not a guess. */
+  quantityReceived: number;
+}
+
+export interface ErpPurchaseOrder {
+  id: number;
+  supplierId: number;
+  supplierName?: string; // only on the list endpoint
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  status: PurchaseOrderStatus;
+  notes: string | null;
+  lineItems?: ErpPoLineItem[]; // only on the single-PO endpoint
+}
+
+export interface ErpReceivingLineItem {
+  id: number;
+  receivingDocumentId: number;
+  poLineItemId: number;
+  quantityReceived: number;
+  notes: string | null;
+}
+
+export interface ErpReceivingDocument {
+  id: number;
+  purchaseOrderId: number;
+  createdBy: number | null;
+  createdAt: string;
+  notes: string | null;
+  lineItems?: ErpReceivingLineItem[];
+}
+
+export interface ErpOverview {
+  countByStatus: Record<PurchaseOrderStatus, number>;
+  recent: { id: number; status: PurchaseOrderStatus; supplierName: string; createdAt: string }[];
 }
 
 export interface InventoryAlert {

@@ -67,6 +67,12 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   reorder_pending: "info",
   on_order: "info",
   inactive: "muted",
+
+  // ERP purchase order states.
+  sent: "info",
+  partially_received: "info",
+  received: "success",
+  cancelled: "destructive",
 };
 
 const BUCKET_CLASSES: Record<string, string> = {

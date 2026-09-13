@@ -17,6 +17,7 @@ import type {
   ReferenceSummaryEntry,
   SupplierPerformance,
   CostingSummary,
+  ErpOverview,
 } from "../../api/types";
 import { SeverityChart } from "../../components/charts/SeverityChart";
 import { CapaEffectivenessChart } from "../../components/charts/CapaEffectivenessChart";
@@ -93,6 +94,10 @@ export function DashboardPage() {
   const openBelowMinAlerts = inventoryAlerts.filter((a) => a.alertType === "below_min" && !a.acknowledgedAt).length;
   const openAlertsTotal = inventoryAlerts.filter((a) => !a.acknowledgedAt).length;
   const acknowledgedAlertsTotal = inventoryAlerts.filter((a) => a.acknowledgedAt).length;
+  const { data: erpOverview } = useQuery<ErpOverview>({
+    queryKey: ["erp/overview"],
+    queryFn: async () => (await apiClient.get("/erp/overview")).data,
+  });
 
   const inventoryStateData = useMemo(() => {
     const counts: Record<string, number> = Object.fromEntries(INVENTORY_STATES.map((s) => [s, 0]));
@@ -297,6 +302,39 @@ export function DashboardPage() {
             <h3 className="mb-2 text-sm font-medium">Supplier Cost Distribution</h3>
             <SupplierCostChart data={costingSummary?.supplierCostDistribution.filter((s) => s.itemValue > 0).map((s) => ({ supplierName: s.supplierName, itemValue: s.itemValue })) ?? []} />
           </div>
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">ERP Overview</h2>
+          <Link to="/erp" className="text-xs text-primary hover:underline">
+            View purchase orders
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+          <StatCard label="Draft" value={erpOverview?.countByStatus.draft ?? 0} />
+          <StatCard label="Sent" value={erpOverview?.countByStatus.sent ?? 0} />
+          <StatCard label="Partially Received" value={erpOverview?.countByStatus.partially_received ?? 0} />
+          <StatCard label="Received" value={erpOverview?.countByStatus.received ?? 0} />
+          <StatCard label="Cancelled" value={erpOverview?.countByStatus.cancelled ?? 0} />
+        </div>
+        <div className="mt-4 rounded-lg border border-border bg-card p-4">
+          <h3 className="mb-2 text-sm font-medium">Recent Purchase Orders</h3>
+          {!erpOverview || erpOverview.recent.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No purchase orders yet.</p>
+          ) : (
+            <ul className="flex flex-col gap-2 text-sm">
+              {erpOverview.recent.map((po) => (
+                <li key={po.id} className="flex items-center justify-between border-b border-border pb-1.5 last:border-0">
+                  <Link to={`/erp/${po.id}`} className="text-primary hover:underline">
+                    PO #{po.id} — {po.supplierName}
+                  </Link>
+                  <StatusBadge value={po.status} />
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 

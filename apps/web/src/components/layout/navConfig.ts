@@ -27,6 +27,7 @@ import {
   Workflow,
   Sparkles,
   Package,
+  Receipt,
 } from "lucide-react";
 
 /**
@@ -122,6 +123,23 @@ export const INVENTORY: NavLeaf = {
   notes: "Not in the department sheet — added directly (see the Inventory module plan)",
 };
 
+// Not a sheet row either — a new, real, standalone ERP module (Purchase
+// Orders + Receiving). Mirrors departmentAccess.ts's PERMISSION_MATRIX.erp
+// exactly. Purchasing owns the PO lifecycle; material_management owns
+// receiving — both get "edit" here, with the specific per-action split
+// enforced inline in erp.controller.ts (not expressible as a nav access
+// level).
+export const ERP: NavLeaf = {
+  key: "erp",
+  label: "Purchase Orders",
+  path: "/erp",
+  icon: Receipt,
+  access: { purchasing: "edit", material_management: "edit", quality: "read" },
+  kpi: false,
+  priority: 2,
+  notes: "Not in the department sheet — a new ERP module (see the ERP module review)",
+};
+
 export const PRODUCTION_LOG: NavLeaf = {
   key: "production_log",
   label: "Production Log",
@@ -176,6 +194,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
       SUPPLIERS,
       COMPLAINTS,
       INVENTORY,
+      ERP,
     ],
   },
   {
@@ -192,11 +211,11 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "purchasing",
-    items: [SUPPLIERS, INVENTORY],
+    items: [SUPPLIERS, INVENTORY, ERP],
   },
   {
     department: "material_management",
-    items: [SUPPLIERS, INVENTORY],
+    items: [SUPPLIERS, INVENTORY, ERP],
   },
   {
     // Not in the sheet — kept so nothing loses a working page. Access is
@@ -244,5 +263,5 @@ export function findNavLeaf(key: string): NavLeaf | undefined {
     const found = group.items.find((item) => item.key === key);
     if (found) return found;
   }
-  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG, INVENTORY].find((leaf) => leaf.key === key);
+  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG, INVENTORY, ERP].find((leaf) => leaf.key === key);
 }
