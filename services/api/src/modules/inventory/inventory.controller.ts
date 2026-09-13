@@ -11,6 +11,25 @@ import { applyMovement, recomputeState, getStockRows } from "./inventory.service
 export const baseHandlers = crudFactory(inventoryItems, { entityName: "InventoryItem", idColumn: "id" });
 
 /**
+ * POST /inventory/items — not crudFactory.create as-is: a plain insert would
+ * leave a brand-new item sitting at the "in_stock" column default even when
+ * its own min_level is already above 0 on_hand (every item starts with zero
+ * stock rows), which is a false "healthy" reading until its first movement
+ * happens to run recomputeState. Insert, then immediately recompute once so
+ * the state a caller sees is never stale from the moment of creation.
+ */
+export const createItemHandler = asyncHandler(async (req: Request, res: Response) => {
+  const [created] = await req.db!
+    .insert(inventoryItems)
+    .values({ ...req.body, tenantId: req.tenantId! })
+    .returning();
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "InventoryItem", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+
+  const settled = await recomputeState(req.db!, req.tenantId!, created!.id, req.user?.id);
+  res.status(201).json(settled);
+});
+
+/**
  * GET /inventory/items — crudFactory.list's plain item rows plus a summed
  * on_hand per item, so the list page can show real stock without every
  * caller having to fetch each item's stock rows separately. Aggregated in
@@ -173,10 +192,28 @@ export const checkMinMaxHandler = asyncHandler(async (req: Request, res: Respons
   res.json({ checked: results.length, items: results });
 });
 
-/** Deactivation is admin-only — a lighter guard than a full crudFactory.update override, since every other field on PATCH stays open to any edit-level department. */
-export const updateItemHandler = asyncHandler(async (req: Request, res: Response, next) => {
-  if (typeof req.body.active === "boolean" && req.body.active === false) {
-    assertDepartment(req, []); // admin/platform_admin only — no department is allowed to deactivate
+/**
+ * Not crudFactory.update as-is, for the same reason createItemHandler isn't
+ * crudFactory.create: minLevel/maxLevel/active are exactly recomputeState's
+ * inputs, so a plain PATCH would leave `state` stale until the next
+ * movement or a manual check-minmax (e.g. deactivating an item wouldn't
+ * actually show "inactive" until something else happened to touch it).
+ * Deactivation is also admin-only — no department may set active:false.
+ */
+export const updateItemHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (req.body.active === false) {
+    assertDepartment(req, []); // admin/platform_admin only
   }
-  return baseHandlers.update(req, res, next);
+
+  const [updated] = await req.db!
+    .update(inventoryItems)
+    .set({ ...req.body, updatedAt: new Date() })
+    .where(and(eq(inventoryItems.id, id), eq(inventoryItems.tenantId, req.tenantId!)))
+    .returning();
+  if (!updated) throw AppError.notFound("InventoryItem");
+
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "InventoryItem", entityId: id, action: "update", changes: req.body, performedBy: req.user?.id });
+  const settled = await recomputeState(req.db!, req.tenantId!, id, req.user?.id);
+  res.json(settled);
 });

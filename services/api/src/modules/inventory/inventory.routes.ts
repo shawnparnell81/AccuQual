@@ -5,7 +5,7 @@ import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createItemSchema, updateItemSchema, movementSchema, adjustSchema, checkMinMaxSchema } from "./inventory.validation.js";
 import {
-  baseHandlers,
+  createItemHandler,
   listItemsHandler,
   getItemHandler,
   updateItemHandler,
@@ -34,7 +34,7 @@ inventoryRouter.post("/alerts/:id/acknowledge", acknowledgeAlertHandler);
 inventoryRouter.post("/check-minmax", validate(checkMinMaxSchema), checkMinMaxHandler);
 
 inventoryRouter.get("/items", listItemsHandler);
-inventoryRouter.post("/items", validate(createItemSchema), baseHandlers.create);
+inventoryRouter.post("/items", validate(createItemSchema), createItemHandler);
 inventoryRouter.get("/items/:id", getItemHandler);
 inventoryRouter.patch("/items/:id", validate(updateItemSchema), updateItemHandler);
 inventoryRouter.post("/items/:id/movement", validate(movementSchema), movementHandler);
