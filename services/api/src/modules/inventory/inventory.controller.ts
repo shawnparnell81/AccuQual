@@ -96,7 +96,7 @@ export const movementHandler = asyncHandler(async (req: Request, res: Response) 
     entityType: "InventoryItem",
     entityId: id,
     action: "update",
-    changes: { movement: req.body.movementType, quantity: req.body.quantity },
+    changes: { movement: req.body.movementType, quantity: req.body.quantity, referenceType: req.body.referenceType, referenceId: req.body.referenceId },
     performedBy: req.user?.id,
   });
 
@@ -110,9 +110,16 @@ export const adjustHandler = asyncHandler(async (req: Request, res: Response) =>
   await loadItem(req, id);
   assertDepartment(req, ["material_management"]);
 
-  const { quantity, location, reason } = req.body as { quantity: number; location?: string; reason: string };
-  const { movement } = await applyMovement(req.db!, req.tenantId!, id, { movementType: "adjust", quantity, fromLocation: location, reason }, req.user?.id);
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "InventoryItem", entityId: id, action: "update", changes: { adjust: quantity, reason }, performedBy: req.user?.id });
+  const { quantity, location, reason, referenceType, referenceId } = req.body as { quantity: number; location?: string; reason: string; referenceType?: string; referenceId?: string };
+  const { movement } = await applyMovement(req.db!, req.tenantId!, id, { movementType: "adjust", quantity, fromLocation: location, reason, referenceType, referenceId }, req.user?.id);
+  await recordAuditTrail(req.db!, {
+    tenantId: req.tenantId!,
+    entityType: "InventoryItem",
+    entityId: id,
+    action: "update",
+    changes: { adjust: quantity, reason, referenceType, referenceId },
+    performedBy: req.user?.id,
+  });
 
   const stock = await getStockRows(req.db!, req.tenantId!, id);
   res.status(201).json({ movement, stock });

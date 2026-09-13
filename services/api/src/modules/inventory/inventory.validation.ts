@@ -32,6 +32,18 @@ export const updateItemSchema = z.object({
   active: z.boolean().optional(),
 });
 
+/**
+ * referenceType/referenceId are free-form manual tags, not validated
+ * against any enum or foreign key — there's no Production Work Order
+ * module (or anything else) to look them up against, so any user allowed
+ * to log this movement can put whatever real-world reference they have on
+ * it ("production_log" / "PL-2024-001", "batch" / "Batch 17", etc.).
+ */
+const referenceFields = {
+  referenceType: z.string().optional(),
+  referenceId: z.string().optional(),
+};
+
 /** Deactivation ("active: false") is admin-only — checked in the controller, not here. */
 export const movementSchema = z
   .object({
@@ -40,6 +52,7 @@ export const movementSchema = z
     fromLocation: z.string().optional(),
     toLocation: z.string().optional(),
     reason: z.string().optional(),
+    ...referenceFields,
   })
   .refine((v) => v.movementType !== "transfer" || (v.fromLocation && v.toLocation), {
     message: "transfer requires both fromLocation and toLocation",
@@ -54,6 +67,7 @@ export const adjustSchema = z.object({
   quantity: z.coerce.number().refine((v) => v !== 0, "quantity delta cannot be 0"), // signed delta, unlike movementSchema's positive magnitude
   location: z.string().optional(),
   reason: z.string().min(1),
+  ...referenceFields,
 });
 
 export const checkMinMaxSchema = z.object({

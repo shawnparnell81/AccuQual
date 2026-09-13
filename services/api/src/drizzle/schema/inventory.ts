@@ -45,9 +45,11 @@ export const inventoryStock = pgTable("inventory_stock", {
 /**
  * Append-only ledger — never edited or deleted; on_hand is derived by
  * replaying/aggregating these, not written directly, so history is never
- * lost. referenceType/referenceId are reserved for a future Production
- * Work Orders / PO integration (no such tables exist yet — see the
- * Inventory module plan's "explicit stubs" section) and are unused today.
+ * lost. referenceType/referenceId are user-set manual tags (no Production
+ * Work Order module exists to populate them automatically — see the
+ * Production/Inventory integration review). referenceId is text, not a
+ * foreign key: real values are free-form ("PL-2024-001", "Batch 17"), not
+ * necessarily another table's numeric id.
  */
 export const inventoryMovements = pgTable("inventory_movements", {
   id: serial("id").primaryKey(),
@@ -58,8 +60,8 @@ export const inventoryMovements = pgTable("inventory_movements", {
   fromLocation: text("from_location"),
   toLocation: text("to_location"),
   reason: text("reason"),
-  referenceType: text("reference_type"), // work_order, po, adjustment (unused this phase)
-  referenceId: integer("reference_id"), // unused this phase
+  referenceType: text("reference_type"), // e.g. production_log, manual, batch — free-form, user-set
+  referenceId: text("reference_id"), // free-form, e.g. "PL-2024-001", "Batch 17" — not a foreign key
   performedBy: integer("performed_by").references(() => users.id),
   performedAt: timestamp("performed_at").defaultNow(),
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),

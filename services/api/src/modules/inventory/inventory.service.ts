@@ -39,6 +39,9 @@ export interface MovementInput {
   fromLocation?: string;
   toLocation?: string;
   reason?: string;
+  /** User-set manual tags — no Production Work Order module exists to populate these automatically. */
+  referenceType?: string;
+  referenceId?: string;
 }
 
 /** Applies one movement's stock effect, inserts the ledger row, then recomputes state. Runs inside the caller's per-request transaction (req.db) — atomic with the rest of the request. */
@@ -88,6 +91,8 @@ export async function applyMovement(db: TenantDb, tenantId: number, itemId: numb
       fromLocation: input.fromLocation,
       toLocation: input.toLocation,
       reason: input.reason,
+      referenceType: input.referenceType,
+      referenceId: input.referenceId,
       performedBy,
     })
     .returning();

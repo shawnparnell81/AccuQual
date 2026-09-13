@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
@@ -26,14 +26,20 @@ function useMovementHistory(itemId: number | undefined) {
 }
 
 const MOVEMENT_TYPES = ["receive", "consume", "produce", "scrap", "transfer"] as const;
+// Free-form examples, not an enum — there's no Production Work Order module
+// (or anything else) to validate these against. "Custom…" lets someone type
+// a value this list didn't anticipate rather than being stuck with these three.
+const REFERENCE_TYPE_OPTIONS = ["", "production_log", "manual", "batch"] as const;
 
 function LogMovementModal({ itemId, isOpen, onClose }: { itemId: number; isOpen: boolean; onClose: () => void }) {
   const toast = useToast();
-  const [form, setForm] = useState({ movementType: "receive", quantity: "", fromLocation: "", toLocation: "", reason: "" });
+  const [form, setForm] = useState({ movementType: "receive", quantity: "", fromLocation: "", toLocation: "", reason: "", referenceType: "", referenceTypeCustom: "", referenceId: "" });
   const movementAction = useWorkflowAction<{ id: number } & Record<string, unknown>>("inventory/items", "movement", {
     successMessage: "Movement logged.",
     invalidateKeys: [["inventory-movements", itemId], ["workflow-history", "inventory", itemId]],
   });
+
+  const resolvedReferenceType = form.referenceType === "custom" ? form.referenceTypeCustom : form.referenceType;
 
   return (
     <Modal title="Log Movement" isOpen={isOpen} onClose={onClose}>
@@ -42,11 +48,20 @@ function LogMovementModal({ itemId, isOpen, onClose }: { itemId: number; isOpen:
         onSubmit={(e) => {
           e.preventDefault();
           movementAction.mutate(
-            { id: itemId, movementType: form.movementType, quantity: Number(form.quantity), fromLocation: form.fromLocation || undefined, toLocation: form.toLocation || undefined, reason: form.reason || undefined },
+            {
+              id: itemId,
+              movementType: form.movementType,
+              quantity: Number(form.quantity),
+              fromLocation: form.fromLocation || undefined,
+              toLocation: form.toLocation || undefined,
+              reason: form.reason || undefined,
+              referenceType: resolvedReferenceType || undefined,
+              referenceId: form.referenceId || undefined,
+            },
             {
               onSuccess: () => {
                 onClose();
-                setForm({ movementType: "receive", quantity: "", fromLocation: "", toLocation: "", reason: "" });
+                setForm({ movementType: "receive", quantity: "", fromLocation: "", toLocation: "", reason: "", referenceType: "", referenceTypeCustom: "", referenceId: "" });
               },
               onError: (err) => toast.error(extractErrorMessage(err, "Couldn't log movement.")),
             }
@@ -73,6 +88,27 @@ function LogMovementModal({ itemId, isOpen, onClose }: { itemId: number; isOpen:
           value={form.reason}
           onChange={(e) => setForm({ ...form, reason: e.target.value })}
         />
+        <div className={form.referenceType === "custom" ? "grid grid-cols-2 gap-3" : ""}>
+          <SelectField label="Reference Type (optional)" value={form.referenceType} onChange={(e) => setForm({ ...form, referenceType: e.target.value })}>
+            {REFERENCE_TYPE_OPTIONS.map((t) => (
+              <option key={t} value={t}>
+                {t === "" ? "None" : t.replace(/_/g, " ")}
+              </option>
+            ))}
+            <option value="custom">Custom…</option>
+          </SelectField>
+          {form.referenceType === "custom" && (
+            <TextField label="Custom Type" value={form.referenceTypeCustom} onChange={(e) => setForm({ ...form, referenceTypeCustom: e.target.value })} />
+          )}
+        </div>
+        {form.referenceType !== "" && (
+          <TextField
+            label="Reference ID (optional)"
+            placeholder='e.g. "PL-2024-001", "Batch 17"'
+            value={form.referenceId}
+            onChange={(e) => setForm({ ...form, referenceId: e.target.value })}
+          />
+        )}
         <button type="submit" disabled={movementAction.isPending} className="rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
           {movementAction.isPending ? "Logging…" : "Log Movement"}
         </button>
@@ -100,6 +136,9 @@ export function InventoryDetailPage() {
   const { data: allAlerts = [] } = alertHooks.useList();
   const itemAlerts = allAlerts.filter((a) => a.itemId === itemId);
   const [movementOpen, setMovementOpen] = useState(false);
+  const [referenceTypeFilter, setReferenceTypeFilter] = useState("all");
+  const referenceTypes = useMemo(() => Array.from(new Set(movements.map((m) => m.referenceType).filter((t): t is string => !!t))), [movements]);
+  const filteredMovements = referenceTypeFilter === "all" ? movements : movements.filter((m) => m.referenceType === referenceTypeFilter);
   const historyKey: unknown[][] = [["workflow-history", "inventory", itemId]];
 
   const reorderPendingAction = useWorkflowAction("inventory/items", "mark-reorder-pending", { successMessage: "Marked reorder pending.", invalidateKeys: historyKey });
@@ -181,9 +220,23 @@ export function InventoryDetailPage() {
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4">
-        <h3 className="mb-3 text-sm font-medium">Movement Ledger</h3>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-medium">Movement Ledger</h3>
+          {referenceTypes.length > 0 && (
+            <SelectField label="" value={referenceTypeFilter} onChange={(e) => setReferenceTypeFilter(e.target.value)}>
+              <option value="all">All references</option>
+              {referenceTypes.map((t) => (
+                <option key={t} value={t}>
+                  {t.replace(/_/g, " ")}
+                </option>
+              ))}
+            </SelectField>
+          )}
+        </div>
         {movements.length === 0 ? (
           <p className="text-sm text-muted-foreground">No movements logged yet.</p>
+        ) : filteredMovements.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No movements match this reference type.</p>
         ) : (
           <table className="w-full text-sm">
             <thead className="text-left text-xs text-muted-foreground">
@@ -194,11 +247,12 @@ export function InventoryDetailPage() {
                 <th className="pb-2">From</th>
                 <th className="pb-2">To</th>
                 <th className="pb-2">Reason</th>
+                <th className="pb-2">Reference</th>
                 <th className="pb-2">By</th>
               </tr>
             </thead>
             <tbody>
-              {movements.map((m) => (
+              {filteredMovements.map((m) => (
                 <tr key={m.id} className="border-t border-border">
                   <td className="py-1.5 text-muted-foreground">{new Date(m.performedAt).toLocaleString()}</td>
                   <td className="py-1.5 capitalize">{m.movementType}</td>
@@ -206,6 +260,9 @@ export function InventoryDetailPage() {
                   <td className="py-1.5">{m.fromLocation ?? "—"}</td>
                   <td className="py-1.5">{m.toLocation ?? "—"}</td>
                   <td className="py-1.5 text-muted-foreground">{m.reason ?? "—"}</td>
+                  <td className="py-1.5 text-muted-foreground">
+                    {m.referenceType ? `${m.referenceType.replace(/_/g, " ")}${m.referenceId ? `: ${m.referenceId}` : ""}` : "—"}
+                  </td>
                   {/* Raw user id, not a resolved name/email: GET /users (the only place that maps one to
                       the other) is admin/quality_manager-only, and this ledger is seen by every
                       edit-level department (material_management/purchasing/production too). */}

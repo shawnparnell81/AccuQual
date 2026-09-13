@@ -190,6 +190,9 @@ export interface InventoryMovement {
   fromLocation: string | null;
   toLocation: string | null;
   reason: string | null;
+  /** Free-form manual tags — no Production Work Order module exists to set these automatically. */
+  referenceType: string | null;
+  referenceId: string | null;
   performedBy: number | null;
   performedAt: string;
 }

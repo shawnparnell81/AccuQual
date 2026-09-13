@@ -1,0 +1,1 @@
+ALTER TABLE "inventory_movements" ALTER COLUMN "reference_id" SET DATA TYPE text;
