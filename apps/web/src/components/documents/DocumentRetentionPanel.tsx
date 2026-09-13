@@ -3,6 +3,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { TextField, SelectField } from "../forms/Field";
 import { StatusBadge } from "../tables/StatusBadge";
+import { WorkflowActionButton } from "../shared/WorkflowActionButton";
+import { useToast } from "../shared/ToastProvider";
+import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import type { AccuQualDocument } from "../../api/types";
 
 /** Computed the same way as the server (documents.controller.ts's expirationStatus) — kept here purely for an instant badge while typing, before the next save round-trips it. */
@@ -30,6 +33,7 @@ export function DocumentRetentionPanel({ document }: { document: AccuQualDocumen
     retentionAction: document.retentionAction,
   });
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const save = useMutation({
     mutationFn: async () =>
@@ -44,15 +48,32 @@ export function DocumentRetentionPanel({ document }: { document: AccuQualDocumen
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       queryClient.invalidateQueries({ queryKey: ["audit-trail", "Document", document.id] });
+      toast.success("Retention rules saved.");
     },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save retention rules.")),
   });
 
   const runRetention = useMutation({
     mutationFn: async () => (await apiClient.post("/documents/retention/apply")).data as { processed: number },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-trail", "Document", document.id] });
+      toast.success(data.processed === 0 ? "No documents were aged-out enough to act on." : `Processed ${data.processed} document(s).`);
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't run retention.")),
+  });
+
+  // New in Phase 6 (services/api's documents.controller.ts): archives this
+  // one document on demand instead of waiting for the tenant-wide sweep
+  // above. Same eligibility rule server-side (decideRetention()).
+  const archiveNow = useMutation({
+    mutationFn: async () => (await apiClient.post(`/documents/${document.id}/archive`)).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       queryClient.invalidateQueries({ queryKey: ["audit-trail", "Document", document.id] });
+      toast.success("Document archived.");
     },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't archive this document.")),
   });
 
   const status = computeExpirationStatus(form.expirationDate || null, Number(form.expirationWarningDays));
@@ -98,25 +119,29 @@ export function DocumentRetentionPanel({ document }: { document: AccuQualDocumen
           <option value="delete">Delete</option>
         </SelectField>
 
-        <div className="col-span-full flex items-center justify-between border-t border-border pt-3">
-          <button
-            type="button"
-            onClick={() => runRetention.mutate()}
-            disabled={runRetention.isPending}
-            className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-60"
-            title="Applies retention rules to every obsolete, aged-out document in this tenant right now"
-          >
-            {runRetention.isPending ? "Running…" : "Run Retention Now"}
-          </button>
+        <div className="col-span-full flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => runRetention.mutate()}
+              disabled={runRetention.isPending}
+              className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-60"
+              title="Applies retention rules to every obsolete, aged-out document in this tenant right now"
+            >
+              {runRetention.isPending ? "Running…" : "Run Retention Now"}
+            </button>
+            <WorkflowActionButton
+              label="Archive This Document Now"
+              navKey="documents"
+              action={archiveNow}
+              onClick={() => archiveNow.mutate()}
+              visible={document.status === "obsolete" && document.retentionState !== "archived"}
+            />
+          </div>
           <button type="submit" disabled={save.isPending} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
             {save.isPending ? "Saving…" : "Save Rules"}
           </button>
         </div>
-        {runRetention.isSuccess && (
-          <p className="col-span-full text-xs text-muted-foreground">
-            {runRetention.data.processed === 0 ? "No documents were aged-out enough to act on." : `Processed ${runRetention.data.processed} document(s).`}
-          </p>
-        )}
       </form>
     </div>
   );

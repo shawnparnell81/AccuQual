@@ -3,6 +3,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { Modal } from "../modals/Modal";
 import { TextAreaField } from "../forms/Field";
+import { useToast } from "../shared/ToastProvider";
+import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 
 /**
  * Revision workflow: uploading a new file bumps currentVersion and sets
@@ -17,6 +19,7 @@ export function DocumentRevisionModal({ documentId, isOpen, onClose }: { documen
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const revise = useMutation({
     mutationFn: async () => {
@@ -33,8 +36,10 @@ export function DocumentRevisionModal({ documentId, isOpen, onClose }: { documen
       queryClient.invalidateQueries({ queryKey: ["document-folders"] });
       setChangeNotes("");
       setFile(null);
+      toast.success("Revision uploaded — back to In Review.");
       onClose();
     },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't upload this revision.")),
   });
 
   return (
@@ -59,7 +64,7 @@ export function DocumentRevisionModal({ documentId, isOpen, onClose }: { documen
           />
         </div>
         <TextAreaField label="What changed in this revision?" value={changeNotes} onChange={(e) => setChangeNotes(e.target.value)} rows={3} />
-        {revise.isError && <p className="text-sm text-destructive">{(revise.error as Error).message}</p>}
+        {revise.isError && <p className="text-sm text-destructive">{extractErrorMessage(revise.error, "Couldn't upload this revision.")}</p>}
         <button type="submit" disabled={revise.isPending || !file} className="w-fit self-end rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
           {revise.isPending ? "Uploading…" : "Upload Revision"}
         </button>

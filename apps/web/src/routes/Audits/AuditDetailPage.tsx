@@ -7,6 +7,8 @@ import type { Audit } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextField, SelectField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { useWorkflowAction } from "../../hooks/useWorkflowAction";
+import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 
 const auditHooks = createResourceHooks<Audit>("audits");
 
@@ -23,7 +25,8 @@ export function AuditDetailPage() {
   const navigate = useNavigate();
   const auditId = Number(id);
   const { data: audit, isLoading } = auditHooks.useOne(auditId);
-  const completeAction = auditHooks.useAction("complete");
+  const startAction = useWorkflowAction("audits", "start", { successMessage: "Audit started." });
+  const completeAction = useWorkflowAction("audits", "complete", { successMessage: "Audit marked completed." });
   const queryClient = useQueryClient();
 
   const { data: items = [] } = useQuery<AuditItem[]>({
@@ -47,11 +50,21 @@ export function AuditDetailPage() {
           <OpenFormButton formType="audit_plan" entityId={audit.id} title={`Audit #${audit.id} — Audit Plan`} label="Audit Plan" />
           <OpenFormButton formType="audit_checklist" entityId={audit.id} title={`Audit #${audit.id} — Audit Checklist`} label="Audit Checklist" />
           <OpenFormButton formType="lpa" entityId={audit.id} title={`Audit #${audit.id} — Layered Process Audit`} label="Layered Process Audit" />
-          {audit.status !== "completed" && (
-            <button onClick={() => completeAction.mutate({ id: auditId })} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-              Mark completed
-            </button>
-          )}
+          <WorkflowActionButton
+            label="Start Audit"
+            navKey="audit"
+            action={startAction}
+            onClick={() => startAction.mutate({ id: auditId })}
+            visible={audit.status === "scheduled"}
+            variant="primary"
+          />
+          <WorkflowActionButton
+            label="Mark completed"
+            navKey="audit"
+            action={completeAction}
+            onClick={() => completeAction.mutate({ id: auditId })}
+            visible={audit.status === "in_progress"}
+          />
         </div>
       </div>
 

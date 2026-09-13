@@ -7,6 +7,8 @@ import type { Ncr, Capa } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextAreaField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { useWorkflowAction } from "../../hooks/useWorkflowAction";
+import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
 const capaHooks = createResourceHooks<Capa>("capa");
@@ -20,10 +22,10 @@ export function NcrDetailPage() {
   const [tab, setTab] = useState<Tab>("Overview");
 
   const { data: ncr, isLoading } = ncrHooks.useOne(ncrId);
-  const containmentAction = ncrHooks.useAction("containment");
-  const rootCauseAction = ncrHooks.useAction("root-cause");
-  const correctiveActionAction = ncrHooks.useAction("corrective-action");
-  const closeAction = ncrHooks.useAction("close");
+  const containmentAction = useWorkflowAction("ncr", "containment", { successMessage: "Containment recorded." });
+  const rootCauseAction = useWorkflowAction("ncr", "root-cause", { successMessage: "Root cause recorded." });
+  const correctiveActionAction = useWorkflowAction("ncr", "corrective-action", { successMessage: "Corrective action recorded." });
+  const closeAction = useWorkflowAction("ncr", "close", { successMessage: "NCR closed." });
 
   if (isLoading || !ncr) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
@@ -41,14 +43,13 @@ export function NcrDetailPage() {
         </div>
         <div className="flex gap-2">
           <OpenFormButton formType="ncr" entityId={ncr.id} title={`NCR #${ncr.id} Form`} />
-          {ncr.status !== "closed" && (
-            <button
-              onClick={() => closeAction.mutate({ id: ncrId })}
-              className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
-            >
-              Close NCR
-            </button>
-          )}
+          <WorkflowActionButton
+            label="Close NCR"
+            navKey="ncr"
+            action={closeAction}
+            onClick={() => closeAction.mutate({ id: ncrId })}
+            visible={ncr.status === "corrective_action"}
+          />
         </div>
       </div>
 
@@ -77,18 +78,24 @@ export function NcrDetailPage() {
 
       {tab === "Root Cause" && (
         <div className="rounded-lg border border-border bg-card p-4">
-          <ActionForm
-            label="Root cause"
-            value={ncr.rootCause}
-            onSubmit={(value) => rootCauseAction.mutate({ id: ncrId, rootCause: value })}
-          />
-          <div className="mt-4">
+          {ncr.status === "open" ? (
+            <p className="text-sm text-muted-foreground">Record containment on the Overview tab first — root cause can't be recorded before that.</p>
+          ) : (
             <ActionForm
-              label="Corrective action"
-              value={ncr.correctiveAction}
-              onSubmit={(value) => correctiveActionAction.mutate({ id: ncrId, correctiveAction: value })}
+              label="Root cause"
+              value={ncr.rootCause}
+              onSubmit={(value) => rootCauseAction.mutate({ id: ncrId, rootCause: value })}
             />
-          </div>
+          )}
+          {ncr.status !== "open" && ncr.status !== "contained" && (
+            <div className="mt-4">
+              <ActionForm
+                label="Corrective action"
+                value={ncr.correctiveAction}
+                onSubmit={(value) => correctiveActionAction.mutate({ id: ncrId, correctiveAction: value })}
+              />
+            </div>
+          )}
         </div>
       )}
 

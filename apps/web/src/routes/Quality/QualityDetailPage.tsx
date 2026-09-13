@@ -2,6 +2,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { useWorkflowAction, useWorkflowUpdate } from "../../hooks/useWorkflowAction";
+import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 
 interface DiscrepancyInvestigation {
   id: number;
@@ -21,7 +23,12 @@ export function QualityDetailPage() {
   const navigate = useNavigate();
   const discrepancyId = Number(id);
   const { data: discrepancy, isLoading } = qualityHooks.useOne(discrepancyId);
-  const closeAction = qualityHooks.useAction("close");
+  // Open -> Investigating -> Disposed are generic-PATCH-only on the backend
+  // (no dedicated endpoint — see the Transitions/Rules Dictionaries); only
+  // Close is a real, sequence-checked, dedicated action.
+  const investigateAction = useWorkflowUpdate<{ id: number; status: string }>("quality", { successMessage: "Marked investigating." });
+  const disposeAction = useWorkflowUpdate<{ id: number; status: string }>("quality", { successMessage: "Marked disposed." });
+  const closeAction = useWorkflowAction("quality", "close", { successMessage: "Investigation closed." });
 
   if (isLoading || !discrepancy) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
@@ -44,11 +51,29 @@ export function QualityDetailPage() {
         </div>
         <div className="flex gap-2">
           <OpenFormButton formType="discrepancy_inspection" entityId={discrepancy.id} title={`Discrepancy #${discrepancy.id} Investigation`} />
-          {discrepancy.status !== "closed" && (
-            <button onClick={() => closeAction.mutate({ id: discrepancyId })} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-              Close Investigation
-            </button>
-          )}
+          <WorkflowActionButton
+            label="Mark Investigating"
+            navKey="di"
+            action={investigateAction}
+            onClick={() => investigateAction.mutate({ id: discrepancyId, status: "investigating" })}
+            visible={discrepancy.status === "open"}
+            variant="primary"
+          />
+          <WorkflowActionButton
+            label="Mark Disposed"
+            navKey="di"
+            action={disposeAction}
+            onClick={() => disposeAction.mutate({ id: discrepancyId, status: "disposed" })}
+            visible={discrepancy.status === "investigating"}
+            variant="primary"
+          />
+          <WorkflowActionButton
+            label="Close Investigation"
+            navKey="di"
+            action={closeAction}
+            onClick={() => closeAction.mutate({ id: discrepancyId })}
+            visible={discrepancy.status === "disposed"}
+          />
         </div>
       </div>
 

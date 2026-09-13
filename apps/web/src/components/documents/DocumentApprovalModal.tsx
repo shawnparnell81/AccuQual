@@ -3,6 +3,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { Modal } from "../modals/Modal";
 import { TextAreaField } from "../forms/Field";
+import { useToast } from "../shared/ToastProvider";
+import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 
 /**
  * Approval workflow rule: only "approved" (Released) documents are meant to
@@ -14,6 +16,7 @@ import { TextAreaField } from "../forms/Field";
 export function DocumentApprovalModal({ documentId, isOpen, onClose }: { documentId: number; isOpen: boolean; onClose: () => void }) {
   const [approvalNotes, setApprovalNotes] = useState("");
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const approve = useMutation({
     mutationFn: async () => (await apiClient.post(`/documents/${documentId}/approve`, { approvalNotes: approvalNotes || undefined })).data,
@@ -23,8 +26,10 @@ export function DocumentApprovalModal({ documentId, isOpen, onClose }: { documen
       queryClient.invalidateQueries({ queryKey: ["audit-trail", "Document", documentId] });
       queryClient.invalidateQueries({ queryKey: ["document-folders"] }); // a linked leaf's badge depends on this document's status
       setApprovalNotes("");
+      toast.success("Document released.");
       onClose();
     },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't approve this document.")),
   });
 
   return (

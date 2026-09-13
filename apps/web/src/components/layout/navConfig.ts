@@ -212,3 +212,18 @@ export const PLATFORM_LEAF = { key: "platform", label: "Platform Admin", path: "
 
 /** Every KPI-flagged leaf's key that a live count exists for (GET /nav/kpi-counts). Pareto and Production Log are KPI="Yes" in the sheet but aren't countable the same way — see nav.controller.ts. */
 export const KPI_COUNT_KEYS = ["ncr", "capa", "8d", "di", "complaints"] as const;
+
+/**
+ * Looks up one leaf by key across every department's dropdown, plus the
+ * canonical leaves declared once and shared (SUPPLIERS/COMPLAINTS/
+ * PRODUCTION_LOG) — used by the Workflow UI components (useWorkflowAccess)
+ * to reuse this same access map for permission-aware transition buttons
+ * instead of a second, parallel matrix.
+ */
+export function findNavLeaf(key: string): NavLeaf | undefined {
+  for (const group of NAV_STRUCTURE) {
+    const found = group.items.find((item) => item.key === key);
+    if (found) return found;
+  }
+  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG].find((leaf) => leaf.key === key);
+}

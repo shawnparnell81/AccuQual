@@ -31,12 +31,15 @@ const BUCKET_BY_STATUS: Record<string, "muted" | "info" | "warning" | "success" 
   in_review: "info",
   verifying: "info",
   corrective_action: "info",
+  disposed: "info", // DI: awaiting close, one step past investigating
 
   open: "warning",
   medium: "warning",
   high: "warning",
   expiring_soon: "warning",
   overdue: "warning",
+  probation: "warning", // Supplier: conditional, not yet a problem but not fully clear either
+  suspended: "warning", // Supplier: paused, not yet the terminal disqualified — see Phase 6's supplier.controller.ts
 
   approved: "success",
   completed: "success",

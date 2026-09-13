@@ -90,7 +90,7 @@ export interface Supplier {
   id: number;
   name: string;
   contactEmail: string | null;
-  status: "active" | "probation" | "disqualified";
+  status: "active" | "probation" | "suspended" | "disqualified";
   riskLevel: string | null;
 }
 
