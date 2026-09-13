@@ -29,6 +29,8 @@ import { SupplierCostChart } from "../../components/charts/SupplierCostChart";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowDashboard } from "../../components/dashboard/WorkflowDashboard";
 import { RecheckMinMaxButton } from "../../components/dashboard/RecheckMinMaxButton";
+import { useCurrentUser } from "../../hooks/useAuth";
+import { Palette, FileUp, Bot, Cpu } from "lucide-react";
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
 const capaHooks = createResourceHooks<Capa>("capa");
@@ -51,6 +53,7 @@ function StatCard({ label, value }: { label: string; value: number | string }) {
 
 /** Dashboard: NCR severity chart, CAPA status overview, audit calendar widget, supplier scorecards, AI insights panel. */
 export function DashboardPage() {
+  const currentUser = useCurrentUser();
   const { data: ncrs = [] } = ncrHooks.useList();
   const { data: capas = [] } = capaHooks.useList();
   const { data: audits = [] } = auditHooks.useList();
@@ -337,6 +340,30 @@ export function DashboardPage() {
           )}
         </div>
       </div>
+
+      {currentUser?.roleName === "admin" && (
+        <div>
+          <h2 className="mb-3 text-lg font-semibold">Tenant Configuration</h2>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <Link to="/admin/tenant-branding" className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 hover:bg-muted/50">
+              <Palette size={18} className="text-muted-foreground" />
+              <span className="text-sm font-medium">Branding</span>
+            </Link>
+            <Link to="/admin/tenant-templates" className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 hover:bg-muted/50">
+              <FileUp size={18} className="text-muted-foreground" />
+              <span className="text-sm font-medium">Templates</span>
+            </Link>
+            <Link to="/admin/tenant-ai" className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 hover:bg-muted/50">
+              <Bot size={18} className="text-muted-foreground" />
+              <span className="text-sm font-medium">AI Config</span>
+            </Link>
+            <Link to="/admin/digital-twin" className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 hover:bg-muted/50">
+              <Cpu size={18} className="text-muted-foreground" />
+              <span className="text-sm font-medium">Digital Twin Setup</span>
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div>
         <h2 className="mb-3 text-lg font-semibold">Workflow Overview</h2>

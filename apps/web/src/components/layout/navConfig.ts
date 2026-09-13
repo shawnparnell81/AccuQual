@@ -28,6 +28,10 @@ import {
   Sparkles,
   Package,
   Receipt,
+  Palette,
+  FileUp,
+  Bot,
+  Cpu,
 } from "lucide-react";
 
 /**
@@ -240,6 +244,15 @@ export const NAV_STRUCTURE: NavGroup[] = [
       { key: "workflow", label: "Workflow Builder", path: "/workflow", icon: Workflow, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
       { key: "ai", label: "AI Insights", path: "/ai", icon: Sparkles, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
       { key: "digital_twin", label: "Digital Twin", path: "/digital-twin", icon: Boxes, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
+      // Admin-only in practice (each page's own AdminOnlyGuard + the real
+      // requireRole("admin") backend gate) — access: {} here just means
+      // "visible in the nav to every department", same as every other leaf
+      // in this catch-all group; there's no role dimension in the nav
+      // access model, only department. See the Tenant Admin UI review.
+      { key: "tenant_branding", label: "Tenant Branding", path: "/admin/tenant-branding", icon: Palette, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard" },
+      { key: "tenant_templates", label: "Tenant Templates", path: "/admin/tenant-templates", icon: FileUp, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard" },
+      { key: "tenant_ai", label: "Tenant AI Config", path: "/admin/tenant-ai", icon: Bot, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard" },
+      { key: "digital_twin_setup", label: "Digital Twin Setup", path: "/admin/digital-twin", icon: Cpu, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard" },
     ],
   },
 ];

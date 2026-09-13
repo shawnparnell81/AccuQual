@@ -37,3 +37,11 @@ export const iotIngestSchema = z.object({
   timestamp: z.coerce.date().optional(),
   data: z.record(z.string(), z.unknown()),
 });
+
+/** Real registration (name/type/model link) — /iot-ingest only ever upserts deviceId+lastSeenAt as a side effect of a reading, never these fields. */
+export const registerDeviceSchema = z.object({
+  deviceId: z.string().min(1),
+  name: z.string().optional(),
+  type: z.enum(["plc", "sensor", "inspection_equipment", "environmental"]).optional(),
+  digitalTwinModelId: z.number().int().optional(),
+});
