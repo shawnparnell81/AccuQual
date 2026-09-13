@@ -41,7 +41,10 @@ export const PERMISSION_MATRIX: Record<ResourceKey, Partial<Record<Department, A
   audit: { quality: "edit" },
   calibration: { quality: "edit" },
   pareto: { quality: "read" },
-  suppliers: { quality: "edit", purchasing: "read", material_management: "read" },
+  // production added for Supplier Performance Analytics (read-only, same
+  // level as purchasing/material_management — it had no access at all
+  // before this) — see the Supplier Performance Analytics review.
+  suppliers: { quality: "edit", purchasing: "read", material_management: "read", production: "read" },
   complaints: { quality: "edit", engineering: "edit", production: "read", customer_service: "edit" },
   ppap: { engineering: "edit" },
   apqp: { engineering: "edit" },

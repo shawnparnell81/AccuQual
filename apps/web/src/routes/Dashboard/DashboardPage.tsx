@@ -15,6 +15,7 @@ import type {
   ConsumptionVsReceivingResponse,
   ScrapAnalytics,
   ReferenceSummaryEntry,
+  SupplierPerformance,
 } from "../../api/types";
 import { SeverityChart } from "../../components/charts/SeverityChart";
 import { CapaEffectivenessChart } from "../../components/charts/CapaEffectivenessChart";
@@ -71,6 +72,18 @@ export function DashboardPage() {
     queryKey: ["inventory/analytics/reference-summary"],
     queryFn: async () => (await apiClient.get("/inventory/analytics/reference-summary")).data,
   });
+  const { data: supplierPerformance = [] } = useQuery<SupplierPerformance[]>({
+    queryKey: ["suppliers/performance-summary"],
+    queryFn: async () => (await apiClient.get("/suppliers/performance-summary")).data,
+  });
+  const suppliersWithData = supplierPerformance.filter((p) => p.itemCount > 0);
+  const suppliersAtRisk = suppliersWithData.filter((p) => p.riskScore === "high").length;
+  const timelinessSamples = suppliersWithData.filter((p) => p.deliveryTimeliness.avgDays !== null);
+  const avgDeliveryTime =
+    timelinessSamples.length === 0 ? null : timelinessSamples.reduce((sum, p) => sum + p.deliveryTimeliness.avgDays!, 0) / timelinessSamples.length;
+  const accuracySamples = suppliersWithData.filter((p) => p.deliveryAccuracy.avgPercent !== null);
+  const avgDeliveryAccuracy =
+    accuracySamples.length === 0 ? null : accuracySamples.reduce((sum, p) => sum + p.deliveryAccuracy.avgPercent!, 0) / accuracySamples.length;
   const openBelowMinAlerts = inventoryAlerts.filter((a) => a.alertType === "below_min" && !a.acknowledgedAt).length;
   const openAlertsTotal = inventoryAlerts.filter((a) => !a.acknowledgedAt).length;
   const acknowledgedAlertsTotal = inventoryAlerts.filter((a) => a.acknowledgedAt).length;
@@ -142,6 +155,23 @@ export function DashboardPage() {
               </li>
             ))}
           </ul>
+
+          {/* Computed from real delivery/reorder/alert data (see Supplier Performance
+              Analytics) — distinct from the manually-entered scorecard riskLevel above. */}
+          <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border pt-3 text-center">
+            <div>
+              <p className="text-lg font-semibold tabular-nums">{suppliersAtRisk}</p>
+              <p className="text-xs text-muted-foreground">Suppliers at Risk</p>
+            </div>
+            <div>
+              <p className="text-lg font-semibold tabular-nums">{avgDeliveryTime === null ? "—" : `${avgDeliveryTime.toFixed(1)}d`}</p>
+              <p className="text-xs text-muted-foreground">Avg Delivery Time</p>
+            </div>
+            <div>
+              <p className="text-lg font-semibold tabular-nums">{avgDeliveryAccuracy === null ? "—" : `${avgDeliveryAccuracy.toFixed(0)}%`}</p>
+              <p className="text-xs text-muted-foreground">Avg Delivery Accuracy</p>
+            </div>
+          </div>
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">

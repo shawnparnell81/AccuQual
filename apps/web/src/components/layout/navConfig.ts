@@ -88,10 +88,12 @@ export const SUPPLIERS: NavLeaf = {
   label: "Suppliers",
   path: "/suppliers",
   icon: Truck,
-  access: { quality: "edit", purchasing: "read", material_management: "read" },
+  // production added for Supplier Performance Analytics — mirrors
+  // departmentAccess.ts's PERMISSION_MATRIX.suppliers exactly.
+  access: { quality: "edit", purchasing: "read", material_management: "read", production: "read" },
   kpi: false,
   priority: 2,
-  notes: "Linked to Purchasing + Material Mgmt",
+  notes: "Linked to Purchasing + Material Mgmt + Production (read)",
 };
 
 export const COMPLAINTS: NavLeaf = {
@@ -182,7 +184,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "production",
-    items: [PRODUCTION_LOG, COMPLAINTS, INVENTORY],
+    items: [PRODUCTION_LOG, COMPLAINTS, INVENTORY, SUPPLIERS],
   },
   {
     department: "customer_service",

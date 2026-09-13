@@ -5,18 +5,27 @@ import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createSupplierSchema, addScorecardSchema } from "./supplier.validation.js";
 import { baseHandlers, addScorecardHandler, approveHandler, conditionalHandler, suspendHandler, removeHandler } from "./supplier.controller.js";
+import { getSupplierPerformanceHandler, performanceSummaryHandler } from "./supplier.performance.js";
 
 export const supplierRouter = Router();
-// Suppliers is shared by 3 departments at different levels (Quality: edit,
-// Purchasing/Material Mgmt: read-only) — see departmentAccess.ts. Note this
-// means the 4 dedicated actions below are Quality/admin-only today — real
-// Purchasing users only have read access, unlike the brief's assumption
-// that Purchasing could approve a supplier (see the Permissions Dictionary).
+// Suppliers is shared by 4 departments at different levels (Quality: edit,
+// Purchasing/Material Mgmt/Production: read-only) — see departmentAccess.ts.
+// Note this means the 4 dedicated actions below are Quality/admin-only
+// today — real Purchasing users only have read access, unlike the brief's
+// assumption that Purchasing could approve a supplier (see the Permissions
+// Dictionary). Production was added purely for the read-only Performance
+// Analytics endpoints below (see the Supplier Performance Analytics review)
+// — it has no write access to anything here.
 supplierRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("suppliers"));
+
+// Fixed literal path before ":id"-shaped ones, same convention used
+// throughout this app (workflow.routes.ts's "/history/...", etc.).
+supplierRouter.get("/performance-summary", performanceSummaryHandler);
 
 supplierRouter.get("/", baseHandlers.list);
 supplierRouter.post("/", validate(createSupplierSchema), baseHandlers.create);
 supplierRouter.get("/:id", baseHandlers.getOne);
+supplierRouter.get("/:id/performance", getSupplierPerformanceHandler);
 supplierRouter.post("/:id/scorecard", validate(addScorecardSchema), addScorecardHandler);
 supplierRouter.post("/:id/approve", approveHandler);
 supplierRouter.post("/:id/conditional", conditionalHandler);

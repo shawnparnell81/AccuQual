@@ -5,7 +5,7 @@ import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
-import type { InventoryItem, InventoryMovement, InventoryAlert, InventoryReorderRequest } from "../../api/types";
+import type { InventoryItem, InventoryMovement, InventoryAlert, InventoryReorderRequest, Supplier } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
@@ -18,6 +18,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 const itemHooks = createResourceHooks<InventoryItem>("inventory/items");
 const alertHooks = createResourceHooks<InventoryAlert>("inventory/alerts");
 const reorderRequestHooks = createResourceHooks<InventoryReorderRequest>("inventory/reorder-requests");
+const supplierHooks = createResourceHooks<Supplier>("suppliers");
 
 function useMovementHistory(itemId: number | undefined) {
   return useQuery<InventoryMovement[]>({
@@ -210,8 +211,11 @@ export function InventoryDetailPage() {
   const { data: allAlerts = [] } = alertHooks.useList();
   const itemAlerts = allAlerts.filter((a) => a.itemId === itemId);
   const { data: reorderRequests = [] } = reorderRequestHooks.useList({ itemId });
+  const { data: suppliers = [] } = supplierHooks.useList();
   const currentUser = useCurrentUser();
   const canManageReorder = currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin" || currentUser?.department === "purchasing";
+  const updateItem = itemHooks.useUpdate();
+  const [editingSupplier, setEditingSupplier] = useState(false);
   const [movementOpen, setMovementOpen] = useState(false);
   const [referenceTypeFilter, setReferenceTypeFilter] = useState("all");
   const referenceTypes = useMemo(() => Array.from(new Set(movements.map((m) => m.referenceType).filter((t): t is string => !!t))), [movements]);
@@ -232,6 +236,35 @@ export function InventoryDetailPage() {
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge value={item.state} />
             <span className="text-sm text-muted-foreground">{item.description}</span>
+          </div>
+          <div className="mt-2 flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Supplier:</span>
+            {editingSupplier ? (
+              <>
+                <select
+                  className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                  defaultValue={item.defaultSupplierId ?? ""}
+                  onChange={(e) => {
+                    const value = e.target.value ? Number(e.target.value) : null;
+                    updateItem.mutate({ id: itemId, defaultSupplierId: value } as Partial<InventoryItem> & { id: number }, { onSuccess: () => setEditingSupplier(false) });
+                  }}
+                >
+                  <option value="">None</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <button onClick={() => setEditingSupplier(false)} className="text-xs text-muted-foreground hover:underline">
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setEditingSupplier(true)} className="text-primary hover:underline">
+                {suppliers.find((s) => s.id === item.defaultSupplierId)?.name ?? "None set — click to link"}
+              </button>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">

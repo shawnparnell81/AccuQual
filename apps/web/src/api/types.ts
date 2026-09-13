@@ -149,6 +149,27 @@ export interface Supplier {
   riskLevel: string | null;
 }
 
+/**
+ * GET /suppliers/:id/performance and /suppliers/performance-summary — built
+ * entirely from real inventory_movements/inventory_reorder_requests/
+ * inventory_alerts rows (see supplier.performance.ts). Delivery timeliness/
+ * accuracy sampleSize can be 0 (avgDays/avgPercent then null) — nothing
+ * formally links a reorder request to the movement that fulfilled it, so
+ * a supplier with no matched pairs yet has no fabricated average.
+ */
+export interface SupplierPerformance {
+  supplierId: number;
+  supplierName?: string; // only on the performance-summary list, not the single-supplier endpoint
+  itemCount: number;
+  deliveryFrequency: { count: number; days: number };
+  deliveryTimeliness: { avgDays: number | null; sampleSize: number };
+  deliveryAccuracy: { avgPercent: number | null; sampleSize: number };
+  reorderResponsiveness: { overduePendingCount: number; thresholdDays: number };
+  belowMinAlertCount: number;
+  riskScore: "low" | "medium" | "high" | "no_data";
+  riskPoints: number;
+}
+
 export interface InventoryStock {
   id: number;
   itemId: number;

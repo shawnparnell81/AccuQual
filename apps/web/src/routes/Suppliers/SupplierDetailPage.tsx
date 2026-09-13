@@ -1,13 +1,32 @@
 import { useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
-import type { Supplier } from "../../api/types";
+import { apiClient } from "../../api/client";
+import type { Supplier, SupplierPerformance } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 
 const supplierHooks = createResourceHooks<Supplier>("suppliers");
+
+function useSupplierPerformance(supplierId: number | undefined) {
+  return useQuery<SupplierPerformance>({
+    queryKey: ["suppliers", supplierId, "performance"],
+    queryFn: async () => (await apiClient.get(`/suppliers/${supplierId}/performance`)).data,
+    enabled: supplierId !== undefined,
+  });
+}
+
+function PerformanceStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-lg font-semibold tabular-nums">{value}</p>
+    </div>
+  );
+}
 
 /**
  * Supplier detail: the roster record plus its fillable supplier record and
@@ -19,6 +38,7 @@ export function SupplierDetailPage() {
   const { id } = useParams();
   const supplierId = Number(id);
   const { data: supplier, isLoading } = supplierHooks.useOne(supplierId);
+  const { data: performance } = useSupplierPerformance(supplierId);
   const historyKey: unknown[][] = [["workflow-history", "suppliers", supplierId]];
 
   const approveAction = useWorkflowAction("suppliers", "approve", { successMessage: "Supplier approved.", invalidateKeys: historyKey });
@@ -87,6 +107,39 @@ export function SupplierDetailPage() {
             />
             <WorkflowActionButton label="Disqualify" navKey="suppliers" action={removeAction} onClick={() => removeAction.mutate({ id: supplierId })} />
           </div>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-medium">Performance Analytics</h2>
+          {performance && performance.riskScore !== "no_data" && (
+            <StatusBadge value={performance.riskScore === "high" ? "critical" : performance.riskScore} label={`Risk: ${performance.riskScore}`} />
+          )}
+        </div>
+        {!performance ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : performance.itemCount === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No inventory items are linked to this supplier yet — set it as an item's supplier from that item's detail page to start
+            tracking performance.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+              <PerformanceStat label="Avg Delivery Time" value={performance.deliveryTimeliness.avgDays === null ? "No data" : `${performance.deliveryTimeliness.avgDays}d`} />
+              <PerformanceStat label="Delivery Accuracy" value={performance.deliveryAccuracy.avgPercent === null ? "No data" : `${performance.deliveryAccuracy.avgPercent}%`} />
+              <PerformanceStat label={`Deliveries (${performance.deliveryFrequency.days}d)`} value={String(performance.deliveryFrequency.count)} />
+              <PerformanceStat label="Pending Reorder Requests" value={String(performance.reorderResponsiveness.overduePendingCount)} />
+              <PerformanceStat label="Below-Min Alerts" value={String(performance.belowMinAlertCount)} />
+              <PerformanceStat label="Linked Items" value={String(performance.itemCount)} />
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Delivery time/accuracy are computed from real receive movements matched to sent reorder requests (sample size:{" "}
+              {performance.deliveryTimeliness.sampleSize}) — nothing formally links a request to the delivery that fulfills it, so this
+              is a best-effort pairing, not a guarantee.
+            </p>
+          </>
         )}
       </div>
 
