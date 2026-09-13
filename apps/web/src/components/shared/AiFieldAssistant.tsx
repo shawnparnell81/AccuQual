@@ -93,7 +93,7 @@ export function AiFieldAssistant({ module, recordId, buildInitialPrompt, onInser
             type="button"
             onClick={() => generate.mutate()}
             disabled={generate.isPending || !prompt.trim()}
-            className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60"
+            className="w-fit rounded-md bg-button px-3 py-1.5 text-sm text-button-foreground disabled:opacity-60"
           >
             {generate.isPending ? "Generating…" : "Generate"}
           </button>
@@ -109,7 +109,7 @@ export function AiFieldAssistant({ module, recordId, buildInitialPrompt, onInser
                       onInsert(result);
                       setIsOpen(false);
                     }}
-                    className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+                    className="rounded-md bg-button px-3 py-1.5 text-xs font-medium text-button-foreground"
                   >
                     {insertLabel}
                   </button>

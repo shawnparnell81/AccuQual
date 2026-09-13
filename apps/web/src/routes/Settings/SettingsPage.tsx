@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useCurrentUser, useCurrentTenant } from "../../hooks/useAuth";
 import { NavigationSettingsPage } from "./NavigationSettingsPage";
 import { SecurityRolesSection } from "./SecurityRolesSection";
+import { ThemeSettingsSection } from "./ThemeSettingsSection";
 
 const TABS = [
   "User Preferences",
@@ -96,22 +97,7 @@ export function SettingsPage() {
         </div>
       )}
 
-      {tab === "Theme" && (
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="mb-2 text-sm font-medium">Appearance</h3>
-          <div className="flex items-center gap-3">
-            <span className="rounded-md border border-primary bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary">Dark</span>
-            <span className="cursor-not-allowed rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground opacity-50" title="Not built yet">
-              Light
-            </span>
-          </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            AccuQual currently ships one committed dark theme (see globals.css) rather than a light/dark toggle — Light is shown here for
-            visibility into what's planned, not as a working switch. Building a real light theme means auditing every component's colors
-            against a second palette, which is a real, separate piece of work rather than something to bolt on here.
-          </p>
-        </div>
-      )}
+      {tab === "Theme" && <ThemeSettingsSection />}
 
       {tab === "Notifications" && <NotAvailable what="Notifications" />}
       {tab === "Email Alerts" && <NotAvailable what="Email delivery" />}

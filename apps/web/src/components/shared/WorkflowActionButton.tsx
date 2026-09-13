@@ -42,7 +42,7 @@ export function WorkflowActionButton({ label, navKey, action, onClick, visible =
       title={canEdit ? undefined : "Your department doesn't have edit access to this module"}
       className={clsx(
         "rounded-md px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40",
-        variant === "primary" ? "bg-primary text-primary-foreground" : "border border-border hover:bg-muted"
+        variant === "primary" ? "bg-button text-button-foreground" : "border border-border hover:bg-muted"
       )}
     >
       {action.isPending ? "Working…" : label}
