@@ -40,6 +40,7 @@ import { AiInsightsPage } from "./routes/AI/AiInsightsPage";
 import { DigitalTwinPage } from "./routes/DigitalTwin/DigitalTwinPage";
 import { PlatformAdminPage } from "./routes/Platform/PlatformAdminPage";
 import { NavigationSettingsPage } from "./routes/Settings/NavigationSettingsPage";
+import { SettingsPage } from "./routes/Settings/SettingsPage";
 import { useCurrentUser } from "./hooks/useAuth";
 
 function HomeRoute() {
@@ -100,6 +101,8 @@ export function App() {
           <Route path="/workflow" element={<WorkflowBuilderPage />} />
           <Route path="/ai" element={<AiInsightsPage />} />
           <Route path="/digital-twin" element={<DigitalTwinPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          {/* Kept working as its own URL (embedded as SettingsPage's "Navigation" tab) — anyone with this link bookmarked shouldn't get a 404. */}
           <Route path="/settings/navigation" element={<NavigationSettingsPage />} />
         </Route>
       </Route>

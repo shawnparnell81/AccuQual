@@ -1,3 +1,21 @@
+/** GET/POST/PATCH /users (services/api's users.controller.ts) — never includes passwordHash. */
+export interface AppUser {
+  id: number;
+  email: string;
+  name: string | null;
+  roleId: number | null;
+  department: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+/** GET/POST/PATCH /roles — platform-wide constants, not tenant-scoped (see roles.controller.ts). */
+export interface AppRole {
+  id: number;
+  name: string;
+  description: string | null;
+}
+
 /**
  * One row from GET /workflow/history/:moduleName/:recordId (see
  * workflow.controller.ts's historyHandler) — a raw audit_trail row.

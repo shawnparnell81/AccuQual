@@ -50,5 +50,13 @@ export function createResourceHooks<T extends { id: number }>(resource: string) 
     });
   }
 
-  return { useList, useOne, useCreate, useUpdate, useAction };
+  function useDelete() {
+    const queryClient = useQueryClient();
+    return useMutation({
+      mutationFn: async (id: number) => apiClient.delete(`/${resource}/${id}`),
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
+    });
+  }
+
+  return { useList, useOne, useCreate, useUpdate, useAction, useDelete };
 }
