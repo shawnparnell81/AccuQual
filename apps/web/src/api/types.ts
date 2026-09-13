@@ -447,6 +447,23 @@ export interface TenantAiConfig {
   hasApiKey: boolean;
   maskedApiKey?: string | null;
   assistantName: string | null;
+  // BYOK usage limit — see tenants.aiMonthlyLimit's schema comment for why
+  // enforcement itself is computed live from audit trail history, not a
+  // stored counter.
+  monthlyLimit: number | null;
+  limitEnforced: boolean;
+}
+
+/** GET /tenant/ai-usage (admin only). dailyBreakdown/moduleBreakdown cover the last 30 days; totalTokens/totalCost are all-time. remainingTokens is null when no limit is enforced. */
+export interface TenantAiUsage {
+  totalTokens: number;
+  totalCost: number;
+  monthlyLimit: number | null;
+  limitEnforced: boolean;
+  currentMonthTokens: number;
+  remainingTokens: number | null;
+  dailyBreakdown: Array<{ label: string; count: number }>;
+  moduleBreakdown: Array<{ module: string; tokens: number; calls: number }>;
 }
 
 /** GET /tenant/assistant-name — open to ANY authenticated user (not just admin), so the floating Assistant panel can label itself for everyone. */

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
@@ -25,6 +26,8 @@ function AiConfigForm() {
   const [temperature, setTemperature] = useState("");
   const [maxTokens, setMaxTokens] = useState("");
   const [assistantName, setAssistantName] = useState("");
+  const [monthlyLimit, setMonthlyLimit] = useState("");
+  const [limitEnforced, setLimitEnforced] = useState(false);
 
   useEffect(() => {
     if (config) {
@@ -33,6 +36,8 @@ function AiConfigForm() {
       setTemperature(config.temperature?.toString() ?? "");
       setMaxTokens(config.maxTokens?.toString() ?? "");
       setAssistantName(config.assistantName ?? "");
+      setMonthlyLimit(config.monthlyLimit?.toString() ?? "");
+      setLimitEnforced(config.limitEnforced);
     }
   }, [config]);
 
@@ -46,6 +51,8 @@ function AiConfigForm() {
           temperature: temperature ? Number(temperature) : undefined,
           maxTokens: maxTokens ? Number(maxTokens) : undefined,
           assistantName, // "" clears it back to the default label — see updateAiConfigHandler
+          monthlyLimit: monthlyLimit ? Number(monthlyLimit) : null,
+          limitEnforced,
         })
       ).data,
     onSuccess: () => {
@@ -69,7 +76,8 @@ function AiConfigForm() {
     >
       <p className="rounded-md border border-dashed border-border bg-muted/40 p-3 text-xs text-muted-foreground">
         This provider and key are used by the AI Assistant (the chat panel available to every user) and by AccuQual's other AI
-        features, whenever a key is set here — falling back to the platform's own configured provider otherwise.
+        features, whenever a key is set here — falling back to the platform's own configured provider otherwise. Your organization's
+        own provider account is billed for this usage, not AccuQual's.
       </p>
 
       <TextField
@@ -88,18 +96,52 @@ function AiConfigForm() {
         ))}
       </SelectField>
 
-      <TextField
-        label={config?.hasApiKey ? `API Key (currently ${config.maskedApiKey}) — leave blank to keep it` : "API Key"}
-        type="password"
-        placeholder={config?.hasApiKey ? "Leave blank to keep the current key" : "sk-…"}
-        value={apiKey}
-        onChange={(e) => setApiKey(e.target.value)}
-      />
+      <div>
+        <TextField
+          label={config?.hasApiKey ? `API Key (currently ${config.maskedApiKey}) — leave blank to keep it` : "API Key"}
+          type="password"
+          placeholder={config?.hasApiKey ? "Leave blank to keep the current key" : "sk-…"}
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+        />
+        {apiKey && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Saving will make one small real request to {provider} to confirm this key works before it's stored — a genuine (tiny)
+            charge against your own account, and the save is rejected if the key doesn't validate.
+          </p>
+        )}
+      </div>
       <TextField label="Model Name" value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="claude-sonnet-5" />
       <TextField label="Temperature (0–2)" type="number" min="0" max="2" step="0.1" value={temperature} onChange={(e) => setTemperature(e.target.value)} />
       <TextField label="Max Tokens" type="number" min="1" value={maxTokens} onChange={(e) => setMaxTokens(e.target.value)} />
 
-      <button type="submit" disabled={save.isPending} className="w-fit rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
+      <div className="border-t border-border pt-4">
+        <h3 className="mb-1 text-sm font-medium">Usage Limit</h3>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Optional — caps how many tokens this organization's AI Assistant can use per calendar month. Checked against real usage
+          history, not a stored counter, so it resets naturally at the start of each month.{" "}
+          <Link to="/admin/ai-usage" className="text-primary hover:underline">
+            View usage
+          </Link>
+          .
+        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <TextField
+            label="Monthly Token Limit"
+            type="number"
+            min="1"
+            placeholder="No limit"
+            value={monthlyLimit}
+            onChange={(e) => setMonthlyLimit(e.target.value)}
+          />
+          <label className="flex items-center gap-2 pb-2 text-sm">
+            <input type="checkbox" checked={limitEnforced} onChange={(e) => setLimitEnforced(e.target.checked)} className="h-4 w-4 rounded border-form-field" />
+            <span>Enforce this limit</span>
+          </label>
+        </div>
+      </div>
+
+      <button type="submit" disabled={save.isPending} className="w-fit rounded-md bg-button px-4 py-2 text-sm font-medium text-button-foreground disabled:opacity-60">
         {save.isPending ? "Saving…" : "Save AI Configuration"}
       </button>
     </form>

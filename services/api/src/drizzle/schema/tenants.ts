@@ -1,4 +1,4 @@
-import { pgTable, serial, text, jsonb, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, jsonb, timestamp, boolean, integer, numeric } from "drizzle-orm/pg-core";
 
 /**
  * A tenant is a company/plant/division/customer (see Tenant Onboarding Flow Spec).
@@ -50,6 +50,24 @@ export const tenants = pgTable("tenants", {
    * gateway already had.
    */
   aiConfig: jsonb("ai_config").$type<{ provider?: "anthropic" | "openai"; apiKeyEncrypted?: string; modelName?: string; temperature?: number; maxTokens?: number; assistantName?: string }>(),
+  /**
+   * BYOK usage/limits — real flat columns, not folded into aiConfig above,
+   * because these are counters a concurrent AI call must increment
+   * atomically (`SET col = col + $1` is trivially atomic in Postgres; doing
+   * the same inside one jsonb blob via a read-modify-write risks a lost
+   * update between two simultaneous requests). aiConfig stays "rarely-changed
+   * config a human edits"; these are "counters the request path writes on
+   * every call". aiUsageTokens/aiUsageCost are all-time cumulative (for the
+   * dashboard's "Total tokens/cost" figures) — the *monthly* limit check
+   * itself is computed live from real audit_trail rows for the current
+   * calendar month (see ai.assistant.ts), not from these two columns, since
+   * a single cumulative counter can never really implement "monthly" without
+   * a reset mechanism, and this app has no background jobs to reset one.
+   */
+  aiUsageTokens: integer("ai_usage_tokens").notNull().default(0),
+  aiUsageCost: numeric("ai_usage_cost").notNull().default("0"),
+  aiMonthlyLimit: integer("ai_monthly_limit"),
+  aiLimitEnforced: boolean("ai_limit_enforced").notNull().default(false),
   isDeleted: boolean("is_deleted").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });

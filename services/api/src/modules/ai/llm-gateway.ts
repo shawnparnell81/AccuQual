@@ -129,6 +129,38 @@ async function callOpenAi(prompt: string, options: LlmCallOptions): Promise<LlmC
   };
 }
 
+/**
+ * A real, minimal (max_tokens: 1) call to the provider to confirm a key
+ * actually works before it's ever encrypted/stored — see
+ * tenant.controller.ts's updateAiConfigHandler. This is a genuine trade-off
+ * the reviewed BYOK prompt asked for explicitly ("perform a test request...
+ * if invalid, reject"): it spends a trivial, real amount of the tenant's
+ * own provider quota on every key save, unlike every other AI call in this
+ * app (which only ever runs on an explicit user action). Returns true/false
+ * rather than throwing — a network hiccup and a genuinely bad key both mean
+ * "couldn't validate", and the caller decides what to do with that.
+ */
+export async function validateApiKey(provider: "anthropic" | "openai", apiKey: string, model: string): Promise<boolean> {
+  try {
+    if (provider === "anthropic") {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model, max_tokens: 1, messages: [{ role: "user", content: "Hi" }] }),
+      });
+      return response.ok;
+    }
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, max_tokens: 1, messages: [{ role: "user", content: "Hi" }] }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 function stubResponse(prompt: string): string {
   return JSON.stringify({
     note: "No LLM API key configured — this is a deterministic development stub, not a real model response.",
