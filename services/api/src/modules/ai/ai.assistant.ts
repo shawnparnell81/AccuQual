@@ -11,6 +11,7 @@ import { digitalTwinModels, digitalTwinSimulations } from "../../drizzle/schema/
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { trainingCourses, trainingAssignments } from "../../drizzle/schema/training.js";
 import { equipment, calibrations } from "../../drizzle/schema/calibration.js";
+import { users } from "../../drizzle/schema/users.js";
 import { computeSupplierPerformance } from "../supplier/supplier.performance.js";
 import { computeCostingSummary } from "../inventory/inventory.costing.js";
 import { decryptSecret } from "../tenant/crypto.js";
@@ -73,6 +74,28 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
     return (
       `The user is viewing Training Course "${row.title}". Description: ${row.description ?? "none"}. ` +
       `Assignments: ${assignments.length} total — ${completed} completed, ${overdue} overdue, ${inProgress} in progress, ${notStarted} not started yet.`
+    );
+  }
+  if (module === "training_employee") {
+    // Distinct from "training" (one course, every employee) — this is one
+    // employee, every course, the data behind EmployeeTrainingHistoryPage /
+    // GET /training/employee/:userId/history.
+    const [user] = await db.select().from(users).where(and(eq(users.id, recordId), eq(users.tenantId, tenantId)));
+    if (!user) return null;
+    const rows = await db
+      .select({ status: trainingAssignments.status, courseTitle: trainingCourses.title })
+      .from(trainingAssignments)
+      .leftJoin(trainingCourses, eq(trainingAssignments.courseId, trainingCourses.id))
+      .where(and(eq(trainingAssignments.userId, recordId), eq(trainingAssignments.tenantId, tenantId)));
+    const completed = rows.filter((r) => r.status === "completed").length;
+    const overdue = rows.filter((r) => r.status === "overdue").length;
+    const inProgress = rows.filter((r) => r.status === "in_progress").length;
+    const notStarted = rows.filter((r) => r.status === "assigned").length;
+    const courseList = rows.map((r) => `${r.courseTitle ?? "Untitled course"} (${r.status})`).join("; ");
+    return (
+      `The user is viewing the training history for employee "${user.name ?? user.email}". ` +
+      `${rows.length} course assignment(s) total — ${completed} completed, ${overdue} overdue, ${inProgress} in progress, ${notStarted} not started. ` +
+      (rows.length > 0 ? `Courses: ${courseList}.` : "No courses assigned yet.")
     );
   }
   if (module === "calibration") {
