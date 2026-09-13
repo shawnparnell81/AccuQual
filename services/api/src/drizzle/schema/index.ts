@@ -24,3 +24,4 @@ export * from "./navPreferences.js";
 export * from "./inventory.js";
 export * from "./notifications.js";
 export * from "./erp.js";
+export * from "./rma.js";

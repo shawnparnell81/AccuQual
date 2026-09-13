@@ -134,6 +134,13 @@
       "when": 1789334227601,
       "tag": "0018_tenant_ai_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789341645341,
+      "tag": "0019_rma_module",
+      "breakpoints": true
     }
   ]
 }
