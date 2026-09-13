@@ -6,6 +6,7 @@ import { DataTable, type Column } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { Modal } from "../../components/modals/Modal";
 import { TextField, TextAreaField, SelectField } from "../../components/forms/Field";
+import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
 
@@ -103,7 +104,22 @@ export function NcrListPage() {
           }}
         >
           <TextField label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-          <TextAreaField label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Description</span>
+              <AiFieldAssistant
+                module="ncr"
+                buildInitialPrompt={() =>
+                  `Draft an NCR write-up${form.title ? ` for "${form.title}"` : ""}. Include a clear problem description, what evidence` +
+                  " supports it, a suspected cause, and a recommended containment action. Keep it factual and concise — this is a draft" +
+                  " for a quality engineer to review and edit, not a final record."
+                }
+                onInsert={(text) => setForm({ ...form, description: text })}
+                insertLabel="Insert as Description"
+              />
+            </div>
+            <TextAreaField label="" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          </div>
           <SelectField label="Severity" value={form.severity ?? "medium"} onChange={(e) => setForm({ ...form, severity: e.target.value as Ncr["severity"] })}>
             {["low", "medium", "high", "critical"].map((s) => (
               <option key={s} value={s}>
