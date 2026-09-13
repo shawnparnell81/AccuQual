@@ -15,6 +15,7 @@ import { TextField, SelectField } from "../../components/forms/Field";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
+import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 
 const itemHooks = createResourceHooks<InventoryItem>("inventory/items");
 const alertHooks = createResourceHooks<InventoryAlert>("inventory/alerts");
@@ -325,7 +326,19 @@ export function InventoryDetailPage() {
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="mb-3 text-sm font-medium">Stock by Location</h3>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-medium">Stock by Location</h3>
+            <AiFieldAssistant
+              module="inventory_forecast"
+              recordId={itemId}
+              triggerLabel="AI Forecast Refinement"
+              buildInitialPrompt={() =>
+                `Refine the forecast for inventory item "${item.sku}" using the consumption/receiving/burn-rate data provided. Highlight` +
+                " any anomalies in the recent movement history, interpret what the trend means, predict realistic stockout scenarios," +
+                " and suggest reorder timing that accounts for the item's lead time. Be specific about the numbers, not generic advice."
+              }
+            />
+          </div>
           {item.stock && item.stock.length > 0 ? (
             <table className="w-full text-sm">
               <thead className="text-left text-xs text-muted-foreground">

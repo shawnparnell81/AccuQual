@@ -1,13 +1,16 @@
 import type { Request, Response } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte } from "drizzle-orm";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { callLlmDetailed } from "./llm-gateway.js";
 import { tenants } from "../../drizzle/schema/tenants.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
-import { inventoryItems } from "../../drizzle/schema/inventory.js";
+import { inventoryItems, inventoryStock, inventoryMovements } from "../../drizzle/schema/inventory.js";
 import { audits, auditItems } from "../../drizzle/schema/audits.js";
 import { digitalTwinModels, digitalTwinSimulations } from "../../drizzle/schema/digitalTwin.js";
+import { suppliers } from "../../drizzle/schema/supplier.js";
+import { computeSupplierPerformance } from "../supplier/supplier.performance.js";
+import { computeCostingSummary } from "../inventory/inventory.costing.js";
 import { decryptSecret } from "../tenant/crypto.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
@@ -82,6 +85,84 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
       `Predicted defect rate: ${results?.predictedDefectRatePct ?? "unknown"}%. ` +
       `Bottleneck: ${results?.bottleneck ? `${results.bottleneck.nodeId} at ${results.bottleneck.utilizationPct}% utilization` : "none"}. ` +
       `Risk heatmap: ${JSON.stringify(results?.riskHeatmap ?? [])}.`
+    );
+  }
+
+  if (module === "capa_effectiveness") {
+    const [row] = await db.select().from(capa).where(and(eq(capa.id, recordId), eq(capa.tenantId, tenantId)));
+    if (!row) return null;
+    let ncrSummary = "no linked NCR.";
+    if (row.ncrId !== null) {
+      const [ncrRow] = await db.select().from(ncr).where(and(eq(ncr.id, row.ncrId), eq(ncr.tenantId, tenantId)));
+      if (ncrRow) {
+        ncrSummary =
+          `NCR #${ncrRow.id} "${ncrRow.title}" (severity: ${ncrRow.severity ?? "not set"}, status: ${ncrRow.status}). ` +
+          `Description: ${ncrRow.description ?? "none"}. Containment: ${ncrRow.containment ?? "none"}.`;
+      }
+    }
+    // No formal recurrence tracking exists anywhere in this schema (no
+    // NCR "reopened" state, no category/root-cause code to group by) — the
+    // one real recurrence signal available is whether more than one CAPA
+    // was ever opened against the same NCR.
+    const siblingCapas = row.ncrId !== null ? await db.select().from(capa).where(and(eq(capa.ncrId, row.ncrId), eq(capa.tenantId, tenantId))) : [];
+    return (
+      `The user is scoring the effectiveness of CAPA #${row.id}. Linked NCR: ${ncrSummary} ` +
+      `CAPA status: ${row.status}. Root cause: ${row.rootCause ?? "not documented"}. Action plan: ${row.actionPlan ?? "not documented"}. ` +
+      `Preventive action: ${row.preventiveAction ?? "not documented"}. Verification notes: ${row.verification ?? "not documented"}. ` +
+      `Closed at: ${row.closedAt ? new Date(row.closedAt).toISOString() : "not closed yet"}. ` +
+      (siblingCapas.length > 1
+        ? `Note: ${siblingCapas.length} CAPAs total have been opened against this same NCR, which may itself be a sign of recurrence. `
+        : "Only one CAPA has ever been opened against this NCR. ") +
+      "AccuQual tracks no other recurrence metric — judge recurrence risk from the text above, not a computed statistic."
+    );
+  }
+  if (module === "supplier_risk") {
+    const [row] = await db.select().from(suppliers).where(and(eq(suppliers.id, recordId), eq(suppliers.tenantId, tenantId)));
+    if (!row) return null;
+    const performance = await computeSupplierPerformance(db, tenantId, recordId);
+    const costing = await computeCostingSummary(db, tenantId, 30);
+    const costEntry = costing.supplierCostDistribution.find((c) => c.supplierId === recordId);
+    return (
+      `The user is assessing risk for Supplier "${row.name}" (status: ${row.status}, current recorded risk level: ${row.riskLevel ?? "not set"}). ` +
+      `Linked inventory items: ${performance.itemCount}. Avg delivery time: ${performance.deliveryTimeliness.avgDays ?? "no data"} day(s) ` +
+      `(sample size ${performance.deliveryTimeliness.sampleSize}). Avg delivery accuracy: ${performance.deliveryAccuracy.avgPercent ?? "no data"}%. ` +
+      `Overdue pending reorder requests: ${performance.reorderResponsiveness.overduePendingCount}. Below-min alerts triggered by this supplier's items: ${performance.belowMinAlertCount}. ` +
+      `AccuQual's own rule-based risk score for this supplier: ${performance.riskScore} (${performance.riskPoints}/8 points). ` +
+      (costEntry
+        ? `Cost impact (last 30 days): $${costEntry.scrapCost.toFixed(2)} scrap, $${costEntry.consumptionCost.toFixed(2)} consumption, $${costEntry.itemValue.toFixed(2)} on-hand inventory value across ${costEntry.itemCount} costed item(s). `
+        : "No costed inventory items are linked to this supplier, so no cost-impact figures are available. ") +
+      "Note: AccuQual's data model does not link NCRs to suppliers, so no NCR history for this supplier can be provided — do not assume or invent one."
+    );
+  }
+  if (module === "inventory_forecast") {
+    const [item] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, recordId), eq(inventoryItems.tenantId, tenantId)));
+    if (!item) return null;
+    const stockRows = await db.select().from(inventoryStock).where(and(eq(inventoryStock.itemId, recordId), eq(inventoryStock.tenantId, tenantId)));
+    const onHand = stockRows.reduce((sum, r) => sum + Number(r.onHand), 0);
+    const windowDays = 30;
+    const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+    const movements = await db
+      .select()
+      .from(inventoryMovements)
+      .where(and(eq(inventoryMovements.itemId, recordId), eq(inventoryMovements.tenantId, tenantId), gte(inventoryMovements.performedAt, since)));
+    const sumType = (type: string) => movements.filter((m) => m.movementType === type).reduce((s, m) => s + Number(m.quantity), 0);
+    const consumed = sumType("consume");
+    const received = sumType("receive");
+    const scrapped = sumType("scrap");
+    const dailyConsumption = consumed / windowDays;
+    const dailyReceiving = received / windowDays;
+    const netBurnPerDay = dailyConsumption - dailyReceiving;
+    const stockoutDays = netBurnPerDay > 0 ? Math.round(onHand / netBurnPerDay) : null;
+    return (
+      `The user is reviewing forecasting for inventory item "${item.sku}" (${item.description ?? "no description"}). ` +
+      `Current on-hand: ${onHand} ${item.unitOfMeasure ?? "units"}. Min level: ${item.minLevel}, Max level: ${item.maxLevel ?? "not set"}, ` +
+      `Reorder quantity: ${item.reorderQuantity ?? "not set"}, Lead time: ${item.leadTimeDays ?? "not set"} day(s). ` +
+      `Over the last ${windowDays} days: ${consumed} consumed, ${received} received, ${scrapped} scrapped. ` +
+      `Average daily consumption: ${dailyConsumption.toFixed(2)}, average daily receiving: ${dailyReceiving.toFixed(2)}, net burn rate: ${netBurnPerDay.toFixed(2)}/day. ` +
+      (stockoutDays !== null
+        ? `At this net burn rate, on-hand stock would be exhausted in approximately ${stockoutDays} day(s) if nothing changes. `
+        : "Net burn rate is zero or negative (receiving is keeping pace with or exceeding consumption), so no stockout is currently projected from this trend. ") +
+      `Current computed state: ${item.state}.`
     );
   }
 

@@ -122,6 +122,27 @@ export function CapaDetailPage() {
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-medium">AI Effectiveness Score</h2>
+            <AiFieldAssistant
+              module="capa_effectiveness"
+              recordId={capaId}
+              triggerLabel="AI Effectiveness Score"
+              buildInitialPrompt={() =>
+                `Score the effectiveness of CAPA #${capaId} on a 0–100 scale. Base the score on how well-documented and complete the root` +
+                " cause, action plan, preventive action, and verification are, and on any recurrence signal noted in the context below." +
+                " Respond with: the effectiveness score (0–100), a short reasoning summary for that score, a few recommended follow-up" +
+                " actions, and an assessment of the risk of recurrence (low/medium/high with a one-line justification)."
+              }
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Scores this CAPA's documentation and verification completeness and estimates recurrence risk — an insight for the CAPA owner
+            to weigh, not a field on this record.
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
           <h2 className="mb-2 text-sm font-medium">AI-Generated CAPA Recommendations</h2>
           <button
             onClick={() => aiSuggestion.refetch()}
