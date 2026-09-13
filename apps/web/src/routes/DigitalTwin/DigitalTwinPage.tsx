@@ -5,6 +5,7 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import type { DigitalTwinModel } from "../../api/types";
 import { TextField } from "../../components/forms/Field";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
+import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 
 const twinHooks = createResourceHooks<DigitalTwinModel>("digital-twin/models");
 
@@ -29,6 +30,7 @@ export function DigitalTwinPage() {
   const { data: models = [] } = twinHooks.useList();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [demandPerHour, setDemandPerHour] = useState(100);
+  const selectedModel = models.find((m) => m.id === selectedId);
 
   const simulate = useMutation({
     mutationFn: async () =>
@@ -39,6 +41,12 @@ export function DigitalTwinPage() {
         })
       ).data,
   });
+
+  // Only a saved simulation run has a real id the backend context loader
+  // can look up (see ai.assistant.ts's "digital_twin" case, keyed on
+  // digital_twin_simulations.id) — recordId stays undefined until one
+  // exists rather than pointing at a model id.
+  useSetAssistantContext("digital_twin", simulate.data?.id, selectedModel ? `Digital Twin — ${selectedModel.name}` : "Digital Twin");
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_2fr]">

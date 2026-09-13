@@ -9,6 +9,8 @@ import { STATUS_COLORS, calibrationStatusFromDueDate } from "../../components/fo
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
+import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 
 interface Equipment {
   id: number;
@@ -64,6 +66,7 @@ export function EquipmentDetailPage() {
   const { id } = useParams();
   const equipmentId = Number(id);
   const { data: equipment, isLoading } = equipmentHooks.useOne(equipmentId);
+  useSetAssistantContext("calibration", equipmentId, equipment ? equipment.name : `Equipment #${equipmentId}`);
   const uploadCertificate = useUploadCertificate(equipmentId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingUploadTarget = useRef<number | null>(null);
@@ -131,11 +134,23 @@ export function EquipmentDetailPage() {
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-sm font-medium">Calibration History</h2>
-          <p className="text-xs text-muted-foreground">
-            Open "Calibration Record" above, fill it in, then click <span className="font-medium">Log Calibration Event</span> to add a row here.
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="text-xs text-muted-foreground">
+              Open "Calibration Record" above, fill it in, then click <span className="font-medium">Log Calibration Event</span> to add a row here.
+            </p>
+            <AiFieldAssistant
+              module="calibration"
+              recordId={equipmentId}
+              triggerLabel="AI Calibration Summary"
+              buildInitialPrompt={() =>
+                `Summarize the calibration status for equipment "${equipment.name}" using the history and interval provided. Note whether` +
+                " it's on track or overdue, call out any pattern across past results (e.g. repeated adjustments or failures), and suggest" +
+                " next steps."
+              }
+            />
+          </div>
         </div>
         <ul className="flex flex-col gap-2 text-sm">
           {calibrations.length === 0 && <li className="text-muted-foreground">No calibration events logged yet.</li>}

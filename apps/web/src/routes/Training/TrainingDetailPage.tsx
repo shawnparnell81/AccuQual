@@ -12,6 +12,8 @@ import { DocumentRevisionModal } from "../../components/documents/DocumentRevisi
 import { DocumentRetentionPanel } from "../../components/documents/DocumentRetentionPanel";
 import { DocumentHistoryPanel } from "../../components/documents/DocumentHistoryPanel";
 import { StatusBadge } from "../../components/tables/StatusBadge";
+import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
+import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import type { AccuQualDocument, TrainingAssignment, TrainingCourse } from "../../api/types";
 
 const trainingHooks = createResourceHooks<TrainingCourse>("training");
@@ -28,6 +30,7 @@ export function TrainingDetailPage() {
   const { id } = useParams();
   const courseId = Number(id);
   const { data: course, isLoading } = trainingHooks.useOne(courseId);
+  useSetAssistantContext("training", courseId, course ? course.title : `Training Course #${courseId}`);
   const [assignOpen, setAssignOpen] = useState(false);
   const [completingId, setCompletingId] = useState<number | null>(null);
   const [approveOpen, setApproveOpen] = useState(false);
@@ -97,7 +100,18 @@ export function TrainingDetailPage() {
       )}
 
       <div className="rounded-lg border border-border bg-card p-4">
-        <h2 className="mb-3 text-sm font-medium">Assignments</h2>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-medium">Assignments</h2>
+          <AiFieldAssistant
+            module="training"
+            recordId={courseId}
+            triggerLabel="AI Compliance Summary"
+            buildInitialPrompt={() =>
+              `Summarize training compliance for "${course.title}" using the assignment counts provided. Call out how urgent any overdue` +
+              " assignments are, and suggest concrete follow-up actions for getting the remaining employees compliant."
+            }
+          />
+        </div>
         <ul className="flex flex-col gap-2 text-sm">
           {assignments.length === 0 && <li className="text-muted-foreground">No employees assigned yet.</li>}
           {assignments.map((a) => {

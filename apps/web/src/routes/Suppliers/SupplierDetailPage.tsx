@@ -9,6 +9,7 @@ import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
+import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 
 const supplierHooks = createResourceHooks<Supplier>("suppliers");
 
@@ -49,6 +50,7 @@ export function SupplierDetailPage() {
   const { id } = useParams();
   const supplierId = Number(id);
   const { data: supplier, isLoading } = supplierHooks.useOne(supplierId);
+  useSetAssistantContext("supplier", supplierId, supplier ? supplier.name : `Supplier #${supplierId}`);
   const { data: performance } = useSupplierPerformance(supplierId);
   const costing = useSupplierCosting(supplierId);
   const historyKey: unknown[][] = [["workflow-history", "suppliers", supplierId]];
