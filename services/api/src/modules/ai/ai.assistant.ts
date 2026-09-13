@@ -1,7 +1,10 @@
 import type { Request, Response } from "express";
-import { and, eq, gte, inArray, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import { AppError } from "../../utils/appError.js";
 import { callLlmDetailed } from "./llm-gateway.js";
+import { estimateCost } from "./pricing.js";
+import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { tenants } from "../../drizzle/schema/tenants.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
@@ -306,6 +309,32 @@ async function loadSimilarAuditFindings(db: TenantDb, tenantId: number, queryTex
 }
 
 /**
+ * BYOK monthly limit enforcement — checked before every real call, not
+ * against a stored counter. A single cumulative field can't implement
+ * "monthly" without something resetting it, and this app has no background
+ * jobs to do that reset; querying this tenant's own real AiAssistantMessage
+ * audit trail rows from the 1st of the current calendar month onward gets
+ * the same answer with no state to ever reset. Returns null when under
+ * limit (or no limit set), or an error message to return to the caller.
+ */
+async function checkUsageLimit(db: TenantDb, tenantId: number, monthlyLimit: number | null, limitEnforced: boolean): Promise<string | null> {
+  if (!limitEnforced || monthlyLimit === null) return null;
+
+  const startOfMonth = new Date();
+  startOfMonth.setUTCDate(1);
+  startOfMonth.setUTCHours(0, 0, 0, 0);
+
+  const [row] = await db
+    .select({ total: sql<number>`COALESCE(SUM((${auditTrail.changes}->>'tokens')::int), 0)` })
+    .from(auditTrail)
+    .where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "AiAssistantMessage"), gte(auditTrail.createdAt, startOfMonth)));
+
+  const usedThisMonth = row?.total ?? 0;
+  if (usedThisMonth >= monthlyLimit) return "AI usage limit reached for this tenant.";
+  return null;
+}
+
+/**
  * POST /ai/assistant — the one endpoint with no department gate at all
  * (just requireAuth + withTenantDb), per "the assistant must work for ANY
  * user in ANY department". Uses the tenant's own configured provider/key
@@ -319,6 +348,9 @@ export const assistantHandler = asyncHandler(async (req: Request, res: Response)
 
   const [tenant] = await req.db!.select().from(tenants).where(eq(tenants.id, tenantId));
   const aiConfig = tenant?.aiConfig ?? {};
+
+  const limitError = await checkUsageLimit(req.db!, tenantId, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  if (limitError) throw AppError.forbidden(limitError);
 
   const contextSummary = context ? await loadContextSummary(req.db!, tenantId, context.module, context.recordId) : null;
   const lastUserMessage = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
@@ -334,11 +366,30 @@ export const assistantHandler = asyncHandler(async (req: Request, res: Response)
     maxTokens: aiConfig.maxTokens,
   });
 
+  // Only a real provider response has real usage to bill/track — the
+  // honest no-key stub (result.usage === null) never touches the tenant's
+  // BYOK counters, same as it never touches a real provider either.
+  const cost = result.usage ? estimateCost(result.model, result.usage.inputTokens, result.usage.outputTokens) : 0;
+  const totalTokens = result.usage ? result.usage.inputTokens + result.usage.outputTokens : null;
+
+  if (result.usage) {
+    // Atomic column increments (col = col + $1), not a read-modify-write of
+    // the whole tenant row — see tenants.aiUsageTokens's own schema comment
+    // on why these two fields are real columns instead of living in the
+    // aiConfig jsonb: two concurrent AI calls must never lose one's count
+    // to the other's write.
+    await req
+      .db!.update(tenants)
+      .set({ aiUsageTokens: sql`${tenants.aiUsageTokens} + ${totalTokens}`, aiUsageCost: sql`${tenants.aiUsageCost} + ${cost}` })
+      .where(eq(tenants.id, tenantId));
+  }
+
   // No dedicated chat-message table exists (no persistence, per this
   // module's scope) — entityId is the tenant, same convention the AI
   // config change entries already use, since there's no other real owning
   // record for "one assistant usage event" to key on. performedBy is the
-  // real invoking user either way.
+  // real invoking user either way. tokens/tokensIn/tokensOut/cost are what
+  // both checkUsageLimit and the usage dashboard read back from later.
   await recordAuditTrail(req.db!, {
     tenantId,
     entityType: "AiAssistantMessage",
@@ -347,7 +398,10 @@ export const assistantHandler = asyncHandler(async (req: Request, res: Response)
     changes: {
       usedModel: result.model,
       module: context?.module ?? null,
-      tokens: result.usage ? result.usage.inputTokens + result.usage.outputTokens : null,
+      tokens: totalTokens,
+      tokensIn: result.usage?.inputTokens ?? null,
+      tokensOut: result.usage?.outputTokens ?? null,
+      cost,
       aiUsed: true, // trivially always true for this endpoint — kept explicit since it's what module assistance buttons filter/report on
     },
     performedBy: req.user?.id,

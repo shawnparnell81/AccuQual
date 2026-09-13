@@ -50,6 +50,7 @@ import { ErpPurchaseOrderDetailPage } from "./routes/Erp/ErpPurchaseOrderDetailP
 import { AdminTenantBrandingPage } from "./routes/Admin/AdminTenantBrandingPage";
 import { AdminTenantTemplatesPage } from "./routes/Admin/AdminTenantTemplatesPage";
 import { AdminTenantAiConfigPage } from "./routes/Admin/AdminTenantAiConfigPage";
+import { AdminAiUsagePage } from "./routes/Admin/AdminAiUsagePage";
 import { AdminDigitalTwinSetupPage } from "./routes/Admin/AdminDigitalTwinSetupPage";
 import { useCurrentUser } from "./hooks/useAuth";
 
@@ -123,6 +124,7 @@ export function App() {
           <Route path="/admin/tenant-branding" element={<AdminTenantBrandingPage />} />
           <Route path="/admin/tenant-templates" element={<AdminTenantTemplatesPage />} />
           <Route path="/admin/tenant-ai" element={<AdminTenantAiConfigPage />} />
+          <Route path="/admin/ai-usage" element={<AdminAiUsagePage />} />
           <Route path="/admin/digital-twin" element={<AdminDigitalTwinSetupPage />} />
         </Route>
       </Route>

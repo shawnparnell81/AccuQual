@@ -32,6 +32,7 @@ import {
   FileUp,
   Bot,
   Cpu,
+  TrendingUp,
 } from "lucide-react";
 
 /**
@@ -252,6 +253,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
       { key: "tenant_branding", label: "Tenant Branding", path: "/admin/tenant-branding", icon: Palette, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard" },
       { key: "tenant_templates", label: "Tenant Templates", path: "/admin/tenant-templates", icon: FileUp, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard" },
       { key: "tenant_ai", label: "Tenant AI Config", path: "/admin/tenant-ai", icon: Bot, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard" },
+      { key: "ai_usage", label: "AI Usage", path: "/admin/ai-usage", icon: TrendingUp, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard; BYOK usage dashboard" },
       { key: "digital_twin_setup", label: "Digital Twin Setup", path: "/admin/digital-twin", icon: Cpu, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard" },
     ],
   },

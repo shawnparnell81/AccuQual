@@ -38,4 +38,10 @@ export const updateAiConfigSchema = z.object({
   temperature: z.coerce.number().min(0).max(2).optional(),
   maxTokens: z.coerce.number().int().positive().optional(),
   assistantName: z.string().max(80).optional().or(z.literal("")), // "" clears it back to the default label
+  // BYOK usage limit — see tenants.aiMonthlyLimit's own schema comment for
+  // why this is enforced against real audit trail history, not a stored
+  // counter. null clears the limit back to "no limit set" (unlike the
+  // ""-clears-a-string convention above, this is a real integer field).
+  monthlyLimit: z.coerce.number().int().positive().nullable().optional(),
+  limitEnforced: z.boolean().optional(),
 });
