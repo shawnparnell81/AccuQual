@@ -6,6 +6,8 @@ import { tenants } from "../../drizzle/schema/tenants.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
+import { audits, auditItems } from "../../drizzle/schema/audits.js";
+import { digitalTwinModels, digitalTwinSimulations } from "../../drizzle/schema/digitalTwin.js";
 import { decryptSecret } from "../tenant/crypto.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
@@ -28,10 +30,9 @@ const SAFETY_PREAMBLE =
 
 /**
  * Real, read-only context for a small, representative set of modules
- * (ncr/capa/inventory) — see the AI Assistant module review for why this
- * isn't all 8 asked-for modules in one pass. Any other module name still
- * gets passed through as a plain label, honestly, rather than silently
- * dropped or faked.
+ * (ncr/capa/inventory, plus audit/digital_twin added for the module
+ * assistance round). Any other module name still gets passed through as a
+ * plain label, honestly, rather than silently dropped or faked.
  */
 async function loadContextSummary(db: TenantDb, tenantId: number, module: string, recordId?: number): Promise<string | null> {
   if (recordId === undefined) return `The user is currently viewing the ${module} module (no specific record selected).`;
@@ -50,6 +51,38 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
     const [row] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, recordId), eq(inventoryItems.tenantId, tenantId)));
     if (!row) return null;
     return `The user is viewing inventory item "${row.sku}" (${row.description ?? "no description"}). State: ${row.state}. Min level: ${row.minLevel}. Max level: ${row.maxLevel ?? "not set"}.`;
+  }
+  if (module === "audit") {
+    const [row] = await db.select().from(audits).where(and(eq(audits.id, recordId), eq(audits.tenantId, tenantId)));
+    if (!row) return null;
+    const items = await db.select().from(auditItems).where(and(eq(auditItems.auditId, recordId), eq(auditItems.tenantId, tenantId)));
+    const findings = items.filter((i) => i.finding).map((i) => `[${i.severity ?? "observation"}] ${i.finding}`);
+    return (
+      `The user is viewing Audit #${row.id} "${row.name}" (type: ${row.type ?? "not set"}). Status: ${row.status}. ` +
+      `${items.length} audit item(s) recorded so far. ` +
+      (findings.length > 0 ? `Findings so far: ${findings.slice(0, 10).join("; ")}.` : "No findings recorded yet.")
+    );
+  }
+  if (module === "digital_twin") {
+    // recordId here is a digital_twin_simulations id (a saved simulation
+    // run), not a model id — that's the real "record" a simulation-results
+    // view is showing.
+    const [sim] = await db.select().from(digitalTwinSimulations).where(and(eq(digitalTwinSimulations.id, recordId), eq(digitalTwinSimulations.tenantId, tenantId)));
+    if (!sim) return null;
+    const [model] = await db.select().from(digitalTwinModels).where(and(eq(digitalTwinModels.id, sim.modelId), eq(digitalTwinModels.tenantId, tenantId)));
+    const results = sim.results as {
+      predictedDefectRatePct?: number;
+      bottleneck?: { nodeId: string; utilizationPct: number } | null;
+      riskHeatmap?: Array<{ nodeId: string; riskScore: number }>;
+      recommendedActions?: string[];
+    } | null;
+    return (
+      `The user is viewing Digital Twin simulation #${sim.id} of model "${model?.name ?? `#${sim.modelId}`}". ` +
+      `Input parameters: ${JSON.stringify(sim.inputParameters ?? {})}. ` +
+      `Predicted defect rate: ${results?.predictedDefectRatePct ?? "unknown"}%. ` +
+      `Bottleneck: ${results?.bottleneck ? `${results.bottleneck.nodeId} at ${results.bottleneck.utilizationPct}% utilization` : "none"}. ` +
+      `Risk heatmap: ${JSON.stringify(results?.riskHeatmap ?? [])}.`
+    );
   }
 
   return `The user is currently viewing the ${module} module, record #${recordId}.`;
@@ -102,7 +135,12 @@ export const assistantHandler = asyncHandler(async (req: Request, res: Response)
     entityType: "AiAssistantMessage",
     entityId: tenantId,
     action: "create",
-    changes: { usedModel: result.model, module: context?.module ?? null, tokens: result.usage ? result.usage.inputTokens + result.usage.outputTokens : null },
+    changes: {
+      usedModel: result.model,
+      module: context?.module ?? null,
+      tokens: result.usage ? result.usage.inputTokens + result.usage.outputTokens : null,
+      aiUsed: true, // trivially always true for this endpoint — kept explicit since it's what module assistance buttons filter/report on
+    },
     performedBy: req.user?.id,
   });
 

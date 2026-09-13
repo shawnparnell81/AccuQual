@@ -10,6 +10,7 @@ import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 
 const auditHooks = createResourceHooks<Audit>("audits");
 
@@ -52,6 +53,17 @@ export function AuditDetailPage() {
           <OpenFormButton formType="audit_plan" entityId={audit.id} title={`Audit #${audit.id} — Audit Plan`} label="Audit Plan" />
           <OpenFormButton formType="audit_checklist" entityId={audit.id} title={`Audit #${audit.id} — Audit Checklist`} label="Audit Checklist" />
           <OpenFormButton formType="lpa" entityId={audit.id} title={`Audit #${audit.id} — Layered Process Audit`} label="Layered Process Audit" />
+          <AiFieldAssistant
+            module="audit"
+            recordId={auditId}
+            triggerLabel="Generate Audit Plan"
+            buildInitialPrompt={() =>
+              `Help plan Audit #${auditId} ("${audit.name}", type: ${audit.type ?? "not set"}). Propose a checklist of areas to audit, suggest` +
+              " the overall scope, propose a sampling plan appropriate to that type of audit, and summarize what regulatory or standard" +
+              " requirements are typically relevant for an audit like this. Base it on any prior findings noted for this audit. This is a" +
+              " draft for the auditor to review and adapt into the real Audit Plan document — not the document itself."
+            }
+          />
           <WorkflowActionButton
             label="Start Audit"
             navKey="audit"

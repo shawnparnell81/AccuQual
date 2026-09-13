@@ -11,6 +11,7 @@ import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
+import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
 const capaHooks = createResourceHooks<Capa>("capa");
@@ -76,6 +77,13 @@ export function NcrDetailPage() {
             label="Containment"
             value={ncr.containment}
             onSubmit={(value) => containmentAction.mutate({ id: ncrId, containment: value })}
+            assistant={{
+              module: "ncr",
+              recordId: ncrId,
+              buildPrompt: () =>
+                `Recommend a containment action for NCR #${ncr.id} ("${ncr.title}"). Problem: ${ncr.description || "not described"}.` +
+                " Keep it specific and actionable — this is a draft for a quality engineer to review and edit, not a final record.",
+            }}
           />
         </div>
       )}
@@ -111,7 +119,17 @@ export function NcrDetailPage() {
   );
 }
 
-function ActionForm({ label, value, onSubmit }: { label: string; value: string | null; onSubmit: (value: string) => void }) {
+function ActionForm({
+  label,
+  value,
+  onSubmit,
+  assistant,
+}: {
+  label: string;
+  value: string | null;
+  onSubmit: (value: string) => void;
+  assistant?: { module: string; recordId: number; buildPrompt: () => string };
+}) {
   const [draft, setDraft] = useState(value ?? "");
   return (
     <form
@@ -121,7 +139,13 @@ function ActionForm({ label, value, onSubmit }: { label: string; value: string |
         onSubmit(draft);
       }}
     >
-      <TextAreaField label={label} value={draft} onChange={(e) => setDraft(e.target.value)} />
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">{label}</span>
+        {assistant && (
+          <AiFieldAssistant module={assistant.module} recordId={assistant.recordId} buildInitialPrompt={assistant.buildPrompt} onInsert={setDraft} />
+        )}
+      </div>
+      <TextAreaField label="" value={draft} onChange={(e) => setDraft(e.target.value)} />
       <button type="submit" className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground">
         Save
       </button>

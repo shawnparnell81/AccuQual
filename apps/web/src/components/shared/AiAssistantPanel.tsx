@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Bot, Copy, Send, X } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
 import { useAssistantContextStore } from "../../store/assistantContextStore";
+import { useAssistantName } from "../../hooks/useAssistantName";
 import { useToast } from "./ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { MarkdownLite } from "./MarkdownLite";
-import type { AssistantNameResponse, AssistantReply } from "../../api/types";
+import type { AssistantReply } from "../../api/types";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -30,11 +31,8 @@ export function AiAssistantPanel() {
   const context = useAssistantContextStore((s) => s.context);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { data: nameData } = useQuery<AssistantNameResponse>({
-    queryKey: ["tenant/assistant-name"],
-    queryFn: async () => (await apiClient.get("/tenant/assistant-name")).data,
-  });
-  const assistantName = nameData?.assistantName || "the Assistant";
+  const { data: assistantNameRaw } = useAssistantName();
+  const assistantName = assistantNameRaw || "the Assistant";
 
   const send = useMutation({
     mutationFn: async (nextMessages: ChatMessage[]) =>

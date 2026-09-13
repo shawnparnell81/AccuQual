@@ -11,6 +11,7 @@ import { useWorkflowAction, useWorkflowUpdate } from "../../hooks/useWorkflowAct
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
+import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 
 const capaHooks = createResourceHooks<Capa>("capa");
 
@@ -68,8 +69,28 @@ export function CapaDetailPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-border bg-card p-4">
-          <h2 className="mb-2 text-sm font-medium">Root Cause Summary</h2>
-          <p className="text-sm text-muted-foreground">{capa.rootCause || "Not yet documented."}</p>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-medium">Root Cause Summary</h2>
+            <AiFieldAssistant
+              module="capa"
+              recordId={capaId}
+              triggerLabel="AI Root Cause Analysis"
+              buildInitialPrompt={() =>
+                `Analyze the probable root cause for CAPA #${capaId}${capa.ncrId ? ` (linked to NCR #${capa.ncrId})` : ""}. ` +
+                "Walk through a 5-Why analysis, note which Fishbone (Ishikawa) categories are most likely involved (e.g. method, machine," +
+                " material, man, measurement, environment), and conclude with the single most probable root cause and a short list of" +
+                " recommended corrective actions. This is a draft analysis for a quality engineer to review, not a final record."
+              }
+              onInsert={(text) => updateCapa.mutate({ id: capaId, rootCause: text })}
+              insertLabel="Insert as Root Cause"
+            />
+          </div>
+          <TextAreaField
+            label=""
+            value={capa.rootCause ?? ""}
+            placeholder="Not yet documented."
+            onChange={(e) => updateCapa.mutate({ id: capaId, rootCause: e.target.value })}
+          />
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">

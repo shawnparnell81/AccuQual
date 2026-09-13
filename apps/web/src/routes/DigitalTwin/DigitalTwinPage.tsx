@@ -4,6 +4,7 @@ import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
 import type { DigitalTwinModel } from "../../api/types";
 import { TextField } from "../../components/forms/Field";
+import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 
 const twinHooks = createResourceHooks<DigitalTwinModel>("digital-twin/models");
 
@@ -12,6 +13,12 @@ interface SimulationResult {
   bottleneck: { nodeId: string; utilizationPct: number } | null;
   riskHeatmap: Array<{ nodeId: string; riskScore: number }>;
   recommendedActions: string[];
+}
+
+/** The real POST /digital-twin/simulate response is the saved digital_twin_simulations row — id included — not just its `results` column. */
+interface SimulationRun {
+  id: number;
+  results: SimulationResult;
 }
 
 /**
@@ -26,7 +33,7 @@ export function DigitalTwinPage() {
   const simulate = useMutation({
     mutationFn: async () =>
       (
-        await apiClient.post<{ results: SimulationResult }>("/digital-twin/simulate", {
+        await apiClient.post<SimulationRun>("/digital-twin/simulate", {
           modelId: selectedId,
           parameters: { demandPerHour },
         })
@@ -75,7 +82,21 @@ export function DigitalTwinPage() {
 
       <div className="flex flex-col gap-4">
         <div className="rounded-lg border border-border bg-card p-4">
-          <h2 className="mb-2 text-sm font-medium">Simulation Results</h2>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-medium">Simulation Results</h2>
+            {simulate.data && (
+              <AiFieldAssistant
+                module="digital_twin"
+                recordId={simulate.data.id}
+                triggerLabel="Interpret Simulation"
+                buildInitialPrompt={() =>
+                  "Interpret this digital twin simulation's results: summarize what they mean in plain language, highlight any anomalies" +
+                  " or concerning values, explain what the bottleneck and risk heatmap indicate about the process, and suggest reasonable" +
+                  " next steps to investigate or address them."
+                }
+              />
+            )}
+          </div>
           {!simulate.data && <p className="text-sm text-muted-foreground">Select a model and run a simulation.</p>}
           {simulate.data && (
             <div className="flex flex-col gap-3 text-sm">
