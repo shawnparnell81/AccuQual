@@ -33,6 +33,8 @@ export interface Ncr {
   createdBy: number | null;
   createdAt: string;
   updatedAt: string | null;
+  /** Real column (ncr.ts), just never surfaced on the frontend until the dashboard needed it for a closure trend. */
+  closedAt: string | null;
 }
 
 export interface Capa {
@@ -45,6 +47,17 @@ export interface Capa {
   status: "open" | "in_progress" | "verifying" | "closed";
   ownerId: number | null;
   createdAt: string;
+  /** Real column (capa.ts), same reason as Ncr.closedAt above. */
+  closedAt: string | null;
+}
+
+export interface AuditItem {
+  id: number;
+  auditId: number;
+  question: string;
+  finding: string | null;
+  severity: "observation" | "minor" | "major" | "critical" | null;
+  evidence: string | null;
 }
 
 export interface Audit {
@@ -69,6 +82,8 @@ export interface AccuQualDocument {
   retentionPeriodDays: number;
   retentionAction: "archive" | "delete";
   retentionState: "active" | "archived";
+  /** Real column, set on every write (approve/revise/archive) — used as an activity-by-month proxy since there's no bulk revision-history endpoint. */
+  updatedAt: string | null;
 }
 
 export interface TrainingCourse {

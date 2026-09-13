@@ -6,18 +6,8 @@ import { StatusBadge } from "../tables/StatusBadge";
 import { WorkflowActionButton } from "../shared/WorkflowActionButton";
 import { useToast } from "../shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { documentExpirationStatus } from "../../lib/workflowMetrics";
 import type { AccuQualDocument } from "../../api/types";
-
-/** Computed the same way as the server (documents.controller.ts's expirationStatus) — kept here purely for an instant badge while typing, before the next save round-trips it. */
-function computeExpirationStatus(expirationDate: string | null, warningDays: number): "expired" | "expiring_soon" | null {
-  if (!expirationDate) return null;
-  const now = new Date();
-  const expiresAt = new Date(expirationDate);
-  if (now >= expiresAt) return "expired";
-  const warnAt = new Date(expiresAt);
-  warnAt.setDate(warnAt.getDate() - warningDays);
-  return now >= warnAt ? "expiring_soon" : null;
-}
 
 /**
  * Expiration + retention settings for one document, plus a way to run
@@ -76,7 +66,7 @@ export function DocumentRetentionPanel({ document }: { document: AccuQualDocumen
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't archive this document.")),
   });
 
-  const status = computeExpirationStatus(form.expirationDate || null, Number(form.expirationWarningDays));
+  const status = documentExpirationStatus(form.expirationDate || null, Number(form.expirationWarningDays));
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">

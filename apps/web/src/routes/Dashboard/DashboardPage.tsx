@@ -4,6 +4,7 @@ import type { Ncr, Capa, Audit, Supplier } from "../../api/types";
 import { SeverityChart } from "../../components/charts/SeverityChart";
 import { CapaEffectivenessChart } from "../../components/charts/CapaEffectivenessChart";
 import { StatusBadge } from "../../components/tables/StatusBadge";
+import { WorkflowDashboard } from "../../components/dashboard/WorkflowDashboard";
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
 const capaHooks = createResourceHooks<Capa>("capa");
@@ -102,6 +103,11 @@ export function DashboardPage() {
             page for the full panel.
           </p>
         </div>
+      </div>
+
+      <div>
+        <h2 className="mb-3 text-lg font-semibold">Workflow Overview</h2>
+        <WorkflowDashboard />
       </div>
     </div>
   );

@@ -15,7 +15,10 @@ import clsx from "clsx";
  * word — "verifying" and "in_progress" both read as "in progress toward a
  * decision", so both map to `info`, same idea for the others below.
  */
-const BUCKET_BY_STATUS: Record<string, "muted" | "info" | "warning" | "success" | "destructive"> = {
+export type StatusBucket = "muted" | "info" | "warning" | "success" | "destructive";
+
+/** Exported so cross-module views (the workflow dashboards' state distribution chart) bucket a status exactly the same way this badge colors it, instead of a second mapping that could drift out of sync. */
+export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   draft: "muted",
   scheduled: "muted",
   submitted: "muted",
@@ -36,6 +39,8 @@ const BUCKET_BY_STATUS: Record<string, "muted" | "info" | "warning" | "success" 
   open: "warning",
   medium: "warning",
   high: "warning",
+  minor: "warning", // Audit finding severity — same weight as NCR's "medium"
+  major: "warning", // Audit finding severity — same weight as NCR's "high"
   expiring_soon: "warning",
   overdue: "warning",
   probation: "warning", // Supplier: conditional, not yet a problem but not fully clear either
