@@ -81,8 +81,13 @@ export const getItemHandler = asyncHandler(async (req: Request, res: Response) =
 
 export const movementHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  await loadItem(req, id);
+  const item = await loadItem(req, id);
   if (req.body.movementType === "consume") assertDepartment(req, ["production"]);
+  // A raw material is never the output of a production step — only WIP
+  // (an intermediate stage) or a finished good can be produced into.
+  if (req.body.movementType === "produce" && item.itemType === "raw_material") {
+    throw AppError.badRequest(`Cannot "produce" into a raw_material item — produce is only valid for wip or finished_good items`);
+  }
 
   const { movement } = await applyMovement(req.db!, req.tenantId!, id, req.body, req.user?.id);
   await recordAuditTrail(req.db!, {

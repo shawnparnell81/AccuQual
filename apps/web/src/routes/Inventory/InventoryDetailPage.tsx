@@ -66,7 +66,12 @@ function LogMovementModal({ itemId, isOpen, onClose }: { itemId: number; isOpen:
         {(form.movementType === "receive" || form.movementType === "produce" || form.movementType === "transfer") && (
           <TextField label="To Location" value={form.toLocation} onChange={(e) => setForm({ ...form, toLocation: e.target.value })} />
         )}
-        <TextField label="Reason (optional)" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+        <TextField
+          label={form.movementType === "scrap" ? "Reason" : "Reason (optional)"}
+          required={form.movementType === "scrap"}
+          value={form.reason}
+          onChange={(e) => setForm({ ...form, reason: e.target.value })}
+        />
         <button type="submit" disabled={movementAction.isPending} className="rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
           {movementAction.isPending ? "Logging…" : "Log Movement"}
         </button>
@@ -182,6 +187,7 @@ export function InventoryDetailPage() {
                 <th className="pb-2">From</th>
                 <th className="pb-2">To</th>
                 <th className="pb-2">Reason</th>
+                <th className="pb-2">By</th>
               </tr>
             </thead>
             <tbody>
@@ -193,6 +199,10 @@ export function InventoryDetailPage() {
                   <td className="py-1.5">{m.fromLocation ?? "—"}</td>
                   <td className="py-1.5">{m.toLocation ?? "—"}</td>
                   <td className="py-1.5 text-muted-foreground">{m.reason ?? "—"}</td>
+                  {/* Raw user id, not a resolved name/email: GET /users (the only place that maps one to
+                      the other) is admin/quality_manager-only, and this ledger is seen by every
+                      edit-level department (material_management/purchasing/production too). */}
+                  <td className="py-1.5 text-muted-foreground">{m.performedBy ? `User #${m.performedBy}` : "—"}</td>
                 </tr>
               ))}
             </tbody>

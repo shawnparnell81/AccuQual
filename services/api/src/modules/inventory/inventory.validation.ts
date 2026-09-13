@@ -44,6 +44,10 @@ export const movementSchema = z
   .refine((v) => v.movementType !== "transfer" || (v.fromLocation && v.toLocation), {
     message: "transfer requires both fromLocation and toLocation",
     path: ["toLocation"],
+  })
+  .refine((v) => v.movementType !== "scrap" || !!v.reason?.trim(), {
+    message: "scrap requires a reason",
+    path: ["reason"],
   });
 
 export const adjustSchema = z.object({
