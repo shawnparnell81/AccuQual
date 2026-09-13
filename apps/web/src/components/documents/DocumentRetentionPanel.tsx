@@ -47,7 +47,7 @@ export function DocumentRetentionPanel({ document }: { document: AccuQualDocumen
       ).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
-      queryClient.invalidateQueries({ queryKey: ["audit-trail", "Document", document.id] });
+      queryClient.invalidateQueries({ queryKey: ["workflow-history", "documents", document.id] });
       toast.success("Retention rules saved.");
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save retention rules.")),
@@ -57,7 +57,7 @@ export function DocumentRetentionPanel({ document }: { document: AccuQualDocumen
     mutationFn: async () => (await apiClient.post("/documents/retention/apply")).data as { processed: number },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
-      queryClient.invalidateQueries({ queryKey: ["audit-trail", "Document", document.id] });
+      queryClient.invalidateQueries({ queryKey: ["workflow-history", "documents", document.id] });
       toast.success(data.processed === 0 ? "No documents were aged-out enough to act on." : `Processed ${data.processed} document(s).`);
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't run retention.")),
@@ -70,7 +70,7 @@ export function DocumentRetentionPanel({ document }: { document: AccuQualDocumen
     mutationFn: async () => (await apiClient.post(`/documents/${document.id}/archive`)).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
-      queryClient.invalidateQueries({ queryKey: ["audit-trail", "Document", document.id] });
+      queryClient.invalidateQueries({ queryKey: ["workflow-history", "documents", document.id] });
       toast.success("Document archived.");
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't archive this document.")),

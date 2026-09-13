@@ -9,21 +9,23 @@ import { TextAreaField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { useWorkflowAction, useWorkflowUpdate } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
+import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 
 const capaHooks = createResourceHooks<Capa>("capa");
 
-/** CAPA Detail: root cause summary, action plan, verification steps, AI-generated recommendations. */
+/** CAPA Detail: root cause summary, action plan, verification steps, AI-generated recommendations, history. */
 export function CapaDetailPage() {
   const { id } = useParams();
   const capaId = Number(id);
+  const historyKey: unknown[][] = [["workflow-history", "capa", capaId]];
   const { data: capa, isLoading } = capaHooks.useOne(capaId);
   const updateCapa = capaHooks.useUpdate();
   // Open -> In Progress is generic-PATCH-only on the backend (no dedicated
   // endpoint — see the Transitions/Rules Dictionaries), so this is the one
   // action here that goes through useWorkflowUpdate, not useWorkflowAction.
-  const startAction = useWorkflowUpdate<{ id: number; status: string }>("capa", { successMessage: "CAPA started." });
-  const verifyAction = useWorkflowAction("capa", "verify", { successMessage: "Verification recorded." });
-  const closeAction = useWorkflowAction("capa", "close", { successMessage: "CAPA closed." });
+  const startAction = useWorkflowUpdate<{ id: number; status: string }>("capa", { successMessage: "CAPA started.", invalidateKeys: historyKey });
+  const verifyAction = useWorkflowAction("capa", "verify", { successMessage: "Verification recorded.", invalidateKeys: historyKey });
+  const closeAction = useWorkflowAction("capa", "close", { successMessage: "CAPA closed.", invalidateKeys: historyKey });
   const [verification, setVerification] = useState("");
 
   const aiSuggestion = useQuery({
@@ -112,6 +114,8 @@ export function CapaDetailPage() {
           )}
         </div>
       </div>
+
+      <WorkflowHistoryPanel moduleName="capa" recordId={capaId} />
     </div>
   );
 }

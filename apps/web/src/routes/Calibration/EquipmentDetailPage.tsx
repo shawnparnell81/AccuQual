@@ -8,6 +8,7 @@ import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { STATUS_COLORS, calibrationStatusFromDueDate } from "../../components/forms/formulas";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 
 interface Equipment {
   id: number;
@@ -40,6 +41,10 @@ function useUploadCertificate(equipmentId: number) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["equipment", equipmentId, "calibration"] });
+      // Certificate uploads log against the equipment, not the individual
+      // calibration event (see calibration.controller.ts) — same key this
+      // page's WorkflowHistoryPanel reads.
+      queryClient.invalidateQueries({ queryKey: ["workflow-history", "calibration", equipmentId] });
       toast.success("Certificate attached.");
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't attach this certificate.")),
@@ -159,6 +164,8 @@ export function EquipmentDetailPage() {
             ))}
         </ul>
       </div>
+
+      <WorkflowHistoryPanel moduleName="calibration" recordId={equipmentId} />
     </div>
   );
 }

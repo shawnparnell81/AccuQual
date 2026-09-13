@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { FileText } from "lucide-react";
 import { apiClient } from "../../api/client";
-import { AuditTrailList } from "../shared/AuditTrailList";
+import { WorkflowHistoryPanel } from "../shared/WorkflowHistoryPanel";
 import type { DocumentVersion } from "../../api/types";
 
 /** A version's fileUrl is either an already-hosted link (the JSON `POST .../version` path) or a real uploaded file streamed via GET /documents/version/:versionId/file (auth required, so fetched as a blob rather than a plain link). */
@@ -54,10 +54,7 @@ export function DocumentHistoryPanel({ documentId }: { documentId: number }) {
         </ul>
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-4">
-        <h3 className="mb-3 text-sm font-medium">Audit Trail</h3>
-        <AuditTrailList entityType="Document" entityId={documentId} />
-      </div>
+      <WorkflowHistoryPanel moduleName="documents" recordId={documentId} title="Audit Trail" />
     </div>
   );
 }

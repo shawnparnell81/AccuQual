@@ -5,6 +5,7 @@ import type { Supplier } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
+import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 
 const supplierHooks = createResourceHooks<Supplier>("suppliers");
 
@@ -18,11 +19,12 @@ export function SupplierDetailPage() {
   const { id } = useParams();
   const supplierId = Number(id);
   const { data: supplier, isLoading } = supplierHooks.useOne(supplierId);
+  const historyKey: unknown[][] = [["workflow-history", "suppliers", supplierId]];
 
-  const approveAction = useWorkflowAction("suppliers", "approve", { successMessage: "Supplier approved." });
-  const conditionalAction = useWorkflowAction("suppliers", "conditional", { successMessage: "Supplier set to conditional." });
-  const suspendAction = useWorkflowAction("suppliers", "suspend", { successMessage: "Supplier suspended." });
-  const removeAction = useWorkflowAction("suppliers", "remove", { successMessage: "Supplier disqualified." });
+  const approveAction = useWorkflowAction("suppliers", "approve", { successMessage: "Supplier approved.", invalidateKeys: historyKey });
+  const conditionalAction = useWorkflowAction("suppliers", "conditional", { successMessage: "Supplier set to conditional.", invalidateKeys: historyKey });
+  const suspendAction = useWorkflowAction("suppliers", "suspend", { successMessage: "Supplier suspended.", invalidateKeys: historyKey });
+  const removeAction = useWorkflowAction("suppliers", "remove", { successMessage: "Supplier disqualified.", invalidateKeys: historyKey });
 
   if (isLoading || !supplier) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
@@ -87,6 +89,8 @@ export function SupplierDetailPage() {
           </div>
         )}
       </div>
+
+      <WorkflowHistoryPanel moduleName="suppliers" recordId={supplierId} />
     </div>
   );
 }

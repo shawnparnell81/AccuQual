@@ -9,6 +9,7 @@ import { TextField, SelectField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
+import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 
 const auditHooks = createResourceHooks<Audit>("audits");
 
@@ -24,9 +25,10 @@ export function AuditDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const auditId = Number(id);
+  const historyKey: unknown[][] = [["workflow-history", "audit", auditId]];
   const { data: audit, isLoading } = auditHooks.useOne(auditId);
-  const startAction = useWorkflowAction("audits", "start", { successMessage: "Audit started." });
-  const completeAction = useWorkflowAction("audits", "complete", { successMessage: "Audit marked completed." });
+  const startAction = useWorkflowAction("audits", "start", { successMessage: "Audit started.", invalidateKeys: historyKey });
+  const completeAction = useWorkflowAction("audits", "complete", { successMessage: "Audit marked completed.", invalidateKeys: historyKey });
   const queryClient = useQueryClient();
 
   const { data: items = [] } = useQuery<AuditItem[]>({
@@ -116,6 +118,8 @@ export function AuditDetailPage() {
           </button>
         </form>
       </div>
+
+      <WorkflowHistoryPanel moduleName="audit" recordId={auditId} />
     </div>
   );
 }

@@ -1,3 +1,25 @@
+/**
+ * One row from GET /workflow/history/:moduleName/:recordId (see
+ * workflow.controller.ts's historyHandler) — a raw audit_trail row.
+ * `action` is the fixed DB-shaped category (create/update/delete/
+ * status_change/transition_failed, see the Audit Trail Dictionary); the
+ * specific transition name (e.g. "close", "approve") usually lives inside
+ * `changes.action` instead, when the writer curated one.
+ */
+export interface WorkflowHistoryEntry {
+  id: number;
+  tenantId: number;
+  entityType: string;
+  entityId: number;
+  action: "create" | "update" | "delete" | "status_change" | "transition_failed";
+  changes: Record<string, unknown> | null;
+  performedBy: number | null;
+  createdAt: string;
+}
+
+/** Friendly moduleName values the history endpoint accepts — kept in sync with services/api's workflow.controller.ts MODULE_ENTITY_TYPES. */
+export type WorkflowModuleName = "calibration" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers";
+
 export interface Ncr {
   id: number;
   title: string;

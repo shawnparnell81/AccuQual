@@ -23,7 +23,7 @@ export function DocumentApprovalModal({ documentId, isOpen, onClose }: { documen
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       queryClient.invalidateQueries({ queryKey: ["document", documentId, "history"] });
-      queryClient.invalidateQueries({ queryKey: ["audit-trail", "Document", documentId] });
+      queryClient.invalidateQueries({ queryKey: ["workflow-history", "documents", documentId] });
       queryClient.invalidateQueries({ queryKey: ["document-folders"] }); // a linked leaf's badge depends on this document's status
       setApprovalNotes("");
       toast.success("Document released.");

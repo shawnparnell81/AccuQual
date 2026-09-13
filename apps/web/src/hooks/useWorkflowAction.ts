@@ -47,7 +47,7 @@ export function useWorkflowAction<TVars extends { id: number } = { id: number } 
 /** Same idea for the generic PATCH path (crudFactory's update) — used where a transition has no dedicated endpoint yet (see the Transitions/Rules Dictionaries). */
 export function useWorkflowUpdate<TVars extends { id: number } = { id: number } & Record<string, unknown>>(
   resource: string,
-  options?: { successMessage?: string }
+  options?: { successMessage?: string; invalidateKeys?: unknown[][] }
 ): UseMutationResult<unknown, unknown, TVars> {
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -56,6 +56,7 @@ export function useWorkflowUpdate<TVars extends { id: number } = { id: number } 
     mutationFn: async ({ id, ...payload }: TVars) => (await apiClient.patch(`/${resource}/${id}`, payload)).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [resource] });
+      for (const key of options?.invalidateKeys ?? []) queryClient.invalidateQueries({ queryKey: key });
       toast.success(options?.successMessage ?? "Updated.");
     },
     onError: (err) => {

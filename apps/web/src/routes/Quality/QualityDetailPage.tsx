@@ -4,6 +4,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { useWorkflowAction, useWorkflowUpdate } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
+import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 
 interface DiscrepancyInvestigation {
   id: number;
@@ -22,13 +23,14 @@ export function QualityDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const discrepancyId = Number(id);
+  const historyKey: unknown[][] = [["workflow-history", "di", discrepancyId]];
   const { data: discrepancy, isLoading } = qualityHooks.useOne(discrepancyId);
   // Open -> Investigating -> Disposed are generic-PATCH-only on the backend
   // (no dedicated endpoint — see the Transitions/Rules Dictionaries); only
   // Close is a real, sequence-checked, dedicated action.
-  const investigateAction = useWorkflowUpdate<{ id: number; status: string }>("quality", { successMessage: "Marked investigating." });
-  const disposeAction = useWorkflowUpdate<{ id: number; status: string }>("quality", { successMessage: "Marked disposed." });
-  const closeAction = useWorkflowAction("quality", "close", { successMessage: "Investigation closed." });
+  const investigateAction = useWorkflowUpdate<{ id: number; status: string }>("quality", { successMessage: "Marked investigating.", invalidateKeys: historyKey });
+  const disposeAction = useWorkflowUpdate<{ id: number; status: string }>("quality", { successMessage: "Marked disposed.", invalidateKeys: historyKey });
+  const closeAction = useWorkflowAction("quality", "close", { successMessage: "Investigation closed.", invalidateKeys: historyKey });
 
   if (isLoading || !discrepancy) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
@@ -78,6 +80,8 @@ export function QualityDetailPage() {
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">{discrepancy.description || "No description provided."}</div>
+
+      <WorkflowHistoryPanel moduleName="di" recordId={discrepancyId} />
     </div>
   );
 }
