@@ -8,6 +8,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 
 const supplierHooks = createResourceHooks<Supplier>("suppliers");
 
@@ -124,9 +125,22 @@ export function SupplierDetailPage() {
       <div className="rounded-lg border border-border bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-medium">Performance Analytics</h2>
-          {performance && performance.riskScore !== "no_data" && (
-            <StatusBadge value={performance.riskScore === "high" ? "critical" : performance.riskScore} label={`Risk: ${performance.riskScore}`} />
-          )}
+          <div className="flex items-center gap-2">
+            {performance && performance.riskScore !== "no_data" && (
+              <StatusBadge value={performance.riskScore === "high" ? "critical" : performance.riskScore} label={`Risk: ${performance.riskScore}`} />
+            )}
+            <AiFieldAssistant
+              module="supplier_risk"
+              recordId={supplierId}
+              triggerLabel="AI Supplier Risk Prediction"
+              buildInitialPrompt={() =>
+                `Predict the ongoing risk for Supplier "${supplier.name}" using the metrics provided (delivery timeliness, delivery` +
+                " accuracy, reorder responsiveness, below-min alert frequency, and cost impact). Respond with: a risk level (low/medium/" +
+                "high), a reasoning summary explaining that level from the specific numbers given, and a few concrete recommended" +
+                " mitigation actions. Note explicitly in your answer if any of the underlying metrics have too little data to be reliable."
+              }
+            />
+          </div>
         </div>
         {!performance ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
