@@ -24,6 +24,7 @@ function AiConfigForm() {
   const [modelName, setModelName] = useState("");
   const [temperature, setTemperature] = useState("");
   const [maxTokens, setMaxTokens] = useState("");
+  const [assistantName, setAssistantName] = useState("");
 
   useEffect(() => {
     if (config) {
@@ -31,6 +32,7 @@ function AiConfigForm() {
       setModelName(config.modelName ?? "");
       setTemperature(config.temperature?.toString() ?? "");
       setMaxTokens(config.maxTokens?.toString() ?? "");
+      setAssistantName(config.assistantName ?? "");
     }
   }, [config]);
 
@@ -43,10 +45,12 @@ function AiConfigForm() {
           modelName: modelName || undefined,
           temperature: temperature ? Number(temperature) : undefined,
           maxTokens: maxTokens ? Number(maxTokens) : undefined,
+          assistantName, // "" clears it back to the default label — see updateAiConfigHandler
         })
       ).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tenant/ai-config"] });
+      queryClient.invalidateQueries({ queryKey: ["tenant/assistant-name"] });
       setApiKey("");
       toast.success("AI configuration saved.");
     },
@@ -64,9 +68,17 @@ function AiConfigForm() {
       }}
     >
       <p className="rounded-md border border-dashed border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-        This stores your own key for future use — AccuQual's AI features today run on the platform's own configured provider, not this
-        key. Nothing here changes what AI Insights actually calls.
+        This provider and key are used by the AI Assistant (the chat panel available to every user) and by AccuQual's other AI
+        features, whenever a key is set here — falling back to the platform's own configured provider otherwise.
       </p>
+
+      <TextField
+        label="Assistant Name"
+        value={assistantName}
+        onChange={(e) => setAssistantName(e.target.value)}
+        placeholder="AcuAI"
+        maxLength={80}
+      />
 
       <SelectField label="Provider" value={provider} onChange={(e) => setProvider(e.target.value)}>
         {PROVIDERS.map((p) => (

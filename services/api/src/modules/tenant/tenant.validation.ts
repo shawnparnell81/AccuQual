@@ -22,4 +22,5 @@ export const updateAiConfigSchema = z.object({
   modelName: z.string().optional(),
   temperature: z.coerce.number().min(0).max(2).optional(),
   maxTokens: z.coerce.number().int().positive().optional(),
+  assistantName: z.string().max(80).optional().or(z.literal("")), // "" clears it back to the default label
 });

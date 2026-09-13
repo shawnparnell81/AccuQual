@@ -10,3 +10,11 @@ export const analysisSchema = z.object({
 });
 export const formSuggestSchema = z.object({ formType: z.string(), partialData: z.record(z.string(), z.unknown()) });
 export const formAutofillSchema = z.object({ formType: z.string(), context: z.record(z.string(), z.unknown()) });
+
+export const assistantSchema = z.object({
+  messages: z
+    .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1) }))
+    .min(1)
+    .max(50), // a generous cap on one request's conversation length — this is a per-session, client-held transcript, not a stored one
+  context: z.object({ module: z.string(), recordId: z.coerce.number().int().optional() }).optional(),
+});

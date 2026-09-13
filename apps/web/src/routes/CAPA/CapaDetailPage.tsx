@@ -10,6 +10,7 @@ import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { useWorkflowAction, useWorkflowUpdate } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 
 const capaHooks = createResourceHooks<Capa>("capa");
 
@@ -19,6 +20,7 @@ export function CapaDetailPage() {
   const capaId = Number(id);
   const historyKey: unknown[][] = [["workflow-history", "capa", capaId]];
   const { data: capa, isLoading } = capaHooks.useOne(capaId);
+  useSetAssistantContext("capa", capaId, `CAPA #${capaId}`);
   const updateCapa = capaHooks.useUpdate();
   // Open -> In Progress is generic-PATCH-only on the backend (no dedicated
   // endpoint — see the Transitions/Rules Dictionaries), so this is the one

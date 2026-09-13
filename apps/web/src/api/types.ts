@@ -421,7 +421,7 @@ export interface TenantBranding {
   pdfFooter?: string;
 }
 
-/** GET/PATCH /tenant/ai-config — apiKey is never returned; maskedApiKey/hasApiKey only. Storage only — the AI pipelines still use the global env config, not this (see the Tenant AI Configuration review). */
+/** GET/PATCH /tenant/ai-config (admin only) — apiKey is never returned; maskedApiKey/hasApiKey only. Now live: the AI Assistant proxy (POST /ai/assistant) and the AI pipelines use this config's provider/key/model when set, falling back to the global env config otherwise. */
 export interface TenantAiConfig {
   provider: "anthropic" | "openai" | null;
   modelName: string | null;
@@ -429,6 +429,19 @@ export interface TenantAiConfig {
   maxTokens: number | null;
   hasApiKey: boolean;
   maskedApiKey?: string | null;
+  assistantName: string | null;
+}
+
+/** GET /tenant/assistant-name — open to ANY authenticated user (not just admin), so the floating Assistant panel can label itself for everyone. */
+export interface AssistantNameResponse {
+  assistantName: string | null;
+}
+
+/** POST /ai/assistant response. usage is null when the provider didn't report token counts (including the honest no-API-key stub). */
+export interface AssistantReply {
+  content: string;
+  model: string;
+  usage: { inputTokens: number; outputTokens: number } | null;
 }
 
 /** GET /forms/templates — one entry per real form type (see forms.validation.ts's FORM_TYPES). */
