@@ -7,6 +7,8 @@ import { DocumentApprovalModal } from "../../components/documents/DocumentApprov
 import { DocumentRevisionModal } from "../../components/documents/DocumentRevisionModal";
 import { DocumentRetentionPanel } from "../../components/documents/DocumentRetentionPanel";
 import { StatusBadge } from "../../components/tables/StatusBadge";
+import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
+import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 
 const documentHooks = createResourceHooks<AccuQualDocument>("documents");
 
@@ -30,6 +32,7 @@ export function DocumentDetailPage() {
   const { id } = useParams();
   const documentId = Number(id);
   const { data: doc, isLoading } = documentHooks.useOne(documentId);
+  useSetAssistantContext("sop_generator", documentId, doc ? doc.title : `Document #${documentId}`);
   const [approveOpen, setApproveOpen] = useState(false);
   const [reviseOpen, setReviseOpen] = useState(false);
 
@@ -47,6 +50,18 @@ export function DocumentDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <AiFieldAssistant
+            module="sop_generator"
+            recordId={documentId}
+            triggerLabel="Generate SOP"
+            buildInitialPrompt={() =>
+              `Draft SOP content for "${doc.title}"${doc.category ? ` (category: ${doc.category})` : ""}. Structure it with Purpose, Scope,` +
+              " Responsibilities, Procedure (numbered steps), and Records sections. Suggest steps based on the process this document" +
+              " covers, and propose relevant controls and checks. This is a draft for the document owner to refine and use when authoring" +
+              " the real controlled document — AccuQual's Document Control is file-based, so this text has to be copied into whatever" +
+              " file gets uploaded as the next revision, not inserted directly."
+            }
+          />
           <button onClick={() => setReviseOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             Revise
           </button>

@@ -5,6 +5,7 @@ import { FileText, Paperclip } from "lucide-react";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { TextAreaField } from "../../components/forms/Field";
 import { TrainingAssignmentModal } from "../../components/training/TrainingAssignmentModal";
 import { TrainingCompletionModal } from "../../components/training/TrainingCompletionModal";
 import { DocumentApprovalModal } from "../../components/documents/DocumentApprovalModal";
@@ -31,6 +32,7 @@ export function TrainingDetailPage() {
   const courseId = Number(id);
   const { data: course, isLoading } = trainingHooks.useOne(courseId);
   useSetAssistantContext("training", courseId, course ? course.title : `Training Course #${courseId}`);
+  const updateCourse = trainingHooks.useUpdate();
   const [assignOpen, setAssignOpen] = useState(false);
   const [completingId, setCompletingId] = useState<number | null>(null);
   const [approveOpen, setApproveOpen] = useState(false);
@@ -65,7 +67,30 @@ export function TrainingDetailPage() {
         </button>
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">{course.description || "No description provided."}</div>
+      <div className="rounded-lg border border-border bg-card p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-medium">Description / Content</h2>
+          <AiFieldAssistant
+            module="training_builder"
+            recordId={courseId}
+            triggerLabel="Build Training Content"
+            buildInitialPrompt={() =>
+              `Build training content for "${course.title}". Generate a short outline of learning objectives, a bulleted list of the key` +
+              " points to cover (summarizing the linked material if one is noted in context), and 3-5 quiz questions with answers to" +
+              " check understanding. Keep the difficulty appropriate for a general workforce refresher unless the course title suggests" +
+              " otherwise."
+            }
+            onInsert={(text) => updateCourse.mutate({ id: courseId, description: text })}
+            insertLabel="Insert as Description"
+          />
+        </div>
+        <TextAreaField
+          label=""
+          value={course.description ?? ""}
+          placeholder="No description provided."
+          onChange={(e) => updateCourse.mutate({ id: courseId, description: e.target.value })}
+        />
+      </div>
 
       {material ? (
         <>

@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
-import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
+import { publishEvent, WORKFLOW_STREAM, AI_STREAM } from "../../lib/eventBus.js";
 
 export const baseHandlers = crudFactory(audits, { entityName: "Audit", idColumn: "id" });
 
@@ -20,6 +20,17 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
 
   const [item] = await req.db!.insert(auditItems).values({ ...req.body, auditId, tenantId: req.tenantId! }).returning();
   if (!item) throw new Error("Insert did not return the created audit item");
+
+  // Same "embed" job crudFactory's generic create() already queues for
+  // every other entity (see its own comment + workers/ai-worker) — this
+  // handler is hand-written, not crudFactory-based, so it never got that
+  // for free. Queuing it (not calling embedAndStore directly) keeps
+  // embedding generation off the request path, same as everywhere else,
+  // and gives AI Finding Classification's "previous similar findings"
+  // (ai.assistant.ts) real history to search as findings come in.
+  if (item.finding) {
+    await publishEvent(AI_STREAM, { job: "embed", tenantId: req.tenantId!, entityType: "audit_finding", entityId: item.id, content: item.finding });
+  }
 
   // Automation: a nonconformance found during an internal audit opens its
   // own Discrepancy & Inspection investigation immediately, source-linked
