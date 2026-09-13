@@ -36,7 +36,7 @@ export interface WorkflowHistoryEntry {
 }
 
 /** Friendly moduleName values the history endpoint accepts — kept in sync with services/api's workflow.controller.ts MODULE_ENTITY_TYPES. */
-export type WorkflowModuleName = "calibration" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers";
+export type WorkflowModuleName = "calibration" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory";
 
 export interface Ncr {
   id: number;
@@ -147,6 +147,62 @@ export interface Supplier {
   contactEmail: string | null;
   status: "active" | "probation" | "suspended" | "disqualified";
   riskLevel: string | null;
+}
+
+export interface InventoryStock {
+  id: number;
+  itemId: number;
+  location: string;
+  onHand: string;
+  allocated: string;
+  onOrder: string;
+  lastAdjustedAt: string | null;
+  lastAdjustedBy: number | null;
+}
+
+export interface InventoryItem {
+  id: number;
+  sku: string;
+  description: string | null;
+  itemType: "raw_material" | "wip" | "finished_good";
+  unitOfMeasure: string | null;
+  defaultSupplierId: number | null;
+  minLevel: string;
+  maxLevel: string | null;
+  reorderQuantity: string | null;
+  leadTimeDays: number | null;
+  state: "in_stock" | "below_min" | "reorder_pending" | "on_order" | "overstock" | "inactive";
+  active: boolean;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+  /** Only on GET /inventory/items (listItemsHandler) — the summed on_hand across all locations. */
+  onHand?: number;
+  /** Only on GET /inventory/items/:id (getItemHandler) — the real per-location rows. */
+  stock?: InventoryStock[];
+}
+
+export interface InventoryMovement {
+  id: number;
+  itemId: number;
+  movementType: "receive" | "consume" | "produce" | "adjust" | "scrap" | "transfer";
+  quantity: string;
+  fromLocation: string | null;
+  toLocation: string | null;
+  reason: string | null;
+  performedBy: number | null;
+  performedAt: string;
+}
+
+export interface InventoryAlert {
+  id: number;
+  itemId: number;
+  alertType: "below_min" | "overstock";
+  triggeredAt: string;
+  acknowledgedAt: string | null;
+  acknowledgedBy: number | null;
+  sku: string;
+  description: string | null;
 }
 
 export interface AiSuggestion {

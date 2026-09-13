@@ -53,12 +53,20 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   active: "success",
   closed: "success",
   released: "success",
+  in_stock: "success", // Inventory: healthy stock level
 
   rejected: "destructive",
   disqualified: "destructive",
   failed: "destructive",
   critical: "destructive",
   expired: "destructive",
+
+  // Inventory-specific states not covered by the buckets above.
+  below_min: "warning",
+  overstock: "warning",
+  reorder_pending: "info",
+  on_order: "info",
+  inactive: "muted",
 };
 
 const BUCKET_CLASSES: Record<string, string> = {

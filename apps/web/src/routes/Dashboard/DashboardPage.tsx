@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { createResourceHooks } from "../../api/resourceHooks";
-import type { Ncr, Capa, Audit, Supplier } from "../../api/types";
+import type { Ncr, Capa, Audit, Supplier, InventoryAlert } from "../../api/types";
 import { SeverityChart } from "../../components/charts/SeverityChart";
 import { CapaEffectivenessChart } from "../../components/charts/CapaEffectivenessChart";
 import { StatusBadge } from "../../components/tables/StatusBadge";
@@ -10,6 +10,7 @@ const ncrHooks = createResourceHooks<Ncr>("ncr");
 const capaHooks = createResourceHooks<Capa>("capa");
 const auditHooks = createResourceHooks<Audit>("audits");
 const supplierHooks = createResourceHooks<Supplier>("suppliers");
+const inventoryAlertHooks = createResourceHooks<InventoryAlert>("inventory/alerts");
 
 function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
@@ -26,6 +27,8 @@ export function DashboardPage() {
   const { data: capas = [] } = capaHooks.useList();
   const { data: audits = [] } = auditHooks.useList();
   const { data: suppliers = [] } = supplierHooks.useList();
+  const { data: inventoryAlerts = [] } = inventoryAlertHooks.useList();
+  const openBelowMinAlerts = inventoryAlerts.filter((a) => a.alertType === "below_min" && !a.acknowledgedAt).length;
 
   const severityData = useMemo(() => {
     const counts: Record<string, number> = { low: 0, medium: 0, high: 0, critical: 0 };
@@ -48,12 +51,13 @@ export function DashboardPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">Dashboard</h1>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
         <StatCard label="Open NCRs" value={ncrs.filter((n) => n.status !== "closed").length} />
         <StatCard label="Open CAPAs" value={openCapas} />
         <StatCard label="Scheduled Audits" value={audits.filter((a) => a.status === "scheduled").length} />
         <StatCard label="At-Risk Suppliers" value={atRiskSuppliers.length} />
         <StatCard label="CAPA Effectiveness" value={capaEffectivenessRate === null ? "—" : `${capaEffectivenessRate}%`} />
+        <StatCard label="Items Below Min" value={openBelowMinAlerts} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

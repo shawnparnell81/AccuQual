@@ -26,6 +26,7 @@ import {
   Landmark,
   Workflow,
   Sparkles,
+  Package,
 } from "lucide-react";
 
 /**
@@ -104,6 +105,21 @@ export const COMPLAINTS: NavLeaf = {
   notes: "Linked to Quality, Engineering, Customer Service",
 };
 
+// Not a "Subfolder links.xlsx" row — the sheet has no Inventory row at all.
+// Added per the Inventory module plan, mirroring departmentAccess.ts's
+// PERMISSION_MATRIX.inventory entry exactly so this dropdown access and the
+// backend's enforcement can't disagree.
+export const INVENTORY: NavLeaf = {
+  key: "inventory",
+  label: "Inventory",
+  path: "/inventory",
+  icon: Package,
+  access: { material_management: "edit", purchasing: "edit", production: "edit", quality: "read" },
+  kpi: false,
+  priority: 2,
+  notes: "Not in the department sheet — added directly (see the Inventory module plan)",
+};
+
 export const PRODUCTION_LOG: NavLeaf = {
   key: "production_log",
   label: "Production Log",
@@ -157,6 +173,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
       { key: "pareto", label: "Pareto Analysis", path: "/pareto", icon: BarChart3, access: { quality: "read" }, kpi: true, priority: 1, notes: "KPI dashboard item" },
       SUPPLIERS,
       COMPLAINTS,
+      INVENTORY,
     ],
   },
   {
@@ -165,7 +182,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "production",
-    items: [PRODUCTION_LOG, COMPLAINTS],
+    items: [PRODUCTION_LOG, COMPLAINTS, INVENTORY],
   },
   {
     department: "customer_service",
@@ -173,11 +190,11 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "purchasing",
-    items: [SUPPLIERS],
+    items: [SUPPLIERS, INVENTORY],
   },
   {
     department: "material_management",
-    items: [SUPPLIERS],
+    items: [SUPPLIERS, INVENTORY],
   },
   {
     // Not in the sheet — kept so nothing loses a working page. Access is
@@ -225,5 +242,5 @@ export function findNavLeaf(key: string): NavLeaf | undefined {
     const found = group.items.find((item) => item.key === key);
     if (found) return found;
   }
-  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG].find((leaf) => leaf.key === key);
+  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG, INVENTORY].find((leaf) => leaf.key === key);
 }
