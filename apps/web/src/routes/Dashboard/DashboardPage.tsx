@@ -1,16 +1,22 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
-import type { Ncr, Capa, Audit, Supplier, InventoryAlert } from "../../api/types";
+import type { Ncr, Capa, Audit, Supplier, InventoryItem, InventoryAlert } from "../../api/types";
 import { SeverityChart } from "../../components/charts/SeverityChart";
 import { CapaEffectivenessChart } from "../../components/charts/CapaEffectivenessChart";
+import { InventoryStateChart } from "../../components/charts/InventoryStateChart";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowDashboard } from "../../components/dashboard/WorkflowDashboard";
+import { RecheckMinMaxButton } from "../../components/dashboard/RecheckMinMaxButton";
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
 const capaHooks = createResourceHooks<Capa>("capa");
 const auditHooks = createResourceHooks<Audit>("audits");
 const supplierHooks = createResourceHooks<Supplier>("suppliers");
+const inventoryItemHooks = createResourceHooks<InventoryItem>("inventory/items");
 const inventoryAlertHooks = createResourceHooks<InventoryAlert>("inventory/alerts");
+
+const INVENTORY_STATES = ["in_stock", "below_min", "reorder_pending", "on_order", "overstock", "inactive"] as const;
 
 function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
@@ -27,8 +33,17 @@ export function DashboardPage() {
   const { data: capas = [] } = capaHooks.useList();
   const { data: audits = [] } = auditHooks.useList();
   const { data: suppliers = [] } = supplierHooks.useList();
+  const { data: inventoryItems = [] } = inventoryItemHooks.useList();
   const { data: inventoryAlerts = [] } = inventoryAlertHooks.useList();
   const openBelowMinAlerts = inventoryAlerts.filter((a) => a.alertType === "below_min" && !a.acknowledgedAt).length;
+  const openAlertsTotal = inventoryAlerts.filter((a) => !a.acknowledgedAt).length;
+
+  const inventoryStateData = useMemo(() => {
+    const counts: Record<string, number> = Object.fromEntries(INVENTORY_STATES.map((s) => [s, 0]));
+    for (const i of inventoryItems) counts[i.state] = (counts[i.state] ?? 0) + 1;
+    return INVENTORY_STATES.map((state) => ({ state, count: counts[state] ?? 0 }));
+  }, [inventoryItems]);
+  const countByState = (state: string) => inventoryItems.filter((i) => i.state === state).length;
 
   const severityData = useMemo(() => {
     const counts: Record<string, number> = { low: 0, medium: 0, high: 0, critical: 0 };
@@ -106,6 +121,28 @@ export function DashboardPage() {
             </a>{" "}
             page for the full panel.
           </p>
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Inventory Overview</h2>
+          <RecheckMinMaxButton />
+        </div>
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <StatCard label="Reorder Pending" value={countByState("reorder_pending")} />
+          <StatCard label="On Order" value={countByState("on_order")} />
+          <StatCard label="Overstock" value={countByState("overstock")} />
+          <StatCard label="Active Alerts" value={openAlertsTotal} />
+        </div>
+        <div className="mt-4 rounded-lg border border-border bg-card p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-medium">Items by State</h3>
+            <Link to="/inventory/alerts" className="text-xs text-primary hover:underline">
+              View alerts
+            </Link>
+          </div>
+          <InventoryStateChart data={inventoryStateData} />
         </div>
       </div>
 

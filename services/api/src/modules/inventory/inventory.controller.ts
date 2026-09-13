@@ -180,21 +180,29 @@ export const acknowledgeAlertHandler = asyncHandler(async (req: Request, res: Re
   res.json(updated);
 });
 
-/** POST /inventory/check-minmax — manual recompute; itemId in body recomputes one item, omitted recomputes every item for the tenant. */
+/**
+ * POST /inventory/check-minmax — manual recompute; itemId in body recomputes
+ * one item, omitted recomputes every item for the tenant. `changed` counts
+ * only items whose state actually moved (recomputeState returns every
+ * evaluated item regardless, since it's also used internally after every
+ * movement) — reported separately so a caller isn't left assuming "checked"
+ * means "changed".
+ */
 export const checkMinMaxHandler = asyncHandler(async (req: Request, res: Response) => {
   const { itemId } = req.body as { itemId?: number };
+  const targets = itemId
+    ? await req.db!.select().from(inventoryItems).where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.tenantId, req.tenantId!)))
+    : await req.db!.select().from(inventoryItems).where(eq(inventoryItems.tenantId, req.tenantId!));
+  if (itemId && targets.length === 0) throw AppError.notFound("InventoryItem");
 
-  if (itemId) {
-    const updated = await recomputeState(req.db!, req.tenantId!, itemId, req.user?.id);
-    return res.json({ checked: 1, items: [updated] });
-  }
-
-  const items = await req.db!.select().from(inventoryItems).where(eq(inventoryItems.tenantId, req.tenantId!));
   const results = [];
-  for (const item of items) {
-    results.push(await recomputeState(req.db!, req.tenantId!, item.id, req.user?.id));
+  let changed = 0;
+  for (const item of targets) {
+    const updated = await recomputeState(req.db!, req.tenantId!, item.id, req.user?.id);
+    if (updated.state !== item.state) changed++;
+    results.push(updated);
   }
-  res.json({ checked: results.length, items: results });
+  res.json({ checked: results.length, changed, items: results });
 });
 
 /**
