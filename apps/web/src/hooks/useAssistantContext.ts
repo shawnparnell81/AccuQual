@@ -9,6 +9,8 @@ export function useSetAssistantContext(module: string, recordId: number | undefi
   useEffect(() => {
     setContext({ module, recordId, label });
     return () => clearContext();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // setContext/clearContext are stable Zustand action references (see
+    // assistantContextStore.ts), so they're intentionally left out here —
+    // only a real change to what's being viewed should re-run this.
   }, [module, recordId, label]);
 }
