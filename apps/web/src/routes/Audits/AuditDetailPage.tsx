@@ -119,7 +119,25 @@ export function AuditDetailPage() {
           }}
         >
           <TextField label="Question" value={item.question} onChange={(e) => setItem({ ...item, question: e.target.value })} required />
-          <TextField label="Finding" value={item.finding} onChange={(e) => setItem({ ...item, finding: e.target.value })} />
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Finding</span>
+              {item.finding.trim() && (
+                <AiFieldAssistant
+                  module="audit_finding"
+                  recordId={auditId}
+                  triggerLabel="Classify Finding"
+                  buildInitialPrompt={() =>
+                    `Classify this audit finding: "${item.finding}"${item.question ? ` (from the question: "${item.question}")` : ""}. ` +
+                    "Suggest a severity (observation, minor, major, or critical — AccuQual's real values, use exactly one), a category" +
+                    " (e.g. process, documentation, training, supplier), a risk level, and a few recommended follow-up actions. Note any" +
+                    " similar past findings given in context and whether this looks like a recurrence."
+                  }
+                />
+              )}
+            </div>
+            <TextField label="" value={item.finding} onChange={(e) => setItem({ ...item, finding: e.target.value })} />
+          </div>
           <SelectField label="Severity" value={item.severity} onChange={(e) => setItem({ ...item, severity: e.target.value })}>
             {["observation", "minor", "major", "critical"].map((s) => (
               <option key={s} value={s}>

@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, inArray, ne } from "drizzle-orm";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { callLlmDetailed } from "./llm-gateway.js";
 import { tenants } from "../../drizzle/schema/tenants.js";
@@ -12,8 +12,10 @@ import { suppliers } from "../../drizzle/schema/supplier.js";
 import { trainingCourses, trainingAssignments } from "../../drizzle/schema/training.js";
 import { equipment, calibrations } from "../../drizzle/schema/calibration.js";
 import { users } from "../../drizzle/schema/users.js";
+import { documents } from "../../drizzle/schema/documents.js";
 import { computeSupplierPerformance } from "../supplier/supplier.performance.js";
 import { computeCostingSummary } from "../inventory/inventory.costing.js";
+import { findSimilar } from "./embedding-engine.js";
 import { decryptSecret } from "../tenant/crypto.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
@@ -98,6 +100,30 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
       (rows.length > 0 ? `Courses: ${courseList}.` : "No courses assigned yet.")
     );
   }
+  if (module === "training_builder") {
+    const [row] = await db.select().from(trainingCourses).where(and(eq(trainingCourses.id, recordId), eq(trainingCourses.tenantId, tenantId)));
+    if (!row) return null;
+    let materialSummary = "No controlled document is linked as this course's material yet.";
+    if (row.documentId !== null) {
+      const [doc] = await db.select().from(documents).where(and(eq(documents.id, row.documentId), eq(documents.tenantId, tenantId)));
+      if (doc) materialSummary = `Linked material document: "${doc.title}" (category: ${doc.category ?? "not set"}, status: ${doc.status}).`;
+    }
+    return `The user is building training content for Course "${row.title}". Existing description: ${row.description ?? "none"}. ${materialSummary}`;
+  }
+  if (module === "sop_generator") {
+    const [row] = await db.select().from(documents).where(and(eq(documents.id, recordId), eq(documents.tenantId, tenantId)));
+    if (!row) return null;
+    const related = row.category
+      ? await db.select().from(documents).where(and(eq(documents.category, row.category), eq(documents.tenantId, tenantId), ne(documents.id, recordId)))
+      : [];
+    return (
+      `The user is drafting SOP content for Document #${row.id} "${row.title}" (category: ${row.category ?? "not set"}, status: ${row.status}, ` +
+      `current version: ${row.currentVersion}). ` +
+      (related.length > 0
+        ? `Other controlled documents already in this same category: ${related.slice(0, 5).map((d) => d.title).join(", ")}.`
+        : "No other documents share this category yet.")
+    );
+  }
   if (module === "calibration") {
     const [row] = await db.select().from(equipment).where(and(eq(equipment.id, recordId), eq(equipment.tenantId, tenantId)));
     if (!row) return null;
@@ -109,6 +135,19 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
       (latest
         ? `Most recent: ${new Date(latest.performedAt).toISOString().slice(0, 10)}, result: ${latest.result ?? "not recorded"}, next due: ${latest.nextDueAt ? new Date(latest.nextDueAt).toISOString().slice(0, 10) : "not set"}.`
         : "No calibration events recorded yet.")
+    );
+  }
+  if (module === "audit_finding") {
+    const [row] = await db.select().from(audits).where(and(eq(audits.id, recordId), eq(audits.tenantId, tenantId)));
+    if (!row) return null;
+    const items = await db.select().from(auditItems).where(and(eq(auditItems.auditId, recordId), eq(auditItems.tenantId, tenantId)));
+    const findings = items.filter((i) => i.finding).map((i) => `[${i.severity ?? "observation"}] ${i.finding}`);
+    return (
+      `The user is classifying a new finding before adding it to Audit #${row.id} "${row.name}" (type: ${row.type ?? "not set"}). ` +
+      (findings.length > 0
+        ? `Other findings already recorded in this same audit: ${findings.slice(0, 10).join("; ")}. `
+        : "No other findings recorded in this audit yet. ") +
+      "AccuQual's real audit item severity values are: observation, minor, major, critical — use only one of those when suggesting a severity."
     );
   }
   if (module === "audit") {
@@ -236,6 +275,37 @@ function flattenConversation(messages: AssistantMessage[]): string {
 }
 
 /**
+ * Real semantic similarity search over the dormant ai_embeddings table
+ * (embedding-engine.ts's findSimilar), populated for real as of this round
+ * by audits.controller.ts's addItemHandler — every finding logged from now
+ * on gets embedded, so this genuinely surfaces prior similar findings
+ * rather than a fabricated "recurrence" signal. Uses the user's own latest
+ * message (the finding text they're asking to classify) as the query,
+ * since that's the one piece of text this feature is actually about — not
+ * a DB row lookup like loadContextSummary's other cases. Best-effort: a
+ * failed/slow embedding lookup should never block the assistant response.
+ */
+async function loadSimilarAuditFindings(db: TenantDb, tenantId: number, queryText: string): Promise<string | null> {
+  if (!queryText.trim()) return null;
+  try {
+    const matches = await findSimilar(db, tenantId, "audit_finding", queryText, 3);
+    if (matches.length === 0) return null;
+
+    const itemIds = matches.map((m) => m.entityId);
+    const relatedItems = await db.select().from(auditItems).where(and(inArray(auditItems.id, itemIds), eq(auditItems.tenantId, tenantId)));
+    const byId = new Map(relatedItems.map((i) => [i.id, i]));
+
+    const lines = matches.map((m) => {
+      const item = byId.get(m.entityId);
+      return item ? `- [${item.severity ?? "observation"}] ${item.finding} (from Audit #${item.auditId})` : `- ${m.content}`;
+    });
+    return `Similar past findings found by semantic search, most similar first (use these to judge recurrence — do not assume any others exist):\n${lines.join("\n")}`;
+  } catch {
+    return null; // e.g. the embedding call itself failed — classify on the other context alone rather than error out
+  }
+}
+
+/**
  * POST /ai/assistant — the one endpoint with no department gate at all
  * (just requireAuth + withTenantDb), per "the assistant must work for ANY
  * user in ANY department". Uses the tenant's own configured provider/key
@@ -251,7 +321,9 @@ export const assistantHandler = asyncHandler(async (req: Request, res: Response)
   const aiConfig = tenant?.aiConfig ?? {};
 
   const contextSummary = context ? await loadContextSummary(req.db!, tenantId, context.module, context.recordId) : null;
-  const system = [SAFETY_PREAMBLE, contextSummary].filter(Boolean).join("\n\n");
+  const lastUserMessage = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const similarFindings = context?.module === "audit_finding" ? await loadSimilarAuditFindings(req.db!, tenantId, lastUserMessage) : null;
+  const system = [SAFETY_PREAMBLE, contextSummary, similarFindings].filter(Boolean).join("\n\n");
 
   const result = await callLlmDetailed(flattenConversation(messages), {
     system,
