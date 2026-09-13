@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { apiClient } from "../../api/client";
-import type { Supplier, SupplierPerformance } from "../../api/types";
+import type { Supplier, SupplierPerformance, CostingSummary } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
@@ -17,6 +17,16 @@ function useSupplierPerformance(supplierId: number | undefined) {
     queryFn: async () => (await apiClient.get(`/suppliers/${supplierId}/performance`)).data,
     enabled: supplierId !== undefined,
   });
+}
+
+/** No dedicated /suppliers/:id/costing endpoint — the reviewed prompt's own deliverable list named exactly two costing endpoints, both under /inventory/costing. This reads the tenant-wide summary and picks out this supplier's entry, same as the Dashboard's Supplier Cost Distribution chart does. */
+function useSupplierCosting(supplierId: number | undefined) {
+  const query = useQuery<CostingSummary>({
+    queryKey: ["inventory/costing/summary"],
+    queryFn: async () => (await apiClient.get("/inventory/costing/summary", { params: { days: 30 } })).data,
+  });
+  const entry = query.data?.supplierCostDistribution.find((s) => s.supplierId === supplierId);
+  return { entry, days: query.data?.days, isLoading: query.isLoading };
 }
 
 function PerformanceStat({ label, value }: { label: string; value: string }) {
@@ -39,6 +49,7 @@ export function SupplierDetailPage() {
   const supplierId = Number(id);
   const { data: supplier, isLoading } = supplierHooks.useOne(supplierId);
   const { data: performance } = useSupplierPerformance(supplierId);
+  const costing = useSupplierCosting(supplierId);
   const historyKey: unknown[][] = [["workflow-history", "suppliers", supplierId]];
 
   const approveAction = useWorkflowAction("suppliers", "approve", { successMessage: "Supplier approved.", invalidateKeys: historyKey });
@@ -138,6 +149,33 @@ export function SupplierDetailPage() {
               Delivery time/accuracy are computed from real receive movements matched to sent reorder requests (sample size:{" "}
               {performance.deliveryTimeliness.sampleSize}) — nothing formally links a request to the delivery that fulfills it, so this
               is a best-effort pairing, not a guarantee.
+            </p>
+          </>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-3 text-sm font-medium">Costing</h2>
+        {costing.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : !costing.entry ? (
+          <p className="text-sm text-muted-foreground">
+            No costed, linked inventory items yet — link an item to this supplier and set its unit cost from that item's detail page.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+              <PerformanceStat label="Inventory Value" value={`$${costing.entry.itemValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+              <PerformanceStat label={`Scrap Cost (${costing.days}d)`} value={`$${costing.entry.scrapCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+              <PerformanceStat
+                label={`Consumption Cost (${costing.days}d)`}
+                value={`$${costing.entry.consumptionCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              />
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Based on {costing.entry.itemCount} linked item{costing.entry.itemCount === 1 ? "" : "s"} with a unit cost set — items with
+              no cost don't contribute here. Today's cost applied to past movements, not the actual cost paid at the time (no FIFO/LIFO
+              history exists).
             </p>
           </>
         )}

@@ -27,6 +27,7 @@ export function InventoryListPage() {
         { name: "unitOfMeasure", label: "Unit of Measure" },
         { name: "minLevel", label: "Min Level", type: "number" },
         { name: "maxLevel", label: "Max Level", type: "number" },
+        { name: "unitCost", label: "Unit Cost", type: "number" },
       ]}
     />
   );

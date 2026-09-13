@@ -5,7 +5,7 @@ import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
-import type { InventoryItem, InventoryMovement, InventoryAlert, InventoryReorderRequest, Supplier } from "../../api/types";
+import type { InventoryItem, InventoryMovement, InventoryAlert, InventoryReorderRequest, Supplier, ItemCosting } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
@@ -27,6 +27,16 @@ function useMovementHistory(itemId: number | undefined) {
     enabled: itemId !== undefined,
   });
 }
+
+function useItemCosting(itemId: number | undefined) {
+  return useQuery<ItemCosting>({
+    queryKey: ["inventory/costing", itemId],
+    queryFn: async () => (await apiClient.get(`/inventory/costing/${itemId}`)).data,
+    enabled: itemId !== undefined,
+  });
+}
+
+const currency = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const MOVEMENT_TYPES = ["receive", "consume", "produce", "scrap", "transfer"] as const;
 // Free-form examples, not an enum — there's no Production Work Order module
@@ -212,10 +222,13 @@ export function InventoryDetailPage() {
   const itemAlerts = allAlerts.filter((a) => a.itemId === itemId);
   const { data: reorderRequests = [] } = reorderRequestHooks.useList({ itemId });
   const { data: suppliers = [] } = supplierHooks.useList();
+  const { data: costing } = useItemCosting(itemId);
   const currentUser = useCurrentUser();
   const canManageReorder = currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin" || currentUser?.department === "purchasing";
   const updateItem = itemHooks.useUpdate();
   const [editingSupplier, setEditingSupplier] = useState(false);
+  const [editingCost, setEditingCost] = useState(false);
+  const [costDraft, setCostDraft] = useState("");
   const [movementOpen, setMovementOpen] = useState(false);
   const [referenceTypeFilter, setReferenceTypeFilter] = useState("all");
   const referenceTypes = useMemo(() => Array.from(new Set(movements.map((m) => m.referenceType).filter((t): t is string => !!t))), [movements]);
@@ -266,6 +279,39 @@ export function InventoryDetailPage() {
               </button>
             )}
           </div>
+          <div className="mt-1 flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Unit Cost:</span>
+            {editingCost ? (
+              <>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  autoFocus
+                  defaultValue={item.unitCost ?? ""}
+                  onChange={(e) => setCostDraft(e.target.value)}
+                  className="w-24 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                />
+                <button
+                  onClick={() =>
+                    updateItem.mutate({ id: itemId, unitCost: costDraft === "" ? null : Number(costDraft) } as Partial<InventoryItem> & { id: number }, {
+                      onSuccess: () => setEditingCost(false),
+                    })
+                  }
+                  className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
+                >
+                  Save
+                </button>
+                <button onClick={() => setEditingCost(false)} className="text-xs text-muted-foreground hover:underline">
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setEditingCost(true)} className="text-primary hover:underline">
+                {item.unitCost !== null ? currency(Number(item.unitCost)) : "Not set — click to set"}
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <OpenFormButton formType="inventory_item" entityId={item.id} title={`Inventory Item #${item.id} Record`} label="Item Record" />
@@ -275,7 +321,7 @@ export function InventoryDetailPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="mb-3 text-sm font-medium">Stock by Location</h3>
           {item.stock && item.stock.length > 0 ? (
@@ -326,6 +372,32 @@ export function InventoryDetailPage() {
             />
             {item.state !== "below_min" && item.state !== "reorder_pending" && <p className="text-sm text-muted-foreground">No reorder action applies to the current state.</p>}
           </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="mb-3 text-sm font-medium">Costing</h3>
+          {!costing ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : costing.unitCost === null ? (
+            <p className="text-sm text-muted-foreground">No unit cost set — set one above to see item value and scrap/consumption cost.</p>
+          ) : (
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+              <dt className="text-muted-foreground">Unit Cost</dt>
+              <dd className="text-right tabular-nums">{currency(costing.unitCost)}</dd>
+              <dt className="text-muted-foreground">On Hand</dt>
+              <dd className="text-right tabular-nums">{costing.onHand}</dd>
+              <dt className="font-medium">Item Value</dt>
+              <dd className="text-right font-medium tabular-nums">{currency(costing.itemValue!)}</dd>
+              <dt className="text-muted-foreground">Scrap Cost ({costing.days}d)</dt>
+              <dd className="text-right tabular-nums">{currency(costing.scrapCost!)}</dd>
+              <dt className="text-muted-foreground">Consumption Cost ({costing.days}d)</dt>
+              <dd className="text-right tabular-nums">{currency(costing.consumptionCost!)}</dd>
+            </dl>
+          )}
+          <p className="mt-3 text-xs text-muted-foreground">
+            Today's unit cost applied to past movements — AccuQual keeps no FIFO/LIFO cost history, so this is an estimate at current
+            pricing, not the actual cost paid at the time.
+          </p>
         </div>
       </div>
 

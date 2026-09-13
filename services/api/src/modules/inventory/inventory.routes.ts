@@ -24,6 +24,7 @@ import {
   notesReorderRequestHandler,
 } from "./inventory.controller.js";
 import { movementTrendsHandler, consumptionVsReceivingHandler, scrapAnalyticsHandler, referenceSummaryHandler } from "./inventory.analytics.js";
+import { getItemCostingHandler, costingSummaryHandler } from "./inventory.costing.js";
 
 export const inventoryRouter = Router();
 // material_management/purchasing/production get edit; quality gets read-only —
@@ -44,6 +45,10 @@ inventoryRouter.get("/analytics/movements", movementTrendsHandler);
 inventoryRouter.get("/analytics/consumption-vs-receiving", consumptionVsReceivingHandler);
 inventoryRouter.get("/analytics/scrap", scrapAnalyticsHandler);
 inventoryRouter.get("/analytics/reference-summary", referenceSummaryHandler);
+
+// "/costing/summary" fixed literal path before "/costing/:itemId".
+inventoryRouter.get("/costing/summary", costingSummaryHandler);
+inventoryRouter.get("/costing/:itemId", getItemCostingHandler);
 
 inventoryRouter.get("/reorder-requests", listReorderRequestsHandler);
 inventoryRouter.post("/reorder-requests/:id/send", sendReorderRequestHandler);

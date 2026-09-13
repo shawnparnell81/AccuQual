@@ -192,6 +192,8 @@ export interface InventoryItem {
   maxLevel: string | null;
   reorderQuantity: string | null;
   leadTimeDays: number | null;
+  /** Nullable — no fabricated default cost; see inventory.costing.ts. */
+  unitCost: string | null;
   state: "in_stock" | "below_min" | "reorder_pending" | "on_order" | "overstock" | "inactive";
   active: boolean;
   notes: string | null;
@@ -253,6 +255,37 @@ export interface ReferenceSummaryEntry {
   referenceType: string | null;
   count: number;
   quantity: number;
+}
+
+/** GET /inventory/costing/:itemId — null fields mean the item has no unitCost set, not a $0 value. */
+export interface ItemCosting {
+  itemId: number;
+  sku: string;
+  unitCost: number | null;
+  onHand: number;
+  itemValue: number | null;
+  scrapCost: number | null;
+  consumptionCost: number | null;
+  days: number;
+}
+
+export interface SupplierCostEntry {
+  supplierId: number;
+  supplierName: string;
+  itemValue: number;
+  scrapCost: number;
+  consumptionCost: number;
+  itemCount: number;
+}
+
+/** GET /inventory/costing/summary — current unitCost only, no FIFO/LIFO cost layers exist. */
+export interface CostingSummary {
+  totalInventoryValue: number;
+  uncostedItemCount: number;
+  totalScrapCost: number;
+  totalConsumptionCost: number;
+  supplierCostDistribution: SupplierCostEntry[];
+  days: number;
 }
 
 export interface InventoryAlert {

@@ -16,6 +16,7 @@ import type {
   ScrapAnalytics,
   ReferenceSummaryEntry,
   SupplierPerformance,
+  CostingSummary,
 } from "../../api/types";
 import { SeverityChart } from "../../components/charts/SeverityChart";
 import { CapaEffectivenessChart } from "../../components/charts/CapaEffectivenessChart";
@@ -23,6 +24,7 @@ import { InventoryStateChart } from "../../components/charts/InventoryStateChart
 import { MovementTrendsChart } from "../../components/charts/MovementTrendsChart";
 import { ConsumptionVsReceivingChart } from "../../components/charts/ConsumptionVsReceivingChart";
 import { ScrapDistributionChart } from "../../components/charts/ScrapDistributionChart";
+import { SupplierCostChart } from "../../components/charts/SupplierCostChart";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowDashboard } from "../../components/dashboard/WorkflowDashboard";
 import { RecheckMinMaxButton } from "../../components/dashboard/RecheckMinMaxButton";
@@ -84,6 +86,10 @@ export function DashboardPage() {
   const accuracySamples = suppliersWithData.filter((p) => p.deliveryAccuracy.avgPercent !== null);
   const avgDeliveryAccuracy =
     accuracySamples.length === 0 ? null : accuracySamples.reduce((sum, p) => sum + p.deliveryAccuracy.avgPercent!, 0) / accuracySamples.length;
+  const { data: costingSummary } = useQuery<CostingSummary>({
+    queryKey: ["inventory/costing/summary"],
+    queryFn: async () => (await apiClient.get("/inventory/costing/summary", { params: { days: 30 } })).data,
+  });
   const openBelowMinAlerts = inventoryAlerts.filter((a) => a.alertType === "below_min" && !a.acknowledgedAt).length;
   const openAlertsTotal = inventoryAlerts.filter((a) => !a.acknowledgedAt).length;
   const acknowledgedAlertsTotal = inventoryAlerts.filter((a) => a.acknowledgedAt).length;
@@ -204,6 +210,24 @@ export function DashboardPage() {
           <StatCard label="Acknowledged Alerts" value={acknowledgedAlertsTotal} />
           <StatCard label="Reorder Requests Pending" value={pendingReorderRequests} />
         </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3">
+          <StatCard label="Total Inventory Value" value={costingSummary ? `$${costingSummary.totalInventoryValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"} />
+          <StatCard
+            label={`Scrap Cost (${costingSummary?.days ?? 30}d)`}
+            value={costingSummary ? `$${costingSummary.totalScrapCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}
+          />
+          <StatCard
+            label={`Consumption Cost (${costingSummary?.days ?? 30}d)`}
+            value={costingSummary ? `$${costingSummary.totalConsumptionCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}
+          />
+        </div>
+        {costingSummary && costingSummary.uncostedItemCount > 0 && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {costingSummary.uncostedItemCount} item{costingSummary.uncostedItemCount === 1 ? "" : "s"} have no unit cost set and are
+            excluded from these totals.
+          </p>
+        )}
         <div className="mt-4 rounded-lg border border-border bg-card p-4">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-medium">Items by State</h3>
@@ -267,6 +291,11 @@ export function DashboardPage() {
                 </tbody>
               </table>
             )}
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-4">
+            <h3 className="mb-2 text-sm font-medium">Supplier Cost Distribution</h3>
+            <SupplierCostChart data={costingSummary?.supplierCostDistribution.filter((s) => s.itemValue > 0).map((s) => ({ supplierName: s.supplierName, itemValue: s.itemValue })) ?? []} />
           </div>
         </div>
       </div>

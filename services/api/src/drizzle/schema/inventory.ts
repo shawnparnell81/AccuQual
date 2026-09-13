@@ -22,6 +22,11 @@ export const inventoryItems = pgTable("inventory_items", {
   maxLevel: numeric("max_level"),
   reorderQuantity: numeric("reorder_quantity"),
   leadTimeDays: integer("lead_time_days"),
+  // Nullable, not a fabricated default: an item with no known cost has no
+  // itemValue rather than a fake $0 one — see inventory.costing.ts. No cost
+  // history/layers exist (no FIFO/LIFO) — this is always today's cost,
+  // applied retroactively to past movements for scrap/consumption cost.
+  unitCost: numeric("unit_cost"),
   state: text("state").notNull().default("in_stock"),
   active: boolean("active").notNull().default(true),
   notes: text("notes"),

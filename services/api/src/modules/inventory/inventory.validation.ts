@@ -15,6 +15,7 @@ export const createItemSchema = z.object({
   maxLevel: z.coerce.number().min(0).optional(),
   reorderQuantity: z.coerce.number().min(0).optional(),
   leadTimeDays: z.coerce.number().int().min(0).optional(),
+  unitCost: z.coerce.number().min(0).optional(),
   notes: z.string().optional(),
 });
 
@@ -28,6 +29,7 @@ export const updateItemSchema = z.object({
   maxLevel: z.coerce.number().min(0).nullable().optional(),
   reorderQuantity: z.coerce.number().min(0).nullable().optional(),
   leadTimeDays: z.coerce.number().int().min(0).nullable().optional(),
+  unitCost: z.coerce.number().min(0).nullable().optional(),
   notes: z.string().optional(),
   active: z.boolean().optional(),
 });

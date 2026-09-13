@@ -99,6 +99,13 @@
       "when": 1789310712318,
       "tag": "0013_inventory_reorder_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1789312369784,
+      "tag": "0014_inventory_items_unit_cost",
+      "breakpoints": true
     }
   ]
 }
