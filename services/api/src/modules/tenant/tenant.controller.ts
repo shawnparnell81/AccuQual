@@ -47,6 +47,7 @@ export const getAiConfigHandler = asyncHandler(async (req: Request, res: Respons
     modelName: config.modelName ?? null,
     temperature: config.temperature ?? null,
     maxTokens: config.maxTokens ?? null,
+    assistantName: config.assistantName ?? null,
     hasApiKey: !!config.apiKeyEncrypted,
     maskedApiKey: config.apiKeyEncrypted ? maskSecret(decryptSecret(config.apiKeyEncrypted)) : null,
   });
@@ -54,7 +55,14 @@ export const getAiConfigHandler = asyncHandler(async (req: Request, res: Respons
 
 export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Response) => {
   const tenant = await loadTenant(req);
-  const { provider, apiKey, modelName, temperature, maxTokens } = req.body as { provider?: string; apiKey?: string; modelName?: string; temperature?: number; maxTokens?: number };
+  const { provider, apiKey, modelName, temperature, maxTokens, assistantName } = req.body as {
+    provider?: string;
+    apiKey?: string;
+    modelName?: string;
+    temperature?: number;
+    maxTokens?: number;
+    assistantName?: string;
+  };
 
   const merged = { ...tenant.aiConfig };
   if (provider !== undefined) merged.provider = provider as "anthropic" | "openai";
@@ -62,6 +70,7 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
   if (modelName !== undefined) merged.modelName = modelName;
   if (temperature !== undefined) merged.temperature = temperature;
   if (maxTokens !== undefined) merged.maxTokens = maxTokens;
+  if (assistantName !== undefined) merged.assistantName = assistantName || undefined;
 
   await req.db!.update(tenants).set({ aiConfig: merged }).where(eq(tenants.id, req.tenantId!));
   // Never log apiKey itself, encrypted or not — only what changed and to what non-secret values.
@@ -70,9 +79,28 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
     entityType: "Tenant",
     entityId: req.tenantId!,
     action: "update",
-    changes: { action: "update_ai_config", provider: merged.provider, modelName: merged.modelName, apiKeyChanged: apiKey !== undefined },
+    changes: { action: "update_ai_config", provider: merged.provider, modelName: merged.modelName, assistantName: merged.assistantName, apiKeyChanged: apiKey !== undefined },
     performedBy: req.user?.id,
   });
 
-  res.json({ provider: merged.provider ?? null, modelName: merged.modelName ?? null, temperature: merged.temperature ?? null, maxTokens: merged.maxTokens ?? null, hasApiKey: !!merged.apiKeyEncrypted });
+  res.json({
+    provider: merged.provider ?? null,
+    modelName: merged.modelName ?? null,
+    temperature: merged.temperature ?? null,
+    maxTokens: merged.maxTokens ?? null,
+    assistantName: merged.assistantName ?? null,
+    hasApiKey: !!merged.apiKeyEncrypted,
+  });
+});
+
+/**
+ * The one AI-config field ANY authenticated user can read (not just admin)
+ * — the floating Assistant panel needs to show "Chat with <name>" for
+ * everyone, per "the assistant must work for ANY user in ANY department".
+ * Everything else about the config (provider, masked key, etc.) stays
+ * admin-only via getAiConfigHandler above.
+ */
+export const getAssistantNameHandler = asyncHandler(async (req: Request, res: Response) => {
+  const tenant = await loadTenant(req);
+  res.json({ assistantName: tenant.aiConfig?.assistantName ?? null });
 });

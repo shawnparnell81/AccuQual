@@ -5,6 +5,7 @@ import { Header } from "./Header";
 import { WindowContainer } from "../../window-manager/WindowContainer";
 import { useWindowStore } from "../../window-manager/useWindowStore";
 import { useAuthStore } from "../../store/authStore";
+import { AiAssistantPanelGate } from "../shared/AiAssistantPanel";
 
 export function AppLayout() {
   const userTenantId = useAuthStore((s) => s.user?.tenantId);
@@ -25,6 +26,7 @@ export function AppLayout() {
         <Outlet />
       </main>
       <WindowContainer />
+      <AiAssistantPanelGate />
     </div>
   );
 }

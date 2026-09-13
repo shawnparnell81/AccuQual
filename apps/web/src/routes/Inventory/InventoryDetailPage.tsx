@@ -14,6 +14,7 @@ import { Modal } from "../../components/modals/Modal";
 import { TextField, SelectField } from "../../components/forms/Field";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 
 const itemHooks = createResourceHooks<InventoryItem>("inventory/items");
 const alertHooks = createResourceHooks<InventoryAlert>("inventory/alerts");
@@ -214,6 +215,7 @@ export function InventoryDetailPage() {
   const { id } = useParams();
   const itemId = Number(id);
   const { data: item, isLoading } = itemHooks.useOne(itemId);
+  useSetAssistantContext("inventory", itemId, item ? `Item ${item.sku}` : `Item #${itemId}`);
   const { data: movements = [] } = useMovementHistory(itemId);
   // Alert history for this item — the whole tenant's alerts are one small
   // list (same "fetch-and-filter" convention as listItemsHandler), so this

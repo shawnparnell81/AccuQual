@@ -4,7 +4,7 @@ import { requireRole } from "../../middleware/rbac.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
 import { validate } from "../../middleware/validate.js";
 import { updateBrandingSchema, updateAiConfigSchema } from "./tenant.validation.js";
-import { getBrandingHandler, updateBrandingHandler, getAiConfigHandler, updateAiConfigHandler } from "./tenant.controller.js";
+import { getBrandingHandler, updateBrandingHandler, getAiConfigHandler, updateAiConfigHandler, getAssistantNameHandler } from "./tenant.controller.js";
 
 /** A tenant admin's own settings — scoped to req.tenantId, never a foreign tenant id. Admin-only (requireRole), not department-gated: branding/AI config aren't a department concern. */
 export const tenantRouter = Router();
@@ -15,3 +15,6 @@ tenantRouter.patch("/branding", requireRole("admin"), validate(updateBrandingSch
 
 tenantRouter.get("/ai-config", requireRole("admin"), getAiConfigHandler);
 tenantRouter.patch("/ai-config", requireRole("admin"), validate(updateAiConfigSchema), updateAiConfigHandler);
+
+// Open to any authenticated user — see getAssistantNameHandler's own comment.
+tenantRouter.get("/assistant-name", getAssistantNameHandler);
