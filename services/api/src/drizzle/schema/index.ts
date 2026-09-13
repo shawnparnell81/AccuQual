@@ -21,3 +21,5 @@ export * from "./digitalTwin.js";
 export * from "./auditTrail.js";
 export * from "./forms.js";
 export * from "./navPreferences.js";
+export * from "./inventory.js";
+export * from "./notifications.js";

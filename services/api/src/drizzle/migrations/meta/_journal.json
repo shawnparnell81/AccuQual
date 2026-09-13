@@ -78,6 +78,13 @@
       "when": 1789247184338,
       "tag": "0010_training_module_workflow",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789266688134,
+      "tag": "0011_add_inventory_and_notifications",
+      "breakpoints": true
     }
   ]
 }

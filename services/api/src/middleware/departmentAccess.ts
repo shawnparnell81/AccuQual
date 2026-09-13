@@ -22,7 +22,8 @@ export type ResourceKey =
   | "complaints"
   | "ppap"
   | "apqp"
-  | "production_log";
+  | "production_log"
+  | "inventory";
 
 /**
  * Source of truth: "Subfolder links.xlsx" (Department | Subfolder | Appears In |
@@ -54,6 +55,13 @@ export const PERMISSION_MATRIX: Record<ResourceKey, Partial<Record<Department, A
   // non-quality employee out of viewing documents or completing their own
   // training — a real regression, not hardening. Left for a deliberate,
   // explicitly-scoped pass instead of guessed here.
+  // Not a "Subfolder links.xlsx" row (no sheet row exists for Inventory yet) —
+  // added directly per the Inventory module plan. material_management gets
+  // full edit (the real owner of stock); purchasing/production get edit too
+  // since they each drive real actions (reorder/on-order, consume); quality
+  // is read-only. Finer per-action limits (e.g. only production may consume)
+  // are enforced inline in inventory.controller.ts, not expressible here.
+  inventory: { material_management: "edit", purchasing: "edit", production: "edit", quality: "read" },
 };
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
