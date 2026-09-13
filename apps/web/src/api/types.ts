@@ -203,6 +203,16 @@ export interface InventoryAlert {
   acknowledgedBy: number | null;
   sku: string;
   description: string | null;
+  itemType: "raw_material" | "wip" | "finished_good";
+  minLevel: string;
+  reorderQuantity: string | null;
+  currentStock: number;
+}
+
+/** GET /inventory/alerts/routing — real active-user counts per department, not a fictional single "department email" (see the Alerts UI review). */
+export interface InventoryAlertRouting {
+  material_management: number;
+  purchasing: number;
 }
 
 export interface AiSuggestion {

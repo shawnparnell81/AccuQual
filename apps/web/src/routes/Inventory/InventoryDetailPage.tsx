@@ -4,7 +4,7 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
-import type { InventoryItem, InventoryMovement } from "../../api/types";
+import type { InventoryItem, InventoryMovement, InventoryAlert } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
@@ -15,6 +15,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 
 const itemHooks = createResourceHooks<InventoryItem>("inventory/items");
+const alertHooks = createResourceHooks<InventoryAlert>("inventory/alerts");
 
 function useMovementHistory(itemId: number | undefined) {
   return useQuery<InventoryMovement[]>({
@@ -93,11 +94,17 @@ export function InventoryDetailPage() {
   const itemId = Number(id);
   const { data: item, isLoading } = itemHooks.useOne(itemId);
   const { data: movements = [] } = useMovementHistory(itemId);
+  // Alert history for this item — the whole tenant's alerts are one small
+  // list (same "fetch-and-filter" convention as listItemsHandler), so this
+  // is a client-side filter rather than a second endpoint.
+  const { data: allAlerts = [] } = alertHooks.useList();
+  const itemAlerts = allAlerts.filter((a) => a.itemId === itemId);
   const [movementOpen, setMovementOpen] = useState(false);
   const historyKey: unknown[][] = [["workflow-history", "inventory", itemId]];
 
   const reorderPendingAction = useWorkflowAction("inventory/items", "mark-reorder-pending", { successMessage: "Marked reorder pending.", invalidateKeys: historyKey });
   const onOrderAction = useWorkflowAction("inventory/items", "mark-on-order", { successMessage: "Marked on order.", invalidateKeys: historyKey });
+  const acknowledgeAction = useWorkflowAction("inventory/alerts", "acknowledge", { successMessage: "Alert acknowledged." });
 
   if (isLoading || !item) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
@@ -203,6 +210,48 @@ export function InventoryDetailPage() {
                       the other) is admin/quality_manager-only, and this ledger is seen by every
                       edit-level department (material_management/purchasing/production too). */}
                   <td className="py-1.5 text-muted-foreground">{m.performedBy ? `User #${m.performedBy}` : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-4">
+        <h3 className="mb-3 text-sm font-medium">Alerts</h3>
+        {itemAlerts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No alerts raised for this item.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="pb-2">Type</th>
+                <th className="pb-2">Triggered</th>
+                <th className="pb-2">Reorder Qty</th>
+                <th className="pb-2">Status</th>
+                <th className="pb-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {itemAlerts.map((a) => (
+                <tr key={a.id} className="border-t border-border">
+                  <td className="py-1.5 capitalize">{a.alertType.replace(/_/g, " ")}</td>
+                  <td className="py-1.5 text-muted-foreground">{new Date(a.triggeredAt).toLocaleString()}</td>
+                  <td className="py-1.5">{a.reorderQuantity ?? "—"}</td>
+                  <td className="py-1.5">
+                    {a.acknowledgedAt ? <StatusBadge value="closed" label="Acknowledged" /> : <StatusBadge value="open" label="Open" />}
+                  </td>
+                  <td className="py-1.5 text-right">
+                    {!a.acknowledgedAt && (
+                      <button
+                        onClick={() => acknowledgeAction.mutate({ id: a.id })}
+                        disabled={acknowledgeAction.isPending}
+                        className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
+                      >
+                        Acknowledge
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

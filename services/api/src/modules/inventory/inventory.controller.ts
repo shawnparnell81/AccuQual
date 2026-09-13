@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { and, eq, desc } from "drizzle-orm";
 import { inventoryItems, inventoryStock, inventoryAlerts, inventoryMovements } from "../../drizzle/schema/inventory.js";
+import { users } from "../../drizzle/schema/users.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
@@ -146,7 +147,12 @@ export const historyHandler = asyncHandler(async (req: Request, res: Response) =
   res.json(rows);
 });
 
-/** GET /inventory/alerts — every alert for the tenant, newest first, joined with the item's identifying fields. */
+/**
+ * GET /inventory/alerts — every alert for the tenant, newest first, joined
+ * live with the item's identifying + threshold fields (never denormalized
+ * onto the alert row — see the Alerts UI review) plus a summed current
+ * stock, same aggregation approach as listItemsHandler.
+ */
 export const listAlertsHandler = asyncHandler(async (req: Request, res: Response) => {
   const rows = await req.db!
     .select({
@@ -158,12 +164,39 @@ export const listAlertsHandler = asyncHandler(async (req: Request, res: Response
       acknowledgedBy: inventoryAlerts.acknowledgedBy,
       sku: inventoryItems.sku,
       description: inventoryItems.description,
+      itemType: inventoryItems.itemType,
+      minLevel: inventoryItems.minLevel,
+      reorderQuantity: inventoryItems.reorderQuantity,
     })
     .from(inventoryAlerts)
     .innerJoin(inventoryItems, eq(inventoryAlerts.itemId, inventoryItems.id))
     .where(eq(inventoryAlerts.tenantId, req.tenantId!))
     .orderBy(desc(inventoryAlerts.triggeredAt));
-  res.json(rows);
+
+  const stockRows = await req.db!.select().from(inventoryStock).where(eq(inventoryStock.tenantId, req.tenantId!));
+  const onHandByItem = new Map<number, number>();
+  for (const row of stockRows) onHandByItem.set(row.itemId, (onHandByItem.get(row.itemId) ?? 0) + Number(row.onHand));
+
+  res.json(rows.map((r) => ({ ...r, currentStock: onHandByItem.get(r.itemId) ?? 0 })));
+});
+
+/**
+ * GET /inventory/alerts/routing — real recipient counts for a below_min
+ * notification (see notification.service.ts's notifyDepartment), not the
+ * fictional single "department email" the Alerts UI review flagged. Open
+ * to any department with inventory access (not admin/quality_manager-only
+ * like GET /users) since it's an aggregate count, not per-user data.
+ */
+export const alertRoutingHandler = asyncHandler(async (req: Request, res: Response) => {
+  const recipients = await req.db!
+    .select({ department: users.department })
+    .from(users)
+    .where(and(eq(users.tenantId, req.tenantId!), eq(users.isActive, true)));
+
+  res.json({
+    material_management: recipients.filter((u) => u.department === "material_management").length,
+    purchasing: recipients.filter((u) => u.department === "purchasing").length,
+  });
 });
 
 export const acknowledgeAlertHandler = asyncHandler(async (req: Request, res: Response) => {

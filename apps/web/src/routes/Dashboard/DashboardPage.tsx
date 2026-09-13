@@ -37,6 +37,7 @@ export function DashboardPage() {
   const { data: inventoryAlerts = [] } = inventoryAlertHooks.useList();
   const openBelowMinAlerts = inventoryAlerts.filter((a) => a.alertType === "below_min" && !a.acknowledgedAt).length;
   const openAlertsTotal = inventoryAlerts.filter((a) => !a.acknowledgedAt).length;
+  const acknowledgedAlertsTotal = inventoryAlerts.filter((a) => a.acknowledgedAt).length;
 
   const inventoryStateData = useMemo(() => {
     const counts: Record<string, number> = Object.fromEntries(INVENTORY_STATES.map((s) => [s, 0]));
@@ -129,11 +130,12 @@ export function DashboardPage() {
           <h2 className="text-lg font-semibold">Inventory Overview</h2>
           <RecheckMinMaxButton />
         </div>
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
           <StatCard label="Reorder Pending" value={countByState("reorder_pending")} />
           <StatCard label="On Order" value={countByState("on_order")} />
           <StatCard label="Overstock" value={countByState("overstock")} />
           <StatCard label="Active Alerts" value={openAlertsTotal} />
+          <StatCard label="Acknowledged Alerts" value={acknowledgedAlertsTotal} />
         </div>
         <div className="mt-4 rounded-lg border border-border bg-card p-4">
           <div className="mb-2 flex items-center justify-between">

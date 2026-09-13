@@ -15,6 +15,7 @@ import {
   markOnOrderHandler,
   historyHandler,
   listAlertsHandler,
+  alertRoutingHandler,
   acknowledgeAlertHandler,
   checkMinMaxHandler,
 } from "./inventory.controller.js";
@@ -30,6 +31,7 @@ inventoryRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("inventor
 // Fixed literal paths ("/alerts", "/check-minmax") before ":id"-shaped ones,
 // same convention workflow.routes.ts uses for "/history/...".
 inventoryRouter.get("/alerts", listAlertsHandler);
+inventoryRouter.get("/alerts/routing", alertRoutingHandler);
 inventoryRouter.post("/alerts/:id/acknowledge", acknowledgeAlertHandler);
 inventoryRouter.post("/check-minmax", validate(checkMinMaxSchema), checkMinMaxHandler);
 
