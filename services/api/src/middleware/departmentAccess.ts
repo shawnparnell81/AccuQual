@@ -23,7 +23,8 @@ export type ResourceKey =
   | "ppap"
   | "apqp"
   | "production_log"
-  | "inventory";
+  | "inventory"
+  | "erp";
 
 /**
  * Source of truth: "Subfolder links.xlsx" (Department | Subfolder | Appears In |
@@ -65,6 +66,15 @@ export const PERMISSION_MATRIX: Record<ResourceKey, Partial<Record<Department, A
   // is read-only. Finer per-action limits (e.g. only production may consume)
   // are enforced inline in inventory.controller.ts, not expressible here.
   inventory: { material_management: "edit", purchasing: "edit", production: "edit", quality: "read" },
+  // Not a sheet row — a new module. Purchasing creates/sends/cancels POs;
+  // material_management physically receives goods, so it also needs edit
+  // (to create Receiving Documents), not just read. Quality gets read
+  // visibility, matching its access to every other real-goods-movement
+  // module. Which specific actions each department may take (purchasing
+  // only for send/cancel, material_management only for receiving) is
+  // enforced inline in erp.controller.ts, not expressible here — same
+  // pattern as inventory.controller.ts's assertDepartment.
+  erp: { purchasing: "edit", material_management: "edit", quality: "read" },
 };
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);

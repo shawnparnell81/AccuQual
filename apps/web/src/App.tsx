@@ -44,6 +44,9 @@ import { SettingsPage } from "./routes/Settings/SettingsPage";
 import { InventoryListPage } from "./routes/Inventory/InventoryListPage";
 import { InventoryDetailPage } from "./routes/Inventory/InventoryDetailPage";
 import { InventoryAlertsPage } from "./routes/Inventory/InventoryAlertsPage";
+import { ErpPurchaseOrdersPage } from "./routes/Erp/ErpPurchaseOrdersPage";
+import { ErpNewPurchaseOrderPage } from "./routes/Erp/ErpNewPurchaseOrderPage";
+import { ErpPurchaseOrderDetailPage } from "./routes/Erp/ErpPurchaseOrderDetailPage";
 import { useCurrentUser } from "./hooks/useAuth";
 
 function HomeRoute() {
@@ -103,6 +106,9 @@ export function App() {
           <Route path="/inventory" element={<InventoryListPage />} />
           <Route path="/inventory/alerts" element={<InventoryAlertsPage />} />
           <Route path="/inventory/:id" element={<InventoryDetailPage />} />
+          <Route path="/erp" element={<ErpPurchaseOrdersPage />} />
+          <Route path="/erp/new" element={<ErpNewPurchaseOrderPage />} />
+          <Route path="/erp/:id" element={<ErpPurchaseOrderDetailPage />} />
 
           <Route path="/workflow" element={<WorkflowBuilderPage />} />
           <Route path="/ai" element={<AiInsightsPage />} />

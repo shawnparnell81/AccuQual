@@ -68,6 +68,7 @@ const MODULE_ENTITY_TYPES: Record<string, string> = {
   di: "discrepancy_investigation",
   suppliers: "Supplier",
   inventory: "InventoryItem",
+  erp: "PurchaseOrder",
 };
 
 /** GET /workflow/history/:moduleName/:recordId — read-only, backed entirely by the existing audit_trail table. */
