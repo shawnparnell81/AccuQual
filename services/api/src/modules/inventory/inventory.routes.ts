@@ -19,6 +19,7 @@ import {
   acknowledgeAlertHandler,
   checkMinMaxHandler,
 } from "./inventory.controller.js";
+import { movementTrendsHandler, consumptionVsReceivingHandler, scrapAnalyticsHandler, referenceSummaryHandler } from "./inventory.analytics.js";
 
 export const inventoryRouter = Router();
 // material_management/purchasing/production get edit; quality gets read-only —
@@ -34,6 +35,11 @@ inventoryRouter.get("/alerts", listAlertsHandler);
 inventoryRouter.get("/alerts/routing", alertRoutingHandler);
 inventoryRouter.post("/alerts/:id/acknowledge", acknowledgeAlertHandler);
 inventoryRouter.post("/check-minmax", validate(checkMinMaxSchema), checkMinMaxHandler);
+
+inventoryRouter.get("/analytics/movements", movementTrendsHandler);
+inventoryRouter.get("/analytics/consumption-vs-receiving", consumptionVsReceivingHandler);
+inventoryRouter.get("/analytics/scrap", scrapAnalyticsHandler);
+inventoryRouter.get("/analytics/reference-summary", referenceSummaryHandler);
 
 inventoryRouter.get("/items", listItemsHandler);
 inventoryRouter.post("/items", validate(createItemSchema), createItemHandler);

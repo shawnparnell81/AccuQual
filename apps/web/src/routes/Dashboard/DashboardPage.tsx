@@ -1,10 +1,26 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
-import type { Ncr, Capa, Audit, Supplier, InventoryItem, InventoryAlert } from "../../api/types";
+import type {
+  Ncr,
+  Capa,
+  Audit,
+  Supplier,
+  InventoryItem,
+  InventoryAlert,
+  MovementTrendsResponse,
+  ConsumptionVsReceivingResponse,
+  ScrapAnalytics,
+  ReferenceSummaryEntry,
+} from "../../api/types";
 import { SeverityChart } from "../../components/charts/SeverityChart";
 import { CapaEffectivenessChart } from "../../components/charts/CapaEffectivenessChart";
 import { InventoryStateChart } from "../../components/charts/InventoryStateChart";
+import { MovementTrendsChart } from "../../components/charts/MovementTrendsChart";
+import { ConsumptionVsReceivingChart } from "../../components/charts/ConsumptionVsReceivingChart";
+import { ScrapDistributionChart } from "../../components/charts/ScrapDistributionChart";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowDashboard } from "../../components/dashboard/WorkflowDashboard";
 import { RecheckMinMaxButton } from "../../components/dashboard/RecheckMinMaxButton";
@@ -35,6 +51,22 @@ export function DashboardPage() {
   const { data: suppliers = [] } = supplierHooks.useList();
   const { data: inventoryItems = [] } = inventoryItemHooks.useList();
   const { data: inventoryAlerts = [] } = inventoryAlertHooks.useList();
+  const { data: movementTrends } = useQuery<MovementTrendsResponse>({
+    queryKey: ["inventory/analytics/movements"],
+    queryFn: async () => (await apiClient.get("/inventory/analytics/movements", { params: { days: 30 } })).data,
+  });
+  const { data: consumptionVsReceiving } = useQuery<ConsumptionVsReceivingResponse>({
+    queryKey: ["inventory/analytics/consumption-vs-receiving"],
+    queryFn: async () => (await apiClient.get("/inventory/analytics/consumption-vs-receiving", { params: { days: 30 } })).data,
+  });
+  const { data: scrapAnalytics } = useQuery<ScrapAnalytics>({
+    queryKey: ["inventory/analytics/scrap"],
+    queryFn: async () => (await apiClient.get("/inventory/analytics/scrap")).data,
+  });
+  const { data: referenceSummary = [] } = useQuery<ReferenceSummaryEntry[]>({
+    queryKey: ["inventory/analytics/reference-summary"],
+    queryFn: async () => (await apiClient.get("/inventory/analytics/reference-summary")).data,
+  });
   const openBelowMinAlerts = inventoryAlerts.filter((a) => a.alertType === "below_min" && !a.acknowledgedAt).length;
   const openAlertsTotal = inventoryAlerts.filter((a) => !a.acknowledgedAt).length;
   const acknowledgedAlertsTotal = inventoryAlerts.filter((a) => a.acknowledgedAt).length;
@@ -145,6 +177,62 @@ export function DashboardPage() {
             </Link>
           </div>
           <InventoryStateChart data={inventoryStateData} />
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-lg border border-border bg-card p-4">
+            <h3 className="mb-2 text-sm font-medium">Movement Trends (last {movementTrends?.days ?? 30} days)</h3>
+            <MovementTrendsChart data={movementTrends?.data ?? []} />
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-4">
+            <h3 className="mb-2 text-sm font-medium">Consumption vs Receiving (last {consumptionVsReceiving?.days ?? 30} days)</h3>
+            <ConsumptionVsReceivingChart data={consumptionVsReceiving?.data ?? []} />
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-4">
+            <h3 className="mb-2 text-sm font-medium">Scrap Distribution</h3>
+            <ScrapDistributionChart data={scrapAnalytics?.byItem ?? []} />
+            {scrapAnalytics && scrapAnalytics.byReferenceType.length > 0 && (
+              <div className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
+                <p className="mb-1 font-medium text-foreground">By reference type</p>
+                <ul className="flex flex-col gap-1">
+                  {scrapAnalytics.byReferenceType.map((r) => (
+                    <li key={r.referenceType} className="flex items-center justify-between">
+                      <span className="capitalize">{r.referenceType.replace(/_/g, " ")}</span>
+                      <span className="tabular-nums">{r.quantity}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-4">
+            <h3 className="mb-2 text-sm font-medium">Movements by Reference Type</h3>
+            {referenceSummary.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No movements logged yet.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="pb-2">Reference Type</th>
+                    <th className="pb-2">Movements</th>
+                    <th className="pb-2">Total Quantity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {referenceSummary.map((r) => (
+                    <tr key={r.referenceType ?? "none"} className="border-t border-border">
+                      <td className="py-1.5 capitalize">{r.referenceType ? r.referenceType.replace(/_/g, " ") : "None (unset)"}</td>
+                      <td className="py-1.5">{r.count}</td>
+                      <td className="py-1.5">{r.quantity}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       </div>
 

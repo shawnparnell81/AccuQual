@@ -197,6 +197,43 @@ export interface InventoryMovement {
   performedAt: string;
 }
 
+export interface MovementTrendPoint {
+  bucket: string;
+  receive: number;
+  consume: number;
+  produce: number;
+  adjust: number;
+  scrap: number;
+  transfer: number;
+}
+export interface MovementTrendsResponse {
+  bucket: "day" | "week";
+  days: number;
+  data: MovementTrendPoint[];
+}
+
+export interface ConsumptionVsReceivingPoint {
+  bucket: string;
+  consumed: number;
+  received: number;
+}
+export interface ConsumptionVsReceivingResponse {
+  bucket: "day" | "week";
+  days: number;
+  data: ConsumptionVsReceivingPoint[];
+}
+
+export interface ScrapAnalytics {
+  byItem: { itemId: number; sku: string; quantity: number }[];
+  byReferenceType: { referenceType: string; quantity: number }[];
+}
+
+export interface ReferenceSummaryEntry {
+  referenceType: string | null;
+  count: number;
+  quantity: number;
+}
+
 export interface InventoryAlert {
   id: number;
   itemId: number;
