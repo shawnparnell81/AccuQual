@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
+import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createEquipmentSchema, addCalibrationSchema } from "./calibration.validation.js";
 import {
@@ -14,7 +15,9 @@ import {
 } from "./calibration.controller.js";
 
 export const calibrationRouter = Router();
-calibrationRouter.use(requireAuth, withTenantDb);
+// Turns on PERMISSION_MATRIX.calibration (quality: edit) — previously
+// unenforced, see the Permissions Dictionary.
+calibrationRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("calibration"));
 
 // Same pattern as document-folders.routes.ts: memoryStorage, handler decides
 // the on-disk path (needs the calibration id multer already parsed).

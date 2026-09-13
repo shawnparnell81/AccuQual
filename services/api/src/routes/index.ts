@@ -23,6 +23,7 @@ import { auditTrailRouter } from "../modules/audit-trail/audit-trail.routes.js";
 import { formsRouter } from "../modules/forms/forms.routes.js";
 import { platformRouter } from "../modules/platform/platform.routes.js";
 import { navRouter } from "../modules/nav/nav.routes.js";
+import { inventoryRouter } from "../modules/inventory/inventory.routes.js";
 
 export const apiRouter = Router();
 
@@ -50,3 +51,4 @@ apiRouter.use("/audit-trail", auditTrailRouter);
 apiRouter.use("/forms", formsRouter);
 apiRouter.use("/platform", platformRouter);
 apiRouter.use("/nav", navRouter);
+apiRouter.use("/inventory", inventoryRouter);

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { FileText } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { StatusBadge } from "../tables/StatusBadge";
-import { AuditTrailList } from "../shared/AuditTrailList";
+import { WorkflowHistoryPanel } from "../shared/WorkflowHistoryPanel";
 import type { TrainingAssignment } from "../../api/types";
 
 async function viewCertificate(assignmentId: number) {
@@ -56,7 +56,7 @@ export function TrainingHistoryPanel({ userId }: { userId: number }) {
               <details className="text-xs">
                 <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Audit trail</summary>
                 <div className="mt-1 pl-3">
-                  <AuditTrailList entityType="TrainingAssignment" entityId={r.id} />
+                  <WorkflowHistoryPanel moduleName="training" recordId={r.id} bare />
                 </div>
               </details>
             </li>

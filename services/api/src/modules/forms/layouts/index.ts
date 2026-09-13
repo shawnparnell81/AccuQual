@@ -28,6 +28,7 @@ import { staffMeetingMinutesLayout } from "./staffMeetingMinutes.js";
 import { finalInspectionReleaseChecklistLayout } from "./finalInspectionReleaseChecklist.js";
 import { gageRRLayout } from "./gageRR.js";
 import { paretoChartLayout } from "./paretoChart.js";
+import { inventoryItemLayout } from "./inventoryItem.js";
 
 /**
  * formType -> layout, for every form we've derived from a real pasted
@@ -66,6 +67,7 @@ export const FORM_LAYOUTS: Record<string, FormLayout> = {
   final_inspection_release_checklist: finalInspectionReleaseChecklistLayout,
   gage_rr: gageRRLayout,
   pareto_chart: paretoChartLayout,
+  inventory_item: inventoryItemLayout,
 };
 
 export function getFormLayout(formType: string): FormLayout | undefined {

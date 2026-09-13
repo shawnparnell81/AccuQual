@@ -7,17 +7,25 @@ import type { Capa } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextAreaField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { useWorkflowAction, useWorkflowUpdate } from "../../hooks/useWorkflowAction";
+import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
+import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 
 const capaHooks = createResourceHooks<Capa>("capa");
 
-/** CAPA Detail: root cause summary, action plan, verification steps, AI-generated recommendations. */
+/** CAPA Detail: root cause summary, action plan, verification steps, AI-generated recommendations, history. */
 export function CapaDetailPage() {
   const { id } = useParams();
   const capaId = Number(id);
+  const historyKey: unknown[][] = [["workflow-history", "capa", capaId]];
   const { data: capa, isLoading } = capaHooks.useOne(capaId);
   const updateCapa = capaHooks.useUpdate();
-  const verifyAction = capaHooks.useAction("verify");
-  const closeAction = capaHooks.useAction("close");
+  // Open -> In Progress is generic-PATCH-only on the backend (no dedicated
+  // endpoint — see the Transitions/Rules Dictionaries), so this is the one
+  // action here that goes through useWorkflowUpdate, not useWorkflowAction.
+  const startAction = useWorkflowUpdate<{ id: number; status: string }>("capa", { successMessage: "CAPA started.", invalidateKeys: historyKey });
+  const verifyAction = useWorkflowAction("capa", "verify", { successMessage: "Verification recorded.", invalidateKeys: historyKey });
+  const closeAction = useWorkflowAction("capa", "close", { successMessage: "CAPA closed.", invalidateKeys: historyKey });
   const [verification, setVerification] = useState("");
 
   const aiSuggestion = useQuery({
@@ -38,11 +46,21 @@ export function CapaDetailPage() {
         </div>
         <div className="flex gap-2">
           <OpenFormButton formType="capa" entityId={capa.id} title={`CAPA #${capa.id} Form`} />
-          {capa.status !== "closed" && (
-            <button onClick={() => closeAction.mutate({ id: capaId })} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-              Close CAPA
-            </button>
-          )}
+          <WorkflowActionButton
+            label="Start Work"
+            navKey="capa"
+            action={startAction}
+            onClick={() => startAction.mutate({ id: capaId, status: "in_progress" })}
+            visible={capa.status === "open"}
+            variant="primary"
+          />
+          <WorkflowActionButton
+            label="Close CAPA"
+            navKey="capa"
+            action={closeAction}
+            onClick={() => closeAction.mutate({ id: capaId })}
+            visible={capa.status === "verifying"}
+          />
         </div>
       </div>
 
@@ -63,13 +81,21 @@ export function CapaDetailPage() {
 
         <div className="rounded-lg border border-border bg-card p-4">
           <h2 className="mb-2 text-sm font-medium">Verification Steps</h2>
-          <TextAreaField label="" value={verification} onChange={(e) => setVerification(e.target.value)} />
-          <button
-            onClick={() => verifyAction.mutate({ id: capaId, verification })}
-            className="mt-2 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground"
-          >
-            Submit verification
-          </button>
+          {capa.status === "open" ? (
+            <p className="text-sm text-muted-foreground">Start work above first — verification can't be recorded before that.</p>
+          ) : (
+            <>
+              <TextAreaField label="" value={verification} onChange={(e) => setVerification(e.target.value)} />
+              <WorkflowActionButton
+                label="Submit verification"
+                navKey="capa"
+                action={verifyAction}
+                onClick={() => verifyAction.mutate({ id: capaId, verification })}
+                visible={capa.status === "in_progress"}
+                variant="primary"
+              />
+            </>
+          )}
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
@@ -88,6 +114,8 @@ export function CapaDetailPage() {
           )}
         </div>
       </div>
+
+      <WorkflowHistoryPanel moduleName="capa" recordId={capaId} />
     </div>
   );
 }

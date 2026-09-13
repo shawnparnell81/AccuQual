@@ -30,6 +30,7 @@ export function TrainingCompletionModal({ assignmentId, isOpen, onClose }: { ass
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === "training-assignments" || query.queryKey[0] === "training-employee-history" });
+      queryClient.invalidateQueries({ queryKey: ["workflow-history", "training", assignmentId] });
       setTrainerName("");
       setNotes("");
       setCertificate(null);

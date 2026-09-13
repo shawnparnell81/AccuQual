@@ -311,12 +311,12 @@ export function TopNav() {
           )}
         </div>
 
-        {/* Customize which departments/items show up in the nav at all. */}
+        {/* General app settings — nav customization is now one tab inside it, not this button's whole purpose. */}
         <Link
-          to="/settings/navigation"
+          to="/settings"
           className="hidden md:flex shrink-0 p-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Customize navigation"
-          title="Customize navigation"
+          aria-label="Settings"
+          title="Settings"
         >
           <Settings size={18} />
         </Link>
@@ -469,12 +469,12 @@ export function TopNav() {
               )}
 
               <Link
-                to="/settings/navigation"
+                to="/settings"
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted border-t border-border mt-1 pt-3"
               >
                 <Settings size={16} />
-                <span>Customize navigation</span>
+                <span>Settings</span>
               </Link>
             </>
           )}

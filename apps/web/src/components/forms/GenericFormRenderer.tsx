@@ -168,12 +168,12 @@ function TableBlockView({ block, data, onChange }: { block: TableBlock; data: Re
         <thead>
           <tr>
             {block.fixedRowLabels && (
-              <th className="border-t px-2 py-1.5 text-left font-semibold" style={{ backgroundColor: LABEL_BG, borderColor: BORDER }}>
+              <th className="border-t px-2 py-1.5 text-left font-semibold text-slate-800" style={{ backgroundColor: LABEL_BG, borderColor: BORDER }}>
                 {block.labelColumnHeader ?? "Role"}
               </th>
             )}
             {block.columns.map((col) => (
-              <th key={col.key} className="border-t px-2 py-1.5 text-left font-semibold" style={{ backgroundColor: LABEL_BG, borderColor: BORDER }}>
+              <th key={col.key} className="border-t px-2 py-1.5 text-left font-semibold text-slate-800" style={{ backgroundColor: LABEL_BG, borderColor: BORDER }}>
                 {col.label}
               </th>
             ))}
@@ -184,7 +184,7 @@ function TableBlockView({ block, data, onChange }: { block: TableBlock; data: Re
           {rows.map((row, rowIndex) => (
             <tr key={rowIndex}>
               {block.fixedRowLabels && (
-                <td className="border-t px-2 py-1.5 font-medium" style={{ backgroundColor: LABEL_BG, borderColor: BORDER }}>
+                <td className="border-t px-2 py-1.5 font-medium text-slate-800" style={{ backgroundColor: LABEL_BG, borderColor: BORDER }}>
                   {block.fixedRowLabels[rowIndex]}
                 </td>
               )}

@@ -40,6 +40,10 @@ import { AiInsightsPage } from "./routes/AI/AiInsightsPage";
 import { DigitalTwinPage } from "./routes/DigitalTwin/DigitalTwinPage";
 import { PlatformAdminPage } from "./routes/Platform/PlatformAdminPage";
 import { NavigationSettingsPage } from "./routes/Settings/NavigationSettingsPage";
+import { SettingsPage } from "./routes/Settings/SettingsPage";
+import { InventoryListPage } from "./routes/Inventory/InventoryListPage";
+import { InventoryDetailPage } from "./routes/Inventory/InventoryDetailPage";
+import { InventoryAlertsPage } from "./routes/Inventory/InventoryAlertsPage";
 import { useCurrentUser } from "./hooks/useAuth";
 
 function HomeRoute() {
@@ -96,10 +100,15 @@ export function App() {
           <Route path="/calibration/:id" element={<EquipmentDetailPage />} />
           <Route path="/complaints" element={<ComplaintsPage />} />
           <Route path="/complaints/:id" element={<ComplaintDetailPage />} />
+          <Route path="/inventory" element={<InventoryListPage />} />
+          <Route path="/inventory/alerts" element={<InventoryAlertsPage />} />
+          <Route path="/inventory/:id" element={<InventoryDetailPage />} />
 
           <Route path="/workflow" element={<WorkflowBuilderPage />} />
           <Route path="/ai" element={<AiInsightsPage />} />
           <Route path="/digital-twin" element={<DigitalTwinPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          {/* Kept working as its own URL (embedded as SettingsPage's "Navigation" tab) — anyone with this link bookmarked shouldn't get a 404. */}
           <Route path="/settings/navigation" element={<NavigationSettingsPage />} />
         </Route>
       </Route>

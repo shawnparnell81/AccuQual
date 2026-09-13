@@ -26,6 +26,7 @@ import {
   Landmark,
   Workflow,
   Sparkles,
+  Package,
 } from "lucide-react";
 
 /**
@@ -87,10 +88,12 @@ export const SUPPLIERS: NavLeaf = {
   label: "Suppliers",
   path: "/suppliers",
   icon: Truck,
-  access: { quality: "edit", purchasing: "read", material_management: "read" },
+  // production added for Supplier Performance Analytics — mirrors
+  // departmentAccess.ts's PERMISSION_MATRIX.suppliers exactly.
+  access: { quality: "edit", purchasing: "read", material_management: "read", production: "read" },
   kpi: false,
   priority: 2,
-  notes: "Linked to Purchasing + Material Mgmt",
+  notes: "Linked to Purchasing + Material Mgmt + Production (read)",
 };
 
 export const COMPLAINTS: NavLeaf = {
@@ -102,6 +105,21 @@ export const COMPLAINTS: NavLeaf = {
   kpi: true,
   priority: 1,
   notes: "Linked to Quality, Engineering, Customer Service",
+};
+
+// Not a "Subfolder links.xlsx" row — the sheet has no Inventory row at all.
+// Added per the Inventory module plan, mirroring departmentAccess.ts's
+// PERMISSION_MATRIX.inventory entry exactly so this dropdown access and the
+// backend's enforcement can't disagree.
+export const INVENTORY: NavLeaf = {
+  key: "inventory",
+  label: "Inventory",
+  path: "/inventory",
+  icon: Package,
+  access: { material_management: "edit", purchasing: "edit", production: "edit", quality: "read" },
+  kpi: false,
+  priority: 2,
+  notes: "Not in the department sheet — added directly (see the Inventory module plan)",
 };
 
 export const PRODUCTION_LOG: NavLeaf = {
@@ -157,6 +175,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
       { key: "pareto", label: "Pareto Analysis", path: "/pareto", icon: BarChart3, access: { quality: "read" }, kpi: true, priority: 1, notes: "KPI dashboard item" },
       SUPPLIERS,
       COMPLAINTS,
+      INVENTORY,
     ],
   },
   {
@@ -165,7 +184,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "production",
-    items: [PRODUCTION_LOG, COMPLAINTS],
+    items: [PRODUCTION_LOG, COMPLAINTS, INVENTORY, SUPPLIERS],
   },
   {
     department: "customer_service",
@@ -173,11 +192,11 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "purchasing",
-    items: [SUPPLIERS],
+    items: [SUPPLIERS, INVENTORY],
   },
   {
     department: "material_management",
-    items: [SUPPLIERS],
+    items: [SUPPLIERS, INVENTORY],
   },
   {
     // Not in the sheet — kept so nothing loses a working page. Access is
@@ -212,3 +231,18 @@ export const PLATFORM_LEAF = { key: "platform", label: "Platform Admin", path: "
 
 /** Every KPI-flagged leaf's key that a live count exists for (GET /nav/kpi-counts). Pareto and Production Log are KPI="Yes" in the sheet but aren't countable the same way — see nav.controller.ts. */
 export const KPI_COUNT_KEYS = ["ncr", "capa", "8d", "di", "complaints"] as const;
+
+/**
+ * Looks up one leaf by key across every department's dropdown, plus the
+ * canonical leaves declared once and shared (SUPPLIERS/COMPLAINTS/
+ * PRODUCTION_LOG) — used by the Workflow UI components (useWorkflowAccess)
+ * to reuse this same access map for permission-aware transition buttons
+ * instead of a second, parallel matrix.
+ */
+export function findNavLeaf(key: string): NavLeaf | undefined {
+  for (const group of NAV_STRUCTURE) {
+    const found = group.items.find((item) => item.key === key);
+    if (found) return found;
+  }
+  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG, INVENTORY].find((leaf) => leaf.key === key);
+}

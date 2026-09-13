@@ -144,6 +144,20 @@ export const uploadCertificateHandler = asyncHandler(async (req: Request, res: R
   }
 
   const [updated] = await req.db!.update(calibrations).set({ certificatePath: path }).where(and(eq(calibrations.id, calibrationId), eq(calibrations.tenantId, tenantId))).returning();
+
+  // Was missing entirely (see the Outputs Dictionary) — createCalibrationEvent
+  // logs the event itself, but attaching/replacing a certificate afterwards
+  // left no trace. entityType "Equipment" matches every other calibration
+  // audit entry, scoped by equipmentId rather than the calibration row.
+  await recordAuditTrail(req.db!, {
+    tenantId,
+    entityType: "Equipment",
+    entityId: calibration.equipmentId,
+    action: "update",
+    changes: { action: "upload_certificate", calibrationId, filename: file.originalname },
+    performedBy: req.user?.id,
+  });
+
   res.status(201).json(updated);
 });
 

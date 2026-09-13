@@ -22,7 +22,8 @@ export type ResourceKey =
   | "complaints"
   | "ppap"
   | "apqp"
-  | "production_log";
+  | "production_log"
+  | "inventory";
 
 /**
  * Source of truth: "Subfolder links.xlsx" (Department | Subfolder | Appears In |
@@ -40,11 +41,30 @@ export const PERMISSION_MATRIX: Record<ResourceKey, Partial<Record<Department, A
   audit: { quality: "edit" },
   calibration: { quality: "edit" },
   pareto: { quality: "read" },
-  suppliers: { quality: "edit", purchasing: "read", material_management: "read" },
+  // production added for Supplier Performance Analytics (read-only, same
+  // level as purchasing/material_management — it had no access at all
+  // before this) — see the Supplier Performance Analytics review.
+  suppliers: { quality: "edit", purchasing: "read", material_management: "read", production: "read" },
   complaints: { quality: "edit", engineering: "edit", production: "read", customer_service: "edit" },
   ppap: { engineering: "edit" },
   apqp: { engineering: "edit" },
   production_log: { production: "read", customer_service: "edit" },
+  // Document Control and Training deliberately aren't given a ResourceKey
+  // here yet (see the Permissions Dictionary and Phase 6's implementation
+  // notes): unlike ncr/capa/audit/calibration/di, these two are read-by-
+  // everyone, write-by-few resources, and Training additionally needs a
+  // per-row check ("is this your own assignment"), not a whole-department
+  // grant. Copying the quality-edit-only pattern here would lock every
+  // non-quality employee out of viewing documents or completing their own
+  // training — a real regression, not hardening. Left for a deliberate,
+  // explicitly-scoped pass instead of guessed here.
+  // Not a "Subfolder links.xlsx" row (no sheet row exists for Inventory yet) —
+  // added directly per the Inventory module plan. material_management gets
+  // full edit (the real owner of stock); purchasing/production get edit too
+  // since they each drive real actions (reorder/on-order, consume); quality
+  // is read-only. Finer per-action limits (e.g. only production may consume)
+  // are enforced inline in inventory.controller.ts, not expressible here.
+  inventory: { material_management: "edit", purchasing: "edit", production: "edit", quality: "read" },
 };
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);

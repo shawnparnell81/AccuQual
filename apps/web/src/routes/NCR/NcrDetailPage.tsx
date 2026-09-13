@@ -7,23 +7,27 @@ import type { Ncr, Capa } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextAreaField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { useWorkflowAction } from "../../hooks/useWorkflowAction";
+import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
+import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
 const capaHooks = createResourceHooks<Capa>("capa");
 
-const TABS = ["Overview", "Root Cause", "CAPA", "8D", "AI Suggestions", "Audit Trail"] as const;
+const TABS = ["Overview", "Root Cause", "CAPA", "8D", "AI Suggestions", "History"] as const;
 type Tab = (typeof TABS)[number];
 
 export function NcrDetailPage() {
   const { id } = useParams();
   const ncrId = Number(id);
   const [tab, setTab] = useState<Tab>("Overview");
+  const historyKey: unknown[][] = [["workflow-history", "ncr", ncrId]];
 
   const { data: ncr, isLoading } = ncrHooks.useOne(ncrId);
-  const containmentAction = ncrHooks.useAction("containment");
-  const rootCauseAction = ncrHooks.useAction("root-cause");
-  const correctiveActionAction = ncrHooks.useAction("corrective-action");
-  const closeAction = ncrHooks.useAction("close");
+  const containmentAction = useWorkflowAction("ncr", "containment", { successMessage: "Containment recorded.", invalidateKeys: historyKey });
+  const rootCauseAction = useWorkflowAction("ncr", "root-cause", { successMessage: "Root cause recorded.", invalidateKeys: historyKey });
+  const correctiveActionAction = useWorkflowAction("ncr", "corrective-action", { successMessage: "Corrective action recorded.", invalidateKeys: historyKey });
+  const closeAction = useWorkflowAction("ncr", "close", { successMessage: "NCR closed.", invalidateKeys: historyKey });
 
   if (isLoading || !ncr) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
@@ -41,14 +45,13 @@ export function NcrDetailPage() {
         </div>
         <div className="flex gap-2">
           <OpenFormButton formType="ncr" entityId={ncr.id} title={`NCR #${ncr.id} Form`} />
-          {ncr.status !== "closed" && (
-            <button
-              onClick={() => closeAction.mutate({ id: ncrId })}
-              className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
-            >
-              Close NCR
-            </button>
-          )}
+          <WorkflowActionButton
+            label="Close NCR"
+            navKey="ncr"
+            action={closeAction}
+            onClick={() => closeAction.mutate({ id: ncrId })}
+            visible={ncr.status === "corrective_action"}
+          />
         </div>
       </div>
 
@@ -77,25 +80,31 @@ export function NcrDetailPage() {
 
       {tab === "Root Cause" && (
         <div className="rounded-lg border border-border bg-card p-4">
-          <ActionForm
-            label="Root cause"
-            value={ncr.rootCause}
-            onSubmit={(value) => rootCauseAction.mutate({ id: ncrId, rootCause: value })}
-          />
-          <div className="mt-4">
+          {ncr.status === "open" ? (
+            <p className="text-sm text-muted-foreground">Record containment on the Overview tab first — root cause can't be recorded before that.</p>
+          ) : (
             <ActionForm
-              label="Corrective action"
-              value={ncr.correctiveAction}
-              onSubmit={(value) => correctiveActionAction.mutate({ id: ncrId, correctiveAction: value })}
+              label="Root cause"
+              value={ncr.rootCause}
+              onSubmit={(value) => rootCauseAction.mutate({ id: ncrId, rootCause: value })}
             />
-          </div>
+          )}
+          {ncr.status !== "open" && ncr.status !== "contained" && (
+            <div className="mt-4">
+              <ActionForm
+                label="Corrective action"
+                value={ncr.correctiveAction}
+                onSubmit={(value) => correctiveActionAction.mutate({ id: ncrId, correctiveAction: value })}
+              />
+            </div>
+          )}
         </div>
       )}
 
       {tab === "CAPA" && <CapaTab ncrId={ncrId} />}
       {tab === "8D" && <EightDTab ncrId={ncrId} />}
       {tab === "AI Suggestions" && <AiSuggestionsTab ncr={ncr} />}
-      {tab === "Audit Trail" && <AuditTrailTab ncrId={ncrId} />}
+      {tab === "History" && <WorkflowHistoryPanel moduleName="ncr" recordId={ncrId} />}
     </div>
   );
 }
@@ -185,21 +194,3 @@ function AiSuggestionsTab({ ncr }: { ncr: Ncr }) {
   );
 }
 
-function AuditTrailTab({ ncrId }: { ncrId: number }) {
-  const { data = [] } = useQuery({
-    queryKey: ["audit-trail", "ncr", ncrId],
-    queryFn: async () => (await apiClient.get(`/audit-trail/ncr/${ncrId}`)).data,
-  });
-
-  return (
-    <ul className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4 text-sm">
-      {data.length === 0 && <li className="text-muted-foreground">No history yet.</li>}
-      {data.map((entry: { id: number; action: string; createdAt: string }) => (
-        <li key={entry.id} className="flex items-center justify-between border-b border-border pb-1">
-          <span className="capitalize">{entry.action.replace(/_/g, " ")}</span>
-          <span className="text-muted-foreground">{new Date(entry.createdAt).toLocaleString()}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}

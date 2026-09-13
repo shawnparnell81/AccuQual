@@ -1,14 +1,43 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
-import type { Ncr, Capa, Audit, Supplier } from "../../api/types";
+import type {
+  Ncr,
+  Capa,
+  Audit,
+  Supplier,
+  InventoryItem,
+  InventoryAlert,
+  InventoryReorderRequest,
+  MovementTrendsResponse,
+  ConsumptionVsReceivingResponse,
+  ScrapAnalytics,
+  ReferenceSummaryEntry,
+  SupplierPerformance,
+  CostingSummary,
+} from "../../api/types";
 import { SeverityChart } from "../../components/charts/SeverityChart";
 import { CapaEffectivenessChart } from "../../components/charts/CapaEffectivenessChart";
+import { InventoryStateChart } from "../../components/charts/InventoryStateChart";
+import { MovementTrendsChart } from "../../components/charts/MovementTrendsChart";
+import { ConsumptionVsReceivingChart } from "../../components/charts/ConsumptionVsReceivingChart";
+import { ScrapDistributionChart } from "../../components/charts/ScrapDistributionChart";
+import { SupplierCostChart } from "../../components/charts/SupplierCostChart";
 import { StatusBadge } from "../../components/tables/StatusBadge";
+import { WorkflowDashboard } from "../../components/dashboard/WorkflowDashboard";
+import { RecheckMinMaxButton } from "../../components/dashboard/RecheckMinMaxButton";
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
 const capaHooks = createResourceHooks<Capa>("capa");
 const auditHooks = createResourceHooks<Audit>("audits");
 const supplierHooks = createResourceHooks<Supplier>("suppliers");
+const inventoryItemHooks = createResourceHooks<InventoryItem>("inventory/items");
+const inventoryAlertHooks = createResourceHooks<InventoryAlert>("inventory/alerts");
+const reorderRequestHooks = createResourceHooks<InventoryReorderRequest>("inventory/reorder-requests");
+
+const INVENTORY_STATES = ["in_stock", "below_min", "reorder_pending", "on_order", "overstock", "inactive"] as const;
 
 function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
@@ -25,6 +54,52 @@ export function DashboardPage() {
   const { data: capas = [] } = capaHooks.useList();
   const { data: audits = [] } = auditHooks.useList();
   const { data: suppliers = [] } = supplierHooks.useList();
+  const { data: inventoryItems = [] } = inventoryItemHooks.useList();
+  const { data: inventoryAlerts = [] } = inventoryAlertHooks.useList();
+  const { data: reorderRequests = [] } = reorderRequestHooks.useList();
+  const pendingReorderRequests = reorderRequests.filter((r) => r.status === "pending").length;
+  const { data: movementTrends } = useQuery<MovementTrendsResponse>({
+    queryKey: ["inventory/analytics/movements"],
+    queryFn: async () => (await apiClient.get("/inventory/analytics/movements", { params: { days: 30 } })).data,
+  });
+  const { data: consumptionVsReceiving } = useQuery<ConsumptionVsReceivingResponse>({
+    queryKey: ["inventory/analytics/consumption-vs-receiving"],
+    queryFn: async () => (await apiClient.get("/inventory/analytics/consumption-vs-receiving", { params: { days: 30 } })).data,
+  });
+  const { data: scrapAnalytics } = useQuery<ScrapAnalytics>({
+    queryKey: ["inventory/analytics/scrap"],
+    queryFn: async () => (await apiClient.get("/inventory/analytics/scrap")).data,
+  });
+  const { data: referenceSummary = [] } = useQuery<ReferenceSummaryEntry[]>({
+    queryKey: ["inventory/analytics/reference-summary"],
+    queryFn: async () => (await apiClient.get("/inventory/analytics/reference-summary")).data,
+  });
+  const { data: supplierPerformance = [] } = useQuery<SupplierPerformance[]>({
+    queryKey: ["suppliers/performance-summary"],
+    queryFn: async () => (await apiClient.get("/suppliers/performance-summary")).data,
+  });
+  const suppliersWithData = supplierPerformance.filter((p) => p.itemCount > 0);
+  const suppliersAtRisk = suppliersWithData.filter((p) => p.riskScore === "high").length;
+  const timelinessSamples = suppliersWithData.filter((p) => p.deliveryTimeliness.avgDays !== null);
+  const avgDeliveryTime =
+    timelinessSamples.length === 0 ? null : timelinessSamples.reduce((sum, p) => sum + p.deliveryTimeliness.avgDays!, 0) / timelinessSamples.length;
+  const accuracySamples = suppliersWithData.filter((p) => p.deliveryAccuracy.avgPercent !== null);
+  const avgDeliveryAccuracy =
+    accuracySamples.length === 0 ? null : accuracySamples.reduce((sum, p) => sum + p.deliveryAccuracy.avgPercent!, 0) / accuracySamples.length;
+  const { data: costingSummary } = useQuery<CostingSummary>({
+    queryKey: ["inventory/costing/summary"],
+    queryFn: async () => (await apiClient.get("/inventory/costing/summary", { params: { days: 30 } })).data,
+  });
+  const openBelowMinAlerts = inventoryAlerts.filter((a) => a.alertType === "below_min" && !a.acknowledgedAt).length;
+  const openAlertsTotal = inventoryAlerts.filter((a) => !a.acknowledgedAt).length;
+  const acknowledgedAlertsTotal = inventoryAlerts.filter((a) => a.acknowledgedAt).length;
+
+  const inventoryStateData = useMemo(() => {
+    const counts: Record<string, number> = Object.fromEntries(INVENTORY_STATES.map((s) => [s, 0]));
+    for (const i of inventoryItems) counts[i.state] = (counts[i.state] ?? 0) + 1;
+    return INVENTORY_STATES.map((state) => ({ state, count: counts[state] ?? 0 }));
+  }, [inventoryItems]);
+  const countByState = (state: string) => inventoryItems.filter((i) => i.state === state).length;
 
   const severityData = useMemo(() => {
     const counts: Record<string, number> = { low: 0, medium: 0, high: 0, critical: 0 };
@@ -47,12 +122,13 @@ export function DashboardPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">Dashboard</h1>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
         <StatCard label="Open NCRs" value={ncrs.filter((n) => n.status !== "closed").length} />
         <StatCard label="Open CAPAs" value={openCapas} />
         <StatCard label="Scheduled Audits" value={audits.filter((a) => a.status === "scheduled").length} />
         <StatCard label="At-Risk Suppliers" value={atRiskSuppliers.length} />
         <StatCard label="CAPA Effectiveness" value={capaEffectivenessRate === null ? "—" : `${capaEffectivenessRate}%`} />
+        <StatCard label="Items Below Min" value={openBelowMinAlerts} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -85,6 +161,23 @@ export function DashboardPage() {
               </li>
             ))}
           </ul>
+
+          {/* Computed from real delivery/reorder/alert data (see Supplier Performance
+              Analytics) — distinct from the manually-entered scorecard riskLevel above. */}
+          <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border pt-3 text-center">
+            <div>
+              <p className="text-lg font-semibold tabular-nums">{suppliersAtRisk}</p>
+              <p className="text-xs text-muted-foreground">Suppliers at Risk</p>
+            </div>
+            <div>
+              <p className="text-lg font-semibold tabular-nums">{avgDeliveryTime === null ? "—" : `${avgDeliveryTime.toFixed(1)}d`}</p>
+              <p className="text-xs text-muted-foreground">Avg Delivery Time</p>
+            </div>
+            <div>
+              <p className="text-lg font-semibold tabular-nums">{avgDeliveryAccuracy === null ? "—" : `${avgDeliveryAccuracy.toFixed(0)}%`}</p>
+              <p className="text-xs text-muted-foreground">Avg Delivery Accuracy</p>
+            </div>
+          </div>
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
@@ -102,6 +195,114 @@ export function DashboardPage() {
             page for the full panel.
           </p>
         </div>
+      </div>
+
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Inventory Overview</h2>
+          <RecheckMinMaxButton />
+        </div>
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
+          <StatCard label="Reorder Pending" value={countByState("reorder_pending")} />
+          <StatCard label="On Order" value={countByState("on_order")} />
+          <StatCard label="Overstock" value={countByState("overstock")} />
+          <StatCard label="Active Alerts" value={openAlertsTotal} />
+          <StatCard label="Acknowledged Alerts" value={acknowledgedAlertsTotal} />
+          <StatCard label="Reorder Requests Pending" value={pendingReorderRequests} />
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3">
+          <StatCard label="Total Inventory Value" value={costingSummary ? `$${costingSummary.totalInventoryValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—"} />
+          <StatCard
+            label={`Scrap Cost (${costingSummary?.days ?? 30}d)`}
+            value={costingSummary ? `$${costingSummary.totalScrapCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}
+          />
+          <StatCard
+            label={`Consumption Cost (${costingSummary?.days ?? 30}d)`}
+            value={costingSummary ? `$${costingSummary.totalConsumptionCost.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}
+          />
+        </div>
+        {costingSummary && costingSummary.uncostedItemCount > 0 && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {costingSummary.uncostedItemCount} item{costingSummary.uncostedItemCount === 1 ? "" : "s"} have no unit cost set and are
+            excluded from these totals.
+          </p>
+        )}
+        <div className="mt-4 rounded-lg border border-border bg-card p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-medium">Items by State</h3>
+            <Link to="/inventory/alerts" className="text-xs text-primary hover:underline">
+              View alerts
+            </Link>
+          </div>
+          <InventoryStateChart data={inventoryStateData} />
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-lg border border-border bg-card p-4">
+            <h3 className="mb-2 text-sm font-medium">Movement Trends (last {movementTrends?.days ?? 30} days)</h3>
+            <MovementTrendsChart data={movementTrends?.data ?? []} />
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-4">
+            <h3 className="mb-2 text-sm font-medium">Consumption vs Receiving (last {consumptionVsReceiving?.days ?? 30} days)</h3>
+            <ConsumptionVsReceivingChart data={consumptionVsReceiving?.data ?? []} />
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-4">
+            <h3 className="mb-2 text-sm font-medium">Scrap Distribution</h3>
+            <ScrapDistributionChart data={scrapAnalytics?.byItem ?? []} />
+            {scrapAnalytics && scrapAnalytics.byReferenceType.length > 0 && (
+              <div className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
+                <p className="mb-1 font-medium text-foreground">By reference type</p>
+                <ul className="flex flex-col gap-1">
+                  {scrapAnalytics.byReferenceType.map((r) => (
+                    <li key={r.referenceType} className="flex items-center justify-between">
+                      <span className="capitalize">{r.referenceType.replace(/_/g, " ")}</span>
+                      <span className="tabular-nums">{r.quantity}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-4">
+            <h3 className="mb-2 text-sm font-medium">Movements by Reference Type</h3>
+            {referenceSummary.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No movements logged yet.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="pb-2">Reference Type</th>
+                    <th className="pb-2">Movements</th>
+                    <th className="pb-2">Total Quantity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {referenceSummary.map((r) => (
+                    <tr key={r.referenceType ?? "none"} className="border-t border-border">
+                      <td className="py-1.5 capitalize">{r.referenceType ? r.referenceType.replace(/_/g, " ") : "None (unset)"}</td>
+                      <td className="py-1.5">{r.count}</td>
+                      <td className="py-1.5">{r.quantity}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-4">
+            <h3 className="mb-2 text-sm font-medium">Supplier Cost Distribution</h3>
+            <SupplierCostChart data={costingSummary?.supplierCostDistribution.filter((s) => s.itemValue > 0).map((s) => ({ supplierName: s.supplierName, itemValue: s.itemValue })) ?? []} />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2 className="mb-3 text-lg font-semibold">Workflow Overview</h2>
+        <WorkflowDashboard />
       </div>
     </div>
   );

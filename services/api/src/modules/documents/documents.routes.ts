@@ -13,8 +13,14 @@ import {
   historyHandler,
   listExpiringHandler,
   applyRetentionHandler,
+  archiveHandler,
 } from "./documents.controller.js";
 
+// Deliberately not gated with requireDepartmentAccess this pass — Documents
+// has no ResourceKey yet, and unlike ncr/capa/audit/calibration/di this is a
+// read-by-everyone, write-by-few resource; copying the quality-edit-only
+// pattern here would block every non-quality employee from viewing released
+// documents. See departmentAccess.ts's comment and Phase 6's summary.
 export const documentsRouter = Router();
 documentsRouter.use(requireAuth, withTenantDb);
 
@@ -34,4 +40,6 @@ documentsRouter.post("/:id/version", validate(addVersionSchema), addVersionHandl
 documentsRouter.post("/:id/version/upload", upload.single("file"), uploadVersionHandler);
 documentsRouter.get("/version/:versionId/file", downloadVersionHandler);
 documentsRouter.post("/:id/approve", validate(approveSchema), approveHandler);
+// On-demand version of the "retention/apply" sweep for a single document.
+documentsRouter.post("/:id/archive", archiveHandler);
 documentsRouter.get("/:id/history", historyHandler);

@@ -6,6 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 
 export const baseHandlers = crudFactory(audits, { entityName: "Audit", idColumn: "id" });
 
@@ -61,13 +62,35 @@ export const listItemsHandler = asyncHandler(async (req: Request, res: Response)
   res.json(items);
 });
 
+/** Scheduled -> In Progress. Previously only reachable via the generic PATCH with no sequence check at all (see the Rules Dictionary). */
+export const startHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const tenantId = req.tenantId!;
+  const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, id), eq(audits.tenantId, tenantId)));
+  if (!audit) throw AppError.notFound("Audit");
+  if (audit.status !== "scheduled") throw AppError.badRequest(`Cannot start an audit from status "${audit.status}" — must be "scheduled"`);
+
+  const [updated] = await req.db!.update(audits).set({ status: "in_progress" }).where(eq(audits.id, id)).returning();
+
+  await recordAuditTrail(req.db!, { tenantId, entityType: "Audit", entityId: id, action: "status_change", changes: { action: "start" }, performedBy: req.user?.id });
+  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "audit", event: "start", entityId: id });
+
+  res.json(updated);
+});
+
 export const completeHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const [updated] = await req
-    .db!.update(audits)
-    .set({ status: "completed", completedAt: new Date() })
-    .where(and(eq(audits.id, id), eq(audits.tenantId, req.tenantId!)))
-    .returning();
-  if (!updated) throw AppError.notFound("Audit");
+  const tenantId = req.tenantId!;
+  const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, id), eq(audits.tenantId, tenantId)));
+  if (!audit) throw AppError.notFound("Audit");
+  if (audit.status !== "in_progress") throw AppError.badRequest(`Cannot complete an audit from status "${audit.status}" — must be "in_progress"`);
+
+  const [updated] = await req.db!.update(audits).set({ status: "completed", completedAt: new Date() }).where(eq(audits.id, id)).returning();
+
+  // Was missing entirely (see the Outputs Dictionary) — the one dedicated
+  // transition in the app that left no audit trail of itself.
+  await recordAuditTrail(req.db!, { tenantId, entityType: "Audit", entityId: id, action: "status_change", changes: { action: "complete" }, performedBy: req.user?.id });
+  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "audit", event: "complete", entityId: id });
+
   res.json(updated);
 });
