@@ -2,9 +2,10 @@ import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
+import { useCurrentUser } from "../../hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
-import type { InventoryItem, InventoryMovement, InventoryAlert } from "../../api/types";
+import type { InventoryItem, InventoryMovement, InventoryAlert, InventoryReorderRequest } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
@@ -16,6 +17,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 
 const itemHooks = createResourceHooks<InventoryItem>("inventory/items");
 const alertHooks = createResourceHooks<InventoryAlert>("inventory/alerts");
+const reorderRequestHooks = createResourceHooks<InventoryReorderRequest>("inventory/reorder-requests");
 
 function useMovementHistory(itemId: number | undefined) {
   return useQuery<InventoryMovement[]>({
@@ -118,6 +120,78 @@ function LogMovementModal({ itemId, isOpen, onClose }: { itemId: number; isOpen:
 }
 
 /**
+ * One reorder request row — a minimal ERP stub (see the ERP Reorder Request
+ * review): created only when Purchasing marks the item reorder_pending,
+ * never by an external ERP integration (none exists). Send/Ignore/notes are
+ * all real Purchasing actions on a real row, not a simulated third-party
+ * sync.
+ */
+function ReorderRequestRow({ request, canEdit }: { request: InventoryReorderRequest; canEdit: boolean }) {
+  const toast = useToast();
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState(request.notes ?? "");
+  const historyKey: unknown[][] = [["workflow-history", "inventory", request.itemId]];
+  const itemKey: unknown[][] = [["inventory/items", request.itemId]];
+
+  const sendAction = useWorkflowAction("inventory/reorder-requests", "send", { successMessage: "Reorder request sent.", invalidateKeys: [...itemKey, ...historyKey] });
+  const ignoreAction = useWorkflowAction("inventory/reorder-requests", "ignore", { successMessage: "Reorder request ignored.", invalidateKeys: [...itemKey, ...historyKey] });
+  const notesAction = useWorkflowAction<{ id: number; notes: string }>("inventory/reorder-requests", "notes", { successMessage: "Note saved." });
+
+  return (
+    <tr className="border-t border-border align-top">
+      <td className="py-1.5">{request.requestedQty}</td>
+      <td className="py-1.5">
+        <StatusBadge value={request.status === "sent" ? "closed" : request.status === "ignored" ? "rejected" : "open"} label={request.status} />
+      </td>
+      <td className="py-1.5 text-muted-foreground">{new Date(request.createdAt).toLocaleString()}</td>
+      <td className="py-1.5">
+        {editingNotes ? (
+          <div className="flex items-center gap-1">
+            <TextField label="" value={notesDraft} onChange={(e) => setNotesDraft(e.target.value)} />
+            <button
+              onClick={() =>
+                notesAction.mutate(
+                  { id: request.id, notes: notesDraft },
+                  { onSuccess: () => setEditingNotes(false), onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save note.")) }
+                )
+              }
+              disabled={notesAction.isPending}
+              className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
+            >
+              Save
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => canEdit && setEditingNotes(true)} className={`text-left text-muted-foreground ${canEdit ? "hover:underline" : "cursor-default"}`}>
+            {request.notes || (canEdit ? "Add note…" : "—")}
+          </button>
+        )}
+      </td>
+      <td className="py-1.5 text-right">
+        {request.status === "pending" && canEdit && (
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => sendAction.mutate({ id: request.id })}
+              disabled={sendAction.isPending}
+              className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+            >
+              Send
+            </button>
+            <button
+              onClick={() => ignoreAction.mutate({ id: request.id })}
+              disabled={ignoreAction.isPending}
+              className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
+            >
+              Ignore
+            </button>
+          </div>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+/**
  * Item record + real per-location stock + movement ledger + Purchasing's
  * reorder/on-order actions + the shared WorkflowHistoryPanel (state-change
  * audit trail) — same shell shape as SupplierDetailPage, with "Log
@@ -135,6 +209,9 @@ export function InventoryDetailPage() {
   // is a client-side filter rather than a second endpoint.
   const { data: allAlerts = [] } = alertHooks.useList();
   const itemAlerts = allAlerts.filter((a) => a.itemId === itemId);
+  const { data: reorderRequests = [] } = reorderRequestHooks.useList({ itemId });
+  const currentUser = useCurrentUser();
+  const canManageReorder = currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin" || currentUser?.department === "purchasing";
   const [movementOpen, setMovementOpen] = useState(false);
   const [referenceTypeFilter, setReferenceTypeFilter] = useState("all");
   const referenceTypes = useMemo(() => Array.from(new Set(movements.map((m) => m.referenceType).filter((t): t is string => !!t))), [movements]);
@@ -217,6 +294,33 @@ export function InventoryDetailPage() {
             {item.state !== "below_min" && item.state !== "reorder_pending" && <p className="text-sm text-muted-foreground">No reorder action applies to the current state.</p>}
           </div>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-4">
+        <h3 className="mb-3 text-sm font-medium">Reorder Requests</h3>
+        {reorderRequests.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No reorder requests — one is created automatically the moment Purchasing marks this item reorder pending. This is a minimal
+            stub, not a live ERP connection (none exists).
+          </p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="pb-2">Requested Qty</th>
+                <th className="pb-2">Status</th>
+                <th className="pb-2">Created</th>
+                <th className="pb-2">Notes</th>
+                <th className="pb-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {reorderRequests.map((r) => (
+                <ReorderRequestRow key={r.id} request={r} canEdit={canManageReorder} />
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4">

@@ -10,6 +10,7 @@ import type {
   Supplier,
   InventoryItem,
   InventoryAlert,
+  InventoryReorderRequest,
   MovementTrendsResponse,
   ConsumptionVsReceivingResponse,
   ScrapAnalytics,
@@ -31,6 +32,7 @@ const auditHooks = createResourceHooks<Audit>("audits");
 const supplierHooks = createResourceHooks<Supplier>("suppliers");
 const inventoryItemHooks = createResourceHooks<InventoryItem>("inventory/items");
 const inventoryAlertHooks = createResourceHooks<InventoryAlert>("inventory/alerts");
+const reorderRequestHooks = createResourceHooks<InventoryReorderRequest>("inventory/reorder-requests");
 
 const INVENTORY_STATES = ["in_stock", "below_min", "reorder_pending", "on_order", "overstock", "inactive"] as const;
 
@@ -51,6 +53,8 @@ export function DashboardPage() {
   const { data: suppliers = [] } = supplierHooks.useList();
   const { data: inventoryItems = [] } = inventoryItemHooks.useList();
   const { data: inventoryAlerts = [] } = inventoryAlertHooks.useList();
+  const { data: reorderRequests = [] } = reorderRequestHooks.useList();
+  const pendingReorderRequests = reorderRequests.filter((r) => r.status === "pending").length;
   const { data: movementTrends } = useQuery<MovementTrendsResponse>({
     queryKey: ["inventory/analytics/movements"],
     queryFn: async () => (await apiClient.get("/inventory/analytics/movements", { params: { days: 30 } })).data,
@@ -162,12 +166,13 @@ export function DashboardPage() {
           <h2 className="text-lg font-semibold">Inventory Overview</h2>
           <RecheckMinMaxButton />
         </div>
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
           <StatCard label="Reorder Pending" value={countByState("reorder_pending")} />
           <StatCard label="On Order" value={countByState("on_order")} />
           <StatCard label="Overstock" value={countByState("overstock")} />
           <StatCard label="Active Alerts" value={openAlertsTotal} />
           <StatCard label="Acknowledged Alerts" value={acknowledgedAlertsTotal} />
+          <StatCard label="Reorder Requests Pending" value={pendingReorderRequests} />
         </div>
         <div className="mt-4 rounded-lg border border-border bg-card p-4">
           <div className="mb-2 flex items-center justify-between">

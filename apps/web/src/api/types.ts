@@ -255,6 +255,18 @@ export interface InventoryAlertRouting {
   purchasing: number;
 }
 
+/** A minimal ERP reorder stub — created only when Purchasing marks an item reorder_pending, never by an external ERP (none exists). */
+export interface InventoryReorderRequest {
+  id: number;
+  itemId: number;
+  requestedQty: number;
+  status: "pending" | "sent" | "ignored";
+  notes: string | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
 export interface AiSuggestion {
   id: number;
   module: string | null;

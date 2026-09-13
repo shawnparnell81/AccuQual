@@ -3,7 +3,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
-import { createItemSchema, updateItemSchema, movementSchema, adjustSchema, checkMinMaxSchema } from "./inventory.validation.js";
+import { createItemSchema, updateItemSchema, movementSchema, adjustSchema, checkMinMaxSchema, reorderRequestNotesSchema } from "./inventory.validation.js";
 import {
   createItemHandler,
   listItemsHandler,
@@ -18,6 +18,10 @@ import {
   alertRoutingHandler,
   acknowledgeAlertHandler,
   checkMinMaxHandler,
+  listReorderRequestsHandler,
+  sendReorderRequestHandler,
+  ignoreReorderRequestHandler,
+  notesReorderRequestHandler,
 } from "./inventory.controller.js";
 import { movementTrendsHandler, consumptionVsReceivingHandler, scrapAnalyticsHandler, referenceSummaryHandler } from "./inventory.analytics.js";
 
@@ -40,6 +44,11 @@ inventoryRouter.get("/analytics/movements", movementTrendsHandler);
 inventoryRouter.get("/analytics/consumption-vs-receiving", consumptionVsReceivingHandler);
 inventoryRouter.get("/analytics/scrap", scrapAnalyticsHandler);
 inventoryRouter.get("/analytics/reference-summary", referenceSummaryHandler);
+
+inventoryRouter.get("/reorder-requests", listReorderRequestsHandler);
+inventoryRouter.post("/reorder-requests/:id/send", sendReorderRequestHandler);
+inventoryRouter.post("/reorder-requests/:id/ignore", ignoreReorderRequestHandler);
+inventoryRouter.post("/reorder-requests/:id/notes", validate(reorderRequestNotesSchema), notesReorderRequestHandler);
 
 inventoryRouter.get("/items", listItemsHandler);
 inventoryRouter.post("/items", validate(createItemSchema), createItemHandler);

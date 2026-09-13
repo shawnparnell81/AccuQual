@@ -43,7 +43,7 @@ DECLARE
     'ai_embeddings', 'digital_twin_models', 'digital_twin_simulations',
     'iot_data', 'iot_devices', 'audit_trail', 'form_templates', 'form_data',
     'form_versions', 'inventory_items', 'inventory_stock', 'inventory_movements',
-    'inventory_alerts', 'notification_log'
+    'inventory_alerts', 'notification_log', 'inventory_reorder_requests'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP

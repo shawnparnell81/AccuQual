@@ -78,7 +78,28 @@ export const inventoryAlerts = pgTable("inventory_alerts", {
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),
 });
 
+/**
+ * A minimal, forward-compatible ERP reorder stub — no ERP integration
+ * exists (see the ERP Reorder Request review), so this is created and
+ * resolved entirely by real Purchasing users, never an external system.
+ * Created when Purchasing calls mark-reorder-pending (the only real path
+ * to that state — see inventory.service.ts's recomputeState), not by any
+ * automatic min/max evaluation.
+ */
+export const inventoryReorderRequests = pgTable("inventory_reorder_requests", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
+  itemId: integer("item_id").references(() => inventoryItems.id).notNull(),
+  requestedQty: integer("requested_qty").notNull(),
+  status: text("status").notNull().default("pending"), // pending, sent, ignored
+  notes: text("notes"),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
 export type InventoryItem = typeof inventoryItems.$inferSelect;
 export type InventoryStock = typeof inventoryStock.$inferSelect;
 export type InventoryMovement = typeof inventoryMovements.$inferSelect;
 export type InventoryAlert = typeof inventoryAlerts.$inferSelect;
+export type InventoryReorderRequest = typeof inventoryReorderRequests.$inferSelect;

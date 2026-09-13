@@ -1,13 +1,13 @@
 import type { Request, Response } from "express";
 import { and, eq, desc } from "drizzle-orm";
-import { inventoryItems, inventoryStock, inventoryAlerts, inventoryMovements } from "../../drizzle/schema/inventory.js";
+import { inventoryItems, inventoryStock, inventoryAlerts, inventoryMovements, inventoryReorderRequests } from "../../drizzle/schema/inventory.js";
 import { users } from "../../drizzle/schema/users.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
-import { applyMovement, recomputeState, getStockRows } from "./inventory.service.js";
+import { applyMovement, recomputeState, getStockRows, createReorderRequest } from "./inventory.service.js";
 
 export const baseHandlers = crudFactory(inventoryItems, { entityName: "InventoryItem", idColumn: "id" });
 
@@ -136,11 +136,117 @@ async function setStatus(req: Request, res: Response, action: string, fromState:
   const [updated] = await req.db!.update(inventoryItems).set({ state: toState, updatedAt: new Date() }).where(eq(inventoryItems.id, id)).returning();
   await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "InventoryItem", entityId: id, action: "status_change", changes: { action, from: fromState, to: toState }, performedBy: req.user?.id });
   await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "inventory", event: action, entityId: id });
-  res.json(updated);
+  return updated!;
 }
 
-export const markReorderPendingHandler = asyncHandler((req: Request, res: Response) => setStatus(req, res, "mark-reorder-pending", "below_min", "reorder_pending"));
-export const markOnOrderHandler = asyncHandler((req: Request, res: Response) => setStatus(req, res, "mark-on-order", "reorder_pending", "on_order"));
+/** The real trigger for the ERP reorder stub: reorder_pending is only ever reached here, never by min/max evaluation (see recomputeState). */
+export const markReorderPendingHandler = asyncHandler(async (req: Request, res: Response) => {
+  const updated = await setStatus(req, res, "mark-reorder-pending", "below_min", "reorder_pending");
+  const stock = await getStockRows(req.db!, req.tenantId!, updated.id);
+  const onHand = stock.reduce((sum, s) => sum + Number(s.onHand), 0);
+  await createReorderRequest(req.db!, req.tenantId!, updated, onHand, req.user?.id);
+  res.json(updated);
+});
+export const markOnOrderHandler = asyncHandler(async (req: Request, res: Response) => {
+  const updated = await setStatus(req, res, "mark-on-order", "reorder_pending", "on_order");
+  res.json(updated);
+});
+
+/** GET /inventory/reorder-requests?itemId=... — itemId optional (omit for every request across the tenant). */
+export const listReorderRequestsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const itemId = req.query.itemId ? Number(req.query.itemId) : undefined;
+  const rows = await req.db!
+    .select()
+    .from(inventoryReorderRequests)
+    .where(itemId ? and(eq(inventoryReorderRequests.tenantId, req.tenantId!), eq(inventoryReorderRequests.itemId, itemId)) : eq(inventoryReorderRequests.tenantId, req.tenantId!))
+    .orderBy(desc(inventoryReorderRequests.createdAt));
+  res.json(rows);
+});
+
+async function loadReorderRequest(req: Request, id: number) {
+  const [request] = await req.db!
+    .select()
+    .from(inventoryReorderRequests)
+    .where(and(eq(inventoryReorderRequests.id, id), eq(inventoryReorderRequests.tenantId, req.tenantId!)));
+  if (!request) throw AppError.notFound("InventoryReorderRequest");
+  return request;
+}
+
+/** POST /inventory/reorder-requests/:id/send — purchasing-only. Marks the request sent and moves the item to on_order, same transition as the direct mark-on-order action. */
+export const sendReorderRequestHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const request = await loadReorderRequest(req, id);
+  assertDepartment(req, ["purchasing"]);
+  if (request.status !== "pending") throw AppError.badRequest(`Cannot "send" — request is already "${request.status}"`);
+
+  const item = await loadItem(req, request.itemId);
+  if (item.state !== "reorder_pending") {
+    throw AppError.badRequest(`Cannot "send" — item is "${item.state}", expected "reorder_pending"`);
+  }
+
+  const [updatedRequest] = await req.db!.update(inventoryReorderRequests).set({ status: "sent", updatedAt: new Date() }).where(eq(inventoryReorderRequests.id, id)).returning();
+  await req.db!.update(inventoryItems).set({ state: "on_order", updatedAt: new Date() }).where(eq(inventoryItems.id, item.id));
+  await recordAuditTrail(req.db!, {
+    tenantId: req.tenantId!,
+    entityType: "InventoryItem",
+    entityId: item.id,
+    action: "status_change",
+    changes: { reorderRequestId: id, newStatus: "sent", from: "reorder_pending", to: "on_order" },
+    performedBy: req.user?.id,
+  });
+  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "inventory", event: "reorder-sent", entityId: item.id });
+  res.json(updatedRequest);
+});
+
+/**
+ * POST /inventory/reorder-requests/:id/ignore — purchasing-only. Marks the
+ * request ignored and recomputes the item's real state (rather than
+ * hardcoding "in_stock" or "reorder_pending", neither of which reflects
+ * actual on-hand — see the ERP Reorder Request review).
+ */
+export const ignoreReorderRequestHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const request = await loadReorderRequest(req, id);
+  assertDepartment(req, ["purchasing"]);
+  if (request.status !== "pending") throw AppError.badRequest(`Cannot "ignore" — request is already "${request.status}"`);
+
+  const [updatedRequest] = await req.db!.update(inventoryReorderRequests).set({ status: "ignored", updatedAt: new Date() }).where(eq(inventoryReorderRequests.id, id)).returning();
+
+  // Undo the reorder_pending purchasing decision first (recomputeState never
+  // downgrades reorder_pending/on_order on its own — see its own comment),
+  // then let a real recompute decide the honest resulting state.
+  await req.db!.update(inventoryItems).set({ state: "below_min", updatedAt: new Date() }).where(eq(inventoryItems.id, request.itemId));
+  const settled = await recomputeState(req.db!, req.tenantId!, request.itemId, req.user?.id);
+
+  await recordAuditTrail(req.db!, {
+    tenantId: req.tenantId!,
+    entityType: "InventoryItem",
+    entityId: request.itemId,
+    action: "status_change",
+    changes: { reorderRequestId: id, newStatus: "ignored", resultingState: settled.state },
+    performedBy: req.user?.id,
+  });
+  res.json(updatedRequest);
+});
+
+/** POST /inventory/reorder-requests/:id/notes — purchasing-only, any status. */
+export const notesReorderRequestHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const request = await loadReorderRequest(req, id);
+  assertDepartment(req, ["purchasing"]);
+  const { notes } = req.body as { notes: string };
+
+  const [updated] = await req.db!.update(inventoryReorderRequests).set({ notes, updatedAt: new Date() }).where(eq(inventoryReorderRequests.id, id)).returning();
+  await recordAuditTrail(req.db!, {
+    tenantId: req.tenantId!,
+    entityType: "InventoryItem",
+    entityId: request.itemId,
+    action: "update",
+    changes: { reorderRequestId: id, notes },
+    performedBy: req.user?.id,
+  });
+  res.json(updated);
+});
 
 /** GET /inventory/items/:id/history — the raw movement ledger, separate from the generic audit trail (which only records state changes and edits, not every stock movement's own row). */
 export const historyHandler = asyncHandler(async (req: Request, res: Response) => {

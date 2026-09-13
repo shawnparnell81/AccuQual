@@ -73,3 +73,7 @@ export const adjustSchema = z.object({
 export const checkMinMaxSchema = z.object({
   itemId: z.coerce.number().int().optional(), // omit to recompute every item for the tenant
 });
+
+export const reorderRequestNotesSchema = z.object({
+  notes: z.string().max(2000), // may be empty, to clear a note
+});

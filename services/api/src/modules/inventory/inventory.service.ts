@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import type { TenantDb } from "../../lib/tenantScope.js";
-import { inventoryItems, inventoryStock, inventoryMovements, inventoryAlerts, type InventoryItem } from "../../drizzle/schema/inventory.js";
+import { inventoryItems, inventoryStock, inventoryMovements, inventoryAlerts, inventoryReorderRequests, type InventoryItem } from "../../drizzle/schema/inventory.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
@@ -149,6 +149,33 @@ export async function recomputeState(db: TenantDb, tenantId: number, itemId: num
   }
 
   return updated!;
+}
+
+/**
+ * Creates the ERP reorder stub row when Purchasing marks an item
+ * reorder_pending — the only real trigger for that state (see
+ * recomputeState's own comment); there is no automatic min/max-driven
+ * creation, since min/max evaluation never sets reorder_pending itself.
+ * requestedQty prefers the item's own reorderQuantity (the field that
+ * already exists for exactly this), falling back to max_level - on_hand
+ * (only meaningful when maxLevel is set) and finally min_level, so a
+ * request never has to be a null/zero quantity.
+ */
+export async function createReorderRequest(db: TenantDb, tenantId: number, item: InventoryItem, onHand: number, createdBy: number | undefined) {
+  const maxLevel = item.maxLevel === null ? null : Number(item.maxLevel);
+  const target = item.reorderQuantity !== null ? Number(item.reorderQuantity) : maxLevel !== null ? Math.max(maxLevel - onHand, 0) : Number(item.minLevel);
+  const requestedQty = Math.max(Math.round(target), 1);
+
+  const [request] = await db.insert(inventoryReorderRequests).values({ tenantId, itemId: item.id, requestedQty, status: "pending", createdBy }).returning();
+  await recordAuditTrail(db, {
+    tenantId,
+    entityType: "InventoryItem",
+    entityId: item.id,
+    action: "create",
+    changes: { reorderRequestId: request!.id, requestedQty },
+    performedBy: createdBy,
+  });
+  return request!;
 }
 
 async function raiseAlertIfNeeded(db: TenantDb, tenantId: number, item: InventoryItem, alertType: "below_min" | "overstock", onHand: number, minLevel: number) {
