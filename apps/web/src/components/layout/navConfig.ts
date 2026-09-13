@@ -33,6 +33,7 @@ import {
   Bot,
   Cpu,
   TrendingUp,
+  Undo2,
 } from "lucide-react";
 
 /**
@@ -145,6 +146,22 @@ export const ERP: NavLeaf = {
   notes: "Not in the department sheet — a new ERP module (see the ERP module review)",
 };
 
+// Not a sheet row — a new module (Purchase Orders' reverse-direction
+// sibling). Mirrors departmentAccess.ts's PERMISSION_MATRIX.rma exactly.
+// quality's real access is narrower than "edit" implies (notes/NCR-CAPA
+// linkage only, no submit/close) — enforced inline in rma.controller.ts,
+// not expressible as a nav access level, same as inventory/erp above.
+export const RMA: NavLeaf = {
+  key: "rma",
+  label: "RMA / RGA",
+  path: "/rma",
+  icon: Undo2,
+  access: { purchasing: "edit", material_management: "edit", quality: "edit", engineering: "read" },
+  kpi: false,
+  priority: 2,
+  notes: "Not in the department sheet — a new RMA/RGA module (see the RMA module review)",
+};
+
 export const PRODUCTION_LOG: NavLeaf = {
   key: "production_log",
   label: "Production Log",
@@ -200,11 +217,12 @@ export const NAV_STRUCTURE: NavGroup[] = [
       COMPLAINTS,
       INVENTORY,
       ERP,
+      RMA,
     ],
   },
   {
     department: "engineering",
-    items: [PPAP, APQP, COMPLAINTS],
+    items: [PPAP, APQP, COMPLAINTS, RMA],
   },
   {
     department: "production",
@@ -216,11 +234,11 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "purchasing",
-    items: [SUPPLIERS, INVENTORY, ERP],
+    items: [SUPPLIERS, INVENTORY, ERP, RMA],
   },
   {
     department: "material_management",
-    items: [SUPPLIERS, INVENTORY, ERP],
+    items: [SUPPLIERS, INVENTORY, ERP, RMA],
   },
   {
     // Not in the sheet — kept so nothing loses a working page. Access is
@@ -278,5 +296,5 @@ export function findNavLeaf(key: string): NavLeaf | undefined {
     const found = group.items.find((item) => item.key === key);
     if (found) return found;
   }
-  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG, INVENTORY, ERP].find((leaf) => leaf.key === key);
+  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG, INVENTORY, ERP, RMA].find((leaf) => leaf.key === key);
 }

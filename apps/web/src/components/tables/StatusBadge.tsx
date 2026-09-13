@@ -73,6 +73,12 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   partially_received: "info",
   received: "success",
   cancelled: "destructive",
+
+  // RMA-specific states not covered above (draft/closed already are).
+  submitted_to_supplier: "info",
+  approved_by_supplier: "info",
+  in_transit: "info",
+  received_by_supplier: "info",
 };
 
 const BUCKET_CLASSES: Record<string, string> = {

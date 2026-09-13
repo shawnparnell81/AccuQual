@@ -13,6 +13,7 @@ import {
   Settings,
   Shield,
   LayoutDashboard,
+  Undo2,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -29,6 +30,7 @@ const TAB_ICONS: Record<string, LucideIcon> = {
   training: GraduationCap,
   calibration: Gauge,
   erp: Receipt,
+  rma: Undo2,
   digitaltwin: Boxes,
   documents: FileText,
   quality: ShieldCheck,

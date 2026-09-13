@@ -36,7 +36,7 @@ export interface WorkflowHistoryEntry {
 }
 
 /** Friendly moduleName values the history endpoint accepts — kept in sync with services/api's workflow.controller.ts MODULE_ENTITY_TYPES. */
-export type WorkflowModuleName = "calibration" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp";
+export type WorkflowModuleName = "calibration" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp" | "rma";
 
 export interface Ncr {
   id: number;
@@ -336,6 +336,45 @@ export interface ErpReceivingDocument {
 export interface ErpOverview {
   countByStatus: Record<PurchaseOrderStatus, number>;
   recent: { id: number; status: PurchaseOrderStatus; supplierName: string; createdAt: string }[];
+}
+
+export type RmaStatus = "draft" | "submitted_to_supplier" | "approved_by_supplier" | "in_transit" | "received_by_supplier" | "closed" | "cancelled";
+export type RmaReasonCode = "defective" | "wrong_item" | "over_shipment" | "under_shipment" | "quality_issue" | "other";
+
+export interface RmaItem {
+  id: number;
+  rmaId: number;
+  itemId: number;
+  sku?: string | null; // joined, list/detail endpoints only
+  description: string | null;
+  quantityReturned: string;
+  unitOfMeasure: string | null;
+  reason: string | null;
+  supplierResponse: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface Rma {
+  id: number;
+  rmaNumber: string;
+  status: RmaStatus;
+  supplierId: number;
+  supplierName?: string; // list endpoint only
+  reasonCode: RmaReasonCode | null;
+  linkedNcrId: number | null;
+  linkedCapaId: number | null;
+  createdByUserId: number | null;
+  approvedByUserId: number | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+  // Detail endpoint only — read-only summaries, see the RMA module's
+  // Supplier/NCR/CAPA integration points.
+  supplier?: { id: number; name: string; contactEmail: string | null; status: string };
+  linkedNcr?: { id: number; title: string; status: string; severity: string | null } | null;
+  linkedCapa?: { id: number; status: string; rootCause: string | null } | null;
+  items?: RmaItem[];
 }
 
 export interface InventoryAlert {

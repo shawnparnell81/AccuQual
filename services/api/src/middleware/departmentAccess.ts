@@ -24,7 +24,8 @@ export type ResourceKey =
   | "apqp"
   | "production_log"
   | "inventory"
-  | "erp";
+  | "erp"
+  | "rma";
 
 /**
  * Source of truth: "Subfolder links.xlsx" (Department | Subfolder | Appears In |
@@ -75,6 +76,15 @@ export const PERMISSION_MATRIX: Record<ResourceKey, Partial<Record<Department, A
   // enforced inline in erp.controller.ts, not expressible here — same
   // pattern as inventory.controller.ts's assertDepartment.
   erp: { purchasing: "edit", material_management: "edit", quality: "read" },
+  // Not a sheet row — a new module. purchasing/material_management get
+  // "full RMA access" per the RMA module spec; quality's real access is
+  // narrower ("can link NCR/CAPA, can add notes, cannot submit or close")
+  // than this binary matrix expresses, so it's granted "edit" here and the
+  // narrower field-level limit is enforced inline in rma.controller.ts —
+  // same pattern as inventory.controller.ts/erp.controller.ts's
+  // assertDepartment for per-action nuance this matrix can't express.
+  // engineering is read-only, matching the spec exactly.
+  rma: { purchasing: "edit", material_management: "edit", quality: "edit", engineering: "read" },
 };
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);

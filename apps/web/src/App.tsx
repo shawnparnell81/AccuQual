@@ -47,6 +47,8 @@ import { InventoryAlertsPage } from "./routes/Inventory/InventoryAlertsPage";
 import { ErpPurchaseOrdersPage } from "./routes/Erp/ErpPurchaseOrdersPage";
 import { ErpNewPurchaseOrderPage } from "./routes/Erp/ErpNewPurchaseOrderPage";
 import { ErpPurchaseOrderDetailPage } from "./routes/Erp/ErpPurchaseOrderDetailPage";
+import { RmaListPage } from "./routes/Rma/RmaListPage";
+import { RmaDetailPage } from "./routes/Rma/RmaDetailPage";
 import { AdminTenantBrandingPage } from "./routes/Admin/AdminTenantBrandingPage";
 import { AdminTenantTemplatesPage } from "./routes/Admin/AdminTenantTemplatesPage";
 import { AdminTenantAiConfigPage } from "./routes/Admin/AdminTenantAiConfigPage";
@@ -114,6 +116,8 @@ export function App() {
           <Route path="/erp" element={<ErpPurchaseOrdersPage />} />
           <Route path="/erp/new" element={<ErpNewPurchaseOrderPage />} />
           <Route path="/erp/:id" element={<ErpPurchaseOrderDetailPage />} />
+          <Route path="/rma" element={<RmaListPage />} />
+          <Route path="/rma/:id" element={<RmaDetailPage />} />
 
           <Route path="/workflow" element={<WorkflowBuilderPage />} />
           <Route path="/ai" element={<AiInsightsPage />} />

@@ -69,6 +69,7 @@ const MODULE_ENTITY_TYPES: Record<string, string> = {
   suppliers: "Supplier",
   inventory: "InventoryItem",
   erp: "PurchaseOrder",
+  rma: "Rma",
 };
 
 /** GET /workflow/history/:moduleName/:recordId — read-only, backed entirely by the existing audit_trail table. */
