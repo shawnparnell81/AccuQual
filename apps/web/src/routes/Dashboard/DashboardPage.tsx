@@ -18,6 +18,8 @@ import type {
   SupplierPerformance,
   CostingSummary,
   ErpOverview,
+  WorkOrder,
+  ErpPurchaseRequisition,
 } from "../../api/types";
 import { SeverityChart } from "../../components/charts/SeverityChart";
 import { CapaEffectivenessChart } from "../../components/charts/CapaEffectivenessChart";
@@ -38,6 +40,8 @@ const auditHooks = createResourceHooks<Audit>("audits");
 const supplierHooks = createResourceHooks<Supplier>("suppliers");
 const inventoryItemHooks = createResourceHooks<InventoryItem>("inventory/items");
 const inventoryAlertHooks = createResourceHooks<InventoryAlert>("inventory/alerts");
+const workOrderHooks = createResourceHooks<WorkOrder>("work-orders");
+const requisitionHooks = createResourceHooks<ErpPurchaseRequisition>("erp/requisitions");
 const reorderRequestHooks = createResourceHooks<InventoryReorderRequest>("inventory/reorder-requests");
 
 const INVENTORY_STATES = ["in_stock", "below_min", "reorder_pending", "on_order", "overstock", "inactive"] as const;
@@ -101,6 +105,13 @@ export function DashboardPage() {
     queryKey: ["erp/overview"],
     queryFn: async () => (await apiClient.get("/erp/overview")).data,
   });
+  // Same "fetch unconditionally, let a 403 just leave data undefined" pattern
+  // as erpOverview/inventoryItems above — a department without access to
+  // these two new modules just sees the StatCard fallback to 0.
+  const { data: workOrders = [] } = workOrderHooks.useList();
+  const { data: requisitions = [] } = requisitionHooks.useList();
+  const openWorkOrders = workOrders.filter((wo) => wo.status === "planned" || wo.status === "in_progress").length;
+  const requisitionsPendingApproval = requisitions.filter((r) => r.status === "pending_approval").length;
 
   const inventoryStateData = useMemo(() => {
     const counts: Record<string, number> = Object.fromEntries(INVENTORY_STATES.map((s) => [s, 0]));
@@ -321,6 +332,14 @@ export function DashboardPage() {
           <StatCard label="Partially Received" value={erpOverview?.countByStatus.partially_received ?? 0} />
           <StatCard label="Received" value={erpOverview?.countByStatus.received ?? 0} />
           <StatCard label="Cancelled" value={erpOverview?.countByStatus.cancelled ?? 0} />
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-5">
+          <Link to="/work-orders">
+            <StatCard label="Open Work Orders" value={openWorkOrders} />
+          </Link>
+          <Link to="/erp/requisitions">
+            <StatCard label="Requisitions Pending Approval" value={requisitionsPendingApproval} />
+          </Link>
         </div>
         <div className="mt-4 rounded-lg border border-border bg-card p-4">
           <h3 className="mb-2 text-sm font-medium">Recent Purchase Orders</h3>

@@ -28,6 +28,7 @@ const ROUTE_ENTITY_TYPES: Record<string, string> = {
   training: "TrainingAssignment",
   suppliers: "Supplier",
   rma: "Rma",
+  "work-orders": "WorkOrder",
 };
 
 /**

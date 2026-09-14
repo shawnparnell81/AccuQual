@@ -4,7 +4,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { callLlmDetailed } from "./llm-gateway.js";
 import { estimateCost } from "./pricing.js";
-import { auditTrail } from "../../drizzle/schema/auditTrail.js";
+import { checkUsageLimit } from "./ai.usage.js";
 import { tenants } from "../../drizzle/schema/tenants.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
@@ -306,32 +306,6 @@ async function loadSimilarAuditFindings(db: TenantDb, tenantId: number, queryTex
   } catch {
     return null; // e.g. the embedding call itself failed — classify on the other context alone rather than error out
   }
-}
-
-/**
- * BYOK monthly limit enforcement — checked before every real call, not
- * against a stored counter. A single cumulative field can't implement
- * "monthly" without something resetting it, and this app has no background
- * jobs to do that reset; querying this tenant's own real AiAssistantMessage
- * audit trail rows from the 1st of the current calendar month onward gets
- * the same answer with no state to ever reset. Returns null when under
- * limit (or no limit set), or an error message to return to the caller.
- */
-async function checkUsageLimit(db: TenantDb, tenantId: number, monthlyLimit: number | null, limitEnforced: boolean): Promise<string | null> {
-  if (!limitEnforced || monthlyLimit === null) return null;
-
-  const startOfMonth = new Date();
-  startOfMonth.setUTCDate(1);
-  startOfMonth.setUTCHours(0, 0, 0, 0);
-
-  const [row] = await db
-    .select({ total: sql<number>`COALESCE(SUM((${auditTrail.changes}->>'tokens')::int), 0)` })
-    .from(auditTrail)
-    .where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "AiAssistantMessage"), gte(auditTrail.createdAt, startOfMonth)));
-
-  const usedThisMonth = row?.total ?? 0;
-  if (usedThisMonth >= monthlyLimit) return "AI usage limit reached for this tenant.";
-  return null;
 }
 
 /**

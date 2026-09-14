@@ -26,3 +26,5 @@ export * from "./notifications.js";
 export * from "./erp.js";
 export * from "./rma.js";
 export * from "./passwordResetTokens.js";
+export * from "./workOrders.js";
+export * from "./onboarding.js";

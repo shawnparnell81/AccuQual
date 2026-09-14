@@ -25,7 +25,9 @@ export type ResourceKey =
   | "production_log"
   | "inventory"
   | "erp"
-  | "rma";
+  | "rma"
+  | "work_orders"
+  | "purchase_requisitions";
 
 /**
  * Source of truth: "Subfolder links.xlsx" (Department | Subfolder | Appears In |
@@ -85,6 +87,21 @@ export const PERMISSION_MATRIX: Record<ResourceKey, Partial<Record<Department, A
   // assertDepartment for per-action nuance this matrix can't express.
   // engineering is read-only, matching the spec exactly.
   rma: { purchasing: "edit", material_management: "edit", quality: "edit", engineering: "read" },
+  // Not a sheet row — a new module (see the AI Work Order Planning / PR
+  // Justification / Onboarding / ERP Automation review). Production owns
+  // the work order lifecycle (create/start/complete/cancel, enforced
+  // inline in workOrders.controller.ts's assertDepartment); the other
+  // three get read visibility since they each care about production
+  // output (material_management for stock, purchasing for what's being
+  // produced, quality for traceability to a linked NCR).
+  work_orders: { production: "edit", material_management: "read", purchasing: "read", quality: "read" },
+  // Not a sheet row — a new module, the real pre-PO request/approval step.
+  // Any requesting department can create/edit their own draft (inline
+  // check in erp.controller.ts's requisition handlers, since this matrix
+  // is per-resource, not per-action); approve/reject/convert-to-PO are
+  // purchasing-only, same narrower-than-matrix pattern RMA's quality
+  // access already uses.
+  purchase_requisitions: { production: "edit", material_management: "edit", quality: "edit", engineering: "edit", purchasing: "edit" },
 };
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);

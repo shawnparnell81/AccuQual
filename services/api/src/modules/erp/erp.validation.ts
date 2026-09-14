@@ -35,3 +35,19 @@ export const createReceivingDocumentSchema = z.object({
   notes: z.string().optional(),
   lineItems: z.array(receivingLineItemInput).min(1, "A receiving document needs at least one line item"),
 });
+
+export const createRequisitionSchema = z.object({
+  itemId: z.coerce.number().int(),
+  quantity: z.coerce.number().int().positive(),
+  supplierId: z.coerce.number().int().optional(),
+  linkedNcrId: z.coerce.number().int().optional(),
+  justification: z.string().optional(),
+});
+
+/** Every field optional at the schema level — draft-only editability and who may touch what is enforced in erp.controller.ts, same split every other module in this app uses. */
+export const updateRequisitionSchema = z.object({
+  quantity: z.coerce.number().int().positive().optional(),
+  supplierId: z.coerce.number().int().nullable().optional(),
+  linkedNcrId: z.coerce.number().int().nullable().optional(),
+  justification: z.string().optional(),
+});
