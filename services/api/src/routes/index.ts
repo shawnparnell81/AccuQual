@@ -25,9 +25,12 @@ import { platformRouter } from "../modules/platform/platform.routes.js";
 import { navRouter } from "../modules/nav/nav.routes.js";
 import { inventoryRouter } from "../modules/inventory/inventory.routes.js";
 import { erpRouter } from "../modules/erp/erp.routes.js";
+import { erpRequisitionsRouter } from "../modules/erp/erpRequisitions.routes.js";
 import { tenantRouter } from "../modules/tenant/tenant.routes.js";
 import { searchRouter } from "../modules/search/search.routes.js";
 import { rmaRouter } from "../modules/rma/rma.routes.js";
+import { workOrdersRouter } from "../modules/work-orders/workOrders.routes.js";
+import { onboardingRouter } from "../modules/onboarding/onboarding.routes.js";
 
 export const apiRouter = Router();
 
@@ -56,7 +59,14 @@ apiRouter.use("/forms", formsRouter);
 apiRouter.use("/platform", platformRouter);
 apiRouter.use("/nav", navRouter);
 apiRouter.use("/inventory", inventoryRouter);
+// Registered before /erp: a more specific prefix match must come first so
+// /erp/requisitions/* is handled by its own router (a different department
+// gate — see erpRequisitions.routes.ts's own comment) instead of falling
+// into erpRouter's blanket "erp" gate.
+apiRouter.use("/erp/requisitions", erpRequisitionsRouter);
 apiRouter.use("/erp", erpRouter);
 apiRouter.use("/tenant", tenantRouter);
 apiRouter.use("/search", searchRouter);
 apiRouter.use("/rma", rmaRouter);
+apiRouter.use("/work-orders", workOrdersRouter);
+apiRouter.use("/onboarding", onboardingRouter);

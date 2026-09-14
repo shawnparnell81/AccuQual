@@ -3,6 +3,7 @@ import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
 import { inventoryItems } from "./inventory.js";
+import { ncr } from "./ncr.js";
 
 /**
  * A real, standalone ERP module — Purchase Orders + Receiving, entirely
@@ -58,7 +59,42 @@ export const erpReceivingLineItems = pgTable("erp_receiving_line_items", {
   notes: text("notes"),
 });
 
+/**
+ * A real Purchase Requisition — the pre-PO request/approval step the AI
+ * PR Justification review assumed already existed. It didn't: the only
+ * thing close to it was `inventory_reorder_requests` (inventory.ts), a
+ * narrower stub created only by Purchasing's own mark-reorder-pending
+ * action, with no approval workflow and no path to a real PO. This table
+ * generalizes that idea into a real requisition any requesting department
+ * can raise — production/material_management/quality/engineering can
+ * create their own draft; purchasing approves, rejects, or converts one
+ * to a real Purchase Order (see erp.controller.ts's convertToPoHandler).
+ * `justification` is free text — the field AI PR Justification drafts and
+ * the user edits/saves via the normal PATCH endpoint.
+ *
+ * status: draft | pending_approval | approved | rejected | converted_to_po
+ */
+export const erpPurchaseRequisitions = pgTable("erp_purchase_requisitions", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
+  requestedBy: integer("requested_by").references(() => users.id),
+  department: text("department"),
+  itemId: integer("item_id").references(() => inventoryItems.id).notNull(),
+  quantity: integer("quantity").notNull(),
+  supplierId: integer("supplier_id").references(() => suppliers.id),
+  linkedNcrId: integer("linked_ncr_id").references(() => ncr.id),
+  justification: text("justification"),
+  status: text("status").notNull().default("draft"),
+  approvedBy: integer("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  purchaseOrderId: integer("purchase_order_id").references(() => erpPurchaseOrders.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
 export type ErpPurchaseOrder = typeof erpPurchaseOrders.$inferSelect;
 export type ErpPoLineItem = typeof erpPoLineItems.$inferSelect;
 export type ErpReceivingDocument = typeof erpReceivingDocuments.$inferSelect;
 export type ErpReceivingLineItem = typeof erpReceivingLineItems.$inferSelect;
+export type ErpPurchaseRequisition = typeof erpPurchaseRequisitions.$inferSelect;
+export type NewErpPurchaseRequisition = typeof erpPurchaseRequisitions.$inferInsert;

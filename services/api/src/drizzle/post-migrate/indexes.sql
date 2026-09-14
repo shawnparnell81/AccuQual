@@ -34,7 +34,7 @@ DECLARE
     'form_versions', 'inventory_items', 'inventory_stock', 'inventory_movements',
     'inventory_alerts', 'notification_log', 'inventory_reorder_requests',
     'erp_purchase_orders', 'erp_po_line_items', 'erp_receiving_documents', 'erp_receiving_line_items',
-    'rma', 'rma_items'
+    'rma', 'rma_items', 'work_orders', 'erp_purchase_requisitions', 'onboarding_progress'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP
@@ -51,6 +51,8 @@ CREATE INDEX IF NOT EXISTS training_assignments_tenant_status_idx ON training_as
 CREATE INDEX IF NOT EXISTS erp_purchase_orders_tenant_status_idx ON erp_purchase_orders (tenant_id, status);
 CREATE INDEX IF NOT EXISTS inventory_reorder_requests_tenant_status_idx ON inventory_reorder_requests (tenant_id, status);
 CREATE INDEX IF NOT EXISTS rma_tenant_status_idx ON rma (tenant_id, status);
+CREATE INDEX IF NOT EXISTS work_orders_tenant_status_idx ON work_orders (tenant_id, status);
+CREATE INDEX IF NOT EXISTS erp_purchase_requisitions_tenant_status_idx ON erp_purchase_requisitions (tenant_id, status);
 
 -- The single hottest lookup shape in the whole app: every module's history
 -- panel (WorkflowHistoryPanel) and the generic per-entity audit endpoint
@@ -67,6 +69,9 @@ CREATE INDEX IF NOT EXISTS erp_po_line_items_po_idx ON erp_po_line_items (purcha
 CREATE INDEX IF NOT EXISTS erp_receiving_line_items_doc_idx ON erp_receiving_line_items (receiving_document_id);
 CREATE INDEX IF NOT EXISTS rma_items_rma_idx ON rma_items (rma_id);
 CREATE INDEX IF NOT EXISTS capa_ncr_idx ON capa (ncr_id);
+CREATE INDEX IF NOT EXISTS work_orders_item_idx ON work_orders (item_id);
+CREATE INDEX IF NOT EXISTS erp_purchase_requisitions_item_idx ON erp_purchase_requisitions (item_id);
+CREATE INDEX IF NOT EXISTS onboarding_progress_user_idx ON onboarding_progress (user_id);
 
 -- password_reset_tokens isn't in the tenant_tables array above (see its own
 -- schema comment — it's only ever queried via the unscoped db, pre-auth,

@@ -1,6 +1,14 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { TenantDb } from "../../lib/tenantScope.js";
-import { erpPurchaseOrders, erpPoLineItems, erpReceivingDocuments, erpReceivingLineItems, type ErpPurchaseOrder } from "../../drizzle/schema/erp.js";
+import {
+  erpPurchaseOrders,
+  erpPoLineItems,
+  erpReceivingDocuments,
+  erpReceivingLineItems,
+  erpPurchaseRequisitions,
+  type ErpPurchaseOrder,
+  type ErpPurchaseRequisition,
+} from "../../drizzle/schema/erp.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 
@@ -128,4 +136,76 @@ export async function createReceivingDocument(
   });
 
   return doc!;
+}
+
+const REQUISITION_ALLOWED_NEXT: Record<string, string[]> = {
+  draft: ["pending_approval"],
+  pending_approval: ["approved", "rejected"],
+  approved: ["converted_to_po"],
+  rejected: [],
+  converted_to_po: [],
+};
+
+async function transitionRequisition(db: TenantDb, tenantId: number, req: ErpPurchaseRequisition, newStatus: string, performedBy: number | undefined, patch: Record<string, unknown> = {}) {
+  if (!REQUISITION_ALLOWED_NEXT[req.status]?.includes(newStatus)) {
+    throw AppError.badRequest(`Cannot move a requisition from "${req.status}" to "${newStatus}"`);
+  }
+  const [updated] = await db
+    .update(erpPurchaseRequisitions)
+    .set({ status: newStatus, updatedAt: new Date(), ...patch })
+    .where(eq(erpPurchaseRequisitions.id, req.id))
+    .returning();
+  await recordAuditTrail(db, {
+    tenantId,
+    entityType: "PurchaseRequisition",
+    entityId: req.id,
+    action: "status_change",
+    changes: { oldStatus: req.status, newStatus },
+    performedBy,
+  });
+  return updated!;
+}
+
+export async function submitRequisition(db: TenantDb, tenantId: number, req: ErpPurchaseRequisition, performedBy: number | undefined) {
+  return transitionRequisition(db, tenantId, req, "pending_approval", performedBy);
+}
+
+export async function approveRequisition(db: TenantDb, tenantId: number, req: ErpPurchaseRequisition, performedBy: number | undefined) {
+  return transitionRequisition(db, tenantId, req, "approved", performedBy, { approvedBy: performedBy, approvedAt: new Date() });
+}
+
+export async function rejectRequisition(db: TenantDb, tenantId: number, req: ErpPurchaseRequisition, performedBy: number | undefined) {
+  return transitionRequisition(db, tenantId, req, "rejected", performedBy);
+}
+
+/**
+ * Converts an approved requisition into a real Purchase Order — the one
+ * real write this feature was built for. Reuses createPurchaseOrder above
+ * rather than inserting erp_purchase_orders directly, so a converted
+ * requisition's PO is created through the exact same path (and gets the
+ * exact same "PurchaseOrder create" audit entry) as one entered by hand.
+ * requisition.supplierId is required at this point — validated in
+ * erp.controller.ts's convertRequisitionToPoHandler, not here, since a
+ * requisition may legitimately be created without one and have it filled
+ * in during approval.
+ */
+export async function convertRequisitionToPo(db: TenantDb, tenantId: number, requisition: ErpPurchaseRequisition, performedBy: number | undefined) {
+  if (requisition.status !== "approved") {
+    throw AppError.badRequest(`Cannot convert — requisition is "${requisition.status}", not "approved"`);
+  }
+  if (requisition.supplierId === null) {
+    throw AppError.badRequest("Requisition has no supplier set — set one before converting to a Purchase Order");
+  }
+
+  const po = await createPurchaseOrder(
+    db,
+    tenantId,
+    requisition.supplierId,
+    [{ itemId: requisition.itemId, quantity: requisition.quantity }],
+    `Created from Purchase Requisition #${requisition.id}`,
+    performedBy
+  );
+
+  const updated = await transitionRequisition(db, tenantId, requisition, "converted_to_po", performedBy, { purchaseOrderId: po.id });
+  return { requisition: updated, purchaseOrder: po };
 }

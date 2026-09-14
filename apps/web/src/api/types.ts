@@ -36,7 +36,7 @@ export interface WorkflowHistoryEntry {
 }
 
 /** Friendly moduleName values the history endpoint accepts — kept in sync with services/api's workflow.controller.ts MODULE_ENTITY_TYPES. */
-export type WorkflowModuleName = "calibration" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp" | "rma";
+export type WorkflowModuleName = "calibration" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp" | "rma" | "work_orders";
 
 export interface Ncr {
   id: number;
@@ -538,4 +538,71 @@ export interface WorkflowDefinition {
   name: string;
   module: string | null;
   definition: { nodes: unknown[]; edges: unknown[] };
+}
+
+export type WorkOrderStatus = "planned" | "in_progress" | "completed" | "cancelled";
+
+export interface WorkOrder {
+  id: number;
+  itemId: number;
+  sku?: string; // list endpoint only
+  description?: string | null; // list endpoint only
+  quantityPlanned: string;
+  quantityCompleted: string;
+  status: WorkOrderStatus;
+  linkedNcrId: number | null;
+  dueDate: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+  // Detail endpoint only.
+  item?: { id: number; sku: string; description: string | null; state: string } | null;
+  linkedNcr?: { id: number; title: string; status: string; severity: string | null } | null;
+}
+
+export type PurchaseRequisitionStatus = "draft" | "pending_approval" | "approved" | "rejected" | "converted_to_po";
+
+export interface ErpPurchaseRequisition {
+  id: number;
+  itemId: number;
+  sku?: string; // list endpoint only
+  quantity: number;
+  supplierId: number | null;
+  department: string | null;
+  linkedNcrId: number | null;
+  justification: string | null;
+  status: PurchaseRequisitionStatus;
+  approvedBy: number | null;
+  approvedAt: string | null;
+  purchaseOrderId: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  // Detail endpoint only.
+  item?: { id: number; sku: string; description: string | null } | null;
+  supplier?: { id: number; name: string; status: string } | null;
+}
+
+export interface OnboardingProgressRow {
+  id: number;
+  userId: number;
+  moduleKey: string;
+  status: "not_started" | "in_progress" | "completed";
+  updatedAt: string;
+}
+
+export interface OnboardingChecklistItem {
+  moduleKey: string;
+  moduleLabel: string;
+  explanation: string;
+  firstAction: string;
+}
+
+export type ErpAutomationSuggestionType = "create_requisition" | "flag_supplier" | "suggest_inspection";
+
+export interface ErpAutomationSuggestion {
+  type: ErpAutomationSuggestionType;
+  itemId: number | null;
+  supplierId: number | null;
+  quantity: number | null;
+  rationale: string;
 }

@@ -66,3 +66,29 @@ Respond as strict JSON: { "forecast": string, "driftRisk": "low" | "medium" | "h
 
 Input:
 ${JSON.stringify(input, null, 2)}`;
+
+export const workOrderPlanPrompt = (input: unknown) => `You are AccuQual's production planning assistant. Given open NCRs, inventory items below their minimum level or overstocked, disqualified/probation suppliers, and existing open work orders, suggest which production work orders should be created next. Only suggest items that actually appear in the inventory items list below — never invent an item. Prioritize items that are below_min, and factor in any open NCR tied to the same item.
+
+Respond as strict JSON: { "suggestions": { "itemId": number, "quantity": number, "priority": "low" | "medium" | "high", "rationale": string }[] }
+
+Data:
+${JSON.stringify(input, null, 2)}`;
+
+export const prJustificationPrompt = (input: unknown) => `You are AccuQual's purchasing assistant. Draft a clear, factual justification for a purchase requisition, based on the requested item, quantity, the intended supplier's real performance history, and any linked NCR. Write it as text a purchasing manager would read and approve — not JSON, not bullet points, 2-4 sentences.
+
+Requisition context:
+${JSON.stringify(input, null, 2)}`;
+
+export const onboardingPrompt = (input: unknown) => `You are AccuQual's onboarding assistant. The user below has access to the listed modules only (their department's real permissions — never mention a module not listed). For each module, write one short, friendly explanation of what it's for and one first concrete action to try. Keep the tone plain and helpful, not salesy.
+
+Respond as strict JSON: { "checklist": { "moduleKey": string, "moduleLabel": string, "explanation": string, "firstAction": string }[] }
+
+User + accessible modules:
+${JSON.stringify(input, null, 2)}`;
+
+export const erpAutomationPrompt = (input: unknown) => `You are AccuQual's ERP automation assistant. Given inventory items below their minimum level, supplier risk signals, and audit coverage gaps, suggest concrete next actions. Every suggestion must be one of exactly three types: "create_requisition" (references a real itemId from the data below), "flag_supplier" (references a real supplierId), or "suggest_inspection" (references a real supplierId or itemId). Never invent an id that doesn't appear in the data below.
+
+Respond as strict JSON: { "suggestions": { "type": "create_requisition" | "flag_supplier" | "suggest_inspection", "itemId": number | null, "supplierId": number | null, "quantity": number | null, "rationale": string }[] }
+
+Data:
+${JSON.stringify(input, null, 2)}`;

@@ -51,6 +51,11 @@ import { ErpNewPurchaseOrderPage } from "./routes/Erp/ErpNewPurchaseOrderPage";
 import { ErpPurchaseOrderDetailPage } from "./routes/Erp/ErpPurchaseOrderDetailPage";
 import { RmaListPage } from "./routes/Rma/RmaListPage";
 import { RmaDetailPage } from "./routes/Rma/RmaDetailPage";
+import { ErpRequisitionsPage } from "./routes/Erp/ErpRequisitionsPage";
+import { ErpRequisitionDetailPage } from "./routes/Erp/ErpRequisitionDetailPage";
+import { WorkOrderListPage } from "./routes/WorkOrders/WorkOrderListPage";
+import { WorkOrderDetailPage } from "./routes/WorkOrders/WorkOrderDetailPage";
+import { OnboardingPage } from "./routes/Onboarding/OnboardingPage";
 import { AdminTenantBrandingPage } from "./routes/Admin/AdminTenantBrandingPage";
 import { AdminTenantTemplatesPage } from "./routes/Admin/AdminTenantTemplatesPage";
 import { AdminTenantAiConfigPage } from "./routes/Admin/AdminTenantAiConfigPage";
@@ -119,9 +124,14 @@ export function App() {
           <Route path="/inventory/:id" element={<InventoryDetailPage />} />
           <Route path="/erp" element={<ErpPurchaseOrdersPage />} />
           <Route path="/erp/new" element={<ErpNewPurchaseOrderPage />} />
+          <Route path="/erp/requisitions" element={<ErpRequisitionsPage />} />
+          <Route path="/erp/requisitions/:id" element={<ErpRequisitionDetailPage />} />
           <Route path="/erp/:id" element={<ErpPurchaseOrderDetailPage />} />
           <Route path="/rma" element={<RmaListPage />} />
           <Route path="/rma/:id" element={<RmaDetailPage />} />
+          <Route path="/work-orders" element={<WorkOrderListPage />} />
+          <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
+          <Route path="/onboarding" element={<OnboardingPage />} />
 
           <Route path="/workflow" element={<WorkflowBuilderPage />} />
           <Route path="/ai" element={<AiInsightsPage />} />

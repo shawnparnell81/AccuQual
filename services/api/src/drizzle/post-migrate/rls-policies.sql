@@ -65,7 +65,8 @@ DECLARE
     'form_versions', 'inventory_items', 'inventory_stock', 'inventory_movements',
     'inventory_alerts', 'notification_log', 'inventory_reorder_requests',
     'erp_purchase_orders', 'erp_po_line_items', 'erp_receiving_documents', 'erp_receiving_line_items',
-    'rma', 'rma_items', 'nav_hidden_items'
+    'rma', 'rma_items', 'nav_hidden_items', 'work_orders', 'erp_purchase_requisitions',
+    'onboarding_progress'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP

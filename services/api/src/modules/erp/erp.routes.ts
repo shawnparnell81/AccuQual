@@ -17,6 +17,7 @@ import {
   getReceivingDocumentHandler,
   erpOverviewHandler,
 } from "./erp.controller.js";
+import { erpAutomationSuggestionsHandler } from "./automation.ai.js";
 
 export const erpRouter = Router();
 // purchasing/material_management get edit; quality gets read-only — see
@@ -29,6 +30,12 @@ erpRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("erp"));
 // Fixed literal path before ":id"-shaped ones, same convention used
 // throughout this app.
 erpRouter.get("/overview", erpOverviewHandler);
+// POST-only, so requireDepartmentAccess("erp")'s READ_METHODS check already
+// restricts this to purchasing/material_management (both "edit") — quality
+// ("read") is rejected before this handler ever runs, matching the AI
+// modules review's "purchasing + material_management" scope for this
+// endpoint without needing a separate inline assertDepartment.
+erpRouter.post("/ai-automation-suggestions", erpAutomationSuggestionsHandler);
 
 erpRouter.get("/purchase-orders", listPurchaseOrdersHandler);
 erpRouter.post("/purchase-orders", validate(createPurchaseOrderSchema), createPurchaseOrderHandler);

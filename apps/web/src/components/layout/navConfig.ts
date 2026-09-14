@@ -34,6 +34,9 @@ import {
   Cpu,
   TrendingUp,
   Undo2,
+  Hammer,
+  FileSignature,
+  Compass,
 } from "lucide-react";
 
 /**
@@ -162,6 +165,37 @@ export const RMA: NavLeaf = {
   notes: "Not in the department sheet — a new RMA/RGA module (see the RMA module review)",
 };
 
+// Not a sheet row — a new module. Mirrors departmentAccess.ts's
+// PERMISSION_MATRIX.work_orders exactly (see the AI Work Order Planning /
+// PR Justification / Onboarding / ERP Automation review).
+export const WORK_ORDERS: NavLeaf = {
+  key: "work_orders",
+  label: "Work Orders",
+  path: "/work-orders",
+  icon: Hammer,
+  access: { production: "edit", material_management: "read", purchasing: "read", quality: "read" },
+  kpi: false,
+  priority: 2,
+  notes: "Not in the department sheet — a new production Work Orders module",
+};
+
+// Not a sheet row — a new module (Purchase Orders' pre-approval sibling).
+// Mirrors departmentAccess.ts's PERMISSION_MATRIX.purchase_requisitions —
+// every requesting department gets "edit" (raise/edit their own draft);
+// approve/reject/convert-to-PO are purchasing-only, enforced inline in
+// erp.controller.ts, same as every other narrower-than-matrix action in
+// this app.
+export const PURCHASE_REQUISITIONS: NavLeaf = {
+  key: "purchase_requisitions",
+  label: "Purchase Requisitions",
+  path: "/erp/requisitions",
+  icon: FileSignature,
+  access: { production: "edit", material_management: "edit", quality: "edit", engineering: "edit", purchasing: "edit" },
+  kpi: false,
+  priority: 2,
+  notes: "Not in the department sheet — the real pre-PO request/approval step",
+};
+
 export const PRODUCTION_LOG: NavLeaf = {
   key: "production_log",
   label: "Production Log",
@@ -218,15 +252,17 @@ export const NAV_STRUCTURE: NavGroup[] = [
       INVENTORY,
       ERP,
       RMA,
+      WORK_ORDERS,
+      PURCHASE_REQUISITIONS,
     ],
   },
   {
     department: "engineering",
-    items: [PPAP, APQP, COMPLAINTS, RMA],
+    items: [PPAP, APQP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS],
   },
   {
     department: "production",
-    items: [PRODUCTION_LOG, COMPLAINTS, INVENTORY, SUPPLIERS],
+    items: [PRODUCTION_LOG, COMPLAINTS, INVENTORY, SUPPLIERS, WORK_ORDERS, PURCHASE_REQUISITIONS],
   },
   {
     department: "customer_service",
@@ -234,11 +270,11 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "purchasing",
-    items: [SUPPLIERS, INVENTORY, ERP, RMA],
+    items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS],
   },
   {
     department: "material_management",
-    items: [SUPPLIERS, INVENTORY, ERP, RMA],
+    items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS],
   },
   {
     // Not in the sheet — kept so nothing loses a working page. Access is
@@ -263,6 +299,16 @@ export const NAV_STRUCTURE: NavGroup[] = [
       { key: "workflow", label: "Workflow Builder", path: "/workflow", icon: Workflow, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
       { key: "ai", label: "AI Insights", path: "/ai", icon: Sparkles, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
       { key: "digital_twin", label: "Digital Twin", path: "/digital-twin", icon: Boxes, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
+      {
+        key: "onboarding",
+        label: "Onboarding",
+        path: "/onboarding",
+        icon: Compass,
+        access: {},
+        kpi: false,
+        priority: 3,
+        notes: "Not in the department sheet — visible to every department, same as AI Insights/Workflow Builder; POST /onboarding/ai-generate has no department gate either",
+      },
       // Admin-only in practice (each page's own AdminOnlyGuard + the real
       // requireRole("admin") backend gate) — access: {} here just means
       // "visible in the nav to every department", same as every other leaf
@@ -296,5 +342,5 @@ export function findNavLeaf(key: string): NavLeaf | undefined {
     const found = group.items.find((item) => item.key === key);
     if (found) return found;
   }
-  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG, INVENTORY, ERP, RMA].find((leaf) => leaf.key === key);
+  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS].find((leaf) => leaf.key === key);
 }

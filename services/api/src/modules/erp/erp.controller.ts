@@ -1,8 +1,9 @@
 import type { Request, Response } from "express";
 import { and, eq, desc } from "drizzle-orm";
-import { erpPurchaseOrders, erpPoLineItems, erpReceivingDocuments, erpReceivingLineItems } from "../../drizzle/schema/erp.js";
+import { erpPurchaseOrders, erpReceivingDocuments, erpReceivingLineItems, erpPurchaseRequisitions } from "../../drizzle/schema/erp.js";
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
+import { ncr } from "../../drizzle/schema/ncr.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import {
@@ -13,6 +14,10 @@ import {
   sendPurchaseOrder,
   cancelPurchaseOrder,
   createReceivingDocument,
+  submitRequisition,
+  approveRequisition,
+  rejectRequisition,
+  convertRequisitionToPo,
   type LineItemInput,
 } from "./erp.service.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -161,4 +166,113 @@ export const erpOverviewHandler = asyncHandler(async (req: Request, res: Respons
   for (const po of pos) countByStatus[po.status] = (countByStatus[po.status] ?? 0) + 1;
 
   res.json({ countByStatus, recent: pos.slice(0, 5) });
+});
+
+async function loadRequisition(req: Request, id: number) {
+  const [row] = await req.db!.select().from(erpPurchaseRequisitions).where(and(eq(erpPurchaseRequisitions.id, id), eq(erpPurchaseRequisitions.tenantId, req.tenantId!)));
+  if (!row) throw AppError.notFound("PurchaseRequisition");
+  return row;
+}
+
+/** Any requesting department may raise a requisition — this matrix entry grants "edit" to all of them (see departmentAccess.ts's purchase_requisitions), so there's no assertDepartment call here; approve/reject/convert below are purchasing-only. */
+export const listRequisitionsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { status } = req.query as Record<string, string | undefined>;
+  const conditions = [eq(erpPurchaseRequisitions.tenantId, req.tenantId!)];
+  if (status) conditions.push(eq(erpPurchaseRequisitions.status, status));
+
+  const rows = await req
+    .db!.select({
+      id: erpPurchaseRequisitions.id,
+      itemId: erpPurchaseRequisitions.itemId,
+      sku: inventoryItems.sku,
+      quantity: erpPurchaseRequisitions.quantity,
+      supplierId: erpPurchaseRequisitions.supplierId,
+      department: erpPurchaseRequisitions.department,
+      status: erpPurchaseRequisitions.status,
+      justification: erpPurchaseRequisitions.justification,
+      createdAt: erpPurchaseRequisitions.createdAt,
+    })
+    .from(erpPurchaseRequisitions)
+    .innerJoin(inventoryItems, eq(erpPurchaseRequisitions.itemId, inventoryItems.id))
+    .where(and(...conditions))
+    .orderBy(desc(erpPurchaseRequisitions.createdAt));
+  res.json(rows);
+});
+
+export const createRequisitionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { itemId, quantity, supplierId, linkedNcrId, justification } = req.body as {
+    itemId: number;
+    quantity: number;
+    supplierId?: number;
+    linkedNcrId?: number;
+    justification?: string;
+  };
+
+  const [item] = await req.db!.select({ id: inventoryItems.id, defaultSupplierId: inventoryItems.defaultSupplierId }).from(inventoryItems).where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.tenantId, req.tenantId!)));
+  if (!item) throw AppError.badRequest(`Inventory item #${itemId} not found`);
+  if (linkedNcrId !== undefined) {
+    const [linked] = await req.db!.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, linkedNcrId), eq(ncr.tenantId, req.tenantId!)));
+    if (!linked) throw AppError.badRequest(`NCR #${linkedNcrId} not found`);
+  }
+
+  const [created] = await req
+    .db!.insert(erpPurchaseRequisitions)
+    .values({
+      tenantId: req.tenantId!,
+      requestedBy: req.user?.id,
+      department: req.user?.department ?? null,
+      itemId,
+      quantity,
+      supplierId: supplierId ?? item.defaultSupplierId ?? null,
+      linkedNcrId,
+      justification,
+    })
+    .returning();
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "PurchaseRequisition", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  res.status(201).json(created);
+});
+
+export const getRequisitionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const record = await loadRequisition(req, Number(req.params.id));
+  const [item] = await req.db!.select().from(inventoryItems).where(eq(inventoryItems.id, record.itemId));
+  const supplier = record.supplierId ? (await req.db!.select().from(suppliers).where(eq(suppliers.id, record.supplierId)))[0] : null;
+  res.json({ ...record, item: item ? { id: item.id, sku: item.sku, description: item.description } : null, supplier: supplier ? { id: supplier.id, name: supplier.name, status: supplier.status } : null });
+});
+
+/** draft-only edits — same "only the requester's own draft" spirit as RMA's field-level limits, enforced by status rather than department since any department may own a draft. */
+export const updateRequisitionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const record = await loadRequisition(req, Number(req.params.id));
+  if (record.status !== "draft") {
+    throw AppError.badRequest(`Cannot edit a requisition that is "${record.status}", not "draft"`);
+  }
+  const [updated] = await req
+    .db!.update(erpPurchaseRequisitions)
+    .set({ ...req.body, updatedAt: new Date() })
+    .where(eq(erpPurchaseRequisitions.id, record.id))
+    .returning();
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "PurchaseRequisition", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  res.json(updated);
+});
+
+export const submitRequisitionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const record = await loadRequisition(req, Number(req.params.id));
+  res.json(await submitRequisition(req.db!, req.tenantId!, record, req.user?.id));
+});
+
+export const approveRequisitionHandler = asyncHandler(async (req: Request, res: Response) => {
+  assertDepartment(req, ["purchasing"]);
+  const record = await loadRequisition(req, Number(req.params.id));
+  res.json(await approveRequisition(req.db!, req.tenantId!, record, req.user?.id));
+});
+
+export const rejectRequisitionHandler = asyncHandler(async (req: Request, res: Response) => {
+  assertDepartment(req, ["purchasing"]);
+  const record = await loadRequisition(req, Number(req.params.id));
+  res.json(await rejectRequisition(req.db!, req.tenantId!, record, req.user?.id));
+});
+
+export const convertRequisitionToPoHandler = asyncHandler(async (req: Request, res: Response) => {
+  assertDepartment(req, ["purchasing"]);
+  const record = await loadRequisition(req, Number(req.params.id));
+  res.json(await convertRequisitionToPo(req.db!, req.tenantId!, record, req.user?.id));
 });
