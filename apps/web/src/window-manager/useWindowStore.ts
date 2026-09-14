@@ -60,7 +60,23 @@ export const useWindowStore = create<WindowState>((set, get) => ({
     set({ tenantId, windows });
   },
 
-  clear: () => set({ tenantId: null, windows: [] }),
+  // Also removes the persisted workspace, not just the in-memory windows —
+  // otherwise the next loadForTenant() (any user logging into this same
+  // tenant, including this same user's own next login) reads the stale
+  // localStorage entry right back, maximized state and all, silently
+  // covering their very first screen with someone's leftover form. Found
+  // live (QA sweep review): logging out never actually cleared this.
+  clear: () => {
+    const { tenantId } = get();
+    if (tenantId) {
+      try {
+        localStorage.removeItem(storageKey(tenantId));
+      } catch {
+        // localStorage unavailable — nothing persisted to clean up anyway.
+      }
+    }
+    set({ tenantId: null, windows: [] });
+  },
 
   openWindow: (win, id) => {
     const { tenantId, windows } = get();

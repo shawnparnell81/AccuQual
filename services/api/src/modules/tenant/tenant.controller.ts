@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { eq, and, gte, sql } from "drizzle-orm";
+import { eq, and, gte, inArray, sql } from "drizzle-orm";
 import { tenants } from "../../drizzle/schema/tenants.js";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
@@ -131,11 +131,19 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
  * The BYOK usage dashboard's one data source — admin only (see
  * tenant.routes.ts). totalTokens/totalCost are the all-time cumulative
  * columns (fast, always available); currentMonthTokens/dailyBreakdown/
- * moduleBreakdown are computed live from real audit_trail rows (every real
- * /ai/assistant call already writes one — see ai.assistant.ts), which is
- * also exactly how limit enforcement itself decides "this month's usage"
- * (see ai.assistant.ts's checkUsageLimit) — the dashboard and the
- * enforcement it explains are reading the same real numbers.
+ * moduleBreakdown are computed live from real audit_trail rows — every
+ * real /ai/assistant call writes one with entityType "AiAssistantMessage"
+ * (see ai.assistant.ts), and every other real AI pipeline built since
+ * (Work Order Planning, PR Justification, Onboarding, ERP Automation)
+ * writes one with entityType "AiSuggestion" via ai.usage.ts's
+ * recordAiSuggestion — both carry the same `module`/`tokens` shape in
+ * `changes`, so both are counted here. This is also exactly how limit
+ * enforcement itself decides "this month's usage" (see ai.usage.ts's
+ * checkUsageLimit, which sums every entity type's tokens tenant-wide) —
+ * the dashboard and the enforcement it explains read the same real
+ * numbers. Previously scoped to "AiAssistantMessage" only, which silently
+ * left every other pipeline's real spend invisible here even though it
+ * already counted against the limit — see the QA sweep review.
  */
 export const getAiUsageHandler = asyncHandler(async (req: Request, res: Response) => {
   const tenant = await loadTenant(req);
@@ -154,7 +162,7 @@ export const getAiUsageHandler = asyncHandler(async (req: Request, res: Response
       tokens: sql<number>`COALESCE((${auditTrail.changes}->>'tokens')::int, 0)`,
     })
     .from(auditTrail)
-    .where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "AiAssistantMessage"), gte(auditTrail.createdAt, windowStart)));
+    .where(and(eq(auditTrail.tenantId, tenantId), inArray(auditTrail.entityType, ["AiAssistantMessage", "AiSuggestion"]), gte(auditTrail.createdAt, windowStart)));
 
   const currentMonthTokens = rows.filter((r) => (r.createdAt ?? new Date(0)) >= startOfMonth).reduce((sum, r) => sum + r.tokens, 0);
 

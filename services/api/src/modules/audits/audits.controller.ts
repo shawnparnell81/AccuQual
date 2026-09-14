@@ -52,9 +52,12 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
       })
       .returning();
     if (!discrepancy) throw new Error("Insert did not return the created discrepancy investigation");
+    // "Discrepancy investigation" — must match quality.controller.ts's
+    // crudFactory entityName exactly, same reasoning as the QA sweep
+    // review's History-tab casing fix.
     await recordAuditTrail(req.db!, {
       tenantId: req.tenantId!,
-      entityType: "discrepancy_investigation",
+      entityType: "Discrepancy investigation",
       entityId: discrepancy.id,
       action: "create",
       changes: { autoCreated: true, sourceAuditId: audit.id, sourceAuditItemId: item.id, severity: item.severity },

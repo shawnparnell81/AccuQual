@@ -1,9 +1,12 @@
 import { and, eq, gte, sql } from "drizzle-orm";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { tenants } from "../../drizzle/schema/tenants.js";
+import { aiSuggestions } from "../../drizzle/schema/ai.js";
 import { decryptSecret } from "../tenant/crypto.js";
+import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { estimateCost } from "./pricing.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
-import type { LlmCallOptions } from "./llm-gateway.js";
+import type { LlmCallOptions, LlmCallResult } from "./llm-gateway.js";
 
 /**
  * BYOK monthly limit enforcement, shared by every AI endpoint that spends
@@ -58,4 +61,61 @@ export async function loadTenantLlmOptions(db: TenantDb, tenantId: number): Prom
       maxTokens: aiConfig.maxTokens,
     },
   };
+}
+
+/**
+ * Saves one ai_suggestions row plus its audit trail entry, capturing real
+ * token usage/cost from a `callLlmDetailed` result — the same shape
+ * ai.assistant.ts already records for every assistant message. Originally
+ * each of the 4 newer AI pipelines (Work Order Planning, PR Justification,
+ * Onboarding, ERP Automation) called the plain `callLlm` (text-only,
+ * discards usage) and logged only `{ module, pipeline }`, so their real
+ * spend never showed up in Admin → AI Usage and never counted toward
+ * `checkUsageLimit`'s sum above despite this function's own tenant-wide
+ * scope — found live in the QA sweep review. Every new AI pipeline should
+ * call this (via `callLlmDetailed`, not `callLlm`) instead of inserting
+ * into `aiSuggestions` by hand.
+ */
+export async function recordAiSuggestion(
+  db: TenantDb,
+  params: {
+    tenantId: number;
+    module: string;
+    pipeline: string;
+    input: Record<string, unknown>;
+    output: Record<string, unknown>;
+    result: LlmCallResult;
+    performedBy: number | undefined;
+  }
+): Promise<typeof aiSuggestions.$inferSelect> {
+  const { tenantId, module, pipeline, input, output, result, performedBy } = params;
+  const totalTokens = result.usage ? result.usage.inputTokens + result.usage.outputTokens : null;
+  // Only a real provider response has real usage to bill/track — the
+  // honest no-key stub (result.usage === null) never touches cost, same
+  // as ai.assistant.ts's own rule.
+  const cost = result.usage ? estimateCost(result.model, result.usage.inputTokens, result.usage.outputTokens) : 0;
+
+  const [saved] = await db
+    .insert(aiSuggestions)
+    .values({ tenantId, module, pipeline, input, output, createdBy: performedBy })
+    .returning();
+
+  await recordAuditTrail(db, {
+    tenantId,
+    entityType: "AiSuggestion",
+    entityId: saved!.id,
+    action: "create",
+    changes: {
+      module,
+      pipeline,
+      usedModel: result.model,
+      tokens: totalTokens,
+      tokensIn: result.usage?.inputTokens ?? null,
+      tokensOut: result.usage?.outputTokens ?? null,
+      cost,
+    },
+    performedBy,
+  });
+
+  return saved!;
 }

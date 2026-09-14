@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { digitalTwinModels, digitalTwinSimulations, iotData, iotDevices } from "../../drizzle/schema/digitalTwin.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
@@ -81,10 +81,25 @@ export const registerDeviceHandler = asyncHandler(async (req: Request, res: Resp
     if (!model) throw AppError.notFound("Digital twin model");
   }
 
+  // COALESCE against `excluded` (Postgres's name for the row this insert
+  // attempted) rather than the bare `name`/`type`/`digitalTwinModelId`
+  // variables directly: registering an already-known device with those
+  // three fields left blank — the most obvious way to use this form — used
+  // to build a `set` object of nothing but `undefined`s, which Drizzle
+  // rejects with "No values to set" (found live, QA sweep review). This
+  // keeps every existing value in place when a field isn't provided, and
+  // still updates it when one is, while `set` itself always has real keys.
   const [device] = await req
     .db!.insert(iotDevices)
     .values({ tenantId, deviceId, name, type, digitalTwinModelId })
-    .onConflictDoUpdate({ target: [iotDevices.tenantId, iotDevices.deviceId], set: { name, type, digitalTwinModelId } })
+    .onConflictDoUpdate({
+      target: [iotDevices.tenantId, iotDevices.deviceId],
+      set: {
+        name: sql`coalesce(excluded.name, ${iotDevices.name})`,
+        type: sql`coalesce(excluded.type, ${iotDevices.type})`,
+        digitalTwinModelId: sql`coalesce(excluded.digital_twin_model_id, ${iotDevices.digitalTwinModelId})`,
+      },
+    })
     .returning();
 
   await recordAuditTrail(req.db!, { tenantId, entityType: "IotDevice", entityId: device!.id, action: "create", changes: { deviceId, name, type, digitalTwinModelId }, performedBy: req.user?.id });

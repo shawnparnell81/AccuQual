@@ -32,7 +32,13 @@ async function patchNcr(
     .where(and(eq(ncr.id, id), eq(ncr.tenantId, tenantId)))
     .returning();
   if (!updated) throw AppError.notFound("NCR");
-  await recordAuditTrail(db, { tenantId, entityType: "ncr", entityId: id, action: "status_change", changes: { action, patch }, performedBy });
+  // "NCR" — must match crudFactory's entityName for this table (ncr.controller.ts's
+  // baseHandlers) exactly; a casing mismatch here previously made this
+  // status-change history invisible on one side or the other of the split,
+  // since workflow.controller.ts's MODULE_ENTITY_TYPES filters by exact
+  // string match (Postgres text comparison is case-sensitive). See the QA
+  // sweep review.
+  await recordAuditTrail(db, { tenantId, entityType: "NCR", entityId: id, action: "status_change", changes: { action, patch }, performedBy });
   await publishEvent(WORKFLOW_STREAM, { tenantId, module: "ncr", event: action, entityId: id });
   return updated;
 }

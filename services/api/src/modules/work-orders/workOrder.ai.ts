@@ -6,11 +6,9 @@ import { workOrders } from "../../drizzle/schema/workOrders.js";
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
-import { aiSuggestions } from "../../drizzle/schema/ai.js";
-import { callLlm } from "../ai/llm-gateway.js";
+import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { workOrderPlanPrompt } from "../ai/prompts.js";
-import { checkUsageLimit, loadTenantLlmOptions } from "../ai/ai.usage.js";
-import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
 
 function parseSuggestions(raw: string): unknown {
   try {
@@ -54,20 +52,16 @@ export const workOrderAiPlanHandler = asyncHandler(async (req: Request, res: Res
     .where(and(eq(workOrders.tenantId, tenantId), inArray(workOrders.status, ["planned", "in_progress"])));
 
   const inputData = { openNcrs, flaggedInventoryItems: flaggedItems, riskySuppliers, openWorkOrders };
-  const raw = await callLlm(workOrderPlanPrompt(inputData), { system: "You are AccuQual's production planning engine.", ...llmOptions });
-  const output = parseSuggestions(raw);
+  const result = await callLlmDetailed(workOrderPlanPrompt(inputData), { system: "You are AccuQual's production planning engine.", ...llmOptions });
+  const output = parseSuggestions(result.text);
 
-  const [saved] = await req
-    .db!.insert(aiSuggestions)
-    .values({ tenantId, module: "work_order", pipeline: "work_order_planning", input: inputData, output: output as Record<string, unknown>, createdBy: req.user?.id })
-    .returning();
-
-  await recordAuditTrail(req.db!, {
+  const saved = await recordAiSuggestion(req.db!, {
     tenantId,
-    entityType: "AiSuggestion",
-    entityId: saved!.id,
-    action: "create",
-    changes: { module: "work_order", pipeline: "work_order_planning" },
+    module: "work_order",
+    pipeline: "work_order_planning",
+    input: inputData,
+    output: output as Record<string, unknown>,
+    result,
     performedBy: req.user?.id,
   });
 

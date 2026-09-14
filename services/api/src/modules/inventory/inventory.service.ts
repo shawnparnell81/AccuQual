@@ -146,9 +146,44 @@ export async function recomputeState(db: TenantDb, tenantId: number, itemId: num
 
   if (newState === "below_min" || newState === "overstock") {
     await raiseAlertIfNeeded(db, tenantId, item, newState, onHand, minLevel);
+  } else {
+    // Auto-acknowledge whichever alert type this transition actually
+    // resolved. Deliberately does NOT fire for reorder_pending/on_order —
+    // those states mean "still below min, purchasing is already handling
+    // it" (see this function's own below_min branch above), not "resolved".
+    // Previously an alert stayed Open forever once raised, even long after
+    // real stock recovered, until a human clicked Acknowledge by hand —
+    // a deliberate product decision, not a bug fix reverted lightly. See
+    // the QA sweep review.
+    if (item.state === "below_min") await acknowledgeOpenAlerts(db, tenantId, itemId, "below_min", performedBy);
+    if (item.state === "overstock") await acknowledgeOpenAlerts(db, tenantId, itemId, "overstock", performedBy);
   }
 
   return updated!;
+}
+
+async function acknowledgeOpenAlerts(db: TenantDb, tenantId: number, itemId: number, alertType: "below_min" | "overstock", performedBy: number | undefined) {
+  const openAlerts = await db
+    .select({ id: inventoryAlerts.id })
+    .from(inventoryAlerts)
+    .where(and(eq(inventoryAlerts.itemId, itemId), eq(inventoryAlerts.tenantId, tenantId), eq(inventoryAlerts.alertType, alertType), isNull(inventoryAlerts.acknowledgedAt)));
+  if (openAlerts.length === 0) return;
+
+  await db
+    .update(inventoryAlerts)
+    .set({ acknowledgedAt: new Date(), acknowledgedBy: performedBy })
+    .where(and(eq(inventoryAlerts.itemId, itemId), eq(inventoryAlerts.tenantId, tenantId), eq(inventoryAlerts.alertType, alertType), isNull(inventoryAlerts.acknowledgedAt)));
+
+  for (const alert of openAlerts) {
+    await recordAuditTrail(db, {
+      tenantId,
+      entityType: "InventoryAlert",
+      entityId: alert.id,
+      action: "update",
+      changes: { acknowledged: true, reason: "auto-resolved — stock recovered" },
+      performedBy,
+    });
+  }
 }
 
 /**

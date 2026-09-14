@@ -5,11 +5,9 @@ import { AppError } from "../../utils/appError.js";
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { audits } from "../../drizzle/schema/audits.js";
-import { aiSuggestions } from "../../drizzle/schema/ai.js";
-import { callLlm } from "../ai/llm-gateway.js";
+import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { erpAutomationPrompt } from "../ai/prompts.js";
-import { checkUsageLimit, loadTenantLlmOptions } from "../ai/ai.usage.js";
-import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
 
 function parseSuggestions(raw: string): unknown {
   try {
@@ -54,20 +52,16 @@ export const erpAutomationSuggestionsHandler = asyncHandler(async (req: Request,
     .limit(20);
 
   const inputData = { belowMinItems, riskySuppliers, recentAudits };
-  const raw = await callLlm(erpAutomationPrompt(inputData), { system: "You are AccuQual's ERP automation engine.", ...llmOptions });
-  const output = parseSuggestions(raw);
+  const result = await callLlmDetailed(erpAutomationPrompt(inputData), { system: "You are AccuQual's ERP automation engine.", ...llmOptions });
+  const output = parseSuggestions(result.text);
 
-  const [saved] = await req
-    .db!.insert(aiSuggestions)
-    .values({ tenantId, module: "erp", pipeline: "erp_automation", input: inputData, output: output as Record<string, unknown>, createdBy: req.user?.id })
-    .returning();
-
-  await recordAuditTrail(req.db!, {
+  const saved = await recordAiSuggestion(req.db!, {
     tenantId,
-    entityType: "AiSuggestion",
-    entityId: saved!.id,
-    action: "create",
-    changes: { module: "erp", pipeline: "erp_automation" },
+    module: "erp",
+    pipeline: "erp_automation",
+    input: inputData,
+    output: output as Record<string, unknown>,
+    result,
     performedBy: req.user?.id,
   });
 
