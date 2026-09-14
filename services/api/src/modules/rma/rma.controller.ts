@@ -126,6 +126,21 @@ export const createRmaHandler = asyncHandler(async (req: Request, res: Response)
     notes?: string;
   };
 
+  // Real, deliberate lookups (not letting a bad id fall through to a raw FK
+  // violation) — found live while smoke-testing against a fresh database
+  // with no seeded suppliers: an invalid supplierId previously surfaced as
+  // an opaque 500 instead of a clean 400 naming the actual problem.
+  const [supplier] = await req.db!.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, req.tenantId!)));
+  if (!supplier) throw AppError.badRequest(`Supplier #${supplierId} not found`);
+  if (linkedNcrId !== undefined) {
+    const [linked] = await req.db!.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, linkedNcrId), eq(ncr.tenantId, req.tenantId!)));
+    if (!linked) throw AppError.badRequest(`NCR #${linkedNcrId} not found`);
+  }
+  if (linkedCapaId !== undefined) {
+    const [linked] = await req.db!.select({ id: capa.id }).from(capa).where(and(eq(capa.id, linkedCapaId), eq(capa.tenantId, req.tenantId!)));
+    if (!linked) throw AppError.badRequest(`CAPA #${linkedCapaId} not found`);
+  }
+
   const [created] = await req
     .db!.insert(rma)
     .values({
