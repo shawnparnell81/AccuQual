@@ -21,9 +21,12 @@ export const closeHandler = asyncHandler(async (req: Request, res: Response) => 
     .set({ status: "closed", updatedAt: new Date() })
     .where(eq(discrepancyInvestigations.id, id))
     .returning();
+  // "Discrepancy investigation" — must match crudFactory's entityName above
+  // exactly; see the QA sweep review on why a casing mismatch here made
+  // this history invisible.
   await recordAuditTrail(req.db!, {
     tenantId,
-    entityType: "discrepancy_investigation",
+    entityType: "Discrepancy investigation",
     entityId: id,
     action: "status_change",
     changes: { action: "close" },

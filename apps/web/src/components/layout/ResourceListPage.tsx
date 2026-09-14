@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { createResourceHooks } from "../../api/resourceHooks";
+import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { useToast } from "../shared/ToastProvider";
 import { DataTable, type Column } from "../tables/DataTable";
 import { Modal } from "../modals/Modal";
 import { GenericCreateForm, type FieldSpec } from "../forms/GenericCreateForm";
@@ -29,6 +31,7 @@ export function ResourceListPage<T extends { id: number }>({
   onCreated,
 }: ResourceListPageProps<T>) {
   const [createOpen, setCreateOpen] = useState(false);
+  const toast = useToast();
   const hooks = createResourceHooks<T>(resource);
   const { data: rows = [], isLoading } = hooks.useList();
   const createMutation = hooks.useCreate();
@@ -56,6 +59,10 @@ export function ResourceListPage<T extends { id: number }>({
                   setCreateOpen(false);
                   onCreated?.(created);
                 },
+                // Previously missing entirely — every module sharing this
+                // component failed dead silent on any validation, permission,
+                // or network error (see the QA sweep review).
+                onError: (err) => toast.error(extractErrorMessage(err, `Couldn't create ${title.toLowerCase()}.`)),
               })
             }
           />

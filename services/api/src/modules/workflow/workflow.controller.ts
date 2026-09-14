@@ -56,16 +56,28 @@ export const runHandler = asyncHandler(async (req: Request, res: Response) => {
  * Phase 6's notes) — audit_trail already has everything a transition
  * history needs, this just gives every module one predictable read shape
  * instead of the caller having to know each module's internal entityType
- * naming (some PascalCase, some lowercase — a pre-existing inconsistency).
+ * naming (some PascalCase, some lowercase — a pre-existing inconsistency
+ * in naming *style* across modules, harmless as long as a given module's
+ * OWN code always agrees with itself on its own casing).
+ *
+ * ncr/capa/di previously did NOT agree with themselves: crudFactory's
+ * create/update wrote "NCR"/"CAPA"/"Discrepancy investigation" while each
+ * module's own bespoke status-change handler wrote "ncr"/"capa"/
+ * "discrepancy_investigation" — this map picked the lowercase side, so
+ * every record's own "create" event (and CAPA's own "update", from Start
+ * Work) was silently invisible in its History tab, a real gap for a QMS's
+ * audit trail. Fixed by aligning the bespoke handlers to crudFactory's
+ * casing instead (the harder-to-special-case side) and updating this map
+ * to match — see the QA sweep review.
  */
 const MODULE_ENTITY_TYPES: Record<string, string> = {
   calibration: "Equipment",
   documents: "Document",
   training: "TrainingAssignment",
   audit: "Audit",
-  ncr: "ncr",
-  capa: "capa",
-  di: "discrepancy_investigation",
+  ncr: "NCR",
+  capa: "CAPA",
+  di: "Discrepancy investigation",
   suppliers: "Supplier",
   inventory: "InventoryItem",
   erp: "PurchaseOrder",

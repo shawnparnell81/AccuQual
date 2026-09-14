@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useFormData, useSaveForm, useCreateFormVersion, exportFormPdf } from "../../api/formHooks";
 import { useFormStore } from "../../store/formStore";
+import { useToast } from "../shared/ToastProvider";
+import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { FORM_FIELD_SPECS } from "./formFieldSpecs";
 import { FormFieldOverlay } from "./FormFieldOverlay";
 import { FormVersionHistory } from "./FormVersionHistory";
@@ -26,6 +28,7 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
   const saveForm = useSaveForm(formType, entityId);
   const createVersion = useCreateFormVersion(formType, entityId);
   const { setDirty, setSaving } = useFormStore();
+  const toast = useToast();
 
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [showHistory, setShowHistory] = useState(false);
@@ -59,24 +62,34 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
     }, AUTOSAVE_DELAY_MS);
   }
 
+  // Both used to have no (or no complete) catch — exportFormPdf 404s until
+  // the form has been saved at least once (nothing to export yet), and
+  // that rejection used to propagate as an uncaught exception with zero
+  // feedback: the button just looked broken. See the QA sweep review.
   async function handlePreview() {
     setPreviewLoading(true);
     try {
       setPreviewBytes(await exportFormPdf(formType, entityId));
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't load a preview — save the form at least once first."));
     } finally {
       setPreviewLoading(false);
     }
   }
 
   async function handleDownload() {
-    const bytes = await exportFormPdf(formType, entityId);
-    const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${formType}-${entityId}.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const bytes = await exportFormPdf(formType, entityId);
+      const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${formType}-${entityId}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't export this form — save it at least once first."));
+    }
   }
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading form…</p>;

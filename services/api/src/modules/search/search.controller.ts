@@ -3,6 +3,7 @@ import { and, eq, sql, ilike, type SQLWrapper } from "drizzle-orm";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { erpPurchaseOrders } from "../../drizzle/schema/erp.js";
+import { workOrders } from "../../drizzle/schema/workOrders.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { audits } from "../../drizzle/schema/audits.js";
@@ -43,11 +44,10 @@ function idPrefix(column: SQLWrapper, digits: string) {
 
 /**
  * GET /search?q=... — read-only across every module's own real table, no
- * new table of its own. "WO" (Work Order) is deliberately never populated:
- * no work_orders table (or module) exists in AccuQual yet — the type stays
- * in the result union so the UI and this contract are ready the moment a
- * real Work Order module ships, rather than fabricating rows against a
- * table that doesn't exist.
+ * new table of its own. Covers NCR/CAPA/PO/Work Order/Audit/Supplier/
+ * Item/Training/Calibration — RMA, 8D, Complaints, Change, Risk, and PPAP
+ * aren't wired in here yet (pre-existing gaps, not something any one
+ * change should silently fix as a side effect).
  */
 export const searchHandler = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db! as TenantDb;
@@ -78,6 +78,11 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
       .where(and(eq(erpPurchaseOrders.tenantId, tenantId), idPrefix(erpPurchaseOrders.id, digits)))
       .limit(RESULTS_PER_TYPE);
     for (const r of rows) results.push({ type: "PO", id: r.id, label: `PO #${r.id}${r.supplierName ? ` — ${r.supplierName}` : ""} (${r.status})`, path: `/erp/${r.id}` });
+  }
+
+  if (digits && canRead(user, "work_orders")) {
+    const rows = await db.select().from(workOrders).where(and(eq(workOrders.tenantId, tenantId), idPrefix(workOrders.id, digits))).limit(RESULTS_PER_TYPE);
+    for (const r of rows) results.push({ type: "WO", id: r.id, label: `WO #${r.id} (${r.status})`, path: `/work-orders/${r.id}` });
   }
 
   if (digits && canRead(user, "audit")) {

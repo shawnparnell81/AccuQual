@@ -10,5 +10,6 @@ changeRouter.use(requireAuth, withTenantDb);
 
 changeRouter.get("/", baseHandlers.list);
 changeRouter.post("/", validate(createChangeSchema), baseHandlers.create);
+changeRouter.get("/:id", baseHandlers.getOne);
 changeRouter.patch("/:id", validate(updateChangeSchema), baseHandlers.update);
 changeRouter.post("/:id/approve", approveHandler);

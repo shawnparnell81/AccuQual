@@ -6,12 +6,10 @@ import { erpPurchaseRequisitions } from "../../drizzle/schema/erp.js";
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
-import { aiSuggestions } from "../../drizzle/schema/ai.js";
-import { callLlm } from "../ai/llm-gateway.js";
+import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { prJustificationPrompt } from "../ai/prompts.js";
-import { checkUsageLimit, loadTenantLlmOptions } from "../ai/ai.usage.js";
+import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
 import { computeSupplierPerformance } from "../supplier/supplier.performance.js";
-import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 
 /**
  * POST /erp/requisitions/:id/ai-justify — read-only, drafts justification
@@ -45,21 +43,17 @@ export const requisitionAiJustifyHandler = asyncHandler(async (req: Request, res
     linkedNcr: linkedNcr ? { title: linkedNcr.title, status: linkedNcr.status, severity: linkedNcr.severity, description: linkedNcr.description } : null,
   };
 
-  const draft = await callLlm(prJustificationPrompt(inputData), { system: "You are AccuQual's purchasing justification engine.", ...llmOptions });
+  const result = await callLlmDetailed(prJustificationPrompt(inputData), { system: "You are AccuQual's purchasing justification engine.", ...llmOptions });
 
-  const [saved] = await req
-    .db!.insert(aiSuggestions)
-    .values({ tenantId, module: "erp", pipeline: "pr_justification", input: inputData, output: { justification: draft }, createdBy: req.user?.id })
-    .returning();
-
-  await recordAuditTrail(req.db!, {
+  const saved = await recordAiSuggestion(req.db!, {
     tenantId,
-    entityType: "AiSuggestion",
-    entityId: saved!.id,
-    action: "create",
-    changes: { module: "erp", pipeline: "pr_justification", requisitionId: requisition.id },
+    module: "erp",
+    pipeline: "pr_justification",
+    input: { ...inputData, requisitionId: requisition.id },
+    output: { justification: result.text },
+    result,
     performedBy: req.user?.id,
   });
 
-  res.json({ justification: draft, suggestionId: saved!.id });
+  res.json({ justification: result.text, suggestionId: saved.id });
 });

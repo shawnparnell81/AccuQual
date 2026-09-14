@@ -2,11 +2,9 @@ import type { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { PERMISSION_MATRIX, type ResourceKey, type Department } from "../../middleware/departmentAccess.js";
-import { aiSuggestions } from "../../drizzle/schema/ai.js";
-import { callLlm } from "../ai/llm-gateway.js";
+import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { onboardingPrompt } from "../ai/prompts.js";
-import { checkUsageLimit, loadTenantLlmOptions } from "../ai/ai.usage.js";
-import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
 
 /**
  * Real, honest descriptions of what each module actually does today — no
@@ -61,26 +59,22 @@ export const onboardingAiGenerateHandler = asyncHandler(async (req: Request, res
   if (limitError) throw AppError.forbidden(limitError);
 
   const inputData = { department: department ?? (isAdmin ? "admin" : null), accessibleModules };
-  const raw = await callLlm(onboardingPrompt(inputData), { system: "You are AccuQual's onboarding assistant.", ...llmOptions });
+  const result = await callLlmDetailed(onboardingPrompt(inputData), { system: "You are AccuQual's onboarding assistant.", ...llmOptions });
 
   let output: unknown;
   try {
-    output = JSON.parse(raw);
+    output = JSON.parse(result.text);
   } catch {
-    output = { raw };
+    output = { raw: result.text };
   }
 
-  const [saved] = await req
-    .db!.insert(aiSuggestions)
-    .values({ tenantId, module: "onboarding", pipeline: "onboarding", input: inputData, output: output as Record<string, unknown>, createdBy: req.user?.id })
-    .returning();
-
-  await recordAuditTrail(req.db!, {
+  const saved = await recordAiSuggestion(req.db!, {
     tenantId,
-    entityType: "AiSuggestion",
-    entityId: saved!.id,
-    action: "create",
-    changes: { module: "onboarding", pipeline: "onboarding" },
+    module: "onboarding",
+    pipeline: "onboarding",
+    input: inputData,
+    output: output as Record<string, unknown>,
+    result,
     performedBy: req.user?.id,
   });
 
