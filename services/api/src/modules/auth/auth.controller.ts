@@ -29,3 +29,15 @@ export const meHandler = asyncHandler(async (req: Request, res: Response) => {
   const user = await authService.me(req.user.id);
   res.json(user);
 });
+
+// Always the same generic response regardless of whether the email exists —
+// see authService.forgotPassword's own comment on why.
+export const forgotPasswordHandler = asyncHandler(async (req: Request, res: Response) => {
+  await authService.forgotPassword(req.body.email);
+  res.json({ message: "If that email is registered, a password reset link has been sent." });
+});
+
+export const resetPasswordHandler = asyncHandler(async (req: Request, res: Response) => {
+  await authService.resetPassword(req.body.token, req.body.newPassword);
+  res.json({ message: "Password updated. You can now log in with your new password." });
+});

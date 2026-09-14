@@ -27,6 +27,7 @@ const ROUTE_ENTITY_TYPES: Record<string, string> = {
   documents: "Document",
   training: "TrainingAssignment",
   suppliers: "Supplier",
+  rma: "Rma",
 };
 
 /**

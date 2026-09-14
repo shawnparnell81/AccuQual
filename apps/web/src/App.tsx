@@ -3,6 +3,8 @@ import { AppLayout } from "./components/layout/AppLayout";
 import { ProtectedRoute } from "./components/layout/ProtectedRoute";
 import { LoginPage } from "./routes/Auth/LoginPage";
 import { RegisterPage } from "./routes/Auth/RegisterPage";
+import { ForgotPasswordPage } from "./routes/Auth/ForgotPasswordPage";
+import { ResetPasswordPage } from "./routes/Auth/ResetPasswordPage";
 import { DashboardPage } from "./routes/Dashboard/DashboardPage";
 import { NcrListPage } from "./routes/NCR/NcrListPage";
 import { NcrDetailPage } from "./routes/NCR/NcrDetailPage";
@@ -68,6 +70,8 @@ export function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
