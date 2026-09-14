@@ -26,6 +26,11 @@ async function main() {
   await pool.query(indexesSql);
   logger.info("Indexes applied.");
 
+  logger.info("Locking down Supabase's default anon/authenticated grants (no-op outside Supabase)...");
+  const supabaseLockdownSql = readFileSync(join(__dirname, "../drizzle/post-migrate/supabase-lockdown.sql"), "utf-8");
+  await pool.query(supabaseLockdownSql);
+  logger.info("Supabase lockdown applied.");
+
   await pool.end();
 }
 
