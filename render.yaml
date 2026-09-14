@@ -1,0 +1,53 @@
+services:
+  - type: web
+    name: accuqual-api
+    runtime: docker
+    dockerfilePath: ./services/api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Use the Session Pooler string (IPv4), never Direct connection —
+      # Render's network doesn't route the IPv6 address Supabase's direct
+      # endpoint resolves to. See DEPLOY.md's "The one gotcha" section.
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      # 64 hex chars (32 bytes) — generate with `openssl rand -hex 32`.
+      # The boot guard in config/env.ts refuses to start in production on
+      # the schema default, so this MUST be set to a real value here.
+      - key: TENANT_AI_CONFIG_ENCRYPTION_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        fromService:
+          type: web
+          name: accuqual-web
+          property: hostport
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: accuqual-web
+          property: hostport
+
+  - type: web
+    name: accuqual-web
+    runtime: docker
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: .
+    envVars:
+      # Render passes service-level envVars as Docker build args when the
+      # Dockerfile declares a matching ARG (see apps/web/Dockerfile's own
+      # `ARG VITE_API_BASE_URL`) — this should resolve to accuqual-api's
+      # real public URL automatically. Verify this once deployed; if it
+      # doesn't come through as an absolute URL, set it manually to
+      # accuqual-api's Render URL and trigger a manual redeploy of this
+      # service — see DEPLOY.md.
+      - key: VITE_API_BASE_URL
+        fromService:
+          type: web
+          name: accuqual-api
+          property: hostport
