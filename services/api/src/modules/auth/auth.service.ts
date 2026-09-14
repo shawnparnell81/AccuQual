@@ -1,11 +1,15 @@
 import bcrypt from "bcryptjs";
+import { randomBytes, createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { users } from "../../drizzle/schema/users.js";
 import { roles } from "../../drizzle/schema/roles.js";
 import { tenants } from "../../drizzle/schema/tenants.js";
+import { passwordResetTokens } from "../../drizzle/schema/passwordResetTokens.js";
 import { AppError } from "../../utils/appError.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../utils/jwt.js";
+import { sendEmail } from "../notifications/notification.service.js";
+import { env } from "../../config/env.js";
 
 // Registration/login run before a tenant transaction exists (the tenant isn't
 // known yet, or is being resolved), so — unlike every other module — this
@@ -116,6 +120,61 @@ export async function logout(userId: number) {
 async function currentTokenVersion(userId: number): Promise<number> {
   const [row] = await db.select({ tokenVersion: users.tokenVersion }).from(users).where(eq(users.id, userId));
   return row?.tokenVersion ?? 0;
+}
+
+const RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
+
+function hashResetToken(rawToken: string): string {
+  // sha256, not bcrypt — this is a high-entropy random token (32 raw bytes),
+  // not a human-chosen password, so there's no brute-force-guessing risk to
+  // defend against with a slow hash; a fast, deterministic hash is exactly
+  // what a lookup-by-hash needs.
+  return createHash("sha256").update(rawToken).digest("hex");
+}
+
+/**
+ * Inspection Report ONB-02/R05: there was no password-recovery path at all.
+ * Deliberately silent about whether the email exists — the response (and
+ * timing) must look identical either way, or this endpoint becomes a way to
+ * enumerate registered emails. Real delivery goes through the same
+ * sendEmail() every other notification does — logged-only until a real SMTP
+ * transport is configured (see notification.service.ts), never a fabricated
+ * "email sent" claim.
+ */
+export async function forgotPassword(email: string): Promise<void> {
+  const [user] = await db.select().from(users).where(eq(users.email, email));
+  if (!user || !user.isActive) return;
+
+  const rawToken = randomBytes(32).toString("hex");
+  await db.insert(passwordResetTokens).values({
+    userId: user.id,
+    tokenHash: hashResetToken(rawToken),
+    expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+  });
+
+  const resetUrl = `${env.FRONTEND_URL}/reset-password?token=${rawToken}`;
+  await sendEmail({
+    to: user.email,
+    subject: "Reset your AccuQual password",
+    body:
+      "We received a request to reset your AccuQual password. This link expires in 30 minutes and can only be used once:\n\n" +
+      `${resetUrl}\n\n` +
+      "If you didn't request this, you can safely ignore this email — your password hasn't been changed.",
+  });
+}
+
+/** Bumps tokenVersion too — a resets password revokes every outstanding refresh token, the same way logout() does. */
+export async function resetPassword(rawToken: string, newPassword: string): Promise<void> {
+  const [tokenRow] = await db.select().from(passwordResetTokens).where(eq(passwordResetTokens.tokenHash, hashResetToken(rawToken)));
+
+  if (!tokenRow || tokenRow.usedAt || tokenRow.expiresAt.getTime() < Date.now()) {
+    throw AppError.badRequest("This reset link is invalid or has expired.");
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  const nextTokenVersion = (await currentTokenVersion(tokenRow.userId)) + 1;
+  await db.update(users).set({ passwordHash, tokenVersion: nextTokenVersion }).where(eq(users.id, tokenRow.userId));
+  await db.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, tokenRow.id));
 }
 
 export async function me(userId: number) {

@@ -141,6 +141,13 @@
       "when": 1789341645341,
       "tag": "0019_rma_module",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789381565498,
+      "tag": "0020_password_reset_tokens",
+      "breakpoints": true
     }
   ]
 }

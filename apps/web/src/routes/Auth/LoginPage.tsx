@@ -32,7 +32,12 @@ export function LoginPage() {
 
         <div className="flex flex-col gap-4">
           <TextField label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <TextField label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <div>
+            <TextField label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <Link to="/forgot-password" className="mt-1 inline-block text-xs text-muted-foreground hover:text-primary">
+              Forgot password?
+            </Link>
+          </div>
         </div>
 
         {login.isError && <p className="mt-3 text-sm text-destructive">Invalid email or password.</p>}

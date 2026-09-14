@@ -1,35 +1,55 @@
 -- Row-Level Security for every tenant-owned table.
 --
--- AccuQual's multi-tenant isolation has two layers:
+-- AccuQual's multi-tenant isolation has two real layers:
 --   1. Every query in the app explicitly filters by `tenantId` (see
---      src/lib/tenantScope.ts + every module's controller/service) — this is
---      the primary, always-active guarantee and works regardless of which
---      DB role the app connects as.
---   2. These RLS policies are a second, DB-level layer that only actually
---      restricts a role that is NOT the table owner (Postgres exempts table
---      owners from RLS by default, and this migration does not use
---      `FORCE ROW LEVEL SECURITY`, on purpose — see the role note below).
+--      src/lib/tenantScope.ts + every module's controller/service) — the
+--      primary, always-active guarantee, independent of the DB role.
+--   2. RLS policies below, now actually enforced: the app's per-request
+--      transaction runs `SET LOCAL ROLE accuqual_app` (see tenantScope.ts's
+--      withTenantDb) before touching any tenant table. `accuqual_app` is a
+--      real, non-owner, non-superuser role with no BYPASSRLS attribute, so
+--      Postgres actually applies these policies to it — unlike the
+--      connection's own login role (whatever it's named locally or in CI),
+--      which stays the table owner/superuser for migrations, extension
+--      creation, and platform-admin's intentionally cross-tenant queries
+--      (see modules/platform), and is *never* used directly for a
+--      per-tenant request.
+--
+-- This is deliberately a role-SWITCH (SET LOCAL ROLE), not a second
+-- connection/password/pool: accuqual_app is NOLOGIN (nobody connects as it
+-- directly), and whatever role this script runs as (granted membership
+-- below) can switch into it for the lifetime of one transaction. No new
+-- secret, connection string, or pool to manage anywhere, and it works
+-- identically in local dev, CI, and production without hardcoding a
+-- per-environment role name.
 --
 -- Run automatically by `npm run db:migrate` (see src/db/migrate.ts). Safe to
--- re-run — every statement is idempotent.
---
--- IMPORTANT — for layer 2 to actually do anything, the app's runtime
--- DATABASE_URL must connect as a role that is NOT the table owner (the owner
--- bypasses RLS entirely, by Postgres design). The default local/dev
--- DATABASE_URL connects as the owning role for simplicity, so RLS is present
--- but not exercised locally — that's a known, documented gap (see README).
--- In production, create and connect as a restricted role, e.g.:
---
---   CREATE ROLE accuqual_app LOGIN PASSWORD '...';
---   GRANT CONNECT ON DATABASE accuqual TO accuqual_app;
---   GRANT USAGE ON SCHEMA public TO accuqual_app;
---   GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO accuqual_app;
---   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO accuqual_app;
---
--- Platform-admin operations (creating tenants, managing platform users with
--- tenant_id IS NULL — see modules/platform) are inherently cross-tenant, so
--- they deliberately use the unscoped `db` singleton (which the pool connects
--- as the owning/admin role) rather than the per-request tenant-scoped `req.db`.
+-- re-run — every statement here, including the role creation, is idempotent.
+-- Requires the connecting role to have CREATEROLE (true of a normal Postgres
+-- superuser, and of most managed-Postgres "admin" login roles).
+
+DO $$
+DECLARE
+  owner_role text := current_user;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'accuqual_app') THEN
+    EXECUTE 'CREATE ROLE accuqual_app NOLOGIN NOSUPERUSER NOBYPASSRLS';
+  END IF;
+
+  -- Lets the connecting role SET ROLE into accuqual_app. Re-granting an
+  -- already-held membership is a no-op, not an error.
+  EXECUTE format('GRANT accuqual_app TO %I', owner_role);
+
+  EXECUTE 'GRANT USAGE ON SCHEMA public TO accuqual_app';
+  EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO accuqual_app';
+  EXECUTE 'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO accuqual_app';
+
+  -- So a table/sequence a *future* migration adds (owned by owner_role, same
+  -- as every existing one) is automatically granted to accuqual_app too —
+  -- nobody has to remember to touch this file again after adding a module.
+  EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO accuqual_app', owner_role);
+  EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO accuqual_app', owner_role);
+END $$;
 
 DO $$
 DECLARE

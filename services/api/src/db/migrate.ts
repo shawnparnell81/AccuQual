@@ -21,6 +21,11 @@ async function main() {
   await pool.query(rlsSql);
   logger.info("RLS policies applied.");
 
+  logger.info("Applying indexes...");
+  const indexesSql = readFileSync(join(__dirname, "../drizzle/post-migrate/indexes.sql"), "utf-8");
+  await pool.query(indexesSql);
+  logger.info("Indexes applied.");
+
   await pool.end();
 }
 

@@ -25,15 +25,21 @@ declare global {
 }
 
 /**
- * Opens one Postgres transaction per request, sets `app.current_tenant_id`
- * via `SET LOCAL` (real for the lifetime of this transaction only — never
- * leaks to another request on the same pooled connection), and hands the
+ * Opens one Postgres transaction per request, switches into the restricted
+ * `accuqual_app` role and sets `app.current_tenant_id` (both via `SET
+ * LOCAL` — real for the lifetime of this transaction only, never leaks to
+ * another request on the same pooled connection), and hands the
  * transaction-bound Drizzle instance to the route as `req.db`. Commits on a
  * successful response, rolls back otherwise. Must run after `requireAuth`.
  *
- * Every module's queries still filter by `req.tenantId` explicitly — this
- * middleware is the second, DB-level layer (see rls-policies.sql), not a
- * replacement for the first.
+ * Every module's queries still filter by `req.tenantId` explicitly — that
+ * stays the primary, always-active guarantee. The role switch is what makes
+ * the RLS policies in rls-policies.sql an actual second, DB-level layer
+ * instead of a decorative one: the connection's own login role is the table
+ * owner (needed for migrations/platform-admin), and Postgres exempts owners
+ * and superusers from RLS regardless of policy — `accuqual_app` has neither
+ * property, so a query that somehow forgot its own tenantId filter still
+ * can't see another tenant's rows.
  */
 export function withTenantDb(req: Request, res: Response, next: NextFunction) {
   const user: AuthenticatedUser | undefined = req.user;
@@ -47,26 +53,71 @@ export function withTenantDb(req: Request, res: Response, next: NextFunction) {
     .connect()
     .then(async (client: PoolClient) => {
       await client.query("BEGIN");
+      await client.query("SET LOCAL ROLE accuqual_app");
       await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [String(tenantId)]);
 
       req.tenantId = tenantId;
       req.db = drizzle(client, { schema });
 
       let settled = false;
-      const finish = async () => {
-        if (settled) return;
+      /**
+       * Commits (or rolls back) BEFORE the response actually reaches the
+       * client — not in a `res.on("finish")` listener, which fires only
+       * after the bytes are already on the wire. That ordering was a real,
+       * demonstrated race: a client that immediately fires a dependent
+       * follow-up request (exactly what the R08 integration tests do, and
+       * what a fast UI action-then-refetch can do too) could read the row
+       * in a *second* transaction before the *first* transaction's async
+       * commit had actually finished, seeing pre-write data. Wrapping
+       * res.json/res.send here means neither ever flushes until the
+       * transaction is truly finalized.
+       */
+      async function finalize(): Promise<boolean> {
+        if (settled) return true;
         settled = true;
+        const wasSuccess = res.statusCode < 400;
         try {
-          await client.query(res.statusCode >= 400 ? "ROLLBACK" : "COMMIT");
+          await client.query(wasSuccess ? "COMMIT" : "ROLLBACK");
+          return true;
         } catch (err) {
           logger.error("Failed to finalize tenant transaction", err);
+          // A failed ROLLBACK on an already-error response isn't a new
+          // problem for the client; a failed COMMIT on what looked like a
+          // success response means the write did NOT happen — the client
+          // must not be told otherwise.
+          return !wasSuccess;
         } finally {
           client.release();
         }
-      };
+      }
 
-      res.on("finish", finish);
-      res.on("close", finish);
+      const originalJson = res.json.bind(res);
+      const originalSend = res.send.bind(res);
+      res.json = ((body?: unknown) => {
+        finalize()
+          .then((ok) => originalJson(ok ? body : { error: "InternalServerError", message: "Failed to save changes" }))
+          .catch((err) => logger.error("Unexpected error finalizing tenant transaction", err));
+        return res;
+      }) as typeof res.json;
+      res.send = ((body?: unknown) => {
+        finalize()
+          .then((ok) => originalSend(ok ? body : undefined))
+          .catch((err) => logger.error("Unexpected error finalizing tenant transaction", err));
+        return res;
+      }) as typeof res.send;
+
+      // Fallback only — a request whose response is never actually sent
+      // (the client disconnects mid-request) never reaches the overrides
+      // above, so this is the one legitimate remaining use of a "close"
+      // listener: release the connection rather than leaking it.
+      res.on("close", () => {
+        if (settled) return;
+        settled = true;
+        client
+          .query("ROLLBACK")
+          .catch((err) => logger.error("Failed to roll back an abandoned tenant transaction", err))
+          .finally(() => client.release());
+      });
 
       next();
     })

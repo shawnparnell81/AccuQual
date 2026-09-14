@@ -14,20 +14,35 @@ interface RecordAuditTrailInput {
   performedBy?: number;
 }
 
-/** Appends an immutable audit trail entry. Never throws — logging must not break the request. */
+/**
+ * Appends an immutable audit trail entry — inside the caller's own
+ * request transaction (`req.db`), not a separate one.
+ *
+ * DOES throw, deliberately (this used to swallow every error — see the
+ * R08 integration tests, which caught this live: a bad `performedBy`
+ * FK, or any other constraint violation on this insert, poisons the
+ * whole Postgres transaction the same as any other failed statement
+ * inside it. Swallowing the JS-level error didn't make that go away —
+ * it just hid it, so the transaction was silently rolled back at COMMIT
+ * time (Postgres downgrades a COMMIT on an aborted transaction to a
+ * ROLLBACK without erroring) while the caller had already sent a 200/201
+ * response as if the write had succeeded. Letting this throw lets
+ * `asyncHandler` catch it, `errorHandler` produce a real error response,
+ * and `withTenantDb`'s `finalize()` issue the ROLLBACK the transaction
+ * needs anyway — an honest 500 instead of a false success. Use
+ * `recordAuditTrailStandalone` (below) for the one real case that still
+ * needs "never throws": logging a failed transition from *outside* any
+ * request transaction, in the global error handler.
+ */
 export async function recordAuditTrail(db: TenantDb, input: RecordAuditTrailInput): Promise<void> {
-  try {
-    await db.insert(auditTrail).values({
-      tenantId: input.tenantId,
-      entityType: input.entityType,
-      entityId: input.entityId,
-      action: input.action,
-      changes: input.changes as Record<string, unknown> | undefined,
-      performedBy: input.performedBy,
-    });
-  } catch (err) {
-    logger.error("Failed to record audit trail entry", { input, err });
-  }
+  await db.insert(auditTrail).values({
+    tenantId: input.tenantId,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    action: input.action,
+    changes: input.changes as Record<string, unknown> | undefined,
+    performedBy: input.performedBy,
+  });
 }
 
 /**
@@ -51,6 +66,10 @@ export async function recordAuditTrailStandalone(pool: Pool, input: RecordAuditT
 
   try {
     await client.query("BEGIN");
+    // Same role switch withTenantDb uses (see tenantScope.ts) — a failed-
+    // transition audit entry should be subject to the same real RLS layer
+    // as every other tenant-scoped write, not a superuser/owner exception.
+    await client.query("SET LOCAL ROLE accuqual_app");
     await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [String(input.tenantId)]);
     const db = drizzle(client, { schema });
     await db.insert(auditTrail).values({
