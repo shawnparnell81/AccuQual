@@ -24,11 +24,17 @@ export const documentFolders = pgTable("document_folders", {
   name: text("name").notNull(),
   parentId: integer("parent_id").references((): AnyPgColumn => documentFolders.id),
   sortOrder: integer("sort_order").notNull().default(0),
-  // Path (under STORAGE_LOCAL_PATH) to a user-uploaded PDF attached to this
+  // Path (under STORAGE_LOCAL_PATH) to a user-uploaded FILE attached to this
   // node — null until someone attaches one; see uploadTemplate in the
   // controller. Independent of the seeded default taxonomy: any node, seeded
-  // or user-created, can have a PDF attached, replaced, or removed.
+  // or user-created, can have a file attached, replaced, or removed. Despite
+  // the name (kept for backward compatibility with the column that shipped
+  // PDF-only), this now accepts any real document type (docx/xlsx/pdf/
+  // images/...) — real policies and procedures aren't always PDFs. The real
+  // file extension lives in the path itself; pdfMimeType below carries the
+  // real Content-Type for download.
   pdfPath: text("pdf_path"),
+  pdfMimeType: text("pdf_mime_type"),
   // A real in-app route (e.g. "/ncr") this leaf corresponds to, for the small
   // subset of the taxonomy that names an actual built-in QMS record type
   // (see linkKnownForms in the controller — self-heals per tenant, matching
