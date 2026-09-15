@@ -1,0 +1,198 @@
+import type { Request, Response } from "express";
+import { and, eq, ilike, desc, type SQL } from "drizzle-orm";
+import { crarClaims } from "../../drizzle/schema/crar.js";
+import { warrantyClaims } from "../../drizzle/schema/warranty.js";
+import { ncr } from "../../drizzle/schema/ncr.js";
+import { rma } from "../../drizzle/schema/rma.js";
+import { supplierRmaRequests } from "../../drizzle/schema/supplierRma.js";
+import { asyncHandler } from "../../utils/asyncHandler.js";
+import { AppError } from "../../utils/appError.js";
+import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
+
+/** Same inline-guard style as rma.controller.ts/warranty.controller.ts's assertDepartment — PERMISSION_MATRIX.crar is binary (read/edit) and can't express these per-action splits on its own. */
+function assertDepartment(req: Request, allowed: string[]) {
+  const role = req.user?.roleName;
+  if (role === "admin" || role === "platform_admin") return;
+  const department = req.user?.department;
+  if (!department || !allowed.includes(department)) {
+    throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
+  }
+}
+
+function isAdmin(req: Request): boolean {
+  return req.user?.roleName === "admin" || req.user?.roleName === "platform_admin";
+}
+
+/** A fixed, linear lifecycle exactly as specified — no branching, unlike Warranty's own approve/reject fork. completed is terminal. */
+const ALLOWED_NEXT: Record<string, string[]> = {
+  new: ["quality_review"],
+  quality_review: ["warranty_review"],
+  warranty_review: ["completed"],
+  completed: [],
+};
+
+/**
+ * quality_review/warranty_review are both Quality's own hand-offs (Quality
+ * owns the review end to end, per the brief's "Quality: Full access to
+ * CRAR"); completed is the one stage engineering/purchasing may also move
+ * — AccuQual has no literal "Warranty" department (see
+ * departmentAccess.ts's PERMISSION_MATRIX.crar comment), so "Warranty can
+ * finish its review" is expressed here as the real departments that DO
+ * edit the Warranty module itself finishing this one stage.
+ */
+const STATUS_TRANSITION_DEPARTMENTS: Record<string, string[]> = {
+  quality_review: ["quality"],
+  warranty_review: ["quality"],
+  completed: ["quality", "engineering", "purchasing"],
+};
+
+/**
+ * Engineering/purchasing hold "edit" in PERMISSION_MATRIX.crar only so the
+ * link-to-warranty-claim action (a PATCH) isn't blocked at the router —
+ * see departmentAccess.ts's own comment. Inline here, they may ONLY ever
+ * touch `warrantyId` on an existing record, never the report's own 54
+ * content fields, never create one.
+ */
+const WARRANTY_LINK_ONLY_DEPARTMENTS = ["engineering", "purchasing"];
+const WARRANTY_LINK_FIELDS = ["warrantyId"];
+
+async function loadCrar(req: Request, id: number) {
+  const [row] = await req.db!.select().from(crarClaims).where(and(eq(crarClaims.id, id), eq(crarClaims.tenantId, req.tenantId!)));
+  if (!row) throw AppError.notFound("Crar");
+  return row;
+}
+
+export const listCrarHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { status, warrantyId, q } = req.query as Record<string, string | undefined>;
+  const conditions: SQL[] = [eq(crarClaims.tenantId, req.tenantId!)];
+  if (status) conditions.push(eq(crarClaims.status, status));
+  if (warrantyId) conditions.push(eq(crarClaims.warrantyId, Number(warrantyId)));
+  if (q) conditions.push(ilike(crarClaims.customerClaim, `%${q}%`));
+
+  const rows = await req
+    .db!.select({
+      id: crarClaims.id,
+      status: crarClaims.status,
+      customerName: crarClaims.customerName,
+      rmaNumber: crarClaims.rmaNumber,
+      customerClaim: crarClaims.customerClaim,
+      partNumber: crarClaims.partNumber,
+      warrantyId: crarClaims.warrantyId,
+      reportDate: crarClaims.reportDate,
+      createdAt: crarClaims.createdAt,
+      updatedAt: crarClaims.updatedAt,
+    })
+    .from(crarClaims)
+    .where(and(...conditions))
+    .orderBy(desc(crarClaims.createdAt));
+  res.json(rows);
+});
+
+export const createCrarHandler = asyncHandler(async (req: Request, res: Response) => {
+  // Quality initiates a CRAR — matches the brief's own "Integrated with
+  // Quality Department" as the primary owner; Customer Service/Warranty
+  // only ever view or link an existing one (see the RBAC section).
+  assertDepartment(req, ["quality"]);
+  const body = req.body as Record<string, unknown>;
+
+  if (body.warrantyId !== undefined && body.warrantyId !== null) {
+    const [w] = await req.db!.select({ id: warrantyClaims.id }).from(warrantyClaims).where(and(eq(warrantyClaims.id, body.warrantyId as number), eq(warrantyClaims.tenantId, req.tenantId!)));
+    if (!w) throw AppError.badRequest(`Warranty claim #${body.warrantyId} not found`);
+  }
+  if (body.qualityId !== undefined && body.qualityId !== null) {
+    const [n] = await req.db!.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, body.qualityId as number), eq(ncr.tenantId, req.tenantId!)));
+    if (!n) throw AppError.badRequest(`NCR #${body.qualityId} not found`);
+  }
+  if (body.supplierRmaRequestId !== undefined && body.supplierRmaRequestId !== null) {
+    const [s] = await req.db!.select({ id: supplierRmaRequests.id }).from(supplierRmaRequests).where(and(eq(supplierRmaRequests.id, body.supplierRmaRequestId as number), eq(supplierRmaRequests.tenantId, req.tenantId!)));
+    if (!s) throw AppError.badRequest(`Supplier RMA Request #${body.supplierRmaRequestId} not found`);
+  }
+  if (body.linkedRmaId !== undefined && body.linkedRmaId !== null) {
+    const [r] = await req.db!.select({ id: rma.id }).from(rma).where(and(eq(rma.id, body.linkedRmaId as number), eq(rma.tenantId, req.tenantId!)));
+    if (!r) throw AppError.badRequest(`RMA #${body.linkedRmaId} not found`);
+  }
+
+  const [created] = await req
+    .db!.insert(crarClaims)
+    .values({ tenantId: req.tenantId!, ...body, createdByUserId: req.user?.id })
+    .returning();
+
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Crar", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  res.status(201).json(created);
+});
+
+export const getCrarHandler = asyncHandler(async (req: Request, res: Response) => {
+  const record = await loadCrar(req, Number(req.params.id));
+  const [warranty] = record.warrantyId ? await req.db!.select().from(warrantyClaims).where(eq(warrantyClaims.id, record.warrantyId)) : [null];
+  const [linkedNcr] = record.qualityId ? await req.db!.select().from(ncr).where(eq(ncr.id, record.qualityId)) : [null];
+  const [supplierRequest] = record.supplierRmaRequestId ? await req.db!.select().from(supplierRmaRequests).where(eq(supplierRmaRequests.id, record.supplierRmaRequestId)) : [null];
+  const [linkedRma] = record.linkedRmaId ? await req.db!.select().from(rma).where(eq(rma.id, record.linkedRmaId)) : [null];
+
+  res.json({
+    ...record,
+    warranty: warranty ? { id: warranty.id, claimNumber: warranty.claimNumber, status: warranty.status } : null,
+    linkedNcr: linkedNcr ? { id: linkedNcr.id, title: linkedNcr.title, status: linkedNcr.status } : null,
+    supplierRequest: supplierRequest ? { id: supplierRequest.id, companyName: supplierRequest.companyName, status: supplierRequest.status } : null,
+    linkedRma: linkedRma ? { id: linkedRma.id, rmaNumber: linkedRma.rmaNumber, status: linkedRma.status } : null,
+  });
+});
+
+export const updateCrarHandler = asyncHandler(async (req: Request, res: Response) => {
+  const record = await loadCrar(req, Number(req.params.id));
+  if (record.status === "completed") throw AppError.badRequest("This CRAR is completed and can no longer be edited");
+
+  const role = req.user?.roleName;
+  const department = req.user?.department;
+  const isLinkOnly = role !== "admin" && role !== "platform_admin" && department != null && WARRANTY_LINK_ONLY_DEPARTMENTS.includes(department);
+
+  if (isLinkOnly) {
+    const disallowed = Object.keys(req.body).filter((k) => !WARRANTY_LINK_FIELDS.includes(k));
+    if (disallowed.length > 0) {
+      throw AppError.forbidden(`Your department may only update ${WARRANTY_LINK_FIELDS.join(", ")} on a CRAR (not: ${disallowed.join(", ")})`);
+    }
+  } else {
+    assertDepartment(req, ["quality"]);
+  }
+
+  if (req.body.warrantyId !== undefined && req.body.warrantyId !== null) {
+    const [w] = await req.db!.select({ id: warrantyClaims.id }).from(warrantyClaims).where(and(eq(warrantyClaims.id, req.body.warrantyId), eq(warrantyClaims.tenantId, req.tenantId!)));
+    if (!w) throw AppError.badRequest(`Warranty claim #${req.body.warrantyId} not found`);
+  }
+
+  const [updated] = await req
+    .db!.update(crarClaims)
+    .set({ ...req.body, updatedAt: new Date() })
+    .where(eq(crarClaims.id, record.id))
+    .returning();
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Crar", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  res.json(updated);
+});
+
+export const transitionCrarHandler = asyncHandler(async (req: Request, res: Response) => {
+  const record = await loadCrar(req, Number(req.params.id));
+  const { status: newStatus } = req.body as { status: string };
+
+  if (!ALLOWED_NEXT[record.status]?.includes(newStatus)) {
+    throw AppError.badRequest(`Cannot move a CRAR from "${record.status}" to "${newStatus}"`);
+  }
+  if (!isAdmin(req)) assertDepartment(req, STATUS_TRANSITION_DEPARTMENTS[newStatus] ?? []);
+
+  const [updated] = await req.db!.update(crarClaims).set({ status: newStatus, updatedAt: new Date() }).where(eq(crarClaims.id, record.id)).returning();
+
+  // "workflow_transition" per the brief's own words maps onto this app's
+  // real audit_trail action enum as "status_change" — the same category
+  // every other module's transitions log under (see e.g.
+  // warranty.controller.ts's own transition handler).
+  await recordAuditTrail(req.db!, {
+    tenantId: req.tenantId!,
+    entityType: "Crar",
+    entityId: record.id,
+    action: "status_change",
+    changes: { oldStatus: record.status, newStatus, userId: req.user?.id },
+    performedBy: req.user?.id,
+  });
+  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "crar", event: newStatus, entityId: record.id });
+
+  res.json(updated);
+});

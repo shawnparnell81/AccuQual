@@ -14,6 +14,8 @@ import {
   sendMessageSchema,
   updateSupplierSettingsSchema,
 } from "./supplierPortal.validation.js";
+import { submitRmaRequestSchema } from "./rmaRequest.validation.js";
+import { submitRmaRequestHandler, rmaRequestStatusHandler } from "./rmaRequest.controller.js";
 import {
   uploadOnboardingDocumentHandler,
   onboardingStatusHandler,
@@ -92,3 +94,9 @@ supplierPortalRouter.get("/capa/list", supplierCapaListHandler);
 // Settings
 supplierPortalRouter.get("/settings", getSupplierSettingsHandler);
 supplierPortalRouter.post("/settings", validate(updateSupplierSettingsSchema), updateSupplierSettingsHandler);
+
+// RMA Request — supplier-only (see rmaRequest.controller.ts's own checks);
+// internal staff reach the resulting real RMA through the existing RMA
+// module and the new /rma-log feed instead of through this path.
+supplierPortalRouter.post("/rma-request", validate(submitRmaRequestSchema), submitRmaRequestHandler);
+supplierPortalRouter.get("/rma-request/status", rmaRequestStatusHandler);

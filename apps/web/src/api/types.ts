@@ -1301,3 +1301,135 @@ export interface SupplierPortalPerformance {
   ppapSubmissionCount: number;
   ppapApprovalRate: number | null;
 }
+
+// ---------------------------------------------------------------------------
+// Customer Return Analysis Report (CRAR)
+// ---------------------------------------------------------------------------
+
+export type CrarStatus = "new" | "quality_review" | "warranty_review" | "completed";
+
+/** Every one of these 54 fields is one of the source PDF's own real fillable fields — see crar.ts's own schema comment. Every field nullable/optional, same as a plain fillable PDF field always is. */
+export interface CrarClaim {
+  id: number;
+  status: CrarStatus;
+  warrantyId: number | null;
+  qualityId: number | null;
+  supplierRmaRequestId: number | null;
+  linkedRmaId: number | null;
+
+  customerName: string | null;
+  rmaNumber: string | null;
+  customerClaim: string | null;
+  partNumber: string | null;
+  partDescription: string | null;
+  qtyReturned: string | null;
+  reportInitiatedBy: string | null;
+  reportDate: string | null;
+  approvedBy: string | null;
+  customerComplaint: string | null;
+
+  complaintDetail: string | null;
+  dateReceived: string | null;
+  receivedBy: string | null;
+  conditionOnReceipt: string | null;
+
+  assessmentDamage: boolean;
+  assessmentMissing: boolean;
+  assessmentContamination: boolean;
+  assessmentPackaging: boolean;
+  assessmentMismatch: boolean;
+  assessmentOther: boolean;
+  initialAssessmentNotes: string | null;
+
+  investigationPlan: string | null;
+  investigator: string | null;
+  targetCompletion: string | null;
+  priority: string | null;
+
+  evidenceNotes: string | null;
+
+  drawingSpecNo: string | null;
+  drawingRevision: string | null;
+  applicableRequirement: string | null;
+  acceptanceCriteria: string | null;
+
+  testResults: string | null;
+  testedBy: string | null;
+  testDate: string | null;
+  overallTestResult: string | null;
+
+  findings: string | null;
+  rootCause: string | null;
+  conclusion: string | null;
+
+  warrantyAccepted: boolean;
+  warrantyDenied: boolean;
+  acceptedDisposition: string | null;
+  deniedReason: string | null;
+  dispositionExplanation: string | null;
+  correctiveActionRequired: boolean;
+  engineeringReviewRequired: boolean;
+  carNumber: string | null;
+  customerCommunicationDate: string | null;
+  dispositionDate: string | null;
+
+  finalReviewComments: string | null;
+  preparedByFinal: string | null;
+  preparedSignature: string | null;
+  preparedDate: string | null;
+  approvedByFinal: string | null;
+  approvedSignature: string | null;
+  approvedDate: string | null;
+
+  recordLocation: string | null;
+  retentionClass: string | null;
+  recordClosed: boolean;
+  customerNotified: boolean;
+  additionalNotes: string | null;
+
+  createdByUserId: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+
+  // Detail endpoint only.
+  warranty?: { id: number; claimNumber: string; status: string } | null;
+  linkedNcr?: { id: number; title: string; status: string } | null;
+  supplierRequest?: { id: number; companyName: string; status: string } | null;
+  linkedRma?: { id: number; rmaNumber: string; status: string } | null;
+}
+
+// ---------------------------------------------------------------------------
+// Supplier Portal RMA Request + RMA Log
+// ---------------------------------------------------------------------------
+
+export type SupplierRmaRequestStatus = "submitted" | "rma_created";
+
+export interface SupplierRmaRequest {
+  id: number;
+  supplierId: number;
+  status: SupplierRmaRequestStatus;
+  companyName: string;
+  contactName: string;
+  email: string;
+  phoneNumber: string | null;
+  poNumber: string | null;
+  partNumber: string | null;
+  poDate: string | null;
+  customerClaimNumber: string | null;
+  shortDescription: string | null;
+  description: string | null;
+  createdRmaId: number | null;
+  createdRmaNumber?: string | null; // status endpoint only
+  submittedByUserId: number | null;
+  createdAt: string;
+}
+
+export interface RmaLogEntry {
+  id: number;
+  rmaId: number | null;
+  supplierRmaRequestId: number | null;
+  event: string;
+  details: Record<string, unknown> | null;
+  performedBy: number | null;
+  createdAt: string;
+}

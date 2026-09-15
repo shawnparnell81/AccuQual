@@ -46,6 +46,8 @@ import {
   UploadCloud,
   Wrench,
   Globe2,
+  RotateCcw,
+  ScrollText,
 } from "lucide-react";
 
 /**
@@ -228,6 +230,37 @@ export const SUPPLIER_PORTAL: NavLeaf = {
   notes: "Not in the department sheet — internal review/management side of the new Supplier Portal (onboarding, PPAP, CAR/8D responses, messaging)",
 };
 
+// Not a sheet row — the new CRAR module. Mirrors departmentAccess.ts's
+// PERMISSION_MATRIX.crar exactly. Quality owns the report end to end;
+// customer_service is view-only; engineering/purchasing hold "edit" here
+// only so their warrantyId-link PATCH isn't blocked at the router — see
+// crar.controller.ts's own comment (they're narrowed to that one field
+// inline, same asymmetry as Warranty's own nav leaf above).
+export const CRAR: NavLeaf = {
+  key: "crar",
+  label: "Customer Return Analysis",
+  path: "/crar",
+  icon: RotateCcw,
+  access: { quality: "edit", customer_service: "read", engineering: "edit", purchasing: "edit" },
+  kpi: false,
+  priority: 2,
+  notes: "Not in the department sheet — Customer Return Analysis Report (CRAR), integrated with Quality, Warranty and Supplier RMA Requests",
+};
+
+// Not a sheet row — the audit trail of every Supplier Portal RMA Request,
+// separate from the RMA/RGA module's own record list. Mirrors
+// departmentAccess.ts's PERMISSION_MATRIX.rma_log exactly.
+export const RMA_LOG: NavLeaf = {
+  key: "rma_log",
+  label: "RMA Log",
+  path: "/rma-log",
+  icon: ScrollText,
+  access: { quality: "edit", customer_service: "read" },
+  kpi: false,
+  priority: 2,
+  notes: "Not in the department sheet — event log for Supplier Portal RMA Requests (submission, auto-match, RMA creation, notifications)",
+};
+
 export const PURCHASE_REQUISITIONS: NavLeaf = {
   key: "purchase_requisitions",
   label: "Purchase Requisitions",
@@ -349,11 +382,13 @@ export const NAV_STRUCTURE: NavGroup[] = [
       CUSTOMERS,
       WARRANTY,
       SUPPLIER_PORTAL,
+      CRAR,
+      RMA_LOG,
     ],
   },
   {
     department: "engineering",
-    items: [PPAP, APQP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, SALES_ACCOUNTS, CUSTOMERS, FEASIBILITY, WARRANTY, SUPPLIER_PORTAL],
+    items: [PPAP, APQP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, SALES_ACCOUNTS, CUSTOMERS, FEASIBILITY, WARRANTY, SUPPLIER_PORTAL, CRAR],
   },
   {
     department: "production",
@@ -361,11 +396,11 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "customer_service",
-    items: [PRODUCTION_LOG, COMPLAINTS, WARRANTY],
+    items: [PRODUCTION_LOG, COMPLAINTS, WARRANTY, CRAR, RMA_LOG],
   },
   {
     department: "purchasing",
-    items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, WARRANTY, SUPPLIER_PORTAL],
+    items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, WARRANTY, SUPPLIER_PORTAL, CRAR],
   },
   {
     department: "material_management",
@@ -506,5 +541,5 @@ export function findNavLeaf(key: string): NavLeaf | undefined {
     const found = group.items.find((item) => item.key === key);
     if (found) return found;
   }
-  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, SALES_ACCOUNTS, CUSTOMERS].find((leaf) => leaf.key === key);
+  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, SALES_ACCOUNTS, CUSTOMERS, CRAR, RMA_LOG].find((leaf) => leaf.key === key);
 }

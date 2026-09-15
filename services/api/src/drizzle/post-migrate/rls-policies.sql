@@ -75,7 +75,8 @@ DECLARE
     'attachments',
     'warranty_claims', 'warranty_claim_costs', 'warranty_claim_workflow',
     'supplier_onboarding_documents', 'supplier_documents', 'supplier_ppap_submissions',
-    'supplier_corrective_actions', 'supplier_8d_responses', 'supplier_messages'
+    'supplier_corrective_actions', 'supplier_8d_responses', 'supplier_messages',
+    'crar', 'supplier_rma_requests', 'rma_log'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP

@@ -42,6 +42,8 @@ import { settingsRouter } from "../modules/settings/settings.routes.js";
 import { attachmentsRouter } from "../modules/attachments/attachments.routes.js";
 import { warrantyRouter } from "../modules/warranty/warranty.routes.js";
 import { supplierPortalRouter } from "../modules/supplier-portal/supplierPortal.routes.js";
+import { crarRouter } from "../modules/crar/crar.routes.js";
+import { rmaLogRouter } from "../modules/rma-log/rmaLog.routes.js";
 
 export const apiRouter = Router();
 
@@ -92,3 +94,5 @@ apiRouter.use("/settings", settingsRouter);
 apiRouter.use("/attachments", attachmentsRouter);
 apiRouter.use("/warranty", warrantyRouter);
 apiRouter.use("/supplier-portal", supplierPortalRouter);
+apiRouter.use("/crar", crarRouter);
+apiRouter.use("/rma-log", rmaLogRouter);
