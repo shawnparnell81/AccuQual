@@ -40,6 +40,8 @@ import { scarFormsRouter } from "../modules/scar-forms/scarForms.routes.js";
 import { qualityInspectionReportsRouter } from "../modules/quality-inspection-reports/qualityInspectionReports.routes.js";
 import { settingsRouter } from "../modules/settings/settings.routes.js";
 import { attachmentsRouter } from "../modules/attachments/attachments.routes.js";
+import { warrantyRouter } from "../modules/warranty/warranty.routes.js";
+import { supplierPortalRouter } from "../modules/supplier-portal/supplierPortal.routes.js";
 
 export const apiRouter = Router();
 
@@ -88,3 +90,5 @@ apiRouter.use("/scar-forms", scarFormsRouter);
 apiRouter.use("/quality-inspection-reports", qualityInspectionReportsRouter);
 apiRouter.use("/settings", settingsRouter);
 apiRouter.use("/attachments", attachmentsRouter);
+apiRouter.use("/warranty", warrantyRouter);
+apiRouter.use("/supplier-portal", supplierPortalRouter);

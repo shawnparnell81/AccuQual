@@ -8,6 +8,9 @@ export interface AuthenticatedUser {
   roleId: number | null;
   roleName: string | null;
   department: string | null;
+  // Set only for roleName:"supplier" (Supplier Portal) logins — see
+  // users.ts's supplierId column comment.
+  supplierId: number | null;
 }
 
 declare global {
@@ -36,6 +39,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
       roleId: payload.roleId,
       roleName: payload.roleName,
       department: payload.department,
+      supplierId: payload.supplierId ?? null,
     };
     next();
   } catch {

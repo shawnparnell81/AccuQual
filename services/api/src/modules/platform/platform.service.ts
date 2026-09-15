@@ -103,7 +103,7 @@ export async function createTenant(input: CreateTenantInput) {
   // 4. Provision tenant storage (local filesystem when STORAGE_DRIVER=local; a real
   //    deployment would provision the equivalent Azure Blob prefixes instead).
   if (env.STORAGE_DRIVER === "local") {
-    for (const dir of ["forms", "documents", "digital-twin", "exports", "attachments"]) {
+    for (const dir of ["forms", "documents", "digital-twin", "exports", "attachments", "warranty", "supplier-portal"]) {
       await mkdir(`${env.STORAGE_LOCAL_PATH}/tenants/${tenant.id}/${dir}`, { recursive: true }).catch((err) =>
         logger.warn(`Could not provision storage dir for tenant ${tenant.id}`, err)
       );

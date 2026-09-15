@@ -32,7 +32,9 @@ export type ResourceKey =
   | "risk"
   | "feasibility"
   | "sales"
-  | "customers";
+  | "customers"
+  | "warranty"
+  | "supplier_portal";
 
 /**
  * Source of truth: "Subfolder links.xlsx" (Department | Subfolder | Appears In |
@@ -149,6 +151,31 @@ export const PERMISSION_MATRIX: Record<ResourceKey, Partial<Record<Department, A
   // same level as the sales module above. Delete stays admin-only, enforced
   // inline in customers.controller.ts — same stricter rule as sales.
   customers: { sales_and_marketing: "edit", quality: "read", engineering: "read" },
+  // The Warranty module. Customer Service owns intake (a warranty claim
+  // starts as a customer contact); Quality owns inspection + the
+  // supplier_review/approved/rejected disposition decision (same
+  // disposition-authority role it has on NCR/CAPA); Engineering shares
+  // inspection duty (real technical failure analysis). Purchasing gets
+  // "edit" too — narrower than it sounds, since warranty.controller.ts's
+  // own assertDepartment only actually lets Purchasing record cost entries
+  // (what a supplier invoice charged), never create a claim or transition
+  // its status; the matrix can only grant/deny at the whole-module level
+  // (a "read" grant here would block that one real write action), so this
+  // is the same "matrix grants edit, controller narrows per action" pattern
+  // as rma/risk/feasibility above. material_management stays read-only —
+  // it has no write action of its own in this module.
+  warranty: { customer_service: "edit", quality: "edit", engineering: "edit", purchasing: "edit", material_management: "read" },
+  // The Supplier Portal — the INTERNAL staff side only. Quality owns
+  // reviewing/approving what suppliers submit (onboarding docs, PPAP,
+  // corrective actions, 8Ds — the same disposition-authority role it has
+  // everywhere else); Purchasing gets edit too (messaging + scorecard
+  // entry is part of supplier relationship management, already
+  // Purchasing's read-level concern on the `suppliers` resource above).
+  // Engineering gets read (PPAP/FMEA content is theirs to consult, not
+  // approve). This entry never applies to an actual external supplier
+  // login — those carry roleName:"supplier" and are gated by
+  // requireSupplierPortalAccess() below instead, never by this matrix.
+  supplier_portal: { quality: "edit", purchasing: "edit", engineering: "read" },
 };
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -198,4 +225,39 @@ export function requireAnyDepartment(...departments: Department[]) {
 
     next(AppError.forbidden(`Requires one of departments: ${departments.join(", ")} (or admin)`));
   };
+}
+
+/**
+ * Gates the Supplier Portal to its two real audiences:
+ *  - an external supplier login (roleName:"supplier") — allowed through
+ *    unconditionally here (every controller then MUST scope its queries to
+ *    `req.user.supplierId`, never a client-supplied id — see
+ *    supplierPortal.controller.ts's own resolveSupplierScope()); rejected
+ *    if the account has no supplierId at all (a misconfigured login, not a
+ *    real supplier-portal user).
+ *  - internal staff, gated exactly like every other module via
+ *    PERMISSION_MATRIX.supplier_portal (Quality/Purchasing edit,
+ *    Engineering read) through the normal requireDepartmentAccess logic.
+ * admin/platform_admin bypass both branches, same as everywhere else.
+ */
+export function requireSupplierPortalAccess(req: Request, _res: Response, next: NextFunction) {
+  const role = req.user?.roleName;
+  if (role === "platform_admin" || role === "admin") return next();
+
+  if (role === "supplier") {
+    if (!req.user?.supplierId) {
+      return next(AppError.forbidden("This supplier login is not linked to a real supplier record"));
+    }
+    return next();
+  }
+
+  const department = req.user?.department as Department | null | undefined;
+  const level: AccessLevel = (department && PERMISSION_MATRIX.supplier_portal[department]) || "none";
+  if (level === "none") {
+    return next(AppError.forbidden("No access to the Supplier Portal for your department"));
+  }
+  if (level === "read" && !READ_METHODS.has(req.method)) {
+    return next(AppError.forbidden("Supplier Portal is read-only for your department"));
+  }
+  next();
 }
