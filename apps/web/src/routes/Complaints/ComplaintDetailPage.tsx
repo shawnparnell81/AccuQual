@@ -2,6 +2,7 @@ import { useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { CreateFeasibilityButton } from "../../components/shared/CreateFeasibilityButton";
 
 interface Complaint {
   id: number;
@@ -33,7 +34,10 @@ export function ComplaintDetailPage() {
             <StatusBadge value={complaint.severity} />
           </div>
         </div>
-        <OpenFormButton formType="complaint" entityId={complaint.id} title={`Complaint #${complaint.id} Form`} />
+        <div className="flex gap-2">
+          <OpenFormButton formType="complaint" entityId={complaint.id} title={`Complaint #${complaint.id} Form`} />
+          <CreateFeasibilityButton sourceType="complaint" sourceId={complaint.id} defaultTitle={`Feasibility review for Complaint #${complaint.id}`} defaultDepartment="quality" />
+        </div>
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">{complaint.description}</div>

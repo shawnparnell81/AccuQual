@@ -7,7 +7,7 @@ import { ForgotPasswordPage } from "./routes/Auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "./routes/Auth/ResetPasswordPage";
 import { DashboardPage } from "./routes/Dashboard/DashboardPage";
 import { NcrListPage } from "./routes/NCR/NcrListPage";
-import { NcrDetailPage } from "./routes/NCR/NcrDetailPage";
+import { NcrWorkspacePage } from "./routes/NCR/NcrWorkspacePage";
 import { CapaListPage } from "./routes/CAPA/CapaListPage";
 import { CapaDetailPage } from "./routes/CAPA/CapaDetailPage";
 import { EightDPage } from "./routes/EightD/EightDPage";
@@ -24,6 +24,25 @@ import { ChangePage } from "./routes/Change/ChangePage";
 import { ChangeDetailPage } from "./routes/Change/ChangeDetailPage";
 import { RiskPage } from "./routes/Risk/RiskPage";
 import { RiskDetailPage } from "./routes/Risk/RiskDetailPage";
+import { RiskDashboardPage } from "./routes/Risk/RiskDashboardPage";
+import { FeasibilityPage } from "./routes/Feasibility/FeasibilityPage";
+import { FeasibilityDetailPage } from "./routes/Feasibility/FeasibilityDetailPage";
+import { FeasibilityDashboardPage } from "./routes/Feasibility/FeasibilityDashboardPage";
+import { SalesAccountsPage } from "./routes/Sales/SalesAccountsPage";
+import { SalesAccountDetailPage } from "./routes/Sales/SalesAccountDetailPage";
+import { SalesDashboardPage } from "./routes/Sales/SalesDashboardPage";
+import { CustomersPage } from "./routes/Customers/CustomersPage";
+import { CustomerDetailPage } from "./routes/Customers/CustomerDetailPage";
+import { CustomerDashboardPage } from "./routes/Customers/CustomerDashboardPage";
+import { DocumentChangeRequestsPage } from "./routes/DocumentChangeRequests/DocumentChangeRequestsPage";
+import { DocumentChangeRequestDetailPage } from "./routes/DocumentChangeRequests/DocumentChangeRequestDetailPage";
+import { QmsFormsLibraryPage } from "./routes/QmsForms/QmsFormsLibraryPage";
+import { QmsFormTypePage } from "./routes/QmsForms/QmsFormTypePage";
+import { QmsFormRecordPage } from "./routes/QmsForms/QmsFormRecordPage";
+import { ScarFormsPage } from "./routes/ScarForms/ScarFormsPage";
+import { ScarFormDetailPage } from "./routes/ScarForms/ScarFormDetailPage";
+import { QualityInspectionReportsPage } from "./routes/QualityInspectionReports/QualityInspectionReportsPage";
+import { QualityInspectionReportDetailPage } from "./routes/QualityInspectionReports/QualityInspectionReportDetailPage";
 import { PpapListPage } from "./routes/Ppap/PpapListPage";
 import { PpapDetailPage } from "./routes/Ppap/PpapDetailPage";
 import { ProductionLogsPage } from "./routes/Production/ProductionLogsPage";
@@ -84,7 +103,7 @@ export function App() {
           <Route path="/platform" element={<PlatformAdminPage />} />
 
           <Route path="/ncr" element={<NcrListPage />} />
-          <Route path="/ncr/:id" element={<NcrDetailPage />} />
+          <Route path="/ncr/:id" element={<NcrWorkspacePage />} />
 
           <Route path="/capa" element={<CapaListPage />} />
           <Route path="/capa/:id" element={<CapaDetailPage />} />
@@ -107,7 +126,26 @@ export function App() {
           <Route path="/change" element={<ChangePage />} />
           <Route path="/change/:id" element={<ChangeDetailPage />} />
           <Route path="/risk" element={<RiskPage />} />
+          <Route path="/risk/dashboard" element={<RiskDashboardPage />} />
           <Route path="/risk/:id" element={<RiskDetailPage />} />
+          <Route path="/feasibility" element={<FeasibilityPage />} />
+          <Route path="/feasibility/dashboard" element={<FeasibilityDashboardPage />} />
+          <Route path="/feasibility/:id" element={<FeasibilityDetailPage />} />
+          <Route path="/sales" element={<SalesAccountsPage />} />
+          <Route path="/sales/dashboard" element={<SalesDashboardPage />} />
+          <Route path="/sales/:id" element={<SalesAccountDetailPage />} />
+          <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/customers/dashboard" element={<CustomerDashboardPage />} />
+          <Route path="/customers/:id" element={<CustomerDetailPage />} />
+          <Route path="/document-change-requests" element={<DocumentChangeRequestsPage />} />
+          <Route path="/document-change-requests/:id" element={<DocumentChangeRequestDetailPage />} />
+          <Route path="/qms-forms" element={<QmsFormsLibraryPage />} />
+          <Route path="/qms-forms/:formType" element={<QmsFormTypePage />} />
+          <Route path="/qms-forms/:formType/:id" element={<QmsFormRecordPage />} />
+          <Route path="/scar-forms" element={<ScarFormsPage />} />
+          <Route path="/scar-forms/:id" element={<ScarFormDetailPage />} />
+          <Route path="/quality-inspection-reports" element={<QualityInspectionReportsPage />} />
+          <Route path="/quality-inspection-reports/:id" element={<QualityInspectionReportDetailPage />} />
           <Route path="/ppap" element={<PpapListPage />} />
           <Route path="/ppap/:id" element={<PpapDetailPage />} />
           <Route path="/production-logs" element={<ProductionLogsPage />} />

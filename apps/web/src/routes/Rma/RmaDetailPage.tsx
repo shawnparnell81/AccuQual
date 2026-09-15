@@ -9,6 +9,9 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { CreateFeasibilityButton } from "../../components/shared/CreateFeasibilityButton";
+import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
+import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
 import { Modal } from "../../components/modals/Modal";
 import { TextField, SelectField, TextAreaField } from "../../components/forms/Field";
 import type { Rma, RmaItem, InventoryItem, Ncr, Capa, RmaStatus } from "../../api/types";
@@ -192,11 +195,16 @@ export function RmaDetailPage() {
             <span className="text-sm text-muted-foreground">{record.reasonCode?.replace(/_/g, " ") ?? "No reason code set"}</span>
           </div>
         </div>
-        {canEditFull && (
-          <button onClick={() => setAddItemOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-            + Add Item
-          </button>
-        )}
+        <div className="flex gap-2">
+          {canEditFull && (
+            <button onClick={() => setAddItemOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+              + Add Item
+            </button>
+          )}
+          <CreateFeasibilityButton sourceType="rma" sourceId={record.id} defaultTitle={`Feasibility review for ${record.rmaNumber}`} defaultDepartment="purchasing" />
+          <LinkSalesAccountButton sourceType="RMA" sourceId={record.id} defaultAccountName={record.rmaNumber} />
+          <CreateCustomerButton sourceType="RMA" sourceId={record.id} defaultLegalName={record.rmaNumber} />
+        </div>
       </div>
 
       {nextActions.length > 0 && (

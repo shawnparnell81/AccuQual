@@ -57,7 +57,7 @@ DECLARE
   tenant_tables text[] := ARRAY[
     'users', 'documents', 'document_versions', 'document_folders', 'ncr', 'ncr_attachments',
     'capa', 'eight_d', 'audits', 'audit_items', 'training_courses',
-    'training_assignments', 'change_requests', 'risk_assessments', 'fmea_items',
+    'training_assignments', 'change_requests', 'risk_assessments', 'fmea_items', 'risk_mitigations',
     'ppap_packages', 'discrepancy_investigations', 'suppliers', 'supplier_scorecards', 'equipment', 'calibrations', 'complaints',
     'workflow_definitions', 'workflow_runs', 'ai_suggestions', 'ai_risk_scores',
     'ai_embeddings', 'digital_twin_models', 'digital_twin_simulations',
@@ -66,7 +66,12 @@ DECLARE
     'inventory_alerts', 'notification_log', 'inventory_reorder_requests',
     'erp_purchase_orders', 'erp_po_line_items', 'erp_receiving_documents', 'erp_receiving_line_items',
     'rma', 'rma_items', 'nav_hidden_items', 'work_orders', 'erp_purchase_requisitions',
-    'onboarding_progress'
+    'onboarding_progress', 'feasibility_reviews', 'feasibility_scores',
+    'sales_accounts', 'sales_activities', 'sales_quotes', 'sales_contracts',
+    'customers', 'work_order_operations',
+    'document_change_requests', 'document_change_items', 'document_change_reviews',
+    'qms_forms', 'qms_form_rows',
+    'scar_forms', 'quality_inspection_reports', 'quality_inspection_items'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP

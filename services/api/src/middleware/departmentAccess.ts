@@ -8,7 +8,8 @@ export type Department =
   | "production"
   | "customer_service"
   | "purchasing"
-  | "material_management";
+  | "material_management"
+  | "sales_and_marketing";
 
 export type ResourceKey =
   | "ncr"
@@ -27,7 +28,11 @@ export type ResourceKey =
   | "erp"
   | "rma"
   | "work_orders"
-  | "purchase_requisitions";
+  | "purchase_requisitions"
+  | "risk"
+  | "feasibility"
+  | "sales"
+  | "customers";
 
 /**
  * Source of truth: "Subfolder links.xlsx" (Department | Subfolder | Appears In |
@@ -102,6 +107,43 @@ export const PERMISSION_MATRIX: Record<ResourceKey, Partial<Record<Department, A
   // purchasing-only, same narrower-than-matrix pattern RMA's quality
   // access already uses.
   purchase_requisitions: { production: "edit", material_management: "edit", quality: "edit", engineering: "edit", purchasing: "edit" },
+  // Not a sheet row — the Risk Management module. Every department that can
+  // raise or work a risk gets "edit" here (create + propose-mitigation is
+  // the shared floor); the real per-action asymmetry the spec calls for
+  // ("Quality has full control incl. close/status transitions, Engineering
+  // may also update the record's own fields, Production/Purchasing may only
+  // add mitigation actions") is narrower than this matrix can express, so
+  // it's enforced inline in risk.controller.ts's assertDepartment — same
+  // pattern as inventory/erp/rma/work_orders above. Deleting a risk is
+  // admin-only, also enforced inline (not a department at all).
+  risk: { quality: "edit", engineering: "edit", production: "edit", purchasing: "edit", material_management: "edit" },
+  // Not a sheet row — the unified Feasibility Review module. Same shared
+  // floor as risk (create + add/update scores); the real per-action
+  // asymmetry (record update: quality+engineering only; workflow
+  // transitions + delete: quality or admin) is enforced inline in
+  // feasibility.controller.ts's assertDepartment, same pattern as risk.
+  feasibility: { quality: "edit", engineering: "edit", production: "edit", purchasing: "edit", material_management: "edit" },
+  // Not a sheet row — the new Sales & Marketing module, and sales_and_marketing's
+  // first real PERMISSION_MATRIX entry as a department (see the Sales &
+  // Marketing module review — added as ONE department, not split into
+  // separate Sales/Marketing gates). quality/engineering get read (they
+  // review customer-requirements-linked documents via the existing Document
+  // Control approval flow, not this module's own gate). Delete stays
+  // admin-only, enforced inline — no department gets it, per the module's
+  // own explicit "Admin: delete records" rule (a stricter rule than risk/
+  // feasibility's quality-or-admin, kept as literally specified this time).
+  sales: { sales_and_marketing: "edit", quality: "read", engineering: "read" },
+  // Not a sheet row — the Customer Onboarding module. sales_and_marketing
+  // owns the whole case lifecycle (create through activate), same reasoning
+  // as its own sales_accounts pipeline — there's no separate "reviewer
+  // department" in the spec, so submit/review/approve/reject/activate are
+  // all sales_and_marketing (or admin), with ownerId/reviewerId on the
+  // record itself distinguishing who did what within that one department.
+  // quality/engineering get read visibility (they consult it when raising a
+  // linked Risk/Feasibility review — see customers.ts's relatedSourceType),
+  // same level as the sales module above. Delete stays admin-only, enforced
+  // inline in customers.controller.ts — same stricter rule as sales.
+  customers: { sales_and_marketing: "edit", quality: "read", engineering: "read" },
 };
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);

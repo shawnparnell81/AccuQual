@@ -83,6 +83,14 @@ const MODULE_ENTITY_TYPES: Record<string, string> = {
   erp: "PurchaseOrder",
   rma: "Rma",
   work_orders: "WorkOrder",
+  risk: "RiskAssessment",
+  feasibility: "FeasibilityReview",
+  sales_accounts: "SalesAccount",
+  customers: "Customer",
+  document_change_requests: "DocumentChangeRequest",
+  qms_forms: "QmsForm",
+  scar_forms: "ScarForm",
+  quality_inspection_reports: "QualityInspectionReport",
 };
 
 /** GET /workflow/history/:moduleName/:recordId — read-only, backed entirely by the existing audit_trail table. */

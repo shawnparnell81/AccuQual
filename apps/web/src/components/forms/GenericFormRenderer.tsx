@@ -14,9 +14,18 @@ interface GenericFormRendererProps {
   layout: FormLayout;
   data: Record<string, unknown>;
   onChange: (name: string, value: unknown) => void;
+  /**
+   * Renders every block's value as static styled text instead of an
+   * input/textarea/select — same wrapper markup/classes as the editable
+   * version, so a read-only pane fed the same layout+data stays visually
+   * identical to the editable one beside it. Used by the NCR workspace's
+   * live preview pane (see NcrWorkspacePage.tsx) — a local re-render of
+   * in-memory state, not a PDF export round trip.
+   */
+  readOnly?: boolean;
 }
 
-export function GenericFormRenderer({ layout, data, onChange }: GenericFormRendererProps) {
+export function GenericFormRenderer({ layout, data, onChange, readOnly = false }: GenericFormRendererProps) {
   return (
     <div className="flex flex-col gap-5">
       <h2 className="text-center text-base font-bold uppercase tracking-wide" style={{ color: NAVY }}>
@@ -29,7 +38,7 @@ export function GenericFormRenderer({ layout, data, onChange }: GenericFormRende
           </div>
           <div className="flex flex-col divide-y" style={{ borderColor: BORDER }}>
             {section.blocks.map((block, i) => (
-              <BlockView key={i} block={block} data={data} onChange={onChange} />
+              <BlockView key={i} block={block} data={data} onChange={onChange} readOnly={readOnly} />
             ))}
           </div>
         </div>
@@ -38,20 +47,33 @@ export function GenericFormRenderer({ layout, data, onChange }: GenericFormRende
   );
 }
 
-function BlockView({ block, data, onChange }: { block: Block; data: Record<string, unknown>; onChange: (name: string, value: unknown) => void }) {
+interface BlockViewProps<B> {
+  block: B;
+  data: Record<string, unknown>;
+  onChange: (name: string, value: unknown) => void;
+  readOnly: boolean;
+}
+
+function BlockView({ block, data, onChange, readOnly }: BlockViewProps<Block>) {
   switch (block.type) {
     case "row":
-      return <RowBlockView block={block} data={data} onChange={onChange} />;
+      return <RowBlockView block={block} data={data} onChange={onChange} readOnly={readOnly} />;
     case "textarea":
-      return <TextareaBlockView block={block} data={data} onChange={onChange} />;
+      return <TextareaBlockView block={block} data={data} onChange={onChange} readOnly={readOnly} />;
     case "yesno":
-      return <YesNoBlockView block={block} data={data} onChange={onChange} />;
+      return <YesNoBlockView block={block} data={data} onChange={onChange} readOnly={readOnly} />;
     case "table":
-      return <TableBlockView block={block} data={data} onChange={onChange} />;
+      return <TableBlockView block={block} data={data} onChange={onChange} readOnly={readOnly} />;
   }
 }
 
-function RowBlockView({ block, data, onChange }: { block: RowBlock; data: Record<string, unknown>; onChange: (name: string, value: unknown) => void }) {
+/** Read-only stand-in for an input/select/textarea — same text size/color as the real value, so the two panes line up. */
+function StaticValue({ value }: { value: unknown }) {
+  const text = value === undefined || value === null || value === "" ? "" : String(value);
+  return <p className="min-h-[1.25em] whitespace-pre-wrap text-xs text-slate-800">{text || " "}</p>;
+}
+
+function RowBlockView({ block, data, onChange, readOnly }: BlockViewProps<RowBlock>) {
   return (
     <div className="grid" style={{ gridTemplateColumns: `repeat(${block.fields.length}, minmax(0, 1fr))` }}>
       {block.fields.map((field) => (
@@ -61,7 +83,9 @@ function RowBlockView({ block, data, onChange }: { block: RowBlock; data: Record
             {field.hint && <p className="text-[9px] italic text-slate-500">{field.hint}</p>}
           </div>
           <div className="px-2 py-1">
-            {field.kind === "select" ? (
+            {readOnly ? (
+              <StaticValue value={data[field.name]} />
+            ) : field.kind === "select" ? (
               <select
                 className="w-full bg-transparent text-xs outline-none"
                 value={(data[field.name] as string) ?? ""}
@@ -89,41 +113,54 @@ function RowBlockView({ block, data, onChange }: { block: RowBlock; data: Record
   );
 }
 
-function TextareaBlockView({ block, data, onChange }: { block: TextareaBlock; data: Record<string, unknown>; onChange: (name: string, value: unknown) => void }) {
+function TextareaBlockView({ block, data, onChange, readOnly }: BlockViewProps<TextareaBlock>) {
   return (
     <div>
       <div className="px-2 py-1.5" style={{ backgroundColor: LABEL_BG }}>
         <p className="text-[11px] font-semibold text-slate-800">{block.label}</p>
         {block.hint && <p className="text-[9px] italic text-slate-500">{block.hint}</p>}
       </div>
-      <textarea
-        className="w-full resize-y bg-transparent px-2 py-2 text-xs outline-none"
-        rows={4}
-        value={(data[block.name] as string) ?? ""}
-        onChange={(e) => onChange(block.name, e.target.value)}
-      />
+      {readOnly ? (
+        <div className="px-2 py-2">
+          <StaticValue value={data[block.name]} />
+        </div>
+      ) : (
+        <textarea
+          className="w-full resize-y bg-transparent px-2 py-2 text-xs outline-none"
+          rows={4}
+          value={(data[block.name] as string) ?? ""}
+          onChange={(e) => onChange(block.name, e.target.value)}
+        />
+      )}
     </div>
   );
 }
 
-function YesNoBlockView({ block, data, onChange }: { block: YesNoBlock; data: Record<string, unknown>; onChange: (name: string, value: unknown) => void }) {
+function YesNoBlockView({ block, data, onChange, readOnly }: BlockViewProps<YesNoBlock>) {
   const value = (data[block.name] as string) ?? "";
   return (
     <div className="flex items-center justify-between px-2 py-2" style={{ backgroundColor: LABEL_BG }}>
       <p className="text-[11px] font-semibold text-slate-800">{block.label}</p>
       <div className="flex items-center gap-3 text-xs">
-        {(["yes", "no"] as const).map((opt) => (
-          <label key={opt} className="flex items-center gap-1">
-            <input type="radio" name={block.name} checked={value === opt} onChange={() => onChange(block.name, opt)} />
-            {opt.toUpperCase()}
-          </label>
-        ))}
+        {(["yes", "no"] as const).map((opt) =>
+          readOnly ? (
+            <span key={opt} className={value === opt ? "font-semibold text-slate-800" : "text-muted-foreground"}>
+              {value === opt ? "● " : "○ "}
+              {opt.toUpperCase()}
+            </span>
+          ) : (
+            <label key={opt} className="flex items-center gap-1">
+              <input type="radio" name={block.name} checked={value === opt} onChange={() => onChange(block.name, opt)} />
+              {opt.toUpperCase()}
+            </label>
+          ),
+        )}
       </div>
     </div>
   );
 }
 
-function TableBlockView({ block, data, onChange }: { block: TableBlock; data: Record<string, unknown>; onChange: (name: string, value: unknown) => void }) {
+function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<TableBlock>) {
   const rows: Record<string, unknown>[] =
     (data[block.name] as Record<string, unknown>[] | undefined) ??
     (block.fixedRowLabels ? block.fixedRowLabels.map(() => ({})) : Array.from({ length: block.minRows ?? 1 }, () => ({})));
@@ -134,7 +171,9 @@ function TableBlockView({ block, data, onChange }: { block: TableBlock; data: Re
   // calibration due-date status) whose answer depends on "today" and can go
   // stale between visits even when no cell was actually edited this session.
   useEffect(() => {
-    if (!hasComputedColumns) return;
+    // The read-only preview pane must never write — it shares the same
+    // in-memory data as the editable pane, which already owns this refresh.
+    if (!hasComputedColumns || readOnly) return;
     let changed = false;
     const refreshed = rows.map((r) => {
       const next = materializeRow(r, block.columns);
@@ -177,7 +216,7 @@ function TableBlockView({ block, data, onChange }: { block: TableBlock; data: Re
                 {col.label}
               </th>
             ))}
-            {block.addableRows && <th className="border-t w-8" style={{ backgroundColor: LABEL_BG, borderColor: BORDER }} />}
+            {block.addableRows && !readOnly && <th className="border-t w-8" style={{ backgroundColor: LABEL_BG, borderColor: BORDER }} />}
           </tr>
         </thead>
         <tbody>
@@ -194,7 +233,12 @@ function TableBlockView({ block, data, onChange }: { block: TableBlock; data: Re
                     <div className="flex flex-col gap-1">
                       {col.options?.map((opt) => {
                         const selected = (row[col.key] as Record<string, boolean> | undefined) ?? {};
-                        return (
+                        return readOnly ? (
+                          <span key={opt} className={Boolean(selected[opt]) ? "font-semibold text-slate-800" : "text-muted-foreground"}>
+                            {Boolean(selected[opt]) ? "☑ " : "☐ "}
+                            {opt}
+                          </span>
+                        ) : (
                           <label key={opt} className="flex items-center gap-1">
                             <input
                               type="checkbox"
@@ -206,6 +250,10 @@ function TableBlockView({ block, data, onChange }: { block: TableBlock; data: Re
                         );
                       })}
                     </div>
+                  ) : col.kind === "computed" ? (
+                    <ComputedCell value={row[col.key]} />
+                  ) : readOnly ? (
+                    <StaticValue value={row[col.key]} />
                   ) : col.kind === "textarea" ? (
                     <textarea
                       className="w-full resize-y bg-transparent text-xs outline-none"
@@ -213,8 +261,6 @@ function TableBlockView({ block, data, onChange }: { block: TableBlock; data: Re
                       value={(row[col.key] as string) ?? ""}
                       onChange={(e) => updateCell(rowIndex, col.key, e.target.value)}
                     />
-                  ) : col.kind === "computed" ? (
-                    <ComputedCell value={row[col.key]} />
                   ) : col.kind === "select" ? (
                     <select
                       className="w-full bg-transparent text-xs outline-none"
@@ -242,7 +288,7 @@ function TableBlockView({ block, data, onChange }: { block: TableBlock; data: Re
                   )}
                 </td>
               ))}
-              {block.addableRows && (
+              {block.addableRows && !readOnly && (
                 <td className="border-t px-1 text-center" style={{ borderColor: BORDER }}>
                   <button onClick={() => removeRow(rowIndex)} className="text-muted-foreground hover:text-destructive" aria-label="Remove row">
                     ×
@@ -253,7 +299,7 @@ function TableBlockView({ block, data, onChange }: { block: TableBlock; data: Re
           ))}
         </tbody>
       </table>
-      {block.addableRows && (
+      {block.addableRows && !readOnly && (
         <button onClick={addRow} className="mt-2 rounded-md border px-2 py-1 text-xs hover:bg-muted" style={{ borderColor: BORDER }}>
           + Add row
         </button>

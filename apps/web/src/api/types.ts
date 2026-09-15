@@ -36,7 +36,7 @@ export interface WorkflowHistoryEntry {
 }
 
 /** Friendly moduleName values the history endpoint accepts — kept in sync with services/api's workflow.controller.ts MODULE_ENTITY_TYPES. */
-export type WorkflowModuleName = "calibration" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp" | "rma" | "work_orders";
+export type WorkflowModuleName = "calibration" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp" | "rma" | "work_orders" | "risk" | "feasibility" | "sales_accounts" | "customers" | "document_change_requests" | "qms_forms" | "scar_forms" | "quality_inspection_reports";
 
 export interface Ncr {
   id: number;
@@ -542,6 +542,20 @@ export interface WorkflowDefinition {
 
 export type WorkOrderStatus = "planned" | "in_progress" | "completed" | "cancelled";
 
+/** One row of the Production Work Order traveler's Operations Routing table — see workOrders.ts's schema comment. */
+export interface WorkOrderOperation {
+  id: number;
+  workOrderId: number;
+  opNumber: number;
+  description: string;
+  workCenter: string | null;
+  completedQty: string | null;
+  signOff: string | null;
+  signOffDate: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
 export interface WorkOrder {
   id: number;
   itemId: number;
@@ -553,11 +567,176 @@ export interface WorkOrder {
   linkedNcrId: number | null;
   dueDate: string | null;
   notes: string | null;
+  revision: string | null;
+  firstPieceInspectionPassed: boolean;
+  finalQcInspectionPassed: boolean;
+  operatorSignature: string | null;
+  operatorSignedAt: string | null;
+  inspectorSignature: string | null;
+  inspectorSignedAt: string | null;
   createdAt: string;
   updatedAt: string | null;
   // Detail endpoint only.
   item?: { id: number; sku: string; description: string | null; state: string } | null;
   linkedNcr?: { id: number; title: string; status: string; severity: string | null } | null;
+  operations?: WorkOrderOperation[];
+}
+
+export type DocumentChangeStatus = "draft" | "active" | "obsolete";
+
+/** One row of the Document Change Request's "Change Request" table — see documentChangeRequests.ts's schema comment. */
+export interface DocumentChangeItem {
+  id: number;
+  documentChangeRequestId: number;
+  changeId: string | null;
+  documentProcess: string | null;
+  currentRevision: string | null;
+  proposedRevision: string | null;
+  reason: string | null;
+  requestedBy: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+/** One row of the Document Change Request's "Review & Approval" table. */
+export interface DocumentChangeReview {
+  id: number;
+  documentChangeRequestId: number;
+  reviewer: string | null;
+  comments: string | null;
+  decision: string | null;
+  reviewDate: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface DocumentChangeRequest {
+  id: number;
+  formNo: string | null;
+  revision: string | null;
+  effectiveDate: string | null;
+  preparedBy: string | null;
+  approvedBy: string | null;
+  status: DocumentChangeStatus;
+  additionalComments: string | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  // Detail endpoint only.
+  items?: DocumentChangeItem[];
+  reviews?: DocumentChangeReview[];
+}
+
+export type QmsFormStatus = "draft" | "active" | "obsolete";
+
+/** One row in one named table section of a QmsForm — see qmsFormDefinitions.ts. */
+export interface QmsFormRow {
+  id: number;
+  formId: number;
+  sectionKey: string;
+  data: Record<string, string>;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+/** A generic QMS Simple Form record — see qmsForms.ts's schema comment. */
+export interface QmsForm {
+  id: number;
+  formType: string;
+  formNo: string | null;
+  revision: string | null;
+  effectiveDate: string | null;
+  preparedBy: string | null;
+  approvedBy: string | null;
+  status: QmsFormStatus;
+  additionalComments: string | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  // Detail endpoint only.
+  rows?: QmsFormRow[];
+}
+
+export type ScarStatus = "open" | "closed";
+
+/** Supplier Corrective Action Request — see scarForms.ts's schema comment for why the CAPA/sign-off rows are flat columns, not a child table. */
+export interface ScarForm {
+  id: number;
+  scarNumber: string | null;
+  dateIssued: string | null;
+  supplierName: string | null;
+  responseDueDate: string | null;
+  contactPerson: string | null;
+  poNumber: string | null;
+  partNumberDescription: string | null;
+  lotHeatNumber: string | null;
+  quantityInspected: string | null;
+  quantityRejected: string | null;
+  defectDescription: string | null;
+  quarantineAtSupplier: boolean;
+  quarantineInTransit: boolean;
+  quarantineAtCustomerSite: boolean;
+  containmentPlan: string | null;
+  why1: string | null;
+  why2: string | null;
+  why3: string | null;
+  why4: string | null;
+  why5: string | null;
+  correctiveActionOwner: string | null;
+  correctiveActionTargetDate: string | null;
+  preventiveActionOwner: string | null;
+  preventiveActionTargetDate: string | null;
+  processUpdateOwner: string | null;
+  processUpdateTargetDate: string | null;
+  supplierRepSignature: string | null;
+  supplierRepDate: string | null;
+  qualityEngineerSignature: string | null;
+  qualityEngineerDate: string | null;
+  status: ScarStatus;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export type InspectionType = "incoming" | "in_process" | "final";
+export type InspectionFinalStatus = "accepted" | "rejected" | "rework_required" | "accepted_via_deviation";
+export type InspectionItemResult = "pass" | "fail";
+
+export interface QualityInspectionItem {
+  id: number;
+  reportId: number;
+  itemNumber: string | null;
+  parameter: string | null;
+  specification: string | null;
+  actualFinding: string | null;
+  result: InspectionItemResult | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface QualityInspectionReport {
+  id: number;
+  inspectionDate: string | null;
+  inspectorName: string | null;
+  inspectionType: InspectionType | null;
+  partMaterialNo: string | null;
+  poJobNo: string | null;
+  supplierVendor: string | null;
+  batchLotNo: string | null;
+  totalQuantity: string | null;
+  sampleSize: string | null;
+  finalStatus: InspectionFinalStatus | null;
+  notesRemarks: string | null;
+  inspectorSignature: string | null;
+  inspectorSignatureDate: string | null;
+  qaLeadSignature: string | null;
+  qaLeadSignatureDate: string | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  // Detail endpoint only.
+  items?: QualityInspectionItem[];
 }
 
 export type PurchaseRequisitionStatus = "draft" | "pending_approval" | "approved" | "rejected" | "converted_to_po";
@@ -580,6 +759,190 @@ export interface ErpPurchaseRequisition {
   // Detail endpoint only.
   item?: { id: number; sku: string; description: string | null } | null;
   supplier?: { id: number; name: string; status: string } | null;
+}
+
+export type RiskStatus = "open" | "mitigation" | "monitoring" | "closed";
+export type RiskLevel = "low" | "medium" | "high" | "critical";
+export type MitigationStatus = "planned" | "in_progress" | "completed";
+
+export interface RiskMitigation {
+  id: number;
+  riskAssessmentId: number;
+  action: string;
+  dueDate: string | null;
+  ownerId: number | null;
+  status: MitigationStatus;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface FmeaItem {
+  id: number;
+  riskAssessmentId: number;
+  failureMode: string;
+  effect: string | null;
+  cause: string | null;
+  severity: number;
+  occurrence: number;
+  detection: number;
+  rpn: string | null;
+  recommendedAction: string | null;
+}
+
+/** The Risk Register — see risk.ts's own schema comment for how this differs from /ai/risk-score (supplier scoring) and the Digital Twin's simulation heatmap. */
+export interface RiskAssessment {
+  id: number;
+  title: string;
+  description: string | null;
+  category: string | null;
+  sourceType: "NCR" | "Supplier" | "Receiving" | "WorkOrder" | "Manual" | null;
+  sourceId: number | null;
+  severity: number | null;
+  probability: number | null;
+  riskScore: number | null;
+  riskLevel: RiskLevel | null;
+  processArea: string | null;
+  department: string | null;
+  ownerId: number | null;
+  status: RiskStatus;
+  createdAt: string;
+  updatedAt: string | null;
+  closedAt: string | null;
+  // Detail endpoint only.
+  mitigations?: RiskMitigation[];
+  fmeaItems?: FmeaItem[];
+}
+
+export type FeasibilitySourceType = "ncr" | "supplier" | "complaint" | "ppap" | "change_request" | "work_order" | "requisition" | "po" | "rma" | "customer" | "future_product";
+export type FeasibilityStatus = "draft" | "submitted" | "under_review" | "approved" | "rejected";
+export type FeasibilityDecision = "feasible" | "conditional" | "not_feasible";
+
+export interface FeasibilityScore {
+  id: number;
+  feasibilityId: number;
+  dimensionKey: string;
+  dimensionLabel: string | null;
+  dimensionType: string | null;
+  value: string;
+  weight: string | null;
+  contribution: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+/** The unified Feasibility Review — ONE module across every source type, see feasibility.ts's own schema comment. */
+export interface FeasibilityReview {
+  id: number;
+  title: string;
+  description: string | null;
+  sourceType: FeasibilitySourceType | null;
+  sourceId: number | null;
+  overallScore: string | null;
+  decision: FeasibilityDecision | null;
+  status: FeasibilityStatus;
+  department: string | null;
+  ownerId: number | null;
+  reviewerId: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  decidedAt: string | null;
+  // Detail endpoint only.
+  scores?: FeasibilityScore[];
+}
+
+export type SalesAccountStatus = "prospect" | "active" | "dormant";
+export type SalesQuoteStatus = "draft" | "submitted" | "accepted" | "rejected" | "archived";
+export type SalesContractStatus = "draft" | "active" | "expired" | "archived";
+export type SalesContractType = "customer" | "service" | "pricing" | "renewal";
+export type SalesActivityType = "call" | "meeting" | "email" | "demo" | "follow_up" | "note";
+export type SalesRelatedSourceType = "NCR" | "PPAP" | "ChangeRequest" | "WorkOrder" | "Requisition" | "PO" | "RMA";
+
+export interface SalesAccount {
+  id: number;
+  customerName: string;
+  industry: string | null;
+  primaryContactName: string | null;
+  primaryContactEmail: string | null;
+  primaryContactPhone: string | null;
+  status: SalesAccountStatus;
+  ownerId: number | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  // Detail endpoint only.
+  activities?: SalesActivity[];
+  quotes?: SalesQuote[];
+  contracts?: SalesContract[];
+}
+
+export interface SalesActivity {
+  id: number;
+  accountId: number;
+  activityType: SalesActivityType;
+  notes: string | null;
+  nextSteps: string | null;
+  dueDate: string | null;
+  ownerId: number | null;
+  relatedSourceType: SalesRelatedSourceType | null;
+  relatedSourceId: number | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface SalesQuote {
+  id: number;
+  accountId: number;
+  quoteNumber: string;
+  revision: number;
+  status: SalesQuoteStatus;
+  pricingSheetDocumentId: number | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface SalesContract {
+  id: number;
+  accountId: number;
+  contractType: SalesContractType;
+  effectiveDate: string | null;
+  expirationDate: string | null;
+  status: SalesContractStatus;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export type CustomerType = "OEM" | "Tier 1" | "Tier 2" | "Distributor" | "Other";
+export type CustomerStatus = "draft" | "submitted" | "under_review" | "approved" | "activated" | "rejected";
+export type CustomerRelatedSourceType = "NCR" | "Supplier" | "WorkOrder" | "Requisition" | "PO" | "RMA" | "Risk" | "Feasibility" | "SalesAccount";
+
+/** A Customer Onboarding case — ONE table for both the master record and its onboarding workflow, see customers.ts's own schema comment. */
+export interface Customer {
+  id: number;
+  legalName: string;
+  dbaName: string | null;
+  address: string | null;
+  billingAddress: string | null;
+  website: string | null;
+  primaryContactName: string | null;
+  primaryContactEmail: string | null;
+  primaryContactPhone: string | null;
+  industry: string | null;
+  customerType: CustomerType | null;
+  status: CustomerStatus;
+  department: string | null;
+  ownerId: number | null;
+  reviewerId: number | null;
+  ndaDocumentId: number | null;
+  relatedSourceType: CustomerRelatedSourceType | null;
+  relatedSourceId: number | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  decidedAt: string | null;
+  activatedAt: string | null;
 }
 
 export interface OnboardingProgressRow {

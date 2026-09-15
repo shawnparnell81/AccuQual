@@ -6,6 +6,9 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { TextField } from "../../components/forms/Field";
+import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
+import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
+import { ProductionWorkOrderTraveler } from "./ProductionWorkOrderTraveler";
 import type { WorkOrder, WorkOrderStatus } from "../../api/types";
 
 const woHooks = createResourceHooks<WorkOrder>("work-orders");
@@ -29,13 +32,19 @@ export function WorkOrderDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Work Order #{record.id}</h1>
-        <div className="mt-1 flex items-center gap-2">
-          <StatusBadge value={record.status} />
-          <span className="text-sm text-muted-foreground">
-            {record.item?.sku ?? `Item #${record.itemId}`} — planned {record.quantityPlanned}, completed {record.quantityCompleted}
-          </span>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold">Work Order #{record.id}</h1>
+          <div className="mt-1 flex items-center gap-2">
+            <StatusBadge value={record.status} />
+            <span className="text-sm text-muted-foreground">
+              {record.item?.sku ?? `Item #${record.itemId}`} — planned {record.quantityPlanned}, completed {record.quantityCompleted}
+            </span>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <LinkSalesAccountButton sourceType="WorkOrder" sourceId={record.id} defaultAccountName={`Work Order #${record.id}`} />
+          <CreateCustomerButton sourceType="WorkOrder" sourceId={record.id} defaultLegalName={`Work Order #${record.id}`} />
         </div>
       </div>
 
@@ -64,22 +73,9 @@ export function WorkOrderDetailPage() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="mb-2 text-sm font-medium">Item</h3>
-          {record.item ? (
-            <div className="text-sm">
-              <p className="font-medium">{record.item.sku}</p>
-              <p className="text-muted-foreground">{record.item.description ?? "No description"}</p>
-              <p className="mt-1">
-                <StatusBadge value={record.item.state} />
-              </p>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Item not found.</p>
-          )}
-        </div>
+      <ProductionWorkOrderTraveler workOrder={record} />
 
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="mb-2 text-sm font-medium">Linked NCR</h3>
           {record.linkedNcr ? (
@@ -90,14 +86,14 @@ export function WorkOrderDetailPage() {
             <p className="text-sm text-muted-foreground">Not linked.</p>
           )}
         </div>
-      </div>
 
-      {record.notes && (
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="mb-2 text-sm font-medium">Notes</h3>
-          <p className="text-sm text-muted-foreground">{record.notes}</p>
-        </div>
-      )}
+        {record.notes && (
+          <div className="rounded-lg border border-border bg-card p-4">
+            <h3 className="mb-2 text-sm font-medium">Notes</h3>
+            <p className="text-sm text-muted-foreground">{record.notes}</p>
+          </div>
+        )}
+      </div>
 
       <WorkflowHistoryPanel moduleName="work_orders" recordId={workOrderId} />
     </div>

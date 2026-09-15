@@ -12,6 +12,10 @@ import { WorkflowActionButton } from "../../components/shared/WorkflowActionButt
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { Modal } from "../../components/modals/Modal";
 import { TextField } from "../../components/forms/Field";
+import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
+import { CreateFeasibilityButton } from "../../components/shared/CreateFeasibilityButton";
+import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
+import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
 import type { ErpPurchaseOrder, ErpReceivingDocument } from "../../api/types";
 
 const poHooks = createResourceHooks<ErpPurchaseOrder>("erp/purchase-orders");
@@ -136,6 +140,9 @@ export function ErpPurchaseOrderDetailPage() {
             </button>
           )}
           <WorkflowActionButton label="Cancel" navKey="erp" action={cancelAction} onClick={() => cancelAction.mutate({ id: poId })} visible={canCancel} />
+          <CreateFeasibilityButton sourceType="po" sourceId={po.id} defaultTitle={`Feasibility review for PO #${po.id}`} defaultDepartment="purchasing" />
+          <LinkSalesAccountButton sourceType="PO" sourceId={po.id} defaultAccountName={po.supplierName ?? `PO #${po.id}`} />
+          <CreateCustomerButton sourceType="PO" sourceId={po.id} defaultLegalName={po.supplierName ?? `PO #${po.id}`} />
         </div>
       </div>
 
@@ -179,10 +186,18 @@ export function ErpPurchaseOrderDetailPage() {
         ) : (
           <ul className="flex flex-col gap-2 text-sm">
             {receivingDocs.map((doc) => (
-              <li key={doc.id} className="flex items-center justify-between border-b border-border pb-1.5 last:border-0">
+              <li key={doc.id} className="flex items-center justify-between gap-3 border-b border-border pb-1.5 last:border-0">
                 <span>Receipt #{doc.id}</span>
                 <span className="text-muted-foreground">{new Date(doc.createdAt).toLocaleString()}</span>
                 {doc.notes && <span className="text-muted-foreground">{doc.notes}</span>}
+                <CreateRiskButton
+                  sourceType="Receiving"
+                  sourceId={doc.id}
+                  defaultTitle={`Risk from Receipt #${doc.id} (PO #${po.id})`}
+                  defaultDepartment="material_management"
+                  defaultCategory="supplier"
+                  label="Create Risk"
+                />
               </li>
             ))}
           </ul>

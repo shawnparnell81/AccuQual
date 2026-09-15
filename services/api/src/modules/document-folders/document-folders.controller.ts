@@ -79,7 +79,76 @@ const FORM_LINK_RULES: { pattern: RegExp; path: string }[] = [
   { pattern: /\btraining records?\b/i, path: "/training" },
   { pattern: /\b(engineering )?change (request|order)/i, path: "/change" },
   { pattern: /\b[dp]fmea\b/i, path: "/risk" },
+  { pattern: /\brisk assessments?\b/i, path: "/risk" },
+  { pattern: /\bequipment master list\b/i, path: "/calibration" },
+  { pattern: /\bwork orders?\b|\btravelers?\s*\/?\s*routers?\b/i, path: "/work-orders" },
+  { pattern: /\bchange request form\b/i, path: "/document-change-requests" },
+  // The generic "ACCUQUAL Forms" batch (see qmsFormDefinitions.ts) — every
+  // one of these is a distinct QMS record type this app has no other real
+  // module for, so each gets its own real /qms-forms/:formType link
+  // instead of a static file slot.
+  { pattern: /\brevision history\b/i, path: "/qms-forms/document_revision_record" },
+  { pattern: /\bmaster document list\b/i, path: "/qms-forms/master_document_register" },
+  { pattern: /\brecord retention log\b/i, path: "/qms-forms/record_retention_log" },
+  { pattern: /\bquality objectives\b/i, path: "/qms-forms/quality_objectives_action_plan" },
+  { pattern: /\bpreventive actions?\b/i, path: "/qms-forms/preventive_risk_action" },
+  { pattern: /\bsupplier qualification\b/i, path: "/qms-forms/supplier_qualification_evaluation" },
+  { pattern: /\bpo quality requirements\b/i, path: "/qms-forms/po_quality_requirements" },
+  { pattern: /\bincoming inspection record\b|\breceiving inspection form\b/i, path: "/qms-forms/incoming_inspection_record" },
+  { pattern: /\bfirst article inspection\b/i, path: "/qms-forms/first_article_inspection" },
+  { pattern: /\bin-process inspection\b/i, path: "/qms-forms/in_process_inspection" },
+  { pattern: /\bfinal inspection\b/i, path: "/qms-forms/final_inspection_release" },
+  { pattern: /\btraining matrix\b/i, path: "/qms-forms/training_matrix" },
+  { pattern: /\bcustomer satisfaction\b/i, path: "/qms-forms/customer_satisfaction_record" },
+  { pattern: /\blot traceability\b/i, path: "/qms-forms/product_traceability_record" },
+  { pattern: /\bdeviation\s*\/?\s*waiver requests?\b/i, path: "/qms-forms/deviation_waiver_request" },
+  { pattern: /\bchange control records?\b/i, path: "/qms-forms/change_control_record" },
+  { pattern: /\bmanagement review\b/i, path: "/qms-forms/management_review_record" },
+  { pattern: /\bquality kpis?\b/i, path: "/qms-forms/quality_kpi_monitoring" },
+  { pattern: /\benvironmental condition\b/i, path: "/qms-forms/environmental_condition_record" },
+  { pattern: /\baudit findings\b/i, path: "/qms-forms/audit_finding_action_log" },
+  { pattern: /\bquality record disposition\b/i, path: "/qms-forms/quality_record_disposition" },
+  { pattern: /\bdhf\b|\bdesign history\b/i, path: "/qms-forms/design_history_form" },
+  // The two real gaps reported by the ACCUQUAL Forms batch review, since
+  // filled with their own real supplied forms.
+  { pattern: /\bscar\b/i, path: "/scar-forms" },
+  { pattern: /\binspection forms?\b/i, path: "/quality-inspection-reports" },
 ];
+
+/**
+ * The 9 subfolders added to DEFAULT_DOCUMENT_FOLDERS by the "ACCUQUAL
+ * Forms" batch (see qmsFormDefinitions.ts) after many tenants had already
+ * been seeded — backfilled here for any tenant whose tree already existed,
+ * same self-healing idea as ensureLibraryPool/linkKnownForms rather than a
+ * one-off migration script (which could never reach a tenant created after
+ * it ran anyway; this reaches every tenant, always).
+ */
+const ADDITIONAL_SUBFOLDERS: { department: string; folder: string; subfolder: string }[] = [
+  { department: "Quality", folder: "Document Control", subfolder: "Record Retention Log" },
+  { department: "Quality", folder: "Document Control", subfolder: "Quality Record Disposition" },
+  { department: "Quality", folder: "Quality Manual & Policies", subfolder: "Quality Objectives & Action Plans" },
+  { department: "Quality", folder: "Quality Manual & Policies", subfolder: "Management Review Records" },
+  { department: "Quality", folder: "Nonconformance Management", subfolder: "Deviation / Waiver Requests" },
+  { department: "Production", folder: "Safety & Compliance", subfolder: "Environmental Condition Records" },
+  { department: "Shipping & Receiving", folder: "Incoming Inspection", subfolder: "Incoming Inspection Record" },
+  { department: "Purchasing", folder: "Supplier Management", subfolder: "Supplier Qualification & Evaluation" },
+  { department: "Purchasing", folder: "Compliance & Documentation", subfolder: "PO Quality Requirements" },
+];
+
+async function ensureAdditionalSubfolders(db: TenantDb, tenantId: number, all: (typeof documentFolders.$inferSelect)[]): Promise<(typeof documentFolders.$inferSelect)[]> {
+  let list = all;
+  for (const { department, folder, subfolder } of ADDITIONAL_SUBFOLDERS) {
+    const dept = list.find((f) => f.parentId === null && f.name === department);
+    if (!dept) continue; // tenant doesn't have this department branch (e.g. a customized tree) — skip rather than force it back in
+    const parentFolder = list.find((f) => f.parentId === dept.id && f.name === folder);
+    if (!parentFolder) continue;
+    if (list.some((f) => f.parentId === parentFolder.id && f.name === subfolder)) continue;
+    const siblingCount = list.filter((f) => f.parentId === parentFolder.id).length;
+    const [created] = await db.insert(documentFolders).values({ tenantId, name: subfolder, parentId: parentFolder.id, sortOrder: siblingCount }).returning();
+    if (created) list = [...list, created];
+  }
+  return list;
+}
 
 /**
  * Self-heals `linkedPath` onto any leaf (no children) whose name matches a
@@ -131,14 +200,15 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     await seedDefaults(db, tenantId);
     const seeded = await db.select().from(documentFolders).where(eq(documentFolders.tenantId, tenantId));
     const pool = await ensureLibraryPool(db, tenantId, seeded.filter((f) => f.parentId === null));
-    const all = [...seeded, pool];
+    const all = await ensureAdditionalSubfolders(db, tenantId, [...seeded, pool]);
     await linkKnownForms(db, tenantId, all);
     return res.json(await withLinkedDocumentInfo(db, tenantId, all));
   }
 
   const pool = await ensureLibraryPool(db, tenantId, existing.filter((f) => f.parentId === null));
   const alreadyIncluded = existing.some((f) => f.id === pool.id);
-  const all = alreadyIncluded ? existing : [...existing, pool];
+  const withPool = alreadyIncluded ? existing : [...existing, pool];
+  const all = await ensureAdditionalSubfolders(db, tenantId, withPool);
   await linkKnownForms(db, tenantId, all);
   res.json(await withLinkedDocumentInfo(db, tenantId, all));
 });

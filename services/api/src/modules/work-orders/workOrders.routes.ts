@@ -3,7 +3,15 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
-import { createWorkOrderSchema, updateWorkOrderSchema, completeWorkOrderSchema } from "./workOrders.validation.js";
+import {
+  createWorkOrderSchema,
+  updateWorkOrderSchema,
+  completeWorkOrderSchema,
+  updateQualityGatesSchema,
+  signTravelerSchema,
+  createOperationSchema,
+  updateOperationSchema,
+} from "./workOrders.validation.js";
 import {
   listWorkOrdersHandler,
   createWorkOrderHandler,
@@ -12,6 +20,12 @@ import {
   startWorkOrderHandler,
   completeWorkOrderHandler,
   cancelWorkOrderHandler,
+  updateQualityGatesHandler,
+  signOperatorHandler,
+  signInspectorHandler,
+  createOperationHandler,
+  updateOperationHandler,
+  deleteOperationHandler,
 } from "./workOrders.controller.js";
 import { workOrderAiPlanHandler } from "./workOrder.ai.js";
 
@@ -34,3 +48,11 @@ workOrdersRouter.patch("/:id", validate(updateWorkOrderSchema), updateWorkOrderH
 workOrdersRouter.post("/:id/start", startWorkOrderHandler);
 workOrdersRouter.post("/:id/complete", validate(completeWorkOrderSchema), completeWorkOrderHandler);
 workOrdersRouter.post("/:id/cancel", cancelWorkOrderHandler);
+
+// Production Work Order traveler (bespoke standalone page — see workOrders.ts's schema comment).
+workOrdersRouter.patch("/:id/quality-gates", validate(updateQualityGatesSchema), updateQualityGatesHandler);
+workOrdersRouter.post("/:id/sign-operator", validate(signTravelerSchema), signOperatorHandler);
+workOrdersRouter.post("/:id/sign-inspector", validate(signTravelerSchema), signInspectorHandler);
+workOrdersRouter.post("/:id/operations", validate(createOperationSchema), createOperationHandler);
+workOrdersRouter.patch("/:id/operations/:opId", validate(updateOperationSchema), updateOperationHandler);
+workOrdersRouter.delete("/:id/operations/:opId", deleteOperationHandler);

@@ -45,6 +45,10 @@ export function AiInsightsPage() {
             Score supplier risk
           </button>
         </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          A one-off 0-100 AI opinion here — not the same thing as the <a href="/risk" className="text-primary hover:underline">Risk Register</a> (a tracked
+          record with a workflow and mitigation plan) or the Digital Twin's simulation heatmap.
+        </p>
 
         {analysis.data && (
           <pre className="mt-4 whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">{JSON.stringify(analysis.data.output, null, 2)}</pre>
