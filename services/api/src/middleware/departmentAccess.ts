@@ -97,13 +97,18 @@ export const PERMISSION_MATRIX: Record<ResourceKey, Partial<Record<Department, A
   // engineering is read-only, matching the spec exactly.
   rma: { purchasing: "edit", material_management: "edit", quality: "edit", engineering: "read" },
   // Not a sheet row — a new module (see the AI Work Order Planning / PR
-  // Justification / Onboarding / ERP Automation review). Production owns
-  // the work order lifecycle (create/start/complete/cancel, enforced
-  // inline in workOrders.controller.ts's assertDepartment); the other
-  // three get read visibility since they each care about production
-  // output (material_management for stock, purchasing for what's being
-  // produced, quality for traceability to a linked NCR).
-  work_orders: { production: "edit", material_management: "read", purchasing: "read", quality: "read" },
+  // Justification / Onboarding / ERP Automation review). Per explicit user
+  // request (2026-09-15): Customer Service now owns the work order
+  // lifecycle (create/start/complete/cancel, enforced inline in
+  // workOrders.controller.ts's assertDepartment) — Production was
+  // downgraded to read-only. "General Manager" full access is covered by
+  // the existing tenant-admin bypass (isAdmin short-circuits every
+  // assertDepartment call), not a new department — there is no distinct
+  // "general_manager" department in this app. material_management/
+  // purchasing/quality keep read visibility since they each care about
+  // production output (stock, what's being produced, traceability to a
+  // linked NCR) — unchanged from before.
+  work_orders: { customer_service: "edit", production: "read", material_management: "read", purchasing: "read", quality: "read" },
   // Not a sheet row — a new module, the real pre-PO request/approval step.
   // Any requesting department can create/edit their own draft (inline
   // check in erp.controller.ts's requisition handlers, since this matrix

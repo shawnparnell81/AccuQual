@@ -19,9 +19,13 @@ function parseSuggestions(raw: string): unknown {
 }
 
 /**
- * POST /work-orders/ai-plan — production + purchasing (matching the
- * module's own PERMISSION_MATRIX access). Read-only: gathers real open
- * NCRs, below_min/overstock inventory items, disqualified/probation
+ * POST /work-orders/ai-plan — gated by requireDepartmentAccess("work_orders")
+ * at the router, same as every other route on this router; being a POST, it
+ * actually requires "edit" (Customer Service, or admin — see
+ * departmentAccess.ts PERMISSION_MATRIX.work_orders), not merely "read", so
+ * production/purchasing/quality/material_management can view suggestions
+ * already on file but can't request a new one. Read-only itself: gathers
+ * real open NCRs, below_min/overstock inventory items, disqualified/probation
  * suppliers, and existing open work orders, then asks the LLM to suggest
  * which work orders to create next. Nothing is written except the
  * ai_suggestions audit row — creating an actual work order is a separate,

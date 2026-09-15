@@ -34,11 +34,13 @@ let productionUserId: number;
 let qualityUserId: number;
 let purchasingUserId: number;
 let engineeringUserId: number;
+let customerServiceUserId: number;
 
 let productionToken: string;
 let qualityToken: string;
 let purchasingToken: string;
 let engineeringToken: string;
+let customerServiceToken: string;
 
 async function makeUser(department: string) {
   const [user] = await db.insert(users).values({ tenantId, email: `wopr-test-${department}-${suffix}@test.local`, passwordHash: "unused" }).returning();
@@ -65,11 +67,13 @@ describe("Work Orders + Purchase Requisitions (real DB + real HTTP path)", () =>
     qualityUserId = await makeUser("quality");
     purchasingUserId = await makeUser("purchasing");
     engineeringUserId = await makeUser("engineering");
+    customerServiceUserId = await makeUser("customer_service");
 
     productionToken = tokenFor(productionUserId, "production");
     qualityToken = tokenFor(qualityUserId, "quality");
     purchasingToken = tokenFor(purchasingUserId, "purchasing");
     engineeringToken = tokenFor(engineeringUserId, "engineering");
+    customerServiceToken = tokenFor(customerServiceUserId, "customer_service");
   });
 
   afterAll(async () => {
@@ -103,24 +107,42 @@ describe("Work Orders + Purchase Requisitions (real DB + real HTTP path)", () =>
     expect(res.status).toBe(200);
   });
 
-  it("production can create a work order", async () => {
+  // Per explicit user request (2026-09-15): Customer Service now owns the
+  // work order lifecycle; Production was downgraded to read-only (view
+  // what's assigned, no longer create/start/complete/cancel).
+  it("production (now read-only in the matrix) cannot create a work order", async () => {
     const res = await request(app).post("/work-orders").set("Authorization", `Bearer ${productionToken}`).send({ itemId, quantityPlanned: 10 });
+    expect(res.status).toBe(403);
+  });
+
+  it("production can still read work orders", async () => {
+    const res = await request(app).get("/work-orders").set("Authorization", `Bearer ${productionToken}`);
+    expect(res.status).toBe(200);
+  });
+
+  it("customer service can create a work order", async () => {
+    const res = await request(app).post("/work-orders").set("Authorization", `Bearer ${customerServiceToken}`).send({ itemId, quantityPlanned: 10 });
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("planned");
     workOrderId = res.body.id;
   });
 
-  it("quality cannot start it — production-only", async () => {
+  it("quality cannot start it — customer-service-only", async () => {
     const res = await request(app).post(`/work-orders/${workOrderId}/start`).set("Authorization", `Bearer ${qualityToken}`);
     expect(res.status).toBe(403);
   });
 
-  it("production can start then complete it, which logs a real 'produce' movement", async () => {
-    const start = await request(app).post(`/work-orders/${workOrderId}/start`).set("Authorization", `Bearer ${productionToken}`);
+  it("production cannot start it either — read-only now", async () => {
+    const res = await request(app).post(`/work-orders/${workOrderId}/start`).set("Authorization", `Bearer ${productionToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it("customer service can start then complete it, which logs a real 'produce' movement", async () => {
+    const start = await request(app).post(`/work-orders/${workOrderId}/start`).set("Authorization", `Bearer ${customerServiceToken}`);
     expect(start.status).toBe(200);
     expect(start.body.status).toBe("in_progress");
 
-    const complete = await request(app).post(`/work-orders/${workOrderId}/complete`).set("Authorization", `Bearer ${productionToken}`).send({ quantityCompleted: 10 });
+    const complete = await request(app).post(`/work-orders/${workOrderId}/complete`).set("Authorization", `Bearer ${customerServiceToken}`).send({ quantityCompleted: 10 });
     expect(complete.status).toBe(200);
     expect(complete.body.status).toBe("completed");
 
@@ -134,7 +156,7 @@ describe("Work Orders + Purchase Requisitions (real DB + real HTTP path)", () =>
   });
 
   it("a completed work order cannot be completed again", async () => {
-    const res = await request(app).post(`/work-orders/${workOrderId}/complete`).set("Authorization", `Bearer ${productionToken}`).send({ quantityCompleted: 5 });
+    const res = await request(app).post(`/work-orders/${workOrderId}/complete`).set("Authorization", `Bearer ${customerServiceToken}`).send({ quantityCompleted: 5 });
     expect(res.status).toBe(400);
   });
 
