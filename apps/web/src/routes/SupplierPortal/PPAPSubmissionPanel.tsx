@@ -112,7 +112,19 @@ function PpapCard({ submission, isReviewer }: { submission: SupplierPpapSubmissi
           </p>
           <p className="text-xs text-muted-foreground">{submission.description ?? "No description"}</p>
         </div>
-        <StatusBadge value={submission.status} />
+        <div className="flex items-center gap-2">
+          <StatusBadge value={submission.status} />
+          {/* Kept up here next to the status badge, not at the far right of
+              the bottom "Attach document" row — that corner sits under the
+              fixed AI assistant button on most viewports, which visually
+              covers a bottom-right ml-auto control (found via a live
+              browser check). */}
+          {isReviewer && submission.status !== "approved" && submission.status !== "rejected" && (
+            <button onClick={() => setReviewing(!reviewing)} className="text-xs text-primary hover:underline">
+              Review
+            </button>
+          )}
+        </div>
       </div>
       {submission.reviewNotes && <p className="mt-1 text-xs text-muted-foreground">Reviewer note: {submission.reviewNotes}</p>}
 
@@ -136,12 +148,6 @@ function PpapCard({ submission, isReviewer }: { submission: SupplierPpapSubmissi
         <button onClick={() => fileInputRef.current?.click()} disabled={attach.isPending} className="rounded-md border border-border px-3 py-2 text-xs hover:bg-muted disabled:opacity-60">
           {attach.isPending ? "Uploading…" : "Upload"}
         </button>
-
-        {isReviewer && submission.status !== "approved" && submission.status !== "rejected" && (
-          <button onClick={() => setReviewing(!reviewing)} className="ml-auto text-xs text-primary hover:underline">
-            Review
-          </button>
-        )}
       </div>
 
       {reviewing && (
