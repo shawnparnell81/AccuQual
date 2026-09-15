@@ -10,6 +10,7 @@ import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { useWorkflowAction, useWorkflowUpdate } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 
@@ -159,6 +160,7 @@ export function CapaDetailPage() {
         </div>
       </div>
 
+      <AttachmentsPanel entityType="capa" entityId={capaId} />
       <WorkflowHistoryPanel moduleName="capa" recordId={capaId} />
     </div>
   );

@@ -1082,3 +1082,16 @@ export interface ErpAutomationSuggestion {
   quantity: number | null;
   rationale: string;
 }
+
+/** ONE generic attachment reused by every module — see attachments.ts's own schema comment. entityType/entityId both null = a general upload (the shared "General Uploads" bin), not tied to any record. */
+export interface Attachment {
+  id: number;
+  entityType: string | null;
+  entityId: number | null;
+  fileName: string;
+  filePath: string;
+  mimeType: string | null;
+  fileSize: number | null;
+  uploadedBy: number | null;
+  createdAt: string;
+}

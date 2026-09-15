@@ -6,6 +6,7 @@ import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { Modal } from "../../components/modals/Modal";
 import { DocumentChangeRequestForm } from "./DocumentChangeRequestForm";
 import type { DocumentChangeRequest } from "../../api/types";
@@ -49,7 +50,8 @@ export function DocumentChangeRequestDetailPage() {
 
       <DocumentChangeRequestForm dcr={dcr} />
 
-      <div className="print:hidden">
+      <div className="flex flex-col gap-4 print:hidden">
+        <AttachmentsPanel entityType="document_change_requests" entityId={dcrId} />
         <WorkflowHistoryPanel moduleName="document_change_requests" recordId={dcrId} />
       </div>
 

@@ -2,6 +2,7 @@ import { useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 
 interface Complaint {
   id: number;
@@ -39,6 +40,8 @@ export function ComplaintDetailPage() {
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">{complaint.description}</div>
+
+      <AttachmentsPanel entityType="complaint" entityId={complaint.id} />
     </div>
   );
 }

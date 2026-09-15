@@ -3,6 +3,7 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 
 interface ChangeRequest {
   id: number;
@@ -53,6 +54,8 @@ export function ChangeDetailPage() {
           <p className="text-sm text-muted-foreground">{change.impactAssessment || "Not yet documented."}</p>
         </div>
       </div>
+
+      <AttachmentsPanel entityType="change" entityId={change.id} />
     </div>
   );
 }

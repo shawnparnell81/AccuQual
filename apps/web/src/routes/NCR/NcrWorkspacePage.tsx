@@ -18,6 +18,7 @@ import { useFormEditorState } from "../../components/forms/useFormEditorState";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
 import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
 import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 
 const FORM_TYPE = "ncr";
 
@@ -146,6 +147,8 @@ export function NcrWorkspacePage() {
           </div>
 
           <LinkedRecordsPanel ncrId={ncrId} ncrTitle={ncr.title} />
+
+          <AttachmentsPanel entityType="ncr" entityId={ncrId} />
 
           <div className="rounded-lg border border-border bg-card p-4">
             {formLoading || !layout ? (

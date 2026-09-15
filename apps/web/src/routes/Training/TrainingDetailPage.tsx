@@ -14,6 +14,7 @@ import { DocumentRetentionPanel } from "../../components/documents/DocumentReten
 import { DocumentHistoryPanel } from "../../components/documents/DocumentHistoryPanel";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import type { AccuQualDocument, TrainingAssignment, TrainingCourse } from "../../api/types";
 
@@ -165,6 +166,8 @@ export function TrainingDetailPage() {
           })}
         </ul>
       </div>
+
+      <AttachmentsPanel entityType="training" entityId={courseId} />
 
       <TrainingAssignmentModal courseId={courseId} isOpen={assignOpen} onClose={() => setAssignOpen(false)} />
       {completingId !== null && <TrainingCompletionModal assignmentId={completingId} isOpen onClose={() => setCompletingId(null)} />}

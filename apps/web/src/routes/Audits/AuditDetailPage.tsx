@@ -10,6 +10,7 @@ import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 
@@ -151,6 +152,7 @@ export function AuditDetailPage() {
         </form>
       </div>
 
+      <AttachmentsPanel entityType="audit" entityId={auditId} />
       <WorkflowHistoryPanel moduleName="audit" recordId={auditId} />
     </div>
   );

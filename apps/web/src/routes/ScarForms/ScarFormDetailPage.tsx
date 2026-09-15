@@ -7,6 +7,7 @@ import { useAuthStore } from "../../store/authStore";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { Modal } from "../../components/modals/Modal";
 import type { ScarForm } from "../../api/types";
 
@@ -174,7 +175,8 @@ export function ScarFormDetailPage() {
         </Section>
       </div>
 
-      <div className="print:hidden">
+      <div className="flex flex-col gap-4 print:hidden">
+        <AttachmentsPanel entityType="scar_forms" entityId={scarId} />
         <WorkflowHistoryPanel moduleName="scar_forms" recordId={scarId} />
       </div>
 

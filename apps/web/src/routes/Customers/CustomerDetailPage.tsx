@@ -12,6 +12,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextField, TextAreaField, SelectField } from "../../components/forms/Field";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
 import { CreateFeasibilityButton } from "../../components/shared/CreateFeasibilityButton";
@@ -160,6 +161,7 @@ export function CustomerDetailPage() {
         </div>
       </div>
 
+      <AttachmentsPanel entityType="customers" entityId={customerId} />
       <WorkflowHistoryPanel moduleName="customers" recordId={customerId} />
 
       <EditCustomerModal customer={customer} isOpen={editOpen} onClose={() => setEditOpen(false)} />
