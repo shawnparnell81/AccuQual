@@ -187,7 +187,7 @@ export function RmaDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between print:hidden">
         <div>
           <h1 className="text-2xl font-semibold">{record.rmaNumber}</h1>
           <div className="mt-1 flex items-center gap-2">
@@ -196,6 +196,9 @@ export function RmaDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+            Print
+          </button>
           {canEditFull && (
             <button onClick={() => setAddItemOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
               + Add Item
@@ -206,8 +209,13 @@ export function RmaDetailPage() {
         </div>
       </div>
 
+      <div className="hidden print:block">
+        <h1 className="text-2xl font-semibold">{record.rmaNumber}</h1>
+        <p className="text-sm text-muted-foreground">Status: {record.status.replace(/_/g, " ")} — {record.reasonCode?.replace(/_/g, " ") ?? "No reason code set"}</p>
+      </div>
+
       {nextActions.length > 0 && (
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-4 print:hidden">
           <h3 className="mb-3 text-sm font-medium">Status</h3>
           <div className="flex flex-wrap gap-2">
             {nextActions.map((next) => {
@@ -367,8 +375,10 @@ export function RmaDetailPage() {
         )}
       </div>
 
-      <AttachmentsPanel entityType="rma" entityId={rmaId} />
-      <WorkflowHistoryPanel moduleName="rma" recordId={rmaId} />
+      <div className="flex flex-col gap-4 print:hidden">
+        <AttachmentsPanel entityType="rma" entityId={rmaId} />
+        <WorkflowHistoryPanel moduleName="rma" recordId={rmaId} />
+      </div>
 
       <AddItemModal rmaId={rmaId} isOpen={addItemOpen} onClose={() => setAddItemOpen(false)} />
     </div>

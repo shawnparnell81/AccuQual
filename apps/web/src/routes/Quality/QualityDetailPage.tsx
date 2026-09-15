@@ -2,6 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { useWorkflowAction, useWorkflowUpdate } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
@@ -53,6 +54,7 @@ export function QualityDetailPage() {
         </div>
         <div className="flex gap-2">
           <OpenFormButton formType="discrepancy_inspection" entityId={discrepancy.id} title={`Discrepancy #${discrepancy.id} Investigation`} />
+          <PrintFormButton formType="discrepancy_inspection" entityId={discrepancy.id} />
           <WorkflowActionButton
             label="Mark Investigating"
             navKey="di"

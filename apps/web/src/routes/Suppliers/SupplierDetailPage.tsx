@@ -6,6 +6,7 @@ import { apiClient } from "../../api/client";
 import type { Supplier, SupplierPerformance, CostingSummary } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
@@ -89,6 +90,7 @@ export function SupplierDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <OpenFormButton formType="supplier" entityId={supplier.id} title={`Supplier #${supplier.id} Record`} label="Supplier Record" />
+          <PrintFormButton formType="supplier" entityId={supplier.id} />
           <OpenFormButton
             formType="approved_vendor_list"
             entityId={supplier.id}

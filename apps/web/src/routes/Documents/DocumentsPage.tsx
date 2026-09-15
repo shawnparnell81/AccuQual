@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import type { AccuQualDocument } from "../../api/types";
 
 /** A tenant-wide master index of every controlled document, not one document record — a fixed singleton, same pattern as the Production Logs page. */
@@ -24,7 +25,10 @@ export function DocumentsPage() {
           <h2 className="text-sm font-medium">Document Control Master Index</h2>
           <p className="text-sm text-muted-foreground">Revision level, deployment date, next review date, and control status for every controlled document.</p>
         </div>
-        <OpenFormButton formType="document_control_index" entityId={DOCUMENT_CONTROL_INDEX_ENTITY_ID} title="Document Control Master Index" label="Open Master Index" />
+        <div className="flex items-center gap-2">
+          <OpenFormButton formType="document_control_index" entityId={DOCUMENT_CONTROL_INDEX_ENTITY_ID} title="Document Control Master Index" label="Open Master Index" />
+          <PrintFormButton formType="document_control_index" entityId={DOCUMENT_CONTROL_INDEX_ENTITY_ID} />
+        </div>
       </div>
 
       <ResourceListPage<AccuQualDocument>

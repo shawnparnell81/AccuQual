@@ -7,6 +7,7 @@ import type { Audit } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextField, SelectField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
@@ -54,8 +55,11 @@ export function AuditDetailPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <OpenFormButton formType="audit_plan" entityId={audit.id} title={`Audit #${audit.id} — Audit Plan`} label="Audit Plan" />
+          <PrintFormButton formType="audit_plan" entityId={audit.id} label="Print Plan" />
           <OpenFormButton formType="audit_checklist" entityId={audit.id} title={`Audit #${audit.id} — Audit Checklist`} label="Audit Checklist" />
+          <PrintFormButton formType="audit_checklist" entityId={audit.id} label="Print Checklist" />
           <OpenFormButton formType="lpa" entityId={audit.id} title={`Audit #${audit.id} — Layered Process Audit`} label="Layered Process Audit" />
+          <PrintFormButton formType="lpa" entityId={audit.id} label="Print LPA" />
           <AiFieldAssistant
             module="audit"
             recordId={auditId}

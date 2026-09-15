@@ -7,6 +7,7 @@ import type { Capa } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextAreaField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { useWorkflowAction, useWorkflowUpdate } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
@@ -50,6 +51,7 @@ export function CapaDetailPage() {
         </div>
         <div className="flex gap-2">
           <OpenFormButton formType="capa" entityId={capa.id} title={`CAPA #${capa.id} Form`} />
+          <PrintFormButton formType="capa" entityId={capa.id} />
           <WorkflowActionButton
             label="Start Work"
             navKey="capa"

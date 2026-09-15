@@ -77,7 +77,7 @@ export function SalesAccountDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
         <div>
           <h1 className="text-2xl font-semibold">{account.customerName}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -86,6 +86,9 @@ export function SalesAccountDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+            Print
+          </button>
           <button onClick={() => setAiOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             AI Assistant
           </button>
