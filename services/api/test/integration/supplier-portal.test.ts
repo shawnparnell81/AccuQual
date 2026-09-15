@@ -17,7 +17,7 @@ import { db, pool } from "../../src/db/index.js";
 import { tenants } from "../../src/drizzle/schema/tenants.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { suppliers, supplierScorecards } from "../../src/drizzle/schema/supplier.js";
-import { roles } from "../../src/drizzle/schema/roles.js";
+import { ensureSupplierRole } from "../../src/modules/supplier/supplier.controller.js";
 import { rma } from "../../src/drizzle/schema/rma.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
 import {
@@ -56,10 +56,13 @@ async function makeInternalUser(department: string, roleName = "operator") {
   return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName, department });
 }
 
+// Self-heals the role instead of assuming db/seed.ts has run — CI's fresh
+// database only runs migrations, never the separate seed step (see
+// ensureSupplierRole's own comment). `db` here is the plain, unscoped
+// singleton (this file never opens its own tenant transaction), which
+// ensureSupplierRole accepts fine since `roles` isn't tenant-scoped.
 async function getSupplierRoleId(): Promise<number> {
-  const [supplierRole] = await db.select().from(roles).where(eq(roles.name, "supplier"));
-  if (!supplierRole) throw new Error("'supplier' role is not seeded — check db/seed.ts");
-  return supplierRole.id;
+  return (await ensureSupplierRole(db)).id;
 }
 
 async function makeSupplierLogin(supplierId: number) {

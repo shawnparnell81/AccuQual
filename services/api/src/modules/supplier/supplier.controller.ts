@@ -4,14 +4,31 @@ import { randomBytes } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { suppliers, supplierScorecards } from "../../drizzle/schema/supplier.js";
 import { users } from "../../drizzle/schema/users.js";
-import { roles } from "../../drizzle/schema/roles.js";
+import { roles, type Role } from "../../drizzle/schema/roles.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
+import type { TenantDb } from "../../lib/tenantScope.js";
 
 export const baseHandlers = crudFactory(suppliers, { entityName: "Supplier", idColumn: "id" });
+
+/**
+ * Self-heals the "supplier" role (see users.ts's own supplierId comment)
+ * instead of assuming db/seed.ts has run — CI's fresh database only ever
+ * runs migrations, never the separate seed step, so a real deploy or test
+ * run can't rely on this row already existing. Same self-creating pattern
+ * as forms.service.ts's loadTemplate / document-folders' ensureLibraryPool.
+ * `roles` isn't a tenant-scoped table (not in rls-policies.sql's array), so
+ * this is safe to call from inside a tenant-scoped transaction.
+ */
+export async function ensureSupplierRole(db: TenantDb): Promise<Role> {
+  await db.insert(roles).values({ name: "supplier", description: "External supplier portal access" }).onConflictDoNothing({ target: roles.name });
+  const [role] = await db.select().from(roles).where(eq(roles.name, "supplier"));
+  if (!role) throw new AppError("Failed to create or find the 'supplier' role", 500);
+  return role;
+}
 
 export const addScorecardHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = Number(req.params.id);
@@ -95,8 +112,7 @@ export const createPortalAccountHandler = asyncHandler(async (req: Request, res:
   const [existing] = await req.db!.select({ id: users.id }).from(users).where(eq(users.email, email));
   if (existing) throw AppError.badRequest("Email already registered");
 
-  const [supplierRole] = await req.db!.select().from(roles).where(eq(roles.name, "supplier"));
-  if (!supplierRole) throw new AppError("The 'supplier' role is not seeded — cannot create a portal login", 500);
+  const supplierRole = await ensureSupplierRole(req.db!);
 
   const tempPassword = randomBytes(9).toString("base64url");
   const passwordHash = await bcrypt.hash(tempPassword, 10);
