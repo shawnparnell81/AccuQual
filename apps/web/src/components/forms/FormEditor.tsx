@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { useFormData, useSaveForm, useCreateFormVersion, exportFormPdf } from "../../api/formHooks";
-import { useFormStore } from "../../store/formStore";
+import { useState } from "react";
+import { useCreateFormVersion, exportFormPdf } from "../../api/formHooks";
 import { useToast } from "../shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { FORM_FIELD_SPECS } from "./formFieldSpecs";
@@ -10,6 +9,7 @@ import { PdfViewer } from "./PdfViewer";
 import { getFormLayout } from "./layouts";
 import { GenericFormRenderer } from "./GenericFormRenderer";
 import { getCustomFormComponent } from "./customForms";
+import { useFormEditorState } from "./useFormEditorState";
 
 interface FormEditorProps {
   formType: string;
@@ -17,50 +17,18 @@ interface FormEditorProps {
   windowId: string;
 }
 
-const AUTOSAVE_DELAY_MS = 1200;
-
 /** The actual data-entry surface for one form: fields, auto-save, versioning, export, preview. */
 export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
   const layout = getFormLayout(formType);
   const CustomComponent = getCustomFormComponent(formType);
   const fields = FORM_FIELD_SPECS[formType] ?? [];
-  const { data: formData, isLoading } = useFormData(formType, entityId);
-  const saveForm = useSaveForm(formType, entityId);
+  const { formData, isLoading, values, updateField, isSaving } = useFormEditorState(formType, entityId, windowId);
   const createVersion = useCreateFormVersion(formType, entityId);
-  const { setDirty, setSaving } = useFormStore();
   const toast = useToast();
 
-  const [values, setValues] = useState<Record<string, unknown>>({});
   const [showHistory, setShowHistory] = useState(false);
   const [previewBytes, setPreviewBytes] = useState<Uint8Array | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const autosaveTimer = useRef<ReturnType<typeof setTimeout>>();
-  const hydrated = useRef(false);
-
-  // Hydrate local field state once the current form_data row loads.
-  useEffect(() => {
-    if (!hydrated.current && formData) {
-      setValues(formData.data ?? {});
-      hydrated.current = true;
-    }
-  }, [formData]);
-
-  function updateField(name: string, value: unknown) {
-    const next = { ...values, [name]: value };
-    setValues(next);
-    setDirty(windowId, true);
-
-    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-    autosaveTimer.current = setTimeout(() => {
-      setSaving(windowId, true);
-      saveForm.mutate(next, {
-        onSettled: () => {
-          setSaving(windowId, false);
-          setDirty(windowId, false);
-        },
-      });
-    }, AUTOSAVE_DELAY_MS);
-  }
 
   // Both used to have no (or no complete) catch — exportFormPdf 404s until
   // the form has been saved at least once (nothing to export yet), and
@@ -98,7 +66,7 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>{formData ? `Version ${formData.version}` : "New form"}</span>
-        <span>{saveForm.isPending ? "Saving…" : "Auto-saved"}</span>
+        <span>{isSaving ? "Saving…" : "Auto-saved"}</span>
       </div>
 
       {layout ? (
