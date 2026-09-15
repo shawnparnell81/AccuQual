@@ -232,6 +232,13 @@
       "when": 1789484107117,
       "tag": "0032_slippery_shotgun",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789486288048,
+      "tag": "0033_secret_bucky",
+      "breakpoints": true
     }
   ]
 }
