@@ -7,7 +7,18 @@ import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
-import { applyMovement, recomputeState, getStockRows, createReorderRequest } from "./inventory.service.js";
+import {
+  applyMovement,
+  recomputeState,
+  getStockRows,
+  createReorderRequest,
+  reserveStock,
+  releaseStock,
+  applyReservationAutoRelease,
+  computeAgingBucket,
+  isCycleCountDue,
+} from "./inventory.service.js";
+import { loadTenantForSettings, getInventorySettings } from "../settings/settings.service.js";
 
 export const baseHandlers = crudFactory(inventoryItems, { entityName: "InventoryItem", idColumn: "id" });
 
@@ -43,11 +54,33 @@ export const listItemsHandler = asyncHandler(async (req: Request, res: Response)
   const stockRows = await req.db!.select().from(inventoryStock).where(eq(inventoryStock.tenantId, req.tenantId!));
 
   const onHandByItem = new Map<number, number>();
+  const lastAdjustedByItem = new Map<number, Date>();
   for (const row of stockRows) {
     onHandByItem.set(row.itemId, (onHandByItem.get(row.itemId) ?? 0) + Number(row.onHand));
+    if (row.lastAdjustedAt) {
+      const prev = lastAdjustedByItem.get(row.itemId);
+      if (!prev || row.lastAdjustedAt > prev) lastAdjustedByItem.set(row.itemId, row.lastAdjustedAt);
+    }
   }
 
-  res.json(items.map((item) => ({ ...item, onHand: onHandByItem.get(item.id) ?? 0 })));
+  // Settings → Inventory Module expansion: aging + cycle count, computed
+  // live for every row rather than stored — see inventory.service.ts's own
+  // comments on computeAgingBucket/isCycleCountDue.
+  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const settings = getInventorySettings(tenant);
+
+  res.json(
+    items.map((item) => {
+      const lastActivity = lastAdjustedByItem.get(item.id) ?? item.createdAt ?? null;
+      const daysSinceActivity = lastActivity ? Math.floor((Date.now() - lastActivity.getTime()) / (24 * 60 * 60 * 1000)) : null;
+      return {
+        ...item,
+        onHand: onHandByItem.get(item.id) ?? 0,
+        agingBucket: computeAgingBucket(daysSinceActivity, settings.agingRules),
+        cycleCountDue: isCycleCountDue(item.lastCountedAt, settings.auditFrequency),
+      };
+    })
+  );
 });
 
 /**
@@ -76,8 +109,24 @@ async function loadItem(req: Request, id: number) {
 export const getItemHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const item = await loadItem(req, id);
+  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const settings = getInventorySettings(tenant);
+
+  // Lazy reservation expiry — see applyReservationAutoRelease's own comment
+  // on why this runs here (the one place a human actually looks at this
+  // item's stock) rather than on every internal getStockRows call.
+  await applyReservationAutoRelease(req.db!, req.tenantId!, id, settings);
   const stock = await getStockRows(req.db!, req.tenantId!, id);
-  res.json({ ...item, stock });
+
+  const lastActivity = stock.reduce<Date | null>((latest, row) => (row.lastAdjustedAt && (!latest || row.lastAdjustedAt > latest) ? row.lastAdjustedAt : latest), null) ?? item.createdAt ?? null;
+  const daysSinceActivity = lastActivity ? Math.floor((Date.now() - lastActivity.getTime()) / (24 * 60 * 60 * 1000)) : null;
+
+  res.json({
+    ...item,
+    stock,
+    agingBucket: computeAgingBucket(daysSinceActivity, settings.agingRules),
+    cycleCountDue: isCycleCountDue(item.lastCountedAt, settings.auditFrequency),
+  });
 });
 
 export const movementHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -90,18 +139,55 @@ export const movementHandler = asyncHandler(async (req: Request, res: Response) 
     throw AppError.badRequest(`Cannot "produce" into a raw_material item — produce is only valid for wip or finished_good items`);
   }
 
-  const { movement } = await applyMovement(req.db!, req.tenantId!, id, req.body, req.user?.id);
+  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const { movement } = await applyMovement(req.db!, req.tenantId!, id, req.body, req.user?.id, getInventorySettings(tenant));
   await recordAuditTrail(req.db!, {
     tenantId: req.tenantId!,
     entityType: "InventoryItem",
     entityId: id,
     action: "update",
-    changes: { movement: req.body.movementType, quantity: req.body.quantity, referenceType: req.body.referenceType, referenceId: req.body.referenceId },
+    changes: { movement: req.body.movementType, quantity: req.body.quantity, referenceType: req.body.referenceType, referenceId: req.body.referenceId, lotNumber: movement!.lotNumber, serialNumber: movement!.serialNumber },
     performedBy: req.user?.id,
   });
 
   const stock = await getStockRows(req.db!, req.tenantId!, id);
   res.status(201).json({ movement, stock });
+});
+
+/** POST /inventory/items/:id/reserve — see inventory.service.ts's reserveStock for the reservationRules it honors. */
+export const reserveHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  await loadItem(req, id);
+  const { quantity, location } = req.body as { quantity: number; location?: string };
+  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const stock = await reserveStock(req.db!, req.tenantId!, id, quantity, location, getInventorySettings(tenant), req.user?.id);
+  res.status(201).json({ stock });
+});
+
+/** POST /inventory/items/:id/release — the inverse of reserve. */
+export const releaseHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  await loadItem(req, id);
+  const { quantity, location } = req.body as { quantity: number; location?: string };
+  const stock = await releaseStock(req.db!, req.tenantId!, id, quantity, location, req.user?.id);
+  res.status(201).json({ stock });
+});
+
+/**
+ * POST /inventory/items/:id/count — records a real cycle count event
+ * (stamps lastCountedAt, which isCycleCountDue then measures against
+ * inventorySettings.auditFrequency). No separate cycle-count workflow/UI —
+ * this is the minimal real hook the "cycle count scheduling" integration
+ * point needs, not a fabricated full count-sheet feature.
+ */
+export const recordCycleCountHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  await loadItem(req, id);
+  const { notes } = req.body as { notes?: string };
+
+  const [updated] = await req.db!.update(inventoryItems).set({ lastCountedAt: new Date(), updatedAt: new Date() }).where(eq(inventoryItems.id, id)).returning();
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "InventoryItem", entityId: id, action: "update", changes: { cycleCounted: true, notes }, performedBy: req.user?.id });
+  res.json(updated);
 });
 
 /** POST /inventory/items/:id/adjust — a thin, material_management-only wrapper around applyMovement("adjust", <signed delta>). */

@@ -3,7 +3,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
-import { createItemSchema, updateItemSchema, movementSchema, adjustSchema, checkMinMaxSchema, reorderRequestNotesSchema } from "./inventory.validation.js";
+import { createItemSchema, updateItemSchema, movementSchema, adjustSchema, checkMinMaxSchema, reorderRequestNotesSchema, reserveSchema, releaseSchema, cycleCountSchema } from "./inventory.validation.js";
 import {
   createItemHandler,
   listItemsHandler,
@@ -22,6 +22,9 @@ import {
   sendReorderRequestHandler,
   ignoreReorderRequestHandler,
   notesReorderRequestHandler,
+  reserveHandler,
+  releaseHandler,
+  recordCycleCountHandler,
 } from "./inventory.controller.js";
 import { movementTrendsHandler, consumptionVsReceivingHandler, scrapAnalyticsHandler, referenceSummaryHandler } from "./inventory.analytics.js";
 import { getItemCostingHandler, costingSummaryHandler } from "./inventory.costing.js";
@@ -64,3 +67,8 @@ inventoryRouter.post("/items/:id/adjust", validate(adjustSchema), adjustHandler)
 inventoryRouter.post("/items/:id/mark-reorder-pending", markReorderPendingHandler);
 inventoryRouter.post("/items/:id/mark-on-order", markOnOrderHandler);
 inventoryRouter.get("/items/:id/history", historyHandler);
+// Settings → Inventory Module expansion (reservation logic + cycle counts) —
+// same base "inventory" edit-level gate as movement/adjust above.
+inventoryRouter.post("/items/:id/reserve", validate(reserveSchema), reserveHandler);
+inventoryRouter.post("/items/:id/release", validate(releaseSchema), releaseHandler);
+inventoryRouter.post("/items/:id/count", validate(cycleCountSchema), recordCycleCountHandler);

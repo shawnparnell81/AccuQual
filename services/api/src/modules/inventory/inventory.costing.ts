@@ -6,6 +6,37 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
 import type { InventoryItem } from "../../drizzle/schema/inventory.js";
+import { loadTenantForSettings, getInventorySettings, type InventorySettings } from "../settings/settings.service.js";
+
+/**
+ * Settings → Inventory Module expansion: costAdjustmentRules.roundingPrecision
+ * rounds every costing figure to that many decimal places (default 2, i.e.
+ * cents) — real and applied everywhere below. costAdjustmentRules.method
+ * ("average" | "latest") is honestly NOT fully implementable here: this
+ * schema stores no cost-layer history (see this file's own top-of-file
+ * comment — "No FIFO/LIFO/weighted-average... only each item's current
+ * unitCost"), so there is nothing to average over. "latest" (today's
+ * unitCost, the only value that ever existed) is what this always computes;
+ * "average" is accepted and stored as a real setting for when/if cost-layer
+ * history is ever built, but resolves to the exact same number today rather
+ * than fabricating a fake average — same "don't build a working-looking
+ * toggle that silently does nothing different" rule the NotAvailable
+ * Settings placeholders already follow.
+ */
+function round(value: number, precision: number): number {
+  const factor = 10 ** precision;
+  return Math.round(value * factor) / factor;
+}
+
+function applyRounding<T extends object>(obj: T, fields: (keyof T)[], settings: InventorySettings): T {
+  const precision = settings.costAdjustmentRules?.roundingPrecision ?? 2;
+  const result: T = { ...obj };
+  for (const field of fields) {
+    const value = result[field];
+    if (typeof value === "number") result[field] = round(value, precision) as T[typeof field];
+  }
+  return result;
+}
 
 const DEFAULT_WINDOW_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -29,7 +60,7 @@ export interface ItemCosting {
  * scrap/consumption would cost at today's price," not the actual cost paid
  * at the time, exactly as the reviewed prompt specified.
  */
-export async function computeItemCosting(db: TenantDb, tenantId: number, item: InventoryItem, days: number = DEFAULT_WINDOW_DAYS): Promise<ItemCosting> {
+export async function computeItemCosting(db: TenantDb, tenantId: number, item: InventoryItem, days: number = DEFAULT_WINDOW_DAYS, settings?: InventorySettings): Promise<ItemCosting> {
   const stockRows = await db.select().from(inventoryStock).where(and(eq(inventoryStock.itemId, item.id), eq(inventoryStock.tenantId, tenantId)));
   const onHand = stockRows.reduce((sum, r) => sum + Number(r.onHand), 0);
 
@@ -46,7 +77,7 @@ export async function computeItemCosting(db: TenantDb, tenantId: number, item: I
   const scrapQty = inWindow.filter((m) => m.movementType === "scrap").reduce((sum, m) => sum + Number(m.quantity), 0);
   const consumeQty = inWindow.filter((m) => m.movementType === "consume").reduce((sum, m) => sum + Number(m.quantity), 0);
 
-  return {
+  const result: ItemCosting = {
     itemId: item.id,
     sku: item.sku,
     unitCost,
@@ -56,6 +87,7 @@ export async function computeItemCosting(db: TenantDb, tenantId: number, item: I
     consumptionCost: unitCost === null ? null : consumeQty * unitCost,
     days,
   };
+  return settings ? applyRounding(result, ["unitCost", "itemValue", "scrapCost", "consumptionCost"], settings) : result;
 }
 
 export interface SupplierCostEntry {
@@ -76,9 +108,9 @@ export interface CostingSummary {
   days: number;
 }
 
-export async function computeCostingSummary(db: TenantDb, tenantId: number, days: number = DEFAULT_WINDOW_DAYS): Promise<CostingSummary> {
+export async function computeCostingSummary(db: TenantDb, tenantId: number, days: number = DEFAULT_WINDOW_DAYS, settings?: InventorySettings): Promise<CostingSummary> {
   const items = await db.select().from(inventoryItems).where(eq(inventoryItems.tenantId, tenantId));
-  const costings = await Promise.all(items.map((item) => computeItemCosting(db, tenantId, item, days)));
+  const costings = await Promise.all(items.map((item) => computeItemCosting(db, tenantId, item, days, settings)));
 
   const uncostedItemCount = costings.filter((c) => c.unitCost === null).length;
   const totalInventoryValue = costings.reduce((sum, c) => sum + (c.itemValue ?? 0), 0);
@@ -106,7 +138,7 @@ export async function computeCostingSummary(db: TenantDb, tenantId: number, days
     }
   }
 
-  return {
+  const summary: CostingSummary = {
     totalInventoryValue,
     uncostedItemCount,
     totalScrapCost,
@@ -114,6 +146,7 @@ export async function computeCostingSummary(db: TenantDb, tenantId: number, days
     supplierCostDistribution: Array.from(bySupplier.values()).sort((a, b) => b.itemValue - a.itemValue),
     days,
   };
+  return settings ? applyRounding(summary, ["totalInventoryValue", "totalScrapCost", "totalConsumptionCost"], settings) : summary;
 }
 
 async function loadItem(req: Request, id: number): Promise<InventoryItem> {
@@ -131,10 +164,12 @@ function parseDays(req: Request): number {
 export const getItemCostingHandler = asyncHandler(async (req: Request, res: Response) => {
   const itemId = Number(req.params.itemId);
   const item = await loadItem(req, itemId);
-  res.json(await computeItemCosting(req.db!, req.tenantId!, item, parseDays(req)));
+  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  res.json(await computeItemCosting(req.db!, req.tenantId!, item, parseDays(req), getInventorySettings(tenant)));
 });
 
 /** GET /inventory/costing/summary?days=30 */
 export const costingSummaryHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await computeCostingSummary(req.db!, req.tenantId!, parseDays(req)));
+  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  res.json(await computeCostingSummary(req.db!, req.tenantId!, parseDays(req), getInventorySettings(tenant)));
 });

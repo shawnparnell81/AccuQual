@@ -54,6 +54,11 @@ export const movementSchema = z
     fromLocation: z.string().optional(),
     toLocation: z.string().optional(),
     reason: z.string().optional(),
+    // Settings → Inventory Module expansion — optional: omitted on
+    // receive/produce means "auto-generate if the tenant has that on", see
+    // inventory.service.ts's applyMovement.
+    lotNumber: z.string().max(100).optional(),
+    serialNumber: z.string().max(100).optional(),
     ...referenceFields,
   })
   .refine((v) => v.movementType !== "transfer" || (v.fromLocation && v.toLocation), {
@@ -78,4 +83,19 @@ export const checkMinMaxSchema = z.object({
 
 export const reorderRequestNotesSchema = z.object({
   notes: z.string().max(2000), // may be empty, to clear a note
+});
+
+// Settings → Inventory Module expansion: reservation logic + cycle counts.
+export const reserveSchema = z.object({
+  quantity: z.coerce.number().positive(),
+  location: z.string().optional(),
+});
+
+export const releaseSchema = z.object({
+  quantity: z.coerce.number().positive(),
+  location: z.string().optional(),
+});
+
+export const cycleCountSchema = z.object({
+  notes: z.string().max(2000).optional(),
 });
