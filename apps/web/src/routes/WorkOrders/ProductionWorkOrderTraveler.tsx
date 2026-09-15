@@ -4,6 +4,7 @@ import { apiClient } from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import type { WorkOrder, WorkOrderOperation } from "../../api/types";
 
 /**
@@ -22,14 +23,21 @@ import type { WorkOrder, WorkOrderOperation } from "../../api/types";
  * Shop-floor fields (the operations routing table, quality gates,
  * signatures) stay editable through "in_progress"/"completed" and only lock
  * once the work order is "cancelled" — see assertTravelerEditable there.
+ * Both are additionally gated on useCanEditWorkflow("work_orders") — before
+ * Customer Service owned this module, every viewer able to reach this page
+ * was already department-"edit" (production) or admin, so status alone was
+ * enough; now that production/quality/purchasing/material_management are
+ * read-only viewers too, the inputs must actually disable for them instead
+ * of looking editable and 403ing on submit.
  */
 export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrder }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const logoUrl = useAuthStore((s) => s.tenant?.branding?.logoUrl);
+  const canEdit = useCanEditWorkflow("work_orders");
 
-  const canEditPlanning = workOrder.status === "planned";
-  const canEditTraveler = workOrder.status !== "cancelled";
+  const canEditPlanning = canEdit && workOrder.status === "planned";
+  const canEditTraveler = canEdit && workOrder.status !== "cancelled";
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["work-orders", workOrder.id] });
 

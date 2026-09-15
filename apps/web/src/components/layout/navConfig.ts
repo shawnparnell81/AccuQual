@@ -180,16 +180,19 @@ export const RMA: NavLeaf = {
 
 // Not a sheet row — a new module. Mirrors departmentAccess.ts's
 // PERMISSION_MATRIX.work_orders exactly (see the AI Work Order Planning /
-// PR Justification / Onboarding / ERP Automation review).
+// PR Justification / Onboarding / ERP Automation review). Per explicit user
+// request (2026-09-15): Customer Service owns it now; Production is
+// read-only. "General Manager" full access is the existing admin bypass,
+// not a distinct department — see departmentAccess.ts's own comment.
 export const WORK_ORDERS: NavLeaf = {
   key: "work_orders",
   label: "Work Orders",
   path: "/work-orders",
   icon: Hammer,
-  access: { production: "edit", material_management: "read", purchasing: "read", quality: "read" },
+  access: { customer_service: "edit", production: "read", material_management: "read", purchasing: "read", quality: "read" },
   kpi: false,
   priority: 2,
-  notes: "Not in the department sheet — a new production Work Orders module",
+  notes: "Not in the department sheet — Customer Service owns the work order lifecycle; Production/Material Mgmt/Purchasing/Quality are read-only",
 };
 
 // Not a sheet row — a new module (Purchase Orders' pre-approval sibling).
@@ -396,7 +399,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "customer_service",
-    items: [PRODUCTION_LOG, COMPLAINTS, WARRANTY, CRAR, RMA_LOG],
+    items: [PRODUCTION_LOG, COMPLAINTS, WARRANTY, CRAR, RMA_LOG, WORK_ORDERS],
   },
   {
     department: "purchasing",

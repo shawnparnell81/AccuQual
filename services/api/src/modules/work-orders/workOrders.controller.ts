@@ -9,7 +9,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { applyMovement } from "../inventory/inventory.service.js";
 
-/** Same inline-guard style as inventory.controller.ts/erp.controller.ts/rma.controller.ts's assertDepartment — production owns work orders; the matrix's read-level departments (quality/material_management/purchasing) can't start/complete/cancel one. */
+/** Same inline-guard style as inventory.controller.ts/erp.controller.ts/rma.controller.ts's assertDepartment — Customer Service owns work orders (per explicit user request, 2026-09-15); every other read-level department (production/quality/material_management/purchasing) can view but never start/complete/cancel one. Admin/platform_admin bypass this entirely, which is how "General Manager" gets full access without a dedicated department. */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
   if (role === "admin" || role === "platform_admin") return;
@@ -80,7 +80,7 @@ export const listWorkOrdersHandler = asyncHandler(async (req: Request, res: Resp
 });
 
 export const createWorkOrderHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["production"]);
+  assertDepartment(req, ["customer_service"]);
   const { itemId, quantityPlanned, linkedNcrId, dueDate, notes } = req.body as {
     itemId: number;
     quantityPlanned: number;
@@ -120,7 +120,7 @@ export const getWorkOrderHandler = asyncHandler(async (req: Request, res: Respon
 });
 
 export const updateWorkOrderHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["production"]);
+  assertDepartment(req, ["customer_service"]);
   const record = await loadWorkOrder(req, Number(req.params.id));
   if (record.status !== "planned") {
     throw AppError.badRequest(`Cannot edit a work order that is "${record.status}", not "planned"`);
@@ -135,13 +135,13 @@ export const updateWorkOrderHandler = asyncHandler(async (req: Request, res: Res
 });
 
 export const startWorkOrderHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["production"]);
+  assertDepartment(req, ["customer_service"]);
   const { updated } = await transition(req, Number(req.params.id), "in_progress");
   res.json(updated);
 });
 
 export const cancelWorkOrderHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["production"]);
+  assertDepartment(req, ["customer_service"]);
   const { updated } = await transition(req, Number(req.params.id), "cancelled");
   res.json(updated);
 });
@@ -155,7 +155,7 @@ export const cancelWorkOrderHandler = asyncHandler(async (req: Request, res: Res
  * the caller's per-request transaction, atomic with the status update.
  */
 export const completeWorkOrderHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["production"]);
+  assertDepartment(req, ["customer_service"]);
   const { quantityCompleted } = req.body as { quantityCompleted: number };
   const { record, updated } = await transition(req, Number(req.params.id), "completed", { quantityCompleted: String(quantityCompleted) });
 
@@ -178,7 +178,7 @@ function assertTravelerEditable(status: string) {
 }
 
 export const updateQualityGatesHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["production"]);
+  assertDepartment(req, ["customer_service"]);
   const record = await loadWorkOrder(req, Number(req.params.id));
   assertTravelerEditable(record.status);
   const [updated] = await req.db!.update(workOrders).set({ ...req.body, updatedAt: new Date() }).where(eq(workOrders.id, record.id)).returning();
@@ -187,7 +187,7 @@ export const updateQualityGatesHandler = asyncHandler(async (req: Request, res: 
 });
 
 export const signOperatorHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["production"]);
+  assertDepartment(req, ["customer_service"]);
   const record = await loadWorkOrder(req, Number(req.params.id));
   assertTravelerEditable(record.status);
   const { signature } = req.body as { signature: string };
@@ -197,7 +197,7 @@ export const signOperatorHandler = asyncHandler(async (req: Request, res: Respon
 });
 
 export const signInspectorHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["production"]);
+  assertDepartment(req, ["customer_service"]);
   const record = await loadWorkOrder(req, Number(req.params.id));
   assertTravelerEditable(record.status);
   const { signature } = req.body as { signature: string };
@@ -213,7 +213,7 @@ async function loadOperation(req: Request, workOrderId: number, opId: number) {
 }
 
 export const createOperationHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["production"]);
+  assertDepartment(req, ["customer_service"]);
   const record = await loadWorkOrder(req, Number(req.params.id));
   assertTravelerEditable(record.status);
   const [created] = await req.db!.insert(workOrderOperations).values({ ...req.body, workOrderId: record.id, tenantId: req.tenantId! }).returning();
@@ -222,7 +222,7 @@ export const createOperationHandler = asyncHandler(async (req: Request, res: Res
 });
 
 export const updateOperationHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["production"]);
+  assertDepartment(req, ["customer_service"]);
   const record = await loadWorkOrder(req, Number(req.params.id));
   assertTravelerEditable(record.status);
   const operation = await loadOperation(req, record.id, Number(req.params.opId));
@@ -239,7 +239,7 @@ export const updateOperationHandler = asyncHandler(async (req: Request, res: Res
 });
 
 export const deleteOperationHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["production"]);
+  assertDepartment(req, ["customer_service"]);
   const record = await loadWorkOrder(req, Number(req.params.id));
   assertTravelerEditable(record.status);
   const operation = await loadOperation(req, record.id, Number(req.params.opId));

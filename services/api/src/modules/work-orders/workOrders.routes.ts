@@ -30,11 +30,12 @@ import {
 import { workOrderAiPlanHandler } from "./workOrder.ai.js";
 
 export const workOrdersRouter = Router();
-// production gets edit; material_management/purchasing/quality get read —
-// see departmentAccess.ts PERMISSION_MATRIX.work_orders. Per-action limits
-// (only production may create/start/complete/cancel) are inline in
-// workOrders.controller.ts, the same assertDepartment pattern every other
-// module in this app uses.
+// Customer Service gets edit; production/material_management/purchasing/
+// quality get read — see departmentAccess.ts PERMISSION_MATRIX.work_orders.
+// Per-action limits (only Customer Service may create/start/complete/
+// cancel) are inline in workOrders.controller.ts, the same assertDepartment
+// pattern every other module in this app uses. Admin/platform_admin
+// ("General Manager", for now) bypass this entirely.
 workOrdersRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("work_orders"));
 
 // Fixed literal path before ":id"-shaped ones, same convention used
