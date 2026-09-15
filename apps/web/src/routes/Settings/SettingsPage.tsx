@@ -4,6 +4,9 @@ import { useCurrentUser, useCurrentTenant } from "../../hooks/useAuth";
 import { NavigationSettingsPage } from "./NavigationSettingsPage";
 import { SecurityRolesSection } from "./SecurityRolesSection";
 import { ThemeSettingsSection } from "./ThemeSettingsSection";
+import { FeasibilitySettingsPanel } from "./FeasibilitySettingsPanel";
+import { InventoryAdvancedSettingsPanel } from "./InventoryAdvancedSettingsPanel";
+import { ERPSyncSettingsPanel } from "./ERPSyncSettingsPanel";
 
 const TABS = [
   "User Preferences",
@@ -12,6 +15,7 @@ const TABS = [
   "Email Alerts",
   "ERP Integration",
   "Inventory Settings",
+  "Feasibility",
   "Security & Roles",
   "Tenant Settings",
   "Navigation",
@@ -101,8 +105,9 @@ export function SettingsPage() {
 
       {tab === "Notifications" && <NotAvailable what="Notifications" />}
       {tab === "Email Alerts" && <NotAvailable what="Email delivery" />}
-      {tab === "ERP Integration" && <NotAvailable what="ERP integration" />}
-      {tab === "Inventory Settings" && <NotAvailable what="Inventory" />}
+      {tab === "ERP Integration" && <ERPSyncSettingsPanel />}
+      {tab === "Inventory Settings" && <InventoryAdvancedSettingsPanel />}
+      {tab === "Feasibility" && <FeasibilitySettingsPanel />}
 
       {tab === "Security & Roles" && <SecurityRolesSection />}
 
