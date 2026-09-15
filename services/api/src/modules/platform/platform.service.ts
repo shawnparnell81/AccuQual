@@ -48,6 +48,14 @@ const DEFAULT_FORM_TYPES = [
   "management_review_minutes",
   "staff_meeting_minutes",
   "final_inspection_release_checklist",
+  // Both were missing from this list despite being real, registered form
+  // types (see layouts/index.ts) with live "Open Form" buttons (Inventory
+  // Item Record, Customer Requirements) — every tenant 404'd on Preview/
+  // Export PDF for these two, forever. forms.service.ts's loadTemplate now
+  // self-heals this class of gap generally, but keeping this seed list
+  // accurate still means a brand-new tenant never needs the self-heal path.
+  "inventory_item",
+  "customer_requirements",
 ] as const;
 
 interface CreateTenantInput {

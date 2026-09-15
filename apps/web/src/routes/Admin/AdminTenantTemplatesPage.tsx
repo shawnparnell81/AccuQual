@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
-import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { extractErrorMessage, extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { FormTemplateStatus } from "../../api/types";
@@ -65,7 +65,7 @@ function TemplateRow({ type, label, status }: { type: string; label: string; sta
       const url = URL.createObjectURL(res.data as Blob);
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (err) {
-      toast.error(extractErrorMessage(err, "Couldn't load template preview."));
+      toast.error(await extractErrorMessageAsync(err, "Couldn't load template preview."));
     }
   }
 
