@@ -22,6 +22,7 @@ export const FEASIBILITY_SOURCE_TYPES = [
 
 export const FEASIBILITY_STATUSES = ["draft", "submitted", "under_review", "approved", "rejected"] as const;
 export const FEASIBILITY_DECISIONS = ["feasible", "conditional", "not_feasible"] as const;
+export const FEASIBILITY_RISK_LEVELS = ["low", "medium", "high", "critical"] as const;
 
 /**
  * The real reusable dimensionKey set — representative of every QMS context
@@ -62,6 +63,11 @@ export const createFeasibilitySchema = z.object({
   sourceId: z.coerce.number().int().optional(),
   department: z.string().optional(),
   ownerId: z.coerce.number().int().optional(),
+  // Settings → Feasibility Module integration — all optional: omitted means
+  // "apply the tenant's configured defaults", see
+  // feasibility.controller.ts's createFeasibilityHandler.
+  riskLevel: z.enum(FEASIBILITY_RISK_LEVELS).optional(),
+  customerRequirement: z.string().max(200).optional(),
 });
 
 // Deliberately excludes `status`/`decision` — those only ever change through
@@ -74,6 +80,12 @@ export const updateFeasibilitySchema = z.object({
   ownerId: z.coerce.number().int().nullable().optional(),
   reviewerId: z.coerce.number().int().nullable().optional(),
   aiSuggested: z.boolean().optional(),
+  // A reviewer setting this explicitly pins it against recalcScoring's
+  // auto-derivation from the computed decision — see riskLevelSetManually
+  // on the schema and feasibility.controller.ts's recalcScoring.
+  riskLevel: z.enum(FEASIBILITY_RISK_LEVELS).optional(),
+  providedDocuments: z.array(z.string().min(1)).optional(),
+  customerRequirement: z.string().max(200).nullable().optional(),
 });
 
 export const createScoreSchema = z.object({

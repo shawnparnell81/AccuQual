@@ -6,6 +6,8 @@ import { AppError } from "../../utils/appError.js";
 import { stripClientOwnedFields } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
+import { notifyDepartment } from "../notifications/notification.service.js";
+import { loadTenantForSettings, getFeasibilitySettings } from "../settings/settings.service.js";
 
 /** Same inline-guard style as risk/workOrders/erp/rma.controller.ts's assertDepartment. */
 function assertDepartment(req: Request, allowed: string[]) {
@@ -69,16 +71,42 @@ async function loadFeasibility(req: Request, id: number) {
   return row;
 }
 
-/** Recomputes overallScore/decision from every real score row and writes both back — called after any score add/update. */
+/**
+ * Decision -> riskLevel, the fixed mapping "risk scoring reads settings"
+ * resolves to (see the module's own settings integration doc). Locked-in,
+ * same spirit as FEASIBLE_MIN/CONDITIONAL_MIN above: worse feasibility outcome
+ * -> higher risk level.
+ */
+const RISK_LEVEL_BY_DECISION: Record<string, "low" | "medium" | "high" | "critical"> = {
+  feasible: "low",
+  conditional: "high",
+  not_feasible: "critical",
+};
+
+/**
+ * Recomputes overallScore/decision from every real score row and writes both
+ * back — called after any score add/update. Also re-derives riskLevel from
+ * the new decision via RISK_LEVEL_BY_DECISION ("risk scoring reads settings"
+ * — see tenants.feasibilitySettings' own comment) UNLESS a reviewer already
+ * set riskLevel by hand (updateFeasibilityHandler stamps
+ * riskLevelSetManually the moment that happens) — a manual call always wins
+ * over the automatic derivation, same "server stamps once, never overwrites
+ * a real human decision" precedent used elsewhere in this app (e.g. Work
+ * Order sign-off timestamps).
+ */
 async function recalcScoring(req: Request, feasibilityId: number) {
   const scores = await req.db!.select().from(feasibilityScores).where(and(eq(feasibilityScores.feasibilityId, feasibilityId), eq(feasibilityScores.tenantId, req.tenantId!)));
   const overallScore = computeOverallScore(scores);
   const decision = computeDecision(overallScore);
+
+  const [existing] = await req.db!.select().from(feasibilityReviews).where(eq(feasibilityReviews.id, feasibilityId));
+  const riskLevel = decision && !existing?.riskLevelSetManually ? RISK_LEVEL_BY_DECISION[decision] : existing?.riskLevel;
+
   await req
     .db!.update(feasibilityReviews)
-    .set({ overallScore: overallScore === null ? null : String(overallScore), decision, updatedAt: new Date() })
+    .set({ overallScore: overallScore === null ? null : String(overallScore), decision, riskLevel, updatedAt: new Date() })
     .where(eq(feasibilityReviews.id, feasibilityId));
-  return { overallScore, decision };
+  return { overallScore, decision, riskLevel };
 }
 
 const ALLOWED_NEXT: Record<string, string[]> = {
@@ -113,6 +141,25 @@ async function transition(req: Request, id: number, newStatus: string) {
     performedBy: req.user?.id,
   });
   await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "feasibility", event: newStatus, entityId: record.id });
+
+  // Settings → Feasibility Module integration: "notification routing" reads
+  // feasibilitySettings.notificationsEnabled. Routed to Quality — the one
+  // department with full workflow control (submit/review/approve/reject),
+  // same real notifyDepartment mechanism inventory.service.ts's below-min
+  // alert already uses (real email if SMTP is configured, honestly logged
+  // otherwise — see notification.service.ts).
+  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  if (getFeasibilitySettings(tenant).notificationsEnabled) {
+    await notifyDepartment(req.db!, {
+      tenantId: req.tenantId!,
+      department: "quality",
+      subject: `Feasibility Review #${record.id} — ${newStatus}`,
+      body: `"${record.title}" moved from ${record.status} to ${newStatus}.`,
+      relatedEntityType: "FeasibilityReview",
+      relatedEntityId: record.id,
+    });
+  }
+
   return updated!;
 }
 
@@ -130,9 +177,19 @@ export const listFeasibilityHandler = asyncHandler(async (req: Request, res: Res
 /** Create — any of the shared floor's five departments, matching risk.controller.ts's createRiskHandler exactly. */
 export const createFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
   assertDepartment(req, ["quality", "engineering", "production", "purchasing", "material_management"]);
+  const customerRequirement: string | undefined = req.body.customerRequirement;
+
+  // Settings → Feasibility Module integration — applied only when the
+  // caller didn't already decide the field themselves.
+  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const settings = getFeasibilitySettings(tenant);
+  const riskLevel = req.body.riskLevel ?? settings.defaultRiskLevel;
+  const ownerId = req.body.ownerId ?? (settings.autoAssignOwner ? req.user?.id : undefined);
+  const mappedRequirementCategory = customerRequirement ? settings.customerRequirementMapping?.[customerRequirement] ?? null : null;
+
   const [created] = await req
     .db!.insert(feasibilityReviews)
-    .values({ ...req.body, tenantId: req.tenantId!, createdBy: req.user?.id })
+    .values({ ...req.body, riskLevel, ownerId, customerRequirement, mappedRequirementCategory, tenantId: req.tenantId!, createdBy: req.user?.id })
     .returning();
   await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);
@@ -149,11 +206,23 @@ export const updateFeasibilityHandler = asyncHandler(async (req: Request, res: R
   assertDepartment(req, ["quality", "engineering"]);
   const record = await loadFeasibility(req, Number(req.params.id));
   const { aiSuggested, ...rest } = req.body as { aiSuggested?: boolean } & Record<string, unknown>;
-  const body = stripClientOwnedFields(rest);
+  const body = stripClientOwnedFields(rest) as { riskLevel?: string; customerRequirement?: string | null } & Record<string, unknown>;
+
+  // A manual riskLevel pins it against recalcScoring's own auto-derivation
+  // from here on (see recalcScoring's own comment).
+  const riskLevelSetManually = body.riskLevel !== undefined ? true : undefined;
+
+  // Re-resolve the mapping any time customerRequirement itself changes —
+  // same settings.customerRequirementMapping createFeasibilityHandler reads.
+  let mappedRequirementCategory: string | null | undefined;
+  if (body.customerRequirement !== undefined) {
+    const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+    mappedRequirementCategory = body.customerRequirement ? getFeasibilitySettings(tenant).customerRequirementMapping?.[body.customerRequirement] ?? null : null;
+  }
 
   const [updated] = await req
     .db!.update(feasibilityReviews)
-    .set({ ...body, updatedAt: new Date() })
+    .set({ ...body, riskLevelSetManually, mappedRequirementCategory, updatedAt: new Date() })
     .where(eq(feasibilityReviews.id, record.id))
     .returning();
 
@@ -168,10 +237,28 @@ export const updateFeasibilityHandler = asyncHandler(async (req: Request, res: R
   res.json(updated);
 });
 
-/** draft -> submitted. Quality only ("full control" of the workflow per the spec). */
+/**
+ * draft -> submitted. Quality only ("full control" of the workflow per the
+ * spec). Settings → Feasibility Module integration: "required document
+ * validation" — every doc name in feasibilitySettings.requiredDocuments must
+ * appear in this record's own providedDocuments (set via
+ * updateFeasibilityHandler) before it can leave draft. Not a real file
+ * upload/attachment system (see feasibility.ts's own schema comment on
+ * providedDocuments) — a checklist gate, same honest scoping as the rest of
+ * this integration.
+ */
 export const submitFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
   assertDepartment(req, ["quality"]);
-  res.json(await transition(req, Number(req.params.id), "submitted"));
+  const id = Number(req.params.id);
+  const record = await loadFeasibility(req, id);
+  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const required = getFeasibilitySettings(tenant).requiredDocuments ?? [];
+  const provided = new Set(record.providedDocuments ?? []);
+  const missing = required.filter((doc) => !provided.has(doc));
+  if (missing.length > 0) {
+    throw AppError.badRequest(`Cannot submit — missing required document(s): ${missing.join(", ")}. Mark them provided first.`);
+  }
+  res.json(await transition(req, id, "submitted"));
 });
 
 /** submitted -> under_review. Quality only. */
