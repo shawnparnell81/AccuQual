@@ -9,6 +9,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
 import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
 import { Modal } from "../../components/modals/Modal";
@@ -366,6 +367,7 @@ export function RmaDetailPage() {
         )}
       </div>
 
+      <AttachmentsPanel entityType="rma" entityId={rmaId} />
       <WorkflowHistoryPanel moduleName="rma" recordId={rmaId} />
 
       <AddItemModal rmaId={rmaId} isOpen={addItemOpen} onClose={() => setAddItemOpen(false)} />

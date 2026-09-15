@@ -11,6 +11,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextField, TextAreaField, SelectField } from "../../components/forms/Field";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { Modal } from "../../components/modals/Modal";
 import { RISK_CATEGORIES } from "../../components/shared/riskConstants";
@@ -123,6 +124,7 @@ export function RiskDetailPage() {
         <FmeaTable riskId={riskId} items={risk.fmeaItems ?? []} />
       </div>
 
+      <AttachmentsPanel entityType="risk" entityId={riskId} />
       <WorkflowHistoryPanel moduleName="risk" recordId={riskId} />
 
       <EditRiskModal risk={risk} isOpen={editOpen} onClose={() => setEditOpen(false)} />

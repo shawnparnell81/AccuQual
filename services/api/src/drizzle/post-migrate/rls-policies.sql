@@ -71,7 +71,8 @@ DECLARE
     'customers', 'work_order_operations',
     'document_change_requests', 'document_change_items', 'document_change_reviews',
     'qms_forms', 'qms_form_rows',
-    'scar_forms', 'quality_inspection_reports', 'quality_inspection_items'
+    'scar_forms', 'quality_inspection_reports', 'quality_inspection_items',
+    'attachments'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP

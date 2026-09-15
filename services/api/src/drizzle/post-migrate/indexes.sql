@@ -40,7 +40,8 @@ DECLARE
     'customers', 'work_order_operations',
     'document_change_requests', 'document_change_items', 'document_change_reviews',
     'qms_forms', 'qms_form_rows',
-    'scar_forms', 'quality_inspection_reports', 'quality_inspection_items'
+    'scar_forms', 'quality_inspection_reports', 'quality_inspection_items',
+    'attachments'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP
@@ -97,6 +98,10 @@ CREATE INDEX IF NOT EXISTS document_change_reviews_dcr_idx ON document_change_re
 CREATE INDEX IF NOT EXISTS qms_forms_type_idx ON qms_forms (tenant_id, form_type);
 CREATE INDEX IF NOT EXISTS qms_form_rows_form_idx ON qms_form_rows (form_id);
 CREATE INDEX IF NOT EXISTS quality_inspection_items_report_idx ON quality_inspection_items (report_id);
+-- The hot lookup shape for the generic attachments panel embedded on every
+-- record's own page: "every attachment for this one record", or (both null)
+-- the shared General Uploads bin.
+CREATE INDEX IF NOT EXISTS attachments_entity_idx ON attachments (tenant_id, entity_type, entity_id);
 
 -- password_reset_tokens isn't in the tenant_tables array above (see its own
 -- schema comment — it's only ever queried via the unscoped db, pre-auth,

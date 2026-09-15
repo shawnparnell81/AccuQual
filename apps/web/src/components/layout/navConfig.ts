@@ -43,6 +43,7 @@ import {
   FileEdit,
   LibraryBig,
   ShieldX,
+  UploadCloud,
 } from "lucide-react";
 
 /**
@@ -353,6 +354,16 @@ export const NAV_STRUCTURE: NavGroup[] = [
         kpi: false,
         priority: 3,
         notes: "Master index + controlled-document register — folder browsing lives under Document Library instead",
+      },
+      {
+        key: "general_uploads",
+        label: "General Uploads",
+        path: "/documents/uploads",
+        icon: UploadCloud,
+        access: {},
+        kpi: false,
+        priority: 3,
+        notes: "Not in the department sheet — the shared bin for a user's own uploads that aren't evidence on a specific record (see AttachmentsPanel)",
       },
       { key: "training", label: "Training", path: "/training", icon: GraduationCap, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
       { key: "change", label: "Change Mgmt", path: "/change", icon: GitBranch, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },

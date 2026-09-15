@@ -5,6 +5,7 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { Modal } from "../../components/modals/Modal";
 import { FeasibilityReviewForm } from "./FeasibilityReviewForm";
@@ -64,7 +65,8 @@ export function FeasibilityDetailPage() {
 
       <FeasibilityReviewForm review={review} />
 
-      <div className="print:hidden">
+      <div className="flex flex-col gap-4 print:hidden">
+        <AttachmentsPanel entityType="feasibility" entityId={reviewId} />
         <WorkflowHistoryPanel moduleName="feasibility" recordId={reviewId} />
       </div>
 

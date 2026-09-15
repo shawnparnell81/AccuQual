@@ -7,6 +7,7 @@ import { useAuthStore } from "../../store/authStore";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { Modal } from "../../components/modals/Modal";
 import type { QualityInspectionReport, QualityInspectionItem, InspectionType, InspectionFinalStatus } from "../../api/types";
 
@@ -206,7 +207,8 @@ export function QualityInspectionReportDetailPage() {
         </div>
       </div>
 
-      <div className="print:hidden">
+      <div className="flex flex-col gap-4 print:hidden">
+        <AttachmentsPanel entityType="quality_inspection_reports" entityId={reportId} />
         <WorkflowHistoryPanel moduleName="quality_inspection_reports" recordId={reportId} />
       </div>
 

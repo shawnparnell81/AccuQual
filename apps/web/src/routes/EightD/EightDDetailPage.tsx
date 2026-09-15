@@ -5,6 +5,7 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
 import { TextAreaField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 
 interface EightDReport {
   id: number;
@@ -81,6 +82,8 @@ export function EightDDetailPage() {
           );
         })}
       </div>
+
+      <AttachmentsPanel entityType="eight_d" entityId={report.id} />
     </div>
   );
 }

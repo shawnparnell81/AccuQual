@@ -3,6 +3,7 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import type { PpapPackage } from "./PpapListPage";
 
 const ppapHooks = createResourceHooks<PpapPackage>("ppap");
@@ -63,6 +64,8 @@ export function PpapDetailPage() {
           ))}
         </div>
       </div>
+
+      <AttachmentsPanel entityType="ppap" entityId={ppap.id} />
     </div>
   );
 }

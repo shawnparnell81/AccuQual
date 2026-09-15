@@ -9,6 +9,7 @@ import { STATUS_COLORS, calibrationStatusFromDueDate } from "../../components/fo
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 
@@ -180,6 +181,7 @@ export function EquipmentDetailPage() {
         </ul>
       </div>
 
+      <AttachmentsPanel entityType="calibration" entityId={equipmentId} />
       <WorkflowHistoryPanel moduleName="calibration" recordId={equipmentId} />
     </div>
   );

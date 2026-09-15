@@ -35,3 +35,4 @@ export * from "./documentChangeRequests.js";
 export * from "./qmsForms.js";
 export * from "./scarForms.js";
 export * from "./qualityInspectionReports.js";
+export * from "./attachments.js";

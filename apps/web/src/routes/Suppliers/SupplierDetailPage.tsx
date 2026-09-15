@@ -8,6 +8,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
 import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
@@ -209,6 +210,7 @@ export function SupplierDetailPage() {
         )}
       </div>
 
+      <AttachmentsPanel entityType="suppliers" entityId={supplierId} />
       <WorkflowHistoryPanel moduleName="suppliers" recordId={supplierId} />
     </div>
   );

@@ -10,6 +10,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { Modal } from "../../components/modals/Modal";
 import { TextField } from "../../components/forms/Field";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
@@ -202,6 +203,7 @@ export function ErpPurchaseOrderDetailPage() {
         )}
       </div>
 
+      <AttachmentsPanel entityType="erp_po" entityId={poId} />
       <WorkflowHistoryPanel moduleName="erp" recordId={poId} />
 
       <LogReceiptModal po={po} isOpen={receiptOpen} onClose={() => setReceiptOpen(false)} />
