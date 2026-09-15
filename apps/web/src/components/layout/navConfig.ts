@@ -37,6 +37,12 @@ import {
   Hammer,
   FileSignature,
   Compass,
+  Megaphone,
+  Handshake,
+  UserPlus,
+  FileEdit,
+  LibraryBig,
+  ShieldX,
 } from "lucide-react";
 
 /**
@@ -56,7 +62,8 @@ export type Department =
   | "production"
   | "customer_service"
   | "purchasing"
-  | "material_management";
+  | "material_management"
+  | "sales_and_marketing";
 
 export interface NavLeaf {
   key: string;
@@ -89,6 +96,7 @@ export const DEPARTMENTS: DepartmentMeta[] = [
   { key: "customer_service", label: "Customer Service", icon: Headset, text: "text-violet-700 dark:text-violet-400", bgSoft: "bg-violet-500/10", ring: "ring-violet-500/30" },
   { key: "purchasing", label: "Purchasing", icon: ShoppingCart, text: "text-emerald-700 dark:text-emerald-400", bgSoft: "bg-emerald-500/10", ring: "ring-emerald-500/30" },
   { key: "material_management", label: "Material Mgmt", icon: PackageSearch, text: "text-orange-800 dark:text-orange-400", bgSoft: "bg-orange-500/10", ring: "ring-orange-500/30" },
+  { key: "sales_and_marketing", label: "Sales & Marketing", icon: Megaphone, text: "text-pink-700 dark:text-pink-400", bgSoft: "bg-pink-500/10", ring: "ring-pink-500/30" },
 ];
 
 // ---- canonical leaves shared across more than one department's dropdown ----
@@ -207,6 +215,38 @@ export const PRODUCTION_LOG: NavLeaf = {
   notes: "Read-only in Production; editable in Customer Service",
 };
 
+// Not a sheet row — a new module (Sales & Marketing review). Mirrors
+// departmentAccess.ts's PERMISSION_MATRIX.sales exactly: sales_and_marketing
+// owns it, quality/engineering get read-only visibility (feasibility/
+// change-management context on a linked account), delete is admin-only with
+// no department at all (a deliberate contrast to Risk/Feasibility's
+// wider admin-or-department delete rule — see sales.controller.ts).
+export const SALES_ACCOUNTS: NavLeaf = {
+  key: "sales_accounts",
+  label: "Sales Accounts",
+  path: "/sales",
+  icon: Handshake,
+  access: { sales_and_marketing: "edit", quality: "read", engineering: "read" },
+  kpi: false,
+  priority: 2,
+  notes: "Not in the department sheet — new CRM-style module (accounts, quotes, contracts)",
+};
+
+// Not a sheet row — the Customer Onboarding module. Mirrors
+// departmentAccess.ts's PERMISSION_MATRIX.customers exactly — same
+// sales_and_marketing-owns-it, quality/engineering-read-only shape as
+// SALES_ACCOUNTS above (see the Customer Onboarding module review).
+export const CUSTOMERS: NavLeaf = {
+  key: "customers",
+  label: "Customer Onboarding",
+  path: "/customers",
+  icon: UserPlus,
+  access: { sales_and_marketing: "edit", quality: "read", engineering: "read" },
+  kpi: false,
+  priority: 2,
+  notes: "Not in the department sheet — new qualification workflow (one consolidated customers table, see its own schema comment)",
+};
+
 // PPAP and APQP are two distinct rows in the sheet, but the app currently
 // ships one combined page for both — see ASSUMPTIONS. Both leaves point at
 // the same route until a dedicated APQP page exists.
@@ -254,11 +294,13 @@ export const NAV_STRUCTURE: NavGroup[] = [
       RMA,
       WORK_ORDERS,
       PURCHASE_REQUISITIONS,
+      SALES_ACCOUNTS,
+      CUSTOMERS,
     ],
   },
   {
     department: "engineering",
-    items: [PPAP, APQP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS],
+    items: [PPAP, APQP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, SALES_ACCOUNTS, CUSTOMERS],
   },
   {
     department: "production",
@@ -275,6 +317,10 @@ export const NAV_STRUCTURE: NavGroup[] = [
   {
     department: "material_management",
     items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS],
+  },
+  {
+    department: "sales_and_marketing",
+    items: [SALES_ACCOUNTS, CUSTOMERS],
   },
   {
     // Not in the sheet — kept so nothing loses a working page. Access is
@@ -294,7 +340,73 @@ export const NAV_STRUCTURE: NavGroup[] = [
       },
       { key: "training", label: "Training", path: "/training", icon: GraduationCap, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
       { key: "change", label: "Change Mgmt", path: "/change", icon: GitBranch, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
-      { key: "risk", label: "Risk / FMEA", path: "/risk", icon: ShieldAlert, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
+      {
+        key: "document_change_requests",
+        label: "Document Change Requests",
+        path: "/document-change-requests",
+        icon: FileEdit,
+        // Deliberately ungated, same as "documents" above — Document Control's own convention (documents.routes.ts's own comment).
+        access: {},
+        kpi: false,
+        priority: 3,
+        notes: "Not in the department sheet — new QMS-document revision-control form, distinct from Change Mgmt's product/process change_requests",
+      },
+      {
+        key: "qms_forms",
+        label: "QMS Forms",
+        path: "/qms-forms",
+        icon: LibraryBig,
+        // Deliberately ungated, same as "documents"/"document_change_requests" above.
+        access: {},
+        kpi: false,
+        priority: 3,
+        notes: "Not in the department sheet — the generic 'ACCUQUAL Forms' batch (22 form types across every department), each also reachable from its own real Document Folders subfolder",
+      },
+      {
+        key: "scar_forms",
+        label: "SCAR Forms",
+        path: "/scar-forms",
+        icon: ShieldX,
+        access: {},
+        kpi: false,
+        priority: 3,
+        notes: "Not in the department sheet — one of the two real gaps the ACCUQUAL Forms batch review reported (a Supplier Corrective Action Request, distinct from a plain Supplier NCR)",
+      },
+      {
+        key: "quality_inspection_reports",
+        label: "Quality Inspection Reports",
+        path: "/quality-inspection-reports",
+        icon: ClipboardCheck,
+        access: {},
+        kpi: false,
+        priority: 3,
+        notes: "Not in the department sheet — the other real gap the ACCUQUAL Forms batch review reported (fills the generic 'Inspection Forms' placeholder)",
+      },
+      {
+        key: "risk",
+        label: "Risk / FMEA",
+        path: "/risk",
+        icon: ShieldAlert,
+        // Mirrors departmentAccess.ts PERMISSION_MATRIX.risk exactly — the
+        // real per-action asymmetry (update/close narrower than create;
+        // delete admin-only) is enforced server-side in risk.controller.ts
+        // and client-side inline via useCurrentUser(), same as work_orders.
+        access: { quality: "edit", engineering: "edit", production: "edit", purchasing: "edit", material_management: "edit" },
+        kpi: false,
+        priority: 3,
+        notes: "Not in the department sheet — new module, mirrors its own backend PERMISSION_MATRIX entry",
+      },
+      {
+        key: "feasibility",
+        label: "Feasibility Review",
+        path: "/feasibility",
+        icon: Gauge,
+        // Mirrors departmentAccess.ts PERMISSION_MATRIX.feasibility exactly — same reasoning as the risk leaf above.
+        access: { quality: "edit", engineering: "edit", production: "edit", purchasing: "edit", material_management: "edit" },
+        kpi: false,
+        priority: 3,
+        notes: "Not in the department sheet — new unified module across NCR/Supplier/Complaints/PPAP/Change/WorkOrders/Requisitions/PO/RMA",
+      },
       { key: "mgmt_system", label: "Management System", path: "/management-system", icon: Landmark, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
       { key: "workflow", label: "Workflow Builder", path: "/workflow", icon: Workflow, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
       { key: "ai", label: "AI Insights", path: "/ai", icon: Sparkles, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
@@ -342,5 +454,5 @@ export function findNavLeaf(key: string): NavLeaf | undefined {
     const found = group.items.find((item) => item.key === key);
     if (found) return found;
   }
-  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS].find((leaf) => leaf.key === key);
+  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, SALES_ACCOUNTS, CUSTOMERS].find((leaf) => leaf.key === key);
 }

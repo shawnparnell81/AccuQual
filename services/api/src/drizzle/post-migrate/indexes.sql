@@ -34,7 +34,13 @@ DECLARE
     'form_versions', 'inventory_items', 'inventory_stock', 'inventory_movements',
     'inventory_alerts', 'notification_log', 'inventory_reorder_requests',
     'erp_purchase_orders', 'erp_po_line_items', 'erp_receiving_documents', 'erp_receiving_line_items',
-    'rma', 'rma_items', 'work_orders', 'erp_purchase_requisitions', 'onboarding_progress'
+    'rma', 'rma_items', 'work_orders', 'erp_purchase_requisitions', 'onboarding_progress', 'risk_mitigations',
+    'feasibility_reviews', 'feasibility_scores',
+    'sales_accounts', 'sales_activities', 'sales_quotes', 'sales_contracts',
+    'customers', 'work_order_operations',
+    'document_change_requests', 'document_change_items', 'document_change_reviews',
+    'qms_forms', 'qms_form_rows',
+    'scar_forms', 'quality_inspection_reports', 'quality_inspection_items'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP
@@ -53,6 +59,12 @@ CREATE INDEX IF NOT EXISTS inventory_reorder_requests_tenant_status_idx ON inven
 CREATE INDEX IF NOT EXISTS rma_tenant_status_idx ON rma (tenant_id, status);
 CREATE INDEX IF NOT EXISTS work_orders_tenant_status_idx ON work_orders (tenant_id, status);
 CREATE INDEX IF NOT EXISTS erp_purchase_requisitions_tenant_status_idx ON erp_purchase_requisitions (tenant_id, status);
+CREATE INDEX IF NOT EXISTS risk_assessments_tenant_status_idx ON risk_assessments (tenant_id, status);
+CREATE INDEX IF NOT EXISTS feasibility_reviews_tenant_status_idx ON feasibility_reviews (tenant_id, status);
+CREATE INDEX IF NOT EXISTS sales_accounts_tenant_status_idx ON sales_accounts (tenant_id, status);
+CREATE INDEX IF NOT EXISTS sales_quotes_tenant_status_idx ON sales_quotes (tenant_id, status);
+CREATE INDEX IF NOT EXISTS sales_contracts_tenant_status_idx ON sales_contracts (tenant_id, status);
+CREATE INDEX IF NOT EXISTS customers_tenant_status_idx ON customers (tenant_id, status);
 
 -- The single hottest lookup shape in the whole app: every module's history
 -- panel (WorkflowHistoryPanel) and the generic per-entity audit endpoint
@@ -72,6 +84,20 @@ CREATE INDEX IF NOT EXISTS capa_ncr_idx ON capa (ncr_id);
 CREATE INDEX IF NOT EXISTS work_orders_item_idx ON work_orders (item_id);
 CREATE INDEX IF NOT EXISTS erp_purchase_requisitions_item_idx ON erp_purchase_requisitions (item_id);
 CREATE INDEX IF NOT EXISTS onboarding_progress_user_idx ON onboarding_progress (user_id);
+CREATE INDEX IF NOT EXISTS fmea_items_risk_idx ON fmea_items (risk_assessment_id);
+CREATE INDEX IF NOT EXISTS risk_mitigations_risk_idx ON risk_mitigations (risk_assessment_id);
+CREATE INDEX IF NOT EXISTS feasibility_scores_review_idx ON feasibility_scores (feasibility_id);
+CREATE INDEX IF NOT EXISTS feasibility_reviews_source_idx ON feasibility_reviews (source_type, source_id);
+CREATE INDEX IF NOT EXISTS sales_activities_account_idx ON sales_activities (account_id);
+CREATE INDEX IF NOT EXISTS sales_quotes_account_idx ON sales_quotes (account_id);
+CREATE INDEX IF NOT EXISTS sales_contracts_account_idx ON sales_contracts (account_id);
+CREATE INDEX IF NOT EXISTS customers_related_source_idx ON customers (related_source_type, related_source_id);
+CREATE INDEX IF NOT EXISTS work_order_operations_wo_idx ON work_order_operations (work_order_id);
+CREATE INDEX IF NOT EXISTS document_change_items_dcr_idx ON document_change_items (document_change_request_id);
+CREATE INDEX IF NOT EXISTS document_change_reviews_dcr_idx ON document_change_reviews (document_change_request_id);
+CREATE INDEX IF NOT EXISTS qms_forms_type_idx ON qms_forms (tenant_id, form_type);
+CREATE INDEX IF NOT EXISTS qms_form_rows_form_idx ON qms_form_rows (form_id);
+CREATE INDEX IF NOT EXISTS quality_inspection_items_report_idx ON quality_inspection_items (report_id);
 
 -- password_reset_tokens isn't in the tenant_tables array above (see its own
 -- schema comment — it's only ever queried via the unscoped db, pre-auth,

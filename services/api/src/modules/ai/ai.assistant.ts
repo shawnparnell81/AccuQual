@@ -16,6 +16,15 @@ import { trainingCourses, trainingAssignments } from "../../drizzle/schema/train
 import { equipment, calibrations } from "../../drizzle/schema/calibration.js";
 import { users } from "../../drizzle/schema/users.js";
 import { documents } from "../../drizzle/schema/documents.js";
+import { feasibilityReviews, feasibilityScores } from "../../drizzle/schema/feasibility.js";
+import { complaints } from "../../drizzle/schema/complaints.js";
+import { ppapPackages } from "../../drizzle/schema/ppap.js";
+import { changeRequests } from "../../drizzle/schema/change.js";
+import { workOrders } from "../../drizzle/schema/workOrders.js";
+import { erpPurchaseRequisitions, erpPurchaseOrders } from "../../drizzle/schema/erp.js";
+import { rma } from "../../drizzle/schema/rma.js";
+import { salesAccounts, salesActivities, salesQuotes, salesContracts } from "../../drizzle/schema/sales.js";
+import { customers } from "../../drizzle/schema/customers.js";
 import { computeSupplierPerformance } from "../supplier/supplier.performance.js";
 import { computeCostingSummary } from "../inventory/inventory.costing.js";
 import { findSimilar } from "./embedding-engine.js";
@@ -264,7 +273,102 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
     );
   }
 
+  if (module === "feasibility") {
+    const [row] = await db.select().from(feasibilityReviews).where(and(eq(feasibilityReviews.id, recordId), eq(feasibilityReviews.tenantId, tenantId)));
+    if (!row) return null;
+    const scores = await db.select().from(feasibilityScores).where(and(eq(feasibilityScores.feasibilityId, recordId), eq(feasibilityScores.tenantId, tenantId)));
+    const scoreSummary =
+      scores.length > 0
+        ? scores.map((s) => `${s.dimensionLabel ?? s.dimensionKey}: ${s.value}/5${s.weight ? ` (weight ${s.weight})` : ""}`).join("; ")
+        : "no scores recorded yet";
+    const sourceSummary = row.sourceType && row.sourceId ? await loadFeasibilitySourceSummary(db, tenantId, row.sourceType, row.sourceId) : "no linked source record";
+    return (
+      `The user is reviewing Feasibility Review #${row.id}: "${row.title}". Description: ${row.description ?? "none"}. ` +
+      `Status: ${row.status}. Current overall score: ${row.overallScore ?? "not yet calculated"} (decision: ${row.decision ?? "none yet"}). ` +
+      `Current scores — ${scoreSummary}. Linked source (${row.sourceType ?? "none"}): ${sourceSummary} ` +
+      `AccuQual's real feasibility scale is 1-5 per dimension; overallScore >= 3.5 is "feasible", >= 2.5 is "conditional", below that is "not_feasible" — use only these three decision values.`
+    );
+  }
+
+  if (module === "sales_account") {
+    const [row] = await db.select().from(salesAccounts).where(and(eq(salesAccounts.id, recordId), eq(salesAccounts.tenantId, tenantId)));
+    if (!row) return null;
+    const activities = await db.select().from(salesActivities).where(and(eq(salesActivities.accountId, recordId), eq(salesActivities.tenantId, tenantId)));
+    const quotes = await db.select().from(salesQuotes).where(and(eq(salesQuotes.accountId, recordId), eq(salesQuotes.tenantId, tenantId)));
+    const contracts = await db.select().from(salesContracts).where(and(eq(salesContracts.accountId, recordId), eq(salesContracts.tenantId, tenantId)));
+    const activitySummary = activities.length > 0 ? activities.slice(0, 10).map((a) => `[${a.activityType}] ${a.notes ?? "(no notes)"}${a.nextSteps ? ` — next: ${a.nextSteps}` : ""}`).join("; ") : "no activities logged yet";
+    return (
+      `The user is working on Sales Account "${row.customerName}" (status: ${row.status}, industry: ${row.industry ?? "not set"}). ` +
+      `Primary contact: ${row.primaryContactName ?? "not set"} (${row.primaryContactEmail ?? "no email"}). ` +
+      `Quotes: ${quotes.length} total (${quotes.map((q) => `${q.quoteNumber} — ${q.status}`).join(", ") || "none"}). ` +
+      `Contracts: ${contracts.length} total (${contracts.map((c) => `${c.contractType} — ${c.status}`).join(", ") || "none"}). ` +
+      `Recent activity: ${activitySummary}.`
+    );
+  }
+
+  if (module === "customer") {
+    const [row] = await db.select().from(customers).where(and(eq(customers.id, recordId), eq(customers.tenantId, tenantId)));
+    if (!row) return null;
+    return (
+      `The user is working on Customer Onboarding case "${row.legalName}"${row.dbaName ? ` (dba ${row.dbaName})` : ""} (status: ${row.status}, type: ${row.customerType ?? "not set"}, industry: ${row.industry ?? "not set"}). ` +
+      `Primary contact: ${row.primaryContactName ?? "not set"} (${row.primaryContactEmail ?? "no email"}). ` +
+      `NDA on file: ${row.ndaDocumentId ? `yes, Document #${row.ndaDocumentId}` : "no"}. ` +
+      `Linked source: ${row.relatedSourceType ? `${row.relatedSourceType} #${row.relatedSourceId}` : "none"}. ` +
+      `Real workflow is draft -> submitted -> under_review -> approved -> activated, or -> rejected from under_review — use only these six status values.`
+    );
+  }
+
   return `The user is currently viewing the ${module} module, record #${recordId}.`;
+}
+
+/**
+ * Real, read-only summary of whatever real record a Feasibility Review is
+ * linked to — one switch on sourceType, reused only by the "feasibility"
+ * context case above. future_product intentionally has no case (that module
+ * doesn't exist yet — see feasibility.validation.ts).
+ */
+async function loadFeasibilitySourceSummary(db: TenantDb, tenantId: number, sourceType: string, sourceId: number): Promise<string> {
+  if (sourceType === "ncr") {
+    const [row] = await db.select().from(ncr).where(and(eq(ncr.id, sourceId), eq(ncr.tenantId, tenantId)));
+    return row ? `NCR #${row.id} "${row.title}" (status: ${row.status}, severity: ${row.severity ?? "not set"}). ${row.description ?? ""}` : "linked NCR not found.";
+  }
+  if (sourceType === "supplier") {
+    const [row] = await db.select().from(suppliers).where(and(eq(suppliers.id, sourceId), eq(suppliers.tenantId, tenantId)));
+    return row ? `Supplier "${row.name}" (status: ${row.status}, recorded risk level: ${row.riskLevel ?? "not set"}).` : "linked supplier not found.";
+  }
+  if (sourceType === "complaint") {
+    const [row] = await db.select().from(complaints).where(and(eq(complaints.id, sourceId), eq(complaints.tenantId, tenantId)));
+    return row ? `Complaint #${row.id} from ${row.customerName ?? "unknown customer"} (status: ${row.status}).` : "linked complaint not found.";
+  }
+  if (sourceType === "ppap") {
+    const [row] = await db.select().from(ppapPackages).where(and(eq(ppapPackages.id, sourceId), eq(ppapPackages.tenantId, tenantId)));
+    return row ? `PPAP package #${row.id} "${row.partName ?? row.partNumber}" (status: ${row.status}).` : "linked PPAP package not found.";
+  }
+  if (sourceType === "change_request") {
+    const [row] = await db.select().from(changeRequests).where(and(eq(changeRequests.id, sourceId), eq(changeRequests.tenantId, tenantId)));
+    return row ? `Change Request #${row.id} "${row.title}" (status: ${row.status}). Impact assessment: ${row.impactAssessment ?? "none yet"}.` : "linked change request not found.";
+  }
+  if (sourceType === "work_order") {
+    const [row] = await db.select().from(workOrders).where(and(eq(workOrders.id, sourceId), eq(workOrders.tenantId, tenantId)));
+    return row ? `Work Order #${row.id} (status: ${row.status}, planned ${row.quantityPlanned}, completed ${row.quantityCompleted}).` : "linked work order not found.";
+  }
+  if (sourceType === "requisition") {
+    const [row] = await db.select().from(erpPurchaseRequisitions).where(and(eq(erpPurchaseRequisitions.id, sourceId), eq(erpPurchaseRequisitions.tenantId, tenantId)));
+    return row ? `Purchase Requisition #${row.id} (status: ${row.status}, quantity ${row.quantity}).` : "linked requisition not found.";
+  }
+  if (sourceType === "po") {
+    const [row] = await db.select().from(erpPurchaseOrders).where(and(eq(erpPurchaseOrders.id, sourceId), eq(erpPurchaseOrders.tenantId, tenantId)));
+    return row ? `Purchase Order #${row.id} (status: ${row.status}).` : "linked purchase order not found.";
+  }
+  if (sourceType === "rma") {
+    const [row] = await db.select().from(rma).where(and(eq(rma.id, sourceId), eq(rma.tenantId, tenantId)));
+    return row ? `RMA ${row.rmaNumber} (status: ${row.status}).` : "linked RMA not found.";
+  }
+  if (sourceType === "customer") {
+    const [row] = await db.select().from(customers).where(and(eq(customers.id, sourceId), eq(customers.tenantId, tenantId)));
+    return row ? `Customer Onboarding case "${row.legalName}" (status: ${row.status}, type: ${row.customerType ?? "not set"}).` : "linked customer not found.";
+  }
+  return `source type "${sourceType}" — no real module to read from yet.`;
 }
 
 interface AssistantMessage {

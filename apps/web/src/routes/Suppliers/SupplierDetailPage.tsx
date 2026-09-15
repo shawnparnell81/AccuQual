@@ -9,6 +9,9 @@ import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
+import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
+import { CreateFeasibilityButton } from "../../components/shared/CreateFeasibilityButton";
+import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 
 const supplierHooks = createResourceHooks<Supplier>("suppliers");
@@ -73,7 +76,15 @@ export function SupplierDetailPage() {
           <h1 className="text-2xl font-semibold">{supplier.name}</h1>
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge value={supplier.status} />
-            <StatusBadge value={supplier.riskLevel} />
+            {/* This is the supplier's own manually-set risk rating column — a
+                third, separate "risk" concept from the Risk Register (the
+                "Create Risk" button here), AI Insights' supplier risk score,
+                and the Digital Twin's simulation heatmap. Labeled explicitly
+                so the two controls sitting right next to each other aren't
+                confused for the same thing. */}
+            <span title="This supplier's own manually-set rating — separate from the Risk Register below.">
+              <StatusBadge value={supplier.riskLevel} label={`Supplier rating: ${supplier.riskLevel}`} />
+            </span>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -84,6 +95,9 @@ export function SupplierDetailPage() {
             title={`Supplier #${supplier.id} — Approved Vendor List`}
             label="Approved Vendor List"
           />
+          <CreateRiskButton sourceType="Supplier" sourceId={supplier.id} defaultTitle={`Risk from ${supplier.name}`} defaultDepartment="purchasing" defaultCategory="supplier" />
+          <CreateFeasibilityButton sourceType="supplier" sourceId={supplier.id} defaultTitle={`Feasibility review for ${supplier.name}`} defaultDepartment="purchasing" />
+          <CreateCustomerButton sourceType="Supplier" sourceId={supplier.id} defaultLegalName={supplier.name} />
         </div>
       </div>
 

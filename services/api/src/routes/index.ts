@@ -31,6 +31,13 @@ import { searchRouter } from "../modules/search/search.routes.js";
 import { rmaRouter } from "../modules/rma/rma.routes.js";
 import { workOrdersRouter } from "../modules/work-orders/workOrders.routes.js";
 import { onboardingRouter } from "../modules/onboarding/onboarding.routes.js";
+import { feasibilityRouter } from "../modules/feasibility/feasibility.routes.js";
+import { salesRouter } from "../modules/sales/sales.routes.js";
+import { customersRouter } from "../modules/customers/customers.routes.js";
+import { documentChangeRequestsRouter } from "../modules/document-change-requests/documentChangeRequests.routes.js";
+import { qmsFormsRouter } from "../modules/qms-forms/qmsForms.routes.js";
+import { scarFormsRouter } from "../modules/scar-forms/scarForms.routes.js";
+import { qualityInspectionReportsRouter } from "../modules/quality-inspection-reports/qualityInspectionReports.routes.js";
 
 export const apiRouter = Router();
 
@@ -70,3 +77,10 @@ apiRouter.use("/search", searchRouter);
 apiRouter.use("/rma", rmaRouter);
 apiRouter.use("/work-orders", workOrdersRouter);
 apiRouter.use("/onboarding", onboardingRouter);
+apiRouter.use("/feasibility", feasibilityRouter);
+apiRouter.use("/sales", salesRouter);
+apiRouter.use("/customers", customersRouter);
+apiRouter.use("/document-change-requests", documentChangeRequestsRouter);
+apiRouter.use("/qms-forms", qmsFormsRouter);
+apiRouter.use("/scar-forms", scarFormsRouter);
+apiRouter.use("/quality-inspection-reports", qualityInspectionReportsRouter);

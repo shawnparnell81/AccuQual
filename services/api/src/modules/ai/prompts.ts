@@ -92,3 +92,20 @@ Respond as strict JSON: { "suggestions": { "type": "create_requisition" | "flag_
 
 Data:
 ${JSON.stringify(input, null, 2)}`;
+
+/**
+ * Risk Management module's own AI analysis — deliberately distinct from
+ * riskScorePrompt above (a 0-100 supplier-risk scorer feeding the AI
+ * Insights page) and from the Digital Twin's simulation risk heatmap
+ * (scores twin model nodes, not real-world risk records). This one scores a
+ * single Risk Register entry on the module's real 1-5 x 1-5 scale and
+ * proposes concrete next steps — never written to the record directly, the
+ * user reviews and confirms via a normal PUT/mitigation-create call (see
+ * risk.ai.ts).
+ */
+export const riskAnalysisPrompt = (input: unknown) => `You are AccuQual's risk management assistant. Given a risk's title, description, category, and any linked source record (NCR/Supplier/Receiving/WorkOrder), suggest a severity (1-5) and probability (1-5) rating, concrete mitigation actions with a suggested owner department, and a brief ongoing monitoring plan. Base the rating strictly on the evidence given — do not invent facts about the source record beyond what's provided.
+
+Respond as strict JSON: { "severity": number, "probability": number, "rationale": string, "mitigationActions": { "action": string, "suggestedDepartment": string }[], "monitoringPlan": string }
+
+Risk context:
+${JSON.stringify(input, null, 2)}`;

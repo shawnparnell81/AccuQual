@@ -119,7 +119,9 @@ export function DigitalTwinPage() {
               )}
 
               <div>
-                <h3 className="mb-1 text-xs font-medium text-muted-foreground">Risk Heatmap</h3>
+                <h3 className="mb-1 text-xs font-medium text-muted-foreground" title="Scores this simulation's model nodes, not real-world records — see the Risk Register (/risk) for tracked risks with a workflow.">
+                  Risk Heatmap (this simulation)
+                </h3>
                 <div className="flex flex-wrap gap-2">
                   {simulate.data.results.riskHeatmap.map((node) => (
                     <span
