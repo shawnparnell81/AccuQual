@@ -72,16 +72,19 @@ export const tenants = pgTable("tenants", {
    * Settings → Feasibility Module integration. Same "rarely-changed config
    * a human edits" reasoning as branding/aiConfig above, not a separate
    * tenant_settings table — see modules/settings/. Read by
-   * feasibility.controller.ts on create (defaultRiskLevel/autoAssignOwner/
-   * customerRequirementMapping) and on submit (requiredDocuments validation,
-   * notificationsEnabled routing) — see that file's own comments for exactly
-   * where each field is consumed.
+   * feasibility.controller.ts on create (defaultRiskLevel seeds all 7 fixed
+   * assessment areas, autoAssignOwner) and on finalize (requiredDocuments
+   * validation, notificationsEnabled routing) — see that file's own
+   * comments for exactly where each field is consumed. customerRequirement
+   * Mapping (a per-code lookup) was dropped when Feasibility was rebuilt as
+   * a bespoke fixed-structure document — the real form has no per-code
+   * customer-requirement field to resolve it against, only a free-text
+   * "Special Customer Requirements" field.
    */
   feasibilitySettings: jsonb("feasibility_settings").$type<{
-    defaultRiskLevel?: "low" | "medium" | "high" | "critical";
+    defaultRiskLevel?: "low" | "medium" | "high";
     autoAssignOwner?: boolean;
     requiredDocuments?: string[];
-    customerRequirementMapping?: Record<string, string>;
     notificationsEnabled?: boolean;
   }>().default({}),
   /**

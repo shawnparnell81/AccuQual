@@ -1,104 +1,78 @@
 import { z } from "zod";
 
-// "customer" is real (see customers.ts / the Customer Onboarding module) —
-// promoted from the earlier placeholder "future_customer" now that a real
-// Customer record and a real "Feasibility Review" button on its detail page
-// both exist. "future_product" stays a placeholder — Product onboarding
-// still doesn't exist — accepted here only so a manual/no-source review can
-// still be tagged with intent for when that module ships.
-export const FEASIBILITY_SOURCE_TYPES = [
-  "ncr",
-  "supplier",
-  "complaint",
-  "ppap",
-  "change_request",
-  "work_order",
-  "requisition",
-  "po",
-  "rma",
-  "customer",
-  "future_product",
-] as const;
+export const FEASIBLE_VALUES = ["yes", "no", "partial"] as const;
+export const RISK_LEVELS = ["low", "medium", "high"] as const;
+export const DETERMINATIONS = ["feasible_as_quoted", "feasible_with_conditions", "not_feasible"] as const;
 
-export const FEASIBILITY_STATUSES = ["draft", "submitted", "under_review", "approved", "rejected"] as const;
-export const FEASIBILITY_DECISIONS = ["feasible", "conditional", "not_feasible"] as const;
-export const FEASIBILITY_RISK_LEVELS = ["low", "medium", "high", "critical"] as const;
+const AREA_KEYS = ["design", "equipment", "supplyChain", "quality", "capacity", "regulatory", "financial"] as const;
 
-/**
- * The real reusable dimensionKey set — representative of every QMS context
- * named in the module spec, stored as rows in feasibility_scores rather than
- * one column per key. Not exhaustive by design (dimensionKey is free text so
- * a genuinely new dimension doesn't need a migration) — this is the starter
- * set the frontend offers by default.
- */
-export const FEASIBILITY_DIMENSION_KEYS = [
-  "technicalFeasibility",
-  "resourceFeasibility",
-  "costFeasibility",
-  "timingFeasibility",
-  "regulatoryFeasibility",
-  "customerFit",
-  "strategicAlignment",
-  "capabilityFeasibility",
-  "capacityFeasibility",
-  "supplierRiskFeasibility",
-  "toolingFeasibility",
-  "processImpactFeasibility",
-  "materialFeasibility",
-  "schedulingFeasibility",
-  "reworkFeasibility",
-  "scrapFeasibility",
-  "returnFeasibility",
-  "technicalImpact",
-  "processImpact",
-  "supplierImpact",
-  "costImpact",
-  "timingImpact",
-] as const;
+/** One {area}Feasible/{area}RiskLevel/{area}Mitigation triple per fixed assessment row — see feasibility.ts's own schema comment. */
+function areaFields() {
+  const shape: Record<string, z.ZodTypeAny> = {};
+  for (const area of AREA_KEYS) {
+    shape[`${area}Feasible`] = z.enum(FEASIBLE_VALUES).optional();
+    shape[`${area}RiskLevel`] = z.enum(RISK_LEVELS).optional();
+    shape[`${area}Mitigation`] = z.string().optional();
+  }
+  return shape;
+}
 
 export const createFeasibilitySchema = z.object({
-  title: z.string().min(1),
-  description: z.string().optional(),
-  sourceType: z.enum(FEASIBILITY_SOURCE_TYPES).optional(),
-  sourceId: z.coerce.number().int().optional(),
-  department: z.string().optional(),
-  ownerId: z.coerce.number().int().optional(),
-  // Settings → Feasibility Module integration — all optional: omitted means
-  // "apply the tenant's configured defaults", see
-  // feasibility.controller.ts's createFeasibilityHandler.
-  riskLevel: z.enum(FEASIBILITY_RISK_LEVELS).optional(),
-  customerRequirement: z.string().max(200).optional(),
+  customerId: z.coerce.number().int().optional(), // set when launched from the Customer Onboarding packet
+  documentId: z.string().optional(),
+  revision: z.string().optional(),
+  effectiveDate: z.coerce.date().optional(),
+  processOwner: z.string().optional(),
+  customerName: z.string().optional(),
+  rfqQuoteNumber: z.string().optional(),
+  partProjectName: z.string().optional(),
+  partNumberRev: z.string().optional(),
+  targetDeliveryDate: z.coerce.date().optional(),
+  annualEstimatedVolume: z.string().optional(),
 });
 
-// Deliberately excludes `status`/`decision` — those only ever change through
-// the dedicated transition endpoints below, same reasoning as
-// risk.validation.ts's updateRiskSchema.
+// Every content field except the 5 sign-off rows — those go through their
+// own narrower endpoint below. Deliberately excludes `status`/`finalizedAt`
+// (only POST /:id/finalize sets those) — same "server-stamped, never
+// client-writable" precedent as everywhere else in this app.
 export const updateFeasibilitySchema = z.object({
-  title: z.string().min(1).optional(),
-  description: z.string().optional(),
-  department: z.string().optional(),
-  ownerId: z.coerce.number().int().nullable().optional(),
-  reviewerId: z.coerce.number().int().nullable().optional(),
-  aiSuggested: z.boolean().optional(),
-  // A reviewer setting this explicitly pins it against recalcScoring's
-  // auto-derivation from the computed decision — see riskLevelSetManually
-  // on the schema and feasibility.controller.ts's recalcScoring.
-  riskLevel: z.enum(FEASIBILITY_RISK_LEVELS).optional(),
+  documentId: z.string().optional(),
+  revision: z.string().optional(),
+  effectiveDate: z.coerce.date().nullable().optional(),
+  processOwner: z.string().optional(),
+  customerName: z.string().optional(),
+  rfqQuoteNumber: z.string().optional(),
+  partProjectName: z.string().optional(),
+  partNumberRev: z.string().optional(),
+  targetDeliveryDate: z.coerce.date().nullable().optional(),
+  annualEstimatedVolume: z.string().optional(),
+  ...areaFields(),
+  newToolingEquipment: z.string().optional(),
+  inspectionGagingNeeds: z.string().optional(),
+  specialCustomerRequirements: z.string().optional(),
+  determination: z.enum(DETERMINATIONS).nullable().optional(),
+  determinationNotes: z.string().optional(),
   providedDocuments: z.array(z.string().min(1)).optional(),
-  customerRequirement: z.string().max(200).nullable().optional(),
+  ownerId: z.coerce.number().int().nullable().optional(),
 });
 
-export const createScoreSchema = z.object({
-  dimensionKey: z.string().min(1),
-  dimensionLabel: z.string().optional(),
-  dimensionType: z.string().optional(),
-  value: z.coerce.number().min(1).max(5),
-  weight: z.coerce.number().min(0).optional(),
-  aiSuggested: z.boolean().optional(),
-});
-
-export const updateScoreSchema = z.object({
-  value: z.coerce.number().min(1).max(5).optional(),
-  weight: z.coerce.number().min(0).nullable().optional(),
-  dimensionLabel: z.string().optional(),
+/**
+ * One department's own sign-off row only — engineeringSignoffName/
+ * Signature XOR qualitySignoffName/Signature XOR ... — enforced by
+ * feasibility.controller.ts's assertSignoffFieldsAllowed, not by this
+ * schema (zod validates shape, not "which fields together"). Dates are
+ * never accepted here — server-stamped the moment a signature transitions
+ * unset -> set.
+ */
+export const updateSignoffSchema = z.object({
+  engineeringSignoffName: z.string().optional(),
+  engineeringSignoffSignature: z.string().nullable().optional(),
+  qualitySignoffName: z.string().optional(),
+  qualitySignoffSignature: z.string().nullable().optional(),
+  manufacturingSignoffName: z.string().optional(),
+  manufacturingSignoffSignature: z.string().nullable().optional(),
+  purchasingSignoffName: z.string().optional(),
+  purchasingSignoffSignature: z.string().nullable().optional(),
+  salesSignoffName: z.string().optional(),
+  salesSignoffSignature: z.string().nullable().optional(),
 });

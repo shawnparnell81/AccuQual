@@ -1,15 +1,14 @@
 import { z } from "zod";
 
-export const RISK_LEVELS = ["low", "medium", "high", "critical"] as const;
+// Mirrors feasibility.validation.ts's RISK_LEVELS exactly — this seeds each
+// of the 7 fixed assessment rows' own riskLevel on create (see
+// feasibility.controller.ts's createFeasibilityHandler).
+export const RISK_LEVELS = ["low", "medium", "high"] as const;
 
 export const updateFeasibilitySettingsSchema = z.object({
   defaultRiskLevel: z.enum(RISK_LEVELS).optional(),
   autoAssignOwner: z.boolean().optional(),
   requiredDocuments: z.array(z.string().min(1)).optional(),
-  // A flat string->string map (customer requirement code -> internal
-  // category), not a nested/typed schema — this is genuinely free-form
-  // tenant-defined content (see feasibility.controller.ts's use of it).
-  customerRequirementMapping: z.record(z.string(), z.string()).optional(),
   notificationsEnabled: z.boolean().optional(),
 });
 

@@ -16,7 +16,7 @@ import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
 import { tenants } from "../../src/drizzle/schema/tenants.js";
 import { users } from "../../src/drizzle/schema/users.js";
-import { feasibilityReviews, feasibilityScores } from "../../src/drizzle/schema/feasibility.js";
+import { feasibilityReviews } from "../../src/drizzle/schema/feasibility.js";
 import { inventoryItems, inventoryMovements, inventoryStock, inventoryAlerts } from "../../src/drizzle/schema/inventory.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { notificationLog } from "../../src/drizzle/schema/notifications.js";
@@ -65,10 +65,7 @@ describe("Settings module (real DB + real HTTP path)", () => {
     await new Promise((r) => setTimeout(r, 300));
     await db.delete(auditTrail).where(inArray(auditTrail.performedBy, userIds));
     await db.delete(notificationLog).where(eq(notificationLog.tenantId, tenantId));
-    for (const id of feasibilityIds) {
-      await db.delete(feasibilityScores).where(eq(feasibilityScores.feasibilityId, id));
-      await db.delete(feasibilityReviews).where(eq(feasibilityReviews.id, id));
-    }
+    for (const id of feasibilityIds) await db.delete(feasibilityReviews).where(eq(feasibilityReviews.id, id));
     for (const id of itemIds) {
       await db.delete(inventoryAlerts).where(eq(inventoryAlerts.itemId, id));
       await db.delete(inventoryMovements).where(eq(inventoryMovements.itemId, id));
@@ -90,7 +87,7 @@ describe("Settings module (real DB + real HTTP path)", () => {
       expect(res.status).toBe(403);
     });
 
-    it("quality configures defaults, requiredDocuments, mapping, and notifications — logged to the audit trail", async () => {
+    it("quality configures defaults, requiredDocuments, and notifications — logged to the audit trail", async () => {
       const res = await request(app)
         .post("/settings/feasibility")
         .set("Authorization", `Bearer ${qualityToken}`)
@@ -98,7 +95,6 @@ describe("Settings module (real DB + real HTTP path)", () => {
           defaultRiskLevel: "high",
           autoAssignOwner: true,
           requiredDocuments: ["Customer Drawing"],
-          customerRequirementMapping: { AS9100: "Aerospace" },
           notificationsEnabled: true,
         });
       expect(res.status).toBe(200);
@@ -108,52 +104,33 @@ describe("Settings module (real DB + real HTTP path)", () => {
       expect(row).toBeTruthy();
     });
 
-    it("creating a review with no riskLevel/ownerId picks up defaultRiskLevel + autoAssignOwner from settings", async () => {
-      const res = await request(app).post("/feasibility").set("Authorization", `Bearer ${engineeringToken}`).send({ title: "Uses tenant defaults", department: "engineering" });
+    it("creating a review with no ownerId picks up autoAssignOwner + defaultRiskLevel seeds every assessment area", async () => {
+      const res = await request(app).post("/feasibility").set("Authorization", `Bearer ${engineeringToken}`).send({ customerName: "Uses tenant defaults" });
       expect(res.status).toBe(201);
-      expect(res.body.riskLevel).toBe("high");
+      expect(res.body.designRiskLevel).toBe("high");
+      expect(res.body.financialRiskLevel).toBe("high");
       expect(res.body.ownerId).toBeTruthy(); // auto-assigned to the creating user
       feasibilityIds.push(res.body.id);
     });
 
-    it("a customerRequirement resolves mappedRequirementCategory via the configured mapping", async () => {
-      const res = await request(app).post("/feasibility").set("Authorization", `Bearer ${qualityToken}`).send({ title: "AS9100 review", customerRequirement: "AS9100" });
-      expect(res.status).toBe(201);
-      expect(res.body.mappedRequirementCategory).toBe("Aerospace");
-      feasibilityIds.push(res.body.id);
-    });
-
-    it("submit is blocked when a required document hasn't been marked provided", async () => {
-      const id = feasibilityIds[1]!;
-      const res = await request(app).post(`/feasibility/${id}/submit`).set("Authorization", `Bearer ${qualityToken}`);
+    it("finalize is blocked when a required document hasn't been marked provided", async () => {
+      const id = feasibilityIds[0]!;
+      const res = await request(app).post(`/feasibility/${id}/finalize`).set("Authorization", `Bearer ${engineeringToken}`);
       expect(res.status).toBe(400);
       expect(res.body.message).toMatch(/Customer Drawing/);
     });
 
-    it("marking the document provided unblocks submit, and (notificationsEnabled) writes a real notification_log row", async () => {
-      const id = feasibilityIds[1]!;
-      const update = await request(app).put(`/feasibility/${id}`).set("Authorization", `Bearer ${qualityToken}`).send({ providedDocuments: ["Customer Drawing"] });
+    it("marking the document provided unblocks finalize, and (notificationsEnabled) writes a real notification_log row", async () => {
+      const id = feasibilityIds[0]!;
+      const update = await request(app).put(`/feasibility/${id}`).set("Authorization", `Bearer ${engineeringToken}`).send({ providedDocuments: ["Customer Drawing"] });
       expect(update.status).toBe(200);
 
-      const submit = await request(app).post(`/feasibility/${id}/submit`).set("Authorization", `Bearer ${qualityToken}`);
-      expect(submit.status).toBe(200);
-      expect(submit.body.status).toBe("submitted");
+      const finalize = await request(app).post(`/feasibility/${id}/finalize`).set("Authorization", `Bearer ${engineeringToken}`);
+      expect(finalize.status).toBe(200);
+      expect(finalize.body.status).toBe("final");
 
       const notifications = await db.select().from(notificationLog).where(and(eq(notificationLog.tenantId, tenantId), eq(notificationLog.relatedEntityId, id)));
       expect(notifications.length).toBeGreaterThan(0);
-    });
-
-    it("a manual riskLevel update pins it — a later score recalculation does not override it", async () => {
-      const id = feasibilityIds[0]!;
-      const manual = await request(app).put(`/feasibility/${id}`).set("Authorization", `Bearer ${qualityToken}`).send({ riskLevel: "low" });
-      expect(manual.status).toBe(200);
-      expect(manual.body.riskLevel).toBe("low");
-
-      const score = await request(app).post(`/feasibility/${id}/scores`).set("Authorization", `Bearer ${engineeringToken}`).send({ dimensionKey: "costImpact", value: 1 }); // would auto-derive "critical" if not pinned
-      expect(score.status).toBe(201);
-
-      const [row] = await db.select().from(feasibilityReviews).where(eq(feasibilityReviews.id, id));
-      expect(row!.riskLevel).toBe("low"); // still pinned, not auto-derived to "critical"
     });
   });
 

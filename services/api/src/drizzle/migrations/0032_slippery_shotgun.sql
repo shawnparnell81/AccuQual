@@ -1,0 +1,54 @@
+ALTER TABLE "feasibility_reviews" ADD COLUMN "customer_id" integer;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "document_id" text DEFAULT 'QMS-FR-001';--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "revision" text DEFAULT '1.0';--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "effective_date" timestamp;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "process_owner" text DEFAULT 'Engineering / Quality Management';--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "customer_name" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "rfq_quote_number" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "part_project_name" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "part_number_rev" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "target_delivery_date" timestamp;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "annual_estimated_volume" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "design_feasible" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "design_risk_level" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "design_mitigation" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "equipment_feasible" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "equipment_risk_level" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "equipment_mitigation" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "supply_chain_feasible" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "supply_chain_risk_level" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "supply_chain_mitigation" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "quality_feasible" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "quality_risk_level" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "quality_mitigation" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "capacity_feasible" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "capacity_risk_level" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "capacity_mitigation" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "regulatory_feasible" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "regulatory_risk_level" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "regulatory_mitigation" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "financial_feasible" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "financial_risk_level" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "financial_mitigation" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "new_tooling_equipment" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "inspection_gaging_needs" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "special_customer_requirements" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "determination" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "determination_notes" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "engineering_signoff_name" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "engineering_signoff_signature" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "engineering_signoff_date" timestamp;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "quality_signoff_name" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "quality_signoff_signature" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "quality_signoff_date" timestamp;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "manufacturing_signoff_name" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "manufacturing_signoff_signature" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "manufacturing_signoff_date" timestamp;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "purchasing_signoff_name" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "purchasing_signoff_signature" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "purchasing_signoff_date" timestamp;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "sales_signoff_name" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "sales_signoff_signature" text;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "sales_signoff_date" timestamp;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD COLUMN "finalized_at" timestamp;--> statement-breakpoint
+ALTER TABLE "feasibility_reviews" ADD CONSTRAINT "feasibility_reviews_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE no action ON UPDATE no action;
