@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import { and, eq, desc } from "drizzle-orm";
-import { workOrders } from "../../drizzle/schema/workOrders.js";
+import { and, eq, asc, desc } from "drizzle-orm";
+import { workOrders, workOrderOperations } from "../../drizzle/schema/workOrders.js";
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
@@ -110,10 +110,12 @@ export const getWorkOrderHandler = asyncHandler(async (req: Request, res: Respon
   const record = await loadWorkOrder(req, Number(req.params.id));
   const [item] = await req.db!.select().from(inventoryItems).where(eq(inventoryItems.id, record.itemId));
   const linkedNcr = record.linkedNcrId ? (await req.db!.select().from(ncr).where(eq(ncr.id, record.linkedNcrId)))[0] : null;
+  const operations = await req.db!.select().from(workOrderOperations).where(and(eq(workOrderOperations.workOrderId, record.id), eq(workOrderOperations.tenantId, req.tenantId!))).orderBy(asc(workOrderOperations.opNumber));
   res.json({
     ...record,
     item: item ? { id: item.id, sku: item.sku, description: item.description, state: item.state } : null,
     linkedNcr: linkedNcr ? { id: linkedNcr.id, title: linkedNcr.title, status: linkedNcr.status, severity: linkedNcr.severity } : null,
+    operations,
   });
 });
 
@@ -166,4 +168,82 @@ export const completeWorkOrderHandler = asyncHandler(async (req: Request, res: R
   );
 
   res.json(updated);
+});
+
+// ---- Production Work Order traveler (bespoke standalone page, not the shared forms engine — see workOrders.ts's schema comment) ----
+
+/** Shop-floor execution data (quality gates, signatures, operations) stays editable through in_progress/completed — only a cancelled work order's traveler is locked, unlike the "planned"-only guard on updateWorkOrderHandler's planning fields. */
+function assertTravelerEditable(status: string) {
+  if (status === "cancelled") throw AppError.badRequest("Cannot edit the traveler on a cancelled work order.");
+}
+
+export const updateQualityGatesHandler = asyncHandler(async (req: Request, res: Response) => {
+  assertDepartment(req, ["production"]);
+  const record = await loadWorkOrder(req, Number(req.params.id));
+  assertTravelerEditable(record.status);
+  const [updated] = await req.db!.update(workOrders).set({ ...req.body, updatedAt: new Date() }).where(eq(workOrders.id, record.id)).returning();
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "quality_gate_updated", ...req.body }, performedBy: req.user?.id });
+  res.json(updated);
+});
+
+export const signOperatorHandler = asyncHandler(async (req: Request, res: Response) => {
+  assertDepartment(req, ["production"]);
+  const record = await loadWorkOrder(req, Number(req.params.id));
+  assertTravelerEditable(record.status);
+  const { signature } = req.body as { signature: string };
+  const [updated] = await req.db!.update(workOrders).set({ operatorSignature: signature, operatorSignedAt: new Date(), updatedAt: new Date() }).where(eq(workOrders.id, record.id)).returning();
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operator_signed", signature }, performedBy: req.user?.id });
+  res.json(updated);
+});
+
+export const signInspectorHandler = asyncHandler(async (req: Request, res: Response) => {
+  assertDepartment(req, ["production"]);
+  const record = await loadWorkOrder(req, Number(req.params.id));
+  assertTravelerEditable(record.status);
+  const { signature } = req.body as { signature: string };
+  const [updated] = await req.db!.update(workOrders).set({ inspectorSignature: signature, inspectorSignedAt: new Date(), updatedAt: new Date() }).where(eq(workOrders.id, record.id)).returning();
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "inspector_signed", signature }, performedBy: req.user?.id });
+  res.json(updated);
+});
+
+async function loadOperation(req: Request, workOrderId: number, opId: number) {
+  const [row] = await req.db!.select().from(workOrderOperations).where(and(eq(workOrderOperations.id, opId), eq(workOrderOperations.workOrderId, workOrderId), eq(workOrderOperations.tenantId, req.tenantId!)));
+  if (!row) throw AppError.notFound("Operation");
+  return row;
+}
+
+export const createOperationHandler = asyncHandler(async (req: Request, res: Response) => {
+  assertDepartment(req, ["production"]);
+  const record = await loadWorkOrder(req, Number(req.params.id));
+  assertTravelerEditable(record.status);
+  const [created] = await req.db!.insert(workOrderOperations).values({ ...req.body, workOrderId: record.id, tenantId: req.tenantId! }).returning();
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operation_added", ...req.body }, performedBy: req.user?.id });
+  res.status(201).json(created);
+});
+
+export const updateOperationHandler = asyncHandler(async (req: Request, res: Response) => {
+  assertDepartment(req, ["production"]);
+  const record = await loadWorkOrder(req, Number(req.params.id));
+  assertTravelerEditable(record.status);
+  const operation = await loadOperation(req, record.id, Number(req.params.opId));
+  const { signOff, ...rest } = req.body as { signOff?: string | null } & Record<string, unknown>;
+  const patch: Record<string, unknown> = { ...rest, updatedAt: new Date() };
+  // signOffDate is always server-stamped the moment signOff is first set — never client-supplied (same reasoning as operator/inspector signedAt above).
+  if (signOff !== undefined) {
+    patch.signOff = signOff;
+    patch.signOffDate = signOff && !operation.signOff ? new Date() : signOff ? operation.signOffDate : null;
+  }
+  const [updated] = await req.db!.update(workOrderOperations).set(patch).where(eq(workOrderOperations.id, operation.id)).returning();
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operation_updated", operationId: operation.id, ...req.body }, performedBy: req.user?.id });
+  res.json(updated);
+});
+
+export const deleteOperationHandler = asyncHandler(async (req: Request, res: Response) => {
+  assertDepartment(req, ["production"]);
+  const record = await loadWorkOrder(req, Number(req.params.id));
+  assertTravelerEditable(record.status);
+  const operation = await loadOperation(req, record.id, Number(req.params.opId));
+  await req.db!.delete(workOrderOperations).where(eq(workOrderOperations.id, operation.id));
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operation_removed", operationId: operation.id }, performedBy: req.user?.id });
+  res.status(204).send();
 });

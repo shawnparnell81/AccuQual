@@ -40,15 +40,21 @@ export function AppLayout() {
   }, [location.pathname, syncActiveTabLocation]);
 
   return (
-    <div className="flex h-screen w-full flex-col">
-      <TopNav />
-      <Header />
-      <TabBar />
-      <main className="flex-1 overflow-y-auto p-6">
+    <div className="flex h-screen w-full flex-col print:block print:h-auto">
+      {/* print:hidden — a printable page (e.g. QmsFormRecordPage's Print button) shows only
+          <main>'s own content; the app chrome has no place on a printed QMS record. */}
+      <div className="print:hidden">
+        <TopNav />
+        <Header />
+        <TabBar />
+      </div>
+      <main className="flex-1 overflow-y-auto p-6 print:overflow-visible print:p-0">
         <Outlet />
       </main>
-      <WindowContainer />
-      <AiAssistantPanelGate />
+      <div className="print:hidden">
+        <WindowContainer />
+        <AiAssistantPanelGate />
+      </div>
     </div>
   );
 }
