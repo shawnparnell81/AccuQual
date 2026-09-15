@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, numeric } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, numeric, jsonb, boolean } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 import { tenants } from "./tenants.js";
 
@@ -32,6 +32,25 @@ export const feasibilityReviews = pgTable("feasibility_reviews", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
   decidedAt: timestamp("decided_at"), // stamped on approve/reject
+  /**
+   * Settings → Feasibility Module integration (see tenants.feasibilitySettings).
+   * riskLevel defaults from the tenant's feasibilitySettings.defaultRiskLevel
+   * on create when the caller doesn't supply one, then gets re-derived from
+   * the computed decision on every score recalculation ("risk scoring reads
+   * settings" — see feasibility.controller.ts's recalcScoring) unless a
+   * reviewer has since set it explicitly via updateFeasibilityHandler, in
+   * which case that manual value sticks (tracked by riskLevelSetManually).
+   */
+  riskLevel: text("risk_level"), // low | medium | high | critical
+  riskLevelSetManually: boolean("risk_level_set_manually").notNull().default(false),
+  // Checklist of document names/types the requester has actually attached or
+  // confirmed, checked against tenant settings' requiredDocuments on submit
+  // (see the "required document validation" comment in
+  // feasibility.controller.ts's submitFeasibilityHandler). Not a real file
+  // upload/attachment system — see that same comment for why.
+  providedDocuments: jsonb("provided_documents").$type<string[]>().default([]),
+  customerRequirement: text("customer_requirement"), // raw code/text the requester supplied, e.g. "AS9100"
+  mappedRequirementCategory: text("mapped_requirement_category"), // resolved via tenant settings' customerRequirementMapping — see feasibility.controller.ts
 });
 
 /**

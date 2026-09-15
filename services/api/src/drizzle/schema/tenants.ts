@@ -68,6 +68,60 @@ export const tenants = pgTable("tenants", {
   aiUsageCost: numeric("ai_usage_cost").notNull().default("0"),
   aiMonthlyLimit: integer("ai_monthly_limit"),
   aiLimitEnforced: boolean("ai_limit_enforced").notNull().default(false),
+  /**
+   * Settings → Feasibility Module integration. Same "rarely-changed config
+   * a human edits" reasoning as branding/aiConfig above, not a separate
+   * tenant_settings table — see modules/settings/. Read by
+   * feasibility.controller.ts on create (defaultRiskLevel/autoAssignOwner/
+   * customerRequirementMapping) and on submit (requiredDocuments validation,
+   * notificationsEnabled routing) — see that file's own comments for exactly
+   * where each field is consumed.
+   */
+  feasibilitySettings: jsonb("feasibility_settings").$type<{
+    defaultRiskLevel?: "low" | "medium" | "high" | "critical";
+    autoAssignOwner?: boolean;
+    requiredDocuments?: string[];
+    customerRequirementMapping?: Record<string, string>;
+    notificationsEnabled?: boolean;
+  }>().default({}),
+  /**
+   * Settings → Inventory Module expansion. Read by inventory.service.ts
+   * (lot/serial auto-generation on receive/produce movements, reservation
+   * rules on reserve/release, aging buckets on list/get) and
+   * inventory.costing.ts (cost rounding) — see each file's own comments.
+   */
+  inventorySettings: jsonb("inventory_settings").$type<{
+    agingRules?: { warningDays?: number; criticalDays?: number };
+    reservationRules?: { allowNegativeAllocation?: boolean; autoReleaseAfterDays?: number };
+    autoGenerateLotNumbers?: boolean;
+    lotNumberFormat?: string; // tokens: {SKU} {YYYY} {MM} {DD} {SEQ} — see inventory.service.ts's generateTrackingNumber
+    autoGenerateSerialNumbers?: boolean;
+    serialNumberFormat?: string; // same tokens as lotNumberFormat
+    costAdjustmentRules?: { method?: "average" | "latest"; roundingPrecision?: number };
+    auditFrequency?: "daily" | "weekly" | "monthly" | "quarterly"; // drives cycleCountDue on list/get — see inventory.controller.ts
+  }>().default({}),
+  /**
+   * Settings → ERP Sync Engine. webhookSecretEncrypted is real AES-256-GCM
+   * ciphertext via the same tenant/crypto.ts helpers aiConfig.apiKeyEncrypted
+   * uses — never plaintext, never returned by any GET. statusHistory is
+   * capped at 20 entries by settings.erpSync.ts (a human-edited config blob
+   * that also accumulates a short run log, not an unbounded ledger — see
+   * that file's own comment). There is no background scheduler in this app
+   * (same honest limitation aiUsageTokens's own comment already documents
+   * for monthly-limit resets) — `schedule` is real stored config a future
+   * worker could read, but today a sync only ever actually runs when
+   * POST /settings/erp-sync/trigger is called.
+   */
+  erpSyncSettings: jsonb("erp_sync_settings").$type<{
+    schedule?: "manual" | "hourly" | "daily";
+    direction?: "push" | "pull" | "bidirectional";
+    modulesEnabled?: string[]; // inventory | suppliers | purchaseOrders | workOrders
+    conflictRules?: { resolutionStrategy?: "local_wins" | "remote_wins" | "manual_review" };
+    retryPolicy?: { maxRetries?: number; backoffSeconds?: number };
+    webhookUrl?: string;
+    webhookSecretEncrypted?: string;
+    statusHistory?: { at: string; status: "success" | "failed" | "skipped"; modules: string[]; message?: string }[];
+  }>().default({}),
   isDeleted: boolean("is_deleted").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });

@@ -1,10 +1,11 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, isNotNull } from "drizzle-orm";
 import type { TenantDb } from "../../lib/tenantScope.js";
 import { inventoryItems, inventoryStock, inventoryMovements, inventoryAlerts, inventoryReorderRequests, type InventoryItem } from "../../drizzle/schema/inventory.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { notifyDepartment } from "../notifications/notification.service.js";
+import type { InventorySettings } from "../settings/settings.service.js";
 
 const DEFAULT_LOCATION = "default";
 
@@ -42,10 +43,34 @@ export interface MovementInput {
   /** User-set manual tags — no Production Work Order module exists to populate these automatically. */
   referenceType?: string;
   referenceId?: string;
+  /** Caller-supplied — auto-generated instead when unset and settings say to (see generateTrackingNumber below). */
+  lotNumber?: string;
+  serialNumber?: string;
+}
+
+/**
+ * Settings → Inventory Module expansion: {SKU}/{YYYY}/{MM}/{DD}/{SEQ} token
+ * substitution for lotNumberFormat/serialNumberFormat. SEQ is a simple
+ * "count of this item's past movements that already carry this kind of
+ * tracking number, plus one" — not a real database sequence object (no
+ * concurrent-safe sequence per item/format exists, and at QMS scale, not
+ * warehouse scale, a rare double-count under true concurrent receiving is an
+ * acceptable, documented tradeoff rather than new schema for it), zero-padded
+ * to 4 digits.
+ */
+export function generateTrackingNumber(format: string, sku: string, seq: number): string {
+  const now = new Date();
+  const pad = (n: number, len = 2) => String(n).padStart(len, "0");
+  return format
+    .replace(/\{SKU\}/g, sku)
+    .replace(/\{YYYY\}/g, String(now.getFullYear()))
+    .replace(/\{MM\}/g, pad(now.getMonth() + 1))
+    .replace(/\{DD\}/g, pad(now.getDate()))
+    .replace(/\{SEQ\}/g, pad(seq, 4));
 }
 
 /** Applies one movement's stock effect, inserts the ledger row, then recomputes state. Runs inside the caller's per-request transaction (req.db) — atomic with the rest of the request. */
-export async function applyMovement(db: TenantDb, tenantId: number, itemId: number, input: MovementInput, performedBy: number | undefined) {
+export async function applyMovement(db: TenantDb, tenantId: number, itemId: number, input: MovementInput, performedBy: number | undefined, inventorySettings?: InventorySettings) {
   const stockRows = await getStockRows(db, tenantId, itemId);
   const totalBefore = stockRows.reduce((sum, r) => sum + Number(r.onHand), 0);
 
@@ -81,6 +106,25 @@ export async function applyMovement(db: TenantDb, tenantId: number, itemId: numb
     }
   }
 
+  // Settings → Inventory Module expansion: auto-generate lot/serial numbers
+  // on the two movement types that actually bring new units into existence
+  // (receive from a supplier, produce from a WIP/finished-good step) — never
+  // overrides a caller-supplied value.
+  let lotNumber = input.lotNumber;
+  let serialNumber = input.serialNumber;
+  if (input.movementType === "receive" || input.movementType === "produce") {
+    const [item] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.tenantId, tenantId)));
+    const sku = item?.sku ?? "ITEM";
+    if (!lotNumber && inventorySettings?.autoGenerateLotNumbers && inventorySettings.lotNumberFormat) {
+      const priorCount = (await db.select().from(inventoryMovements).where(and(eq(inventoryMovements.tenantId, tenantId), eq(inventoryMovements.itemId, itemId), isNotNull(inventoryMovements.lotNumber)))).length;
+      lotNumber = generateTrackingNumber(inventorySettings.lotNumberFormat, sku, priorCount + 1);
+    }
+    if (!serialNumber && inventorySettings?.autoGenerateSerialNumbers && inventorySettings.serialNumberFormat) {
+      const priorCount = (await db.select().from(inventoryMovements).where(and(eq(inventoryMovements.tenantId, tenantId), eq(inventoryMovements.itemId, itemId), isNotNull(inventoryMovements.serialNumber)))).length;
+      serialNumber = generateTrackingNumber(inventorySettings.serialNumberFormat, sku, priorCount + 1);
+    }
+  }
+
   const [movement] = await db
     .insert(inventoryMovements)
     .values({
@@ -93,6 +137,8 @@ export async function applyMovement(db: TenantDb, tenantId: number, itemId: numb
       reason: input.reason,
       referenceType: input.referenceType,
       referenceId: input.referenceId,
+      lotNumber,
+      serialNumber,
       performedBy,
     })
     .returning();
@@ -228,4 +274,92 @@ async function raiseAlertIfNeeded(db: TenantDb, tenantId: number, item: Inventor
     await notifyDepartment(db, { tenantId, department: "material_management", subject, body, relatedEntityType: "InventoryItem", relatedEntityId: item.id });
     await notifyDepartment(db, { tenantId, department: "purchasing", subject, body, relatedEntityType: "InventoryItem", relatedEntityId: item.id });
   }
+}
+
+// ============================================================
+// Settings → Inventory Module expansion: reservation logic
+// ============================================================
+
+/**
+ * POST /inventory/items/:id/reserve. Blocks reserving past on-hand unless
+ * inventorySettings.reservationRules.allowNegativeAllocation is on (a real
+ * backorder-style allowance some tenants want, off by default).
+ */
+export async function reserveStock(db: TenantDb, tenantId: number, itemId: number, quantity: number, location: string | undefined, settings: InventorySettings | undefined, performedBy: number | undefined) {
+  const loc = location ?? DEFAULT_LOCATION;
+  const row = await getOrCreateStockRow(db, tenantId, itemId, loc);
+  const nextAllocated = Number(row.allocated) + quantity;
+  const unallocated = Number(row.onHand) - Number(row.allocated);
+
+  if (!settings?.reservationRules?.allowNegativeAllocation && quantity > unallocated) {
+    throw AppError.badRequest(`Cannot reserve ${quantity} — only ${unallocated} unallocated unit(s) at "${loc}" (reservationRules.allowNegativeAllocation is off).`);
+  }
+
+  await db.update(inventoryStock).set({ allocated: String(nextAllocated), allocatedAt: new Date() }).where(and(eq(inventoryStock.itemId, itemId), eq(inventoryStock.tenantId, tenantId), eq(inventoryStock.location, loc)));
+  await recordAuditTrail(db, { tenantId, entityType: "InventoryItem", entityId: itemId, action: "update", changes: { reserve: quantity, location: loc, newAllocated: nextAllocated }, performedBy });
+  return getStockRows(db, tenantId, itemId);
+}
+
+/** POST /inventory/items/:id/release — the inverse of reserveStock; never goes negative. */
+export async function releaseStock(db: TenantDb, tenantId: number, itemId: number, quantity: number, location: string | undefined, performedBy: number | undefined) {
+  const loc = location ?? DEFAULT_LOCATION;
+  const row = await getOrCreateStockRow(db, tenantId, itemId, loc);
+  const nextAllocated = Math.max(Number(row.allocated) - quantity, 0);
+
+  await db.update(inventoryStock).set({ allocated: String(nextAllocated), allocatedAt: nextAllocated > 0 ? new Date() : null }).where(and(eq(inventoryStock.itemId, itemId), eq(inventoryStock.tenantId, tenantId), eq(inventoryStock.location, loc)));
+  await recordAuditTrail(db, { tenantId, entityType: "InventoryItem", entityId: itemId, action: "update", changes: { release: quantity, location: loc, newAllocated: nextAllocated }, performedBy });
+  return getStockRows(db, tenantId, itemId);
+}
+
+/**
+ * Lazily expires a stale reservation the next time this item's stock is
+ * actually viewed (GET /inventory/items/:id) — there is no background
+ * scheduler in this app (same limitation as the AI usage monthly-limit
+ * computation and the ERP Sync engine's own `schedule` field), so
+ * reservationRules.autoReleaseAfterDays is enforced at read time rather than
+ * by a timer. Only called from getItemHandler, not every getStockRows caller
+ * — see that handler's own comment.
+ */
+export async function applyReservationAutoRelease(db: TenantDb, tenantId: number, itemId: number, settings: InventorySettings | undefined) {
+  const days = settings?.reservationRules?.autoReleaseAfterDays;
+  if (!days) return;
+
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const rows = await getStockRows(db, tenantId, itemId);
+  for (const row of rows) {
+    if (Number(row.allocated) > 0 && row.allocatedAt && row.allocatedAt.getTime() < cutoff) {
+      await db.update(inventoryStock).set({ allocated: "0", allocatedAt: null }).where(eq(inventoryStock.id, row.id));
+      await recordAuditTrail(db, {
+        tenantId,
+        entityType: "InventoryItem",
+        entityId: itemId,
+        action: "update",
+        changes: { autoReleased: true, previouslyAllocated: row.allocated, location: row.location, afterDays: days },
+        performedBy: undefined,
+      });
+    }
+  }
+}
+
+// ============================================================
+// Settings → Inventory Module expansion: aging + cycle count
+// ============================================================
+
+export type AgingBucket = "fresh" | "warning" | "critical";
+
+/** Days since the item's stock was last touched (lastAdjustedAt across every location, falling back to the item's own createdAt when it's never had a movement). */
+export function computeAgingBucket(daysSinceActivity: number | null, agingRules: InventorySettings["agingRules"] | undefined): AgingBucket | null {
+  if (daysSinceActivity === null || !agingRules) return null;
+  if (agingRules.criticalDays !== undefined && daysSinceActivity >= agingRules.criticalDays) return "critical";
+  if (agingRules.warningDays !== undefined && daysSinceActivity >= agingRules.warningDays) return "warning";
+  return "fresh";
+}
+
+/** Whether this item is due (or overdue) for a cycle count per inventorySettings.auditFrequency — null lastCountedAt (never counted) always reads as due. */
+export function isCycleCountDue(lastCountedAt: Date | null, auditFrequency: InventorySettings["auditFrequency"] | undefined): boolean {
+  if (!auditFrequency) return false; // no frequency configured — not tracked at all, same "honest, not fabricated" convention as everywhere else in this module
+  if (!lastCountedAt) return true;
+  const intervalDays = { daily: 1, weekly: 7, monthly: 30, quarterly: 90 }[auditFrequency];
+  const dueAt = lastCountedAt.getTime() + intervalDays * 24 * 60 * 60 * 1000;
+  return Date.now() >= dueAt;
 }

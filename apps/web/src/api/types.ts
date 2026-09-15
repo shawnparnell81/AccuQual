@@ -179,6 +179,8 @@ export interface InventoryStock {
   onOrder: string;
   lastAdjustedAt: string | null;
   lastAdjustedBy: number | null;
+  /** When `allocated` was last set nonzero — drives reservationRules.autoReleaseAfterDays. */
+  allocatedAt: string | null;
 }
 
 export interface InventoryItem {
@@ -197,12 +199,18 @@ export interface InventoryItem {
   state: "in_stock" | "below_min" | "reorder_pending" | "on_order" | "overstock" | "inactive";
   active: boolean;
   notes: string | null;
+  /** Settings → Inventory Module expansion — last real cycle count (POST /inventory/items/:id/count), or null if never counted. */
+  lastCountedAt: string | null;
   createdAt: string;
   updatedAt: string | null;
   /** Only on GET /inventory/items (listItemsHandler) — the summed on_hand across all locations. */
   onHand?: number;
   /** Only on GET /inventory/items/:id (getItemHandler) — the real per-location rows. */
   stock?: InventoryStock[];
+  /** Computed live from inventorySettings.agingRules — see inventory.service.ts's computeAgingBucket. */
+  agingBucket?: "fresh" | "warning" | "critical" | null;
+  /** Computed live from inventorySettings.auditFrequency — see inventory.service.ts's isCycleCountDue. */
+  cycleCountDue?: boolean;
 }
 
 export interface InventoryMovement {
@@ -218,6 +226,9 @@ export interface InventoryMovement {
   referenceId: string | null;
   performedBy: number | null;
   performedAt: string;
+  /** Caller-supplied, or auto-generated from inventorySettings.lotNumberFormat/serialNumberFormat on receive/produce. */
+  lotNumber: string | null;
+  serialNumber: string | null;
 }
 
 export interface MovementTrendPoint {
@@ -831,6 +842,8 @@ export interface FeasibilityScore {
 }
 
 /** The unified Feasibility Review — ONE module across every source type, see feasibility.ts's own schema comment. */
+export type FeasibilityRiskLevel = "low" | "medium" | "high" | "critical";
+
 export interface FeasibilityReview {
   id: number;
   title: string;
@@ -846,8 +859,63 @@ export interface FeasibilityReview {
   createdAt: string;
   updatedAt: string | null;
   decidedAt: string | null;
+  // Settings → Feasibility Module integration — see FeasibilitySettings below.
+  riskLevel: FeasibilityRiskLevel | null;
+  riskLevelSetManually: boolean;
+  providedDocuments: string[];
+  customerRequirement: string | null;
+  mappedRequirementCategory: string | null;
   // Detail endpoint only.
   scores?: FeasibilityScore[];
+}
+
+// ============================================================
+// Settings → Feasibility / Inventory / ERP Sync integrations
+// ============================================================
+
+export interface FeasibilitySettings {
+  defaultRiskLevel?: FeasibilityRiskLevel;
+  autoAssignOwner?: boolean;
+  requiredDocuments?: string[];
+  customerRequirementMapping?: Record<string, string>;
+  notificationsEnabled?: boolean;
+}
+
+export interface InventorySettings {
+  agingRules?: { warningDays?: number; criticalDays?: number };
+  reservationRules?: { allowNegativeAllocation?: boolean; autoReleaseAfterDays?: number };
+  autoGenerateLotNumbers?: boolean;
+  lotNumberFormat?: string;
+  autoGenerateSerialNumbers?: boolean;
+  serialNumberFormat?: string;
+  costAdjustmentRules?: { method?: "average" | "latest"; roundingPrecision?: number };
+  auditFrequency?: "daily" | "weekly" | "monthly" | "quarterly";
+}
+
+export interface ErpSyncStatusHistoryEntry {
+  at: string;
+  status: "success" | "failed" | "skipped";
+  modules: string[];
+  message?: string;
+}
+
+export interface ErpSyncSettings {
+  schedule: "manual" | "hourly" | "daily" | null;
+  direction: "push" | "pull" | "bidirectional" | null;
+  modulesEnabled: string[];
+  conflictRules: { resolutionStrategy?: "local_wins" | "remote_wins" | "manual_review" };
+  retryPolicy: { maxRetries?: number; backoffSeconds?: number };
+  webhookUrl: string | null;
+  hasWebhookSecret: boolean;
+  maskedWebhookSecret?: string | null;
+  statusHistory: ErpSyncStatusHistoryEntry[];
+}
+
+export interface ErpSyncTriggerResult {
+  status: "success" | "failed" | "skipped";
+  message: string;
+  attempts: number;
+  history: ErpSyncStatusHistoryEntry[];
 }
 
 export type SalesAccountStatus = "prospect" | "active" | "dormant";

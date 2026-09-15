@@ -30,6 +30,13 @@ export const inventoryItems = pgTable("inventory_items", {
   state: text("state").notNull().default("in_stock"),
   active: boolean("active").notNull().default(true),
   notes: text("notes"),
+  // Settings → Inventory Module expansion (tenants.inventorySettings.
+  // auditFrequency): the last time someone recorded a real cycle count
+  // against this item (POST /inventory/items/:id/count). Null means "never
+  // counted" — cycleCountDue is computed live from this + auditFrequency on
+  // list/get, not by a background scheduler (this app has none — see
+  // inventory.controller.ts).
+  lastCountedAt: timestamp("last_counted_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });
@@ -45,6 +52,14 @@ export const inventoryStock = pgTable("inventory_stock", {
   onOrder: numeric("on_order").notNull().default("0"),
   lastAdjustedAt: timestamp("last_adjusted_at"),
   lastAdjustedBy: integer("last_adjusted_by").references(() => users.id),
+  // Settings → Inventory Module expansion (reservationRules): when
+  // `allocated` was last set to a nonzero value via reserve/release — used
+  // to lazily auto-release a reservation older than
+  // inventorySettings.reservationRules.autoReleaseAfterDays the next time
+  // this row is read (see inventory.service.ts's applyReservationAutoRelease;
+  // no background scheduler exists in this app, so expiry is checked at
+  // read time, same pattern as the AI usage monthly-limit computation).
+  allocatedAt: timestamp("allocated_at"),
 });
 
 /**
@@ -70,6 +85,12 @@ export const inventoryMovements = pgTable("inventory_movements", {
   performedBy: integer("performed_by").references(() => users.id),
   performedAt: timestamp("performed_at").defaultNow(),
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  // Settings → Inventory Module expansion: caller-supplied on receive/produce,
+  // or auto-generated from inventorySettings.lotNumberFormat/serialNumberFormat
+  // when autoGenerateLotNumbers/autoGenerateSerialNumbers is on and the caller
+  // didn't supply one — see inventory.service.ts's generateTrackingNumber.
+  lotNumber: text("lot_number"),
+  serialNumber: text("serial_number"),
 });
 
 export const inventoryAlerts = pgTable("inventory_alerts", {

@@ -172,3 +172,25 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
     next();
   };
 }
+
+/**
+ * Gate a route to admin (platform_admin/admin) or one of a fixed list of
+ * departments, full stop — for settings-style endpoints that don't fit the
+ * ResourceKey/PERMISSION_MATRIX shape above (a resource other departments
+ * can read/edit at *different levels*). Tenant-wide config either belongs to
+ * the department(s) that own it, or an admin — there's no "read-only"
+ * tier. See modules/settings/settings.routes.ts for the concrete use
+ * (Feasibility settings: quality/engineering; Inventory settings:
+ * production/purchasing; ERP Sync: admin only, via requireRole instead).
+ */
+export function requireAnyDepartment(...departments: Department[]) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    const role = req.user?.roleName;
+    if (role === "platform_admin" || role === "admin") return next();
+
+    const department = req.user?.department as Department | null | undefined;
+    if (department && departments.includes(department)) return next();
+
+    next(AppError.forbidden(`Requires one of departments: ${departments.join(", ")} (or admin)`));
+  };
+}
