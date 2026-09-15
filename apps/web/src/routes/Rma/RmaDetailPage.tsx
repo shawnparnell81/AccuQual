@@ -9,7 +9,6 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
-import { CreateFeasibilityButton } from "../../components/shared/CreateFeasibilityButton";
 import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
 import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
 import { Modal } from "../../components/modals/Modal";
@@ -201,7 +200,6 @@ export function RmaDetailPage() {
               + Add Item
             </button>
           )}
-          <CreateFeasibilityButton sourceType="rma" sourceId={record.id} defaultTitle={`Feasibility review for ${record.rmaNumber}`} defaultDepartment="purchasing" />
           <LinkSalesAccountButton sourceType="RMA" sourceId={record.id} defaultAccountName={record.rmaNumber} />
           <CreateCustomerButton sourceType="RMA" sourceId={record.id} defaultLegalName={record.rmaNumber} />
         </div>

@@ -10,7 +10,6 @@ import { WorkflowActionButton } from "../../components/shared/WorkflowActionButt
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
-import { CreateFeasibilityButton } from "../../components/shared/CreateFeasibilityButton";
 import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 
@@ -96,7 +95,6 @@ export function SupplierDetailPage() {
             label="Approved Vendor List"
           />
           <CreateRiskButton sourceType="Supplier" sourceId={supplier.id} defaultTitle={`Risk from ${supplier.name}`} defaultDepartment="purchasing" defaultCategory="supplier" />
-          <CreateFeasibilityButton sourceType="supplier" sourceId={supplier.id} defaultTitle={`Feasibility review for ${supplier.name}`} defaultDepartment="purchasing" />
           <CreateCustomerButton sourceType="Supplier" sourceId={supplier.id} defaultLegalName={supplier.name} />
         </div>
       </div>

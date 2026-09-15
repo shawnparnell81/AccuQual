@@ -1,15 +1,13 @@
 import type { Request, Response } from "express";
 import { and, eq, desc } from "drizzle-orm";
-import { feasibilityReviews, feasibilityScores } from "../../drizzle/schema/feasibility.js";
+import { feasibilityReviews } from "../../drizzle/schema/feasibility.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
-import { stripClientOwnedFields } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
-import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { notifyDepartment } from "../notifications/notification.service.js";
 import { loadTenantForSettings, getFeasibilitySettings } from "../settings/settings.service.js";
 
-/** Same inline-guard style as risk/workOrders/erp/rma.controller.ts's assertDepartment. */
+/** Full-record edit — engineering owns this document; same pattern as risk/workOrders/erp/rma.controller.ts's assertDepartment. */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
   if (role === "admin" || role === "platform_admin") return;
@@ -19,50 +17,35 @@ function assertDepartment(req: Request, allowed: string[]) {
   }
 }
 
+/** Which department owns which sign-off row — mirrors the docx's 5-row Sign-off & Authorizations table exactly. */
+const SIGNOFF_OWNER: Record<string, string> = {
+  engineering: "engineering",
+  quality: "quality",
+  production: "manufacturing", // docx: "Manufacturing / Operations"
+  purchasing: "purchasing", // docx: "Supply Chain / Purchasing"
+  sales_and_marketing: "sales", // docx: "Sales / Commercial"
+};
+
 /**
- * Delete is a deliberate widening from risk.controller.ts's admin-only rule
- * — this module's own spec explicitly lists delete under BOTH Quality's
- * capabilities ("can create, edit, submit, review, approve, reject, delete
- * within role limits") and Admin's, so quality department OR tenant
- * admin/platform_admin can delete here, not admin alone.
+ * A non-engineering department may PATCH ONLY its own sign-off row's Name/
+ * Signature fields — checked against the body's actual keys, not just the
+ * route, so quality can't smuggle a manufacturing signature through the
+ * same endpoint. Engineering/admin bypass entirely (they own the whole
+ * document, sign-offs included).
  */
-function assertDeleteAllowed(req: Request) {
+function assertSignoffFieldsAllowed(req: Request, body: Record<string, unknown>) {
   const role = req.user?.roleName;
   if (role === "admin" || role === "platform_admin") return;
-  if (req.user?.department === "quality") return;
-  throw AppError.forbidden("Only Quality or an admin can delete a feasibility review.");
-}
+  const department = req.user?.department;
+  if (department === "engineering") return;
 
-/**
- * overallScore: "sum of (value * weight) across all dimensions, OR average
- * of values if weight is null" — read as a record-level choice (every score
- * either all carries a real weight, or none does) rather than a per-row
- * fallback, since a mix of weighted and unweighted rows in the same average
- * has no well-defined meaning. If EVERY score has a non-null weight, this is
- * a weighted sum; otherwise a plain average of values. Documented here since
- * the spec asked for the chosen formula to be explicit.
- */
-export function computeOverallScore(scores: { value: string | number; weight: string | number | null }[]): number | null {
-  if (scores.length === 0) return null;
-  const allWeighted = scores.every((s) => s.weight !== null && s.weight !== undefined);
-  if (allWeighted) {
-    return scores.reduce((sum, s) => sum + Number(s.value) * Number(s.weight), 0);
+  const ownedPrefix = department ? SIGNOFF_OWNER[department] : undefined;
+  if (!ownedPrefix) throw AppError.forbidden("Your department has no sign-off row on this form.");
+
+  const disallowed = Object.keys(body).filter((k) => !k.startsWith(ownedPrefix));
+  if (disallowed.length > 0) {
+    throw AppError.forbidden(`Your department may only edit its own sign-off row (${ownedPrefix}Signoff*) — not: ${disallowed.join(", ")}`);
   }
-  return scores.reduce((sum, s) => sum + Number(s.value), 0) / scores.length;
-}
-
-/**
- * Decision thresholds — locked in per the module spec, on the same 1-5 scale
- * every dimension value uses. Named constants, documented here as required.
- */
-export const FEASIBLE_MIN = 3.5;
-export const CONDITIONAL_MIN = 2.5;
-
-export function computeDecision(overallScore: number | null): string | null {
-  if (overallScore === null) return null;
-  if (overallScore >= FEASIBLE_MIN) return "feasible";
-  if (overallScore >= CONDITIONAL_MIN) return "conditional";
-  return "not_feasible";
 }
 
 async function loadFeasibility(req: Request, id: number) {
@@ -71,290 +54,134 @@ async function loadFeasibility(req: Request, id: number) {
   return row;
 }
 
-/**
- * Decision -> riskLevel, the fixed mapping "risk scoring reads settings"
- * resolves to (see the module's own settings integration doc). Locked-in,
- * same spirit as FEASIBLE_MIN/CONDITIONAL_MIN above: worse feasibility outcome
- * -> higher risk level.
- */
-const RISK_LEVEL_BY_DECISION: Record<string, "low" | "medium" | "high" | "critical"> = {
-  feasible: "low",
-  conditional: "high",
-  not_feasible: "critical",
-};
-
-/**
- * Recomputes overallScore/decision from every real score row and writes both
- * back — called after any score add/update. Also re-derives riskLevel from
- * the new decision via RISK_LEVEL_BY_DECISION ("risk scoring reads settings"
- * — see tenants.feasibilitySettings' own comment) UNLESS a reviewer already
- * set riskLevel by hand (updateFeasibilityHandler stamps
- * riskLevelSetManually the moment that happens) — a manual call always wins
- * over the automatic derivation, same "server stamps once, never overwrites
- * a real human decision" precedent used elsewhere in this app (e.g. Work
- * Order sign-off timestamps).
- */
-async function recalcScoring(req: Request, feasibilityId: number) {
-  const scores = await req.db!.select().from(feasibilityScores).where(and(eq(feasibilityScores.feasibilityId, feasibilityId), eq(feasibilityScores.tenantId, req.tenantId!)));
-  const overallScore = computeOverallScore(scores);
-  const decision = computeDecision(overallScore);
-
-  const [existing] = await req.db!.select().from(feasibilityReviews).where(eq(feasibilityReviews.id, feasibilityId));
-  const riskLevel = decision && !existing?.riskLevelSetManually ? RISK_LEVEL_BY_DECISION[decision] : existing?.riskLevel;
-
-  await req
-    .db!.update(feasibilityReviews)
-    .set({ overallScore: overallScore === null ? null : String(overallScore), decision, riskLevel, updatedAt: new Date() })
-    .where(eq(feasibilityReviews.id, feasibilityId));
-  return { overallScore, decision, riskLevel };
-}
-
-const ALLOWED_NEXT: Record<string, string[]> = {
-  draft: ["submitted"],
-  submitted: ["under_review"],
-  under_review: ["approved", "rejected"],
-  approved: [],
-  rejected: [],
-};
-
-async function transition(req: Request, id: number, newStatus: string) {
-  const record = await loadFeasibility(req, id);
-  if (!ALLOWED_NEXT[record.status]?.includes(newStatus)) {
-    throw AppError.badRequest(`Cannot move a feasibility review from "${record.status}" to "${newStatus}" — workflow is draft -> submitted -> under_review -> approved|rejected.`);
-  }
-  const isDecision = newStatus === "approved" || newStatus === "rejected";
-  const [updated] = await req
-    .db!.update(feasibilityReviews)
-    .set({
-      status: newStatus,
-      updatedAt: new Date(),
-      ...(isDecision ? { decidedAt: new Date(), reviewerId: req.user?.id ?? record.reviewerId } : {}),
-    })
-    .where(eq(feasibilityReviews.id, record.id))
-    .returning();
-  await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
-    entityType: "FeasibilityReview",
-    entityId: record.id,
-    action: "status_change",
-    changes: { oldStatus: record.status, newStatus },
-    performedBy: req.user?.id,
-  });
-  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "feasibility", event: newStatus, entityId: record.id });
-
-  // Settings → Feasibility Module integration: "notification routing" reads
-  // feasibilitySettings.notificationsEnabled. Routed to Quality — the one
-  // department with full workflow control (submit/review/approve/reject),
-  // same real notifyDepartment mechanism inventory.service.ts's below-min
-  // alert already uses (real email if SMTP is configured, honestly logged
-  // otherwise — see notification.service.ts).
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
-  if (getFeasibilitySettings(tenant).notificationsEnabled) {
-    await notifyDepartment(req.db!, {
-      tenantId: req.tenantId!,
-      department: "quality",
-      subject: `Feasibility Review #${record.id} — ${newStatus}`,
-      body: `"${record.title}" moved from ${record.status} to ${newStatus}.`,
-      relatedEntityType: "FeasibilityReview",
-      relatedEntityId: record.id,
-    });
-  }
-
-  return updated!;
-}
-
 export const listFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { status, sourceType, department } = req.query as Record<string, string | undefined>;
+  const { status, customerId } = req.query as Record<string, string | undefined>;
   const conditions = [eq(feasibilityReviews.tenantId, req.tenantId!)];
   if (status) conditions.push(eq(feasibilityReviews.status, status));
-  if (sourceType) conditions.push(eq(feasibilityReviews.sourceType, sourceType));
-  if (department) conditions.push(eq(feasibilityReviews.department, department));
+  if (customerId) conditions.push(eq(feasibilityReviews.customerId, Number(customerId)));
 
   const rows = await req.db!.select().from(feasibilityReviews).where(and(...conditions)).orderBy(desc(feasibilityReviews.createdAt));
   res.json(rows);
 });
 
-/** Create — any of the shared floor's five departments, matching risk.controller.ts's createRiskHandler exactly. */
+/** Create — engineering (its own document) or sales_and_marketing (launching one from the Customer Onboarding packet). */
 export const createFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["quality", "engineering", "production", "purchasing", "material_management"]);
-  const customerRequirement: string | undefined = req.body.customerRequirement;
+  assertDepartment(req, ["engineering", "sales_and_marketing"]);
 
-  // Settings → Feasibility Module integration — applied only when the
-  // caller didn't already decide the field themselves.
   const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
   const settings = getFeasibilitySettings(tenant);
-  const riskLevel = req.body.riskLevel ?? settings.defaultRiskLevel;
   const ownerId = req.body.ownerId ?? (settings.autoAssignOwner ? req.user?.id : undefined);
-  const mappedRequirementCategory = customerRequirement ? settings.customerRequirementMapping?.[customerRequirement] ?? null : null;
+
+  // defaultRiskLevel seeds every one of the 7 fixed assessment rows — the
+  // old model had one riskLevel field for the whole record; this one has 7,
+  // so "apply the tenant default" now means "start every row at that level"
+  // rather than skip the setting.
+  const areaDefaults: Record<string, string> = {};
+  if (settings.defaultRiskLevel) {
+    for (const area of ["design", "equipment", "supplyChain", "quality", "capacity", "regulatory", "financial"]) {
+      areaDefaults[`${area}RiskLevel`] = settings.defaultRiskLevel;
+    }
+  }
 
   const [created] = await req
     .db!.insert(feasibilityReviews)
-    .values({ ...req.body, riskLevel, ownerId, customerRequirement, mappedRequirementCategory, tenantId: req.tenantId!, createdBy: req.user?.id })
+    .values({ ...areaDefaults, ...req.body, ownerId, tenantId: req.tenantId!, createdBy: req.user?.id })
     .returning();
   await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
 export const getFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
-  const record = await loadFeasibility(req, Number(req.params.id));
-  const scores = await req.db!.select().from(feasibilityScores).where(and(eq(feasibilityScores.feasibilityId, record.id), eq(feasibilityScores.tenantId, req.tenantId!)));
-  res.json({ ...record, scores });
+  res.json(await loadFeasibility(req, Number(req.params.id)));
 });
 
-/** Update — quality + engineering only (mirroring risk's updateRiskHandler); production/purchasing/material_management can still add/update scores below. */
+/** Every content field except the 5 sign-off rows — engineering or admin only. */
 export const updateFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["quality", "engineering"]);
+  assertDepartment(req, ["engineering"]);
   const record = await loadFeasibility(req, Number(req.params.id));
-  const { aiSuggested, ...rest } = req.body as { aiSuggested?: boolean } & Record<string, unknown>;
-  const body = stripClientOwnedFields(rest) as { riskLevel?: string; customerRequirement?: string | null } & Record<string, unknown>;
-
-  // A manual riskLevel pins it against recalcScoring's own auto-derivation
-  // from here on (see recalcScoring's own comment).
-  const riskLevelSetManually = body.riskLevel !== undefined ? true : undefined;
-
-  // Re-resolve the mapping any time customerRequirement itself changes —
-  // same settings.customerRequirementMapping createFeasibilityHandler reads.
-  let mappedRequirementCategory: string | null | undefined;
-  if (body.customerRequirement !== undefined) {
-    const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
-    mappedRequirementCategory = body.customerRequirement ? getFeasibilitySettings(tenant).customerRequirementMapping?.[body.customerRequirement] ?? null : null;
-  }
+  if (record.status === "final") throw AppError.badRequest("This review is finalized — no further edits.");
 
   const [updated] = await req
     .db!.update(feasibilityReviews)
-    .set({ ...body, riskLevelSetManually, mappedRequirementCategory, updatedAt: new Date() })
+    .set({ ...req.body, updatedAt: new Date() })
     .where(eq(feasibilityReviews.id, record.id))
     .returning();
 
-  await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
-    entityType: "FeasibilityReview",
-    entityId: record.id,
-    action: "update",
-    changes: aiSuggested ? { subAction: "ai_suggestion_accepted", fieldsChanged: Object.keys(body), ...body } : { fieldsChanged: Object.keys(body), ...body },
-    performedBy: req.user?.id,
-  });
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: record.id, action: "update", changes: { fieldsChanged: Object.keys(req.body) }, performedBy: req.user?.id });
   res.json(updated);
 });
 
 /**
- * draft -> submitted. Quality only ("full control" of the workflow per the
- * spec). Settings → Feasibility Module integration: "required document
- * validation" — every doc name in feasibilitySettings.requiredDocuments must
- * appear in this record's own providedDocuments (set via
- * updateFeasibilityHandler) before it can leave draft. Not a real file
- * upload/attachment system (see feasibility.ts's own schema comment on
- * providedDocuments) — a checklist gate, same honest scoping as the rest of
- * this integration.
+ * PATCH /:id/signoff — the one endpoint every sign-off department (not just
+ * engineering) can reach, restricted to their own row by
+ * assertSignoffFieldsAllowed. Signature date is always server-stamped the
+ * moment that row's own signature transitions unset -> set, never accepted
+ * from the client — same convention as Work Order operator/inspector
+ * sign-off.
  */
-export const submitFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["quality"]);
-  const id = Number(req.params.id);
-  const record = await loadFeasibility(req, id);
+export const updateSignoffHandler = asyncHandler(async (req: Request, res: Response) => {
+  const record = await loadFeasibility(req, Number(req.params.id));
+  if (record.status === "final") throw AppError.badRequest("This review is finalized — sign-offs are locked.");
+  assertSignoffFieldsAllowed(req, req.body);
+
+  const patch: Record<string, unknown> = { ...req.body, updatedAt: new Date() };
+  for (const prefix of ["engineering", "quality", "manufacturing", "purchasing", "sales"]) {
+    const sigKey = `${prefix}SignoffSignature`;
+    const dateKey = `${prefix}SignoffDate`;
+    if (req.body[sigKey] !== undefined) {
+      const wasUnset = !record[sigKey as keyof typeof record];
+      patch[dateKey] = req.body[sigKey] && wasUnset ? new Date() : req.body[sigKey] ? record[dateKey as keyof typeof record] : null;
+    }
+  }
+
+  const [updated] = await req.db!.update(feasibilityReviews).set(patch).where(eq(feasibilityReviews.id, record.id)).returning();
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: record.id, action: "update", changes: { subAction: "signoff", fieldsChanged: Object.keys(req.body) }, performedBy: req.user?.id });
+  res.json(updated);
+});
+
+/**
+ * POST /:id/finalize — engineering or admin only. "Required document
+ * validation" (Settings → Feasibility integration) gates this the same way
+ * it gated the old "submit" transition; "notification routing" fires here
+ * too, the one real state change this document has.
+ */
+export const finalizeFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
+  assertDepartment(req, ["engineering"]);
+  const record = await loadFeasibility(req, Number(req.params.id));
+  if (record.status === "final") throw AppError.badRequest("Already finalized.");
+
   const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
-  const required = getFeasibilitySettings(tenant).requiredDocuments ?? [];
+  const settings = getFeasibilitySettings(tenant);
+  const required = settings.requiredDocuments ?? [];
   const provided = new Set(record.providedDocuments ?? []);
   const missing = required.filter((doc) => !provided.has(doc));
   if (missing.length > 0) {
-    throw AppError.badRequest(`Cannot submit — missing required document(s): ${missing.join(", ")}. Mark them provided first.`);
+    throw AppError.badRequest(`Cannot finalize — missing required document(s): ${missing.join(", ")}. Mark them provided first.`);
   }
-  res.json(await transition(req, id, "submitted"));
+
+  const [updated] = await req.db!.update(feasibilityReviews).set({ status: "final", finalizedAt: new Date(), updatedAt: new Date() }).where(eq(feasibilityReviews.id, record.id)).returning();
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: record.id, action: "status_change", changes: { oldStatus: record.status, newStatus: "final" }, performedBy: req.user?.id });
+
+  if (settings.notificationsEnabled) {
+    await notifyDepartment(req.db!, {
+      tenantId: req.tenantId!,
+      department: "quality",
+      subject: `Feasibility Review #${record.id} finalized`,
+      body: `"${record.partProjectName ?? record.customerName ?? "Untitled"}" has been finalized.`,
+      relatedEntityType: "FeasibilityReview",
+      relatedEntityId: record.id,
+    });
+  }
+
+  res.json(updated);
 });
 
-/** submitted -> under_review. Quality only. */
-export const reviewFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["quality"]);
-  res.json(await transition(req, Number(req.params.id), "under_review"));
-});
-
-/** under_review -> approved. Quality only. */
-export const approveFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["quality"]);
-  res.json(await transition(req, Number(req.params.id), "approved"));
-});
-
-/** under_review -> rejected. Quality only. */
-export const rejectFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["quality"]);
-  res.json(await transition(req, Number(req.params.id), "rejected"));
-});
-
-/** Delete — quality department OR admin/platform_admin (see assertDeleteAllowed's own comment on why this differs from risk's admin-only rule). Hard delete; scores deleted first for the FK. */
+/** Delete — engineering or admin only (this document has no cross-department delete rule, unlike the old version). */
 export const deleteFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDeleteAllowed(req);
+  assertDepartment(req, ["engineering"]);
   const record = await loadFeasibility(req, Number(req.params.id));
 
-  await req.db!.delete(feasibilityScores).where(and(eq(feasibilityScores.feasibilityId, record.id), eq(feasibilityScores.tenantId, req.tenantId!)));
   await req.db!.delete(feasibilityReviews).where(and(eq(feasibilityReviews.id, record.id), eq(feasibilityReviews.tenantId, req.tenantId!)));
-
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: record.id, action: "delete", changes: { title: record.title, status: record.status }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: record.id, action: "delete", changes: { partProjectName: record.partProjectName, status: record.status }, performedBy: req.user?.id });
   res.status(204).send();
-});
-
-/** Add a scoring dimension — any of the shared floor's five departments (each department scores the dimensions relevant to it; the record owner/Quality doesn't have to enter every number themselves). */
-export const addScoreHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["quality", "engineering", "production", "purchasing", "material_management"]);
-  const review = await loadFeasibility(req, Number(req.params.id));
-  const { aiSuggested, ...body } = req.body as { aiSuggested?: boolean; dimensionKey: string; dimensionLabel?: string; dimensionType?: string; value: number; weight?: number };
-
-  const [created] = await req
-    .db!.insert(feasibilityScores)
-    .values({
-      ...body,
-      value: String(body.value),
-      weight: body.weight !== undefined ? String(body.weight) : undefined,
-      contribution: body.weight !== undefined ? String(body.value * body.weight) : null,
-      feasibilityId: review.id,
-      tenantId: req.tenantId!,
-      createdBy: req.user?.id,
-    })
-    .returning();
-  const { overallScore, decision } = await recalcScoring(req, review.id);
-
-  await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
-    entityType: "FeasibilityReview",
-    entityId: review.id,
-    action: "update",
-    changes: aiSuggested
-      ? { subAction: "ai_suggestion_accepted", scoreAction: "score_added", ...body, newOverallScore: overallScore, newDecision: decision }
-      : { subAction: "score_added", ...body, newOverallScore: overallScore, newDecision: decision },
-    performedBy: req.user?.id,
-  });
-  res.status(201).json(created);
-});
-
-export const updateScoreHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["quality", "engineering", "production", "purchasing", "material_management"]);
-  const reviewId = Number(req.params.id);
-  const scoreId = Number(req.params.sid);
-  const [existing] = await req.db!.select().from(feasibilityScores).where(and(eq(feasibilityScores.id, scoreId), eq(feasibilityScores.feasibilityId, reviewId), eq(feasibilityScores.tenantId, req.tenantId!)));
-  if (!existing) throw AppError.notFound("Feasibility score");
-
-  const body = stripClientOwnedFields(req.body) as { value?: number; weight?: number | null; dimensionLabel?: string };
-  const nextValue = body.value ?? Number(existing.value);
-  const nextWeight = body.weight !== undefined ? body.weight : existing.weight;
-
-  const [updated] = await req
-    .db!.update(feasibilityScores)
-    .set({
-      ...body,
-      value: body.value !== undefined ? String(body.value) : undefined,
-      weight: body.weight !== undefined ? (body.weight === null ? null : String(body.weight)) : undefined,
-      contribution: nextWeight !== null && nextWeight !== undefined ? String(nextValue * Number(nextWeight)) : null,
-      updatedAt: new Date(),
-    })
-    .where(eq(feasibilityScores.id, scoreId))
-    .returning();
-  const { overallScore, decision } = await recalcScoring(req, reviewId);
-
-  await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
-    entityType: "FeasibilityReview",
-    entityId: reviewId,
-    action: "update",
-    changes: { subAction: "score_updated", scoreId, ...body, newOverallScore: overallScore, newDecision: decision },
-    performedBy: req.user?.id,
-  });
-  res.json(updated);
 });

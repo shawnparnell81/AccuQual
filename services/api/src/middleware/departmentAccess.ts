@@ -117,12 +117,17 @@ export const PERMISSION_MATRIX: Record<ResourceKey, Partial<Record<Department, A
   // pattern as inventory/erp/rma/work_orders above. Deleting a risk is
   // admin-only, also enforced inline (not a department at all).
   risk: { quality: "edit", engineering: "edit", production: "edit", purchasing: "edit", material_management: "edit" },
-  // Not a sheet row — the unified Feasibility Review module. Same shared
-  // floor as risk (create + add/update scores); the real per-action
-  // asymmetry (record update: quality+engineering only; workflow
-  // transitions + delete: quality or admin) is enforced inline in
-  // feasibility.controller.ts's assertDepartment, same pattern as risk.
-  feasibility: { quality: "edit", engineering: "edit", production: "edit", purchasing: "edit", material_management: "edit" },
+  // Not a sheet row — the Feasibility Review module. Rebuilt (per explicit
+  // request) as a bespoke document engineering owns; the other four
+  // departments only get "edit" here because each owns exactly one fixed
+  // sign-off row on the form (PATCH /:id/signoff) — the real narrower rule
+  // (full-record edit: engineering only; each other department: its own
+  // sign-off fields only) is enforced inline in feasibility.controller.ts's
+  // assertDepartment/assertSignoffFieldsAllowed, same "matrix grants edit,
+  // controller narrows" pattern as risk/rma/work_orders. material_management
+  // dropped — it has no row on this document at all (the docx's sign-off
+  // table is Engineering/Quality/Manufacturing/Purchasing/Sales only).
+  feasibility: { engineering: "edit", quality: "edit", production: "edit", purchasing: "edit", sales_and_marketing: "edit" },
   // Not a sheet row — the new Sales & Marketing module, and sales_and_marketing's
   // first real PERMISSION_MATRIX entry as a department (see the Sales &
   // Marketing module review — added as ONE department, not split into

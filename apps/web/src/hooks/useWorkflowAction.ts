@@ -9,10 +9,53 @@ interface ApiErrorBody {
   message?: string;
 }
 
-/** Also used directly by places that don't go through these two hooks (e.g. DocumentRetentionPanel's existing bespoke mutations). */
+/**
+ * Also used directly by places that don't go through these two hooks (e.g.
+ * DocumentRetentionPanel's existing bespoke mutations).
+ *
+ * A request made with `responseType: "arraybuffer"` or `"blob"` (PDF/file
+ * export/preview — see api/formHooks.ts's exportFormPdf) gets its ERROR body
+ * decoded the same way as a successful one: axios hands back the server's
+ * real JSON error as raw bytes, not a parsed object, so `data.message` was
+ * always undefined and every failure — whatever the real cause — silently
+ * fell back to the caller's generic fallback text (reported as "the Preview/
+ * Export PDF button is stuck on 'save it first'" regardless of what actually
+ * went wrong). Decode + parse that shape here so the real server message
+ * always surfaces.
+ */
 export function extractErrorMessage(err: unknown, fallback: string): string {
-  const axiosErr = err as AxiosError<ApiErrorBody>;
-  return axiosErr.response?.data?.message ?? fallback;
+  const axiosErr = err as AxiosError<ApiErrorBody | ArrayBuffer | Blob>;
+  const data = axiosErr.response?.data;
+
+  if (data instanceof ArrayBuffer) {
+    try {
+      return (JSON.parse(new TextDecoder().decode(data)) as ApiErrorBody).message ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  // Blob is async-only to read; synchronously we can only fall back — see
+  // extractErrorMessageAsync below for callers that can await it.
+  if (typeof Blob !== "undefined" && data instanceof Blob) return fallback;
+
+  return (data as ApiErrorBody | undefined)?.message ?? fallback;
+}
+
+/** Same decoding as extractErrorMessage, but awaits a Blob error body too (axios `responseType: "blob"`) — use where the call site is already async. */
+export async function extractErrorMessageAsync(err: unknown, fallback: string): Promise<string> {
+  const axiosErr = err as AxiosError<ApiErrorBody | ArrayBuffer | Blob>;
+  const data = axiosErr.response?.data;
+
+  if (typeof Blob !== "undefined" && data instanceof Blob) {
+    try {
+      return (JSON.parse(await data.text()) as ApiErrorBody).message ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  return extractErrorMessage(err, fallback);
 }
 
 /**

@@ -9,7 +9,6 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { TextAreaField } from "../../components/forms/Field";
-import { CreateFeasibilityButton } from "../../components/shared/CreateFeasibilityButton";
 import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
 import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
 import type { ErpPurchaseRequisition } from "../../api/types";
@@ -64,7 +63,6 @@ export function ErpRequisitionDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <CreateFeasibilityButton sourceType="requisition" sourceId={record.id} defaultTitle={`Feasibility review for Requisition #${record.id}`} defaultDepartment="purchasing" />
           <LinkSalesAccountButton sourceType="Requisition" sourceId={record.id} defaultAccountName={`Requisition #${record.id}`} />
           <CreateCustomerButton sourceType="Requisition" sourceId={record.id} defaultLegalName={`Requisition #${record.id}`} />
         </div>

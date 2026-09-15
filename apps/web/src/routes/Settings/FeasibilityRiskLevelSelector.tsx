@@ -1,7 +1,7 @@
 import { SelectField } from "../../components/forms/Field";
 import type { FeasibilityRiskLevel } from "../../api/types";
 
-const RISK_LEVELS: FeasibilityRiskLevel[] = ["low", "medium", "high", "critical"];
+const RISK_LEVELS: FeasibilityRiskLevel[] = ["low", "medium", "high"];
 
 /** A plain, reusable risk-level <select> — used by FeasibilitySettingsPanel for defaultRiskLevel, and reusable wherever else a feasibility riskLevel needs picking (e.g. a future record-level override control). */
 export function FeasibilityRiskLevelSelector({ value, onChange }: { value: FeasibilityRiskLevel | undefined; onChange: (value: FeasibilityRiskLevel) => void }) {

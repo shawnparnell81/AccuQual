@@ -4,14 +4,32 @@ import { AppError } from "../../utils/appError.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
 import { mergePdfFields } from "./pdf-merger.js";
 
+/**
+ * Self-healing (same pattern as document-folders.controller.ts's
+ * ensureLibraryPool/ensureAdditionalSubfolders): platform.service.ts seeds
+ * one default template per tenant at provisioning time from a fixed list,
+ * but a form type added after a tenant was provisioned — or simply left off
+ * that list by mistake (customer_requirements/inventory_item both were) —
+ * had NO template row and 404'd on every Preview/Export PDF, forever, for
+ * every tenant. That 404 also came back with no visible cause: exportFormPdf
+ * uses `responseType: "arraybuffer"`, so the real JSON error body arrived as
+ * raw bytes and extractErrorMessage silently fell back to its generic
+ * caller-supplied text ("save it at least once first") regardless of what
+ * actually failed — see useWorkflowAction.ts's own fix. Auto-provisioning
+ * the default template here on first real use closes the gap for good,
+ * without needing a one-off backfill script per tenant or a second list to
+ * keep in sync with platform.service.ts's own.
+ */
 export async function loadTemplate(db: TenantDb, tenantId: number, formType: string) {
   const [template] = await db
     .select()
     .from(formTemplates)
     .where(and(eq(formTemplates.tenantId, tenantId), eq(formTemplates.formType, formType)))
     .orderBy(desc(formTemplates.id)); // prefer a tenant-uploaded custom template over the seeded default if both exist
-  if (!template) throw AppError.notFound(`Form template for "${formType}"`);
-  return template;
+  if (template) return template;
+
+  const [created] = await db.insert(formTemplates).values({ tenantId, formType, pdfPath: `/templates/defaults/${formType}.pdf`, fieldMap: {}, isDefault: "true" }).returning();
+  return created!;
 }
 
 /** Loads the current (highest-version) form_data row for an entity, or null if none exists yet. */

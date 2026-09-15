@@ -112,7 +112,7 @@ export function CustomerDetailPage() {
             AI Assistant
           </button>
           <CreateRiskButton sourceType="Customer" sourceId={customer.id} defaultTitle={`Risk from ${customer.legalName}`} defaultDepartment="sales_and_marketing" defaultCategory="other" />
-          <CreateFeasibilityButton sourceType="customer" sourceId={customer.id} defaultTitle={`Feasibility review for ${customer.legalName}`} defaultDepartment="sales_and_marketing" />
+          <CreateFeasibilityButton customerId={customer.id} customerName={customer.legalName} />
           {canEdit && (
             <button onClick={() => setEditOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
               Edit

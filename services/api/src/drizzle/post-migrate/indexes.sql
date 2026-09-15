@@ -35,7 +35,7 @@ DECLARE
     'inventory_alerts', 'notification_log', 'inventory_reorder_requests',
     'erp_purchase_orders', 'erp_po_line_items', 'erp_receiving_documents', 'erp_receiving_line_items',
     'rma', 'rma_items', 'work_orders', 'erp_purchase_requisitions', 'onboarding_progress', 'risk_mitigations',
-    'feasibility_reviews', 'feasibility_scores',
+    'feasibility_reviews',
     'sales_accounts', 'sales_activities', 'sales_quotes', 'sales_contracts',
     'customers', 'work_order_operations',
     'document_change_requests', 'document_change_items', 'document_change_reviews',
@@ -86,8 +86,7 @@ CREATE INDEX IF NOT EXISTS erp_purchase_requisitions_item_idx ON erp_purchase_re
 CREATE INDEX IF NOT EXISTS onboarding_progress_user_idx ON onboarding_progress (user_id);
 CREATE INDEX IF NOT EXISTS fmea_items_risk_idx ON fmea_items (risk_assessment_id);
 CREATE INDEX IF NOT EXISTS risk_mitigations_risk_idx ON risk_mitigations (risk_assessment_id);
-CREATE INDEX IF NOT EXISTS feasibility_scores_review_idx ON feasibility_scores (feasibility_id);
-CREATE INDEX IF NOT EXISTS feasibility_reviews_source_idx ON feasibility_reviews (source_type, source_id);
+CREATE INDEX IF NOT EXISTS feasibility_reviews_customer_idx ON feasibility_reviews (customer_id);
 CREATE INDEX IF NOT EXISTS sales_activities_account_idx ON sales_activities (account_id);
 CREATE INDEX IF NOT EXISTS sales_quotes_account_idx ON sales_quotes (account_id);
 CREATE INDEX IF NOT EXISTS sales_contracts_account_idx ON sales_contracts (account_id);

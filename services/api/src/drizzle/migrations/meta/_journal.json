@@ -218,6 +218,20 @@
       "when": 1789480564353,
       "tag": "0030_curvy_vulture",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1789484060231,
+      "tag": "0031_black_wolf_cub",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789484107117,
+      "tag": "0032_slippery_shotgun",
+      "breakpoints": true
     }
   ]
 }
