@@ -8,6 +8,7 @@ import { apiClient } from "../../api/client";
 import type { InventoryItem, InventoryMovement, InventoryAlert, InventoryReorderRequest, Supplier, ItemCosting } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { Modal } from "../../components/modals/Modal";
@@ -318,6 +319,7 @@ export function InventoryDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <OpenFormButton formType="inventory_item" entityId={item.id} title={`Inventory Item #${item.id} Record`} label="Item Record" />
+          <PrintFormButton formType="inventory_item" entityId={item.id} label="Print Record" />
           <button onClick={() => setMovementOpen(true)} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
             Log Movement
           </button>

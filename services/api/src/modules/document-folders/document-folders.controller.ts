@@ -337,28 +337,26 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
- * Attach a user-uploaded PDF to a folder node ("use your own form instead of
- * — or in addition to — the supplied taxonomy"). Multer (memoryStorage, see
- * routes) has already validated size/mimetype and put the file on
- * `req.file`; this just persists it under the tenant's provisioned
+ * Attach a user-uploaded FILE to a folder node ("use your own policy/
+ * procedure instead of — or in addition to — the supplied taxonomy").
+ * Multer (memoryStorage, see routes) has already validated size and put the
+ * file on `req.file`; this persists it under the tenant's provisioned
  * `forms/custom` directory (same STORAGE_LOCAL_PATH convention the seeded
- * form templates use) and records the path on the folder row. Replacing an
- * existing attachment deletes the old file first.
+ * form templates use) and records the path + real mime type on the folder
+ * row. Any file type is accepted — real controlled documents (a Quality
+ * Manual, a calibration procedure) are just as often a .docx or .xlsx as a
+ * .pdf; the column name (`pdfPath`) predates this and stayed for backward
+ * compatibility rather than a column rename. Replacing an existing
+ * attachment deletes the old file first.
  */
-export const uploadTemplate = asyncHandler(async (req: Request, res: Response) => {
-  const db = req.db!;
-  const tenantId = req.tenantId!;
-  const id = Number(req.params.id);
-  const file = req.file;
-  if (!file) throw AppError.badRequest("No file uploaded");
-  if (file.mimetype !== "application/pdf") throw AppError.badRequest("Only PDF files are accepted");
-
-  const [folder] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, id), eq(documentFolders.tenantId, tenantId)));
+async function attachFileToFolder(db: TenantDb, tenantId: number, folderId: number, file: Express.Multer.File, performedBy: number | undefined) {
+  const [folder] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, folderId), eq(documentFolders.tenantId, tenantId)));
   if (!folder) throw AppError.notFound("Document folder");
 
   const dir = `${env.STORAGE_LOCAL_PATH}/tenants/${tenantId}/forms/custom`;
   await mkdir(dir, { recursive: true });
-  const path = `${dir}/${id}-${Date.now()}.pdf`;
+  const ext = file.originalname.includes(".") ? file.originalname.slice(file.originalname.lastIndexOf(".")) : "";
+  const path = `${dir}/${folderId}-${Date.now()}${ext}`;
   await writeFile(path, file.buffer);
 
   if (folder.pdfPath && existsSync(folder.pdfPath)) {
@@ -367,23 +365,63 @@ export const uploadTemplate = asyncHandler(async (req: Request, res: Response) =
 
   const [updated] = await db
     .update(documentFolders)
-    .set({ pdfPath: path, updatedAt: new Date() })
-    .where(and(eq(documentFolders.id, id), eq(documentFolders.tenantId, tenantId)))
+    .set({ pdfPath: path, pdfMimeType: file.mimetype, updatedAt: new Date() })
+    .where(and(eq(documentFolders.id, folderId), eq(documentFolders.tenantId, tenantId)))
     .returning();
 
   await recordAuditTrail(db, {
     tenantId,
     entityType: AUDIT_ENTITY_TYPE,
-    entityId: id,
+    entityId: folderId,
     action: "update",
     changes: { action: "upload_template", filename: file.originalname },
-    performedBy: req.user?.id,
+    performedBy,
   });
 
+  return updated!;
+}
+
+export const uploadTemplate = asyncHandler(async (req: Request, res: Response) => {
+  const file = req.file;
+  if (!file) throw AppError.badRequest("No file uploaded");
+  const updated = await attachFileToFolder(req.db!, req.tenantId!, Number(req.params.id), file, req.user?.id);
   res.status(201).json(updated);
 });
 
-/** Streams the attached PDF back, e.g. for the "live preview" / download affordance. */
+/**
+ * The one-step "upload a document into the library" action — creates a new
+ * leaf folder under `parentId` (named from the file itself unless a `name`
+ * is given) AND attaches the file to it in the same request, instead of the
+ * older two-step "create an empty folder, then separately attach a file to
+ * it" flow uploadTemplate above still supports for an already-existing
+ * node. This is what GeneralUploadsPage.tsx and FolderExplorerPage.tsx's own
+ * "+ Upload Document" button both call — the real answer to "let the user
+ * pick where (which department/folder) an upload goes," per the user's own
+ * explicit requirement.
+ */
+export const uploadDocument = asyncHandler(async (req: Request, res: Response) => {
+  const db = req.db!;
+  const tenantId = req.tenantId!;
+  const file = req.file;
+  if (!file) throw AppError.badRequest("No file uploaded");
+  const parentId = Number(req.body.parentId);
+  if (!parentId) throw AppError.badRequest("parentId is required — pick a real folder to file this document under");
+
+  const [parent] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, parentId), eq(documentFolders.tenantId, tenantId)));
+  if (!parent) throw AppError.notFound("Document folder");
+
+  const rawName = (req.body.name as string | undefined)?.trim();
+  const fallbackName = file.originalname.includes(".") ? file.originalname.slice(0, file.originalname.lastIndexOf(".")) : file.originalname;
+  const name = rawName || fallbackName;
+
+  const [created] = await db.insert(documentFolders).values({ tenantId, name, parentId }).returning();
+  await recordAuditTrail(db, { tenantId, entityType: AUDIT_ENTITY_TYPE, entityId: created!.id, action: "create", changes: { name, parentId }, performedBy: req.user?.id });
+
+  const updated = await attachFileToFolder(db, tenantId, created!.id, file, req.user?.id);
+  res.status(201).json(updated);
+});
+
+/** Streams the attached file back, e.g. for the "live preview" / download affordance. */
 export const downloadTemplate = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
   const tenantId = req.tenantId!;
@@ -393,8 +431,9 @@ export const downloadTemplate = asyncHandler(async (req: Request, res: Response)
   if (!folder) throw AppError.notFound("Document folder");
   if (!folder.pdfPath || !existsSync(folder.pdfPath)) throw AppError.notFound("Attached template file");
 
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `inline; filename="${folder.name.replace(/[^\w.-]+/g, "_")}.pdf"`);
+  const ext = folder.pdfPath.includes(".") ? folder.pdfPath.slice(folder.pdfPath.lastIndexOf(".")) : "";
+  res.setHeader("Content-Type", folder.pdfMimeType ?? "application/octet-stream");
+  res.setHeader("Content-Disposition", `inline; filename="${folder.name.replace(/[^\w.-]+/g, "_")}${ext}"`);
   createReadStream(folder.pdfPath).pipe(res);
 });
 

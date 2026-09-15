@@ -14,6 +14,7 @@ import { WorkflowActionButton } from "../../components/shared/WorkflowActionButt
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
 import { CreateFeasibilityButton } from "../../components/shared/CreateFeasibilityButton";
 import { Modal } from "../../components/modals/Modal";
@@ -109,6 +110,7 @@ export function CustomerDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <OpenFormButton formType="customer_requirements" entityId={customer.id} title={`Customer Requirements — ${customer.legalName}`} label="Customer Requirements" />
+          <PrintFormButton formType="customer_requirements" entityId={customer.id} />
           <button onClick={() => setAiOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             AI Assistant
           </button>

@@ -4,18 +4,23 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
 import { validate } from "../../middleware/validate.js";
 import { createDocumentFolderSchema, updateDocumentFolderSchema } from "./document-folders.validation.js";
-import { list, create, update, remove, uploadTemplate, downloadTemplate, removeTemplate } from "./document-folders.controller.js";
+import { list, create, update, remove, uploadTemplate, uploadDocument, downloadTemplate, removeTemplate } from "./document-folders.controller.js";
 
 export const documentFoldersRouter = Router();
 documentFoldersRouter.use(requireAuth, withTenantDb);
 
-// memoryStorage: files are small (PDF forms), and uploadTemplate decides the
-// on-disk path itself (needs the folder id, which multer parses before the
-// handler runs) — simpler than a disk-storage destination callback.
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+// memoryStorage: files are modest-sized real documents (policies,
+// procedures, forms), and uploadTemplate/uploadDocument decide the on-disk
+// path themselves — simpler than a disk-storage destination callback. Any
+// file type is accepted (see attachFileToFolder's own comment) — real
+// controlled documents aren't always PDFs.
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
 documentFoldersRouter.get("/", list);
 documentFoldersRouter.post("/", validate(createDocumentFolderSchema), create);
+// Fixed literal path before ":id"-shaped ones — the one-step "create a
+// leaf + attach a file" upload, not scoped to an existing node.
+documentFoldersRouter.post("/upload", upload.single("file"), uploadDocument);
 documentFoldersRouter.patch("/:id", validate(updateDocumentFolderSchema), update);
 documentFoldersRouter.delete("/:id", remove);
 

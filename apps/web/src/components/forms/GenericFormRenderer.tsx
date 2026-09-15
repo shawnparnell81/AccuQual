@@ -234,8 +234,8 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
                       {col.options?.map((opt) => {
                         const selected = (row[col.key] as Record<string, boolean> | undefined) ?? {};
                         return readOnly ? (
-                          <span key={opt} className={Boolean(selected[opt]) ? "font-semibold text-slate-800" : "text-muted-foreground"}>
-                            {Boolean(selected[opt]) ? "☑ " : "☐ "}
+                          <span key={opt} className={selected[opt] ? "font-semibold text-slate-800" : "text-muted-foreground"}>
+                            {selected[opt] ? "☑ " : "☐ "}
                             {opt}
                           </span>
                         ) : (

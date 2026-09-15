@@ -124,7 +124,7 @@ export function ErpPurchaseOrderDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between print:hidden">
         <div>
           <h1 className="text-2xl font-semibold">Purchase Order #{po.id}</h1>
           <div className="mt-1 flex items-center gap-2">
@@ -133,6 +133,9 @@ export function ErpPurchaseOrderDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+            Print
+          </button>
           <WorkflowActionButton label="Send" navKey="erp" action={sendAction} onClick={() => sendAction.mutate({ id: poId })} visible={canSend} variant="primary" />
           {canReceive && canLogReceipt && (
             <button onClick={() => setReceiptOpen(true)} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
@@ -143,6 +146,11 @@ export function ErpPurchaseOrderDetailPage() {
           <LinkSalesAccountButton sourceType="PO" sourceId={po.id} defaultAccountName={po.supplierName ?? `PO #${po.id}`} />
           <CreateCustomerButton sourceType="PO" sourceId={po.id} defaultLegalName={po.supplierName ?? `PO #${po.id}`} />
         </div>
+      </div>
+
+      <div className="hidden print:block">
+        <h1 className="text-2xl font-semibold">Purchase Order #{po.id}</h1>
+        <p className="text-sm text-muted-foreground">Status: {po.status.replace(/_/g, " ")} — {po.supplierName}</p>
       </div>
 
       {po.notes && <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">{po.notes}</div>}
@@ -203,8 +211,10 @@ export function ErpPurchaseOrderDetailPage() {
         )}
       </div>
 
-      <AttachmentsPanel entityType="erp_po" entityId={poId} />
-      <WorkflowHistoryPanel moduleName="erp" recordId={poId} />
+      <div className="flex flex-col gap-4 print:hidden">
+        <AttachmentsPanel entityType="erp_po" entityId={poId} />
+        <WorkflowHistoryPanel moduleName="erp" recordId={poId} />
+      </div>
 
       <LogReceiptModal po={po} isOpen={receiptOpen} onClose={() => setReceiptOpen(false)} />
     </div>

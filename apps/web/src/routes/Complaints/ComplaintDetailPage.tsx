@@ -2,6 +2,7 @@ import { useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 
 interface Complaint {
@@ -36,6 +37,7 @@ export function ComplaintDetailPage() {
         </div>
         <div className="flex gap-2">
           <OpenFormButton formType="complaint" entityId={complaint.id} title={`Complaint #${complaint.id} Form`} />
+          <PrintFormButton formType="complaint" entityId={complaint.id} />
         </div>
       </div>
 

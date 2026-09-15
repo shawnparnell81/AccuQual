@@ -5,6 +5,7 @@ import { FileText, Paperclip } from "lucide-react";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { STATUS_COLORS, calibrationStatusFromDueDate } from "../../components/forms/formulas";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
@@ -129,8 +130,11 @@ export function EquipmentDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <OpenFormButton formType="calibration" entityId={equipment.id} title={`Equipment #${equipment.id} — Calibration Record`} label="Calibration Record" />
+          <PrintFormButton formType="calibration" entityId={equipment.id} label="Print Record" />
           <OpenFormButton formType="maintenance_work_order" entityId={equipment.id} title={`Equipment #${equipment.id} — Maintenance Work Order`} label="Maintenance Work Order" />
+          <PrintFormButton formType="maintenance_work_order" entityId={equipment.id} label="Print WO" />
           <OpenFormButton formType="gage_rr" entityId={equipment.id} title={`Equipment #${equipment.id} — Gage R&R Study`} label="Gage R&R Study" />
+          <PrintFormButton formType="gage_rr" entityId={equipment.id} label="Print R&R" />
         </div>
       </div>
 

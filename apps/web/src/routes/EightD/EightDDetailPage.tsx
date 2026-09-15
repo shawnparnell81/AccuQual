@@ -5,6 +5,7 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
 import { TextAreaField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 
 interface EightDReport {
@@ -48,6 +49,7 @@ export function EightDDetailPage() {
           8D Report #{report.id} {report.ncrId && <span className="text-muted-foreground">— NCR #{report.ncrId}</span>}
         </h1>
         <OpenFormButton formType="eight_d" entityId={report.id} title={`8D Report #${report.id} Form`} />
+        <PrintFormButton formType="eight_d" entityId={report.id} />
       </div>
 
       <div className="flex flex-col gap-3">

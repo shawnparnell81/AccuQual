@@ -11,6 +11,7 @@ import { WorkflowActionButton } from "../../components/shared/WorkflowActionButt
 import { TextAreaField } from "../../components/forms/Field";
 import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
 import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import type { ErpPurchaseRequisition } from "../../api/types";
 
 const requisitionHooks = createResourceHooks<ErpPurchaseRequisition>("erp/requisitions");
@@ -52,7 +53,7 @@ export function ErpRequisitionDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-2 print:hidden">
         <div>
           <h1 className="text-2xl font-semibold">Purchase Requisition #{record.id}</h1>
           <div className="mt-1 flex items-center gap-2">
@@ -63,12 +64,20 @@ export function ErpRequisitionDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+            Print
+          </button>
           <LinkSalesAccountButton sourceType="Requisition" sourceId={record.id} defaultAccountName={`Requisition #${record.id}`} />
           <CreateCustomerButton sourceType="Requisition" sourceId={record.id} defaultLegalName={`Requisition #${record.id}`} />
         </div>
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-4">
+      <div className="hidden print:block">
+        <h1 className="text-2xl font-semibold">Purchase Requisition #{record.id}</h1>
+        <p className="text-sm text-muted-foreground">Status: {record.status.replace(/_/g, " ")} — {record.item?.sku ?? `Item #${record.itemId}`}, qty {record.quantity}</p>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-4 print:hidden">
         <h3 className="mb-3 text-sm font-medium">Status</h3>
         <div className="flex flex-wrap gap-2">
           {record.status === "draft" && <WorkflowActionButton label="Submit for Approval" navKey="purchase_requisitions" action={submitAction} onClick={() => submitAction.mutate({ id: requisitionId })} variant="primary" />}
@@ -154,6 +163,10 @@ export function ErpRequisitionDetailPage() {
             {record.justification || (record.status === "draft" ? "Add justification…" : "No justification provided.")}
           </button>
         )}
+      </div>
+
+      <div className="print:hidden">
+        <AttachmentsPanel entityType="erp_requisition" entityId={requisitionId} />
       </div>
     </div>
   );

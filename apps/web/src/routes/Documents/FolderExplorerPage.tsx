@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { Paperclip, FileText, X, Inbox, ArrowUpRight } from "lucide-react";
+import { Paperclip, FileText, X, Inbox, ArrowUpRight, UploadCloud } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
 import { StatusBadge } from "../../components/tables/StatusBadge";
@@ -76,6 +76,20 @@ function useRemoveTemplate() {
   });
 }
 
+/** The one-step "upload a document into this folder" action — see document-folders.controller.ts's uploadDocument for why this is a single request, not create-then-attach. */
+function useUploadDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ parentId, file }: { parentId: number; file: File }) => {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("parentId", String(parentId));
+      return (await apiClient.post<DocumentFolder>("/document-folders/upload", form)).data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["document-folders"] }),
+  });
+}
+
 /**
  * Real, persisted version of the folder-tree tool built earlier as a
  * standalone artifact — same 3-tier shape (department -> folder -> document
@@ -92,6 +106,7 @@ export function FolderExplorerPage() {
   const createFolder = useCreateFolder();
   const deleteFolder = useDeleteFolder();
   const uploadTemplate = useUploadTemplate();
+  const uploadDocument = useUploadDocument();
   const removeTemplate = useRemoveTemplate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -104,6 +119,8 @@ export function FolderExplorerPage() {
   const [newFolderName, setNewFolderName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingUploadTarget = useRef<number | null>(null);
+  const uploadDocInputRef = useRef<HTMLInputElement>(null);
+  const pendingUploadParent = useRef<number | null>(null);
 
   const byParent = useMemo(() => {
     const map = new Map<number | null, DocumentFolder[]>();
@@ -153,6 +170,10 @@ export function FolderExplorerPage() {
     pendingUploadTarget.current = docId;
     fileInputRef.current?.click();
   }
+  function requestDocumentUpload(parentId: number) {
+    pendingUploadParent.current = parentId;
+    uploadDocInputRef.current?.click();
+  }
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading folder tree…</p>;
   if (!activeDept) return <p className="text-sm text-muted-foreground">No departments found.</p>;
@@ -163,9 +184,20 @@ export function FolderExplorerPage() {
   return (
     <div className="flex flex-col gap-4 pb-28">
       <input
+        ref={uploadDocInputRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          const parentId = pendingUploadParent.current;
+          if (file && parentId != null) uploadDocument.mutate({ parentId, file });
+          e.target.value = "";
+          pendingUploadParent.current = null;
+        }}
+      />
+      <input
         ref={fileInputRef}
         type="file"
-        accept="application/pdf"
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -251,6 +283,14 @@ export function FolderExplorerPage() {
             <span className="h-3 w-3 flex-none rounded-full" style={{ backgroundColor: DEPARTMENT_COLORS[deptColorIndex % DEPARTMENT_COLORS.length] }} />
             <h2 className="text-lg font-semibold">{activeDept.name}</h2>
             <button
+              onClick={() => requestDocumentUpload(activeDept.id)}
+              className="ml-1 flex items-center gap-1 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+              title={`Upload a document directly into ${activeDept.name}`}
+            >
+              <UploadCloud size={13} />
+              Upload Document
+            </button>
+            <button
               onClick={() => {
                 if (confirm(`Delete the "${activeDept.name}" department? Only works if it's empty.`)) deleteFolder.mutate(activeDept.id);
               }}
@@ -293,6 +333,17 @@ export function FolderExplorerPage() {
                   <span className="text-xs text-muted-foreground">{isCollapsed ? "▸" : "▾"}</span>
                   <span className="flex-1 text-sm font-semibold">{sub.name}</span>
                   <span className="font-mono text-[10px] text-muted-foreground">{(byParent.get(sub.id) ?? []).length}</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      requestDocumentUpload(sub.id);
+                    }}
+                    className="text-muted-foreground hover:text-primary"
+                    aria-label={`Upload a document into ${sub.name}`}
+                    title={`Upload a document into ${sub.name}`}
+                  >
+                    <UploadCloud size={14} />
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -422,7 +473,7 @@ function DocPill({
       className={`inline-flex cursor-grab items-center gap-1.5 rounded-full border px-3 py-1 text-xs active:cursor-grabbing ${
         doc.linkedPath ? "border-primary/40 bg-primary/10" : "border-border bg-muted"
       }`}
-      title={doc.pdfPath ? "Has an attached PDF — click the file icon to view it" : "No PDF attached yet"}
+      title={doc.pdfPath ? "Has an attached file — click the file icon to view/download it" : "No file attached yet"}
     >
       {doc.linkedPath && (
         <Link
@@ -442,15 +493,15 @@ function DocPill({
       )}
       {doc.pdfPath ? (
         <>
-          <button onClick={viewAttachment} className="text-primary hover:opacity-80" aria-label={`View attached PDF for ${doc.name}`}>
+          <button onClick={viewAttachment} className="text-primary hover:opacity-80" aria-label={`View attached file for ${doc.name}`}>
             <FileText size={12} />
           </button>
-          <button onClick={onRemoveAttachment} className="text-muted-foreground hover:text-destructive" aria-label={`Remove attached PDF for ${doc.name}`}>
+          <button onClick={onRemoveAttachment} className="text-muted-foreground hover:text-destructive" aria-label={`Remove attached file for ${doc.name}`}>
             <X size={11} />
           </button>
         </>
       ) : (
-        <button onClick={onAttach} className="text-muted-foreground hover:text-primary" aria-label={`Attach a PDF to ${doc.name}`}>
+        <button onClick={onAttach} className="text-muted-foreground hover:text-primary" aria-label={`Attach a file to ${doc.name}`}>
           <Paperclip size={12} />
         </button>
       )}

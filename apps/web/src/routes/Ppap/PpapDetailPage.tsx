@@ -2,6 +2,7 @@ import { useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import type { PpapPackage } from "./PpapListPage";
@@ -54,12 +55,15 @@ export function PpapDetailPage() {
           {DOCUMENTS.map((doc) => (
             <div key={doc.formType} className="flex items-center justify-between rounded-md border border-border p-3">
               <span className="text-sm font-medium">{doc.label}</span>
-              <OpenFormButton
-                formType={doc.formType}
-                entityId={ppap.id}
-                title={`PPAP #${ppap.id} — ${doc.label}`}
-                label="Open"
-              />
+              <div className="flex items-center gap-1">
+                <OpenFormButton
+                  formType={doc.formType}
+                  entityId={ppap.id}
+                  title={`PPAP #${ppap.id} — ${doc.label}`}
+                  label="Open"
+                />
+                <PrintFormButton formType={doc.formType} entityId={ppap.id} label="Print" />
+              </div>
             </div>
           ))}
         </div>

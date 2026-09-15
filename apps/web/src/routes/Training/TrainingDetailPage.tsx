@@ -5,6 +5,7 @@ import { FileText, Paperclip } from "lucide-react";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { TextAreaField } from "../../components/forms/Field";
 import { TrainingAssignmentModal } from "../../components/training/TrainingAssignmentModal";
 import { TrainingCompletionModal } from "../../components/training/TrainingCompletionModal";
@@ -158,6 +159,7 @@ export function TrainingDetailPage() {
                   <Paperclip size={14} className="flex-none text-muted-foreground" aria-hidden />
                 )}
                 <OpenFormButton formType="training" entityId={a.id} title={`Training Record — ${a.userName ?? a.userEmail}`} label="Open Record" />
+                <PrintFormButton formType="training" entityId={a.id} label="Print" />
                 <button onClick={() => setCompletingId(a.id)} className="flex-none rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
                   Quick Complete
                 </button>
