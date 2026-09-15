@@ -113,6 +113,16 @@ export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrde
         .wot-remove-op:hover { color: #dc2626; }
         .wot-add-op { margin-top: 10px; border: 1px dashed #9d4edd; background: transparent; color: #9d4edd; border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
         .wot-add-op:disabled { opacity: 0.4; cursor: not-allowed; }
+        /* Real print support (previously missing entirely — see the "Save/
+           Print on every form" review) — the app-chrome hiding
+           (print:hidden on TopNav/etc.) lives in AppLayout.tsx already;
+           this only hides THIS document's own interactive-only controls,
+           since a shop-floor traveler is meant to be printed and physically
+           signed. The colored header/branding is intentional and prints as-is. */
+        @media print {
+          .wot-add-op, .wot-remove-op { display: none; }
+          .wot-work-order { border: 2px solid #0f1423; box-shadow: none; }
+        }
       `}</style>
 
       <div className="wot-work-order">

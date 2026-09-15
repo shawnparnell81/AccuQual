@@ -5,6 +5,7 @@ import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { TextField } from "../../components/forms/Field";
 import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
 import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
@@ -32,7 +33,7 @@ export function WorkOrderDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-2 print:hidden">
         <div>
           <h1 className="text-2xl font-semibold">Work Order #{record.id}</h1>
           <div className="mt-1 flex items-center gap-2">
@@ -43,13 +44,16 @@ export function WorkOrderDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+            Print
+          </button>
           <LinkSalesAccountButton sourceType="WorkOrder" sourceId={record.id} defaultAccountName={`Work Order #${record.id}`} />
           <CreateCustomerButton sourceType="WorkOrder" sourceId={record.id} defaultLegalName={`Work Order #${record.id}`} />
         </div>
       </div>
 
       {(status === "planned" || status === "in_progress") && (
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-4 print:hidden">
           <h3 className="mb-3 text-sm font-medium">Status</h3>
           <div className="flex flex-wrap items-center gap-2">
             {status === "planned" && (
@@ -75,7 +79,7 @@ export function WorkOrderDetailPage() {
 
       <ProductionWorkOrderTraveler workOrder={record} />
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 print:hidden">
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="mb-2 text-sm font-medium">Linked NCR</h3>
           {record.linkedNcr ? (
@@ -95,7 +99,10 @@ export function WorkOrderDetailPage() {
         )}
       </div>
 
-      <WorkflowHistoryPanel moduleName="work_orders" recordId={workOrderId} />
+      <div className="flex flex-col gap-4 print:hidden">
+        <AttachmentsPanel entityType="work_orders" entityId={workOrderId} />
+        <WorkflowHistoryPanel moduleName="work_orders" recordId={workOrderId} />
+      </div>
     </div>
   );
 }
