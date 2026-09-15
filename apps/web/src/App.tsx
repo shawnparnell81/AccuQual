@@ -27,7 +27,6 @@ import { RiskDetailPage } from "./routes/Risk/RiskDetailPage";
 import { RiskDashboardPage } from "./routes/Risk/RiskDashboardPage";
 import { FeasibilityPage } from "./routes/Feasibility/FeasibilityPage";
 import { FeasibilityDetailPage } from "./routes/Feasibility/FeasibilityDetailPage";
-import { FeasibilityDashboardPage } from "./routes/Feasibility/FeasibilityDashboardPage";
 import { SalesAccountsPage } from "./routes/Sales/SalesAccountsPage";
 import { SalesAccountDetailPage } from "./routes/Sales/SalesAccountDetailPage";
 import { SalesDashboardPage } from "./routes/Sales/SalesDashboardPage";
@@ -129,7 +128,6 @@ export function App() {
           <Route path="/risk/dashboard" element={<RiskDashboardPage />} />
           <Route path="/risk/:id" element={<RiskDetailPage />} />
           <Route path="/feasibility" element={<FeasibilityPage />} />
-          <Route path="/feasibility/dashboard" element={<FeasibilityDashboardPage />} />
           <Route path="/feasibility/:id" element={<FeasibilityDetailPage />} />
           <Route path="/sales" element={<SalesAccountsPage />} />
           <Route path="/sales/dashboard" element={<SalesDashboardPage />} />

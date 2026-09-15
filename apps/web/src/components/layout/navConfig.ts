@@ -271,6 +271,22 @@ const APQP: NavLeaf = {
   notes: "Engineering planning module (shares the PPAP page until a dedicated APQP view ships)",
 };
 
+// Rebuilt as a bespoke fixed-structure document (see feasibility.ts's own
+// schema comment) and moved here from the System catch-all — per explicit
+// request, scoped down to Engineering's own nav entry plus the Customer
+// Onboarding packet's own button, not the 9 cross-module integration
+// points the earlier scoring-based version had.
+const FEASIBILITY: NavLeaf = {
+  key: "feasibility",
+  label: "Feasibility Review",
+  path: "/feasibility",
+  icon: Gauge,
+  access: { engineering: "edit" },
+  kpi: false,
+  priority: 1,
+  notes: "Not in the department sheet — Engineering's own document; departmentAccess.ts's PERMISSION_MATRIX.feasibility also grants quality/production/purchasing/sales_and_marketing 'edit' for their own sign-off row only (enforced inline, not expressible here)",
+};
+
 export interface NavGroup {
   department: Department | null; // null = the unlisted-by-the-sheet "System" catch-all
   items: NavLeaf[];
@@ -300,7 +316,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "engineering",
-    items: [PPAP, APQP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, SALES_ACCOUNTS, CUSTOMERS],
+    items: [PPAP, APQP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, SALES_ACCOUNTS, CUSTOMERS, FEASIBILITY],
   },
   {
     department: "production",
@@ -395,17 +411,6 @@ export const NAV_STRUCTURE: NavGroup[] = [
         kpi: false,
         priority: 3,
         notes: "Not in the department sheet — new module, mirrors its own backend PERMISSION_MATRIX entry",
-      },
-      {
-        key: "feasibility",
-        label: "Feasibility Review",
-        path: "/feasibility",
-        icon: Gauge,
-        // Mirrors departmentAccess.ts PERMISSION_MATRIX.feasibility exactly — same reasoning as the risk leaf above.
-        access: { quality: "edit", engineering: "edit", production: "edit", purchasing: "edit", material_management: "edit" },
-        kpi: false,
-        priority: 3,
-        notes: "Not in the department sheet — new unified module across NCR/Supplier/Complaints/PPAP/Change/WorkOrders/Requisitions/PO/RMA",
       },
       { key: "mgmt_system", label: "Management System", path: "/management-system", icon: Landmark, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
       { key: "workflow", label: "Workflow Builder", path: "/workflow", icon: Workflow, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },

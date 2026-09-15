@@ -824,49 +824,95 @@ export interface RiskAssessment {
   fmeaItems?: FmeaItem[];
 }
 
-export type FeasibilitySourceType = "ncr" | "supplier" | "complaint" | "ppap" | "change_request" | "work_order" | "requisition" | "po" | "rma" | "customer" | "future_product";
-export type FeasibilityStatus = "draft" | "submitted" | "under_review" | "approved" | "rejected";
-export type FeasibilityDecision = "feasible" | "conditional" | "not_feasible";
+export type FeasibilityStatus = "draft" | "final";
+export type FeasibilityRiskLevel = "low" | "medium" | "high";
+export type FeasibleValue = "yes" | "no" | "partial";
+export type FeasibilityDetermination = "feasible_as_quoted" | "feasible_with_conditions" | "not_feasible";
 
-export interface FeasibilityScore {
-  id: number;
-  feasibilityId: number;
-  dimensionKey: string;
-  dimensionLabel: string | null;
-  dimensionType: string | null;
-  value: string;
-  weight: string | null;
-  contribution: string | null;
-  createdAt: string;
-  updatedAt: string | null;
-}
+export const FEASIBILITY_AREAS = ["design", "equipment", "supplyChain", "quality", "capacity", "regulatory", "financial"] as const;
+export const FEASIBILITY_AREA_LABELS: Record<(typeof FEASIBILITY_AREAS)[number], string> = {
+  design: "Design & Product Specs",
+  equipment: "Equipment & Tooling",
+  supplyChain: "Supply Chain & Raw Material",
+  quality: "Quality & Measurement Capabilities",
+  capacity: "Production Capacity & Scheduling",
+  regulatory: "Statutory, Regulatory & CSR",
+  financial: "Financial & Commercial Viability",
+};
 
-/** The unified Feasibility Review — ONE module across every source type, see feasibility.ts's own schema comment. */
-export type FeasibilityRiskLevel = "low" | "medium" | "high" | "critical";
-
+/**
+ * A bespoke, fixed-structure document — "Contract & Project Feasibility
+ * Review Form" (QMS-FR-001) — replacing the earlier generic weighted-
+ * dimension-scoring engine (see feasibility.ts's own schema comment).
+ * Reachable from Engineering's own nav entry and the Customer Onboarding
+ * packet only.
+ */
 export interface FeasibilityReview {
   id: number;
-  title: string;
-  description: string | null;
-  sourceType: FeasibilitySourceType | null;
-  sourceId: number | null;
-  overallScore: string | null;
-  decision: FeasibilityDecision | null;
+  customerId: number | null;
+  documentId: string | null;
+  revision: string | null;
+  effectiveDate: string | null;
+  processOwner: string | null;
+  customerName: string | null;
+  rfqQuoteNumber: string | null;
+  partProjectName: string | null;
+  partNumberRev: string | null;
+  targetDeliveryDate: string | null;
+  annualEstimatedVolume: string | null;
+
+  designFeasible: FeasibleValue | null;
+  designRiskLevel: FeasibilityRiskLevel | null;
+  designMitigation: string | null;
+  equipmentFeasible: FeasibleValue | null;
+  equipmentRiskLevel: FeasibilityRiskLevel | null;
+  equipmentMitigation: string | null;
+  supplyChainFeasible: FeasibleValue | null;
+  supplyChainRiskLevel: FeasibilityRiskLevel | null;
+  supplyChainMitigation: string | null;
+  qualityFeasible: FeasibleValue | null;
+  qualityRiskLevel: FeasibilityRiskLevel | null;
+  qualityMitigation: string | null;
+  capacityFeasible: FeasibleValue | null;
+  capacityRiskLevel: FeasibilityRiskLevel | null;
+  capacityMitigation: string | null;
+  regulatoryFeasible: FeasibleValue | null;
+  regulatoryRiskLevel: FeasibilityRiskLevel | null;
+  regulatoryMitigation: string | null;
+  financialFeasible: FeasibleValue | null;
+  financialRiskLevel: FeasibilityRiskLevel | null;
+  financialMitigation: string | null;
+
+  newToolingEquipment: string | null;
+  inspectionGagingNeeds: string | null;
+  specialCustomerRequirements: string | null;
+
+  determination: FeasibilityDetermination | null;
+  determinationNotes: string | null;
+
+  engineeringSignoffName: string | null;
+  engineeringSignoffSignature: string | null;
+  engineeringSignoffDate: string | null;
+  qualitySignoffName: string | null;
+  qualitySignoffSignature: string | null;
+  qualitySignoffDate: string | null;
+  manufacturingSignoffName: string | null;
+  manufacturingSignoffSignature: string | null;
+  manufacturingSignoffDate: string | null;
+  purchasingSignoffName: string | null;
+  purchasingSignoffSignature: string | null;
+  purchasingSignoffDate: string | null;
+  salesSignoffName: string | null;
+  salesSignoffSignature: string | null;
+  salesSignoffDate: string | null;
+
   status: FeasibilityStatus;
-  department: string | null;
+  finalizedAt: string | null;
+  providedDocuments: string[];
   ownerId: number | null;
-  reviewerId: number | null;
+  createdBy: number | null;
   createdAt: string;
   updatedAt: string | null;
-  decidedAt: string | null;
-  // Settings → Feasibility Module integration — see FeasibilitySettings below.
-  riskLevel: FeasibilityRiskLevel | null;
-  riskLevelSetManually: boolean;
-  providedDocuments: string[];
-  customerRequirement: string | null;
-  mappedRequirementCategory: string | null;
-  // Detail endpoint only.
-  scores?: FeasibilityScore[];
 }
 
 // ============================================================
@@ -877,7 +923,6 @@ export interface FeasibilitySettings {
   defaultRiskLevel?: FeasibilityRiskLevel;
   autoAssignOwner?: boolean;
   requiredDocuments?: string[];
-  customerRequirementMapping?: Record<string, string>;
   notificationsEnabled?: boolean;
 }
 

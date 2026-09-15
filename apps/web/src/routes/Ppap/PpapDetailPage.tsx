@@ -2,7 +2,6 @@ import { useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
-import { CreateFeasibilityButton } from "../../components/shared/CreateFeasibilityButton";
 import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
 import type { PpapPackage } from "./PpapListPage";
 
@@ -44,7 +43,6 @@ export function PpapDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <CreateFeasibilityButton sourceType="ppap" sourceId={ppap.id} defaultTitle={`Feasibility review for PPAP #${ppap.id}`} defaultDepartment="engineering" />
           <LinkSalesAccountButton sourceType="PPAP" sourceId={ppap.id} defaultAccountName={ppap.customer ?? `PPAP #${ppap.id}`} />
         </div>
       </div>
