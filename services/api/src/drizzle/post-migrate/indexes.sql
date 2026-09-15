@@ -44,7 +44,8 @@ DECLARE
     'attachments',
     'warranty_claims', 'warranty_claim_costs', 'warranty_claim_workflow',
     'supplier_onboarding_documents', 'supplier_documents', 'supplier_ppap_submissions',
-    'supplier_corrective_actions', 'supplier_8d_responses', 'supplier_messages'
+    'supplier_corrective_actions', 'supplier_8d_responses', 'supplier_messages',
+    'crar', 'supplier_rma_requests', 'rma_log'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP
@@ -70,6 +71,8 @@ CREATE INDEX IF NOT EXISTS sales_quotes_tenant_status_idx ON sales_quotes (tenan
 CREATE INDEX IF NOT EXISTS sales_contracts_tenant_status_idx ON sales_contracts (tenant_id, status);
 CREATE INDEX IF NOT EXISTS customers_tenant_status_idx ON customers (tenant_id, status);
 CREATE INDEX IF NOT EXISTS warranty_claims_tenant_status_idx ON warranty_claims (tenant_id, status);
+CREATE INDEX IF NOT EXISTS crar_tenant_status_idx ON crar (tenant_id, status);
+CREATE INDEX IF NOT EXISTS supplier_rma_requests_tenant_status_idx ON supplier_rma_requests (tenant_id, status);
 
 -- The single hottest lookup shape in the whole app: every module's history
 -- panel (WorkflowHistoryPanel) and the generic per-entity audit endpoint
@@ -117,6 +120,9 @@ CREATE INDEX IF NOT EXISTS supplier_ppap_submissions_supplier_idx ON supplier_pp
 CREATE INDEX IF NOT EXISTS supplier_corrective_actions_supplier_idx ON supplier_corrective_actions (tenant_id, supplier_id);
 CREATE INDEX IF NOT EXISTS supplier_8d_responses_supplier_idx ON supplier_8d_responses (tenant_id, supplier_id);
 CREATE INDEX IF NOT EXISTS supplier_messages_thread_idx ON supplier_messages (tenant_id, supplier_id, thread_key);
+CREATE INDEX IF NOT EXISTS supplier_rma_requests_supplier_idx ON supplier_rma_requests (tenant_id, supplier_id);
+CREATE INDEX IF NOT EXISTS rma_log_rma_idx ON rma_log (tenant_id, rma_id);
+CREATE INDEX IF NOT EXISTS crar_warranty_idx ON crar (warranty_id);
 
 -- password_reset_tokens isn't in the tenant_tables array above (see its own
 -- schema comment — it's only ever queried via the unscoped db, pre-auth,

@@ -34,7 +34,9 @@ export type ResourceKey =
   | "sales"
   | "customers"
   | "warranty"
-  | "supplier_portal";
+  | "supplier_portal"
+  | "crar"
+  | "rma_log";
 
 /**
  * Source of truth: "Subfolder links.xlsx" (Department | Subfolder | Appears In |
@@ -176,6 +178,29 @@ export const PERMISSION_MATRIX: Record<ResourceKey, Partial<Record<Department, A
   // login — those carry roleName:"supplier" and are gated by
   // requireSupplierPortalAccess() below instead, never by this matrix.
   supplier_portal: { quality: "edit", purchasing: "edit", engineering: "read" },
+  // The Customer Return Analysis Report. Quality owns the document end to
+  // end (create through its own quality_review stage). Customer Service is
+  // read-only per the brief's own RBAC table. The brief also asks for a
+  // "Warranty" role to view CRAR and link it to a warranty claim — but
+  // AccuQual has no such department (Warranty is a cross-departmental
+  // MODULE, not a department a user belongs to: see PERMISSION_MATRIX
+  // .warranty above, edited by customer_service/quality/engineering/
+  // purchasing). Engineering/purchasing (the two of those departments not
+  // already covered above) get "edit" here too, so the linking route
+  // itself isn't blocked at this router-level gate — but
+  // crar.controller.ts's own assertDepartment narrows what that actually
+  // means for them to "may PATCH only the warrantyId link field, may never
+  // touch the form content or transition the workflow", same
+  // "matrix grants edit, controller narrows per field/action" pattern as
+  // RMA's own quality-department carve-out.
+  crar: { quality: "edit", customer_service: "read", engineering: "edit", purchasing: "edit" },
+  // A read-only Quality/Customer-Service feed of the supplier-RMA
+  // pipeline (see rmaLog.controller.ts) — Quality gets edit only in the
+  // sense that it's the module's real owner (there's no user-facing write
+  // action on the log itself, every row is written by the pipeline, not a
+  // person), Customer Service gets its own explicit read grant per the
+  // brief.
+  rma_log: { quality: "edit", customer_service: "read" },
 };
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);

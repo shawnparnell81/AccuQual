@@ -253,6 +253,13 @@
       "when": 1789491386338,
       "tag": "0035_new_hedge_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1789508168927,
+      "tag": "0036_dazzling_chronomancer",
+      "breakpoints": true
     }
   ]
 }

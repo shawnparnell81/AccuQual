@@ -8,6 +8,7 @@ import { WarrantyInspectionPanel } from "./WarrantyInspectionPanel";
 import { WarrantySupplierReviewPanel } from "./WarrantySupplierReviewPanel";
 import { WarrantyCostPanel } from "./WarrantyCostPanel";
 import { WarrantyDocumentsPanel } from "./WarrantyDocumentsPanel";
+import { WarrantyCrarPanel } from "./WarrantyCrarPanel";
 import type { WarrantyClaim, WarrantyStatus } from "../../api/types";
 
 const claimHooks = createResourceHooks<WarrantyClaim>("warranty/claims");
@@ -145,6 +146,7 @@ export function WarrantyClaimDetail() {
       <WarrantyInspectionPanel claim={claim} canEdit={canEditFields} />
       <WarrantySupplierReviewPanel claim={claim} canEdit={canEditFields} />
       <WarrantyCostPanel claimId={claimId} actualCost={claim.warrantyActualCost} canEdit={canEditCosts} />
+      <WarrantyCrarPanel claimId={claimId} canCreate={isAdmin || department === "quality"} />
 
       <div className="print:hidden">
         <WarrantyDocumentsPanel claimId={claimId} />

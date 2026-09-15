@@ -14,9 +14,12 @@ import { SupplierPerformanceDashboard } from "./SupplierPerformanceDashboard";
 import { SupplierNCRList } from "./SupplierNCRList";
 import { SupplierCAPAList } from "./SupplierCAPAList";
 import { SupplierSettingsPanel } from "./SupplierSettingsPanel";
+import { SupplierRmaRequestForm } from "./SupplierRmaRequestForm";
+import { SupplierRmaRequestStatus } from "./SupplierRmaRequestStatus";
 import type { Supplier } from "../../api/types";
 
-const TABS = [
+const TABS: { key: TabKey; label: string; supplierOnly?: boolean }[] = [
+  { key: "rma_request", label: "RMA Request", supplierOnly: true },
   { key: "onboarding", label: "Onboarding" },
   { key: "documents", label: "Documents" },
   { key: "ppap", label: "PPAP" },
@@ -28,8 +31,8 @@ const TABS = [
   { key: "ncr", label: "NCRs" },
   { key: "capa", label: "CAPAs" },
   { key: "settings", label: "Settings" },
-] as const;
-type TabKey = (typeof TABS)[number]["key"];
+];
+type TabKey = "rma_request" | "onboarding" | "documents" | "ppap" | "car" | "8d" | "messages" | "scorecard" | "performance" | "ncr" | "capa" | "settings";
 
 // Panels that make sense listing "every supplier at once" when internal
 // staff hasn't picked one — the rest inherently need exactly one supplier.
@@ -53,7 +56,7 @@ export function SupplierPortalHome() {
     enabled: !isSupplier,
   });
   const [supplierId, setSupplierId] = useState<number | undefined>(undefined);
-  const [tab, setTab] = useState<TabKey>("onboarding");
+  const [tab, setTab] = useState<TabKey>(isSupplier ? "rma_request" : "onboarding");
 
   const needsPicker = !isSupplier && !ALL_SUPPLIER_TABS.has(tab) && !supplierId;
 
@@ -76,7 +79,7 @@ export function SupplierPortalHome() {
       </div>
 
       <div className="flex flex-wrap gap-1 border-b border-border">
-        {TABS.map((t) => (
+        {TABS.filter((t) => isSupplier || !t.supplierOnly).map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
@@ -91,6 +94,12 @@ export function SupplierPortalHome() {
         <p className="text-sm text-muted-foreground">Select a supplier above to view this tab.</p>
       ) : (
         <>
+          {tab === "rma_request" && isSupplier && (
+            <div className="flex flex-col gap-4">
+              <SupplierRmaRequestForm onSubmitted={() => {}} />
+              <SupplierRmaRequestStatus />
+            </div>
+          )}
           {tab === "onboarding" && <SupplierOnboardingPanel supplierId={supplierId} isReviewer={isReviewer} />}
           {tab === "documents" && <SupplierDocumentUploadPanel supplierId={supplierId} />}
           {tab === "ppap" && <PPAPSubmissionPanel supplierId={supplierId} isReviewer={isReviewer} />}

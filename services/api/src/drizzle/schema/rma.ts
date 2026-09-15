@@ -5,6 +5,7 @@ import { suppliers } from "./supplier.js";
 import { ncr } from "./ncr.js";
 import { capa } from "./capa.js";
 import { inventoryItems } from "./inventory.js";
+import { erpPurchaseOrders } from "./erp.js";
 
 /**
  * Return Merchandise/Goods Authorization — a real, standalone module (Purchase
@@ -38,6 +39,11 @@ export const rma = pgTable("rma", {
   // simple wrong-item/over-shipment return may never touch NCR/CAPA at all.
   linkedNcrId: integer("linked_ncr_id").references(() => ncr.id),
   linkedCapaId: integer("linked_capa_id").references(() => capa.id),
+  // Set when an RMA auto-created from a Supplier Portal RMA Request could
+  // be matched to a real purchase order (see rmaRequest.controller.ts's
+  // own comment) — optional, same "match if we can, log honestly if we
+  // can't" spirit as the part-number match on the same request.
+  linkedPoId: integer("linked_po_id").references(() => erpPurchaseOrders.id),
   createdByUserId: integer("created_by_user_id").references(() => users.id),
   approvedByUserId: integer("approved_by_user_id").references(() => users.id),
   notes: text("notes"),
