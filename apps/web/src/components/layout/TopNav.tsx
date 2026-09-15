@@ -244,12 +244,12 @@ export function TopNav() {
                 <Link
                   key={item.key}
                   to={item.path}
-                  title={item.notes}
+                  title={item.notes ? `${item.label} — ${item.notes}` : item.label}
                   onClick={() => setOpenId(null)}
-                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted whitespace-nowrap"
+                  className="flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
                 >
-                  <item.icon size={16} />
-                  <span>{item.label}</span>
+                  <item.icon size={16} className="shrink-0" />
+                  <span className="min-w-0 truncate">{item.label}</span>
                 </Link>
               ))}
             </NavDropdown>
@@ -574,8 +574,15 @@ function NavDropdown({
         <div
           ref={panelRef}
           className={clsx(
-            "absolute top-full z-30 mt-1 min-w-[16rem] max-h-[70vh] overflow-y-auto rounded-md border border-border bg-card p-2 shadow-lg",
-            twoColumn ? "grid grid-cols-2 gap-x-2" : "flex flex-col",
+            "absolute top-full z-30 mt-1 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-card p-2 shadow-lg",
+            // Two-column panels need real per-column width reserved, not just an
+            // overall min-width — Tailwind's grid-cols-2 tracks are minmax(0,1fr),
+            // so with no min width of their own a long label (e.g. "Quality
+            // Inspection Reports") doesn't wrap or grow its track, it just draws
+            // past the column boundary on top of the next column's text. Each
+            // NavItemRow also needs min-w-0 + truncate so it can actually shrink
+            // to that track width instead of forcing it wider (see below).
+            twoColumn ? "grid grid-cols-2 gap-x-3 w-[32rem] max-w-[90vw]" : "flex flex-col min-w-[16rem]",
             alignRight ? "right-0" : "left-0",
             meta && "ring-1",
             meta?.ring
@@ -608,13 +615,13 @@ function NavItemRow({
   return (
     <Link
       to={item.path}
-      title={item.notes}
+      title={item.notes ? `${item.label} — ${item.notes}` : item.label}
       onClick={onNavigate}
-      className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted whitespace-nowrap"
+      className="flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
     >
-      <item.icon size={16} />
-      <span className="flex-1">{item.label}</span>
-      {level === "read" && <Lock size={12} className="text-muted-foreground" aria-label="Read-only for your department" />}
+      <item.icon size={16} className="shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      {level === "read" && <Lock size={12} className="shrink-0 text-muted-foreground" aria-label="Read-only for your department" />}
       {item.kpi &&
         (count !== undefined ? (
           <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary tabular-nums">{count}</span>

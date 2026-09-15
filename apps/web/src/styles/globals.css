@@ -67,14 +67,25 @@
  */
 :root[data-theme="light"] {
   color-scheme: light;
-  --background: 210 40% 98%; /* #F8FAFC */
+  /* background/card/border/muted all carry a real, visible tint of the
+     brand's own neon-cyan primary hue (192°) rather than the neutral
+     slate-gray this palette shipped with — plain-white cards read as
+     "washed out"/"completely white all the way around" against the dark
+     theme's identity; this keeps light mode airy while still looking like
+     the same product. Card stays a touch lighter than background so
+     surfaces still visibly "pop" off the page, same relationship as before.
+     First pass at this (45%/60% sat, 95%/97% lightness) was too close to
+     white to read as "colored" at a glance — pushed saturation up and
+     lightness down a second round so the tint is unmistakable (background
+     ~#CEEAF3, card ~#E2F4F9) without losing legibility of dark text on top. */
+  --background: 195 60% 88%; /* #CEEAF3-ish — clearly-tinted pale sky-blue frame */
   --foreground: 210 29% 5%; /* #0A0E12 — the dark palette's own background color, reused as light-mode text */
-  --card: 0 0% 100%; /* #FFFFFF */
-  --border: 214 32% 91%; /* #E2E8F0 */
+  --card: 192 65% 93%; /* #E2F4F9-ish — pale cyan-tinted surface, lighter than the background */
+  --border: 195 50% 76%; /* #A3D1E0-ish — a real visible border line, not a hairline */
   --primary: 192 91% 36%; /* #0891B2 — same cyan hue as the dark palette's neon accent, darkened for contrast on white */
   --primary-foreground: 0 0% 100%;
-  --muted: 210 40% 96%; /* #F1F5F9 */
-  --muted-foreground: 215 16% 47%; /* #64748B */
+  --muted: 195 55% 84%; /* #C0E1ED-ish — same cyan tint, a deeper recessed surface (section header bars, etc.) */
+  --muted-foreground: 205 25% 35%; /* deepened further to keep reading as muted text against the now-darker muted background */
   --destructive: 347 77% 50%; /* #E11D48 */
   --success: 160 84% 39%; /* #059669 */
   --success-foreground: 0 0% 100%;
@@ -122,14 +133,14 @@
 /* Zero-JS fallback for the instant a page loads before lib/theme.ts's applyTheme() stamps a concrete data-theme — real app usage always ends up with an explicit stamp (light/dark/system all resolve to one), so this rarely matters, but it's a real OS-preference match rather than nothing. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --background: 210 40% 98%;
+    --background: 195 60% 88%;
     --foreground: 210 29% 5%;
-    --card: 0 0% 100%;
-    --border: 214 32% 91%;
+    --card: 192 65% 93%;
+    --border: 195 50% 76%;
     --primary: 192 91% 36%;
     --primary-foreground: 0 0% 100%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 195 55% 84%;
+    --muted-foreground: 205 25% 35%;
     --destructive: 347 77% 50%;
     --success: 160 84% 39%;
     --success-foreground: 0 0% 100%;
