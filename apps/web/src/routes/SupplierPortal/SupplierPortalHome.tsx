@@ -1,0 +1,110 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "../../api/client";
+import { useCurrentUser } from "../../hooks/useAuth";
+import { SelectField } from "../../components/forms/Field";
+import { SupplierOnboardingPanel } from "./SupplierOnboardingPanel";
+import { SupplierDocumentUploadPanel } from "./SupplierDocumentUploadPanel";
+import { PPAPSubmissionPanel } from "./PPAPSubmissionPanel";
+import { SupplierCARForm } from "./SupplierCARForm";
+import { Supplier8DForm } from "./Supplier8DForm";
+import { SupplierMessagingPanel } from "./SupplierMessagingPanel";
+import { SupplierScorecard } from "./SupplierScorecard";
+import { SupplierPerformanceDashboard } from "./SupplierPerformanceDashboard";
+import { SupplierNCRList } from "./SupplierNCRList";
+import { SupplierCAPAList } from "./SupplierCAPAList";
+import { SupplierSettingsPanel } from "./SupplierSettingsPanel";
+import type { Supplier } from "../../api/types";
+
+const TABS = [
+  { key: "onboarding", label: "Onboarding" },
+  { key: "documents", label: "Documents" },
+  { key: "ppap", label: "PPAP" },
+  { key: "car", label: "Corrective Actions" },
+  { key: "8d", label: "8D Responses" },
+  { key: "messages", label: "Messages" },
+  { key: "scorecard", label: "Scorecard" },
+  { key: "performance", label: "Performance" },
+  { key: "ncr", label: "NCRs" },
+  { key: "capa", label: "CAPAs" },
+  { key: "settings", label: "Settings" },
+] as const;
+type TabKey = (typeof TABS)[number]["key"];
+
+// Panels that make sense listing "every supplier at once" when internal
+// staff hasn't picked one — the rest inherently need exactly one supplier.
+const ALL_SUPPLIER_TABS = new Set<TabKey>(["onboarding", "documents", "ppap", "car", "8d"]);
+
+/**
+ * The one entry point for both real audiences (see supplierPortal.controller
+ * .ts's own comment): an external supplier login lands here with every panel
+ * silently scoped to itself (no picker shown, no supplierId ever sent from
+ * the client — the server always resolves it from the login), while internal
+ * staff (Quality/Purchasing/Engineering) get a supplier picker up top since
+ * they may review any of them.
+ */
+export function SupplierPortalHome() {
+  const currentUser = useCurrentUser();
+  const isSupplier = currentUser?.roleName === "supplier";
+  const isReviewer = !isSupplier && (currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin" || currentUser?.department === "quality" || currentUser?.department === "purchasing");
+  const { data: suppliers = [] } = useQuery<Supplier[]>({
+    queryKey: ["suppliers"],
+    queryFn: async () => (await apiClient.get("/suppliers")).data,
+    enabled: !isSupplier,
+  });
+  const [supplierId, setSupplierId] = useState<number | undefined>(undefined);
+  const [tab, setTab] = useState<TabKey>("onboarding");
+
+  const needsPicker = !isSupplier && !ALL_SUPPLIER_TABS.has(tab) && !supplierId;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Supplier Portal</h1>
+        {!isSupplier && (
+          <div className="w-64">
+            <SelectField label="Supplier" value={supplierId ?? ""} onChange={(e) => setSupplierId(e.target.value ? Number(e.target.value) : undefined)}>
+              <option value="">{ALL_SUPPLIER_TABS.has(tab) ? "All suppliers" : "Select a supplier…"}</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </SelectField>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-1 border-b border-border">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`rounded-t-md px-3 py-2 text-sm ${tab === t.key ? "border-b-2 border-primary font-medium text-primary" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {needsPicker ? (
+        <p className="text-sm text-muted-foreground">Select a supplier above to view this tab.</p>
+      ) : (
+        <>
+          {tab === "onboarding" && <SupplierOnboardingPanel supplierId={supplierId} isReviewer={isReviewer} />}
+          {tab === "documents" && <SupplierDocumentUploadPanel supplierId={supplierId} />}
+          {tab === "ppap" && <PPAPSubmissionPanel supplierId={supplierId} isReviewer={isReviewer} />}
+          {tab === "car" && <SupplierCARForm supplierId={supplierId} isReviewer={isReviewer} />}
+          {tab === "8d" && <Supplier8DForm supplierId={supplierId} isReviewer={isReviewer} />}
+          {tab === "messages" && supplierId !== undefined && !isSupplier && <SupplierMessagingPanel supplierId={supplierId} />}
+          {tab === "messages" && isSupplier && <SupplierMessagingPanel />}
+          {tab === "scorecard" && <SupplierScorecard supplierId={supplierId} />}
+          {tab === "performance" && <SupplierPerformanceDashboard supplierId={supplierId} />}
+          {tab === "ncr" && <SupplierNCRList supplierId={supplierId} />}
+          {tab === "capa" && <SupplierCAPAList supplierId={supplierId} />}
+          {tab === "settings" && <SupplierSettingsPanel supplierId={supplierId} />}
+        </>
+      )}
+    </div>
+  );
+}

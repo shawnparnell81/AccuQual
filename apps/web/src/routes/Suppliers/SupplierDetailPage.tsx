@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
-import { useWorkflowAction } from "../../hooks/useWorkflowAction";
+import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { apiClient } from "../../api/client";
 import type { Supplier, SupplierPerformance, CostingSummary } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
@@ -13,7 +14,70 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
 import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
+import { useToast } from "../../components/shared/ToastProvider";
+import { Modal } from "../../components/modals/Modal";
+import { TextField } from "../../components/forms/Field";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
+
+/**
+ * Creates this supplier's Supplier Portal login (see
+ * supplier.controller.ts's createPortalAccountHandler) — Quality/admin only,
+ * matching the router's own gate. No SMTP is configured in this environment,
+ * so the generated temporary password is shown once, right here, instead of
+ * a fabricated "email sent" claim.
+ */
+function CreatePortalAccountButton({ supplierId }: { supplierId: number }) {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [result, setResult] = useState<{ email: string; temporaryPassword: string } | null>(null);
+
+  const create = useMutation({
+    mutationFn: async () => (await apiClient.post(`/suppliers/${supplierId}/portal-account`, { email })).data as { user: { email: string }; temporaryPassword: string },
+    onSuccess: (data) => setResult({ email: data.user.email, temporaryPassword: data.temporaryPassword }),
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't create a Supplier Portal login.")),
+  });
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+        Create Portal Login
+      </button>
+      <Modal
+        title="Supplier Portal Login"
+        isOpen={open}
+        onClose={() => {
+          setOpen(false);
+          setResult(null);
+          setEmail("");
+        }}
+      >
+        {result ? (
+          <div className="flex flex-col gap-2 text-sm">
+            <p>
+              Login created for <strong>{result.email}</strong>. Share this temporary password with the supplier directly — it won't be
+              shown again:
+            </p>
+            <p className="select-all rounded-md border border-border bg-muted p-2 font-mono text-sm">{result.temporaryPassword}</p>
+          </div>
+        ) : (
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              create.mutate();
+            }}
+          >
+            <TextField label="Supplier's Email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <button type="submit" disabled={create.isPending} className="rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
+              {create.isPending ? "Creating…" : "Create Login"}
+            </button>
+          </form>
+        )}
+      </Modal>
+    </>
+  );
+}
 
 const supplierHooks = createResourceHooks<Supplier>("suppliers");
 
@@ -99,6 +163,7 @@ export function SupplierDetailPage() {
           />
           <CreateRiskButton sourceType="Supplier" sourceId={supplier.id} defaultTitle={`Risk from ${supplier.name}`} defaultDepartment="purchasing" defaultCategory="supplier" />
           <CreateCustomerButton sourceType="Supplier" sourceId={supplier.id} defaultLegalName={supplier.name} />
+          <CreatePortalAccountButton supplierId={supplier.id} />
         </div>
       </div>
 

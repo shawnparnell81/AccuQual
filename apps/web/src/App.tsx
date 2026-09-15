@@ -70,6 +70,10 @@ import { ErpNewPurchaseOrderPage } from "./routes/Erp/ErpNewPurchaseOrderPage";
 import { ErpPurchaseOrderDetailPage } from "./routes/Erp/ErpPurchaseOrderDetailPage";
 import { RmaListPage } from "./routes/Rma/RmaListPage";
 import { RmaDetailPage } from "./routes/Rma/RmaDetailPage";
+import { WarrantyClaimsList } from "./routes/Warranty/WarrantyClaimsList";
+import { WarrantyClaimDetail } from "./routes/Warranty/WarrantyClaimDetail";
+import { WarrantyDashboard } from "./routes/Warranty/WarrantyDashboard";
+import { SupplierPortalHome } from "./routes/SupplierPortal/SupplierPortalHome";
 import { ErpRequisitionsPage } from "./routes/Erp/ErpRequisitionsPage";
 import { ErpRequisitionDetailPage } from "./routes/Erp/ErpRequisitionDetailPage";
 import { WorkOrderListPage } from "./routes/WorkOrders/WorkOrderListPage";
@@ -167,6 +171,10 @@ export function App() {
           <Route path="/erp/:id" element={<ErpPurchaseOrderDetailPage />} />
           <Route path="/rma" element={<RmaListPage />} />
           <Route path="/rma/:id" element={<RmaDetailPage />} />
+          <Route path="/warranty" element={<WarrantyClaimsList />} />
+          <Route path="/warranty/dashboard" element={<WarrantyDashboard />} />
+          <Route path="/warranty/:id" element={<WarrantyClaimDetail />} />
+          <Route path="/supplier-portal" element={<SupplierPortalHome />} />
           <Route path="/work-orders" element={<WorkOrderListPage />} />
           <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
