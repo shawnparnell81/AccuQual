@@ -11,3 +11,8 @@ export const addScorecardSchema = z.object({
   deliveryScore: z.number().min(0).max(100).optional(),
   notes: z.string().optional(),
 });
+
+export const createPortalAccountSchema = z.object({
+  email: z.string().email(),
+  name: z.string().optional(),
+});

@@ -1095,3 +1095,209 @@ export interface Attachment {
   uploadedBy: number | null;
   createdAt: string;
 }
+
+// ---------------------------------------------------------------------------
+// Warranty module
+// ---------------------------------------------------------------------------
+
+export type WarrantyStatus = "new" | "inspection" | "supplier_review" | "approved" | "rejected" | "replaced" | "repaired" | "closed";
+export type WarrantyCostType = "parts" | "labor" | "shipping" | "replacement_unit" | "other";
+
+export interface WarrantyClaim {
+  id: number;
+  claimNumber: string;
+  status: WarrantyStatus;
+  customerId: number | null;
+  customerName?: string; // list endpoint only
+  productId: number | null;
+  serialNumber: string | null;
+  purchaseDate: string | null;
+  failureDate: string | null;
+  failureDescription: string | null;
+  failureImages: { attachmentId: number; caption?: string }[];
+  documents: { attachmentId: number; label?: string }[];
+  warrantyCostEstimate: string | null;
+  warrantyActualCost: string | null;
+  supplierId: number | null;
+  linkedNcrId: number | null;
+  linkedWorkOrderId: number | null;
+  inspectionNotes: string | null;
+  inspectedByUserId: number | null;
+  inspectionDate: string | null;
+  supplierReviewNotes: string | null;
+  dispositionNotes: string | null;
+  createdByUserId: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  // Detail endpoint only.
+  customer?: { id: number; legalName: string } | null;
+  product?: { id: number; sku: string; description: string | null } | null;
+  supplier?: { id: number; name: string; status: string } | null;
+  linkedNcr?: { id: number; title: string; status: string } | null;
+  linkedWorkOrder?: { id: number; status: string } | null;
+  costs?: WarrantyClaimCost[];
+  workflow?: WarrantyClaimWorkflowEntry[];
+}
+
+export interface WarrantyClaimCost {
+  id: number;
+  claimId: number;
+  costType: WarrantyCostType;
+  amount: string;
+  notes: string | null;
+  recordedByUserId: number | null;
+  createdAt: string;
+}
+
+export interface WarrantyClaimWorkflowEntry {
+  id: number;
+  claimId: number;
+  fromStatus: WarrantyStatus | null;
+  toStatus: WarrantyStatus;
+  note: string | null;
+  performedByUserId: number | null;
+  createdAt: string;
+}
+
+export interface WarrantyAnalytics {
+  totalClaims: number;
+  byStatus: Partial<Record<WarrantyStatus, number>>;
+  totalCostEstimate: number;
+  totalActualCost: number;
+  averageDaysInStatus: Partial<Record<WarrantyStatus, number>>;
+}
+
+// ---------------------------------------------------------------------------
+// Supplier Portal
+// ---------------------------------------------------------------------------
+
+export type ReviewStatus = "submitted" | "under_review" | "approved" | "rejected";
+export type ResponseReviewStatus = "submitted" | "under_review" | "accepted" | "rejected";
+
+export const ONBOARDING_DOCUMENT_TYPES = [
+  "w9",
+  "nda",
+  "quality_manual",
+  "process_flow",
+  "control_plan",
+  "fmea",
+  "org_chart",
+  "certification_iso",
+  "certification_iatf",
+  "certification_as9100",
+  "questionnaire",
+  "agreement",
+] as const;
+
+export const PPAP_DOCUMENT_TYPES = [
+  "psw",
+  "dfmea",
+  "pfmea",
+  "control_plan",
+  "process_flow",
+  "dimensional_results",
+  "material_results",
+  "initial_process_studies",
+  "appearance_approval_report",
+  "sample_parts",
+  "packaging_specs",
+] as const;
+
+export interface SupplierOnboardingDocument {
+  id: number;
+  supplierId: number;
+  documentType: string;
+  fileName: string;
+  status: ReviewStatus;
+  reviewNotes: string | null;
+  reviewedByUserId: number | null;
+  uploadedByUserId: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface SupplierDocument {
+  id: number;
+  supplierId: number;
+  name: string;
+  category: string | null;
+  fileName: string;
+  createdAt: string;
+}
+
+export interface StoredFile {
+  fileName: string;
+  filePath: string;
+  mimeType: string | null;
+  fileSize: number | null;
+  uploadedAt: string;
+}
+
+export interface SupplierPpapSubmission {
+  id: number;
+  supplierId: number;
+  level: number;
+  partNumber: string | null;
+  description: string | null;
+  status: ReviewStatus;
+  documents: Record<string, StoredFile>;
+  reviewNotes: string | null;
+  reviewedByUserId: number | null;
+  submittedByUserId: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface SupplierCorrectiveAction {
+  id: number;
+  supplierId: number;
+  linkedNcrId: number | null;
+  linkedCapaId: number | null;
+  status: ResponseReviewStatus;
+  data: { problemDescription?: string; containment?: string; rootCause?: string; correctiveAction?: string; preventiveAction?: string; verification?: string };
+  reviewNotes: string | null;
+  submittedByUserId: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface Supplier8dResponse {
+  id: number;
+  supplierId: number;
+  linkedNcrId: number | null;
+  linkedEightDId: number | null;
+  status: ResponseReviewStatus;
+  data: {
+    d1_team?: string;
+    d2_problem?: string;
+    d3_containment?: string;
+    d4_rootCause?: string;
+    d5_correctiveAction?: string;
+    d6_validation?: string;
+    d7_prevention?: string;
+    d8_closure?: string;
+  };
+  reviewNotes: string | null;
+  submittedByUserId: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface SupplierMessage {
+  id: number;
+  supplierId: number;
+  threadKey: string;
+  senderRole: "internal" | "supplier";
+  senderUserId: number | null;
+  body: string;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface SupplierPortalPerformance {
+  supplier: { id: number; name: string; status: string; riskLevel: string | null };
+  correctiveActionCount: number;
+  correctiveActionAcceptedCount: number;
+  ppapSubmissionCount: number;
+  ppapApprovalRate: number | null;
+}

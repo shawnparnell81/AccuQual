@@ -1,6 +1,7 @@
 import { pgTable, serial, text, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { roles } from "./roles.js";
 import { tenants } from "./tenants.js";
+import { suppliers } from "./supplier.js";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -19,6 +20,14 @@ export const users = pgTable("users", {
   // platform_admin/admin bypass the department matrix entirely, and external
   // supplier/customer portal accounts aren't part of any internal department.
   department: text("department"),
+  // Which real supplier company this login belongs to — set ONLY for
+  // roleName:"supplier" (Supplier Portal) accounts, the external-login
+  // counterpart to `department` above for internal staff. Every
+  // supplier-portal route scopes its queries to this id (never trusts a
+  // supplierId the client sends), which is how "a supplier can only ever
+  // see their own data" is actually enforced, not just hidden in the UI.
+  // Null for every internal/admin/platform_admin account.
+  supplierId: integer("supplier_id").references(() => suppliers.id),
   tokenVersion: integer("token_version").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   // This user's own theme overrides, layered on top of their tenant's theme

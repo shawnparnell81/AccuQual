@@ -44,6 +44,8 @@ import {
   LibraryBig,
   ShieldX,
   UploadCloud,
+  Wrench,
+  Globe2,
 } from "lucide-react";
 
 /**
@@ -194,6 +196,38 @@ export const WORK_ORDERS: NavLeaf = {
 // approve/reject/convert-to-PO are purchasing-only, enforced inline in
 // erp.controller.ts, same as every other narrower-than-matrix action in
 // this app.
+// Not a sheet row — the new Warranty module. Mirrors
+// departmentAccess.ts's PERMISSION_MATRIX.warranty exactly. Purchasing's
+// "edit" here is narrower than it looks (cost entries only — see
+// warranty.controller.ts's own comment); material_management stays
+// read-only.
+export const WARRANTY: NavLeaf = {
+  key: "warranty",
+  label: "Warranty",
+  path: "/warranty",
+  icon: Wrench,
+  access: { customer_service: "edit", quality: "edit", engineering: "edit", purchasing: "edit", material_management: "read" },
+  kpi: false,
+  priority: 2,
+  notes: "Not in the department sheet — a new Warranty module (claims, inspection, supplier review, cost tracking)",
+};
+
+// Not a sheet row — the internal-staff side of the new Supplier Portal.
+// Mirrors departmentAccess.ts's PERMISSION_MATRIX.supplier_portal exactly.
+// An actual external supplier login (roleName:"supplier") never sees this
+// nav at all — see AppLayout's own supplier-portal branch, which replaces
+// the whole department-driven sidebar with a single-purpose shell instead.
+export const SUPPLIER_PORTAL: NavLeaf = {
+  key: "supplier_portal",
+  label: "Supplier Portal",
+  path: "/supplier-portal",
+  icon: Globe2,
+  access: { quality: "edit", purchasing: "edit", engineering: "read" },
+  kpi: false,
+  priority: 2,
+  notes: "Not in the department sheet — internal review/management side of the new Supplier Portal (onboarding, PPAP, CAR/8D responses, messaging)",
+};
+
 export const PURCHASE_REQUISITIONS: NavLeaf = {
   key: "purchase_requisitions",
   label: "Purchase Requisitions",
@@ -313,11 +347,13 @@ export const NAV_STRUCTURE: NavGroup[] = [
       PURCHASE_REQUISITIONS,
       SALES_ACCOUNTS,
       CUSTOMERS,
+      WARRANTY,
+      SUPPLIER_PORTAL,
     ],
   },
   {
     department: "engineering",
-    items: [PPAP, APQP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, SALES_ACCOUNTS, CUSTOMERS, FEASIBILITY],
+    items: [PPAP, APQP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, SALES_ACCOUNTS, CUSTOMERS, FEASIBILITY, WARRANTY, SUPPLIER_PORTAL],
   },
   {
     department: "production",
@@ -325,15 +361,15 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "customer_service",
-    items: [PRODUCTION_LOG, COMPLAINTS],
+    items: [PRODUCTION_LOG, COMPLAINTS, WARRANTY],
   },
   {
     department: "purchasing",
-    items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS],
+    items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, WARRANTY, SUPPLIER_PORTAL],
   },
   {
     department: "material_management",
-    items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS],
+    items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, WARRANTY],
   },
   {
     department: "sales_and_marketing",

@@ -41,7 +41,10 @@ DECLARE
     'document_change_requests', 'document_change_items', 'document_change_reviews',
     'qms_forms', 'qms_form_rows',
     'scar_forms', 'quality_inspection_reports', 'quality_inspection_items',
-    'attachments'
+    'attachments',
+    'warranty_claims', 'warranty_claim_costs', 'warranty_claim_workflow',
+    'supplier_onboarding_documents', 'supplier_documents', 'supplier_ppap_submissions',
+    'supplier_corrective_actions', 'supplier_8d_responses', 'supplier_messages'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP
@@ -66,6 +69,7 @@ CREATE INDEX IF NOT EXISTS sales_accounts_tenant_status_idx ON sales_accounts (t
 CREATE INDEX IF NOT EXISTS sales_quotes_tenant_status_idx ON sales_quotes (tenant_id, status);
 CREATE INDEX IF NOT EXISTS sales_contracts_tenant_status_idx ON sales_contracts (tenant_id, status);
 CREATE INDEX IF NOT EXISTS customers_tenant_status_idx ON customers (tenant_id, status);
+CREATE INDEX IF NOT EXISTS warranty_claims_tenant_status_idx ON warranty_claims (tenant_id, status);
 
 -- The single hottest lookup shape in the whole app: every module's history
 -- panel (WorkflowHistoryPanel) and the generic per-entity audit endpoint
@@ -102,6 +106,17 @@ CREATE INDEX IF NOT EXISTS quality_inspection_items_report_idx ON quality_inspec
 -- record's own page: "every attachment for this one record", or (both null)
 -- the shared General Uploads bin.
 CREATE INDEX IF NOT EXISTS attachments_entity_idx ON attachments (tenant_id, entity_type, entity_id);
+
+-- Warranty + Supplier Portal's own hot lookup shapes: everything under a
+-- given claim/supplier, in creation order.
+CREATE INDEX IF NOT EXISTS warranty_claim_costs_claim_idx ON warranty_claim_costs (claim_id);
+CREATE INDEX IF NOT EXISTS warranty_claim_workflow_claim_idx ON warranty_claim_workflow (claim_id);
+CREATE INDEX IF NOT EXISTS supplier_onboarding_documents_supplier_idx ON supplier_onboarding_documents (tenant_id, supplier_id);
+CREATE INDEX IF NOT EXISTS supplier_documents_supplier_idx ON supplier_documents (tenant_id, supplier_id);
+CREATE INDEX IF NOT EXISTS supplier_ppap_submissions_supplier_idx ON supplier_ppap_submissions (tenant_id, supplier_id);
+CREATE INDEX IF NOT EXISTS supplier_corrective_actions_supplier_idx ON supplier_corrective_actions (tenant_id, supplier_id);
+CREATE INDEX IF NOT EXISTS supplier_8d_responses_supplier_idx ON supplier_8d_responses (tenant_id, supplier_id);
+CREATE INDEX IF NOT EXISTS supplier_messages_thread_idx ON supplier_messages (tenant_id, supplier_id, thread_key);
 
 -- password_reset_tokens isn't in the tenant_tables array above (see its own
 -- schema comment — it's only ever queried via the unscoped db, pre-auth,

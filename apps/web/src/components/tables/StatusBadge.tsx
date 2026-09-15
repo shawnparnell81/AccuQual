@@ -79,6 +79,16 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   approved_by_supplier: "info",
   in_transit: "info",
   received_by_supplier: "info",
+
+  // Warranty-specific states not covered above (approved/rejected/closed already are).
+  new: "muted",
+  inspection: "info",
+  supplier_review: "info",
+  replaced: "success",
+  repaired: "success",
+
+  // Supplier Portal review states not covered above.
+  accepted: "success",
 };
 
 const BUCKET_CLASSES: Record<string, string> = {

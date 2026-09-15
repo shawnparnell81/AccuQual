@@ -28,6 +28,7 @@ async function userWithRole(userId: number) {
       roleId: users.roleId,
       roleName: roles.name,
       department: users.department,
+      supplierId: users.supplierId,
     })
     .from(users)
     .leftJoin(roles, eq(users.roleId, roles.id))
@@ -35,13 +36,22 @@ async function userWithRole(userId: number) {
   return row;
 }
 
-function issueTokens(user: { id: number; tenantId: number | null; roleId: number | null; roleName: string | null; department: string | null; tokenVersion: number }) {
+function issueTokens(user: {
+  id: number;
+  tenantId: number | null;
+  roleId: number | null;
+  roleName: string | null;
+  department: string | null;
+  supplierId?: number | null;
+  tokenVersion: number;
+}) {
   const accessToken = signAccessToken({
     sub: String(user.id),
     tenantId: user.tenantId,
     roleId: user.roleId,
     roleName: user.roleName,
     department: user.department,
+    supplierId: user.supplierId ?? null,
   });
   const refreshToken = signRefreshToken({ sub: String(user.id), tokenVersion: user.tokenVersion });
   return { accessToken, refreshToken };
@@ -88,7 +98,7 @@ export async function login(input: { email: string; password: string }) {
   const valid = await bcrypt.compare(input.password, user.passwordHash);
   if (!valid) throw AppError.unauthorized("Invalid credentials");
 
-  const tokens = issueTokens({ id: user.id, tenantId: user.tenantId, roleId: user.roleId, roleName, department: user.department, tokenVersion: user.tokenVersion });
+  const tokens = issueTokens({ id: user.id, tenantId: user.tenantId, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion });
   return { user: sanitize({ ...user, roleName }), tenant: row.tenants ? { id: row.tenants.id, name: row.tenants.name, code: row.tenants.code, branding: row.tenants.branding } : null, ...tokens };
 }
 
