@@ -58,6 +58,26 @@ import {
  * subfolder that appears on more than one sheet row (Suppliers, Complaints,
  * Production Log) is declared once and referenced from every department that
  * holds it, so the dropdowns can never disagree about the same module.
+ *
+ * Since the Roles & Permissions module shipped (backend: departmentAccess.ts
+ * getUserAccessLevel, DB-driven), each leaf's `access` map below is no
+ * longer the live source of truth for READ/EDIT level — it's now only:
+ *   1. The pre-fetch fallback shown for an instant before
+ *      GET /permissions/effective resolves (see useEffectivePermissions.ts /
+ *      useWorkflowAccess.ts), and
+ *   2. What decides which department's dropdown GROUP a leaf structurally
+ *      belongs to at all (TopNav.tsx renders each user's own department
+ *      group from NAV_STRUCTURE, then filters individual leaves by the
+ *      LIVE level).
+ * Known, documented limitation: a tenant admin CAN grant any department
+ * edit/read on any module via the new admin UI, and the backend will
+ * correctly enforce it the moment they do (a user can navigate straight to
+ * the URL and it works) — but if that module isn't already listed in that
+ * department's `items` array below, it won't gain a nav dropdown entry
+ * automatically. Rebuilding the nav as a fully dynamic single registry
+ * (any leaf, any department, computed live) is a larger follow-up, not
+ * attempted here to avoid touching every department's dropdown membership
+ * as a side effect of this change.
  */
 
 export type AccessLevel = "none" | "read" | "edit";
@@ -521,6 +541,16 @@ export const NAV_STRUCTURE: NavGroup[] = [
       { key: "tenant_ai", label: "Tenant AI Config", path: "/admin/tenant-ai", icon: Bot, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard" },
       { key: "ai_usage", label: "AI Usage", path: "/admin/ai-usage", icon: TrendingUp, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard; BYOK usage dashboard" },
       { key: "digital_twin_setup", label: "Digital Twin Setup", path: "/admin/digital-twin", icon: Cpu, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard" },
+      {
+        key: "roles_permissions",
+        label: "Roles & Permissions",
+        path: "/admin/roles-permissions",
+        icon: ShieldCheck,
+        access: {},
+        kpi: false,
+        priority: 3,
+        notes: "Admin only — see AdminOnlyGuard; the self-service module replacing departmentAccess.ts's hardcoded PERMISSION_MATRIX",
+      },
     ],
   },
 ];

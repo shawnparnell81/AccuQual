@@ -1433,3 +1433,76 @@ export interface RmaLogEntry {
   performedBy: number | null;
   createdAt: string;
 }
+
+// ---------------------------------------------------------------------------
+// Roles & Permissions (self-service module replacing the hardcoded matrix)
+// ---------------------------------------------------------------------------
+
+export type ModuleAccessLevel = "none" | "read" | "edit";
+
+/** A user's own live effective access to every real module — GET /permissions/effective. */
+export type EffectivePermissions = Record<string, ModuleAccessLevel>;
+
+export interface PermissionModuleInfo {
+  key: string;
+  label: string;
+}
+
+export interface DepartmentPermissionCell {
+  departmentName: string;
+  moduleName: string;
+  accessLevel: ModuleAccessLevel;
+  isOverride: boolean;
+  id: number | null;
+}
+
+export interface PermissionRoleModuleGrant {
+  moduleName: string;
+  accessLevel: ModuleAccessLevel;
+}
+
+export interface PermissionRole {
+  id: number;
+  roleName: string;
+  description: string | null;
+  modules: PermissionRoleModuleGrant[];
+  memberCount: number;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface UserPermissionRoleAssignment {
+  id: number;
+  userId: number;
+  userEmail: string;
+  userName: string | null;
+  roleId: number;
+  roleName: string;
+  createdAt: string;
+}
+
+export interface UserEffectivePermissionRow {
+  moduleName: string;
+  label: string;
+  departmentLevel: ModuleAccessLevel;
+  effectiveLevel: ModuleAccessLevel;
+}
+
+/** GET /users row shape — this tenant's own user roster (the Roles & Permissions User Assignments tab reuses the existing users API, not a new one). */
+export interface TenantUser {
+  id: number;
+  email: string;
+  name: string | null;
+  roleId: number | null;
+  department: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface UserEffectivePermissions {
+  userId: number;
+  email: string;
+  department: string | null;
+  roleName?: string | null;
+  breakdown: UserEffectivePermissionRow[];
+}

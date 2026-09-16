@@ -45,7 +45,8 @@ DECLARE
     'warranty_claims', 'warranty_claim_costs', 'warranty_claim_workflow',
     'supplier_onboarding_documents', 'supplier_documents', 'supplier_ppap_submissions',
     'supplier_corrective_actions', 'supplier_8d_responses', 'supplier_messages',
-    'crar', 'supplier_rma_requests', 'rma_log'
+    'crar', 'supplier_rma_requests', 'rma_log',
+    'permission_roles', 'permission_role_modules', 'user_permission_roles', 'department_permissions'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP
@@ -123,6 +124,14 @@ CREATE INDEX IF NOT EXISTS supplier_messages_thread_idx ON supplier_messages (te
 CREATE INDEX IF NOT EXISTS supplier_rma_requests_supplier_idx ON supplier_rma_requests (tenant_id, supplier_id);
 CREATE INDEX IF NOT EXISTS rma_log_rma_idx ON rma_log (tenant_id, rma_id);
 CREATE INDEX IF NOT EXISTS crar_warranty_idx ON crar (warranty_id);
+
+-- Roles & Permissions' own hot lookup shape: getUserAccessLevel() runs on
+-- EVERY protected request now, so its user_permission_roles ->
+-- permission_role_modules join (departmentAccess.ts's getRoleGrantedAccessLevel)
+-- deserves its own index beyond the composite unique constraints already on
+-- each table (those lead with tenant_id + a different second column each).
+CREATE INDEX IF NOT EXISTS user_permission_roles_user_idx ON user_permission_roles (tenant_id, user_id);
+CREATE INDEX IF NOT EXISTS permission_role_modules_role_idx ON permission_role_modules (role_id, module_name);
 
 -- password_reset_tokens isn't in the tenant_tables array above (see its own
 -- schema comment — it's only ever queried via the unscoped db, pre-auth,

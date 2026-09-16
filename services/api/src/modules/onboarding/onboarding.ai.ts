@@ -1,7 +1,8 @@
 import type { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
-import { PERMISSION_MATRIX, type ResourceKey, type Department } from "../../middleware/departmentAccess.js";
+import { getUserAccessLevel, DEFAULT_PERMISSION_MATRIX, type ResourceKey } from "../../middleware/departmentAccess.js";
+import type { TenantDb } from "../../lib/tenantScope.js";
 import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { onboardingPrompt } from "../ai/prompts.js";
 import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
@@ -10,8 +11,9 @@ import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai
  * Real, honest descriptions of what each module actually does today — no
  * "enabled modules per tenant" concept exists anywhere in this schema (see
  * the AI Onboarding review), so this is grounded on the one real signal
- * available: PERMISSION_MATRIX, walked for the requesting user's own
- * department to find which ResourceKeys they can actually reach.
+ * available: getUserAccessLevel, walked for every real module to find which
+ * ResourceKeys this specific user can actually reach (their own department
+ * baseline plus any custom permission-role grants — see departmentAccess.ts).
  */
 const MODULE_DESCRIPTIONS: Partial<Record<ResourceKey, { label: string; description: string }>> = {
   ncr: { label: "NCR", description: "Log and track nonconforming material/product through containment, investigation, and closure." },
@@ -42,12 +44,13 @@ const MODULE_DESCRIPTIONS: Partial<Record<ResourceKey, { label: string; descript
  */
 export const onboardingAiGenerateHandler = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = req.tenantId!;
-  const department = req.user?.department as Department | null | undefined;
-  const role = req.user?.roleName;
-  const isAdmin = role === "admin" || role === "platform_admin";
+  const db = req.db! as TenantDb;
+  const user = { id: req.user!.id, roleName: req.user?.roleName ?? null, department: req.user?.department ?? null };
 
-  const accessibleModules = (Object.keys(PERMISSION_MATRIX) as ResourceKey[])
-    .filter((key) => isAdmin || (department && PERMISSION_MATRIX[key][department] && PERMISSION_MATRIX[key][department] !== "none"))
+  const moduleKeys = Object.keys(DEFAULT_PERMISSION_MATRIX) as ResourceKey[];
+  const levels = await Promise.all(moduleKeys.map((key) => getUserAccessLevel(db, tenantId, user, key)));
+  const accessibleModules = moduleKeys
+    .filter((_key, i) => levels[i] !== "none")
     .map((key) => ({ moduleKey: key, ...(MODULE_DESCRIPTIONS[key] ?? { label: key, description: "" }) }));
 
   if (accessibleModules.length === 0) {
@@ -58,7 +61,8 @@ export const onboardingAiGenerateHandler = asyncHandler(async (req: Request, res
   const limitError = await checkUsageLimit(req.db!, tenantId, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
-  const inputData = { department: department ?? (isAdmin ? "admin" : null), accessibleModules };
+  const isAdmin = user.roleName === "admin" || user.roleName === "platform_admin";
+  const inputData = { department: user.department ?? (isAdmin ? "admin" : null), accessibleModules };
   const result = await callLlmDetailed(onboardingPrompt(inputData), { system: "You are AccuQual's onboarding assistant.", ...llmOptions });
 
   let output: unknown;

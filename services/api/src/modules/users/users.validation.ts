@@ -2,6 +2,11 @@ import { z } from "zod";
 
 // Mirrors Department in components/layout/navConfig.ts (web) and
 // middleware/departmentAccess.ts — which nav dropdown's RWX rules a user gets.
+// Was missing "sales_and_marketing" (a real Department since the Sales &
+// Marketing module shipped) — silently blocked assigning anyone to it via
+// this API even though the department itself has real PERMISSION_MATRIX
+// entries; fixed while touching this exact file for the Roles & Permissions
+// module.
 export const departmentSchema = z.enum([
   "quality",
   "engineering",
@@ -9,6 +14,7 @@ export const departmentSchema = z.enum([
   "customer_service",
   "purchasing",
   "material_management",
+  "sales_and_marketing",
 ]);
 
 export const createUserSchema = z.object({
