@@ -40,3 +40,4 @@ export * from "./warranty.js";
 export * from "./supplierPortal.js";
 export * from "./supplierRma.js";
 export * from "./crar.js";
+export * from "./permissions.js";

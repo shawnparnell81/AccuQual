@@ -9,7 +9,7 @@ import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { audits } from "../../drizzle/schema/audits.js";
 import { trainingCourses } from "../../drizzle/schema/training.js";
 import { equipment } from "../../drizzle/schema/calibration.js";
-import { PERMISSION_MATRIX, type Department, type ResourceKey } from "../../middleware/departmentAccess.js";
+import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmentAccess.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
 
@@ -23,17 +23,21 @@ export interface SearchResult {
 }
 
 /**
- * Same real per-department access already enforced on each module's own
- * routes (see departmentAccess.ts) — a category this user's department has
- * no read access to on the real module is simply never searched, not
- * filtered out after the fact. admin/platform_admin bypass, same as
- * requireDepartmentAccess itself. Training has no ResourceKey at all (see
- * PERMISSION_MATRIX's own comment: read-by-everyone) — always searchable.
+ * Same real per-department/role access already enforced on each module's
+ * own routes (see departmentAccess.ts's getUserAccessLevel — this is a live
+ * DB-driven check now, same as requireDepartmentAccess itself, not a
+ * hardcoded-matrix lookup) — a category this user has no read access to on
+ * the real module is simply never searched, not filtered out after the
+ * fact. Training has no ResourceKey at all (see DEFAULT_PERMISSION_MATRIX's
+ * own comment: read-by-everyone) — always searchable.
  */
-function canRead(user: { roleName: string | null; department: string | null }, resourceKey: ResourceKey): boolean {
-  if (user.roleName === "admin" || user.roleName === "platform_admin") return true;
-  const department = user.department as Department | null;
-  const level = (department && PERMISSION_MATRIX[resourceKey][department]) || "none";
+async function canRead(
+  db: TenantDb,
+  tenantId: number,
+  user: { id: number; roleName: string | null; department: string | null },
+  resourceKey: ResourceKey
+): Promise<boolean> {
+  const level = await getUserAccessLevel(db, tenantId, user, resourceKey);
   return level !== "none";
 }
 
@@ -52,7 +56,7 @@ function idPrefix(column: SQLWrapper, digits: string) {
 export const searchHandler = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db! as TenantDb;
   const tenantId = req.tenantId!;
-  const user = { roleName: req.user?.roleName ?? null, department: req.user?.department ?? null };
+  const user = { id: req.user!.id, roleName: req.user?.roleName ?? null, department: req.user?.department ?? null };
   const q = String(req.query.q ?? "").trim();
 
   if (!q) return res.json({ results: [] });
@@ -60,17 +64,17 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
   const digits = /^\d+$/.test(q) ? q : null;
   const results: SearchResult[] = [];
 
-  if (digits && canRead(user, "ncr")) {
+  if (digits && await canRead(db, tenantId, user, "ncr")) {
     const rows = await db.select().from(ncr).where(and(eq(ncr.tenantId, tenantId), idPrefix(ncr.id, digits))).limit(RESULTS_PER_TYPE);
     for (const r of rows) results.push({ type: "NCR", id: r.id, label: `NCR #${r.id} — ${r.title}`, path: `/ncr/${r.id}` });
   }
 
-  if (digits && canRead(user, "capa")) {
+  if (digits && await canRead(db, tenantId, user, "capa")) {
     const rows = await db.select().from(capa).where(and(eq(capa.tenantId, tenantId), idPrefix(capa.id, digits))).limit(RESULTS_PER_TYPE);
     for (const r of rows) results.push({ type: "CAPA", id: r.id, label: `CAPA #${r.id}${r.ncrId ? ` (NCR #${r.ncrId})` : ""}`, path: `/capa/${r.id}` });
   }
 
-  if (digits && canRead(user, "erp")) {
+  if (digits && await canRead(db, tenantId, user, "erp")) {
     const rows = await db
       .select({ id: erpPurchaseOrders.id, status: erpPurchaseOrders.status, supplierName: suppliers.name })
       .from(erpPurchaseOrders)
@@ -80,23 +84,23 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
     for (const r of rows) results.push({ type: "PO", id: r.id, label: `PO #${r.id}${r.supplierName ? ` — ${r.supplierName}` : ""} (${r.status})`, path: `/erp/${r.id}` });
   }
 
-  if (digits && canRead(user, "work_orders")) {
+  if (digits && await canRead(db, tenantId, user, "work_orders")) {
     const rows = await db.select().from(workOrders).where(and(eq(workOrders.tenantId, tenantId), idPrefix(workOrders.id, digits))).limit(RESULTS_PER_TYPE);
     for (const r of rows) results.push({ type: "WO", id: r.id, label: `WO #${r.id} (${r.status})`, path: `/work-orders/${r.id}` });
   }
 
-  if (digits && canRead(user, "audit")) {
+  if (digits && await canRead(db, tenantId, user, "audit")) {
     const rows = await db.select().from(audits).where(and(eq(audits.tenantId, tenantId), idPrefix(audits.id, digits))).limit(RESULTS_PER_TYPE);
     for (const r of rows) results.push({ type: "Audit", id: r.id, label: `Audit #${r.id} — ${r.name}`, path: `/audits/${r.id}` });
   }
 
-  if (canRead(user, "suppliers")) {
+  if (await canRead(db, tenantId, user, "suppliers")) {
     const conditions = digits ? idPrefix(suppliers.id, digits) : ilike(suppliers.name, `${q}%`);
     const rows = await db.select().from(suppliers).where(and(eq(suppliers.tenantId, tenantId), conditions)).limit(RESULTS_PER_TYPE);
     for (const r of rows) results.push({ type: "Supplier", id: r.id, label: `Supplier #${r.id} — ${r.name}`, path: `/suppliers/${r.id}` });
   }
 
-  if (canRead(user, "inventory")) {
+  if (await canRead(db, tenantId, user, "inventory")) {
     // Inventory Item # is realistically the SKU, not the bare serial id — search matches either.
     const conditions = digits ? idPrefix(inventoryItems.id, digits) : ilike(inventoryItems.sku, `${q}%`);
     const rows = await db.select().from(inventoryItems).where(and(eq(inventoryItems.tenantId, tenantId), conditions)).limit(RESULTS_PER_TYPE);
@@ -108,7 +112,7 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
     const trainingRows = await db.select().from(trainingCourses).where(and(eq(trainingCourses.tenantId, tenantId), idPrefix(trainingCourses.id, digits))).limit(RESULTS_PER_TYPE);
     for (const r of trainingRows) results.push({ type: "Training", id: r.id, label: `Course #${r.id} — ${r.title}`, path: `/training/${r.id}` });
 
-    if (canRead(user, "calibration")) {
+    if (await canRead(db, tenantId, user, "calibration")) {
       const equipmentRows = await db.select().from(equipment).where(and(eq(equipment.tenantId, tenantId), idPrefix(equipment.id, digits))).limit(RESULTS_PER_TYPE);
       for (const r of equipmentRows) results.push({ type: "Calibration", id: r.id, label: `${r.name} (#${r.id})`, path: `/calibration/${r.id}` });
     }

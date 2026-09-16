@@ -1,4 +1,5 @@
 import { useCurrentUser } from "./useAuth";
+import { useEffectivePermissions } from "./useEffectivePermissions";
 import { findNavLeaf, type AccessLevel, type Department } from "../components/layout/navConfig";
 
 /**
@@ -22,6 +23,7 @@ const UNGATED_MODULES = new Set(["documents", "training"]);
 
 export function useWorkflowAccessLevel(navKey: string): AccessLevel {
   const user = useCurrentUser();
+  const { effective, isLoading } = useEffectivePermissions();
   if (UNGATED_MODULES.has(navKey)) return "edit";
 
   const isBypass = user?.roleName === "admin" || user?.roleName === "platform_admin";
@@ -29,6 +31,13 @@ export function useWorkflowAccessLevel(navKey: string): AccessLevel {
   if (!leaf) return "none";
 
   if (isBypass) return "edit"; // admin/platform_admin bypass the matrix entirely, same as requireDepartmentAccess
+
+  // Prefer the live, DB-driven level (GET /permissions/effective — see the
+  // Roles & Permissions module) the moment it's loaded; navConfig.ts's own
+  // static `access` map is only the pre-fetch fallback, so a page doesn't
+  // flash every button as hidden for a moment on first load.
+  if (!isLoading && effective && navKey in effective) return effective[navKey] as AccessLevel;
+
   const department = user?.department as Department | null | undefined;
   return (department && leaf.access[department]) || "none";
 }

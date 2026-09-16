@@ -6,6 +6,7 @@ import { Building2, ChevronDown, Library, Lock, Menu, Search, Settings, X } from
 import { apiClient } from "../../api/client";
 import { useCurrentTenant, useCurrentUser } from "../../hooks/useAuth";
 import { departmentScope, itemScope, useHiddenNavScopes } from "../../hooks/useNavPreferences";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { GlobalSearchResults } from "./GlobalSearchResults";
 import {
   DASHBOARD_LEAF,
@@ -62,9 +63,18 @@ function useDocumentLibraryTopLevel() {
   return data.filter((f) => f.parentId === null && f.name !== LIBRARY_POOL_NAME);
 }
 
-/** Read/write access this viewer has on a leaf, given which dropdown it's being shown in. */
-function effectiveAccess(leaf: NavLeaf, department: Department, bypass: boolean): AccessLevel {
+/**
+ * Read/write access this viewer has on a leaf, given which dropdown it's
+ * being shown in. `liveLevel` — this viewer's own real-time
+ * GET /permissions/effective value for this leaf's key — wins when
+ * available; navConfig.ts's static `access` map is only the fallback (used
+ * before that query resolves, and when previewing a department other than
+ * the viewer's own, e.g. an admin browsing every dropdown — see
+ * navConfig.ts's own comment on that documented limitation).
+ */
+function effectiveAccess(leaf: NavLeaf, department: Department, bypass: boolean, liveLevel?: AccessLevel): AccessLevel {
   if (bypass) return leaf.access[department] ? "edit" : "none";
+  if (liveLevel !== undefined) return liveLevel;
   return leaf.access[department] ?? "none";
 }
 
@@ -74,6 +84,7 @@ export function TopNav() {
   const isPlatformAdmin = user?.roleName === "platform_admin";
   const isAdmin = user?.roleName === "admin";
   const userDept = user?.department as Department | null | undefined;
+  const { effective: myEffective } = useEffectivePermissions();
   const kpiCounts = useKpiCounts();
   const documentLibrary = useDocumentLibraryTopLevel();
 
@@ -222,6 +233,7 @@ export function TopNav() {
                     item={item}
                     department={group.department!}
                     bypass={isAdmin}
+                    liveLevel={group.department === userDept ? myEffective?.[item.key] : undefined}
                     kpiCounts={kpiCounts}
                     onNavigate={() => setOpenId(null)}
                   />
@@ -410,6 +422,7 @@ export function TopNav() {
                             item={item}
                             department={group.department!}
                             bypass={isAdmin}
+                            liveLevel={group.department === userDept ? myEffective?.[item.key] : undefined}
                             kpiCounts={kpiCounts}
                             onNavigate={() => setMobileOpen(false)}
                           />
@@ -599,16 +612,18 @@ function NavItemRow({
   item,
   department,
   bypass,
+  liveLevel,
   kpiCounts,
   onNavigate,
 }: {
   item: NavLeaf;
   department: Department;
   bypass: boolean;
+  liveLevel?: AccessLevel;
   kpiCounts: KpiCounts;
   onNavigate: () => void;
 }) {
-  const level = effectiveAccess(item, department, bypass);
+  const level = effectiveAccess(item, department, bypass, liveLevel);
   if (level === "none") return null;
   const count = item.kpi ? kpiCounts[item.key as (typeof KPI_COUNT_KEYS)[number]] : undefined;
 

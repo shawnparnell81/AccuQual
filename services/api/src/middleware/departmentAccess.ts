@@ -1,5 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
+import { and, eq } from "drizzle-orm";
 import { AppError } from "../utils/appError.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import type { TenantDb } from "../lib/tenantScope.js";
+import { departmentPermissions, permissionRoleModules, userPermissionRoles } from "../drizzle/schema/permissions.js";
 
 export type AccessLevel = "none" | "read" | "edit";
 export type Department =
@@ -38,15 +42,70 @@ export type ResourceKey =
   | "crar"
   | "rma_log";
 
+export const DEPARTMENTS: Department[] = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management", "sales_and_marketing"];
+
+/** Friendly labels for the Roles & Permissions admin UI's modules list — the real, complete, fixed set ("no fictional modules": a tenant can only configure access to a module that actually has a requireDepartmentAccess/requireSupplierPortalAccess gate on it, never an invented name). */
+export const MODULE_LABELS: Record<ResourceKey, string> = {
+  ncr: "NCR",
+  capa: "CAPA",
+  eight_d: "8D",
+  di: "Discrepancy Investigation",
+  audit: "Audit",
+  calibration: "Calibration",
+  pareto: "Pareto Analysis",
+  suppliers: "Suppliers",
+  complaints: "Complaints",
+  ppap: "PPAP",
+  apqp: "APQP",
+  production_log: "Production Log",
+  inventory: "Inventory",
+  erp: "Purchase Orders (ERP)",
+  rma: "RMA / RGA",
+  work_orders: "Work Orders",
+  purchase_requisitions: "Purchase Requisitions",
+  risk: "Risk / FMEA",
+  feasibility: "Feasibility Review",
+  sales: "Sales Accounts",
+  customers: "Customer Onboarding",
+  warranty: "Warranty",
+  supplier_portal: "Supplier Portal",
+  crar: "Customer Return Analysis (CRAR)",
+  rma_log: "RMA Log",
+};
+export const RESOURCE_KEYS: ResourceKey[] = Object.keys(MODULE_LABELS) as ResourceKey[];
+
 /**
- * Source of truth: "Subfolder links.xlsx" (Department | Subfolder | Appears In |
- * Read | Write | Edit | Behavior | KPI | Priority | Notes). Mirrored in the web
- * app's navConfig.ts NAV_STRUCTURE so the dropdowns and this enforcement can
- * never disagree about who can do what. "edit" = the sheet's Write+Edit
- * columns (both ✔ together on every row); "read" = Read-only ✔ with
- * Write/Edit ✖ (Behavior: ReadOnly in the sheet).
+ * The ORIGINAL, hardcoded matrix — kept as-is, no longer the live source of
+ * truth (see getUserAccessLevel() below), but still very much load-bearing:
+ * it's the FALLBACK used whenever a tenant has no explicit
+ * department_permissions row for a given (department, module) pair. This is
+ * deliberate, not a leftover — see the Roles & Permissions module's own
+ * design notes in drizzle/schema/permissions.ts:
+ *
+ *   - Every tenant that existed before this module shipped keeps behaving
+ *     EXACTLY as it did before, with zero data migration/backfill needed —
+ *     a tenant with zero rows in department_permissions is
+ *     indistinguishable from one running the old hardcoded system.
+ *   - A brand-new module added to this app in the future (a new ResourceKey
+ *     entry here) gets a sane default for every existing tenant the moment
+ *     it ships, without needing a bulk INSERT into every tenant's
+ *     department_permissions table first.
+ *   - A tenant admin only needs to write an explicit override row the
+ *     moment they actually want to deviate from this default — see
+ *     getUserAccessLevel()'s "DB row wins if present, else fall back here"
+ *     logic. This is deliverable #10, "safe fallback behavior if
+ *     permissions are missing," by construction rather than as a
+ *     special-cased branch.
+ *
+ * Original comment, still true of what this describes: source of truth was
+ * "Subfolder links.xlsx" (Department | Subfolder | Appears In | Read |
+ * Write | Edit | Behavior | KPI | Priority | Notes); mirrored in the web
+ * app's navConfig.ts NAV_STRUCTURE (that file's own `access` maps are the
+ * same kind of default-only baseline now, for the same reason). "edit" = the
+ * sheet's Write+Edit columns (both ✔ together on every row); "read" =
+ * Read-only ✔ with Write/Edit ✖ (Behavior: ReadOnly in the sheet).
  */
-export const PERMISSION_MATRIX: Record<ResourceKey, Partial<Record<Department, AccessLevel>>> = {
+export const DEFAULT_PERMISSION_MATRIX: Record<ResourceKey, Partial<Record<Department, AccessLevel>>> = {
   ncr: { quality: "edit" },
   capa: { quality: "edit" },
   eight_d: { quality: "edit" },
@@ -210,20 +269,86 @@ export const PERMISSION_MATRIX: Record<ResourceKey, Partial<Record<Department, A
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+const LEVEL_RANK: Record<AccessLevel, number> = { none: 0, read: 1, edit: 2 };
+function higherLevel(a: AccessLevel, b: AccessLevel): AccessLevel {
+  return LEVEL_RANK[a] >= LEVEL_RANK[b] ? a : b;
+}
+
 /**
- * Gate a route by department + minimum access level from PERMISSION_MATRIX.
- * platform_admin/admin bypass the matrix entirely (same as today's
- * requireRole checks) — it only constrains department-scoped staff.
- * A user with no department set (operator not yet assigned one, or an
- * external supplier/customer portal account) gets "none" on every resource.
+ * The real, live permission check — everything in this file now funnels
+ * through this one function. Computes a user's effective access to a module
+ * as the HIGHER of two independent, additive sources (never subtractive —
+ * there's no way for either source to take away what the other grants):
+ *
+ *   1. Department baseline: the tenant's own department_permissions row for
+ *      (department, moduleName), falling back to DEFAULT_PERMISSION_MATRIX
+ *      when no such row exists yet (see that constant's own comment).
+ *   2. Custom role grants: every permissionRoleModules row for any
+ *      permissionRole this user is assigned to (via userPermissionRoles)
+ *      that names this moduleName — the tenant's own self-service roles,
+ *      e.g. "Line Lead" granted edit on one extra module without touching
+ *      that user's whole department's access.
+ *
+ * admin/platform_admin bypass both sources entirely and always get "edit" —
+ * identical to every check this replaces. A user with no department set
+ * (operator not yet assigned one, or an external supplier/customer login)
+ * simply contributes "none" from source 1, same as before.
+ *
+ * This is a live DB read on every call (no caching) — unlike roleName/
+ * department, which are baked into the JWT at login and only change on the
+ * next token refresh, a tenant admin's permission change here takes effect
+ * on this user's very next request.
+ */
+/** Isolates source 1 alone (department baseline, DB override or the shipped default) — exported so the admin UI's "view a user's effective permissions" report can show this figure separately from custom-role grants, not because anything else in the app needs department access in isolation. */
+export async function getDepartmentAccessLevel(db: TenantDb, tenantId: number, department: Department | null, moduleName: ResourceKey): Promise<AccessLevel> {
+  if (!department) return "none";
+  const [row] = await db
+    .select({ accessLevel: departmentPermissions.accessLevel })
+    .from(departmentPermissions)
+    .where(and(eq(departmentPermissions.tenantId, tenantId), eq(departmentPermissions.departmentName, department), eq(departmentPermissions.moduleName, moduleName)));
+  return row ? (row.accessLevel as AccessLevel) : DEFAULT_PERMISSION_MATRIX[moduleName][department] ?? "none";
+}
+
+/** Isolates source 2 alone (every custom permission-role grant this user holds for this module, at its highest level) — same reasoning as getDepartmentAccessLevel above. */
+export async function getRoleGrantedAccessLevel(db: TenantDb, tenantId: number, userId: number, moduleName: ResourceKey): Promise<AccessLevel> {
+  const roleRows = await db
+    .select({ accessLevel: permissionRoleModules.accessLevel })
+    .from(userPermissionRoles)
+    .innerJoin(permissionRoleModules, and(eq(permissionRoleModules.roleId, userPermissionRoles.roleId), eq(permissionRoleModules.moduleName, moduleName)))
+    .where(and(eq(userPermissionRoles.tenantId, tenantId), eq(userPermissionRoles.userId, userId)));
+  return roleRows.reduce<AccessLevel>((best, r) => higherLevel(best, r.accessLevel as AccessLevel), "none");
+}
+
+export async function getUserAccessLevel(
+  db: TenantDb,
+  tenantId: number,
+  user: { id: number; roleName: string | null; department: string | null },
+  moduleName: ResourceKey
+): Promise<AccessLevel> {
+  if (user.roleName === "admin" || user.roleName === "platform_admin") return "edit";
+
+  const [deptLevel, roleLevel] = await Promise.all([
+    getDepartmentAccessLevel(db, tenantId, user.department as Department | null, moduleName),
+    getRoleGrantedAccessLevel(db, tenantId, user.id, moduleName),
+  ]);
+
+  return higherLevel(deptLevel, roleLevel);
+}
+
+/**
+ * Gate a route by department/role-granted access — the real, live check now
+ * lives in getUserAccessLevel() above; this is just the same Express
+ * middleware shape every route file already calls (zero call-site changes
+ * anywhere in the app). platform_admin/admin bypass entirely, same as
+ * always. Wrapped in asyncHandler since this now needs a real DB read.
  */
 export function requireDepartmentAccess(resourceKey: ResourceKey) {
-  return (req: Request, _res: Response, next: NextFunction) => {
+  return asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
     const role = req.user?.roleName;
     if (role === "platform_admin" || role === "admin") return next();
+    if (!req.user || !req.db || req.tenantId === undefined) return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
 
-    const department = req.user?.department as Department | null | undefined;
-    const level: AccessLevel = (department && PERMISSION_MATRIX[resourceKey][department]) || "none";
+    const level = await getUserAccessLevel(req.db as TenantDb, req.tenantId, req.user, resourceKey);
 
     if (level === "none") {
       return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
@@ -232,14 +357,18 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
       return next(AppError.forbidden(`'${resourceKey}' is read-only for your department`));
     }
     next();
-  };
+  });
 }
 
 /**
  * Gate a route to admin (platform_admin/admin) or one of a fixed list of
  * departments, full stop — for settings-style endpoints that don't fit the
- * ResourceKey/PERMISSION_MATRIX shape above (a resource other departments
- * can read/edit at *different levels*). Tenant-wide config either belongs to
+ * ResourceKey/getUserAccessLevel shape above (a resource other departments
+ * can read/edit at *different levels*). Not part of the self-service Roles &
+ * Permissions module at all (deliberately — these gates aren't keyed by a
+ * ResourceKey/moduleName, just a fixed department list per endpoint, so
+ * there's no per-module row for a tenant admin to configure). Tenant-wide
+ * config either belongs to
  * the department(s) that own it, or an admin — there's no "read-only"
  * tier. See modules/settings/settings.routes.ts for the concrete use
  * (Feasibility settings: quality/engineering; Inventory settings:
@@ -266,11 +395,12 @@ export function requireAnyDepartment(...departments: Department[]) {
  *    if the account has no supplierId at all (a misconfigured login, not a
  *    real supplier-portal user).
  *  - internal staff, gated exactly like every other module via
- *    PERMISSION_MATRIX.supplier_portal (Quality/Purchasing edit,
- *    Engineering read) through the normal requireDepartmentAccess logic.
+ *    getUserAccessLevel(..., "supplier_portal") (Quality/Purchasing edit,
+ *    Engineering read, by default — self-service configurable per tenant
+ *    same as everything else now).
  * admin/platform_admin bypass both branches, same as everywhere else.
  */
-export function requireSupplierPortalAccess(req: Request, _res: Response, next: NextFunction) {
+export const requireSupplierPortalAccess = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
   const role = req.user?.roleName;
   if (role === "platform_admin" || role === "admin") return next();
 
@@ -281,8 +411,9 @@ export function requireSupplierPortalAccess(req: Request, _res: Response, next: 
     return next();
   }
 
-  const department = req.user?.department as Department | null | undefined;
-  const level: AccessLevel = (department && PERMISSION_MATRIX.supplier_portal[department]) || "none";
+  if (!req.user || !req.db || req.tenantId === undefined) return next(AppError.forbidden("No access to the Supplier Portal for your department"));
+
+  const level = await getUserAccessLevel(req.db as TenantDb, req.tenantId, req.user, "supplier_portal");
   if (level === "none") {
     return next(AppError.forbidden("No access to the Supplier Portal for your department"));
   }
@@ -290,4 +421,4 @@ export function requireSupplierPortalAccess(req: Request, _res: Response, next: 
     return next(AppError.forbidden("Supplier Portal is read-only for your department"));
   }
   next();
-}
+});

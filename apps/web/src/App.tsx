@@ -87,6 +87,7 @@ import { AdminTenantTemplatesPage } from "./routes/Admin/AdminTenantTemplatesPag
 import { AdminTenantAiConfigPage } from "./routes/Admin/AdminTenantAiConfigPage";
 import { AdminAiUsagePage } from "./routes/Admin/AdminAiUsagePage";
 import { AdminDigitalTwinSetupPage } from "./routes/Admin/AdminDigitalTwinSetupPage";
+import { RolesPermissionsPage } from "./routes/Admin/RolesPermissionsPage";
 import { useCurrentUser } from "./hooks/useAuth";
 
 function HomeRoute() {
@@ -196,6 +197,7 @@ export function App() {
           <Route path="/admin/tenant-ai" element={<AdminTenantAiConfigPage />} />
           <Route path="/admin/ai-usage" element={<AdminAiUsagePage />} />
           <Route path="/admin/digital-twin" element={<AdminDigitalTwinSetupPage />} />
+          <Route path="/admin/roles-permissions" element={<RolesPermissionsPage />} />
         </Route>
       </Route>
     </Routes>
