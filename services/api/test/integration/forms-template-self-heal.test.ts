@@ -18,6 +18,8 @@ import { users } from "../../src/drizzle/schema/users.js";
 import { formTemplates, formData } from "../../src/drizzle/schema/forms.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
+import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 const FORM_TYPE = `no-template-yet-${suffix}`; // a form type deliberately never seeded a template row
@@ -30,6 +32,8 @@ describe("Forms engine — template self-healing (real DB + real HTTP path)", ()
   beforeAll(async () => {
     const [tenant] = await db.insert(tenants).values({ name: `Forms Self-Heal Test Tenant ${suffix}`, code: `forms-heal-test-${suffix}` }).returning();
     tenantId = tenant!.id;
+
+    await seedDefaultPermissions(tenantId);
     const [user] = await db.insert(users).values({ tenantId, email: `forms-heal-test-${suffix}@test.local`, passwordHash: "unused" }).returning();
     userId = user!.id;
     token = signAccessToken({ sub: String(userId), tenantId, roleId: null, roleName: "operator", department: null });
@@ -39,6 +43,8 @@ describe("Forms engine — template self-healing (real DB + real HTTP path)", ()
     await db.delete(formData).where(and(eq(formData.tenantId, tenantId), eq(formData.formType, FORM_TYPE)));
     await db.delete(formTemplates).where(and(eq(formTemplates.tenantId, tenantId), eq(formTemplates.formType, FORM_TYPE)));
     await db.delete(users).where(eq(users.id, userId));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });

@@ -76,7 +76,9 @@ import { WarrantyDashboard } from "./routes/Warranty/WarrantyDashboard";
 import { SupplierPortalHome } from "./routes/SupplierPortal/SupplierPortalHome";
 import { CrarListPage } from "./routes/Crar/CrarListPage";
 import { CrarDetailPage } from "./routes/Crar/CrarDetailPage";
-import { RmaLogPage } from "./routes/RmaLog/RmaLogPage";
+import { RmaActivityLogPage } from "./routes/RmaActivityLog/RmaActivityLogPage";
+import { RmaLogListPage } from "./routes/RmaLog/RmaLogListPage";
+import { RmaLogDetailPage } from "./routes/RmaLog/RmaLogDetailPage";
 import { ErpRequisitionsPage } from "./routes/Erp/ErpRequisitionsPage";
 import { ErpRequisitionDetailPage } from "./routes/Erp/ErpRequisitionDetailPage";
 import { WorkOrderListPage } from "./routes/WorkOrders/WorkOrderListPage";
@@ -180,7 +182,9 @@ export function App() {
           <Route path="/warranty/:id" element={<WarrantyClaimDetail />} />
           <Route path="/crar" element={<CrarListPage />} />
           <Route path="/crar/:id" element={<CrarDetailPage />} />
-          <Route path="/rma-log" element={<RmaLogPage />} />
+          <Route path="/rma-activity-log" element={<RmaActivityLogPage />} />
+          <Route path="/rma-log" element={<RmaLogListPage />} />
+          <Route path="/rma-log/:id" element={<RmaLogDetailPage />} />
           <Route path="/supplier-portal" element={<SupplierPortalHome />} />
           <Route path="/work-orders" element={<WorkOrderListPage />} />
           <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />

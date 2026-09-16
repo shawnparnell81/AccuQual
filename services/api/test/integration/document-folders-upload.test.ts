@@ -15,6 +15,8 @@ import { documentFolders } from "../../src/drizzle/schema/documentFolders.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
+import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
@@ -28,6 +30,8 @@ describe("Document Folders — real file upload into the library (real DB + real
   beforeAll(async () => {
     const [tenant] = await db.insert(tenants).values({ name: `Doc Upload Test Tenant ${suffix}`, code: `doc-upload-test-${suffix}` }).returning();
     tenantId = tenant!.id;
+
+    await seedDefaultPermissions(tenantId);
     const [user] = await db.insert(users).values({ tenantId, email: `doc-upload-test-${suffix}@test.local`, passwordHash: "unused" }).returning();
     userId = user!.id;
     token = signAccessToken({ sub: String(userId), tenantId, roleId: null, roleName: "operator", department: null });
@@ -41,6 +45,8 @@ describe("Document Folders — real file upload into the library (real DB + real
     await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
     await db.delete(documentFolders).where(eq(documentFolders.tenantId, tenantId));
     await db.delete(users).where(eq(users.id, userId));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });

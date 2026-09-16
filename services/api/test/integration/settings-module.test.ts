@@ -22,6 +22,8 @@ import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { notificationLog } from "../../src/drizzle/schema/notifications.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
+import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
@@ -54,6 +56,8 @@ describe("Settings module (real DB + real HTTP path)", () => {
     const [tenant] = await db.insert(tenants).values({ name: `Settings Test Tenant ${suffix}`, code: `settings-test-${suffix}` }).returning();
     tenantId = tenant!.id;
 
+    await seedDefaultPermissions(tenantId);
+
     qualityToken = await makeUser("quality");
     engineeringToken = await makeUser("engineering");
     productionToken = await makeUser("production");
@@ -73,6 +77,8 @@ describe("Settings module (real DB + real HTTP path)", () => {
       await db.delete(inventoryItems).where(eq(inventoryItems.id, id));
     }
     for (const id of userIds) await db.delete(users).where(eq(users.id, id));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });

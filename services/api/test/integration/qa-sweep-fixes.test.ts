@@ -25,6 +25,8 @@ import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { aiEmbeddings } from "../../src/drizzle/schema/ai.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
+import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
@@ -43,6 +45,8 @@ describe("QA sweep fixes (real DB + real HTTP path)", () => {
   beforeAll(async () => {
     const [tenant] = await db.insert(tenants).values({ name: `QA Fix Test Tenant ${suffix}`, code: `qa-fix-${suffix}` }).returning();
     tenantId = tenant!.id;
+
+    await seedDefaultPermissions(tenantId);
 
     const [admin] = await db.insert(users).values({ tenantId, email: `qa-fix-admin-${suffix}@test.local`, passwordHash: "unused" }).returning();
     adminUserId = admin!.id;
@@ -66,6 +70,8 @@ describe("QA sweep fixes (real DB + real HTTP path)", () => {
     await db.delete(changeRequests).where(eq(changeRequests.tenantId, tenantId));
     await db.delete(ncr).where(eq(ncr.tenantId, tenantId));
     for (const id of userIds) await db.delete(users).where(eq(users.id, id));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });

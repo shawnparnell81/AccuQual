@@ -7,9 +7,12 @@ import { tenants } from "../../drizzle/schema/tenants.js";
 import { users } from "../../drizzle/schema/users.js";
 import { roles } from "../../drizzle/schema/roles.js";
 import { formTemplates } from "../../drizzle/schema/forms.js";
+import { departmentPermissions } from "../../drizzle/schema/permissions.js";
 import { AppError } from "../../utils/appError.js";
 import { logger } from "../../utils/logger.js";
 import { env } from "../../config/env.js";
+import { INITIAL_DEFAULT_PERMISSIONS } from "../../db/defaultPermissions.js";
+import type { AccessLevel, Department, ResourceKey } from "../../middleware/departmentAccess.js";
 
 /** Every QMS form type that gets a default fillable template on tenant creation. */
 const DEFAULT_FORM_TYPES = [
@@ -97,8 +100,26 @@ export async function createTenant(input: CreateTenantInput) {
     })
     .returning();
 
-  // 3. Initialize tenant configuration — branding is on the tenant row already;
-  //    default roles/permissions are global (see roles table) and need no per-tenant copy.
+  // 3. Initialize tenant configuration — branding is on the tenant row
+  //    already; the global system roles table (admin/quality_manager/etc)
+  //    needs no per-tenant copy. The self-service Roles & Permissions
+  //    module DOES need one, though: seed this tenant's department_permissions
+  //    with the same defaults db/backfillDepartmentPermissions.ts gives every
+  //    existing tenant, so a brand-new tenant starts with sane, real rows on
+  //    file rather than an all-"none" empty slate (getUserAccessLevel has no
+  //    hardcoded fallback to lean on anymore — see departmentAccess.ts).
+  const defaultPermissionRows: { tenantId: number; departmentName: Department; moduleName: ResourceKey; accessLevel: AccessLevel }[] = [];
+  for (const moduleName of Object.keys(INITIAL_DEFAULT_PERMISSIONS) as ResourceKey[]) {
+    const perDept = INITIAL_DEFAULT_PERMISSIONS[moduleName];
+    for (const departmentName of Object.keys(perDept) as Department[]) {
+      const accessLevel = perDept[departmentName];
+      if (!accessLevel || accessLevel === "none") continue;
+      defaultPermissionRows.push({ tenantId: tenant.id, departmentName, moduleName, accessLevel });
+    }
+  }
+  if (defaultPermissionRows.length > 0) {
+    await db.insert(departmentPermissions).values(defaultPermissionRows).onConflictDoNothing();
+  }
 
   // 4. Provision tenant storage (local filesystem when STORAGE_DRIVER=local; a real
   //    deployment would provision the equivalent Azure Blob prefixes instead).

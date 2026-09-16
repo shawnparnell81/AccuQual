@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { supplierRmaRequests, rmaLog } from "../../drizzle/schema/supplierRma.js";
+import { supplierRmaRequests, rmaActivityLog } from "../../drizzle/schema/supplierRma.js";
 import { rma, rmaItems } from "../../drizzle/schema/rma.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
@@ -80,12 +80,12 @@ export const submitRmaRequestHandler = asyncHandler(async (req: Request, res: Re
   // the supplier submitted, independent of what happens next.
   const [request] = await req.db!.insert(supplierRmaRequests).values({ tenantId, supplierId, ...body, submittedByUserId: req.user.id }).returning();
   await recordAuditTrail(req.db!, { tenantId, entityType: "SupplierRmaRequest", entityId: request!.id, action: "create", changes: body, performedBy: req.user.id });
-  await req.db!.insert(rmaLog).values({ tenantId, supplierRmaRequestId: request!.id, event: "request_submitted", details: { companyName: body.companyName, customerClaimNumber: body.customerClaimNumber } });
+  await req.db!.insert(rmaActivityLog).values({ tenantId, supplierRmaRequestId: request!.id, event: "request_submitted", details: { companyName: body.companyName, customerClaimNumber: body.customerClaimNumber } });
 
   // 2. Auto-match part + PO (best-effort, logged either way).
   const matchedPart = await tryMatchPart(req, tenantId, body.partNumber);
   const matchedPoId = await tryMatchPurchaseOrder(req, tenantId, supplierId, body.poNumber);
-  await req.db!.insert(rmaLog).values({
+  await req.db!.insert(rmaActivityLog).values({
     tenantId,
     supplierRmaRequestId: request!.id,
     event: "auto_match_attempted",
@@ -133,7 +133,7 @@ export const submitRmaRequestHandler = asyncHandler(async (req: Request, res: Re
     performedBy: req.user.id,
   });
   await publishEvent(WORKFLOW_STREAM, { tenantId, module: "rma", event: "auto_created_from_supplier_request", entityId: numberedRma!.id });
-  await req.db!.insert(rmaLog).values({
+  await req.db!.insert(rmaActivityLog).values({
     tenantId,
     rmaId: numberedRma!.id,
     supplierRmaRequestId: request!.id,
@@ -149,7 +149,7 @@ export const submitRmaRequestHandler = asyncHandler(async (req: Request, res: Re
   const notifyBody = `${supplier.name} submitted a new RMA Request via the Supplier Portal.\n\nRMA: ${numberedRma!.rmaNumber}\nContact: ${body.contactName} (${body.email})\nCustomer Claim #: ${body.customerClaimNumber ?? "n/a"}\nPart #: ${body.partNumber ?? "n/a"}\n\n${body.shortDescription ?? ""}`;
   const qualityNotified = await notifyDepartment(req.db!, { tenantId, department: "quality", subject, body: notifyBody, relatedEntityType: "Rma", relatedEntityId: numberedRma!.id });
   const csNotified = await notifyDepartment(req.db!, { tenantId, department: "customer_service", subject, body: notifyBody, relatedEntityType: "Rma", relatedEntityId: numberedRma!.id });
-  await req.db!.insert(rmaLog).values({
+  await req.db!.insert(rmaActivityLog).values({
     tenantId,
     rmaId: numberedRma!.id,
     supplierRmaRequestId: request!.id,

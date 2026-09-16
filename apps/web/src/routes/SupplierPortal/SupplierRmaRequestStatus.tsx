@@ -9,7 +9,7 @@ import type { SupplierRmaRequest } from "../../api/types";
  * state. GET /supplier-portal/rma-request/status is supplier-only (see
  * rmaRequest.controller.ts), so this component only ever renders for a
  * real supplier login — no internal-staff branch needed; internal staff
- * see the same RMA via the real RMA module and /rma-log instead.
+ * see the same RMA via the real RMA module and /rma-activity-log instead.
  */
 export function SupplierRmaRequestStatus() {
   const { data: rows = [], isLoading } = useQuery<SupplierRmaRequest[]>({

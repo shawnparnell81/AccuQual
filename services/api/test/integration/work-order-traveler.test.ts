@@ -21,6 +21,8 @@ import { workOrders, workOrderOperations } from "../../src/drizzle/schema/workOr
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
+import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
@@ -44,6 +46,8 @@ describe("Production Work Order traveler (real DB + real HTTP path)", () => {
     const [tenant] = await db.insert(tenants).values({ name: `WO Traveler Test Tenant ${suffix}`, code: `wot-test-${suffix}` }).returning();
     tenantId = tenant!.id;
 
+    await seedDefaultPermissions(tenantId);
+
     const [item] = await db.insert(inventoryItems).values({ tenantId, sku: `WOT-${suffix}`, minLevel: "0" }).returning();
     itemId = item!.id;
 
@@ -61,6 +65,8 @@ describe("Production Work Order traveler (real DB + real HTTP path)", () => {
     await db.delete(workOrders).where(eq(workOrders.id, workOrderId));
     await db.delete(inventoryItems).where(eq(inventoryItems.id, itemId));
     for (const id of userIds) await db.delete(users).where(eq(users.id, id));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });

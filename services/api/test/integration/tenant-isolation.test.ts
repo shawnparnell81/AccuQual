@@ -23,6 +23,8 @@ import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { aiEmbeddings } from "../../src/drizzle/schema/ai.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
+import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
@@ -39,7 +41,10 @@ describe("tenant isolation (real DB + real HTTP path)", () => {
     const [tenantA] = await db.insert(tenants).values({ name: `RLS Test Tenant A ${suffix}`, code: `rls-test-a-${suffix}` }).returning();
     const [tenantB] = await db.insert(tenants).values({ name: `RLS Test Tenant B ${suffix}`, code: `rls-test-b-${suffix}` }).returning();
     tenantAId = tenantA!.id;
+
+    await seedDefaultPermissions(tenantAId);
     tenantBId = tenantB!.id;
+    await seedDefaultPermissions(tenantBId);
 
     const [userA] = await db.insert(users).values({ tenantId: tenantAId, email: `rls-test-a-${suffix}@test.local`, passwordHash: "unused" }).returning();
     const [userB] = await db.insert(users).values({ tenantId: tenantBId, email: `rls-test-b-${suffix}@test.local`, passwordHash: "unused" }).returning();
@@ -73,7 +78,10 @@ describe("tenant isolation (real DB + real HTTP path)", () => {
     await db.delete(ncr).where(eq(ncr.id, ncrIdInTenantA));
     await db.delete(users).where(eq(users.id, userAId));
     await db.delete(users).where(eq(users.id, userBId));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantAId));
+
     await db.delete(tenants).where(eq(tenants.id, tenantAId));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantBId));
     await db.delete(tenants).where(eq(tenants.id, tenantBId));
     await pool.end();
   });

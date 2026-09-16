@@ -27,10 +27,14 @@ export function useWorkflowAccessLevel(navKey: string): AccessLevel {
   if (UNGATED_MODULES.has(navKey)) return "edit";
 
   const isBypass = user?.roleName === "admin" || user?.roleName === "platform_admin";
-  const leaf = findNavLeaf(navKey);
-  if (!leaf) return "none";
-
-  if (isBypass) return "edit"; // admin/platform_admin bypass the matrix entirely, same as requireDepartmentAccess
+  // admin/platform_admin bypass the matrix entirely, same as
+  // requireDepartmentAccess — checked BEFORE the "no nav leaf" fallback
+  // below, since a real permission key can exist (and be used for a live
+  // check, e.g. rma_log_status/rma_log_linkage/crar_workflow) without ever
+  // having its own navConfig.ts NavLeaf entry. Checking bypass first here
+  // is what makes admin actually bypass those sub-permission checks too,
+  // not just the ones with a real nav page.
+  if (isBypass) return "edit";
 
   // Prefer the live, DB-driven level (GET /permissions/effective — see the
   // Roles & Permissions module) the moment it's loaded; navConfig.ts's own
@@ -38,6 +42,8 @@ export function useWorkflowAccessLevel(navKey: string): AccessLevel {
   // flash every button as hidden for a moment on first load.
   if (!isLoading && effective && navKey in effective) return effective[navKey] as AccessLevel;
 
+  const leaf = findNavLeaf(navKey);
+  if (!leaf) return "none";
   const department = user?.department as Department | null | undefined;
   return (department && leaf.access[department]) || "none";
 }

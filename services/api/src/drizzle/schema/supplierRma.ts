@@ -52,8 +52,16 @@ export const supplierRmaRequests = pgTable("supplier_rma_requests", {
  * "here's every RMA request and what happened to it" report on its own).
  * One row per real event: request submitted, RMA auto-created + numbered,
  * part/PO auto-match result, notifications sent.
+ *
+ * Renamed from "rma_log" to "rma_activity_log" (module-specific RBAC
+ * build, 2026-09-16) — "RMA Log" now names the real, manually-maintained
+ * customer-return register built at that time (see the new
+ * drizzle/schema/rmaLog.ts), a completely different table this automated
+ * event trail must never be confused with. This table's own data/behavior
+ * is 100% unchanged, only its name and route moved (see
+ * modules/rma-activity-log/).
  */
-export const rmaLog = pgTable("rma_log", {
+export const rmaActivityLog = pgTable("rma_activity_log", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   rmaId: integer("rma_id").references(() => rma.id),
@@ -69,4 +77,4 @@ export const rmaLog = pgTable("rma_log", {
 
 export type SupplierRmaRequest = typeof supplierRmaRequests.$inferSelect;
 export type NewSupplierRmaRequest = typeof supplierRmaRequests.$inferInsert;
-export type RmaLogEntry = typeof rmaLog.$inferSelect;
+export type RmaActivityLogEntry = typeof rmaActivityLog.$inferSelect;

@@ -18,12 +18,14 @@ import { roles } from "../../src/drizzle/schema/roles.js";
 import { rma, rmaItems } from "../../src/drizzle/schema/rma.js";
 import { erpPurchaseOrders } from "../../src/drizzle/schema/erp.js";
 import { inventoryItems } from "../../src/drizzle/schema/inventory.js";
-import { supplierRmaRequests, rmaLog } from "../../src/drizzle/schema/supplierRma.js";
+import { supplierRmaRequests, rmaActivityLog } from "../../src/drizzle/schema/supplierRma.js";
 import { notificationLog } from "../../src/drizzle/schema/notifications.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { ensureSupplierRole } from "../../src/modules/supplier/supplier.controller.js";
 
+import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
@@ -46,6 +48,8 @@ describe("Supplier Portal RMA Request — AI-automated RMA creation (real DB + r
     const [tenant] = await db.insert(tenants).values({ name: `Supplier RMA Request Test Tenant ${suffix}`, code: `sprma-test-${suffix}` }).returning();
     tenantId = tenant!.id;
 
+    await seedDefaultPermissions(tenantId);
+
     const [supplier] = await db.insert(suppliers).values({ tenantId, name: `RMA Request Supplier ${suffix}`, contactEmail: "supplier@test.local" }).returning();
     supplierId = supplier!.id;
 
@@ -66,7 +70,7 @@ describe("Supplier Portal RMA Request — AI-automated RMA creation (real DB + r
     await new Promise((r) => setTimeout(r, 300));
     await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
     await db.delete(notificationLog).where(eq(notificationLog.tenantId, tenantId));
-    await db.delete(rmaLog).where(eq(rmaLog.tenantId, tenantId));
+    await db.delete(rmaActivityLog).where(eq(rmaActivityLog.tenantId, tenantId));
     await db.delete(supplierRmaRequests).where(eq(supplierRmaRequests.tenantId, tenantId));
     await db.delete(rmaItems).where(eq(rmaItems.tenantId, tenantId));
     await db.delete(rma).where(eq(rma.tenantId, tenantId));
@@ -74,6 +78,8 @@ describe("Supplier Portal RMA Request — AI-automated RMA creation (real DB + r
     await db.delete(erpPurchaseOrders).where(eq(erpPurchaseOrders.tenantId, tenantId));
     await db.delete(users).where(eq(users.tenantId, tenantId));
     await db.delete(suppliers).where(eq(suppliers.tenantId, tenantId));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
@@ -124,13 +130,13 @@ describe("Supplier Portal RMA Request — AI-automated RMA creation (real DB + r
     expect(rows.length).toBeGreaterThanOrEqual(2); // at least one quality + one customer_service recipient (makeInternalUser seeded one of each so far)
   });
 
-  it("every real step landed in rma_log: submitted, auto-match, created, notified", async () => {
-    const rows = await db.select().from(rmaLog).where(eq(rmaLog.rmaId, createdRmaId));
+  it("every real step landed in the RMA Activity Log: submitted, auto-match, created, notified", async () => {
+    const rows = await db.select().from(rmaActivityLog).where(eq(rmaActivityLog.rmaId, createdRmaId));
     const events = rows.map((r) => r.event);
     expect(events).toContain("rma_created");
     expect(events).toContain("notifications_sent");
 
-    const submissionRows = await db.select().from(rmaLog).where(eq(rmaLog.tenantId, tenantId));
+    const submissionRows = await db.select().from(rmaActivityLog).where(eq(rmaActivityLog.tenantId, tenantId));
     const allEvents = submissionRows.map((r) => r.event);
     expect(allEvents).toContain("request_submitted");
     expect(allEvents).toContain("auto_match_attempted");
@@ -163,15 +169,15 @@ describe("Supplier Portal RMA Request — AI-automated RMA creation (real DB + r
     expect(items).toHaveLength(0);
   });
 
-  it("Quality and Customer Service can both read the RMA Log; a supplier login cannot", async () => {
-    const qualityView = await request(app).get("/rma-log").set("Authorization", `Bearer ${qualityToken}`);
+  it("Quality and Customer Service can both read the RMA Activity Log; a supplier login cannot", async () => {
+    const qualityView = await request(app).get("/rma-activity-log").set("Authorization", `Bearer ${qualityToken}`);
     expect(qualityView.status).toBe(200);
     expect(qualityView.body.length).toBeGreaterThan(0);
 
-    const csView = await request(app).get("/rma-log").set("Authorization", `Bearer ${customerServiceToken}`);
+    const csView = await request(app).get("/rma-activity-log").set("Authorization", `Bearer ${customerServiceToken}`);
     expect(csView.status).toBe(200);
 
-    const supplierView = await request(app).get("/rma-log").set("Authorization", `Bearer ${supplierToken}`);
+    const supplierView = await request(app).get("/rma-activity-log").set("Authorization", `Bearer ${supplierToken}`);
     expect(supplierView.status).toBe(403);
   });
 });

@@ -11,7 +11,6 @@ import { roles } from "../../drizzle/schema/roles.js";
 import {
   getUserAccessLevel,
   getDepartmentAccessLevel,
-  DEFAULT_PERMISSION_MATRIX,
   MODULE_LABELS,
   RESOURCE_KEYS,
   DEPARTMENTS,
@@ -59,7 +58,7 @@ export const listDepartmentPermissionsHandler = asyncHandler(async (req: Request
       return {
         departmentName,
         moduleName,
-        accessLevel: (override?.accessLevel as AccessLevel) ?? DEFAULT_PERMISSION_MATRIX[moduleName][departmentName] ?? "none",
+        accessLevel: (override?.accessLevel as AccessLevel) ?? "none",
         isOverride: Boolean(override),
         id: override?.id ?? null,
       };
@@ -92,7 +91,7 @@ export const upsertDepartmentPermissionHandler = asyncHandler(async (req: Reques
     entityType: "DepartmentPermission",
     entityId: row!.id,
     action: existing ? "update" : "create",
-    changes: { departmentName, moduleName, oldValue: existing?.accessLevel ?? DEFAULT_PERMISSION_MATRIX[moduleName][departmentName] ?? "none", newValue: accessLevel },
+    changes: { departmentName, moduleName, oldValue: existing?.accessLevel ?? "none", newValue: accessLevel },
     performedBy: req.user?.id,
   });
   res.json(row);
@@ -115,7 +114,7 @@ export const deleteDepartmentPermissionHandler = asyncHandler(async (req: Reques
     entityType: "DepartmentPermission",
     entityId: existing.id,
     action: "delete",
-    changes: { departmentName, moduleName, revertedTo: DEFAULT_PERMISSION_MATRIX[moduleName][departmentName] ?? "none" },
+    changes: { departmentName, moduleName, revertedTo: "none" },
     performedBy: req.user?.id,
   });
   res.status(204).send();

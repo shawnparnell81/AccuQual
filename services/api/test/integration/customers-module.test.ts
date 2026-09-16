@@ -20,6 +20,8 @@ import { customers } from "../../src/drizzle/schema/customers.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
+import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
@@ -44,6 +46,8 @@ describe("Customer Onboarding module (real DB + real HTTP path)", () => {
     const [tenant] = await db.insert(tenants).values({ name: `Customer Test Tenant ${suffix}`, code: `cust-test-${suffix}` }).returning();
     tenantId = tenant!.id;
 
+    await seedDefaultPermissions(tenantId);
+
     const [doc] = await db.insert(documents).values({ tenantId, title: `NDA ${suffix}`, category: "legal" }).returning();
     ndaDocumentId = doc!.id;
 
@@ -59,6 +63,8 @@ describe("Customer Onboarding module (real DB + real HTTP path)", () => {
     if (customerId) await db.delete(customers).where(eq(customers.id, customerId));
     await db.delete(documents).where(eq(documents.id, ndaDocumentId));
     for (const id of userIds) await db.delete(users).where(eq(users.id, id));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     // Pool is closed in the second describe block's afterAll below — this
     // file has two describe blocks sharing one pool, so only the LAST one
@@ -182,6 +188,8 @@ describe("Customer Onboarding — rejection path", () => {
   beforeAll(async () => {
     const [tenant] = await db.insert(tenants).values({ name: `Customer Reject Tenant ${suffix}`, code: `cust-reject-${suffix}` }).returning();
     rejTenantId = tenant!.id;
+
+    await seedDefaultPermissions(rejTenantId);
     const [user] = await db.insert(users).values({ tenantId: rejTenantId, email: `cust-reject-${suffix}@test.local`, passwordHash: "unused" }).returning();
     rejUserIds.push(user!.id);
     rejSalesToken = signAccessToken({ sub: String(user!.id), tenantId: rejTenantId, roleId: null, roleName: "operator", department: "sales_and_marketing" });
@@ -195,6 +203,8 @@ describe("Customer Onboarding — rejection path", () => {
     await db.delete(auditTrail).where(inArray(auditTrail.performedBy, rejUserIds));
     await db.delete(customers).where(eq(customers.id, rejCustomerId));
     for (const id of rejUserIds) await db.delete(users).where(eq(users.id, id));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, rejTenantId));
+
     await db.delete(tenants).where(eq(tenants.id, rejTenantId));
     await pool.end();
   });
