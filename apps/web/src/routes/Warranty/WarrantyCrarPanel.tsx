@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { useWorkflowAccessLevel } from "../../hooks/useWorkflowAccess";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { CrarClaim } from "../../api/types";
 
@@ -13,11 +14,22 @@ import type { CrarClaim } from "../../api/types";
  * Deliberately thin: CRAR itself is owned by crar.controller.ts/CrarDetailPage,
  * this panel only lists/links, matching how RMA/Work Order links are surfaced
  * elsewhere on this page rather than duplicating that page's own UI here.
+ *
+ * "warranty.crar.write" (module-specific RBAC build, 2026-09-16) maps
+ * directly onto CRAR's own live "edit" level rather than a separate,
+ * redundant permission key — creating a CRAR from a warranty claim is
+ * exactly the same permission as creating one anywhere else in the app.
+ * This used to be a hardcoded `isAdmin || department === "quality"` check
+ * passed in as a prop, completely bypassing whatever the Roles &
+ * Permissions module's own crar access level actually said; now it's the
+ * same live, DB-driven check crar.controller.ts itself enforces, computed
+ * here instead of by the caller.
  */
-export function WarrantyCrarPanel({ claimId, canCreate }: { claimId: number; canCreate: boolean }) {
+export function WarrantyCrarPanel({ claimId }: { claimId: number }) {
   const navigate = useNavigate();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const canCreate = useWorkflowAccessLevel("crar") === "edit";
 
   const { data: rows = [], isLoading } = useQuery<CrarClaim[]>({
     queryKey: ["crar", { warrantyId: claimId }],

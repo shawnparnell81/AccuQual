@@ -19,6 +19,8 @@ import { qmsForms, qmsFormRows } from "../../src/drizzle/schema/qmsForms.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
+import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
@@ -39,6 +41,8 @@ describe("Generic QMS Simple Form engine (real DB + real HTTP path)", () => {
   beforeAll(async () => {
     const [tenant] = await db.insert(tenants).values({ name: `QMS Forms Test Tenant ${suffix}`, code: `qmsforms-test-${suffix}` }).returning();
     tenantId = tenant!.id;
+
+    await seedDefaultPermissions(tenantId);
     productionToken = await makeUser("production"); // proves there's no department gate at all
   });
 
@@ -50,6 +54,8 @@ describe("Generic QMS Simple Form engine (real DB + real HTTP path)", () => {
       await db.delete(qmsForms).where(eq(qmsForms.id, formId));
     }
     for (const id of userIds) await db.delete(users).where(eq(users.id, id));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });

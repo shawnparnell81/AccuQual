@@ -19,6 +19,8 @@ import { attachments } from "../../src/drizzle/schema/attachments.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
+import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
@@ -28,6 +30,8 @@ let customerServiceToken: string;
 let qualityToken: string;
 let engineeringToken: string;
 let purchasingToken: string;
+let salesToken: string;
+let adminToken: string;
 let claimId: number;
 let secondClaimId: number;
 
@@ -44,10 +48,14 @@ describe("Warranty module (real DB + real HTTP path)", () => {
     const [tenant] = await db.insert(tenants).values({ name: `Warranty Test Tenant ${suffix}`, code: `warranty-test-${suffix}` }).returning();
     tenantId = tenant!.id;
 
+    await seedDefaultPermissions(tenantId);
+
     customerServiceToken = await makeUser("customer_service");
     qualityToken = await makeUser("quality");
     engineeringToken = await makeUser("engineering");
     purchasingToken = await makeUser("purchasing");
+    salesToken = await makeUser("sales_and_marketing");
+    adminToken = await makeUser(null, "admin");
 
     const [customer] = await db.insert(customers).values({ tenantId, legalName: `Warranty Test Customer ${suffix}`, status: "active" }).returning();
     customerId = customer!.id;
@@ -62,6 +70,8 @@ describe("Warranty module (real DB + real HTTP path)", () => {
     await db.delete(warrantyClaims).where(eq(warrantyClaims.tenantId, tenantId));
     await db.delete(customers).where(eq(customers.tenantId, tenantId));
     await db.delete(users).where(eq(users.tenantId, tenantId));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
@@ -196,5 +206,28 @@ describe("Warranty module (real DB + real HTTP path)", () => {
     const rows = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "WarrantyClaim"), eq(auditTrail.entityId, claimId), eq(auditTrail.action, "status_change")));
     // new->inspection, inspection->supplier_review, supplier_review->approved, approved->replaced, replaced->closed
     expect(rows.length).toBe(5);
+  });
+
+  describe("module-specific RBAC build (2026-09-16): create/edit is now a live warranty.write check, not a hardcoded department list", () => {
+    it("sales_and_marketing (no warranty access at all by default) cannot create a claim", async () => {
+      const res = await request(app).post("/warranty/claims").set("Authorization", `Bearer ${salesToken}`).send({ customerId, failureDescription: "Should be blocked" });
+      expect(res.status).toBe(403);
+    });
+
+    it("admin grants sales_and_marketing 'edit' on warranty via the self-service API — it can now create a claim", async () => {
+      const grant = await request(app).patch("/permissions/department-permissions").set("Authorization", `Bearer ${adminToken}`).send({ departmentName: "sales_and_marketing", moduleName: "warranty", accessLevel: "edit" });
+      expect(grant.status).toBe(200);
+
+      const res = await request(app).post("/warranty/claims").set("Authorization", `Bearer ${salesToken}`).send({ customerId, failureDescription: "New self-service capability" });
+      expect(res.status).toBe(201);
+
+      // clean up the grant so it doesn't leak into any test run after this file
+      await request(app).delete("/permissions/department-permissions").set("Authorization", `Bearer ${adminToken}`).send({ departmentName: "sales_and_marketing", moduleName: "warranty" });
+    });
+
+    it("purchasing's real carve-out (cost entries only) is unaffected — still cannot create a claim even though it holds warranty edit by default", async () => {
+      const res = await request(app).post("/warranty/claims").set("Authorization", `Bearer ${purchasingToken}`).send({ customerId, failureDescription: "Should still be blocked" });
+      expect(res.status).toBe(403);
+    });
   });
 });

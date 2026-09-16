@@ -14,6 +14,8 @@ import { attachments } from "../../src/drizzle/schema/attachments.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
+import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
@@ -34,6 +36,8 @@ describe("Attachments module — generic upload/list/download/delete (real DB + 
     const [tenant] = await db.insert(tenants).values({ name: `Attachments Test Tenant ${suffix}`, code: `attach-test-${suffix}` }).returning();
     tenantId = tenant!.id;
 
+    await seedDefaultPermissions(tenantId);
+
     const uploader = await makeUser();
     uploaderToken = uploader.token;
     otherUserToken = (await makeUser()).token;
@@ -45,6 +49,8 @@ describe("Attachments module — generic upload/list/download/delete (real DB + 
     await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
     await db.delete(attachments).where(eq(attachments.tenantId, tenantId));
     await db.delete(users).where(eq(users.tenantId, tenantId));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });

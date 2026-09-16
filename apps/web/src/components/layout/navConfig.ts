@@ -270,13 +270,28 @@ export const CRAR: NavLeaf = {
   notes: "Not in the department sheet — Customer Return Analysis Report (CRAR), integrated with Quality, Warranty and Supplier RMA Requests",
 };
 
-// Not a sheet row — the audit trail of every Supplier Portal RMA Request,
-// separate from the RMA/RGA module's own record list. Mirrors
-// departmentAccess.ts's PERMISSION_MATRIX.rma_log exactly.
+// The real, manually-maintained RMA Log register (module-specific RBAC
+// build, 2026-09-16) — NOT the automated Supplier RMA Request event trail
+// (see RMA_ACTIVITY_LOG below, which held this "rma_log" key/name until
+// this build freed it). Mirrors db/defaultPermissions.ts's rma_log entry.
 export const RMA_LOG: NavLeaf = {
   key: "rma_log",
   label: "RMA Log",
   path: "/rma-log",
+  icon: ScrollText,
+  access: { quality: "edit", customer_service: "edit", engineering: "read", purchasing: "read", material_management: "read" },
+  kpi: false,
+  priority: 2,
+  notes: "Not in the department sheet — the real customer-return register (RMA #, disposition, corrective action, etc.), linked to Warranty/Supplier RMA Requests/Quality",
+};
+
+// The automated event trail behind every Supplier Portal RMA Request,
+// separate from the RMA/RGA module's own record list — renamed from
+// "RMA Log" (see RMA_LOG above, which now names the real register).
+export const RMA_ACTIVITY_LOG: NavLeaf = {
+  key: "rma_activity_log",
+  label: "RMA Activity Log",
+  path: "/rma-activity-log",
   icon: ScrollText,
   access: { quality: "edit", customer_service: "read" },
   kpi: false,
@@ -407,11 +422,12 @@ export const NAV_STRUCTURE: NavGroup[] = [
       SUPPLIER_PORTAL,
       CRAR,
       RMA_LOG,
+      RMA_ACTIVITY_LOG,
     ],
   },
   {
     department: "engineering",
-    items: [PPAP, APQP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, SALES_ACCOUNTS, CUSTOMERS, FEASIBILITY, WARRANTY, SUPPLIER_PORTAL, CRAR],
+    items: [PPAP, APQP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, SALES_ACCOUNTS, CUSTOMERS, FEASIBILITY, WARRANTY, SUPPLIER_PORTAL, CRAR, RMA_LOG],
   },
   {
     department: "production",
@@ -419,15 +435,15 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "customer_service",
-    items: [PRODUCTION_LOG, COMPLAINTS, WARRANTY, CRAR, RMA_LOG, WORK_ORDERS],
+    items: [PRODUCTION_LOG, COMPLAINTS, WARRANTY, CRAR, RMA_LOG, RMA_ACTIVITY_LOG, WORK_ORDERS],
   },
   {
     department: "purchasing",
-    items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, WARRANTY, SUPPLIER_PORTAL, CRAR],
+    items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, WARRANTY, SUPPLIER_PORTAL, CRAR, RMA_LOG],
   },
   {
     department: "material_management",
-    items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, WARRANTY],
+    items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, WARRANTY, RMA_LOG],
   },
   {
     department: "sales_and_marketing",
@@ -574,5 +590,5 @@ export function findNavLeaf(key: string): NavLeaf | undefined {
     const found = group.items.find((item) => item.key === key);
     if (found) return found;
   }
-  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, SALES_ACCOUNTS, CUSTOMERS, CRAR, RMA_LOG].find((leaf) => leaf.key === key);
+  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, SALES_ACCOUNTS, CUSTOMERS, CRAR, RMA_LOG, RMA_ACTIVITY_LOG].find((leaf) => leaf.key === key);
 }

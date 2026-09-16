@@ -9,7 +9,15 @@ interface RecordAuditTrailInput {
   tenantId: number;
   entityType: string;
   entityId: number;
-  action: "create" | "update" | "delete" | "status_change" | "transition_failed";
+  // "permission_denied" — module-specific RBAC build (2026-09-16): logged
+  // when a real, already-loaded record's update/status/linkage action is
+  // blocked by getUserAccessLevel, never for a blocked CREATE (no entity
+  // exists yet to attach the row to, and entityId is NOT NULL below — see
+  // crar.controller.ts/warranty.controller.ts/rmaLog.controller.ts's own
+  // comments on exactly where this fires). A blocked create still shows up
+  // in the ordinary structured request log (method/path/status/userId),
+  // just not in this entity-scoped table.
+  action: "create" | "update" | "delete" | "status_change" | "transition_failed" | "permission_denied";
   changes?: unknown;
   performedBy?: number;
 }

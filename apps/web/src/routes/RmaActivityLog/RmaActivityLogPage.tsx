@@ -2,9 +2,9 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { TextField } from "../../components/forms/Field";
-import type { RmaLogEntry } from "../../api/types";
+import type { RmaActivityLogEntry } from "../../api/types";
 
-const rmaLogHooks = createResourceHooks<RmaLogEntry>("rma-log");
+const rmaActivityLogHooks = createResourceHooks<RmaActivityLogEntry>("rma-activity-log");
 
 const EVENT_LABELS: Record<string, string> = {
   request_submitted: "Request Submitted",
@@ -17,17 +17,21 @@ const EVENT_LABELS: Record<string, string> = {
  * Read-only event log for every Supplier Portal RMA Request — see
  * rmaRequest.controller.ts's own comment on why each step (submission,
  * part/PO auto-match, real RMA creation, notification) is logged here in
- * addition to the standard audit trail. Quality has full access, Customer
- * Service view-only (see departmentAccess.ts's PERMISSION_MATRIX.rma_log) —
- * both enforced server-side; this page shows the same list to either.
+ * addition to the standard audit trail. Renamed from "RMA Log" to "RMA
+ * Activity Log" (module-specific RBAC build, 2026-09-16) to free that name
+ * for the real, manually-maintained customer-return register at
+ * routes/RmaLog/ — a completely different page this automated trail must
+ * never be confused with. Quality has full access, Customer Service
+ * view-only, both enforced server-side; this page shows the same list to
+ * either.
  */
-export function RmaLogPage() {
+export function RmaActivityLogPage() {
   const [rmaId, setRmaId] = useState("");
-  const { data: rows = [], isLoading } = rmaLogHooks.useList(rmaId ? { rmaId } : undefined);
+  const { data: rows = [], isLoading } = rmaActivityLogHooks.useList(rmaId ? { rmaId } : undefined);
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">RMA Log</h1>
+      <h1 className="text-2xl font-semibold">RMA Activity Log</h1>
       <p className="text-sm text-muted-foreground">Every automated step behind a Supplier Portal RMA Request — submission, part/PO matching, RMA creation, and notifications.</p>
 
       <div className="w-48">

@@ -7,10 +7,13 @@ import { rma } from "../../drizzle/schema/rma.js";
 import { supplierRmaRequests } from "../../drizzle/schema/supplierRma.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
-import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { recordAuditTrail, recordAuditTrailStandalone } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
+import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
+import { pool } from "../../db/index.js";
+import type { TenantDb } from "../../lib/tenantScope.js";
 
-/** Same inline-guard style as rma.controller.ts/warranty.controller.ts's assertDepartment — PERMISSION_MATRIX.crar is binary (read/edit) and can't express these per-action splits on its own. */
+/** Same inline-guard style as rma.controller.ts/warranty.controller.ts's assertDepartment — used for the one thing left that genuinely IS a fixed business rule rather than a tunable access level (which stage of the workflow belongs to whom — see STATUS_TRANSITION_DEPARTMENTS below). */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
   if (role === "admin" || role === "platform_admin") return;
@@ -22,6 +25,33 @@ function assertDepartment(req: Request, allowed: string[]) {
 
 function isAdmin(req: Request): boolean {
   return req.user?.roleName === "admin" || req.user?.roleName === "platform_admin";
+}
+
+/**
+ * Module-specific RBAC build (2026-09-16): create/full-content-edit used to
+ * be hardcoded to `assertDepartment(req, ["quality"])`, bypassing whatever
+ * the Roles & Permissions module's own "crar" access level actually said
+ * for any OTHER department. Now it's the real, live check — any department
+ * with "edit" on crar (self-service configurable, department_permissions
+ * or a custom role) may fully create/edit a CRAR's content, EXCEPT the
+ * warranty-link-only departments below, whose narrower carve-out is a real
+ * structural business rule (not a tunable level) and stays hardcoded, same
+ * as it always has. Default behavior is bit-for-bit unchanged (today only
+ * quality has crar edit AND isn't link-only) — the new capability is
+ * purely additive: grant e.g. sales_and_marketing "edit" on crar via the
+ * admin UI and they gain full create/edit rights too, without touching
+ * this function.
+ */
+async function assertCrarContentWrite(req: Request) {
+  if (isAdmin(req)) return;
+  const department = req.user?.department;
+  if (department && WARRANTY_LINK_ONLY_DEPARTMENTS.includes(department)) {
+    throw AppError.forbidden("Your department may only link a CRAR to a warranty claim, not edit its content");
+  }
+  const level = await getUserAccessLevel(req.db! as TenantDb, req.tenantId!, req.user!, "crar");
+  if (level !== "edit") {
+    throw AppError.forbidden("This action requires edit access to CRAR (crar.write)");
+  }
 }
 
 /** A fixed, linear lifecycle exactly as specified — no branching, unlike Warranty's own approve/reject fork. completed is terminal. */
@@ -90,10 +120,11 @@ export const listCrarHandler = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const createCrarHandler = asyncHandler(async (req: Request, res: Response) => {
-  // Quality initiates a CRAR — matches the brief's own "Integrated with
-  // Quality Department" as the primary owner; Customer Service/Warranty
-  // only ever view or link an existing one (see the RBAC section).
-  assertDepartment(req, ["quality"]);
+  // Quality initiates a CRAR by default — matches the brief's own
+  // "Integrated with Quality Department" as the primary owner. Now a live
+  // DB check (crar.write) rather than hardcoded to quality alone — see
+  // assertCrarContentWrite's own comment.
+  await assertCrarContentWrite(req);
   const body = req.body as Record<string, unknown>;
 
   if (body.warrantyId !== undefined && body.warrantyId !== null) {
@@ -149,10 +180,18 @@ export const updateCrarHandler = asyncHandler(async (req: Request, res: Response
   if (isLinkOnly) {
     const disallowed = Object.keys(req.body).filter((k) => !WARRANTY_LINK_FIELDS.includes(k));
     if (disallowed.length > 0) {
+      await recordAuditTrailStandalone(pool, {
+        tenantId: req.tenantId!,
+        entityType: "Crar",
+        entityId: record.id,
+        action: "permission_denied",
+        changes: { attemptedAction: "update_content", disallowedFields: disallowed },
+        performedBy: req.user?.id,
+      });
       throw AppError.forbidden(`Your department may only update ${WARRANTY_LINK_FIELDS.join(", ")} on a CRAR (not: ${disallowed.join(", ")})`);
     }
   } else {
-    assertDepartment(req, ["quality"]);
+    await assertCrarContentWrite(req);
   }
 
   if (req.body.warrantyId !== undefined && req.body.warrantyId !== null) {
@@ -176,7 +215,28 @@ export const transitionCrarHandler = asyncHandler(async (req: Request, res: Resp
   if (!ALLOWED_NEXT[record.status]?.includes(newStatus)) {
     throw AppError.badRequest(`Cannot move a CRAR from "${record.status}" to "${newStatus}"`);
   }
-  if (!isAdmin(req)) assertDepartment(req, STATUS_TRANSITION_DEPARTMENTS[newStatus] ?? []);
+  if (!isAdmin(req)) {
+    // Two independent checks, both must pass: WHICH stage belongs to whom
+    // stays a real, hardcoded workflow-ownership rule (unchanged); whether
+    // this department can attempt a transition AT ALL is now the module-
+    // specific RBAC brief's own separate, self-service "crar.workflow.write"
+    // lever (crar_workflow) layered on top — see db/defaultPermissions.ts's
+    // own comment on why its seeded default matches today's real behavior
+    // exactly (the union of every department in STATUS_TRANSITION_DEPARTMENTS).
+    const workflowLevel = await getUserAccessLevel(req.db! as TenantDb, req.tenantId!, req.user!, "crar_workflow");
+    if (workflowLevel !== "edit") {
+      await recordAuditTrailStandalone(pool, {
+        tenantId: req.tenantId!,
+        entityType: "Crar",
+        entityId: record.id,
+        action: "permission_denied",
+        changes: { attemptedAction: "status_change", fromStatus: record.status, toStatus: newStatus },
+        performedBy: req.user?.id,
+      });
+      throw AppError.forbidden("Changing a CRAR's status requires the crar.workflow.write permission");
+    }
+    assertDepartment(req, STATUS_TRANSITION_DEPARTMENTS[newStatus] ?? []);
+  }
 
   const [updated] = await req.db!.update(crarClaims).set({ status: newStatus, updatedAt: new Date() }).where(eq(crarClaims.id, record.id)).returning();
 

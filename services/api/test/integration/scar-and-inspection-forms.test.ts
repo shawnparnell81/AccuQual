@@ -16,6 +16,8 @@ import { qualityInspectionReports, qualityInspectionItems } from "../../src/driz
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
+import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
@@ -37,6 +39,8 @@ describe("SCAR + Quality Inspection Report (real DB + real HTTP path)", () => {
   beforeAll(async () => {
     const [tenant] = await db.insert(tenants).values({ name: `SCAR/Inspection Test Tenant ${suffix}`, code: `scar-insp-test-${suffix}` }).returning();
     tenantId = tenant!.id;
+
+    await seedDefaultPermissions(tenantId);
     productionToken = await makeUser("production"); // proves there's no department gate
   });
 
@@ -49,6 +53,8 @@ describe("SCAR + Quality Inspection Report (real DB + real HTTP path)", () => {
       await db.delete(qualityInspectionReports).where(eq(qualityInspectionReports.id, reportId));
     }
     for (const id of userIds) await db.delete(users).where(eq(users.id, id));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });

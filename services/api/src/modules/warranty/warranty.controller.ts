@@ -13,8 +13,10 @@ import { AppError } from "../../utils/appError.js";
 import { env } from "../../config/env.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
+import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
+import type { TenantDb } from "../../lib/tenantScope.js";
 
-/** Same inline-guard style as rma.controller.ts/inventory.controller.ts's assertDepartment — PERMISSION_MATRIX.warranty is binary (read/edit) and can't express these per-action splits on its own. */
+/** Same inline-guard style as rma.controller.ts/inventory.controller.ts's assertDepartment — used for the one thing left that's a real fixed business rule (which stage of the workflow belongs to whom) rather than a tunable access level. */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
   if (role === "admin" || role === "platform_admin") return;
@@ -26,6 +28,29 @@ function assertDepartment(req: Request, allowed: string[]) {
 
 function isAdmin(req: Request): boolean {
   return req.user?.roleName === "admin" || req.user?.roleName === "platform_admin";
+}
+
+/**
+ * Module-specific RBAC build (2026-09-16): create/update/upload used to be
+ * hardcoded to a fixed department list, bypassing the Roles & Permissions
+ * module's own "warranty" access level for any OTHER department. Now a
+ * live DB check (warranty.write) — any department with "edit" on warranty
+ * may fully create/edit a claim, EXCEPT purchasing, whose real carve-out
+ * (cost entries only — see createWarrantyCostHandler) is a genuine
+ * structural business rule, not a tunable level, and stays hardcoded.
+ * Default behavior is bit-for-bit unchanged; the new capability is purely
+ * additive (grant e.g. sales_and_marketing "edit" on warranty and they
+ * gain full create/edit rights too, without touching this function).
+ */
+async function assertWarrantyContentWrite(req: Request) {
+  if (isAdmin(req)) return;
+  if (req.user?.department === "purchasing") {
+    throw AppError.forbidden("Purchasing may only record cost entries on a warranty claim, not create or edit its content");
+  }
+  const level = await getUserAccessLevel(req.db! as TenantDb, req.tenantId!, req.user!, "warranty");
+  if (level !== "edit") {
+    throw AppError.forbidden("This action requires edit access to Warranty (warranty.write)");
+  }
 }
 
 /** A fixed lifecycle graph — see the Warranty module's WORKFLOW section. rejected may still be closed out; replaced/repaired/closed are terminal. */
@@ -99,7 +124,7 @@ export const createWarrantyClaimHandler = asyncHandler(async (req: Request, res:
   // finding). Real, deliberate FK lookups (not letting a bad id fall
   // through to a raw constraint violation) — same pattern rma.controller.ts
   // uses for supplierId/linkedNcrId.
-  assertDepartment(req, ["customer_service", "quality"]);
+  await assertWarrantyContentWrite(req);
   const body = req.body as {
     customerId?: number;
     productId?: number;
@@ -181,7 +206,7 @@ export const getWarrantyClaimHandler = asyncHandler(async (req: Request, res: Re
 export const updateWarrantyClaimHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadClaim(req, Number(req.params.id));
   if (record.status === "closed") throw AppError.badRequest("This claim is closed and can no longer be edited");
-  assertDepartment(req, ["quality", "engineering", "customer_service"]);
+  await assertWarrantyContentWrite(req);
 
   const [updated] = await req
     .db!.update(warrantyClaims)
@@ -231,7 +256,7 @@ export const transitionWarrantyClaimHandler = asyncHandler(async (req: Request, 
  */
 export const uploadWarrantyDocumentHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadClaim(req, Number(req.params.id));
-  assertDepartment(req, ["quality", "engineering", "customer_service"]);
+  await assertWarrantyContentWrite(req);
   const file = req.file;
   if (!file) throw AppError.badRequest("No file uploaded");
   const category = (req.body.category as string | undefined) === "failure_image" ? "failure_image" : "document";

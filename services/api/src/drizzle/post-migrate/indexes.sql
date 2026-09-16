@@ -45,7 +45,7 @@ DECLARE
     'warranty_claims', 'warranty_claim_costs', 'warranty_claim_workflow',
     'supplier_onboarding_documents', 'supplier_documents', 'supplier_ppap_submissions',
     'supplier_corrective_actions', 'supplier_8d_responses', 'supplier_messages',
-    'crar', 'supplier_rma_requests', 'rma_log',
+    'crar', 'supplier_rma_requests', 'rma_activity_log', 'rma_log',
     'permission_roles', 'permission_role_modules', 'user_permission_roles', 'department_permissions'
   ];
 BEGIN
@@ -74,6 +74,7 @@ CREATE INDEX IF NOT EXISTS customers_tenant_status_idx ON customers (tenant_id, 
 CREATE INDEX IF NOT EXISTS warranty_claims_tenant_status_idx ON warranty_claims (tenant_id, status);
 CREATE INDEX IF NOT EXISTS crar_tenant_status_idx ON crar (tenant_id, status);
 CREATE INDEX IF NOT EXISTS supplier_rma_requests_tenant_status_idx ON supplier_rma_requests (tenant_id, status);
+CREATE INDEX IF NOT EXISTS rma_log_tenant_status_idx ON rma_log (tenant_id, status);
 
 -- The single hottest lookup shape in the whole app: every module's history
 -- panel (WorkflowHistoryPanel) and the generic per-entity audit endpoint
@@ -122,8 +123,15 @@ CREATE INDEX IF NOT EXISTS supplier_corrective_actions_supplier_idx ON supplier_
 CREATE INDEX IF NOT EXISTS supplier_8d_responses_supplier_idx ON supplier_8d_responses (tenant_id, supplier_id);
 CREATE INDEX IF NOT EXISTS supplier_messages_thread_idx ON supplier_messages (tenant_id, supplier_id, thread_key);
 CREATE INDEX IF NOT EXISTS supplier_rma_requests_supplier_idx ON supplier_rma_requests (tenant_id, supplier_id);
-CREATE INDEX IF NOT EXISTS rma_log_rma_idx ON rma_log (tenant_id, rma_id);
+CREATE INDEX IF NOT EXISTS rma_activity_log_rma_idx ON rma_activity_log (tenant_id, rma_id);
 CREATE INDEX IF NOT EXISTS crar_warranty_idx ON crar (warranty_id);
+
+-- The RMA Log register's own linkage lookups (module-specific RBAC build,
+-- 2026-09-16) — same "one index per real FK a page actually queries by"
+-- convention as crar_warranty_idx above.
+CREATE INDEX IF NOT EXISTS rma_log_warranty_idx ON rma_log (warranty_id);
+CREATE INDEX IF NOT EXISTS rma_log_supplier_request_idx ON rma_log (supplier_rma_request_id);
+CREATE INDEX IF NOT EXISTS rma_log_quality_idx ON rma_log (quality_id);
 
 -- Roles & Permissions' own hot lookup shape: getUserAccessLevel() runs on
 -- EVERY protected request now, so its user_permission_roles ->

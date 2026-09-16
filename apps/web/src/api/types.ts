@@ -1424,7 +1424,8 @@ export interface SupplierRmaRequest {
   createdAt: string;
 }
 
-export interface RmaLogEntry {
+/** The automated Supplier RMA Request event trail (renamed from "RmaLogEntry" — module-specific RBAC build, 2026-09-16 — see RmaActivityLogPage.tsx's own comment). Not the real, manually-maintained register below. */
+export interface RmaActivityLogEntry {
   id: number;
   rmaId: number | null;
   supplierRmaRequestId: number | null;
@@ -1432,6 +1433,45 @@ export interface RmaLogEntry {
   details: Record<string, unknown> | null;
   performedBy: number | null;
   createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// RMA Log — the real, manually-maintained customer-return register
+// (module-specific RBAC build, 2026-09-16)
+// ---------------------------------------------------------------------------
+
+export type RmaLogStatus = "open" | "received" | "under_review" | "dispositioned" | "closed";
+export type RmaLogDispositionAction = "warranty" | "scrap" | "repair" | "replace" | "credit";
+
+export interface RmaLogRecord {
+  id: number;
+  status: RmaLogStatus;
+  rmaNumber: string;
+  dateIssued: string;
+  trackingNumber: string | null;
+  customerName: string | null;
+  partNumber: string | null;
+  partDescription: string | null;
+  quantityReturned: string | null;
+  originalOrderNumber: string | null;
+  serialNumber: string | null;
+  customerReasonForReturn: string | null;
+  dateReceived: string | null;
+  qualityTeamFindings: string | null;
+  dispositionAction: RmaLogDispositionAction | null;
+  correctiveAction: string | null;
+  creditMemo: string | null;
+  dateClosed: string | null;
+  warrantyId: number | null;
+  supplierRmaRequestId: number | null;
+  qualityId: number | null;
+  createdByUserId: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  // Detail-endpoint-only resolved links
+  warranty?: { id: number; claimNumber: string; status: string } | null;
+  supplierRequest?: { id: number; companyName: string; status: string } | null;
+  linkedNcr?: { id: number; title: string; status: string } | null;
 }
 
 // ---------------------------------------------------------------------------

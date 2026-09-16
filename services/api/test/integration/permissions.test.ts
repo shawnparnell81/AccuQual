@@ -23,6 +23,8 @@ import { rma } from "../../src/drizzle/schema/rma.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
+import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
@@ -56,6 +58,8 @@ describe("department permissions (real DB + real HTTP path, via RMA)", () => {
     const [tenant] = await db.insert(tenants).values({ name: `Perm Test Tenant ${suffix}`, code: `perm-test-${suffix}` }).returning();
     tenantId = tenant!.id;
 
+    await seedDefaultPermissions(tenantId);
+
     const [supplier] = await db.insert(suppliers).values({ tenantId, name: `Perm Test Supplier ${suffix}` }).returning();
     supplierId = supplier!.id;
 
@@ -86,6 +90,8 @@ describe("department permissions (real DB + real HTTP path, via RMA)", () => {
     if (rmaId) await db.delete(rma).where(eq(rma.id, rmaId));
     for (const id of userIds) await db.delete(users).where(eq(users.id, id));
     await db.delete(suppliers).where(eq(suppliers.id, supplierId));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });

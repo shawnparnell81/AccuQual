@@ -31,6 +31,8 @@ import {
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
+import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
@@ -79,6 +81,8 @@ describe("Supplier Portal (real DB + real HTTP path)", () => {
     const [tenant] = await db.insert(tenants).values({ name: `Supplier Portal Test Tenant ${suffix}`, code: `sp-test-${suffix}` }).returning();
     tenantId = tenant!.id;
 
+    await seedDefaultPermissions(tenantId);
+
     qualityToken = await makeInternalUser("quality");
     purchasingToken = await makeInternalUser("purchasing");
     engineeringToken = await makeInternalUser("engineering");
@@ -112,6 +116,8 @@ describe("Supplier Portal (real DB + real HTTP path)", () => {
     // users before suppliers — users.supplierId (Supplier Portal logins) FKs into it.
     await db.delete(users).where(eq(users.tenantId, tenantId));
     await db.delete(suppliers).where(eq(suppliers.tenantId, tenantId));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });

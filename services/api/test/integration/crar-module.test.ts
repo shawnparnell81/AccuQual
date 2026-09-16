@@ -16,6 +16,8 @@ import { warrantyClaims } from "../../src/drizzle/schema/warranty.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
+import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
@@ -24,6 +26,8 @@ let qualityToken: string;
 let customerServiceToken: string;
 let engineeringToken: string;
 let purchasingToken: string;
+let salesToken: string;
+let adminToken: string;
 let warrantyClaimId: number;
 let crarId: number;
 
@@ -37,10 +41,14 @@ describe("CRAR module (real DB + real HTTP path)", () => {
     const [tenant] = await db.insert(tenants).values({ name: `CRAR Test Tenant ${suffix}`, code: `crar-test-${suffix}` }).returning();
     tenantId = tenant!.id;
 
+    await seedDefaultPermissions(tenantId);
+
     qualityToken = await makeUser("quality");
     customerServiceToken = await makeUser("customer_service");
     engineeringToken = await makeUser("engineering");
     purchasingToken = await makeUser("purchasing");
+    salesToken = await makeUser("sales_and_marketing");
+    adminToken = await makeUser(null as unknown as string, "admin");
 
     const [claim] = await db.insert(warrantyClaims).values({ tenantId, claimNumber: `WC-CRARTEST-${suffix}`, status: "new" }).returning();
     warrantyClaimId = claim!.id;
@@ -52,6 +60,8 @@ describe("CRAR module (real DB + real HTTP path)", () => {
     await db.delete(crarClaims).where(eq(crarClaims.tenantId, tenantId));
     await db.delete(warrantyClaims).where(eq(warrantyClaims.tenantId, tenantId));
     await db.delete(users).where(eq(users.tenantId, tenantId));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
@@ -157,5 +167,74 @@ describe("CRAR module (real DB + real HTTP path)", () => {
     const updated = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "Crar"), eq(auditTrail.entityId, crarId), eq(auditTrail.action, "update")));
     expect(created.length).toBe(1);
     expect(updated.length).toBeGreaterThan(0);
+  });
+
+  describe("module-specific RBAC build (2026-09-16): create/edit is now a live crar.write check, not hardcoded to quality alone", () => {
+    it("sales_and_marketing (no crar access at all by default) cannot create a CRAR", async () => {
+      const res = await request(app).post("/crar").set("Authorization", `Bearer ${salesToken}`).send({ customerName: "Should be blocked" });
+      expect(res.status).toBe(403);
+    });
+
+    it("admin grants sales_and_marketing 'edit' on crar via the self-service API", async () => {
+      const res = await request(app).patch("/permissions/department-permissions").set("Authorization", `Bearer ${adminToken}`).send({ departmentName: "sales_and_marketing", moduleName: "crar", accessLevel: "edit" });
+      expect(res.status).toBe(200);
+    });
+
+    it("...and now sales_and_marketing can create AND fully edit a CRAR's content — not just link it", async () => {
+      const create = await request(app).post("/crar").set("Authorization", `Bearer ${salesToken}`).send({ customerName: "New Capability Co", partNumber: "PN-NEW" });
+      expect(create.status).toBe(201);
+      const newId = create.body.id;
+
+      const update = await request(app).patch(`/crar/${newId}`).set("Authorization", `Bearer ${salesToken}`).send({ findings: "sales_and_marketing can edit real content now" });
+      expect(update.status).toBe(200);
+      expect(update.body.findings).toBe("sales_and_marketing can edit real content now");
+    });
+
+    it("engineering/purchasing still stay link-only even with crar edit — the structural carve-out didn't change", async () => {
+      const create = await request(app).post("/crar").set("Authorization", `Bearer ${engineeringToken}`).send({ customerName: "Should still be blocked" });
+      expect(create.status).toBe(403);
+    });
+
+    it("revoking sales_and_marketing's crar access again blocks it", async () => {
+      await request(app).delete("/permissions/department-permissions").set("Authorization", `Bearer ${adminToken}`).send({ departmentName: "sales_and_marketing", moduleName: "crar" });
+      const res = await request(app).post("/crar").set("Authorization", `Bearer ${salesToken}`).send({ customerName: "Should be blocked again" });
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe("crar.workflow.write is a separate lever from crar.write", () => {
+    let workflowTestId: number;
+
+    it("set up a fresh CRAR through quality_review for this block", async () => {
+      const created = await request(app).post("/crar").set("Authorization", `Bearer ${qualityToken}`).send({ customerName: "Workflow Permission Co" });
+      workflowTestId = created.body.id;
+      const transitioned = await request(app).post(`/crar/${workflowTestId}/transition`).set("Authorization", `Bearer ${qualityToken}`).send({ status: "quality_review" });
+      expect(transitioned.status).toBe(200);
+    });
+
+    it("admin elevates purchasing to crar edit but revokes its crar_workflow — purchasing keeps its link-only carve-out for content, and now can't transition either", async () => {
+      const revoke = await request(app).patch("/permissions/department-permissions").set("Authorization", `Bearer ${adminToken}`).send({ departmentName: "purchasing", moduleName: "crar_workflow", accessLevel: "none" });
+      expect(revoke.status).toBe(200);
+
+      const transitioned = await request(app).post(`/crar/${workflowTestId}/transition`).set("Authorization", `Bearer ${qualityToken}`).send({ status: "warranty_review" });
+      expect(transitioned.status).toBe(200);
+
+      const res = await request(app).post(`/crar/${workflowTestId}/transition`).set("Authorization", `Bearer ${purchasingToken}`).send({ status: "completed" });
+      expect(res.status).toBe(403);
+
+      const rows = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "Crar"), eq(auditTrail.entityId, workflowTestId), eq(auditTrail.action, "permission_denied")));
+      expect(rows.length).toBeGreaterThan(0);
+
+      // Restore it explicitly — with no hardcoded fallback left anywhere in
+      // this app (see departmentAccess.ts's own comment), DELETE now means
+      // "none," full stop, not "revert to whatever the old default was."
+      // Setting it back to "edit" is the only way to restore it.
+      await request(app).patch("/permissions/department-permissions").set("Authorization", `Bearer ${adminToken}`).send({ departmentName: "purchasing", moduleName: "crar_workflow", accessLevel: "edit" });
+    });
+
+    it("with crar_workflow restored, purchasing can complete it", async () => {
+      const res = await request(app).post(`/crar/${workflowTestId}/transition`).set("Authorization", `Bearer ${purchasingToken}`).send({ status: "completed" });
+      expect(res.status).toBe(200);
+    });
   });
 });

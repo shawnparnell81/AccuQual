@@ -17,6 +17,8 @@ import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { aiSuggestions } from "../../src/drizzle/schema/ai.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
+import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
@@ -42,6 +44,8 @@ describe("Risk Management module (real DB + real HTTP path)", () => {
     const [tenant] = await db.insert(tenants).values({ name: `Risk Test Tenant ${suffix}`, code: `risk-test-${suffix}` }).returning();
     tenantId = tenant!.id;
 
+    await seedDefaultPermissions(tenantId);
+
     const [ncrRow] = await db.insert(ncr).values({ tenantId, title: "Risk test NCR", description: "x" }).returning();
     ncrId = ncrRow!.id;
 
@@ -63,6 +67,8 @@ describe("Risk Management module (real DB + real HTTP path)", () => {
     }
     await db.delete(ncr).where(eq(ncr.id, ncrId));
     for (const id of userIds) await db.delete(users).where(eq(users.id, id));
+    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });

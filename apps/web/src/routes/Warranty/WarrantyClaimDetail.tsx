@@ -1,6 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
+import { useWorkflowAccessLevel } from "../../hooks/useWorkflowAccess";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
@@ -47,6 +48,7 @@ export function WarrantyClaimDetail() {
   const claimId = Number(id);
   const { data: claim, isLoading } = claimHooks.useOne(claimId);
   const currentUser = useCurrentUser();
+  const warrantyAccessLevel = useWorkflowAccessLevel("warranty");
 
   const transitionAction = useWorkflowAction<{ id: number; status: string }>("warranty/claims", "transition", {
     successMessage: "Warranty claim status updated.",
@@ -56,9 +58,15 @@ export function WarrantyClaimDetail() {
 
   const isAdmin = currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin";
   const department = currentUser?.department;
-  // Field-edit access (inspection notes, supplier review notes, POST .../update) — customer_service/quality/engineering, matching warranty.controller.ts's updateWarrantyClaimHandler.
-  const canEditFields = isAdmin || department === "quality" || department === "engineering" || department === "customer_service";
-  // Cost entries — quality/purchasing only, matching createWarrantyCostHandler.
+  // Field-edit access (inspection notes, supplier review notes, POST
+  // .../update) — module-specific RBAC build (2026-09-16): a live,
+  // DB-driven check (warranty.write) mirroring warranty.controller.ts's own
+  // assertWarrantyContentWrite exactly, rather than a hardcoded department
+  // list that couldn't reflect a tenant admin's own self-service grants.
+  const canEditFields = isAdmin || (department !== "purchasing" && warrantyAccessLevel === "edit");
+  // Cost entries — quality/purchasing only, matching createWarrantyCostHandler
+  // (a genuine, still-hardcoded structural carve-out on the backend, not a
+  // separate configurable permission — see that handler's own comment).
   const canEditCosts = isAdmin || department === "quality" || department === "purchasing";
   const nextActions = NEXT_STATUS[claim.status] ?? [];
 
@@ -146,7 +154,7 @@ export function WarrantyClaimDetail() {
       <WarrantyInspectionPanel claim={claim} canEdit={canEditFields} />
       <WarrantySupplierReviewPanel claim={claim} canEdit={canEditFields} />
       <WarrantyCostPanel claimId={claimId} actualCost={claim.warrantyActualCost} canEdit={canEditCosts} />
-      <WarrantyCrarPanel claimId={claimId} canCreate={isAdmin || department === "quality"} />
+      <WarrantyCrarPanel claimId={claimId} />
 
       <div className="print:hidden">
         <WarrantyDocumentsPanel claimId={claimId} />
