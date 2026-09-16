@@ -6,8 +6,15 @@
 -- plain RENAME is unambiguous and lossless, where drizzle-kit's own
 -- interactive rename-vs-drop-and-create resolver can't run headlessly in
 -- this environment.
+--
+-- Deliberately renames ONLY the table, not its indexes: rma_log_rma_idx
+-- and rma_log_tenant_id_idx were never created by a drizzle-kit migration
+-- at all — they're hand-written in post-migrate/indexes.sql (see that
+-- file's own header comment on why), which runs AFTER every drizzle
+-- migration, including this one. On a truly fresh database (CI, a new
+-- deploy) those indexes don't exist yet at this point in the run, so an
+-- ALTER INDEX ... RENAME here would fail outright. indexes.sql already
+-- creates them under their new, correct names (rma_activity_log_rma_idx /
+-- rma_activity_log_tenant_id_idx) the moment it runs next — nothing here
+-- needs to rename them.
 ALTER TABLE "rma_log" RENAME TO "rma_activity_log";
---> statement-breakpoint
-ALTER INDEX "rma_log_rma_idx" RENAME TO "rma_activity_log_rma_idx";
---> statement-breakpoint
-ALTER INDEX "rma_log_tenant_id_idx" RENAME TO "rma_activity_log_tenant_id_idx";
