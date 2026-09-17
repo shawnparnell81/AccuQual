@@ -15,12 +15,22 @@ import { createClient, type RedisClientType } from "redis";
  * — a poison message must not loop forever — but a failed handler now logs
  * and moves on to the next message instead of exiting the whole worker.
  */
+/**
+ * `signal`/`blockMs` exist purely for testability (see redis-consumer.test.ts)
+ * — no production caller (this worker's own index.ts) passes either, so
+ * `signal` stays undefined and the loop condition below is always true
+ * exactly as before, and `blockMs` keeps its original 5000ms default. A
+ * real test needs some way to stop this otherwise-infinite loop and shrink
+ * its 5s blocking read so the suite doesn't hang; production behavior is
+ * unchanged either way.
+ */
 export async function consumeStream(
   redisUrl: string,
   stream: string,
   group: string,
   consumerName: string,
-  handler: (fields: Record<string, string>) => Promise<void>
+  handler: (fields: Record<string, string>) => Promise<void>,
+  options?: { signal?: AbortSignal; blockMs?: number }
 ): Promise<void> {
   const client: RedisClientType = createClient({ url: redisUrl });
   await client.connect();
@@ -31,28 +41,31 @@ export async function consumeStream(
     // group already exists — fine
   }
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const response = await client.xReadGroup(
-      group,
-      consumerName,
-      [{ key: stream, id: ">" }],
-      { COUNT: 10, BLOCK: 5000 }
-    );
+  try {
+    while (!options?.signal?.aborted) {
+      const response = await client.xReadGroup(
+        group,
+        consumerName,
+        [{ key: stream, id: ">" }],
+        { COUNT: 10, BLOCK: options?.blockMs ?? 5000 }
+      );
 
-    if (!response) continue;
+      if (!response) continue;
 
-    for (const streamResult of response) {
-      for (const message of streamResult.messages) {
-        try {
-          await handler(message.message as Record<string, string>);
-        } catch (err) {
-          // eslint-disable-next-line no-console
-          console.error(`[${stream}] handler failed for message ${message.id} — skipping, worker stays up`, err);
-        } finally {
-          await client.xAck(stream, group, message.id);
+      for (const streamResult of response) {
+        for (const message of streamResult.messages) {
+          try {
+            await handler(message.message as Record<string, string>);
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error(`[${stream}] handler failed for message ${message.id} — skipping, worker stays up`, err);
+          } finally {
+            await client.xAck(stream, group, message.id);
+          }
         }
       }
     }
+  } finally {
+    if (options?.signal) await client.quit();
   }
 }
