@@ -25,9 +25,21 @@ COPY workers/workflow-worker ./workers/workflow-worker
 # (which has no "type", so defaults to CommonJS) — that mismatch made
 # TypeScript instantiate drizzle-orm's types twice (once per module format)
 # and fail with spurious "private property" incompatibility errors.
+# The FULL services/api/src tree, not a hand-picked subset — workflowActions.ts
+# registers action handlers spanning nearly every module (create_ncr,
+# escalate_capa, notify_department, send_email, ai_suggestion, ...), so it
+# transitively imports far more of services/api than just modules/workflow
+# (lib/tenantScope.ts, middleware/departmentAccess.ts, modules/notifications,
+# modules/audit-trail, modules/ai, ...). A narrower whitelist here silently
+# broke this exact build the first time a new import was added to that file
+# (see git history) with zero warning from CI, since CI's own "Build Workers"
+# step runs tsc directly against the full checkout, never through this
+# Dockerfile's isolated COPY — only `docker compose build`/a real Render
+# deploy ever exercised this path. Cheap to copy in full: this is the BUILD
+# stage only, source files, not the final runtime image (see Stage 3 below,
+# which copies only this worker's own compiled dist/ output).
 COPY services/api/package.json ./services/api/package.json
-COPY services/api/src/drizzle ./services/api/src/drizzle
-COPY services/api/src/modules/workflow ./services/api/src/modules/workflow
+COPY services/api/src ./services/api/src
 RUN npm run build --workspace workers/workflow-worker
 
 # ---- Stage 3: run ----
