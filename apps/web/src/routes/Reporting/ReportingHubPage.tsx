@@ -266,8 +266,8 @@ function ProductionReceivingOverview() {
           <TrendLineChart data={scrapVsConsumption.map((d) => ({ month: d.month, count: d.scrap }))} label="Scrap Qty" />
         </div>
         <p className="text-xs text-muted-foreground">
-          Real per-lot/serial traceability (receiving → inventory → NCR/CAPA/warranty) is available on each item's own detail page under
-          Inventory.
+          Real per-lot/serial traceability (receiving → inventory → NCR/CAPA/warranty) is available on each item's own detail page under Inventory, or searched
+          tenant-wide by lot #, serial #, or SKU under Inventory → Lot / Serial Search.
         </p>
       </div>
     </div>

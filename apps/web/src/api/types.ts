@@ -260,12 +260,19 @@ export interface InventoryLot {
   createdAt: string;
 }
 
+/** GET /inventory/lots — tenant-wide search result row (a lot joined with its own item's identifying fields, so a row is meaningful without a second lookup). */
+export interface InventoryLotSearchResult extends InventoryLot {
+  sku: string;
+  description: string | null;
+}
+
 export interface InventoryLotTraceability {
   lot: InventoryLot;
+  item: { id: number; sku: string; description: string | null; itemType: string };
   supplier: { id: number; name: string } | null;
   receivingLineItem: { id: number; status: string; quantityReceived: number; poLineItemId: number } | null;
   poLineItem: { id: number; purchaseOrderId: number; itemId: number; quantity: number } | null;
-  purchaseOrder: { id: number; status: string; supplierId: number } | null;
+  purchaseOrder: { id: number; status: string; supplierId: number; createdAt: string; expectedDeliveryDate: string | null } | null;
   inspectionReport: QualityInspectionReport | null;
   movements: InventoryMovement[];
 }

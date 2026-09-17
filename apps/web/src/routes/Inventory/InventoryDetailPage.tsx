@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { useCurrentUser } from "../../hooks/useAuth";
@@ -238,6 +238,7 @@ function ReorderRequestRow({ request, canEdit }: { request: InventoryReorderRequ
  */
 export function InventoryDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const itemId = Number(id);
   const { data: item, isLoading } = itemHooks.useOne(itemId);
   useSetAssistantContext("inventory", itemId, item ? `Item ${item.sku}` : `Item #${itemId}`);
@@ -470,7 +471,12 @@ export function InventoryDetailPage() {
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4">
-        <h3 className="mb-3 text-sm font-medium">Lot / Serial Traceability</h3>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-medium">Lot / Serial Traceability</h3>
+          <Link to="/inventory/lots" className="text-xs text-primary hover:underline">
+            Search all lots →
+          </Link>
+        </div>
         {lots.length === 0 ? (
           <p className="text-sm text-muted-foreground">No tracked lots for this item yet — a real one is created the moment it's received with a lot number on a Purchase Order's Receiving Document.</p>
         ) : (
@@ -488,7 +494,7 @@ export function InventoryDetailPage() {
             </thead>
             <tbody>
               {lots.map((l) => (
-                <tr key={l.id} className="border-t border-border">
+                <tr key={l.id} onClick={() => navigate(`/inventory/lots/${l.id}`)} className="cursor-pointer border-t border-border hover:bg-muted/50">
                   <td className="py-1.5 font-medium">{l.lotNumber}</td>
                   <td className="py-1.5 text-muted-foreground">{l.serialNumber ?? "—"}</td>
                   <td className="py-1.5 tabular-nums">{l.receivedQty}</td>
@@ -496,7 +502,7 @@ export function InventoryDetailPage() {
                   <td className="py-1.5 text-muted-foreground">{l.revisionLevel ?? "—"}</td>
                   <td className="py-1.5 text-muted-foreground">{l.expirationDate ? new Date(l.expirationDate).toLocaleDateString() : "—"}</td>
                   <td className="py-1.5">
-                    <StatusBadge value={l.status === "expired" || l.status === "scrapped" ? "critical" : l.status} />
+                    <StatusBadge value={l.status} />
                   </td>
                 </tr>
               ))}

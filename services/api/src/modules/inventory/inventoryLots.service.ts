@@ -1,7 +1,7 @@
 import { and, eq, desc } from "drizzle-orm";
 import type { TenantDb } from "../../lib/tenantScope.js";
 import { inventoryLots, type InventoryLot } from "../../drizzle/schema/inventoryLots.js";
-import { inventoryMovements } from "../../drizzle/schema/inventory.js";
+import { inventoryItems, inventoryMovements } from "../../drizzle/schema/inventory.js";
 import { erpReceivingLineItems, erpPoLineItems, erpPurchaseOrders } from "../../drizzle/schema/erp.js";
 import { qualityInspectionReports } from "../../drizzle/schema/qualityInspectionReports.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
@@ -120,20 +120,20 @@ async function loadLot(db: TenantDb, tenantId: number, lotId: number): Promise<I
 
 /**
  * The real "receiving → inventory → production → NCR/CAPA/warranty"
- * traceability chain (Phase 8 task 4) — one call assembling the lot's full
- * backward chain (receiving line item → PO line → PO → supplier →
- * inspection report, when each link exists) plus its forward movement
- * history. NCR/CAPA/warranty are NOT joined here: they link back to a
- * receiving line item (ncr.receivingLineItemId) or a supplier, not to a
- * specific lot — the receiving-line-item id this returns is what a caller
- * cross-references against `GET /ncr?receivingLineItemId=` to complete the
- * chain, keeping this query from having to know about every downstream
- * module.
+ * traceability chain (Phase 8 task 4) — one call assembling the item this
+ * lot belongs to, its full backward chain (receiving line item → PO line →
+ * PO → supplier → inspection report, when each link exists), plus its
+ * forward movement history. NCR/CAPA/warranty are NOT joined here: they
+ * link back to a receiving line item (ncr.receivingLineItemId) or a
+ * supplier, not to a specific lot — the receiving-line-item id this returns
+ * is what a caller cross-references against `GET /ncr?receivingLineItemId=`
+ * to complete the chain, keeping this query from having to know about every
+ * downstream module.
  */
 export async function getLotTraceability(db: TenantDb, tenantId: number, lotId: number) {
   const lot = await loadLot(db, tenantId, lotId);
 
-  const [movements, receivingLine, supplier] = await Promise.all([
+  const [movements, receivingLine, supplier, [item]] = await Promise.all([
     db.select().from(inventoryMovements).where(and(eq(inventoryMovements.tenantId, tenantId), eq(inventoryMovements.lotId, lotId))).orderBy(desc(inventoryMovements.performedAt)),
     lot.receivingLineItemId
       ? db
@@ -147,6 +147,7 @@ export async function getLotTraceability(db: TenantDb, tenantId: number, lotId: 
           .where(and(eq(erpReceivingLineItems.id, lot.receivingLineItemId), eq(erpReceivingLineItems.tenantId, tenantId)))
       : Promise.resolve([]),
     lot.supplierId ? db.select({ id: suppliers.id, name: suppliers.name }).from(suppliers).where(eq(suppliers.id, lot.supplierId)) : Promise.resolve([]),
+    db.select({ id: inventoryItems.id, sku: inventoryItems.sku, description: inventoryItems.description, itemType: inventoryItems.itemType }).from(inventoryItems).where(and(eq(inventoryItems.id, lot.itemId), eq(inventoryItems.tenantId, tenantId))),
   ]);
 
   const receivingLineItem = receivingLine[0];
@@ -167,5 +168,5 @@ export async function getLotTraceability(db: TenantDb, tenantId: number, lotId: 
     inspectionReport = report ?? null;
   }
 
-  return { lot, supplier: supplier[0] ?? null, receivingLineItem: receivingLineItem ?? null, poLineItem, purchaseOrder, inspectionReport, movements };
+  return { lot, item, supplier: supplier[0] ?? null, receivingLineItem: receivingLineItem ?? null, poLineItem, purchaseOrder, inspectionReport, movements };
 }

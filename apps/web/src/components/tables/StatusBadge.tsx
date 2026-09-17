@@ -68,6 +68,12 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   reorder_pending: "info",
   on_order: "info",
   inactive: "muted",
+  // Inventory lot lifecycle (inventoryLots.ts's own status comment) — active/
+  // expired already covered above; these three were missing and fell back to
+  // "muted" for every consumed/scrapped/returned lot.
+  consumed: "muted",
+  scrapped: "destructive",
+  returned: "warning",
 
   // ERP purchase order states.
   sent: "info",

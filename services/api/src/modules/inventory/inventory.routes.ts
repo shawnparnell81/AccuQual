@@ -27,6 +27,7 @@ import {
   recordCycleCountHandler,
   listItemLotsHandler,
   traceLotHandler,
+  searchLotsHandler,
 } from "./inventory.controller.js";
 import { movementTrendsHandler, consumptionVsReceivingHandler, scrapAnalyticsHandler, referenceSummaryHandler } from "./inventory.analytics.js";
 import { getItemCostingHandler, costingSummaryHandler } from "./inventory.costing.js";
@@ -69,7 +70,10 @@ inventoryRouter.post("/items/:id/adjust", validate(adjustSchema), adjustHandler)
 inventoryRouter.post("/items/:id/mark-reorder-pending", markReorderPendingHandler);
 inventoryRouter.post("/items/:id/mark-on-order", markOnOrderHandler);
 inventoryRouter.get("/items/:id/history", historyHandler);
-// Phase 8 — real per-lot/serial traceability (task 4).
+// Phase 8 — real per-lot/serial traceability (task 4). "/lots" (fixed
+// literal, tenant-wide search) before "/lots/:id/trace" (param-shaped),
+// same literal-before-param convention as "/alerts"/"/check-minmax" above.
+inventoryRouter.get("/lots", searchLotsHandler);
 inventoryRouter.get("/items/:id/lots", listItemLotsHandler);
 inventoryRouter.get("/lots/:id/trace", traceLotHandler);
 // Settings → Inventory Module expansion (reservation logic + cycle counts) —

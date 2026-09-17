@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, or, ilike, desc, type SQL } from "drizzle-orm";
 import { inventoryItems, inventoryStock, inventoryAlerts, inventoryMovements, inventoryReorderRequests } from "../../drizzle/schema/inventory.js";
+import { inventoryLots } from "../../drizzle/schema/inventoryLots.js";
 import { users } from "../../drizzle/schema/users.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
@@ -342,6 +343,54 @@ export const notesReorderRequestHandler = asyncHandler(async (req: Request, res:
     performedBy: req.user?.id,
   });
   res.json(updated);
+});
+
+/**
+ * GET /inventory/lots?q=&status= — tenant-wide lot/serial visibility. Phase
+ * 8's per-item lot list and lot-trace endpoint both required already
+ * knowing which item to start from; a real recall/traceability
+ * investigation usually starts from a lot number, a serial number, or a
+ * SKU pulled off a customer complaint or a shipping label, not from
+ * browsing the item roster first. q matches any of those three (same
+ * ilike-OR-across-columns shape rmaLog/warranty/crar's own ?q= filters
+ * already use, just spread across a join instead of one table's columns);
+ * status narrows to one lot lifecycle state. Same base read gate as every
+ * other GET on this router (quality is read-only here, not blocked).
+ */
+export const searchLotsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { q, status } = req.query as Record<string, string | undefined>;
+  const conditions: SQL[] = [eq(inventoryLots.tenantId, req.tenantId!)];
+  if (status) conditions.push(eq(inventoryLots.status, status));
+  if (q) {
+    const match = or(ilike(inventoryLots.lotNumber, `%${q}%`), ilike(inventoryLots.serialNumber, `%${q}%`), ilike(inventoryItems.sku, `%${q}%`));
+    if (match) conditions.push(match);
+  }
+
+  const rows = await req.db!
+    .select({
+      id: inventoryLots.id,
+      tenantId: inventoryLots.tenantId,
+      itemId: inventoryLots.itemId,
+      sku: inventoryItems.sku,
+      description: inventoryItems.description,
+      lotNumber: inventoryLots.lotNumber,
+      serialNumber: inventoryLots.serialNumber,
+      supplierId: inventoryLots.supplierId,
+      purchaseOrderId: inventoryLots.purchaseOrderId,
+      receivingLineItemId: inventoryLots.receivingLineItemId,
+      revisionLevel: inventoryLots.revisionLevel,
+      expirationDate: inventoryLots.expirationDate,
+      receivedQty: inventoryLots.receivedQty,
+      remainingQty: inventoryLots.remainingQty,
+      status: inventoryLots.status,
+      createdAt: inventoryLots.createdAt,
+    })
+    .from(inventoryLots)
+    .innerJoin(inventoryItems, eq(inventoryLots.itemId, inventoryItems.id))
+    .where(and(...conditions))
+    .orderBy(desc(inventoryLots.createdAt));
+
+  res.json(rows);
 });
 
 /** GET /inventory/items/:id/lots — Phase 8 traceability (task 4): every real per-lot record for this item, newest first. */
