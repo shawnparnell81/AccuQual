@@ -5,6 +5,8 @@ import { warrantyClaims } from "../../drizzle/schema/warranty.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { rma } from "../../drizzle/schema/rma.js";
 import { supplierRmaRequests } from "../../drizzle/schema/supplierRma.js";
+import { rmaLogRecords } from "../../drizzle/schema/rmaLog.js";
+import { customers } from "../../drizzle/schema/customers.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail, recordAuditTrailStandalone } from "../audit-trail/audit-trail.service.js";
@@ -143,10 +145,30 @@ export const createCrarHandler = asyncHandler(async (req: Request, res: Response
     const [r] = await req.db!.select({ id: rma.id }).from(rma).where(and(eq(rma.id, body.linkedRmaId as number), eq(rma.tenantId, req.tenantId!)));
     if (!r) throw AppError.badRequest(`RMA #${body.linkedRmaId} not found`);
   }
+  // Phase 2 fix: RMA Log link, previously entirely missing (see crar.ts's
+  // own schema comment) — same existence-check style as every other link.
+  if (body.rmaLogId !== undefined && body.rmaLogId !== null) {
+    const [rl] = await req.db!.select({ id: rmaLogRecords.id }).from(rmaLogRecords).where(and(eq(rmaLogRecords.id, body.rmaLogId as number), eq(rmaLogRecords.tenantId, req.tenantId!)));
+    if (!rl) throw AppError.badRequest(`RMA Log #${body.rmaLogId} not found`);
+  }
+  if (body.customerId !== undefined && body.customerId !== null) {
+    const [c] = await req.db!.select({ id: customers.id }).from(customers).where(and(eq(customers.id, body.customerId as number), eq(customers.tenantId, req.tenantId!)));
+    if (!c) throw AppError.badRequest(`Customer #${body.customerId} not found`);
+  }
+
+  // Phase 2 fix ("Add customer contact fields"): a CRAR usually starts from
+  // an existing Warranty claim ("+Start CRAR") — inherit that claim's own
+  // customer link automatically rather than making someone re-select the
+  // same customer a second time, unless one was already given explicitly.
+  let customerId = body.customerId as number | null | undefined;
+  if (customerId === undefined && body.warrantyId) {
+    const [w] = await req.db!.select({ customerId: warrantyClaims.customerId }).from(warrantyClaims).where(eq(warrantyClaims.id, body.warrantyId as number));
+    customerId = w?.customerId ?? undefined;
+  }
 
   const [created] = await req
     .db!.insert(crarClaims)
-    .values({ tenantId: req.tenantId!, ...body, createdByUserId: req.user?.id })
+    .values({ tenantId: req.tenantId!, ...body, customerId, createdByUserId: req.user?.id })
     .returning();
 
   await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Crar", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
@@ -159,6 +181,9 @@ export const getCrarHandler = asyncHandler(async (req: Request, res: Response) =
   const [linkedNcr] = record.qualityId ? await req.db!.select().from(ncr).where(eq(ncr.id, record.qualityId)) : [null];
   const [supplierRequest] = record.supplierRmaRequestId ? await req.db!.select().from(supplierRmaRequests).where(eq(supplierRmaRequests.id, record.supplierRmaRequestId)) : [null];
   const [linkedRma] = record.linkedRmaId ? await req.db!.select().from(rma).where(eq(rma.id, record.linkedRmaId)) : [null];
+  // Phase 2 fixes: RMA Log link + customer contact, both previously missing.
+  const [linkedRmaLog] = record.rmaLogId ? await req.db!.select().from(rmaLogRecords).where(eq(rmaLogRecords.id, record.rmaLogId)) : [null];
+  const [customer] = record.customerId ? await req.db!.select().from(customers).where(eq(customers.id, record.customerId)) : [null];
 
   res.json({
     ...record,
@@ -166,6 +191,8 @@ export const getCrarHandler = asyncHandler(async (req: Request, res: Response) =
     linkedNcr: linkedNcr ? { id: linkedNcr.id, title: linkedNcr.title, status: linkedNcr.status } : null,
     supplierRequest: supplierRequest ? { id: supplierRequest.id, companyName: supplierRequest.companyName, status: supplierRequest.status } : null,
     linkedRma: linkedRma ? { id: linkedRma.id, rmaNumber: linkedRma.rmaNumber, status: linkedRma.status } : null,
+    linkedRmaLog: linkedRmaLog ? { id: linkedRmaLog.id, rmaNumber: linkedRmaLog.rmaNumber, status: linkedRmaLog.status } : null,
+    customer: customer ? { id: customer.id, legalName: customer.legalName, primaryContactEmail: customer.primaryContactEmail, primaryContactPhone: customer.primaryContactPhone } : null,
   });
 });
 
@@ -194,17 +221,24 @@ export const updateCrarHandler = asyncHandler(async (req: Request, res: Response
     await assertCrarContentWrite(req);
   }
 
-  if (req.body.warrantyId !== undefined && req.body.warrantyId !== null) {
-    const [w] = await req.db!.select({ id: warrantyClaims.id }).from(warrantyClaims).where(and(eq(warrantyClaims.id, req.body.warrantyId), eq(warrantyClaims.tenantId, req.tenantId!)));
-    if (!w) throw AppError.badRequest(`Warranty claim #${req.body.warrantyId} not found`);
+  const patch: Record<string, unknown> = { ...req.body };
+  if (patch.warrantyId !== undefined && patch.warrantyId !== null) {
+    const [w] = await req.db!.select({ id: warrantyClaims.id, customerId: warrantyClaims.customerId }).from(warrantyClaims).where(and(eq(warrantyClaims.id, patch.warrantyId as number), eq(warrantyClaims.tenantId, req.tenantId!)));
+    if (!w) throw AppError.badRequest(`Warranty claim #${patch.warrantyId} not found`);
+    // Phase 2 fix: linking (or re-linking) a warranty claim later also backs
+    // a customer in, same as createCrarHandler does at creation time — only
+    // when this request isn't already setting customerId itself and the
+    // record doesn't already have one, so it never overwrites a
+    // deliberately-chosen or already-linked customer.
+    if (patch.customerId === undefined && record.customerId === null && w.customerId) patch.customerId = w.customerId;
   }
 
   const [updated] = await req
     .db!.update(crarClaims)
-    .set({ ...req.body, updatedAt: new Date() })
+    .set({ ...patch, updatedAt: new Date() })
     .where(eq(crarClaims.id, record.id))
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Crar", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Crar", entityId: record.id, action: "update", changes: patch, performedBy: req.user?.id });
   res.json(updated);
 });
 

@@ -11,6 +11,16 @@ export const analysisSchema = z.object({
 export const formSuggestSchema = z.object({ formType: z.string(), partialData: z.record(z.string(), z.unknown()) });
 export const formAutofillSchema = z.object({ formType: z.string(), context: z.record(z.string(), z.unknown()) });
 
+// Phase 4 new module-level integration points.
+export const ncrTriageSchema = z.object({ ncrId: z.number().int().optional(), input: z.record(z.string(), z.unknown()) });
+export const supplierMessageDraftSchema = z.object({ supplierId: z.number().int().optional(), input: z.record(z.string(), z.unknown()) });
+export const warrantyTriageSchema = z.object({ claimId: z.number().int().optional(), input: z.record(z.string(), z.unknown()) });
+// Phase 8 — "AI-assisted inspection notes."
+export const inspectionNotesSchema = z.object({ reportId: z.number().int().optional(), input: z.record(z.string(), z.unknown()) });
+
+// Phase 5 — explicit accept/reject decision on an already-generated suggestion.
+export const suggestionDecisionSchema = z.object({ decision: z.enum(["accepted", "rejected"]) });
+
 export const assistantSchema = z.object({
   messages: z
     .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1) }))

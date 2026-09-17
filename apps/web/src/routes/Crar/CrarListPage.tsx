@@ -7,6 +7,7 @@ import { DataTable } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { SelectField, TextField } from "../../components/forms/Field";
 import type { CrarClaim, CrarStatus } from "../../api/types";
+import { formatDate } from "../../lib/dates";
 
 const crarHooks = createResourceHooks<CrarClaim>("crar");
 const STATUSES: CrarStatus[] = ["new", "quality_review", "warranty_review", "completed"];
@@ -65,7 +66,7 @@ export function CrarListPage() {
           { header: "Customer Claim #", accessor: (c) => c.customerClaim ?? "—" },
           { header: "Part #", accessor: (c) => c.partNumber ?? "—" },
           { header: "Status", accessor: (c) => <StatusBadge value={c.status} /> },
-          { header: "Created", accessor: (c) => new Date(c.createdAt).toLocaleDateString() },
+          { header: "Created", accessor: (c) => formatDate(c.createdAt) },
         ]}
         rows={rows}
         rowKey={(c) => c.id}

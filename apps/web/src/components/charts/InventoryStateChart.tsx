@@ -1,21 +1,21 @@
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CHART_COLORS } from "./chartPalette";
 
 export interface InventoryStateDatum {
   state: string;
   count: number;
 }
 
-// Same semantic weight as SeverityChart/CapaEffectivenessChart's palette
-// (green = resolved/healthy, amber = needs attention, blue = action under
-// way, purple = waiting, orange = still a problem, slate = inert) rather
-// than a fresh palette per chart.
+// Same shared palette every dashboard chart draws from now — see
+// chartPalette.ts (green = resolved/healthy, amber = needs attention, blue =
+// action under way, purple = waiting, orange = still a problem, slate = inert).
 const COLORS: Record<string, string> = {
-  in_stock: "#10b981",
-  below_min: "#f59e0b",
-  reorder_pending: "#60a5fa",
-  on_order: "#a78bfa",
-  overstock: "#fb923c",
-  inactive: "#94a3b8",
+  in_stock: CHART_COLORS.resolved,
+  below_min: CHART_COLORS.attention,
+  reorder_pending: CHART_COLORS.active,
+  on_order: CHART_COLORS.waiting,
+  overstock: CHART_COLORS.problem,
+  inactive: CHART_COLORS.inert,
 };
 
 const LABELS: Record<string, string> = {
@@ -51,7 +51,7 @@ export function InventoryStateChart({ data }: { data: InventoryStateDatum[] }) {
         <Tooltip labelFormatter={(s: string) => LABELS[s] ?? s} />
         <Bar dataKey="count" radius={[6, 6, 0, 0]}>
           {data.map((entry) => (
-            <Cell key={entry.state} fill={COLORS[entry.state] ?? "#64748b"} />
+            <Cell key={entry.state} fill={COLORS[entry.state] ?? CHART_COLORS.fallback} />
           ))}
         </Bar>
       </BarChart>

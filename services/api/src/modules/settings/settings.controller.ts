@@ -4,7 +4,7 @@ import { tenants } from "../../drizzle/schema/tenants.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { encryptSecret, maskSecret, decryptSecret } from "../tenant/crypto.js";
-import { loadTenantForSettings, getFeasibilitySettings, getInventorySettings, getErpSyncSettings } from "./settings.service.js";
+import { loadTenantForSettings, getFeasibilitySettings, getInventorySettings, getErpSyncSettings, getSupplierRiskSettings, getReceivingSettings } from "./settings.service.js";
 import { triggerErpSync } from "./settings.erpSync.js";
 
 // ============================================================
@@ -109,6 +109,59 @@ export const updateErpSyncSettingsHandler = asyncHandler(async (req: Request, re
     hasWebhookSecret: !!result.webhookSecretEncrypted,
     statusHistory: result.statusHistory ?? [],
   });
+});
+
+// ============================================================
+// Settings → Supplier Risk (Phase 7) — weights for the Supplier Quality
+// Risk Score's 7 factors; see tenants.ts's own schema comment for why this
+// lives here rather than on PlatformAdminPage.
+// ============================================================
+
+export const getSupplierRiskSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  res.json(getSupplierRiskSettings(tenant));
+});
+
+export const updateSupplierRiskSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const merged = { ...getSupplierRiskSettings(tenant), ...req.body };
+
+  const [updated] = await req.db!.update(tenants).set({ supplierRiskWeights: merged }).where(eq(tenants.id, req.tenantId!)).returning();
+  await recordAuditTrail(req.db!, {
+    tenantId: req.tenantId!,
+    entityType: "SupplierRiskSettings",
+    entityId: req.tenantId!,
+    action: "update",
+    changes: { fieldsChanged: Object.keys(req.body) },
+    performedBy: req.user?.id,
+  });
+  res.json(updated!.supplierRiskWeights);
+});
+
+// ============================================================
+// Settings → Receiving (Phase 8) — see receivingAutomation.ts for exactly
+// how each field is read.
+// ============================================================
+
+export const getReceivingSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  res.json(getReceivingSettings(tenant));
+});
+
+export const updateReceivingSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const merged = { ...getReceivingSettings(tenant), ...req.body };
+
+  const [updated] = await req.db!.update(tenants).set({ receivingSettings: merged }).where(eq(tenants.id, req.tenantId!)).returning();
+  await recordAuditTrail(req.db!, {
+    tenantId: req.tenantId!,
+    entityType: "ReceivingSettings",
+    entityId: req.tenantId!,
+    action: "update",
+    changes: { fieldsChanged: Object.keys(req.body) },
+    performedBy: req.user?.id,
+  });
+  res.json(updated!.receivingSettings);
 });
 
 /**

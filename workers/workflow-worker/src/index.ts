@@ -4,6 +4,13 @@ import { and, eq } from "drizzle-orm";
 import { consumeStream } from "./redis-consumer.js";
 import { db, workflowDefinitions, workflowRuns } from "./db.js";
 import { runWorkflow, type WorkflowDefinition } from "../../../services/api/src/modules/workflow/workflow-engine.js";
+// Phase 9 — registers the real action handlers (send_email, create_ncr,
+// escalate_capa, ai_suggestion, ...) for THIS process. The API process and
+// this worker are separate Node processes with separate module-level
+// actionRegistry singletons (see workflow-engine.ts) — each must import
+// this once for its own side effect, same reasoning as routes/index.ts's
+// own import of it.
+import "../../../services/api/src/modules/workflow/workflowActions.js";
 
 const logger = winston.createLogger({
   level: "info",
@@ -26,21 +33,40 @@ async function handleEvent(fields: Record<string, string>) {
   const { module, event, entityId, tenantId } = fields;
   if (!module || !event || !tenantId) return;
 
+  // Phase 9 fix — previously matched ANY definition for {module, tenantId}
+  // regardless of isActive, so a definition a tenant had deliberately
+  // toggled off would still fire for real (a genuine live bug: isActive
+  // exists on the schema and the builder UI implies it does something).
   const definitions = await db
     .select()
     .from(workflowDefinitions)
-    .where(and(eq(workflowDefinitions.module, module), eq(workflowDefinitions.tenantId, Number(tenantId))));
+    .where(and(eq(workflowDefinitions.module, module), eq(workflowDefinitions.tenantId, Number(tenantId)), eq(workflowDefinitions.isActive, "true")));
 
   for (const definition of definitions) {
+    // Real, previously-latent bug found live: node-redis v4's xReadGroup
+    // returns each message's field-value map as a null-prototype object, and
+    // drizzle's jsonb-column handling does an `instanceof`/prototype-chain
+    // check on every column value it's given — passing that object in
+    // directly crashes with "Cannot read properties of null (reading
+    // 'constructor')" on the very first insert of every real triggered run.
+    // Spreading into a plain object (same as runContext below) fixes it.
     const [run] = await db
       .insert(workflowRuns)
-      .values({ workflowId: definition.id, tenantId: Number(tenantId), context: fields, status: "running" })
+      .values({ workflowId: definition.id, tenantId: Number(tenantId), context: { ...fields }, status: "running", simulated: false })
       .returning();
     if (!run) continue;
 
+    // Phase 9 — real action handlers need DB/tenant/actor context (see
+    // workflowActions.ts's own comment on this __-prefixed convention).
+    // This worker has no human actor — a real system-triggered run, not a
+    // user's own request — so __performedBy stays undefined (audit trail's
+    // existing "System" fallback already handles a null performer).
+    const runContext = { ...fields, entityId, __db: db, __tenantId: Number(tenantId), __performedBy: undefined };
+
     try {
-      const result = await runWorkflow(definition.definition as unknown as WorkflowDefinition, { ...fields, entityId }, event);
-      await db.update(workflowRuns).set({ status: "completed", context: result, finishedAt: new Date() }).where(eq(workflowRuns.id, run.id));
+      const result = await runWorkflow(definition.definition as unknown as WorkflowDefinition, runContext, event, false);
+      const { __db: _db, __tenantId: _tenantId, __performedBy: _performedBy, ...persistable } = result;
+      await db.update(workflowRuns).set({ status: "completed", context: persistable, finishedAt: new Date() }).where(eq(workflowRuns.id, run.id));
       logger.info(`Workflow "${definition.name}" completed for ${module}.${event}`);
     } catch (err) {
       await db

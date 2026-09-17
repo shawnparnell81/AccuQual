@@ -23,6 +23,18 @@ export const createWorkflowSchema = z.object({
   definition: workflowDefinitionSchema,
 });
 
+/** PATCH /workflow/:id — every field optional; only a real `definition` change bumps version/versionHistory (see workflow.controller.ts's updateHandler). */
+export const updateWorkflowSchema = z.object({
+  name: z.string().min(1).optional(),
+  module: z.string().nullable().optional(),
+  isActive: z.enum(["true", "false"]).optional(),
+  definition: workflowDefinitionSchema.optional(),
+});
+
 export const runWorkflowSchema = z.object({
   context: z.record(z.string(), z.unknown()).default({}),
+  // Phase 9 task 9 — Simulation Mode: walks the same graph/condition logic
+  // but every action handler skips its real side effect (see
+  // workflowActions.ts's own dryRun handling).
+  simulate: z.boolean().default(false),
 });

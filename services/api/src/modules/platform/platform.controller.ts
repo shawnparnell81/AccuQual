@@ -20,3 +20,7 @@ export const deleteTenantHandler = asyncHandler(async (req: Request, res: Respon
   const tenant = await platformService.deleteTenant(Number(req.params.id));
   res.json(tenant);
 });
+
+export const getAiOverviewHandler = asyncHandler(async (_req: Request, res: Response) => {
+  res.json(await platformService.getAiOverview());
+});

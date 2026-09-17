@@ -46,10 +46,18 @@ const referenceFields = {
   referenceId: z.string().optional(),
 };
 
-/** Deactivation ("active: false") is admin-only — checked in the controller, not here. */
+/**
+ * Deactivation ("active: false") is admin-only — checked in the controller,
+ * not here. Phase 8 adds "return" — goods physically leaving stock back to
+ * a supplier (an RMA-driven return, most commonly), modeled like
+ * scrap/consume (decrements on-hand) rather than a second "returns bring
+ * stock back in" concept — a customer return that re-enters stock is a
+ * "receive" with referenceType "customer_return", not a new movement type,
+ * since it already increases on-hand exactly the way receive does.
+ */
 export const movementSchema = z
   .object({
-    movementType: z.enum(["receive", "consume", "produce", "scrap", "transfer"]),
+    movementType: z.enum(["receive", "consume", "produce", "scrap", "transfer", "return"]),
     quantity: z.coerce.number().positive(),
     fromLocation: z.string().optional(),
     toLocation: z.string().optional(),
@@ -59,6 +67,10 @@ export const movementSchema = z
     // inventory.service.ts's applyMovement.
     lotNumber: z.string().max(100).optional(),
     serialNumber: z.string().max(100).optional(),
+    // Phase 8 — ties this movement to a real inventory_lots row (see that
+    // schema's own comment); optional, since most items still aren't
+    // lot-tracked.
+    lotId: z.coerce.number().int().optional(),
     ...referenceFields,
   })
   .refine((v) => v.movementType !== "transfer" || (v.fromLocation && v.toLocation), {
@@ -67,6 +79,10 @@ export const movementSchema = z
   })
   .refine((v) => v.movementType !== "scrap" || !!v.reason?.trim(), {
     message: "scrap requires a reason",
+    path: ["reason"],
+  })
+  .refine((v) => v.movementType !== "return" || !!v.reason?.trim(), {
+    message: "return requires a reason",
     path: ["reason"],
   });
 

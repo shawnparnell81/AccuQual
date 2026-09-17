@@ -7,6 +7,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { env } from "../../config/env.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
 
@@ -95,6 +96,12 @@ export const approveHandler = asyncHandler(async (req: Request, res: Response) =
     changes: { action: "approve", version: doc.currentVersion, approvalNotes, status: "approved" },
     performedBy: req.user?.id,
   });
+  // Phase 9 — Document Revision was the one status-changing module with no
+  // publishEvent(WORKFLOW_STREAM, ...) call at all (confirmed by the Phase
+  // 9 workflow-engine research), so no workflow definition could ever react
+  // to a document being approved. Additive only — the approval logic above
+  // is unchanged.
+  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "documents", event: "approved", entityId: documentId });
 
   res.json(updated);
 });

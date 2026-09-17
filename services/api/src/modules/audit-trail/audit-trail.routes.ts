@@ -4,6 +4,8 @@ import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
+import { withResolvedActors } from "./audit-trail.service.js";
+import type { TenantDb } from "../../lib/tenantScope.js";
 
 export const auditTrailRouter = Router();
 
@@ -17,6 +19,7 @@ auditTrailRouter.get(
       .db!.select()
       .from(auditTrail)
       .where(and(eq(auditTrail.entityId, Number(req.params.entityId)), eq(auditTrail.tenantId, req.tenantId!)));
-    res.json(rows.filter((r) => r.entityType === req.params.entityType));
+    const filtered = rows.filter((r) => r.entityType === req.params.entityType);
+    res.json(await withResolvedActors(req.db! as TenantDb, filtered));
   })
 );

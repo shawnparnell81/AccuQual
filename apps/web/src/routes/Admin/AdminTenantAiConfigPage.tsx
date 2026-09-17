@@ -26,6 +26,7 @@ function AiConfigForm() {
   const [temperature, setTemperature] = useState("");
   const [maxTokens, setMaxTokens] = useState("");
   const [assistantName, setAssistantName] = useState("");
+  const [safetyMode, setSafetyMode] = useState<"standard" | "strict">("standard");
   const [monthlyLimit, setMonthlyLimit] = useState("");
   const [limitEnforced, setLimitEnforced] = useState(false);
 
@@ -36,6 +37,7 @@ function AiConfigForm() {
       setTemperature(config.temperature?.toString() ?? "");
       setMaxTokens(config.maxTokens?.toString() ?? "");
       setAssistantName(config.assistantName ?? "");
+      setSafetyMode(config.safetyMode ?? "standard");
       setMonthlyLimit(config.monthlyLimit?.toString() ?? "");
       setLimitEnforced(config.limitEnforced);
     }
@@ -51,6 +53,7 @@ function AiConfigForm() {
           temperature: temperature ? Number(temperature) : undefined,
           maxTokens: maxTokens ? Number(maxTokens) : undefined,
           assistantName, // "" clears it back to the default label — see updateAiConfigHandler
+          safetyMode,
           monthlyLimit: monthlyLimit ? Number(monthlyLimit) : null,
           limitEnforced,
         })
@@ -79,6 +82,20 @@ function AiConfigForm() {
         features, whenever a key is set here — falling back to the platform's own configured provider otherwise. Your organization's
         own provider account is billed for this usage, not AccuQual's.
       </p>
+
+      {config && (
+        <p className="text-xs">
+          Key status:{" "}
+          {config.keyStatus === "ready" ? (
+            <span className="font-medium text-success">Ready — AI features will use a real provider.</span>
+          ) : (
+            <span className="font-medium text-warning">
+              Missing — no key configured here or by your platform admin. AI features return a clearly-labeled placeholder response
+              until one is set.
+            </span>
+          )}
+        </p>
+      )}
 
       <TextField
         label="Assistant Name"
@@ -114,6 +131,17 @@ function AiConfigForm() {
       <TextField label="Model Name" value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="claude-sonnet-5" />
       <TextField label="Temperature (0–2)" type="number" min="0" max="2" step="0.1" value={temperature} onChange={(e) => setTemperature(e.target.value)} />
       <TextField label="Max Tokens" type="number" min="1" value={maxTokens} onChange={(e) => setMaxTokens(e.target.value)} />
+
+      <div>
+        <SelectField label="Safety Mode" value={safetyMode} onChange={(e) => setSafetyMode(e.target.value as "standard" | "strict")}>
+          <option value="standard">Standard — show a clear warning if a response doesn't parse cleanly</option>
+          <option value="strict">Strict — refuse to show anything that doesn't match the expected shape</option>
+        </SelectField>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Every AI response is already checked against its own expected shape before it reaches any page (see the AI Enablement
+          guardrails) — this only changes what happens when a response fails that check.
+        </p>
+      </div>
 
       <div className="border-t border-border pt-4">
         <h3 className="mb-1 text-sm font-medium">Usage Limit</h3>

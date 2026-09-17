@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
@@ -8,12 +8,20 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
+import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import { Modal } from "../../components/modals/Modal";
-import type { QualityInspectionReport, QualityInspectionItem, InspectionType, InspectionFinalStatus } from "../../api/types";
+import { DEFECT_CATEGORIES, INSPECTION_METHODS } from "../../api/types";
+import type { QualityInspectionReport, QualityInspectionItem, InspectionType, InspectionFinalStatus, Supplier, DefectCategory, InspectionMethod } from "../../api/types";
 
 const reportHooks = createResourceHooks<QualityInspectionReport>("quality-inspection-reports");
 const INSPECTION_TYPES: InspectionType[] = ["incoming", "in_process", "final"];
 const FINAL_STATUSES: InspectionFinalStatus[] = ["accepted", "rejected", "rework_required", "accepted_via_deviation"];
+
+interface InspectionNotesSuggestion {
+  summary: string;
+  suggestedDefectCategory: string | null;
+  confidence: number;
+}
 
 /**
  * Quality Inspection Report — built from a real supplied HTML mockup,
@@ -32,6 +40,7 @@ export function QualityInspectionReportDetailPage() {
   const { data: report, isLoading } = reportHooks.useOne(reportId);
   const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const { data: suppliers = [] } = useQuery<Supplier[]>({ queryKey: ["suppliers"], queryFn: async () => (await apiClient.get("/suppliers")).data });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["quality-inspection-reports", reportId] });
 
@@ -125,9 +134,60 @@ export function QualityInspectionReportDetailPage() {
           <Field label="Part / Material #" value={report.partMaterialNo} onSave={(v) => patch.mutate({ partMaterialNo: v || null })} />
           <Field label="PO / Job #" value={report.poJobNo} onSave={(v) => patch.mutate({ poJobNo: v || null })} />
           <Field label="Supplier / Vendor" value={report.supplierVendor} onSave={(v) => patch.mutate({ supplierVendor: v || null })} />
+          <label className="flex flex-col gap-1 text-sm print:hidden">
+            <span className="text-xs font-medium uppercase text-muted-foreground">Linked Supplier Record</span>
+            <select
+              value={report.supplierId ?? ""}
+              onChange={(e) => patch.mutate({ supplierId: e.target.value ? Number(e.target.value) : null })}
+              className="rounded-md border border-form-field bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">Not linked</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <Field label="Batch / Lot #" value={report.batchLotNo} onSave={(v) => patch.mutate({ batchLotNo: v || null })} />
           <Field label="Total Quantity" value={report.totalQuantity} onSave={(v) => patch.mutate({ totalQuantity: v || null })} />
           <Field label="Sample Size" value={report.sampleSize} onSave={(v) => patch.mutate({ sampleSize: v || null })} />
+          <label className="flex flex-col gap-1 text-sm print:hidden">
+            <span className="text-xs font-medium uppercase text-muted-foreground">Defect Category</span>
+            <select
+              value={report.defectCategory ?? ""}
+              onChange={(e) => patch.mutate({ defectCategory: (e.target.value as DefectCategory) || null })}
+              className="rounded-md border border-form-field bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">None</option>
+              {DEFECT_CATEGORIES.map((c) => (
+                <option key={c} value={c} className="capitalize">
+                  {c.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm print:hidden">
+            <span className="text-xs font-medium uppercase text-muted-foreground">Inspection Method</span>
+            <select
+              value={report.inspectionMethod ?? ""}
+              onChange={(e) => patch.mutate({ inspectionMethod: (e.target.value as InspectionMethod) || null })}
+              className="rounded-md border border-form-field bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">None</option>
+              {INSPECTION_METHODS.map((m) => (
+                <option key={m} value={m} className="capitalize">
+                  {m.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+          </label>
+          {report.receivingLineItemId && (
+            <div className="flex flex-col gap-1 text-sm">
+              <span className="text-xs font-medium uppercase text-muted-foreground print:text-black">Receiving Line Item</span>
+              <span className="text-sm">#{report.receivingLineItemId}</span>
+            </div>
+          )}
         </div>
 
         <h2 className="mb-2 mt-6 border-l-4 border-primary bg-muted/50 px-3 py-1.5 text-xs font-bold uppercase tracking-wide print:border-black print:bg-transparent print:text-black">
@@ -137,7 +197,7 @@ export function QualityInspectionReportDetailPage() {
           <table className="w-full min-w-[640px] border-collapse text-sm">
             <thead>
               <tr className="bg-foreground text-background print:bg-black print:text-white">
-                {["#", "Inspection Parameter", "Specification / Standard", "Actual Finding", "Result"].map((h) => (
+                {["#", "Inspection Parameter", "Specification / Standard", "Actual Finding", "Min", "Max", "Actual Value", "Unit", "Result"].map((h) => (
                   <th key={h} className="border border-border px-2 py-1.5 text-left text-xs uppercase print:border-black">
                     {h}
                   </th>
@@ -148,7 +208,7 @@ export function QualityInspectionReportDetailPage() {
             <tbody>
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="border border-border px-2 py-2 text-center text-muted-foreground print:border-black">
+                  <td colSpan={10} className="border border-border px-2 py-2 text-center text-muted-foreground print:border-black">
                     No rows yet.
                   </td>
                 </tr>
@@ -177,8 +237,35 @@ export function QualityInspectionReportDetailPage() {
             ))}
           </div>
         </div>
-        <label className="mt-3 flex flex-col gap-1 text-sm">
+        <div className="mt-3 flex items-center justify-between">
           <span className="text-xs font-medium uppercase text-muted-foreground print:text-black">Notes / Remarks</span>
+          <div className="print:hidden">
+            <AiStructuredSuggestion<InspectionNotesSuggestion>
+              endpoint="/ai/inspection-notes"
+              title="AI-Assisted Inspection Notes"
+              triggerLabel="Draft with AI"
+              acceptLabel="Use This Note"
+              buildPayload={() => ({
+                reportId,
+                input: items.map((i) => ({ parameter: i.parameter, specification: i.specification, specMin: i.specMin, specMax: i.specMax, actualFinding: i.actualFinding, actualValue: i.actualValue, unit: i.measurementUnit, result: i.result })),
+              })}
+              onAccept={(output) => {
+                patch.mutate({ notesRemarks: output.summary, ...(output.suggestedDefectCategory ? { defectCategory: output.suggestedDefectCategory } : {}) });
+              }}
+              renderPreview={(output) => (
+                <div className="flex flex-col gap-3 text-sm">
+                  <p className="whitespace-pre-wrap rounded-md border border-border bg-muted/40 p-2">{output.summary}</p>
+                  {output.suggestedDefectCategory && (
+                    <p className="text-xs text-muted-foreground">
+                      Suggested defect category: <span className="font-medium capitalize">{output.suggestedDefectCategory.replace(/_/g, " ")}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+            />
+          </div>
+        </div>
+        <label className="flex flex-col gap-1 text-sm">
           <textarea
             defaultValue={report.notesRemarks ?? ""}
             rows={2}
@@ -258,6 +345,18 @@ function ItemRow({ item, onPatch, onDelete }: { item: QualityInspectionItem; onP
       </td>
       <td className="border border-border p-0 print:border-black">
         <input defaultValue={item.actualFinding ?? ""} onBlur={(e) => e.target.value !== (item.actualFinding ?? "") && onPatch({ actualFinding: e.target.value || null })} className={inputClass} />
+      </td>
+      <td className="border border-border p-0 print:border-black">
+        <input type="number" defaultValue={item.specMin ?? ""} onBlur={(e) => e.target.value !== (item.specMin ?? "") && onPatch({ specMin: e.target.value || null })} className={`${inputClass} w-20`} />
+      </td>
+      <td className="border border-border p-0 print:border-black">
+        <input type="number" defaultValue={item.specMax ?? ""} onBlur={(e) => e.target.value !== (item.specMax ?? "") && onPatch({ specMax: e.target.value || null })} className={`${inputClass} w-20`} />
+      </td>
+      <td className="border border-border p-0 print:border-black">
+        <input type="number" defaultValue={item.actualValue ?? ""} onBlur={(e) => e.target.value !== (item.actualValue ?? "") && onPatch({ actualValue: e.target.value || null })} className={`${inputClass} w-24`} />
+      </td>
+      <td className="border border-border p-0 print:border-black">
+        <input defaultValue={item.measurementUnit ?? ""} onBlur={(e) => e.target.value !== (item.measurementUnit ?? "") && onPatch({ measurementUnit: e.target.value || null })} className={`${inputClass} w-16`} />
       </td>
       <td className="border border-border p-0 print:border-black">
         <select defaultValue={item.result ?? ""} onChange={(e) => onPatch({ result: e.target.value || null })} className={inputClass}>

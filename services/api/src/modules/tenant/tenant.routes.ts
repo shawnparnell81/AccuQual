@@ -3,8 +3,8 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
 import { validate } from "../../middleware/validate.js";
-import { updateBrandingSchema, updateAiConfigSchema } from "./tenant.validation.js";
-import { getBrandingHandler, updateBrandingHandler, getAiConfigHandler, updateAiConfigHandler, getAssistantNameHandler, getAiUsageHandler } from "./tenant.controller.js";
+import { updateBrandingSchema, updateAiConfigSchema, updateTenantProfileSchema } from "./tenant.validation.js";
+import { getBrandingHandler, updateBrandingHandler, getAiConfigHandler, updateAiConfigHandler, getAssistantNameHandler, getAiUsageHandler, getProfileHandler, updateProfileHandler } from "./tenant.controller.js";
 
 /** A tenant admin's own settings — scoped to req.tenantId, never a foreign tenant id. Admin-only (requireRole), not department-gated: branding/AI config aren't a department concern. */
 export const tenantRouter = Router();
@@ -12,6 +12,10 @@ tenantRouter.use(requireAuth, withTenantDb);
 
 tenantRouter.get("/branding", getBrandingHandler);
 tenantRouter.patch("/branding", requireRole("admin"), validate(updateBrandingSchema), updateBrandingHandler);
+
+// Admin Console "Tenant Settings" (Phase 10) — GET open like branding above, PATCH admin-only.
+tenantRouter.get("/profile", getProfileHandler);
+tenantRouter.patch("/profile", requireRole("admin"), validate(updateTenantProfileSchema), updateProfileHandler);
 
 tenantRouter.get("/ai-config", requireRole("admin"), getAiConfigHandler);
 tenantRouter.patch("/ai-config", requireRole("admin"), validate(updateAiConfigSchema), updateAiConfigHandler);

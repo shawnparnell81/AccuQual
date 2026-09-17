@@ -17,6 +17,16 @@ export interface LlmCallResult {
   /** Real token counts from the provider's own response — null when no key is configured and a stub was returned (there's no real usage to report, never guessed). */
   usage: { inputTokens: number; outputTokens: number } | null;
   model: string;
+  /**
+   * True when `text` is the deterministic stub (no provider key configured),
+   * never a real model response. Equivalent to `usage === null` today, but
+   * named and exported explicitly so every caller has one unambiguous,
+   * self-documenting thing to check before treating `text` as real content —
+   * see the CAPA data-integrity fix this field exists for: a stub response
+   * was previously insertable straight into a real record's field with
+   * nothing anywhere checking `usage` first.
+   */
+  isStub: boolean;
 }
 
 /**
@@ -61,7 +71,7 @@ async function callAnthropic(prompt: string, options: LlmCallOptions): Promise<L
   const model = options.model ?? env.LLM_MODEL;
   if (!apiKey) {
     logger.warn("ANTHROPIC_API_KEY not set — returning a stub AI response");
-    return { text: stubResponse(prompt), usage: null, model };
+    return { text: stubResponse(prompt), usage: null, model, isStub: true };
   }
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -89,6 +99,7 @@ async function callAnthropic(prompt: string, options: LlmCallOptions): Promise<L
     text: data.content.map((c) => c.text).join(""),
     usage: data.usage ? { inputTokens: data.usage.input_tokens, outputTokens: data.usage.output_tokens } : null,
     model,
+    isStub: false,
   };
 }
 
@@ -97,7 +108,7 @@ async function callOpenAi(prompt: string, options: LlmCallOptions): Promise<LlmC
   const model = options.model ?? env.LLM_MODEL;
   if (!apiKey) {
     logger.warn("OPENAI_API_KEY not set — returning a stub AI response");
-    return { text: stubResponse(prompt), usage: null, model };
+    return { text: stubResponse(prompt), usage: null, model, isStub: true };
   }
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -126,6 +137,7 @@ async function callOpenAi(prompt: string, options: LlmCallOptions): Promise<LlmC
     text: data.choices[0]?.message.content ?? "",
     usage: data.usage ? { inputTokens: data.usage.prompt_tokens, outputTokens: data.usage.completion_tokens } : null,
     model,
+    isStub: false,
   };
 }
 
@@ -161,9 +173,17 @@ export async function validateApiKey(provider: "anthropic" | "openai", apiKey: s
   }
 }
 
+/**
+ * Exported so any validator that needs to refuse to persist a stub payload
+ * (see modules/capa/capa.validation.ts's rejectAiStubText) can check against
+ * the exact same string this file generates, instead of a second
+ * hand-copied literal that could silently drift out of sync with it.
+ */
+export const STUB_SIGNATURE = "No LLM API key configured — this is a deterministic development stub, not a real model response.";
+
 function stubResponse(prompt: string): string {
   return JSON.stringify({
-    note: "No LLM API key configured — this is a deterministic development stub, not a real model response.",
+    note: STUB_SIGNATURE,
     promptPreview: prompt.slice(0, 200),
   });
 }

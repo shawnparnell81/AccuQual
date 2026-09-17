@@ -18,7 +18,10 @@ import {
   computeAgingBucket,
   isCycleCountDue,
 } from "./inventory.service.js";
+import { getItemLots, getLotTraceability } from "./inventoryLots.service.js";
 import { loadTenantForSettings, getInventorySettings } from "../settings/settings.service.js";
+import { isObviousTestName } from "../../utils/testDataGuard.js";
+import { env } from "../../config/env.js";
 
 export const baseHandlers = crudFactory(inventoryItems, { entityName: "InventoryItem", idColumn: "id" });
 
@@ -31,6 +34,13 @@ export const baseHandlers = crudFactory(inventoryItems, { entityName: "Inventory
  * the state a caller sees is never stale from the moment of creation.
  */
 export const createItemHandler = asyncHandler(async (req: Request, res: Response) => {
+  // Phase 1 hygiene guardrail — see utils/testDataGuard.ts's own comment.
+  // This is what would have caught TEST-CHANGED-COUNT/REORDER-TEST/
+  // FALLBACK-TEST/PERF-TEST before they ever landed in the demo tenant.
+  if (env.NODE_ENV === "production" && isObviousTestName(req.body.sku)) {
+    throw AppError.badRequest(`Refusing to create SKU "${req.body.sku}" in production — it matches the naming pattern manual test data has used before. If this is a real part number, rename it to avoid that pattern.`);
+  }
+
   const [created] = await req.db!
     .insert(inventoryItems)
     .values({ ...req.body, tenantId: req.tenantId! })
@@ -332,6 +342,19 @@ export const notesReorderRequestHandler = asyncHandler(async (req: Request, res:
     performedBy: req.user?.id,
   });
   res.json(updated);
+});
+
+/** GET /inventory/items/:id/lots — Phase 8 traceability (task 4): every real per-lot record for this item, newest first. */
+export const listItemLotsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  await loadItem(req, id);
+  res.json(await getItemLots(req.db!, req.tenantId!, id));
+});
+
+/** GET /inventory/lots/:id/trace — the full receiving → inventory chain for one lot; see inventoryLots.service.ts's own comment. */
+export const traceLotHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  res.json(await getLotTraceability(req.db!, req.tenantId!, id));
 });
 
 /** GET /inventory/items/:id/history — the raw movement ledger, separate from the generic audit trail (which only records state changes and edits, not every stock movement's own row). */

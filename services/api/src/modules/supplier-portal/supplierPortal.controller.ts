@@ -15,10 +15,19 @@ import { rma } from "../../drizzle/schema/rma.js";
 import { warrantyClaims } from "../../drizzle/schema/warranty.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
+import { scarForms } from "../../drizzle/schema/scarForms.js";
+import { notificationLog } from "../../drizzle/schema/notifications.js";
+import { qualityInspectionReports } from "../../drizzle/schema/qualityInspectionReports.js";
+import { inventoryLots } from "../../drizzle/schema/inventoryLots.js";
+import { erpReceivingLineItems } from "../../drizzle/schema/erp.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { env } from "../../config/env.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
+import { sendEmail } from "../notifications/notification.service.js";
+import { getSupplierNcrIds, getSupplierCapaIds } from "./supplierLinkage.js";
+import { getSupplierQualityFactors, getSupplierHealth, getSupplierRiskScoreWithTrend, exportSupplierScorecard } from "../supplier/supplier.qualityRisk.js";
 
 /**
  * The one real rule this whole module exists to enforce: an external
@@ -278,6 +287,10 @@ export const reviewCorrectiveActionHandler = asyncHandler(async (req: Request, r
   if (!updated) throw AppError.notFound("SupplierCorrectiveAction");
 
   await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "SupplierCorrectiveAction", entityId: id, action: "status_change", changes: { status, reviewNotes }, performedBy: req.user?.id });
+  // Phase 9 — the Supplier Corrective Action review had no workflow event
+  // at all before this (confirmed absent), so no workflow definition could
+  // react to it. Additive only — the review logic above is unchanged.
+  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "supplier_car", event: status, entityId: id, supplierId: updated!.supplierId });
   res.json(updated);
 });
 
@@ -339,16 +352,65 @@ export const review8dHandler = asyncHandler(async (req: Request, res: Response) 
 export const sendMessageHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.body.supplierId);
   await assertSupplierExists(req, supplierId);
-  const { body, threadKey } = req.body as { body: string; threadKey?: string };
+  const { body, threadKey, category, aiDrafted } = req.body as { body: string; threadKey?: string; category?: string; aiDrafted?: boolean };
   const senderRole = req.user?.roleName === "supplier" ? "supplier" : "internal";
 
   const [created] = await req
     .db!.insert(supplierMessages)
-    .values({ tenantId: req.tenantId!, supplierId, threadKey: threadKey || "general", senderRole, senderUserId: req.user?.id, body })
+    .values({ tenantId: req.tenantId!, supplierId, threadKey: threadKey || "general", senderRole, senderUserId: req.user?.id, body, category: category || "message", aiDrafted: aiDrafted === true })
     .returning();
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "SupplierMessage", entityId: created!.id, action: "create", changes: { supplierId, senderRole, threadKey: created!.threadKey }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "SupplierMessage", entityId: created!.id, action: "create", changes: { supplierId, senderRole, threadKey: created!.threadKey, category: created!.category, aiDrafted: created!.aiDrafted }, performedBy: req.user?.id });
   res.status(201).json(created);
+});
+
+/**
+ * Phase 5 — "Ensure email templates integrate with Phase 1 email
+ * infrastructure": internal-staff-only (a supplier login has no reason to
+ * email itself). Sends a REAL email via notification.service.ts's
+ * sendEmail() — the same transport tenant onboarding/password reset use —
+ * to the supplier's own contactEmail, not just an in-app portal message
+ * (a supplier may not be logged into the portal to see that). Logs a real
+ * notification_log row (same shape every other real notification leaves)
+ * and also mirrors the content into the in-app thread via supplierMessages,
+ * so the full exchange stays visible in one place either way it was sent.
+ */
+export const sendMessageEmailHandler = asyncHandler(async (req: Request, res: Response) => {
+  if (req.user?.roleName === "supplier") throw AppError.forbidden("Only internal staff can send a supplier email");
+  const supplierId = resolveSupplierScope(req, req.body.supplierId);
+  const { subject, body, threadKey, category, aiDrafted } = req.body as { subject: string; body: string; threadKey?: string; category?: string; aiDrafted?: boolean };
+
+  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, req.tenantId!)));
+  if (!supplier) throw AppError.notFound("Supplier");
+  if (!supplier.contactEmail) throw AppError.badRequest("This supplier has no contact email on file — add one before sending an email.");
+
+  const status = await sendEmail({ to: supplier.contactEmail, subject, body });
+  await req.db!.insert(notificationLog).values({ tenantId: req.tenantId!, channel: "email", recipient: supplier.contactEmail, subject, body, status, relatedEntityType: "Supplier", relatedEntityId: supplierId });
+
+  const [created] = await req
+    .db!.insert(supplierMessages)
+    .values({
+      tenantId: req.tenantId!,
+      supplierId,
+      threadKey: threadKey || "general",
+      senderRole: "internal",
+      senderUserId: req.user?.id,
+      body: `[Emailed — ${subject}]\n\n${body}`,
+      category: category || "message",
+      aiDrafted: aiDrafted === true,
+    })
+    .returning();
+
+  await recordAuditTrail(req.db!, {
+    tenantId: req.tenantId!,
+    entityType: "SupplierMessage",
+    entityId: created!.id,
+    action: "create",
+    changes: { supplierId, senderRole: "internal", channel: "email", recipient: supplier.contactEmail, subject, emailStatus: status, category: created!.category, aiDrafted: created!.aiDrafted },
+    performedBy: req.user?.id,
+  });
+
+  res.status(201).json({ ...created, emailStatus: status });
 });
 
 /** GET /supplier-portal/messages/thread — marks every message NOT sent by the reading party as read (a real read receipt, not just a listing). */
@@ -413,14 +475,7 @@ export const performanceHandler = asyncHandler(async (req: Request, res: Respons
 export const supplierNcrListHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
   const tenantId = req.tenantId!;
-
-  const [rmaRows, warrantyRows, carRows, eightDRows] = await Promise.all([
-    req.db!.select({ ncrId: rma.linkedNcrId }).from(rma).where(and(eq(rma.tenantId, tenantId), eq(rma.supplierId, supplierId))),
-    req.db!.select({ ncrId: warrantyClaims.linkedNcrId }).from(warrantyClaims).where(and(eq(warrantyClaims.tenantId, tenantId), eq(warrantyClaims.supplierId, supplierId))),
-    req.db!.select({ ncrId: supplierCorrectiveActions.linkedNcrId }).from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.tenantId, tenantId), eq(supplierCorrectiveActions.supplierId, supplierId))),
-    req.db!.select({ ncrId: supplier8dResponses.linkedNcrId }).from(supplier8dResponses).where(and(eq(supplier8dResponses.tenantId, tenantId), eq(supplier8dResponses.supplierId, supplierId))),
-  ]);
-  const ncrIds = [...new Set([...rmaRows, ...warrantyRows, ...carRows, ...eightDRows].map((r) => r.ncrId).filter((id): id is number => id !== null))];
+  const ncrIds = await getSupplierNcrIds(req.db!, tenantId, supplierId);
   if (ncrIds.length === 0) return res.json([]);
 
   const rows = await req.db!.select().from(ncr).where(and(eq(ncr.tenantId, tenantId), inArray(ncr.id, ncrIds)));
@@ -430,16 +485,107 @@ export const supplierNcrListHandler = asyncHandler(async (req: Request, res: Res
 export const supplierCapaListHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
   const tenantId = req.tenantId!;
-
-  const [rmaRows, carRows] = await Promise.all([
-    req.db!.select({ capaId: rma.linkedCapaId }).from(rma).where(and(eq(rma.tenantId, tenantId), eq(rma.supplierId, supplierId))),
-    req.db!.select({ capaId: supplierCorrectiveActions.linkedCapaId }).from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.tenantId, tenantId), eq(supplierCorrectiveActions.supplierId, supplierId))),
-  ]);
-  const capaIds = [...new Set([...rmaRows, ...carRows].map((r) => r.capaId).filter((id): id is number => id !== null))];
+  const capaIds = await getSupplierCapaIds(req.db!, tenantId, supplierId);
   if (capaIds.length === 0) return res.json([]);
 
   const rows = await req.db!.select().from(capa).where(and(eq(capa.tenantId, tenantId), inArray(capa.id, capaIds)));
   res.json(rows);
+});
+
+// ---------------------------------------------------------------------------
+// Phase 7 — RMA / Warranty / SCAR visibility. Unlike NCR/CAPA above, these
+// three DO carry a real supplierId FK, so no join-derivation is needed — but
+// their own routers (rma/warranty/scar-forms) are gated by
+// requireDepartmentAccess, which a "supplier" login (department: null) can
+// never pass. These thin wrapper endpoints reuse each module's own schema
+// directly, gated instead by requireSupplierPortalAccess +
+// resolveSupplierScope, exactly like every other read in this file.
+// ---------------------------------------------------------------------------
+
+export const supplierRmaListHandler = asyncHandler(async (req: Request, res: Response) => {
+  const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
+  const rows = await req.db!.select().from(rma).where(and(eq(rma.tenantId, req.tenantId!), eq(rma.supplierId, supplierId))).orderBy(desc(rma.createdAt));
+  res.json(rows);
+});
+
+export const supplierWarrantyListHandler = asyncHandler(async (req: Request, res: Response) => {
+  const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
+  const rows = await req.db!.select().from(warrantyClaims).where(and(eq(warrantyClaims.tenantId, req.tenantId!), eq(warrantyClaims.supplierId, supplierId))).orderBy(desc(warrantyClaims.createdAt));
+  res.json(rows);
+});
+
+export const supplierScarListHandler = asyncHandler(async (req: Request, res: Response) => {
+  const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
+  const rows = await req.db!.select().from(scarForms).where(and(eq(scarForms.tenantId, req.tenantId!), eq(scarForms.supplierId, supplierId))).orderBy(desc(scarForms.createdAt));
+  res.json(rows);
+});
+
+/**
+ * GET /supplier-portal/inspections/list — Phase 8 task 3's "supplier-facing
+ * visibility: ... inspection notes". Reads the real supplierId FK added
+ * this phase directly (a real join, unlike NCR/CAPA's derived-link
+ * pattern — an inspection report either names this supplier or it
+ * doesn't). Read-only: a supplier never edits an inspection report.
+ */
+export const supplierInspectionListHandler = asyncHandler(async (req: Request, res: Response) => {
+  const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
+  const rows = await req.db!.select().from(qualityInspectionReports).where(and(eq(qualityInspectionReports.tenantId, req.tenantId!), eq(qualityInspectionReports.supplierId, supplierId))).orderBy(desc(qualityInspectionReports.createdAt));
+  res.json(rows);
+});
+
+/**
+ * GET /supplier-portal/lots/list — Phase 8 task 3's "supplier-facing
+ * visibility: accepted lots, rejected lots". Reads real inventory_lots
+ * rows for this supplier, joined live to the originating receiving line
+ * item's own disposition status (a lot has no disposition of its own — the
+ * receiving line item it came from does, see erp.ts's schema comment) so a
+ * supplier can see which of their shipments passed or failed inspection.
+ */
+export const supplierLotListHandler = asyncHandler(async (req: Request, res: Response) => {
+  const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
+  const lots = await req.db!.select().from(inventoryLots).where(and(eq(inventoryLots.tenantId, req.tenantId!), eq(inventoryLots.supplierId, supplierId))).orderBy(desc(inventoryLots.createdAt));
+  const lineItemIds = lots.map((l) => l.receivingLineItemId).filter((id): id is number => id !== null);
+  const lineItems = lineItemIds.length > 0 ? await req.db!.select({ id: erpReceivingLineItems.id, status: erpReceivingLineItems.status }).from(erpReceivingLineItems).where(inArray(erpReceivingLineItems.id, lineItemIds)) : [];
+  const statusByLineItem = new Map(lineItems.map((l) => [l.id, l.status]));
+  res.json(lots.map((l) => ({ ...l, receivingStatus: l.receivingLineItemId ? (statusByLineItem.get(l.receivingLineItemId) ?? null) : null })));
+});
+
+/**
+ * GET /supplier-portal/kpis — Phase 7 task 1's KPI strip (NCR count, CAPA
+ * count, on-time delivery %, defect rate, open corrective actions), and
+ * task 8's health indicators (last login / last upload / last
+ * communication / open action count) in one call, so the portal dashboard
+ * and the internal Supplier Detail page can both render the same numbers
+ * from the same source. Delegates every actual computation to
+ * supplier.qualityRisk.ts's getSupplierQualityFactors + getSupplierHealth —
+ * this file stays a thin RBAC/scope wrapper, same as every other handler
+ * here.
+ */
+export const supplierKpisHandler = asyncHandler(async (req: Request, res: Response) => {
+  const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
+  const [factors, health] = await Promise.all([getSupplierQualityFactors(req.db!, req.tenantId!, supplierId), getSupplierHealth(req.db!, req.tenantId!, supplierId)]);
+  res.json({ ...factors, health });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 7 — Supplier Quality Risk Score (read-only passthrough; the
+// internal-only recompute/write path lives on the `suppliers` module — see
+// supplier.controller.ts's recomputeSupplierRiskScoreHandler. A supplier
+// login may only ever read its own latest score + trend, never trigger a
+// recompute itself.)
+// ---------------------------------------------------------------------------
+
+export const supplierRiskScoreHandler = asyncHandler(async (req: Request, res: Response) => {
+  const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
+  res.json(await getSupplierRiskScoreWithTrend(req.db!, req.tenantId!, supplierId));
+});
+
+export const supplierScorecardExportHandler = asyncHandler(async (req: Request, res: Response) => {
+  const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
+  const format = (req.query.format as string | undefined) || "csv";
+  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, req.tenantId!)));
+  if (!supplier) throw AppError.notFound("Supplier");
+  await exportSupplierScorecard(req, res, supplier, format);
 });
 
 // ---------------------------------------------------------------------------

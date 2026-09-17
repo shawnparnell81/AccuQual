@@ -10,9 +10,16 @@ import { WarrantySupplierReviewPanel } from "./WarrantySupplierReviewPanel";
 import { WarrantyCostPanel } from "./WarrantyCostPanel";
 import { WarrantyDocumentsPanel } from "./WarrantyDocumentsPanel";
 import { WarrantyCrarPanel } from "./WarrantyCrarPanel";
+import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import type { WarrantyClaim, WarrantyStatus } from "../../api/types";
 
 const claimHooks = createResourceHooks<WarrantyClaim>("warranty/claims");
+
+interface WarrantyTriageSuggestion {
+  suggestedDisposition: "approve" | "deny" | "needs_inspection";
+  estimatedCost: number | null;
+  rationale: string;
+}
 
 /** Same allowed-next-status shape as warranty.controller.ts's ALLOWED_NEXT — duplicated here only for which buttons to show; the server re-validates on every call. */
 const NEXT_STATUS: Record<WarrantyStatus, { status: WarrantyStatus; label: string }[]> = {
@@ -128,7 +135,43 @@ export function WarrantyClaimDetail() {
           {claim.serialNumber && <p className="mt-1 text-xs text-muted-foreground">S/N {claim.serialNumber}</p>}
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="mb-2 text-sm font-medium">Failure</h3>
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-medium">Failure</h3>
+            <AiStructuredSuggestion<WarrantyTriageSuggestion>
+              endpoint="/ai/warranty-triage"
+              title="AI Triage Suggestion"
+              triggerLabel="AI Triage"
+              acceptLabel="Acknowledge"
+              buildPayload={() => ({
+                claimId,
+                input: {
+                  failureDescription: claim.failureDescription,
+                  product: claim.product?.sku,
+                  serialNumber: claim.serialNumber,
+                  failureDate: claim.failureDate,
+                },
+              })}
+              // No onAccept — Phase 5 explicitly requires this suggestion never
+              // auto-populates a field; the real disposition is only ever
+              // recorded through the Inspection / Supplier Review panels below.
+              renderPreview={(output) => (
+                <div className="flex flex-col gap-2 text-sm">
+                  <p>
+                    Suggested disposition: <strong className="capitalize">{output.suggestedDisposition.replace(/_/g, " ")}</strong>
+                  </p>
+                  {output.estimatedCost !== null && (
+                    <p>
+                      Estimated cost: <strong>${output.estimatedCost.toFixed(2)}</strong>
+                    </p>
+                  )}
+                  <p className="text-muted-foreground">{output.rationale}</p>
+                  <p className="text-xs text-muted-foreground">
+                    A suggestion only — record the real disposition through the Inspection / Supplier Review panels below.
+                  </p>
+                </div>
+              )}
+            />
+          </div>
           <p className="text-sm text-muted-foreground">{claim.failureDescription || "No description provided."}</p>
           {claim.failureDate && <p className="mt-1 text-xs text-muted-foreground">Reported {new Date(claim.failureDate).toLocaleDateString()}</p>}
         </div>
@@ -171,7 +214,10 @@ export function WarrantyClaimDetail() {
                   <strong>{w.toStatus.replace(/_/g, " ")}</strong>
                   {w.note && <span className="text-muted-foreground"> — {w.note}</span>}
                 </span>
-                <span className="text-xs text-muted-foreground">{new Date(w.createdAt).toLocaleString()}</span>
+                <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>{w.performedByName ?? "System"}</span>
+                  <span>{new Date(w.createdAt).toLocaleString()}</span>
+                </span>
               </li>
             ))}
           </ul>

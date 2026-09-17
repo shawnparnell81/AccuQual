@@ -1,8 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
-import { apiClient } from "../../api/client";
 import type { Capa } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextAreaField } from "../../components/forms/Field";
@@ -14,8 +12,16 @@ import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPan
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
+import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 
 const capaHooks = createResourceHooks<Capa>("capa");
+
+interface CapaGeneratedPlan {
+  actionPlan: string;
+  preventiveAction: string;
+  verification: string;
+  estimatedClosureDays: number;
+}
 
 /** CAPA Detail: root cause summary, action plan, verification steps, AI-generated recommendations, history. */
 export function CapaDetailPage() {
@@ -32,13 +38,18 @@ export function CapaDetailPage() {
   const verifyAction = useWorkflowAction("capa", "verify", { successMessage: "Verification recorded.", invalidateKeys: historyKey });
   const closeAction = useWorkflowAction("capa", "close", { successMessage: "CAPA closed.", invalidateKeys: historyKey });
   const [verification, setVerification] = useState("");
-
-  const aiSuggestion = useQuery({
-    queryKey: ["ai-capa", capaId],
-    queryFn: async () =>
-      (await apiClient.post("/ai/capa", { ncrId: capa?.ncrId, rootCause: capa?.rootCause, ncrData: capa })).data,
-    enabled: false,
-  });
+  // Phase 11 bug fix — this field was write-only local draft state with no
+  // hydration from the record at all: a CAPA already verified (status
+  // "verifying" or "closed") showed an empty box here forever, even though
+  // capa.verification really does hold the submitted text (confirmed live —
+  // every other field on this page binds directly to the record; this was
+  // the one exception). Kept as separate local state rather than switching
+  // to the direct capa.X-binding pattern those other fields use, since
+  // verification submits through its own /capa/:id/verify transition
+  // endpoint, not a plain PATCH-on-every-keystroke.
+  useEffect(() => {
+    if (capa?.verification) setVerification(capa.verification);
+  }, [capa?.verification]);
 
   if (isLoading || !capa) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
@@ -106,12 +117,21 @@ export function CapaDetailPage() {
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
+          <h2 className="mb-2 text-sm font-medium">Preventive Action</h2>
+          <TextAreaField
+            label=""
+            value={capa.preventiveAction ?? ""}
+            onChange={(e) => updateCapa.mutate({ id: capaId, preventiveAction: e.target.value })}
+          />
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
           <h2 className="mb-2 text-sm font-medium">Verification Steps</h2>
           {capa.status === "open" ? (
             <p className="text-sm text-muted-foreground">Start work above first — verification can't be recorded before that.</p>
           ) : (
             <>
-              <TextAreaField label="" value={verification} onChange={(e) => setVerification(e.target.value)} />
+              <TextAreaField label="" value={verification} onChange={(e) => setVerification(e.target.value)} readOnly={capa.status !== "in_progress"} />
               <WorkflowActionButton
                 label="Submit verification"
                 navKey="capa"
@@ -146,19 +166,47 @@ export function CapaDetailPage() {
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
-          <h2 className="mb-2 text-sm font-medium">AI-Generated CAPA Recommendations</h2>
-          <button
-            onClick={() => aiSuggestion.refetch()}
-            disabled={aiSuggestion.isFetching}
-            className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-60"
-          >
-            {aiSuggestion.isFetching ? "Generating…" : "Generate recommendations"}
-          </button>
-          {aiSuggestion.data && (
-            <pre className="mt-3 whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
-              {JSON.stringify(aiSuggestion.data.output, null, 2)}
-            </pre>
-          )}
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-medium">AI-Generated CAPA Recommendations</h2>
+            <AiStructuredSuggestion<CapaGeneratedPlan>
+              endpoint="/ai/capa"
+              title="AI-Drafted CAPA Content"
+              triggerLabel="Generate Recommendations"
+              acceptLabel="Use This Draft"
+              buildPayload={() => ({ ncrId: capa.ncrId, rootCause: capa.rootCause, ncrData: capa })}
+              onAccept={(output) => {
+                // actionPlan/preventiveAction are plain PATCH-able fields;
+                // verification is NOT (see capa.validation.ts's separate,
+                // stricter verifyCapaSchema on the dedicated /verify
+                // endpoint) — land it in the same local draft state the
+                // Verification Steps textarea below already uses, so the
+                // user still explicitly reviews and submits it themselves.
+                updateCapa.mutate({ id: capaId, actionPlan: output.actionPlan, preventiveAction: output.preventiveAction });
+                setVerification(output.verification);
+              }}
+              renderPreview={(output) => (
+                <div className="flex flex-col gap-3 text-sm">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">Action Plan</p>
+                    <p>{output.actionPlan}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">Preventive Action</p>
+                    <p>{output.preventiveAction}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">Verification</p>
+                    <p>{output.verification}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Estimated closure: {output.estimatedClosureDays} days</p>
+                </div>
+              )}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Accepting fills in the Action Plan, Preventive Action, and Verification fields above — review and edit them before this CAPA
+            moves forward.
+          </p>
         </div>
       </div>
 

@@ -1,0 +1,1 @@
+ALTER TABLE "erp_purchase_orders" ADD COLUMN "expected_delivery_date" timestamp;

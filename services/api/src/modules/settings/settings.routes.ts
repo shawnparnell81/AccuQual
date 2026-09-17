@@ -4,7 +4,7 @@ import { requireRole } from "../../middleware/rbac.js";
 import { requireAnyDepartment } from "../../middleware/departmentAccess.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
 import { validate } from "../../middleware/validate.js";
-import { updateFeasibilitySettingsSchema, updateInventorySettingsSchema, updateErpSyncSettingsSchema } from "./settings.validation.js";
+import { updateFeasibilitySettingsSchema, updateInventorySettingsSchema, updateErpSyncSettingsSchema, updateSupplierRiskSettingsSchema, updateReceivingSettingsSchema } from "./settings.validation.js";
 import {
   getFeasibilitySettingsHandler,
   updateFeasibilitySettingsHandler,
@@ -13,6 +13,10 @@ import {
   getErpSyncSettingsHandler,
   updateErpSyncSettingsHandler,
   triggerErpSyncHandler,
+  getSupplierRiskSettingsHandler,
+  updateSupplierRiskSettingsHandler,
+  getReceivingSettingsHandler,
+  updateReceivingSettingsHandler,
 } from "./settings.controller.js";
 
 /**
@@ -39,3 +43,18 @@ settingsRouter.post("/inventory", requireAnyDepartment("production", "purchasing
 settingsRouter.get("/erp-sync", requireRole("admin"), getErpSyncSettingsHandler);
 settingsRouter.post("/erp-sync", requireRole("admin"), validate(updateErpSyncSettingsSchema), updateErpSyncSettingsHandler);
 settingsRouter.post("/erp-sync/trigger", requireRole("admin"), triggerErpSyncHandler);
+
+// Phase 7 — Supplier Risk formula weights. PATCH-equivalent restricted to
+// Quality (the "suppliers" ResourceKey's own edit-level department, same as
+// every dedicated supplier action in supplier.routes.ts); GET open to
+// anyone who can see supplier records at all (Quality/Purchasing/Material
+// Mgmt/Production), same "why did this score come out this way" reasoning
+// as Feasibility's own GET above.
+settingsRouter.get("/supplier-risk", getSupplierRiskSettingsHandler);
+settingsRouter.post("/supplier-risk", requireAnyDepartment("quality"), validate(updateSupplierRiskSettingsSchema), updateSupplierRiskSettingsHandler);
+
+// Phase 8 — Receiving auto-trigger/escalation config. Same Quality-only
+// PATCH / open GET split as Supplier Risk above (Quality owns receiving
+// inspection dispositions, the thing these settings actually govern).
+settingsRouter.get("/receiving", getReceivingSettingsHandler);
+settingsRouter.post("/receiving", requireAnyDepartment("quality"), validate(updateReceivingSettingsSchema), updateReceivingSettingsHandler);

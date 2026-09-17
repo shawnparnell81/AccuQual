@@ -40,3 +40,20 @@ function fieldsToRecord(flat: string[]): Record<string, string> {
   }
   return record;
 }
+
+/**
+ * For one-shot CLI scripts only (e.g. db/seedDemoStory.ts) that call
+ * publishEvent and then need the process to actually exit — the live
+ * Express server never calls this (its own process lifetime IS the
+ * client's lifetime). Without this, getClient()'s lazily-opened connection
+ * stays open forever, and a script that never explicitly exits hangs
+ * indefinitely after all its real work is done (found live: a seed script
+ * completed every insert successfully but the node process never returned,
+ * because nothing ever closed this module-level client).
+ */
+export async function closeEventBusClient(): Promise<void> {
+  if (client) {
+    await client.quit();
+    client = null;
+  }
+}

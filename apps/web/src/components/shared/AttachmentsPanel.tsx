@@ -6,6 +6,7 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { useToast } from "./ToastProvider";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import type { Attachment } from "../../api/types";
+import { formatDateTime } from "../../lib/dates";
 
 function formatSize(bytes: number | null): string {
   if (bytes === null) return "";
@@ -111,7 +112,7 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
             <div className="min-w-0 flex-1">
               <div className="truncate font-medium">{file.fileName}</div>
               <div className="text-xs text-muted-foreground">
-                {formatSize(file.fileSize)} · {new Date(file.createdAt).toLocaleString()}
+                {formatSize(file.fileSize)} · {formatDateTime(file.createdAt)}
               </div>
             </div>
             <button onClick={() => download(file)} className="shrink-0 text-muted-foreground hover:text-foreground" title="Download">

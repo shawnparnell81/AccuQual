@@ -1,4 +1,5 @@
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CHART_COLORS } from "./chartPalette";
 
 export interface CapaStatusDatum {
   status: string;
@@ -6,10 +7,10 @@ export interface CapaStatusDatum {
 }
 
 const COLORS: Record<string, string> = {
-  open: "#f59e0b",
-  in_progress: "#60a5fa",
-  verifying: "#a78bfa",
-  closed: "#10b981",
+  open: CHART_COLORS.attention,
+  in_progress: CHART_COLORS.active,
+  verifying: CHART_COLORS.waiting,
+  closed: CHART_COLORS.resolved,
 };
 
 const LABELS: Record<string, string> = {
@@ -42,7 +43,7 @@ export function CapaEffectivenessChart({ data }: { data: CapaStatusDatum[] }) {
         <Tooltip labelFormatter={(s: string) => LABELS[s] ?? s} />
         <Bar dataKey="count" radius={[6, 6, 0, 0]}>
           {data.map((entry) => (
-            <Cell key={entry.status} fill={COLORS[entry.status] ?? "#64748b"} />
+            <Cell key={entry.status} fill={COLORS[entry.status] ?? CHART_COLORS.fallback} />
           ))}
         </Bar>
       </BarChart>

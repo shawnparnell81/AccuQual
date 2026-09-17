@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { apiClient } from "../../api/client";
-import type { Supplier, SupplierPerformance, CostingSummary } from "../../api/types";
+import type { Supplier, SupplierPerformance, CostingSummary, SupplierQualityFactors, SupplierRiskScoreWithTrend } from "../../api/types";
+import { TrendLineChart } from "../../components/charts/TrendLineChart";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
@@ -117,11 +118,32 @@ function PerformanceStat({ label, value }: { label: string; value: string }) {
 export function SupplierDetailPage() {
   const { id } = useParams();
   const supplierId = Number(id);
+  const toast = useToast();
   const { data: supplier, isLoading } = supplierHooks.useOne(supplierId);
   useSetAssistantContext("supplier", supplierId, supplier ? supplier.name : `Supplier #${supplierId}`);
   const { data: performance } = useSupplierPerformance(supplierId);
   const costing = useSupplierCosting(supplierId);
   const historyKey: unknown[][] = [["workflow-history", "suppliers", supplierId]];
+
+  // Phase 7 — Supplier Quality Risk Score + KPIs (see supplier.qualityRisk.ts).
+  const riskQueryKey = ["suppliers", supplierId, "risk-score"];
+  const { data: riskScore, isLoading: riskLoading } = useQuery<SupplierRiskScoreWithTrend>({
+    queryKey: riskQueryKey,
+    queryFn: async () => (await apiClient.get(`/suppliers/${supplierId}/risk-score`)).data,
+  });
+  const { data: kpis } = useQuery<SupplierQualityFactors>({
+    queryKey: ["suppliers", supplierId, "kpis"],
+    queryFn: async () => (await apiClient.get(`/suppliers/${supplierId}/kpis`)).data,
+  });
+  const queryClient = useQueryClient();
+  const recomputeRisk = useMutation({
+    mutationFn: async () => (await apiClient.post(`/suppliers/${supplierId}/risk-score/recompute`)).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: riskQueryKey });
+      toast.success("Quality Risk Score recomputed.");
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't recompute the risk score.")),
+  });
 
   const approveAction = useWorkflowAction("suppliers", "approve", { successMessage: "Supplier approved.", invalidateKeys: historyKey });
   const conditionalAction = useWorkflowAction("suppliers", "conditional", { successMessage: "Supplier set to conditional.", invalidateKeys: historyKey });
@@ -246,6 +268,38 @@ export function SupplierDetailPage() {
               {performance.deliveryTimeliness.sampleSize}) — nothing formally links a request to the delivery that fulfills it, so this
               is a best-effort pairing, not a guarantee.
             </p>
+          </>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-medium">Quality Risk Score</h2>
+          <button onClick={() => recomputeRisk.mutate()} disabled={recomputeRisk.isPending} className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-60">
+            {recomputeRisk.isPending ? "Recomputing…" : "Recompute"}
+          </button>
+        </div>
+        <p className="mb-3 text-xs text-muted-foreground">
+          A deterministic weighted formula over NCRs, CAPAs, CAPA recurrence, delivery performance, defect rate, warranty claims, and communication responsiveness — a separate concept from the
+          "AI Supplier Risk Prediction" above (that one is LLM-generated). Weights configurable in Settings → Supplier Risk.
+        </p>
+        {riskLoading || !riskScore ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : (
+          <>
+            <div className="mb-4 flex items-center gap-3">
+              <p className="text-3xl font-semibold tabular-nums">{riskScore.latest.score}</p>
+              <StatusBadge value={riskScore.latest.band === "high" || riskScore.latest.band === "critical" ? "critical" : riskScore.latest.band} label={`${riskScore.latest.band} risk`} />
+            </div>
+            {riskScore.trend.length > 1 && <TrendLineChart data={riskScore.trend.map((t) => ({ month: t.scoreDate, count: Number(t.score) }))} label="Risk Score" />}
+            {kpis && (
+              <div className="mt-3 grid grid-cols-2 gap-4 md:grid-cols-4">
+                <PerformanceStat label="NCR Count" value={String(kpis.ncrCount)} />
+                <PerformanceStat label="CAPA Count" value={String(kpis.capaCount)} />
+                <PerformanceStat label="Open Corrective Actions" value={String(kpis.openCorrectiveActionCount)} />
+                <PerformanceStat label="Warranty Claims" value={String(kpis.warrantyClaimCount)} />
+              </div>
+            )}
           </>
         )}
       </div>

@@ -54,6 +54,7 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   closed: "success",
   released: "success",
   in_stock: "success", // Inventory: healthy stock level
+  ok: "success", // System Health checks (Phase 10) — "critical" below already covers that same check's worst case
 
   rejected: "destructive",
   disqualified: "destructive",
@@ -87,8 +88,19 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   replaced: "success",
   repaired: "success",
 
+  // Phase 4 AI Enablement — per-tenant AI mode on the Platform Admin AI Overview panel.
+  live: "success",
+  degraded: "warning",
+  disabled: "muted",
+  stub: "info", // key configured (platform or tenant), but no real attempt has landed yet this window
+
   // Supplier Portal review states not covered above.
   accepted: "success",
+
+  // System Health checks (Phase 10) — "critical" above already covers that
+  // status literally; this is the literal "warning" status string itself,
+  // distinct from every other status word that merely buckets INTO warning.
+  warning: "warning",
 };
 
 const BUCKET_CLASSES: Record<string, string> = {

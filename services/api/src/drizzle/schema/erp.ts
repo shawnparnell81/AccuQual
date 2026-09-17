@@ -23,6 +23,8 @@ export const erpPurchaseOrders = pgTable("erp_purchase_orders", {
   updatedAt: timestamp("updated_at"),
   status: text("status").notNull().default("draft"),
   notes: text("notes"),
+  /** Phase 1 buyer-evaluation finding ("PO list columns") — purchasing's own ETA for the order, editable any time same as notes. */
+  expectedDeliveryDate: timestamp("expected_delivery_date"),
 });
 
 export const erpPoLineItems = pgTable("erp_po_line_items", {
@@ -49,6 +51,14 @@ export const erpReceivingDocuments = pgTable("erp_receiving_documents", {
  * the item) — that's what lets a PO's status move from "sent" to
  * "partially_received" to "received" by actually comparing received vs.
  * ordered quantity per line, instead of guessing from a bare item count.
+ *
+ * Phase 8 — a receiving line item now carries a real structured
+ * inspection-workflow status (previously none at all: a line was just "how
+ * much arrived," with no pass/fail concept), and the lot/serial captured at
+ * the moment of physical receipt (mirrored onto a real inventory_lots row
+ * — see inventoryLots.ts — once this line is applied to inventory).
+ * status: received | pending_inspection | inspected | accepted | rejected |
+ * quarantined | disposition_required
  */
 export const erpReceivingLineItems = pgTable("erp_receiving_line_items", {
   id: serial("id").primaryKey(),
@@ -57,6 +67,9 @@ export const erpReceivingLineItems = pgTable("erp_receiving_line_items", {
   poLineItemId: integer("po_line_item_id").references(() => erpPoLineItems.id).notNull(),
   quantityReceived: integer("quantity_received").notNull(),
   notes: text("notes"),
+  status: text("status").notNull().default("received"),
+  lotNumber: text("lot_number"),
+  serialNumber: text("serial_number"),
 });
 
 /**

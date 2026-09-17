@@ -24,18 +24,29 @@ export function useFormEditorState(formType: string, entityId: number, windowId?
   const [values, setValues] = useState<Record<string, unknown>>({});
   const autosaveTimer = useRef<ReturnType<typeof setTimeout>>();
   const hydrated = useRef(false);
+  const lastServerVersion = useRef<number | undefined>(undefined);
+  // True from the first keystroke of an edit until its autosave settles —
+  // guards the re-hydrate below from clobbering an in-progress local edit.
+  const isDirty = useRef(false);
 
-  // Hydrate local field state once the current form_data row loads.
+  // Hydrate local field state when the current form_data row first loads,
+  // and again whenever the server's own version advances from a write this
+  // hook didn't make itself (e.g. NCR's workflow actions syncing a field
+  // onto the official document server-side — see ncr.formSync.ts) — as long
+  // as there's no unsaved local edit in flight that a re-hydrate would wipe.
   useEffect(() => {
-    if (!hydrated.current && formData) {
+    if (!formData) return;
+    if (!hydrated.current || (formData.version !== lastServerVersion.current && !isDirty.current)) {
       setValues(formData.data ?? {});
       hydrated.current = true;
     }
+    lastServerVersion.current = formData.version;
   }, [formData]);
 
   function updateField(name: string, value: unknown) {
     const next = { ...values, [name]: value };
     setValues(next);
+    isDirty.current = true;
     if (windowId) setDirty(windowId, true);
 
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
@@ -43,6 +54,7 @@ export function useFormEditorState(formType: string, entityId: number, windowId?
       if (windowId) setSaving(windowId, true);
       saveForm.mutate(next, {
         onSettled: () => {
+          isDirty.current = false;
           if (windowId) {
             setSaving(windowId, false);
             setDirty(windowId, false);

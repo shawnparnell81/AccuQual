@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { WorkflowMetadataViewer } from "./WorkflowMetadataViewer";
+import { formatDateTime } from "../../lib/dates";
 import type { WorkflowHistoryEntry } from "../../api/types";
 
 type Bucket = "muted" | "info" | "warning" | "success" | "destructive";
@@ -81,10 +82,10 @@ export function WorkflowHistoryItem({ entry, highlighted }: { entry: WorkflowHis
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
             <span className={clsx("font-medium", entry.action !== "transition_failed" && "capitalize")}>{summarize(entry)}</span>
-            <span className="flex-none text-xs text-muted-foreground">{new Date(entry.createdAt).toLocaleString()}</span>
+            <span className="flex-none text-xs text-muted-foreground">{formatDateTime(entry.createdAt)}</span>
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            <span>{entry.performedBy ? `User #${entry.performedBy}` : "System"}</span>
+            <span>{entry.performedByName ?? "System"}</span>
             {toStatus && <span>→ now {toStatus.replace(/_/g, " ")}</span>}
             <button onClick={() => setExpanded((e) => !e)} className="ml-auto flex items-center gap-1 text-primary hover:underline">
               Details <ChevronDown size={12} className={clsx("transition-transform", expanded && "rotate-180")} />

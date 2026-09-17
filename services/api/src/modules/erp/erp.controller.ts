@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import { and, eq, desc } from "drizzle-orm";
-import { erpPurchaseOrders, erpReceivingDocuments, erpReceivingLineItems, erpPurchaseRequisitions } from "../../drizzle/schema/erp.js";
+import { and, eq, desc, inArray } from "drizzle-orm";
+import { erpPurchaseOrders, erpPoLineItems, erpReceivingDocuments, erpReceivingLineItems, erpPurchaseRequisitions } from "../../drizzle/schema/erp.js";
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
@@ -21,6 +21,8 @@ import {
   type LineItemInput,
 } from "./erp.service.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { transitionReceivingLineItem } from "./receivingWorkflow.js";
+import { qualityInspectionReports } from "../../drizzle/schema/qualityInspectionReports.js";
 
 /** Purchasing owns the PO lifecycle (create/edit/send/cancel); material_management owns receiving — same inline-guard style as inventory.controller.ts's assertDepartment. */
 function assertDepartment(req: Request, allowed: string[]) {
@@ -54,6 +56,14 @@ async function lineItemsWithContext(req: Request, purchaseOrderId: number) {
   }));
 }
 
+/**
+ * Phase 1 buyer-evaluation finding ("PO list columns") — totalValue is
+ * computed here, not stored: summed from erp_po_line_items' own
+ * quantity * unitCost, the same real numbers the PO detail page's line-item
+ * table already shows. Two plain queries + a JS reduce, same "tenant-scoped
+ * tables are QMS-scale, not warehouse-scale" reasoning inventory's own list
+ * handler already uses, rather than a SQL group-by join.
+ */
 export const listPurchaseOrdersHandler = asyncHandler(async (req: Request, res: Response) => {
   const rows = await req.db!
     .select({
@@ -63,18 +73,27 @@ export const listPurchaseOrdersHandler = asyncHandler(async (req: Request, res: 
       status: erpPurchaseOrders.status,
       createdAt: erpPurchaseOrders.createdAt,
       notes: erpPurchaseOrders.notes,
+      expectedDeliveryDate: erpPurchaseOrders.expectedDeliveryDate,
     })
     .from(erpPurchaseOrders)
     .innerJoin(suppliers, eq(erpPurchaseOrders.supplierId, suppliers.id))
     .where(eq(erpPurchaseOrders.tenantId, req.tenantId!))
     .orderBy(desc(erpPurchaseOrders.createdAt));
-  res.json(rows);
+
+  const lineItems = await req.db!.select().from(erpPoLineItems).where(eq(erpPoLineItems.tenantId, req.tenantId!));
+  const totalByPo = new Map<number, number>();
+  for (const li of lineItems) {
+    const lineTotal = li.quantity * Number(li.unitCost ?? 0);
+    totalByPo.set(li.purchaseOrderId, (totalByPo.get(li.purchaseOrderId) ?? 0) + lineTotal);
+  }
+
+  res.json(rows.map((po) => ({ ...po, totalValue: totalByPo.get(po.id) ?? 0 })));
 });
 
 export const createPurchaseOrderHandler = asyncHandler(async (req: Request, res: Response) => {
   assertDepartment(req, ["purchasing"]);
-  const { supplierId, notes, lineItems } = req.body as { supplierId: number; notes?: string; lineItems: LineItemInput[] };
-  const po = await createPurchaseOrder(req.db!, req.tenantId!, supplierId, lineItems, notes, req.user?.id);
+  const { supplierId, notes, lineItems, expectedDeliveryDate } = req.body as { supplierId: number; notes?: string; lineItems: LineItemInput[]; expectedDeliveryDate?: string };
+  const po = await createPurchaseOrder(req.db!, req.tenantId!, supplierId, lineItems, notes, req.user?.id, expectedDeliveryDate);
   res.status(201).json(po);
 });
 
@@ -84,18 +103,23 @@ export const getPurchaseOrderHandler = asyncHandler(async (req: Request, res: Re
   res.json({ ...po, lineItems });
 });
 
-/** Notes are editable any time; supplierId only while draft. */
+/** Notes and expectedDeliveryDate are editable any time; supplierId only while draft. */
 export const updatePurchaseOrderHandler = asyncHandler(async (req: Request, res: Response) => {
   const po = await loadPo(req, Number(req.params.id));
   assertDepartment(req, ["purchasing"]);
-  const { supplierId, notes } = req.body as { supplierId?: number; notes?: string };
+  const { supplierId, notes, expectedDeliveryDate } = req.body as { supplierId?: number; notes?: string; expectedDeliveryDate?: string | null };
   if (supplierId !== undefined && po.status !== "draft") {
     throw AppError.badRequest(`Cannot change supplier — purchase order is "${po.status}", not "draft"`);
   }
 
   const [updated] = await req.db!
     .update(erpPurchaseOrders)
-    .set({ ...(supplierId !== undefined ? { supplierId } : {}), ...(notes !== undefined ? { notes } : {}), updatedAt: new Date() })
+    .set({
+      ...(supplierId !== undefined ? { supplierId } : {}),
+      ...(notes !== undefined ? { notes } : {}),
+      ...(expectedDeliveryDate !== undefined ? { expectedDeliveryDate: expectedDeliveryDate ? new Date(expectedDeliveryDate) : null } : {}),
+      updatedAt: new Date(),
+    })
     .where(eq(erpPurchaseOrders.id, po.id))
     .returning();
   await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "PurchaseOrder", entityId: po.id, action: "update", changes: { supplierId, notes }, performedBy: req.user?.id });
@@ -123,6 +147,14 @@ export const cancelPurchaseOrderHandler = asyncHandler(async (req: Request, res:
   res.json(await cancelPurchaseOrder(req.db!, req.tenantId!, po, req.user?.id));
 });
 
+/**
+ * GET /erp/receiving-documents — Phase 8 now also inlines each document's
+ * line items (a small, per-PO join at this app's QMS scale, same
+ * convention listItemsHandler/listAlertsHandler already use elsewhere)
+ * since the new per-line status/lot/serial fields are exactly what the
+ * Receiving Documents section on ErpPurchaseOrderDetailPage.tsx needs to
+ * render — previously only the single-document GET returned them.
+ */
 export const listReceivingDocumentsHandler = asyncHandler(async (req: Request, res: Response) => {
   const purchaseOrderId = req.query.purchaseOrderId ? Number(req.query.purchaseOrderId) : undefined;
   const rows = await req.db!
@@ -134,12 +166,25 @@ export const listReceivingDocumentsHandler = asyncHandler(async (req: Request, r
         : eq(erpReceivingDocuments.tenantId, req.tenantId!)
     )
     .orderBy(desc(erpReceivingDocuments.createdAt));
-  res.json(rows);
+  if (rows.length === 0) return res.json([]);
+
+  const lineItems = await req.db!
+    .select()
+    .from(erpReceivingLineItems)
+    .where(and(eq(erpReceivingLineItems.tenantId, req.tenantId!), inArray(erpReceivingLineItems.receivingDocumentId, rows.map((r) => r.id))));
+  const byDoc = new Map<number, typeof lineItems>();
+  for (const li of lineItems) byDoc.set(li.receivingDocumentId, [...(byDoc.get(li.receivingDocumentId) ?? []), li]);
+
+  res.json(rows.map((r) => ({ ...r, lineItems: byDoc.get(r.id) ?? [] })));
 });
 
 export const createReceivingDocumentHandler = asyncHandler(async (req: Request, res: Response) => {
   assertDepartment(req, ["material_management"]);
-  const { purchaseOrderId, notes, lineItems } = req.body as { purchaseOrderId: number; notes?: string; lineItems: { poLineItemId: number; quantityReceived: number; notes?: string }[] };
+  const { purchaseOrderId, notes, lineItems } = req.body as {
+    purchaseOrderId: number;
+    notes?: string;
+    lineItems: { poLineItemId: number; quantityReceived: number; notes?: string; lotNumber?: string; serialNumber?: string; revisionLevel?: string; expirationDate?: string }[];
+  };
   const po = await loadPo(req, purchaseOrderId);
   const doc = await createReceivingDocument(req.db!, req.tenantId!, po, lineItems, notes, req.user?.id);
   res.status(201).json(doc);
@@ -151,6 +196,32 @@ export const getReceivingDocumentHandler = asyncHandler(async (req: Request, res
   if (!doc) throw AppError.notFound("ReceivingDocument");
   const lineItems = await req.db!.select().from(erpReceivingLineItems).where(and(eq(erpReceivingLineItems.receivingDocumentId, id), eq(erpReceivingLineItems.tenantId, req.tenantId!)));
   res.json({ ...doc, lineItems });
+});
+
+/**
+ * POST /erp/receiving-line-items/:id/status — the one write path for the
+ * Phase 8 receiving state machine (see receivingWorkflow.ts). RBAC is
+ * enforced inside transitionReceivingLineItem itself (department varies by
+ * target state, not a single fixed department the way most actions in
+ * this module are), so this handler has no assertDepartment call of its
+ * own. Auto-fetches the linked inspection report's defectCategory (if one
+ * exists) so the NCR-auto-trigger settings' category filter has something
+ * real to check against without the caller having to re-send it.
+ */
+export const transitionReceivingLineItemHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const { status, notes } = req.body as { status: string; notes?: string };
+
+  const [report] = await req.db!.select({ defectCategory: qualityInspectionReports.defectCategory }).from(qualityInspectionReports).where(and(eq(qualityInspectionReports.receivingLineItemId, id), eq(qualityInspectionReports.tenantId, req.tenantId!)));
+
+  const updated = await transitionReceivingLineItem(req.db!, req.tenantId!, id, status, {
+    department: req.user?.department ?? null,
+    isAdminOrPlatformAdmin: req.user?.roleName === "admin" || req.user?.roleName === "platform_admin",
+    defectCategory: report?.defectCategory ?? undefined,
+    notes,
+    performedBy: req.user?.id,
+  });
+  res.json(updated);
 });
 
 /** GET /erp/overview — real counts + recent activity, for the Dashboard's ERP Overview section. */

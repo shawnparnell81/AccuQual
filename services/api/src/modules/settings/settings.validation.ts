@@ -62,3 +62,29 @@ export const updateErpSyncSettingsSchema = z.object({
   // database, same convention as tenant.validation.ts's updateAiConfigSchema.
   webhookSecret: z.string().min(1).optional(),
 });
+
+/**
+ * Settings → Supplier Risk (Phase 7) — weights for the Supplier Quality
+ * Risk Score's 7 factors (see modules/supplier/supplier.qualityRisk.ts).
+ * Non-negative, uncapped — the score normalizes by the sum of whatever
+ * weights are set, so a tenant emphasizing one factor doesn't need every
+ * other one rebalanced by hand.
+ */
+export const updateSupplierRiskSettingsSchema = z.object({
+  ncr: z.coerce.number().min(0).optional(),
+  capa: z.coerce.number().min(0).optional(),
+  capaRecurrence: z.coerce.number().min(0).optional(),
+  delivery: z.coerce.number().min(0).optional(),
+  defectRate: z.coerce.number().min(0).optional(),
+  warranty: z.coerce.number().min(0).optional(),
+  responsiveness: z.coerce.number().min(0).optional(),
+});
+
+/** Settings → Receiving (Phase 8) — read by erp/receivingAutomation.ts. */
+export const updateReceivingSettingsSchema = z.object({
+  autoCreateNcrOnRejection: z.boolean().optional(),
+  autoCreateNcrOnQuarantine: z.boolean().optional(),
+  autoCreateNcrDefectCategories: z.array(z.string()).optional(),
+  capaEscalationThreshold: z.coerce.number().int().min(1).optional(),
+  capaEscalationWindowDays: z.coerce.number().int().min(1).optional(),
+});

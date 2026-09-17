@@ -5,7 +5,7 @@ import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
-import type { InventoryItem, InventoryMovement, InventoryAlert, InventoryReorderRequest, Supplier, ItemCosting } from "../../api/types";
+import type { InventoryItem, InventoryMovement, InventoryAlert, InventoryReorderRequest, Supplier, ItemCosting, InventoryLot } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
@@ -39,9 +39,18 @@ function useItemCosting(itemId: number | undefined) {
   });
 }
 
+/** Phase 8 — the real per-lot/serial ledger for this item (inventoryLots.ts). */
+function useItemLots(itemId: number | undefined) {
+  return useQuery<InventoryLot[]>({
+    queryKey: ["inventory/lots", itemId],
+    queryFn: async () => (await apiClient.get(`/inventory/items/${itemId}/lots`)).data,
+    enabled: itemId !== undefined,
+  });
+}
+
 const currency = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const MOVEMENT_TYPES = ["receive", "consume", "produce", "scrap", "transfer"] as const;
+const MOVEMENT_TYPES = ["receive", "consume", "produce", "scrap", "transfer", "return"] as const;
 // Free-form examples, not an enum — there's no Production Work Order module
 // (or anything else) to validate these against. "Custom…" lets someone type
 // a value this list didn't anticipate rather than being stuck with these three.
@@ -49,13 +58,16 @@ const REFERENCE_TYPE_OPTIONS = ["", "production_log", "manual", "batch"] as cons
 
 function LogMovementModal({ itemId, isOpen, onClose }: { itemId: number; isOpen: boolean; onClose: () => void }) {
   const toast = useToast();
-  const [form, setForm] = useState({ movementType: "receive", quantity: "", fromLocation: "", toLocation: "", reason: "", referenceType: "", referenceTypeCustom: "", referenceId: "" });
+  const [form, setForm] = useState({ movementType: "receive", quantity: "", fromLocation: "", toLocation: "", reason: "", referenceType: "", referenceTypeCustom: "", referenceId: "", lotId: "" });
+  const { data: lots = [] } = useItemLots(itemId);
+  const activeLots = lots.filter((l) => l.status === "active" && Number(l.remainingQty) > 0);
   const movementAction = useWorkflowAction<{ id: number } & Record<string, unknown>>("inventory/items", "movement", {
     successMessage: "Movement logged.",
-    invalidateKeys: [["inventory-movements", itemId], ["workflow-history", "inventory", itemId]],
+    invalidateKeys: [["inventory-movements", itemId], ["inventory/lots", itemId], ["workflow-history", "inventory", itemId]],
   });
 
   const resolvedReferenceType = form.referenceType === "custom" ? form.referenceTypeCustom : form.referenceType;
+  const isOutbound = form.movementType === "consume" || form.movementType === "scrap" || form.movementType === "return";
 
   return (
     <Modal title="Log Movement" isOpen={isOpen} onClose={onClose}>
@@ -73,11 +85,12 @@ function LogMovementModal({ itemId, isOpen, onClose }: { itemId: number; isOpen:
               reason: form.reason || undefined,
               referenceType: resolvedReferenceType || undefined,
               referenceId: form.referenceId || undefined,
+              lotId: form.lotId ? Number(form.lotId) : undefined,
             },
             {
               onSuccess: () => {
                 onClose();
-                setForm({ movementType: "receive", quantity: "", fromLocation: "", toLocation: "", reason: "", referenceType: "", referenceTypeCustom: "", referenceId: "" });
+                setForm({ movementType: "receive", quantity: "", fromLocation: "", toLocation: "", reason: "", referenceType: "", referenceTypeCustom: "", referenceId: "", lotId: "" });
               },
               onError: (err) => toast.error(extractErrorMessage(err, "Couldn't log movement.")),
             }
@@ -92,15 +105,25 @@ function LogMovementModal({ itemId, isOpen, onClose }: { itemId: number; isOpen:
           ))}
         </SelectField>
         <TextField label="Quantity" type="number" min="0" step="any" required value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
-        {(form.movementType === "consume" || form.movementType === "scrap" || form.movementType === "transfer") && (
+        {(form.movementType === "consume" || form.movementType === "scrap" || form.movementType === "transfer" || form.movementType === "return") && (
           <TextField label="From Location" value={form.fromLocation} onChange={(e) => setForm({ ...form, fromLocation: e.target.value })} />
         )}
         {(form.movementType === "receive" || form.movementType === "produce" || form.movementType === "transfer") && (
           <TextField label="To Location" value={form.toLocation} onChange={(e) => setForm({ ...form, toLocation: e.target.value })} />
         )}
+        {isOutbound && activeLots.length > 0 && (
+          <SelectField label="Lot (optional — decrements that lot's remaining quantity)" value={form.lotId} onChange={(e) => setForm({ ...form, lotId: e.target.value })}>
+            <option value="">No specific lot</option>
+            {activeLots.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.lotNumber} ({l.remainingQty} remaining)
+              </option>
+            ))}
+          </SelectField>
+        )}
         <TextField
-          label={form.movementType === "scrap" ? "Reason" : "Reason (optional)"}
-          required={form.movementType === "scrap"}
+          label={form.movementType === "scrap" || form.movementType === "return" ? "Reason" : "Reason (optional)"}
+          required={form.movementType === "scrap" || form.movementType === "return"}
           value={form.reason}
           onChange={(e) => setForm({ ...form, reason: e.target.value })}
         />
@@ -227,6 +250,7 @@ export function InventoryDetailPage() {
   const { data: reorderRequests = [] } = reorderRequestHooks.useList({ itemId });
   const { data: suppliers = [] } = supplierHooks.useList();
   const { data: costing } = useItemCosting(itemId);
+  const { data: lots = [] } = useItemLots(itemId);
   const currentUser = useCurrentUser();
   const canManageReorder = currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin" || currentUser?.department === "purchasing";
   const updateItem = itemHooks.useUpdate();
@@ -439,6 +463,42 @@ export function InventoryDetailPage() {
             <tbody>
               {reorderRequests.map((r) => (
                 <ReorderRequestRow key={r.id} request={r} canEdit={canManageReorder} />
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-4">
+        <h3 className="mb-3 text-sm font-medium">Lot / Serial Traceability</h3>
+        {lots.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No tracked lots for this item yet — a real one is created the moment it's received with a lot number on a Purchase Order's Receiving Document.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="pb-2">Lot #</th>
+                <th className="pb-2">Serial #</th>
+                <th className="pb-2">Received</th>
+                <th className="pb-2">Remaining</th>
+                <th className="pb-2">Revision</th>
+                <th className="pb-2">Expires</th>
+                <th className="pb-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lots.map((l) => (
+                <tr key={l.id} className="border-t border-border">
+                  <td className="py-1.5 font-medium">{l.lotNumber}</td>
+                  <td className="py-1.5 text-muted-foreground">{l.serialNumber ?? "—"}</td>
+                  <td className="py-1.5 tabular-nums">{l.receivedQty}</td>
+                  <td className="py-1.5 tabular-nums">{l.remainingQty}</td>
+                  <td className="py-1.5 text-muted-foreground">{l.revisionLevel ?? "—"}</td>
+                  <td className="py-1.5 text-muted-foreground">{l.expirationDate ? new Date(l.expirationDate).toLocaleDateString() : "—"}</td>
+                  <td className="py-1.5">
+                    <StatusBadge value={l.status === "expired" || l.status === "scrapped" ? "critical" : l.status} />
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>

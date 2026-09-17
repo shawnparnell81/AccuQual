@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
@@ -9,7 +9,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { Modal } from "../../components/modals/Modal";
-import type { ScarForm } from "../../api/types";
+import type { ScarForm, Supplier } from "../../api/types";
 
 const scarHooks = createResourceHooks<ScarForm>("scar-forms");
 
@@ -30,6 +30,11 @@ export function ScarFormDetailPage() {
   const { data: scar, isLoading } = scarHooks.useOne(scarId);
   const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // Phase 7 — a real supplier link (supplierId), added alongside the
+  // pre-existing free-text supplierName field so a SCAR can actually
+  // surface in that supplier's Supplier Portal / Quality Risk Score
+  // factors — see scarForms.ts's own schema comment.
+  const { data: suppliers = [] } = useQuery<Supplier[]>({ queryKey: ["suppliers"], queryFn: async () => (await apiClient.get("/suppliers")).data });
 
   const patch = useMutation({
     mutationFn: async (body: Record<string, unknown>) => (await apiClient.patch(`/scar-forms/${scarId}`, body)).data,
@@ -92,6 +97,21 @@ export function ScarFormDetailPage() {
             <Field label="SCAR Number" value={scar.scarNumber} onSave={(v) => patch.mutate({ scarNumber: v || null })} />
             <Field label="Date Issued" type="date" value={scar.dateIssued?.slice(0, 10)} onSave={(v) => patch.mutate({ dateIssued: v || null })} />
             <Field label="Supplier Name" value={scar.supplierName} onSave={(v) => patch.mutate({ supplierName: v || null })} />
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-xs font-medium uppercase text-muted-foreground print:text-black">Linked Supplier Record</span>
+              <select
+                value={scar.supplierId ?? ""}
+                onChange={(e) => patch.mutate({ supplierId: e.target.value ? Number(e.target.value) : null })}
+                className="rounded-md border border-form-field bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary print:hidden"
+              >
+                <option value="">Not linked</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <Field label="Response Due Date" type="date" value={scar.responseDueDate?.slice(0, 10)} onSave={(v) => patch.mutate({ responseDueDate: v || null })} />
             <Field label="Contact Person" value={scar.contactPerson} onSave={(v) => patch.mutate({ contactPerson: v || null })} />
             <Field label="PO Number" value={scar.poNumber} onSave={(v) => patch.mutate({ poNumber: v || null })} />

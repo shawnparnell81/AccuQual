@@ -3,6 +3,7 @@ import { ncr } from "../../drizzle/schema/ncr.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
+import { syncNcrFormData, ncrIsoDate } from "./ncr.formSync.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
 
 /**
@@ -47,14 +48,30 @@ async function patchNcr(
 export const assign = (db: TenantDb, tenantId: number, id: number, assignedTo: number, performedBy?: number) =>
   patchNcr(db, tenantId, id, { assignedTo }, "assigned", performedBy);
 
-export const setContainment = (db: TenantDb, tenantId: number, id: number, containment: string, performedBy?: number) =>
-  patchNcr(db, tenantId, id, { containment, status: "contained" }, "containment", performedBy, ["open"]);
+// Phase 2 NCR unified-data-model fix: each workflow step also syncs the
+// matching field on the official document (see ncr.formSync.ts) — the same
+// left-pane text a quality engineer just saved now shows up in the
+// PDF-style form/preview immediately, not just in the bare workflow field.
+export const setContainment = async (db: TenantDb, tenantId: number, id: number, containment: string, performedBy?: number) => {
+  const updated = await patchNcr(db, tenantId, id, { containment, status: "contained" }, "containment", performedBy, ["open"]);
+  await syncNcrFormData(db, tenantId, id, { containmentActionText: containment }, performedBy);
+  return updated;
+};
 
-export const setRootCause = (db: TenantDb, tenantId: number, id: number, rootCause: string, performedBy?: number) =>
-  patchNcr(db, tenantId, id, { rootCause, status: "investigating" }, "root_cause", performedBy, ["contained"]);
+export const setRootCause = async (db: TenantDb, tenantId: number, id: number, rootCause: string, performedBy?: number) => {
+  const updated = await patchNcr(db, tenantId, id, { rootCause, status: "investigating" }, "root_cause", performedBy, ["contained"]);
+  await syncNcrFormData(db, tenantId, id, { identifiedRootCauseSummary: rootCause }, performedBy);
+  return updated;
+};
 
-export const setCorrectiveAction = (db: TenantDb, tenantId: number, id: number, correctiveAction: string, performedBy?: number) =>
-  patchNcr(db, tenantId, id, { correctiveAction, status: "corrective_action" }, "corrective_action", performedBy, ["investigating"]);
+export const setCorrectiveAction = async (db: TenantDb, tenantId: number, id: number, correctiveAction: string, performedBy?: number) => {
+  const updated = await patchNcr(db, tenantId, id, { correctiveAction, status: "corrective_action" }, "corrective_action", performedBy, ["investigating"]);
+  await syncNcrFormData(db, tenantId, id, { correctiveActionText: correctiveAction }, performedBy);
+  return updated;
+};
 
-export const close = (db: TenantDb, tenantId: number, id: number, performedBy?: number) =>
-  patchNcr(db, tenantId, id, { status: "closed", closedAt: new Date() }, "closed", performedBy, ["corrective_action"]);
+export const close = async (db: TenantDb, tenantId: number, id: number, performedBy?: number) => {
+  const updated = await patchNcr(db, tenantId, id, { status: "closed", closedAt: new Date() }, "closed", performedBy, ["corrective_action"]);
+  await syncNcrFormData(db, tenantId, id, { documentStatus: "Closed", ncrClosureDate: ncrIsoDate(updated.closedAt ?? new Date()), finalDispositionConfirmed: "Yes" }, performedBy);
+  return updated;
+};

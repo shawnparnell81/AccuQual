@@ -25,6 +25,8 @@ import {
   reserveHandler,
   releaseHandler,
   recordCycleCountHandler,
+  listItemLotsHandler,
+  traceLotHandler,
 } from "./inventory.controller.js";
 import { movementTrendsHandler, consumptionVsReceivingHandler, scrapAnalyticsHandler, referenceSummaryHandler } from "./inventory.analytics.js";
 import { getItemCostingHandler, costingSummaryHandler } from "./inventory.costing.js";
@@ -67,6 +69,9 @@ inventoryRouter.post("/items/:id/adjust", validate(adjustSchema), adjustHandler)
 inventoryRouter.post("/items/:id/mark-reorder-pending", markReorderPendingHandler);
 inventoryRouter.post("/items/:id/mark-on-order", markOnOrderHandler);
 inventoryRouter.get("/items/:id/history", historyHandler);
+// Phase 8 — real per-lot/serial traceability (task 4).
+inventoryRouter.get("/items/:id/lots", listItemLotsHandler);
+inventoryRouter.get("/lots/:id/trace", traceLotHandler);
 // Settings → Inventory Module expansion (reservation logic + cycle counts) —
 // same base "inventory" edit-level gate as movement/adjust above.
 inventoryRouter.post("/items/:id/reserve", validate(reserveSchema), reserveHandler);

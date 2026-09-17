@@ -1,0 +1,164 @@
+import type { Request, Response } from "express";
+import { and, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
+import { asyncHandler } from "../../utils/asyncHandler.js";
+import { pool } from "../../db/index.js";
+import { tenants } from "../../drizzle/schema/tenants.js";
+import { aiSuggestions } from "../../drizzle/schema/ai.js";
+import { inventoryAlerts } from "../../drizzle/schema/inventory.js";
+import { reportSchedules } from "../../drizzle/schema/reporting.js";
+import { notificationLog } from "../../drizzle/schema/notifications.js";
+import { users } from "../../drizzle/schema/users.js";
+import { env } from "../../config/env.js";
+import { buildWorkflowHealthReport } from "../workflow/workflow.controller.js";
+import type { TenantDb } from "../../lib/tenantScope.js";
+
+type Status = "ok" | "warning" | "critical";
+
+interface HealthCheck {
+  status: Status;
+  detail: string;
+  [key: string]: unknown;
+}
+
+const SEVEN_DAYS_AGO = () => new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+async function checkDatabase(): Promise<HealthCheck> {
+  const start = Date.now();
+  try {
+    await pool.query("SELECT 1");
+    const latencyMs = Date.now() - start;
+    return { status: latencyMs > 500 ? "warning" : "ok", latencyMs, detail: `Reachable, ${latencyMs}ms` };
+  } catch (err) {
+    return { status: "critical", latencyMs: Date.now() - start, detail: `Unreachable: ${(err as Error).message}` };
+  }
+}
+
+/** Mode mirrors tenant.controller.ts's getAiConfigHandler keyStatus logic exactly — "live" here is that function's "ready". */
+async function checkAi(db: TenantDb, tenantId: number): Promise<HealthCheck> {
+  const [tenant] = await db.select({ aiConfig: tenants.aiConfig }).from(tenants).where(eq(tenants.id, tenantId));
+  const mode: "live" | "stub" = tenant?.aiConfig?.apiKeyEncrypted || env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY ? "live" : "stub";
+
+  const since = SEVEN_DAYS_AGO();
+  const recent = await db
+    .select({ status: aiSuggestions.status })
+    .from(aiSuggestions)
+    .where(and(eq(aiSuggestions.tenantId, tenantId), gte(aiSuggestions.createdAt, since)));
+  const errorCount = recent.filter((r) => r.status === "error").length;
+  const total = recent.length;
+  const errorRate = total > 0 ? errorCount / total : 0;
+
+  const status: Status = total > 0 && errorRate > 0.5 ? "critical" : errorCount > 0 ? "warning" : "ok";
+  return {
+    status,
+    mode,
+    recentTotal: total,
+    recentErrorCount: errorCount,
+    detail: mode === "stub" ? "No AI key configured — every AI feature runs in stub mode" : `${errorCount}/${total} AI calls failed in the last 7 days`,
+  };
+}
+
+async function checkWorkflow(db: TenantDb, tenantId: number): Promise<HealthCheck> {
+  const { summary } = await buildWorkflowHealthReport(db, tenantId);
+  const status: Status = summary.withIssues > 0 ? "warning" : "ok";
+  return { status, ...summary, detail: `${summary.active}/${summary.total} workflow definitions active, ${summary.withIssues} with structural issues` };
+}
+
+async function checkEmail(db: TenantDb, tenantId: number): Promise<HealthCheck> {
+  const since = SEVEN_DAYS_AGO();
+  const rows = await db
+    .select({ status: notificationLog.status, count: sql<number>`count(*)::int` })
+    .from(notificationLog)
+    .where(and(eq(notificationLog.tenantId, tenantId), gte(notificationLog.createdAt, since)))
+    .groupBy(notificationLog.status);
+
+  const byStatus = Object.fromEntries(rows.map((r) => [r.status, r.count]));
+  const sent = byStatus.sent ?? 0;
+  const failed = byStatus.failed ?? 0;
+  const loggedOnly = byStatus.logged_only ?? 0;
+  const total = sent + failed + loggedOnly;
+
+  const status: Status = total > 0 && failed / total > 0.2 ? "critical" : failed > 0 ? "warning" : "ok";
+  return {
+    status,
+    sent,
+    failed,
+    loggedOnly,
+    detail: loggedOnly > 0 && sent === 0 && failed === 0 ? "No real email transport configured — notifications are logged only" : `${failed} failed of ${total} notifications in the last 7 days`,
+  };
+}
+
+async function checkReporting(db: TenantDb, tenantId: number): Promise<HealthCheck> {
+  const rows = await db.select().from(reportSchedules).where(eq(reportSchedules.tenantId, tenantId));
+  const enabled = rows.filter((r) => r.enabled);
+  const failedLastRun = enabled.filter((r) => r.lastRunStatus === "failed" || r.lastRunStatus === "error");
+  const overdue = enabled.filter((r) => r.nextRunAt && new Date(r.nextRunAt) < new Date());
+
+  const status: Status = failedLastRun.length > 0 ? "warning" : "ok";
+  return {
+    status,
+    totalSchedules: rows.length,
+    enabledSchedules: enabled.length,
+    failedSchedules: failedLastRun.length,
+    overdueSchedules: overdue.length,
+    detail: rows.length === 0 ? "No scheduled reports configured" : `${failedLastRun.length} schedule(s) last failed, ${overdue.length} overdue (no background scheduler — see /reporting)`,
+  };
+}
+
+async function checkReceivingInventory(db: TenantDb, tenantId: number): Promise<HealthCheck> {
+  const rows = await db
+    .select({ id: inventoryAlerts.id })
+    .from(inventoryAlerts)
+    .where(and(eq(inventoryAlerts.tenantId, tenantId), eq(inventoryAlerts.alertType, "below_min"), isNull(inventoryAlerts.acknowledgedAt)));
+
+  const status: Status = rows.length > 5 ? "warning" : "ok";
+  return { status, itemsBelowMin: rows.length, detail: `${rows.length} item(s) below minimum stock level, unacknowledged` };
+}
+
+async function checkSupplierPortal(db: TenantDb, tenantId: number): Promise<HealthCheck> {
+  const supplierUsers = await db
+    .select({ id: users.id, lastLoginAt: users.lastLoginAt })
+    .from(users)
+    .where(and(eq(users.tenantId, tenantId), isNotNull(users.supplierId), eq(users.isActive, true)));
+
+  const since = SEVEN_DAYS_AGO();
+  const recentlyActive = supplierUsers.filter((u) => u.lastLoginAt && new Date(u.lastLoginAt) >= since).length;
+
+  return {
+    status: "ok",
+    activeSupplierUsers: supplierUsers.length,
+    recentlyActiveCount: recentlyActive,
+    detail: supplierUsers.length === 0 ? "No supplier portal logins provisioned" : `${recentlyActive}/${supplierUsers.length} supplier users logged in within the last 7 days`,
+  };
+}
+
+/**
+ * GET /system-health — Phase 10's System Health dashboard. Aggregates
+ * lightweight signals from across the app into one consolidated view;
+ * detailed drill-down for workflow issues stays at GET /workflow/health
+ * (this reuses that exact same computation via buildWorkflowHealthReport,
+ * not a re-implementation) rather than duplicating every module's own
+ * detailed diagnostics page.
+ */
+export const getSystemHealthHandler = asyncHandler(async (req: Request, res: Response) => {
+  const db = req.db! as TenantDb;
+  const tenantId = req.tenantId!;
+
+  const [database, ai, workflow, email, reporting, receivingInventory, supplierPortal] = await Promise.all([
+    checkDatabase(),
+    checkAi(db, tenantId),
+    checkWorkflow(db, tenantId),
+    checkEmail(db, tenantId),
+    checkReporting(db, tenantId),
+    checkReceivingInventory(db, tenantId),
+    checkSupplierPortal(db, tenantId),
+  ]);
+
+  const checks = { database, ai, workflow, email, reporting, receivingInventory, supplierPortal };
+  const overall: Status = Object.values(checks).some((c) => c.status === "critical")
+    ? "critical"
+    : Object.values(checks).some((c) => c.status === "warning")
+      ? "warning"
+      : "ok";
+
+  res.json({ overall, checks, checkedAt: new Date().toISOString() });
+});

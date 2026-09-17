@@ -57,14 +57,36 @@ export class SmtpTransport implements EmailTransport {
     });
   }
 
+  /**
+   * Phase 1 email infrastructure ("queue/retry logic"): retries a transient
+   * failure (the provider's SMTP endpoint blipping, a momentary DNS/network
+   * hiccup) up to 2 more times with backoff before giving up — same
+   * attempt/backoff shape llm-gateway.ts's callLlmDetailed already uses for
+   * its own transient-failure case (a 429 there; any thrown error here,
+   * since nodemailer doesn't expose a structured "retryable" flag the way
+   * an HTTP status code does). A message that's still failing after 3 real
+   * attempts is recorded as "failed" in notification_log (see notify()
+   * below) rather than silently retried forever — there's no background
+   * worker in this app to keep retrying it later (see erpSyncSettings'
+   * schema comment on the same honest limitation for scheduled ERP sync);
+   * retryFailedNotifications() below is the explicit, triggered equivalent.
+   */
   async send(message: { to: string; subject: string; body: string }): Promise<"sent" | "failed"> {
-    try {
-      await this.transporter.sendMail({ from: env.SMTP_FROM, to: message.to, subject: message.subject, text: message.body });
-      return "sent";
-    } catch (err) {
-      logger.error("SMTP send failed", { to: message.to, subject: message.subject, err });
-      return "failed";
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await this.transporter.sendMail({ from: env.SMTP_FROM, to: message.to, subject: message.subject, text: message.body });
+        return "sent";
+      } catch (err) {
+        if (attempt === maxAttempts) {
+          logger.error("SMTP send failed", { to: message.to, subject: message.subject, attempt, err });
+          return "failed";
+        }
+        logger.warn("SMTP send failed, retrying", { to: message.to, attempt });
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+      }
     }
+    return "failed";
   }
 }
 
@@ -132,4 +154,31 @@ export async function notifyDepartment(db: TenantDb, input: NotifyDepartmentInpu
     input.relatedEntityType,
     input.relatedEntityId
   );
+}
+
+/**
+ * Phase 1 email infrastructure ("queue/retry logic"), the explicit half:
+ * SmtpTransport.send() already retries a transient failure 2 extra times
+ * inline; this is for a message that was still "failed" after all of that
+ * — most likely SMTP_* was unset (or wrong) at the time, not a one-off
+ * blip. There's no background worker in this app to keep retrying it
+ * automatically (same honest limitation as ERP Sync's own "no scheduler,
+ * only an explicit trigger" — see erpSyncSettings' schema comment); this is
+ * that same shape for email: an admin (or a future scheduled job, if one's
+ * ever added) calls this to re-attempt every row still marked "failed" for
+ * this tenant. Updates each row's own status in place rather than inserting
+ * a new log row, so notification_log stays one row per real send attempt's
+ * current outcome, not a growing chain of retries for the same message.
+ */
+export async function retryFailedNotifications(db: TenantDb, tenantId: number): Promise<{ retried: number; sent: number }> {
+  const failed = await db.select().from(notificationLog).where(and(eq(notificationLog.tenantId, tenantId), eq(notificationLog.status, "failed")));
+  if (failed.length === 0 || !activeTransport) return { retried: 0, sent: 0 };
+
+  let sent = 0;
+  for (const entry of failed) {
+    const status = await activeTransport.send({ to: entry.recipient, subject: entry.subject, body: entry.body }).catch(() => "failed" as const);
+    await db.update(notificationLog).set({ status }).where(eq(notificationLog.id, entry.id));
+    if (status === "sent") sent++;
+  }
+  return { retried: failed.length, sent };
 }

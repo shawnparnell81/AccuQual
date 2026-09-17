@@ -12,9 +12,10 @@ async function loadReport(req: Request, id: number) {
 }
 
 export const listReportsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { finalStatus } = req.query as Record<string, string | undefined>;
+  const { finalStatus, supplierId } = req.query as Record<string, string | undefined>;
   const conditions = [eq(qualityInspectionReports.tenantId, req.tenantId!)];
   if (finalStatus) conditions.push(eq(qualityInspectionReports.finalStatus, finalStatus));
+  if (supplierId) conditions.push(eq(qualityInspectionReports.supplierId, Number(supplierId)));
   const rows = await req.db!.select().from(qualityInspectionReports).where(and(...conditions)).orderBy(desc(qualityInspectionReports.createdAt));
   res.json(rows);
 });

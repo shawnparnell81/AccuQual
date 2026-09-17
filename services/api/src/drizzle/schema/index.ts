@@ -42,3 +42,6 @@ export * from "./supplierRma.js";
 export * from "./crar.js";
 export * from "./permissions.js";
 export * from "./rmaLog.js";
+export * from "./reporting.js";
+export * from "./supplierQualityRisk.js";
+export * from "./inventoryLots.js";

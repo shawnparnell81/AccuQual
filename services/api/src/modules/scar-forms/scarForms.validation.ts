@@ -5,12 +5,14 @@ export const SCAR_STATUSES = ["open", "closed"] as const;
 export const createScarFormSchema = z.object({
   scarNumber: z.string().optional(),
   supplierName: z.string().optional(),
+  supplierId: z.coerce.number().optional(),
 });
 
 export const updateScarFormSchema = z.object({
   scarNumber: z.string().nullable().optional(),
   dateIssued: z.coerce.date().nullable().optional(),
   supplierName: z.string().nullable().optional(),
+  supplierId: z.coerce.number().nullable().optional(),
   responseDueDate: z.coerce.date().nullable().optional(),
   contactPerson: z.string().nullable().optional(),
   poNumber: z.string().nullable().optional(),

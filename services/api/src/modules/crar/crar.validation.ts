@@ -102,6 +102,11 @@ const crarLinkFields = {
   qualityId: z.coerce.number().int().nullable().optional(),
   supplierRmaRequestId: z.coerce.number().int().nullable().optional(),
   linkedRmaId: z.coerce.number().int().nullable().optional(),
+  // Phase 2 fixes: RMA Log link (was entirely missing) + a real customer
+  // link (resolves email/phone from the customers table — see crar.ts's
+  // own schema comment on why this isn't just new raw text columns).
+  rmaLogId: z.coerce.number().int().nullable().optional(),
+  customerId: z.coerce.number().int().nullable().optional(),
 };
 
 export const createCrarSchema = z.object({ ...crarContentFields, ...crarLinkFields });

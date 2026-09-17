@@ -11,6 +11,9 @@ import {
 } from "../../drizzle/schema/erp.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { applyMovement } from "../inventory/inventory.service.js";
+import { receiveIntoLot } from "../inventory/inventoryLots.service.js";
+import { loadTenantForSettings, getInventorySettings } from "../settings/settings.service.js";
 
 export interface LineItemInput {
   itemId: number;
@@ -20,8 +23,19 @@ export interface LineItemInput {
 }
 
 /** Every request here already runs inside one Postgres transaction (see tenantScope.ts's withTenantDb) — no separate db.transaction() needed for these multi-insert operations to be atomic. */
-export async function createPurchaseOrder(db: TenantDb, tenantId: number, supplierId: number, lineItems: LineItemInput[], notes: string | undefined, createdBy: number | undefined) {
-  const [po] = await db.insert(erpPurchaseOrders).values({ tenantId, supplierId, notes, createdBy, status: "draft" }).returning();
+export async function createPurchaseOrder(
+  db: TenantDb,
+  tenantId: number,
+  supplierId: number,
+  lineItems: LineItemInput[],
+  notes: string | undefined,
+  createdBy: number | undefined,
+  expectedDeliveryDate?: string
+) {
+  const [po] = await db
+    .insert(erpPurchaseOrders)
+    .values({ tenantId, supplierId, notes, createdBy, status: "draft", expectedDeliveryDate: expectedDeliveryDate ? new Date(expectedDeliveryDate) : undefined })
+    .returning();
   await insertLineItems(db, tenantId, po!.id, lineItems);
   await recordAuditTrail(db, { tenantId, entityType: "PurchaseOrder", entityId: po!.id, action: "create", changes: { supplierId, lineItemCount: lineItems.length }, performedBy: createdBy });
   return po!;
@@ -84,15 +98,27 @@ export async function cancelPurchaseOrder(db: TenantDb, tenantId: number, po: Er
  * status from real received-vs-ordered totals across every receiving
  * document ever filed against it (not just this one) — partially_received
  * if some but not all lines are fully received, received once every line
- * is. Deliberately does NOT touch inventory_stock or create an
- * inventory_movement — no automatic inventory sync exists (see the ERP
- * module review); receiving here is real paperwork, not a live integration.
+ * is.
+ *
+ * Phase 8 — previously did NOT touch inventory_stock or create an
+ * inventory_movement at all ("receiving here is real paperwork, not a live
+ * integration" — the single biggest gap in the whole module, since it left
+ * the "receiving → inventory → production → NCR → CAPA → warranty"
+ * traceability chain with no first link). Now applies a real "receive"
+ * movement per line against the PO line's underlying inventory item, and —
+ * when a lot number is given — creates/updates a real inventory_lots row
+ * via receiveIntoLot, linking the movement to it. Each new receiving line
+ * item starts life in the new structured workflow at status "received"
+ * (see erp.ts's schema comment) — moving it to pending_inspection/
+ * inspected/accepted/rejected/quarantined/disposition_required is a
+ * separate, later action (receivingWorkflow.ts's transitionReceivingLineItem),
+ * not something this create step decides on its own.
  */
 export async function createReceivingDocument(
   db: TenantDb,
   tenantId: number,
   po: ErpPurchaseOrder,
-  lineItems: { poLineItemId: number; quantityReceived: number; notes?: string }[],
+  lineItems: { poLineItemId: number; quantityReceived: number; notes?: string; lotNumber?: string; serialNumber?: string; revisionLevel?: string; expirationDate?: string }[],
   notes: string | undefined,
   createdBy: number | undefined
 ) {
@@ -101,13 +127,26 @@ export async function createReceivingDocument(
   }
 
   const poLineItems = await getLineItems(db, tenantId, po.id);
-  const poLineItemIds = new Set(poLineItems.map((li) => li.id));
+  const poLineItemById = new Map(poLineItems.map((li) => [li.id, li]));
   for (const li of lineItems) {
-    if (!poLineItemIds.has(li.poLineItemId)) throw AppError.badRequest(`Line item ${li.poLineItemId} does not belong to this purchase order`);
+    if (!poLineItemById.has(li.poLineItemId)) throw AppError.badRequest(`Line item ${li.poLineItemId} does not belong to this purchase order`);
   }
 
   const [doc] = await db.insert(erpReceivingDocuments).values({ tenantId, purchaseOrderId: po.id, notes, createdBy }).returning();
-  await db.insert(erpReceivingLineItems).values(lineItems.map((li) => ({ tenantId, receivingDocumentId: doc!.id, poLineItemId: li.poLineItemId, quantityReceived: li.quantityReceived, notes: li.notes })));
+  const createdLines = await db
+    .insert(erpReceivingLineItems)
+    .values(
+      lineItems.map((li) => ({
+        tenantId,
+        receivingDocumentId: doc!.id,
+        poLineItemId: li.poLineItemId,
+        quantityReceived: li.quantityReceived,
+        notes: li.notes,
+        lotNumber: li.lotNumber,
+        serialNumber: li.serialNumber,
+      }))
+    )
+    .returning();
   await recordAuditTrail(db, {
     tenantId,
     entityType: "ReceivingDocument",
@@ -116,6 +155,46 @@ export async function createReceivingDocument(
     changes: { purchaseOrderId: po.id, lineItemCount: lineItems.length },
     performedBy: createdBy,
   });
+
+  const tenant = await loadTenantForSettings(db, tenantId);
+  const inventorySettings = getInventorySettings(tenant);
+  for (const created of createdLines) {
+    const poLine = poLineItemById.get(created.poLineItemId)!;
+    const input = lineItems.find((li) => li.poLineItemId === created.poLineItemId)!;
+
+    let lotId: number | undefined;
+    if (input.lotNumber) {
+      const lot = await receiveIntoLot(db, tenantId, {
+        itemId: poLine.itemId,
+        lotNumber: input.lotNumber,
+        serialNumber: input.serialNumber,
+        supplierId: po.supplierId,
+        purchaseOrderId: po.id,
+        receivingLineItemId: created.id,
+        revisionLevel: input.revisionLevel,
+        expirationDate: input.expirationDate ? new Date(input.expirationDate) : undefined,
+        quantity: created.quantityReceived,
+      });
+      lotId = lot.id;
+    }
+
+    await applyMovement(
+      db,
+      tenantId,
+      poLine.itemId,
+      {
+        movementType: "receive",
+        quantity: created.quantityReceived,
+        referenceType: "erp_receiving",
+        referenceId: String(doc!.id),
+        lotNumber: input.lotNumber,
+        serialNumber: input.serialNumber,
+        lotId,
+      },
+      createdBy,
+      inventorySettings
+    );
+  }
 
   const receivedTotals = await getReceivedQuantities(db, tenantId, poLineItems.map((li) => li.id));
   const fullyReceived = poLineItems.every((li) => (receivedTotals.get(li.id) ?? 0) >= li.quantity);

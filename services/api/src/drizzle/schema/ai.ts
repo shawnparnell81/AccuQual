@@ -5,11 +5,21 @@ import { tenants } from "./tenants.js";
 export const aiSuggestions = pgTable("ai_suggestions", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
-  module: text("module"), // ncr, capa, 8d, audit, document, supplier
-  pipeline: text("pipeline"), // root_cause, capa_generator, eight_d_generator, risk_scoring, audit_prep, doc_summary, predictive_quality
+  module: text("module"), // ncr, capa, 8d, audit, document, supplier, warranty, erp, analysis
+  pipeline: text("pipeline"), // root_cause, capa_generator, eight_d_generator, risk_scoring, audit_prep, doc_summary, predictive_quality, ncr_triage, supplier_message_draft, warranty_triage, erp_automation, pr_justification, risk_analysis
   input: jsonb("input").$type<Record<string, unknown>>(),
   output: jsonb("output").$type<Record<string, unknown>>(),
   confidence: numeric("confidence"),
+  // Phase 4 AI guardrails: every pipeline attempt gets one row now, success
+  // or not — "ok" (real, schema-valid provider response), "stub" (no key
+  // configured, deterministic dev stub — never a real result), "malformed"
+  // (a real provider response that failed this pipeline's own output-shape
+  // check, so it was NOT written into any real record field), "error" (the
+  // provider call itself failed after retries). Previously a failed call
+  // just threw past asyncHandler with no row at all — no attempt/failure
+  // telemetry existed anywhere.
+  status: text("status").notNull().default("ok"),
+  errorMessage: text("error_message"),
   createdBy: integer("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -21,6 +31,8 @@ export const aiRiskScores = pgTable("ai_risk_scores", {
   entityId: integer("entity_id"),
   score: numeric("score"), // 0-100
   details: jsonb("details").$type<Record<string, unknown>>(),
+  status: text("status").notNull().default("ok"),
+  errorMessage: text("error_message"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

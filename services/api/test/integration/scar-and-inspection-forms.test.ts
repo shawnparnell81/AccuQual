@@ -2,8 +2,12 @@
 // Covers the two forms reported as real gaps in the "ACCUQUAL Forms" batch
 // review (see accuqual-qms-forms-batch memory) — SCAR (fixed-row CAPA/
 // sign-off columns, no child table) and Quality Inspection Report (a real
-// child table for its Inspection Checklist). Both deliberately ungated,
-// same convention as the rest of this batch.
+// child table for its Inspection Checklist). SCAR stays deliberately
+// ungated. Quality Inspection Reports got a real RBAC gate in Phase 8 (the
+// new "quality_inspection" ResourceKey — quality: edit, purchasing/
+// material_management: read) after that gap was flagged as a genuine
+// zero-enforcement issue, not a deliberate design — see
+// qualityInspectionReports.routes.ts's own comment.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { eq, inArray } from "drizzle-orm";
@@ -28,6 +32,7 @@ let itemId: number;
 const userIds: number[] = [];
 
 let productionToken: string;
+let qualityToken: string;
 
 async function makeUser(department: string | null) {
   const [user] = await db.insert(users).values({ tenantId, email: `scar-insp-test-${department ?? "none"}-${suffix}@test.local`, passwordHash: "unused" }).returning();
@@ -41,7 +46,8 @@ describe("SCAR + Quality Inspection Report (real DB + real HTTP path)", () => {
     tenantId = tenant!.id;
 
     await seedDefaultPermissions(tenantId);
-    productionToken = await makeUser("production"); // proves there's no department gate
+    productionToken = await makeUser("production"); // proves SCAR still has no department gate
+    qualityToken = await makeUser("quality"); // quality_inspection's real edit-level department (Phase 8)
   });
 
   afterAll(async () => {
@@ -101,8 +107,13 @@ describe("SCAR + Quality Inspection Report (real DB + real HTTP path)", () => {
     scarId = 0;
   });
 
-  it("creates a Quality Inspection Report", async () => {
+  it("blocks a department with no quality_inspection access (Phase 8 RBAC gate)", async () => {
     const res = await request(app).post("/quality-inspection-reports").set("Authorization", `Bearer ${productionToken}`).send({ inspectionType: "incoming" });
+    expect(res.status).toBe(403);
+  });
+
+  it("creates a Quality Inspection Report", async () => {
+    const res = await request(app).post("/quality-inspection-reports").set("Authorization", `Bearer ${qualityToken}`).send({ inspectionType: "incoming" });
     expect(res.status).toBe(201);
     expect(res.body.inspectionType).toBe("incoming");
     reportId = res.body.id;
@@ -111,36 +122,36 @@ describe("SCAR + Quality Inspection Report (real DB + real HTTP path)", () => {
   it("adds a real, freely-addable checklist row", async () => {
     const res = await request(app)
       .post(`/quality-inspection-reports/${reportId}/items`)
-      .set("Authorization", `Bearer ${productionToken}`)
+      .set("Authorization", `Bearer ${qualityToken}`)
       .send({ itemNumber: 1, parameter: "Visual Appearance", specification: "Free of scratches/defects" });
     expect(res.status).toBe(201);
     itemId = res.body.id;
 
-    const detail = await request(app).get(`/quality-inspection-reports/${reportId}`).set("Authorization", `Bearer ${productionToken}`);
+    const detail = await request(app).get(`/quality-inspection-reports/${reportId}`).set("Authorization", `Bearer ${qualityToken}`);
     expect(detail.body.items.length).toBe(1);
   });
 
   it("records the result on that row", async () => {
-    const res = await request(app).patch(`/quality-inspection-reports/${reportId}/items/${itemId}`).set("Authorization", `Bearer ${productionToken}`).send({ actualFinding: "No defects observed", result: "pass" });
+    const res = await request(app).patch(`/quality-inspection-reports/${reportId}/items/${itemId}`).set("Authorization", `Bearer ${qualityToken}`).send({ actualFinding: "No defects observed", result: "pass" });
     expect(res.status).toBe(200);
     expect(res.body.result).toBe("pass");
   });
 
   it("sets the final disposition and sign-off", async () => {
-    const res = await request(app).patch(`/quality-inspection-reports/${reportId}`).set("Authorization", `Bearer ${productionToken}`).send({ finalStatus: "accepted", inspectorSignature: "R. Chen" });
+    const res = await request(app).patch(`/quality-inspection-reports/${reportId}`).set("Authorization", `Bearer ${qualityToken}`).send({ finalStatus: "accepted", inspectorSignature: "R. Chen" });
     expect(res.status).toBe(200);
     expect(res.body.finalStatus).toBe("accepted");
   });
 
   it("removes the checklist row", async () => {
-    const res = await request(app).delete(`/quality-inspection-reports/${reportId}/items/${itemId}`).set("Authorization", `Bearer ${productionToken}`);
+    const res = await request(app).delete(`/quality-inspection-reports/${reportId}/items/${itemId}`).set("Authorization", `Bearer ${qualityToken}`);
     expect(res.status).toBe(204);
     const [gone] = await db.select().from(qualityInspectionItems).where(eq(qualityInspectionItems.id, itemId));
     expect(gone).toBeUndefined();
   });
 
   it("deletes the report, cascading any remaining items, logged before it disappears", async () => {
-    const res = await request(app).delete(`/quality-inspection-reports/${reportId}`).set("Authorization", `Bearer ${productionToken}`);
+    const res = await request(app).delete(`/quality-inspection-reports/${reportId}`).set("Authorization", `Bearer ${qualityToken}`);
     expect(res.status).toBe(204);
     const [gone] = await db.select().from(qualityInspectionReports).where(eq(qualityInspectionReports.id, reportId));
     expect(gone).toBeUndefined();

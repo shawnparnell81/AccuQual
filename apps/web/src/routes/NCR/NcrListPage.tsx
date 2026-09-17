@@ -7,8 +7,17 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { Modal } from "../../components/modals/Modal";
 import { TextField, TextAreaField, SelectField } from "../../components/forms/Field";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
+import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
+import { formatDate } from "../../lib/dates";
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
+
+interface NcrTriageSuggestion {
+  suggestedSeverity: "low" | "medium" | "high" | "critical";
+  suggestedDepartment: string;
+  rationale: string;
+  similarPastNcrs: string[];
+}
 
 /** NCR List: filters (severity, status, date range), export, quick-create. */
 export function NcrListPage() {
@@ -38,7 +47,7 @@ export function NcrListPage() {
     { header: "Title", accessor: (n) => n.title },
     { header: "Severity", accessor: (n) => <StatusBadge value={n.severity} /> },
     { header: "Status", accessor: (n) => <StatusBadge value={n.status} /> },
-    { header: "Created", accessor: (n) => new Date(n.createdAt).toLocaleDateString() },
+    { header: "Created", accessor: (n) => formatDate(n.createdAt) },
   ];
 
   function exportCsv() {
@@ -120,13 +129,45 @@ export function NcrListPage() {
             </div>
             <TextAreaField label="" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </div>
-          <SelectField label="Severity" value={form.severity ?? "medium"} onChange={(e) => setForm({ ...form, severity: e.target.value as Ncr["severity"] })}>
-            {["low", "medium", "high", "critical"].map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </SelectField>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Severity</span>
+              <AiStructuredSuggestion<NcrTriageSuggestion>
+                endpoint="/ai/ncr-triage"
+                title="AI Triage Suggestion"
+                triggerLabel="Suggest Severity"
+                acceptLabel="Apply Suggested Severity"
+                buildPayload={() => ({ input: { title: form.title, description: form.description } })}
+                onAccept={(output) => setForm((f) => ({ ...f, severity: output.suggestedSeverity }))}
+                renderPreview={(output) => (
+                  <div className="flex flex-col gap-3 text-sm">
+                    <p>
+                      Suggested severity: <strong className="capitalize">{output.suggestedSeverity}</strong> — route to{" "}
+                      <strong>{output.suggestedDepartment}</strong>
+                    </p>
+                    <p className="text-muted-foreground">{output.rationale}</p>
+                    {output.similarPastNcrs.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">Similar past NCRs</p>
+                        <ul className="list-inside list-disc text-xs text-muted-foreground">
+                          {output.similarPastNcrs.map((n, i) => (
+                            <li key={i}>{n}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              />
+            </div>
+            <SelectField label="" value={form.severity ?? "medium"} onChange={(e) => setForm({ ...form, severity: e.target.value as Ncr["severity"] })}>
+              {["low", "medium", "high", "critical"].map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </SelectField>
+          </div>
           <button type="submit" className="rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground">
             Create
           </button>

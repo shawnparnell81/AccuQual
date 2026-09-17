@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
 import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
@@ -167,6 +167,18 @@ export const supplierMessages = pgTable("supplier_messages", {
   senderUserId: integer("sender_user_id").references(() => users.id),
   body: text("body").notNull(),
   attachment: jsonb("attachment").$type<StoredFile | null>(),
+  // Phase 7 — one lightweight tag on top of the plain chat-thread shape
+  // above: `category` groups a message as a follow-up/request/response
+  // (default "message" — an ordinary chat line, not one of those three);
+  // `aiDrafted` is a client-asserted flag (only the composer knows whether
+  // the text it's sending came from an accepted AI suggestion — see
+  // SupplierMessagingPanel.tsx, which clears it the moment the user edits
+  // the draft after accepting) recorded here so the thread can honestly
+  // label which messages started as an AI draft, same "never silently
+  // attribute AI content to a human, or vice versa" rule Phase 4/5 already
+  // apply everywhere else.
+  category: text("category").notNull().default("message"), // message | follow_up | request | response
+  aiDrafted: boolean("ai_drafted").notNull().default(false),
   readAt: timestamp("read_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });

@@ -1,6 +1,7 @@
 import { pgTable, serial, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 import { tenants } from "./tenants.js";
+import { suppliers } from "./supplier.js";
 
 export const ncr = pgTable("ncr", {
   id: serial("id").primaryKey(),
@@ -14,6 +15,19 @@ export const ncr = pgTable("ncr", {
   correctiveAction: text("corrective_action"),
   assignedTo: integer("assigned_to").references(() => users.id),
   createdBy: integer("created_by").references(() => users.id),
+  // Phase 8 — a real, direct supplier link (previously NCR had none at
+  // all — every prior "which NCRs belong to this supplier" query had to
+  // derive it indirectly via RMA/warranty/supplier-portal CAR/8D links, see
+  // supplier-portal/supplierLinkage.ts). Set automatically when an NCR is
+  // auto-created from a rejected/quarantined receiving inspection (see
+  // erp/receivingAutomation.ts), and settable by hand otherwise. Real FK —
+  // ncr.ts has no import cycle with supplier.ts.
+  supplierId: integer("supplier_id").references(() => suppliers.id),
+  // Deliberately NOT a real FK (would create an ncr.ts <-> erp.ts import
+  // cycle, since erp.ts already imports ncr.ts for its own linkedNcrId) —
+  // same "free-form reference, not a foreign key" convention
+  // inventory_movements.referenceId already uses for the same reason.
+  receivingLineItemId: integer("receiving_line_item_id"),
   closedAt: timestamp("closed_at"),
   isDeleted: boolean("is_deleted").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),

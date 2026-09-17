@@ -3,7 +3,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
-import { createPurchaseOrderSchema, updatePurchaseOrderSchema, replaceLineItemsSchema, createReceivingDocumentSchema } from "./erp.validation.js";
+import { createPurchaseOrderSchema, updatePurchaseOrderSchema, replaceLineItemsSchema, createReceivingDocumentSchema, transitionReceivingLineItemSchema } from "./erp.validation.js";
 import {
   listPurchaseOrdersHandler,
   createPurchaseOrderHandler,
@@ -15,6 +15,7 @@ import {
   listReceivingDocumentsHandler,
   createReceivingDocumentHandler,
   getReceivingDocumentHandler,
+  transitionReceivingLineItemHandler,
   erpOverviewHandler,
 } from "./erp.controller.js";
 import { erpAutomationSuggestionsHandler } from "./automation.ai.js";
@@ -48,3 +49,7 @@ erpRouter.post("/purchase-orders/:id/cancel", cancelPurchaseOrderHandler);
 erpRouter.get("/receiving-documents", listReceivingDocumentsHandler);
 erpRouter.post("/receiving-documents", validate(createReceivingDocumentSchema), createReceivingDocumentHandler);
 erpRouter.get("/receiving-documents/:id", getReceivingDocumentHandler);
+// Phase 8 — the receiving line item state machine's one write path; RBAC
+// varies by target status, enforced inside transitionReceivingLineItem
+// itself (see that file's own comment), not by this router's fixed gate.
+erpRouter.post("/receiving-line-items/:id/status", validate(transitionReceivingLineItemSchema), transitionReceivingLineItemHandler);

@@ -3,9 +3,13 @@ import { z } from "zod";
 export const INSPECTION_TYPES = ["incoming", "in_process", "final"] as const;
 export const INSPECTION_FINAL_STATUSES = ["accepted", "rejected", "rework_required", "accepted_via_deviation"] as const;
 export const INSPECTION_ITEM_RESULTS = ["pass", "fail"] as const;
+export const DEFECT_CATEGORIES = ["dimensional", "cosmetic", "functional", "material", "documentation", "packaging", "quantity", "other"] as const;
+export const INSPECTION_METHODS = ["visual", "dimensional", "functional", "documentation", "other"] as const;
 
 export const createQualityInspectionReportSchema = z.object({
   inspectionType: z.enum(INSPECTION_TYPES).optional(),
+  supplierId: z.coerce.number().int().optional(),
+  receivingLineItemId: z.coerce.number().int().optional(),
 });
 
 export const updateQualityInspectionReportSchema = z.object({
@@ -15,6 +19,10 @@ export const updateQualityInspectionReportSchema = z.object({
   partMaterialNo: z.string().nullable().optional(),
   poJobNo: z.string().nullable().optional(),
   supplierVendor: z.string().nullable().optional(),
+  supplierId: z.coerce.number().int().nullable().optional(),
+  receivingLineItemId: z.coerce.number().int().nullable().optional(),
+  defectCategory: z.enum(DEFECT_CATEGORIES).nullable().optional(),
+  inspectionMethod: z.enum(INSPECTION_METHODS).nullable().optional(),
   batchLotNo: z.string().nullable().optional(),
   totalQuantity: z.string().nullable().optional(),
   sampleSize: z.string().nullable().optional(),
@@ -38,4 +46,8 @@ export const updateInspectionItemSchema = z.object({
   specification: z.string().nullable().optional(),
   actualFinding: z.string().nullable().optional(),
   result: z.enum(INSPECTION_ITEM_RESULTS).nullable().optional(),
+  specMin: z.coerce.number().nullable().optional(),
+  specMax: z.coerce.number().nullable().optional(),
+  actualValue: z.coerce.number().nullable().optional(),
+  measurementUnit: z.string().nullable().optional(),
 });

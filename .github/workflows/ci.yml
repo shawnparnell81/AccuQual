@@ -25,7 +25,12 @@ jobs:
         env:
           POSTGRES_USER: accuqual
           POSTGRES_PASSWORD: accuqual
-          POSTGRES_DB: accuqual
+          # Must contain "test" — test/setup.ts's testDataGuard.ts refuses to
+          # run integration tests (which create/delete real tenants) against
+          # any database whose name doesn't, precisely to stop this exact
+          # class of accident (see that file's own comment on the 27-tenant
+          # pollution incident this guard was added to prevent).
+          POSTGRES_DB: accuqual_test
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U accuqual"
@@ -55,7 +60,7 @@ jobs:
       - name: Type-check & run migrations (API)
         working-directory: services/api
         env:
-          DATABASE_URL: postgres://accuqual:accuqual@localhost:5432/accuqual
+          DATABASE_URL: postgres://accuqual:accuqual@localhost:5432/accuqual_test
           JWT_ACCESS_SECRET: ci-access-secret
           JWT_REFRESH_SECRET: ci-refresh-secret
         run: |
@@ -64,7 +69,7 @@ jobs:
 
       - name: Test
         env:
-          DATABASE_URL: postgres://accuqual:accuqual@localhost:5432/accuqual
+          DATABASE_URL: postgres://accuqual:accuqual@localhost:5432/accuqual_test
           REDIS_URL: redis://localhost:6379
           JWT_ACCESS_SECRET: ci-access-secret
           JWT_REFRESH_SECRET: ci-refresh-secret

@@ -9,6 +9,14 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 
 export const baseHandlers = crudFactory(capa, { entityName: "CAPA", idColumn: "id" });
 
+/** GET /capa — Phase 8 adds an optional `?supplierId=` filter (same reasoning as ncr.controller.ts's own listHandler) for the receiving → CAPA traceability chain; falls through to baseHandlers.list's plain query when omitted. */
+export const listHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { supplierId } = req.query as Record<string, string | undefined>;
+  if (!supplierId) return baseHandlers.list(req, res, () => undefined);
+  const rows = await req.db!.select().from(capa).where(and(eq(capa.tenantId, req.tenantId!), eq(capa.supplierId, Number(supplierId))));
+  res.json(rows);
+});
+
 export const verifyHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const tenantId = req.tenantId!;

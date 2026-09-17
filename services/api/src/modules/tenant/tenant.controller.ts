@@ -41,18 +41,89 @@ export const updateBrandingHandler = asyncHandler(async (req: Request, res: Resp
   res.json(updated!.branding);
 });
 
-/** Never returns the real key — a masked display string + whether one is set at all, same convention as a password field showing dots. */
+/**
+ * Never returns the real key — a masked display string + whether one is set
+ * at all, same convention as a password field showing dots.
+ *
+ * `keyStatus` is Phase 4's "prepare for external LLM key" tri-state: "ready"
+ * (this tenant, or the platform default, has a key — real calls will be
+ * made), "missing" (neither does — every AI feature runs in stub mode).
+ * There is no third "invalid" value to report here: updateAiConfigHandler
+ * below makes a real validation call to the provider before a key is ever
+ * encrypted/stored, so an invalid key can never actually be saved — the
+ * rejection happens at save time (a 400 on that request), not as a
+ * lingering stored state to warn about later.
+ */
+/**
+ * GET/PATCH /tenant/profile — Admin Console "Tenant Settings" (Phase 10):
+ * name, logo, timezone, contact info as one consolidated section, per the
+ * roadmap's own grouping. Reuses `tenants.name` and `branding.logoUrl`
+ * rather than storing the name/logo a second time — this endpoint is a
+ * convenience view over fields that already exist plus the two genuinely
+ * new ones (timezone, contact), not a new source of truth for name/logo.
+ */
+export const getProfileHandler = asyncHandler(async (req: Request, res: Response) => {
+  const tenant = await loadTenant(req);
+  res.json({
+    name: tenant.name,
+    code: tenant.code,
+    logoUrl: tenant.branding?.logoUrl ?? null,
+    timezone: tenant.profile?.timezone ?? null,
+    contactName: tenant.profile?.contactName ?? null,
+    contactEmail: tenant.profile?.contactEmail ?? null,
+    contactPhone: tenant.profile?.contactPhone ?? null,
+  });
+});
+
+export const updateProfileHandler = asyncHandler(async (req: Request, res: Response) => {
+  const tenant = await loadTenant(req);
+  const { name, logoUrl, ...profileFields } = req.body as { name?: string; logoUrl?: string } & Record<string, string | undefined>;
+
+  const patch: { name?: string; branding?: typeof tenant.branding; profile?: typeof tenant.profile } = {};
+  if (name !== undefined) patch.name = name;
+  if (logoUrl !== undefined) patch.branding = { ...tenant.branding, logoUrl: logoUrl === "" ? undefined : logoUrl };
+
+  const mergedProfile = { ...tenant.profile };
+  for (const [key, value] of Object.entries(profileFields)) {
+    if (value !== undefined) (mergedProfile as Record<string, string | undefined>)[key] = value === "" ? undefined : value;
+  }
+  patch.profile = mergedProfile;
+
+  const [updated] = await req.db!.update(tenants).set(patch).where(eq(tenants.id, req.tenantId!)).returning();
+  await recordAuditTrail(req.db!, {
+    tenantId: req.tenantId!,
+    entityType: "Tenant",
+    entityId: req.tenantId!,
+    action: "update",
+    changes: { action: "update_profile", fieldsChanged: Object.keys(req.body) },
+    performedBy: req.user?.id,
+  });
+
+  res.json({
+    name: updated!.name,
+    code: updated!.code,
+    logoUrl: updated!.branding?.logoUrl ?? null,
+    timezone: updated!.profile?.timezone ?? null,
+    contactName: updated!.profile?.contactName ?? null,
+    contactEmail: updated!.profile?.contactEmail ?? null,
+    contactPhone: updated!.profile?.contactPhone ?? null,
+  });
+});
+
 export const getAiConfigHandler = asyncHandler(async (req: Request, res: Response) => {
   const tenant = await loadTenant(req);
   const config = tenant.aiConfig ?? {};
+  const keyStatus: "ready" | "missing" = config.apiKeyEncrypted || env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY ? "ready" : "missing";
   res.json({
     provider: config.provider ?? null,
     modelName: config.modelName ?? null,
     temperature: config.temperature ?? null,
     maxTokens: config.maxTokens ?? null,
     assistantName: config.assistantName ?? null,
+    safetyMode: config.safetyMode ?? "standard",
     hasApiKey: !!config.apiKeyEncrypted,
     maskedApiKey: config.apiKeyEncrypted ? maskSecret(decryptSecret(config.apiKeyEncrypted)) : null,
+    keyStatus,
     monthlyLimit: tenant.aiMonthlyLimit,
     limitEnforced: tenant.aiLimitEnforced,
   });
@@ -60,13 +131,14 @@ export const getAiConfigHandler = asyncHandler(async (req: Request, res: Respons
 
 export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Response) => {
   const tenant = await loadTenant(req);
-  const { provider, apiKey, modelName, temperature, maxTokens, assistantName, monthlyLimit, limitEnforced } = req.body as {
+  const { provider, apiKey, modelName, temperature, maxTokens, assistantName, safetyMode, monthlyLimit, limitEnforced } = req.body as {
     provider?: string;
     apiKey?: string;
     modelName?: string;
     temperature?: number;
     maxTokens?: number;
     assistantName?: string;
+    safetyMode?: "standard" | "strict";
     monthlyLimit?: number | null;
     limitEnforced?: boolean;
   };
@@ -77,6 +149,7 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
   if (temperature !== undefined) merged.temperature = temperature;
   if (maxTokens !== undefined) merged.maxTokens = maxTokens;
   if (assistantName !== undefined) merged.assistantName = assistantName || undefined;
+  if (safetyMode !== undefined) merged.safetyMode = safetyMode;
 
   if (apiKey !== undefined) {
     // A real, minimal call to the provider — see validateApiKey's own
@@ -121,7 +194,9 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
     temperature: merged.temperature ?? null,
     maxTokens: merged.maxTokens ?? null,
     assistantName: merged.assistantName ?? null,
+    safetyMode: merged.safetyMode ?? "standard",
     hasApiKey: !!merged.apiKeyEncrypted,
+    keyStatus: merged.apiKeyEncrypted || env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY ? "ready" : "missing",
     monthlyLimit: updated!.aiMonthlyLimit,
     limitEnforced: updated!.aiLimitEnforced,
   });

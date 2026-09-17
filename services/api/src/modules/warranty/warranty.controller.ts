@@ -11,7 +11,7 @@ import { workOrders } from "../../drizzle/schema/workOrders.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { env } from "../../config/env.js";
-import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { recordAuditTrail, resolveUserNames } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
@@ -188,7 +188,12 @@ export const getWarrantyClaimHandler = asyncHandler(async (req: Request, res: Re
   const [linkedNcr] = record.linkedNcrId ? await req.db!.select().from(ncr).where(eq(ncr.id, record.linkedNcrId)) : [null];
   const [linkedWorkOrder] = record.linkedWorkOrderId ? await req.db!.select().from(workOrders).where(eq(workOrders.id, record.linkedWorkOrderId)) : [null];
   const costs = await req.db!.select().from(warrantyClaimCosts).where(and(eq(warrantyClaimCosts.claimId, record.id), eq(warrantyClaimCosts.tenantId, req.tenantId!))).orderBy(desc(warrantyClaimCosts.createdAt));
-  const workflow = await req.db!.select().from(warrantyClaimWorkflow).where(and(eq(warrantyClaimWorkflow.claimId, record.id), eq(warrantyClaimWorkflow.tenantId, req.tenantId!))).orderBy(desc(warrantyClaimWorkflow.createdAt));
+  const workflowRows = await req.db!.select().from(warrantyClaimWorkflow).where(and(eq(warrantyClaimWorkflow.claimId, record.id), eq(warrantyClaimWorkflow.tenantId, req.tenantId!))).orderBy(desc(warrantyClaimWorkflow.createdAt));
+  // Phase 0 audit-trail fix: performedByUserId was always captured here but
+  // never resolved to a name — the claim detail page's History list showed
+  // no actor at all. Same resolver every other module's history view uses.
+  const actorNames = await resolveUserNames(req.db! as TenantDb, workflowRows.map((w) => w.performedByUserId));
+  const workflow = workflowRows.map((w) => ({ ...w, performedByName: w.performedByUserId === null ? null : (actorNames.get(w.performedByUserId) ?? null) }));
 
   res.json({
     ...record,

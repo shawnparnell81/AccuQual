@@ -11,6 +11,7 @@ import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPan
 import { Modal } from "../../components/modals/Modal";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
+import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import { useToast } from "../../components/shared/ToastProvider";
 import { getFormLayout } from "../../components/forms/layouts";
 import { GenericFormRenderer } from "../../components/forms/GenericFormRenderer";
@@ -55,10 +56,15 @@ export function NcrWorkspacePage() {
   useSetAssistantContext("ncr", ncrId, ncr ? `NCR #${ncr.id}` : `NCR #${ncrId}`);
 
   const historyKey: unknown[][] = [["workflow-history", "ncr", ncrId]];
-  const containmentAction = useWorkflowAction("ncr", "containment", { successMessage: "Containment recorded.", invalidateKeys: historyKey });
-  const rootCauseAction = useWorkflowAction("ncr", "root-cause", { successMessage: "Root cause recorded.", invalidateKeys: historyKey });
-  const correctiveActionAction = useWorkflowAction("ncr", "corrective-action", { successMessage: "Corrective action recorded.", invalidateKeys: historyKey });
-  const closeAction = useWorkflowAction("ncr", "close", { successMessage: "NCR closed.", invalidateKeys: historyKey });
+  // Each workflow action also syncs a field onto the official document
+  // server-side (see ncr.formSync.ts) — invalidate its query too, or the
+  // right-pane preview keeps showing stale (blank) data until a reload.
+  const formDataKey: unknown[][] = [["form-data", FORM_TYPE, ncrId]];
+  const workflowInvalidateKeys = [...historyKey, ...formDataKey];
+  const containmentAction = useWorkflowAction("ncr", "containment", { successMessage: "Containment recorded.", invalidateKeys: workflowInvalidateKeys });
+  const rootCauseAction = useWorkflowAction("ncr", "root-cause", { successMessage: "Root cause recorded.", invalidateKeys: workflowInvalidateKeys });
+  const correctiveActionAction = useWorkflowAction("ncr", "corrective-action", { successMessage: "Corrective action recorded.", invalidateKeys: workflowInvalidateKeys });
+  const closeAction = useWorkflowAction("ncr", "close", { successMessage: "NCR closed.", invalidateKeys: workflowInvalidateKeys });
 
   const layout = getFormLayout(FORM_TYPE);
   const { isLoading: formLoading, values, updateField, isSaving } = useFormEditorState(FORM_TYPE, ncrId);
@@ -132,7 +138,12 @@ export function NcrWorkspacePage() {
               <p className="text-sm text-muted-foreground">Record containment above first — root cause can't be recorded before that.</p>
             ) : (
               <div className="border-t border-border pt-4">
-                <ActionForm label="Root cause" value={ncr.rootCause} onSubmit={(value) => rootCauseAction.mutate({ id: ncrId, rootCause: value })} />
+                <ActionForm
+                  label="Root cause"
+                  value={ncr.rootCause}
+                  onSubmit={(value) => rootCauseAction.mutate({ id: ncrId, rootCause: value })}
+                  structuredRootCause={{ ncrId: ncr.id, title: ncr.title, description: ncr.description, containment: ncr.containment }}
+                />
               </div>
             )}
             {ncr.status !== "open" && ncr.status !== "contained" && (
@@ -176,16 +187,26 @@ export function NcrWorkspacePage() {
   );
 }
 
+interface NcrRootCauseSuggestion {
+  rootCause: string;
+  confidence: number;
+  reasoning: string;
+  suggestedCorrectiveActions: string[];
+}
+
 function ActionForm({
   label,
   value,
   onSubmit,
   assistant,
+  structuredRootCause,
 }: {
   label: string;
   value: string | null;
   onSubmit: (value: string) => void;
   assistant?: { module: string; recordId: number; buildPrompt: () => string };
+  /** Root-cause specific — wires the real, schema-validated /ai/root-cause pipeline (Phase 4 built it, Phase 5 gives it its first real UI) via the standardized accept/reject panel, instead of the free-text assistant every other ActionForm uses. */
+  structuredRootCause?: { ncrId: number; title: string; description: string | null; containment: string | null };
 }) {
   const [draft, setDraft] = useState(value ?? "");
   return (
@@ -200,6 +221,38 @@ function ActionForm({
         <span className="text-sm font-medium">{label}</span>
         {assistant && (
           <AiFieldAssistant module={assistant.module} recordId={assistant.recordId} buildInitialPrompt={assistant.buildPrompt} onInsert={setDraft} />
+        )}
+        {structuredRootCause && (
+          <AiStructuredSuggestion<NcrRootCauseSuggestion>
+            endpoint="/ai/root-cause"
+            title="AI Root Cause Suggestion"
+            triggerLabel="Suggest Root Cause"
+            acceptLabel="Use This Root Cause"
+            buildPayload={() => ({
+              ncrId: structuredRootCause.ncrId,
+              ncrData: { title: structuredRootCause.title, description: structuredRootCause.description, containment: structuredRootCause.containment },
+            })}
+            onAccept={(output) => setDraft(output.rootCause)}
+            renderPreview={(output) => (
+              <div className="flex flex-col gap-3 text-sm">
+                <p>{output.rootCause}</p>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Reasoning</p>
+                  <p className="text-muted-foreground">{output.reasoning}</p>
+                </div>
+                {output.suggestedCorrectiveActions.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">Suggested Corrective Actions</p>
+                    <ul className="list-inside list-disc text-muted-foreground">
+                      {output.suggestedCorrectiveActions.map((a, i) => (
+                        <li key={i}>{a}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          />
         )}
       </div>
       <TextAreaField label="" value={draft} onChange={(e) => setDraft(e.target.value)} />

@@ -28,37 +28,78 @@ export interface WorkflowDefinition {
   edges: WorkflowEdge[];
 }
 
-export type ActionHandler = (node: WorkflowNode, context: Record<string, unknown>) => Promise<void> | void;
+/**
+ * Phase 9 — `dryRun` is how Simulation Mode (task 9) reaches every
+ * registered action handler without a special "simulated" copy of each
+ * one: a real handler with a real side effect (send an email, insert an
+ * NCR) checks `dryRun` itself and, when true, records what it WOULD have
+ * done into `context.actionsRun` instead of doing it — see
+ * workflowActions.ts's own comment. The graph-walking/condition-evaluation
+ * logic itself is identical in both modes, so a simulation genuinely
+ * exercises the same reachability/condition/RBAC-context path a real run
+ * would, not a separate, potentially-diverging code path.
+ */
+export type ActionHandler = (node: WorkflowNode, context: Record<string, unknown>, dryRun: boolean) => Promise<void> | void;
 
-const actionRegistry: Record<string, ActionHandler> = {
-  assign_user: async (node, context) => {
-    context.actionsRun = [...((context.actionsRun as unknown[]) ?? []), { kind: "assign_user", node: node.id }];
-  },
-  create_capa: async (node, context) => {
-    context.actionsRun = [...((context.actionsRun as unknown[]) ?? []), { kind: "create_capa", node: node.id }];
-  },
-  send_email: async (node, context) => {
-    context.actionsRun = [...((context.actionsRun as unknown[]) ?? []), { kind: "send_email", node: node.id }];
-  },
-};
+const actionRegistry: Record<string, ActionHandler> = {};
 
 export function registerActionHandler(kind: string, handler: ActionHandler) {
   actionRegistry[kind] = handler;
 }
 
+/** The real, currently-registered action kinds — read by workflow.controller.ts's actionKindsHandler and healthHandler (a definition referencing an unregistered kind is a real "missing action" health warning, task 8). */
+export function getRegisteredActionKinds(): string[] {
+  return Object.keys(actionRegistry);
+}
+
+/**
+ * Phase 9 task 5 — real condition operators beyond the original
+ * equals/greaterThan pair, covering the brief's own condition list
+ * (defect category → equals/in, supplier → equals, recurrence →
+ * greaterThan/greaterOrEqual, severity → equals/in, inspection results →
+ * equals). `field` supports one level of dot-path (e.g. "breakdown.ncrFactor")
+ * since several real event contexts (receiving automation, supplier risk)
+ * nest data one level deep; deeper nesting isn't needed by anything today.
+ */
+function resolveField(context: Record<string, unknown>, field: string): unknown {
+  if (!field.includes(".")) return context[field];
+  const [head, ...rest] = field.split(".");
+  const nested = context[head!];
+  if (rest.length === 0 || typeof nested !== "object" || nested === null) return nested;
+  return resolveField(nested as Record<string, unknown>, rest.join("."));
+}
+
 function evaluateCondition(node: WorkflowNode, context: Record<string, unknown>): boolean {
-  const { field, equals, greaterThan } = node.config as { field?: string; equals?: unknown; greaterThan?: number };
+  const { field, equals, notEquals, in: inList, greaterThan, greaterOrEqual, lessThan, lessOrEqual, contains } = node.config as {
+    field?: string;
+    equals?: unknown;
+    notEquals?: unknown;
+    in?: unknown[];
+    greaterThan?: number;
+    greaterOrEqual?: number;
+    lessThan?: number;
+    lessOrEqual?: number;
+    contains?: string;
+  };
   if (!field) return true;
-  const value = context[field];
+  const value = resolveField(context, field);
+
   if (equals !== undefined) return value === equals;
+  if (notEquals !== undefined) return value !== notEquals;
+  if (Array.isArray(inList)) return inList.includes(value);
   if (greaterThan !== undefined) return typeof value === "number" && value > greaterThan;
+  if (greaterOrEqual !== undefined) return typeof value === "number" && value >= greaterOrEqual;
+  if (lessThan !== undefined) return typeof value === "number" && value < lessThan;
+  if (lessOrEqual !== undefined) return typeof value === "number" && value <= lessOrEqual;
+  if (contains !== undefined) return typeof value === "string" && value.includes(contains);
   return true;
 }
 
 export async function runWorkflow(
   definition: WorkflowDefinition,
   context: Record<string, unknown>,
-  triggerKind?: string
+  triggerKind?: string,
+  dryRun = false
 ): Promise<Record<string, unknown>> {
   const nodesById = new Map(definition.nodes.map((n) => [n.id, n]));
   const childrenOf = new Map<string, string[]>();
@@ -72,13 +113,19 @@ export async function runWorkflow(
     const node = nodesById.get(nodeId);
     if (!node) return;
 
-    if (node.type === "condition" && !evaluateCondition(node, context)) {
-      return; // short-circuit this branch
+    if (node.type === "condition") {
+      const passed = evaluateCondition(node, context);
+      context.conditionsEvaluated = [...((context.conditionsEvaluated as unknown[]) ?? []), { node: node.id, kind: node.kind, passed }];
+      if (!passed) return; // short-circuit this branch
     }
 
     if (node.type === "action") {
       const handler = actionRegistry[node.kind];
-      if (handler) await handler(node, context);
+      if (handler) {
+        await handler(node, context, dryRun);
+      } else {
+        context.unregisteredActions = [...((context.unregisteredActions as unknown[]) ?? []), { node: node.id, kind: node.kind }];
+      }
     }
 
     for (const childId of childrenOf.get(nodeId) ?? []) {

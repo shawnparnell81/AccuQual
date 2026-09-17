@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Sparkles } from "lucide-react";
+import { Sparkles, TriangleAlert } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { Modal } from "../modals/Modal";
 import { TextAreaField } from "../forms/Field";
@@ -43,6 +43,7 @@ export function AiFieldAssistant({ module, recordId, buildInitialPrompt, onInser
   const [isOpen, setIsOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState<string | null>(null);
+  const [isStub, setIsStub] = useState(false);
 
   const generate = useMutation({
     mutationFn: async () =>
@@ -52,13 +53,17 @@ export function AiFieldAssistant({ module, recordId, buildInitialPrompt, onInser
           context: recordId !== undefined ? { module, recordId } : { module },
         })
       ).data,
-    onSuccess: (reply) => setResult(reply.content),
+    onSuccess: (reply) => {
+      setResult(reply.content);
+      setIsStub(reply.isStub);
+    },
     onError: (err) => toast.error(extractErrorMessage(err, "The assistant couldn't respond.")),
   });
 
   function open() {
     setPrompt(buildInitialPrompt());
     setResult(null);
+    setIsStub(false);
     setIsOpen(true);
   }
 
@@ -98,11 +103,21 @@ export function AiFieldAssistant({ module, recordId, buildInitialPrompt, onInser
             {generate.isPending ? "Generating…" : "Generate"}
           </button>
 
+          {result && isStub && (
+            <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
+              <TriangleAlert size={14} className="mt-0.5 shrink-0" />
+              <span>
+                No AI provider is configured for this tenant — the text below is a placeholder, not a real answer, and can&apos;t be
+                inserted into this record. Configure a provider under Settings &rarr; Tenant AI Config to get real responses.
+              </span>
+            </div>
+          )}
+
           {result && (
             <div className="flex flex-col gap-3 rounded-md border border-border bg-muted/40 p-3">
               <MarkdownLite text={result} />
               <div className="flex gap-2">
-                {onInsert && (
+                {onInsert && !isStub && (
                   <button
                     type="button"
                     onClick={() => {

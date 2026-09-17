@@ -1,6 +1,7 @@
 import { pgTable, serial, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 import { tenants } from "./tenants.js";
 import { users } from "./users.js";
+import { suppliers } from "./supplier.js";
 
 /**
  * Supplier Corrective Action Request (SCAR) — one of the two forms reported
@@ -27,6 +28,13 @@ export const scarForms = pgTable("scar_forms", {
   scarNumber: text("scar_number"),
   dateIssued: timestamp("date_issued"),
   supplierName: text("supplier_name"),
+  // Phase 7 — the free-text supplierName above predates any real link to
+  // this app's own suppliers table; this nullable FK is added alongside it
+  // (not a replacement) so existing SCARs and any future one still typed in
+  // free-text both keep working, while a real supplier link lets the
+  // Supplier Portal / internal Supplier Quality Risk Score actually query
+  // "this supplier's SCARs" instead of fuzzy-matching a name string.
+  supplierId: integer("supplier_id").references(() => suppliers.id),
   responseDueDate: timestamp("response_due_date"),
   contactPerson: text("contact_person"),
   poNumber: text("po_number"),

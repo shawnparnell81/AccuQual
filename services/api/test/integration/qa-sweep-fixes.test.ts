@@ -23,6 +23,7 @@ import { workOrders } from "../../src/drizzle/schema/workOrders.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { aiEmbeddings } from "../../src/drizzle/schema/ai.js";
+import { formData } from "../../src/drizzle/schema/forms.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
@@ -68,6 +69,7 @@ describe("QA sweep fixes (real DB + real HTTP path)", () => {
     await db.delete(inventoryItems).where(eq(inventoryItems.tenantId, tenantId));
     await db.delete(iotDevices).where(eq(iotDevices.tenantId, tenantId));
     await db.delete(changeRequests).where(eq(changeRequests.tenantId, tenantId));
+    await db.delete(formData).where(eq(formData.tenantId, tenantId));
     await db.delete(ncr).where(eq(ncr.tenantId, tenantId));
     for (const id of userIds) await db.delete(users).where(eq(users.id, id));
     await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
