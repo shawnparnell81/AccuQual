@@ -1,6 +1,10 @@
 import type { Request, Response } from "express";
 import { and, eq, desc } from "drizzle-orm";
 import { customers } from "../../drizzle/schema/customers.js";
+import { customerScorecards } from "../../drizzle/schema/customerScorecards.js";
+import { warrantyClaims } from "../../drizzle/schema/warranty.js";
+import { crarClaims } from "../../drizzle/schema/crar.js";
+import { feasibilityReviews } from "../../drizzle/schema/feasibility.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { stripClientOwnedFields } from "../../utils/crudFactory.js";
@@ -47,6 +51,55 @@ export const createCustomerHandler = asyncHandler(async (req: Request, res: Resp
 export const getCustomerHandler = asyncHandler(async (req: Request, res: Response) => {
   const customer = await loadCustomer(req, Number(req.params.id));
   res.json(customer);
+});
+
+/**
+ * POST /customers/:id/scorecard — mirrors supplier.controller.ts's own
+ * addScorecardHandler exactly (overall = average of the two input scores).
+ * Gated the same way every other write on this module already is:
+ * sales_and_marketing (or admin), the department this router's own base
+ * requireDepartmentAccess("customers") gate already grants edit to.
+ */
+export const addCustomerScorecardHandler = asyncHandler(async (req: Request, res: Response) => {
+  assertDepartment(req, ["sales_and_marketing"]);
+  const customer = await loadCustomer(req, Number(req.params.id));
+
+  const { qualityScore = 0, deliveryScore = 0 } = req.body;
+  const overallScore = (Number(qualityScore) + Number(deliveryScore)) / 2;
+
+  const [scorecard] = await req
+    .db!.insert(customerScorecards)
+    .values({ ...req.body, customerId: customer.id, tenantId: req.tenantId!, overallScore: String(overallScore) })
+    .returning();
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "CustomerScorecard", entityId: scorecard!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  res.status(201).json(scorecard);
+});
+
+/** GET /customers/:id/scorecard — the manually-entered history, newest first. Read-level (quality/engineering too), same as every other GET here. */
+export const listCustomerScorecardsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const customer = await loadCustomer(req, Number(req.params.id));
+  const rows = await req.db!
+    .select()
+    .from(customerScorecards)
+    .where(and(eq(customerScorecards.tenantId, req.tenantId!), eq(customerScorecards.customerId, customer.id)))
+    .orderBy(desc(customerScorecards.createdAt));
+  res.json(rows);
+});
+
+/**
+ * GET /customers/:id/scorecard-summary — real counts from the three
+ * modules that actually carry a customerId FK today (see
+ * customerScorecards.ts's own comment on why this stays honest counts
+ * instead of a weighted risk score like suppliers get).
+ */
+export const customerScorecardSummaryHandler = asyncHandler(async (req: Request, res: Response) => {
+  const customer = await loadCustomer(req, Number(req.params.id));
+  const [warranty, crar, feasibility] = await Promise.all([
+    req.db!.select({ id: warrantyClaims.id }).from(warrantyClaims).where(and(eq(warrantyClaims.tenantId, req.tenantId!), eq(warrantyClaims.customerId, customer.id))),
+    req.db!.select({ id: crarClaims.id }).from(crarClaims).where(and(eq(crarClaims.tenantId, req.tenantId!), eq(crarClaims.customerId, customer.id))),
+    req.db!.select({ id: feasibilityReviews.id }).from(feasibilityReviews).where(and(eq(feasibilityReviews.tenantId, req.tenantId!), eq(feasibilityReviews.customerId, customer.id))),
+  ]);
+  res.json({ warrantyClaimCount: warranty.length, crarCount: crar.length, feasibilityReviewCount: feasibility.length });
 });
 
 export const updateCustomerHandler = asyncHandler(async (req: Request, res: Response) => {

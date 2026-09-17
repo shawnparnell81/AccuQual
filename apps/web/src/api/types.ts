@@ -1297,6 +1297,25 @@ export interface CustomerCommunication {
   updatedAt: string | null;
 }
 
+/** Same shape as supplier.ts's own SupplierScorecard — see customerScorecards.ts's schema comment. */
+export interface CustomerScorecard {
+  id: number;
+  customerId: number;
+  period: string | null;
+  qualityScore: string | null;
+  deliveryScore: string | null;
+  overallScore: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+/** GET /customers/:id/scorecard-summary — real counts, not a weighted score (see customerScorecards.ts's own comment on why). */
+export interface CustomerScorecardSummary {
+  warrantyClaimCount: number;
+  crarCount: number;
+  feasibilityReviewCount: number;
+}
+
 // ---------------------------------------------------------------------------
 // Warranty module
 // ---------------------------------------------------------------------------

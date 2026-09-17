@@ -14,6 +14,7 @@ import { WorkflowActionButton } from "../../components/shared/WorkflowActionButt
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { CustomerCommunicationsPanel } from "../../components/shared/CustomerCommunicationsPanel";
+import { CustomerScorecardPanel } from "../../components/shared/CustomerScorecardPanel";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
@@ -165,6 +166,7 @@ export function CustomerDetailPage() {
       </div>
 
       <CustomerCommunicationsPanel customerId={customerId} />
+      <CustomerScorecardPanel customerId={customerId} />
       <AttachmentsPanel entityType="customers" entityId={customerId} />
       <WorkflowHistoryPanel moduleName="customers" recordId={customerId} />
 

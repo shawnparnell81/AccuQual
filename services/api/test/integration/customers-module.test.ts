@@ -17,6 +17,8 @@ import { tenants } from "../../src/drizzle/schema/tenants.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { documents } from "../../src/drizzle/schema/documents.js";
 import { customers } from "../../src/drizzle/schema/customers.js";
+import { customerScorecards } from "../../src/drizzle/schema/customerScorecards.js";
+import { warrantyClaims } from "../../src/drizzle/schema/warranty.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
@@ -28,6 +30,11 @@ const suffix = Date.now();
 let tenantId: number;
 let ndaDocumentId: number;
 let customerId: number;
+// A separate, disposable customer for the scorecard tests below — kept
+// independent of `customerId`'s own lifecycle (which the "admin CAN
+// delete" test further down deletes) so those tests can't interact with
+// this file's existing delete-flow coverage.
+let scorecardCustomerId: number;
 const userIds: number[] = [];
 
 let salesToken: string;
@@ -55,11 +62,17 @@ describe("Customer Onboarding module (real DB + real HTTP path)", () => {
     qualityToken = await makeUser("quality");
     productionToken = await makeUser("production"); // not in customers's PERMISSION_MATRIX at all
     adminToken = await makeUser(null, "admin");
+
+    const [scorecardCustomer] = await db.insert(customers).values({ tenantId, legalName: `Scorecard Test Customer ${suffix}` }).returning();
+    scorecardCustomerId = scorecardCustomer!.id;
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
     await db.delete(auditTrail).where(inArray(auditTrail.performedBy, userIds));
+    await db.delete(customerScorecards).where(eq(customerScorecards.customerId, scorecardCustomerId));
+    await db.delete(warrantyClaims).where(eq(warrantyClaims.customerId, scorecardCustomerId));
+    await db.delete(customers).where(eq(customers.id, scorecardCustomerId));
     if (customerId) await db.delete(customers).where(eq(customers.id, customerId));
     await db.delete(documents).where(eq(documents.id, ndaDocumentId));
     for (const id of userIds) await db.delete(users).where(eq(users.id, id));
@@ -159,6 +172,49 @@ describe("Customer Onboarding module (real DB + real HTTP path)", () => {
 
     const [row] = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "AiAssistantMessage"), eq(auditTrail.tenantId, tenantId)));
     expect((row?.changes as { module?: string })?.module).toBe("customer");
+  });
+
+  // Customer Scorecard — same manually-entered shape as the Suppliers
+  // module's own scorecard, on a separate disposable customer (see
+  // scorecardCustomerId's own comment) so these tests never interact with
+  // customerId's delete-flow coverage below.
+  describe("Customer Scorecard", () => {
+    it("quality (read-only per the matrix) cannot add a scorecard entry", async () => {
+      const res = await request(app).post(`/customers/${scorecardCustomerId}/scorecard`).set("Authorization", `Bearer ${qualityToken}`).send({ period: "2026-Q1", qualityScore: 80, deliveryScore: 80 });
+      expect(res.status).toBe(403);
+    });
+
+    it("sales_and_marketing can add a real scorecard entry, and it's audited", async () => {
+      const res = await request(app)
+        .post(`/customers/${scorecardCustomerId}/scorecard`)
+        .set("Authorization", `Bearer ${salesToken}`)
+        .send({ period: "2026-Q1", qualityScore: 90, deliveryScore: 70, notes: "Late on two shipments this quarter." });
+      expect(res.status).toBe(201);
+      expect(res.body.overallScore).toBe("80");
+
+      const trail = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "CustomerScorecard"), eq(auditTrail.entityId, res.body.id)));
+      expect(trail.some((t) => t.action === "create")).toBe(true);
+    });
+
+    it("quality CAN read the scorecard history (read access per the matrix)", async () => {
+      const res = await request(app).get(`/customers/${scorecardCustomerId}/scorecard`).set("Authorization", `Bearer ${qualityToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.some((r: { period: string }) => r.period === "2026-Q1")).toBe(true);
+    });
+
+    it("production (no matrix entry for customers at all) cannot even read the scorecard", async () => {
+      const res = await request(app).get(`/customers/${scorecardCustomerId}/scorecard`).set("Authorization", `Bearer ${productionToken}`);
+      expect(res.status).toBe(403);
+    });
+
+    it("scorecard-summary reflects a real linked warranty claim, not a fabricated score", async () => {
+      const zero = await request(app).get(`/customers/${scorecardCustomerId}/scorecard-summary`).set("Authorization", `Bearer ${qualityToken}`);
+      expect(zero.body).toEqual({ warrantyClaimCount: 0, crarCount: 0, feasibilityReviewCount: 0 });
+
+      await db.insert(warrantyClaims).values({ tenantId, claimNumber: `WC-CUST-TEST-${suffix}`, customerId: scorecardCustomerId });
+      const withClaim = await request(app).get(`/customers/${scorecardCustomerId}/scorecard-summary`).set("Authorization", `Bearer ${qualityToken}`);
+      expect(withClaim.body.warrantyClaimCount).toBe(1);
+    });
   });
 
   it("sales_and_marketing itself cannot delete — this module's delete rule is admin-only, no department at all", async () => {

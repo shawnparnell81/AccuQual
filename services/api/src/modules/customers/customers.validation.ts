@@ -29,6 +29,16 @@ export const createCustomerSchema = z.object({
   relatedSourceId: z.coerce.number().int().optional(),
 });
 
+// Same shape as supplier.validation.ts's addScorecardSchema — see
+// customerScorecards.ts's own schema comment for why this doesn't also
+// get a weighted auto-computed score the way suppliers do.
+export const addCustomerScorecardSchema = z.object({
+  period: z.string().min(1),
+  qualityScore: z.number().min(0).max(100).optional(),
+  deliveryScore: z.number().min(0).max(100).optional(),
+  notes: z.string().optional(),
+});
+
 // Deliberately excludes `status` — status only ever changes through the
 // dedicated transition endpoints below, same reasoning as
 // risk.validation.ts's / feasibility.validation.ts's own update schemas.
