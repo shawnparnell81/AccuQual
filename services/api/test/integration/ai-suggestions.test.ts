@@ -74,6 +74,26 @@ describe("GET /ai/suggestions — AI suggestion history (real DB + real HTTP pat
     expect(list.body.items[0].decision).toBeNull(); // no decision recorded yet
   });
 
+  it("POST /ai/8d — the endpoint EightDDetailPage.tsx's new 'AI Draft 8D' button calls — records a real suggestion row visible in the history", async () => {
+    const eightD = await request(app)
+      .post("/ai/8d")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        ncrId: 1,
+        ncrData: { title: "Test NCR", description: "Bearing failure", containment: "Line stopped", rootCause: "Worn bearing" },
+        capaData: { rootCause: "Worn bearing", actionPlan: "Replace bearing", preventiveAction: "PM schedule" },
+      });
+    expect(eightD.status).toBe(200);
+    expect(eightD.body.id).toBeTruthy();
+    // No provider key configured in this test environment — every real
+    // pipeline call degrades to the same deterministic stub every other
+    // endpoint uses, never a fabricated 8-discipline answer.
+    expect(eightD.body.status).toBe("stub");
+
+    const list = await request(app).get("/ai/suggestions").query({ module: "8d" }).set("Authorization", `Bearer ${adminToken}`);
+    expect(list.body.items.find((s: { id: number }) => s.id === eightD.body.id)).toBeTruthy();
+  });
+
   it("filters by module", async () => {
     const list = await request(app).get("/ai/suggestions").query({ module: "capa" }).set("Authorization", `Bearer ${adminToken}`);
     expect(list.status).toBe(200);

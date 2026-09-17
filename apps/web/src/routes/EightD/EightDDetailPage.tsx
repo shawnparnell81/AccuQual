@@ -7,6 +7,8 @@ import { TextAreaField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
+import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
+import type { Ncr, Capa } from "../../api/types";
 
 interface EightDReport {
   id: number;
@@ -26,7 +28,21 @@ const STEPS = [
   { key: "d8_closure", label: "D8 — Congratulate the Team / Closure" },
 ] as const;
 
+/** Exact shape of runEightDGeneratorPipeline's output (ai.guardrails.ts's eightDOutputSchema) — keys deliberately match STEPS above 1:1. */
+interface EightDSuggestion {
+  d1_team: string;
+  d2_problem: string;
+  d3_containment: string;
+  d4_rootCause: string;
+  d5_correctiveAction: string;
+  d6_implementation: string;
+  d7_prevention: string;
+  d8_closure: string;
+}
+
 const eightDHooks = createResourceHooks<EightDReport>("8d");
+const ncrHooks = createResourceHooks<Ncr>("ncr");
+const capaHooks = createResourceHooks<Capa>("capa");
 
 export function EightDDetailPage() {
   const { id } = useParams();
@@ -39,6 +55,12 @@ export function EightDDetailPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["8d", reportId] }),
   });
   const [draftByStep, setDraftByStep] = useState<Record<string, string>>({});
+  const { data: linkedNcr } = ncrHooks.useOne(report?.ncrId ?? undefined);
+  // Same client-filtered pattern the NCR workspace's own Linked Records
+  // panel already uses (GET /capa has no ?ncrId= filter) — fine at this
+  // data scale, matching that page's own reasoning.
+  const { data: allCapas = [] } = capaHooks.useList();
+  const linkedCapa = allCapas.find((c) => c.ncrId === report?.ncrId);
 
   if (isLoading || !report) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
@@ -48,9 +70,40 @@ export function EightDDetailPage() {
         <h1 className="text-2xl font-semibold">
           8D Report #{report.id} {report.ncrId && <span className="text-muted-foreground">— NCR #{report.ncrId}</span>}
         </h1>
-        <OpenFormButton formType="eight_d" entityId={report.id} title={`8D Report #${report.id} Form`} />
-        <PrintFormButton formType="eight_d" entityId={report.id} />
+        <div className="flex items-center gap-2">
+          {linkedNcr && (
+            <AiStructuredSuggestion<EightDSuggestion>
+              endpoint="/ai/8d"
+              title="AI 8D Draft"
+              triggerLabel="AI Draft 8D"
+              acceptLabel="Fill In Draft"
+              buildPayload={() => ({
+                ncrId: linkedNcr.id,
+                ncrData: { title: linkedNcr.title, description: linkedNcr.description, containment: linkedNcr.containment, rootCause: linkedNcr.rootCause },
+                capaData: linkedCapa
+                  ? { rootCause: linkedCapa.rootCause, actionPlan: linkedCapa.actionPlan, preventiveAction: linkedCapa.preventiveAction }
+                  : {},
+              })}
+              onAccept={(output) => setDraftByStep({ ...output })}
+              renderPreview={(output) => (
+                <div className="flex max-h-96 flex-col gap-3 overflow-y-auto text-sm">
+                  {STEPS.map((step) => (
+                    <div key={step.key}>
+                      <p className="text-xs font-medium text-muted-foreground">{step.label}</p>
+                      <p>{output[step.key]}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            />
+          )}
+          <OpenFormButton formType="eight_d" entityId={report.id} title={`8D Report #${report.id} Form`} />
+          <PrintFormButton formType="eight_d" entityId={report.id} />
+        </div>
       </div>
+      {!report.ncrId && (
+        <p className="text-xs text-muted-foreground">Link this 8D to an NCR (see the record's own linkage) to unlock an AI-drafted starting point for all 8 disciplines.</p>
+      )}
 
       <div className="flex flex-col gap-3">
         {STEPS.map((step, index) => {
@@ -66,7 +119,7 @@ export function EightDDetailPage() {
               </div>
               <TextAreaField
                 label=""
-                defaultValue={report.data?.[step.key] ?? ""}
+                value={draftByStep[step.key] ?? report.data?.[step.key] ?? ""}
                 onChange={(e) => setDraftByStep((d) => ({ ...d, [step.key]: e.target.value }))}
               />
               <button
