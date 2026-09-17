@@ -2,10 +2,13 @@
 
 Everything in this file has been proven against the real infrastructure it
 describes — a real Supabase project, and the real Docker images this repo
-already builds — not written from theory. One piece (Render's automatic
-cross-service URL wiring in `render.yaml`) is a well-reasoned best effort
-that hasn't been run against a real Render account yet; it's called out
-explicitly below so it's not mistaken for something already verified.
+already builds — not written from theory. Two pieces are a well-reasoned
+best effort that hasn't been run against a real Render account yet, called
+out explicitly where they appear below: Render's automatic cross-service
+URL wiring, and the `accuqual-redis`/worker service blocks (the `type:
+redis` service shape and its `connectionString` property name specifically
+— the workers' own Docker images are real and already build successfully
+in CI, only the render.yaml wiring around them is unverified).
 
 ## The one gotcha that will bite you if you skip this section
 
@@ -76,19 +79,46 @@ Skip this for a real customer's database.
 ### 3. Deploy via the render.yaml blueprint (or manually — see below)
 
 In Render: New → Blueprint → connect this GitHub repo → it should pick up
-`render.yaml` at the repo root automatically. It defines two services:
+`render.yaml` at the repo root automatically. It defines six services:
 
 - **accuqual-api** — the Node/Express API (`services/api/Dockerfile`)
 - **accuqual-web** — the React frontend, served by nginx (`apps/web/Dockerfile`)
+- **accuqual-redis** — a managed Redis instance (the Workflow Engine's real
+  event bus). **This one is paid/metered**, unlike the two services above —
+  Render shows you the real plan/pricing before provisioning it.
+- **accuqual-workflow-worker** / **accuqual-ai-worker** / **accuqual-digital-twin-worker**
+  — the three background processes that consume that Redis stream (see
+  `/workers`). Each needs the exact same `DATABASE_URL` and
+  `TENANT_AI_CONFIG_ENCRYPTION_KEY` values as `accuqual-api` — Render has
+  no way to share one service's `sync: false` value with another, so
+  you'll paste each of those two values in four times total, identically.
+  Already deployed to only the original two services? Render Dashboard →
+  your Blueprint → **Manual Sync** picks up these 4 new services without
+  needing to recreate anything.
 
-You'll be prompted for the env vars marked `sync: false`:
-- `accuqual-api`'s `DATABASE_URL` → your Session Pooler string from step 1
-- `accuqual-api`'s `TENANT_AI_CONFIG_ENCRYPTION_KEY` → generate with
-  `openssl rand -hex 32`; this must be a real value, or the app refuses to
-  start (see the boot guard note above)
+You'll be prompted for the env vars marked `sync: false`. On `accuqual-api`:
+- `DATABASE_URL` → your Session Pooler string from step 1
+- `TENANT_AI_CONFIG_ENCRYPTION_KEY` → generate with `openssl rand -hex 32`;
+  this must be a real value, or the app refuses to start (see the boot
+  guard note above)
+- `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`SMTP_FROM` and
+  `ALERT_WEBHOOK_URL` are optional — see their own sections below.
+
+On each of the three workers: the same `DATABASE_URL` and
+`TENANT_AI_CONFIG_ENCRYPTION_KEY` values as `accuqual-api` (not fresh
+ones — the encryption key in particular MUST match, since
+`accuqual-workflow-worker` decrypts tenant BYOK keys that were encrypted
+under `accuqual-api`'s key). `accuqual-workflow-worker` also optionally
+takes the same `SMTP_*`/`ANTHROPIC_API_KEY`/`OPENAI_API_KEY` values as
+`accuqual-api`, and `accuqual-ai-worker` optionally takes `OPENAI_API_KEY`
+(its embedding generation always calls OpenAI specifically, regardless of
+a tenant's own provider choice).
 
 `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET` are set to `generateValue: true`
-— Render generates real random secrets for you, nothing to do here.
+on every service — Render generates real random secrets for you, nothing
+to do here. The workers never actually verify a token with these; they're
+only required because every process here imports the same env-validation
+module `accuqual-api` does.
 
 **The one part of render.yaml that's a best effort, not yet verified
 against a real Render account:** `ALLOWED_ORIGINS`, `FRONTEND_URL`, and
@@ -110,9 +140,14 @@ fallback is manual:
 - `curl https://<your-api-url>/health` → `{"status":"ok","database":{"status":"ok",...},"redis":{"status":"ok"|"critical",...},...}`
   — a real readiness check now, not a bare liveness ping (see "Monitoring &
   alerting" below). `status` is 503 only when the database itself is
-  unreachable; `redis` is reported for visibility but never causes a 503,
-  since this blueprint doesn't provision a managed Redis service at all
-  (see that section for why).
+  unreachable; `redis` is reported for visibility but never causes a 503
+  even now that a real managed Redis is part of this blueprint — see that
+  section for why this stayed informational-only rather than being
+  promoted to a hard dependency.
+- Check each worker's own Render log stream shows its real "listening on
+  accuqual:..." startup line (see each `workers/*/src/index.ts`) instead of
+  a crash-and-restart loop — the most common cause of the latter is a
+  missing/mismatched `TENANT_AI_CONFIG_ENCRYPTION_KEY` on that worker.
 - Open the deployed frontend URL, log in with a real seeded user, confirm
   a page that hits the API (e.g., the NCR list) loads without a CORS or
   network error in the browser console.
@@ -153,16 +188,19 @@ zero setup:
    skip this entirely). No redeploy needed for a plain env var change on
    Render, just a restart.
 
-**Why Redis/the workflow-worker aren't part of this**: this blueprint
-deploys only `accuqual-api` and `accuqual-web` — no managed Redis service
-and no worker processes are defined in `render.yaml` today, so the
-Workflow Engine's event-driven side isn't live on this exact deployment as
-described. Making `/health` fail over a Redis outage would therefore have
-made Render treat an otherwise-fully-functional deployment as permanently
-unhealthy. If Redis + the workers are deployed later (their own Render
-blueprint entries, or a managed Redis add-on), `checkReadiness()` already
-computes a real `redis` status — promoting it to a hard dependency at that
-point is a one-line change in `healthMonitor.ts`, not a rebuild.
+**Why `/health` still doesn't fail over a Redis outage, even now that a
+real managed Redis is part of this blueprint**: not every account deploying
+this blueprint necessarily re-synced to pick up the 4 new services (see
+step 3) — an account still running only the original `accuqual-api`/
+`accuqual-web` pair would have `/health` permanently reporting `redis` as
+unreachable (nothing is listening at `REDIS_URL`'s default), which would
+make Render treat an otherwise-fully-functional deployment as permanently
+unhealthy. Once you've confirmed the Redis service and all three workers
+are actually deployed and healthy, promoting `redis` to a hard dependency
+in `checkReadiness()` (`services/api/src/modules/monitoring/healthMonitor.ts`)
+is a genuine, safe one-line change at that point — just not done
+automatically here, since it's a real behavior change to `/health`'s HTTP
+status, not just additive config.
 
 ## Real email delivery (SMTP)
 
@@ -195,7 +233,3 @@ needed regardless of which port your provider gives you.
   platform-admin flow.
 - No billing/tier enforcement — see the Inspection Report's TIER-01
   finding.
-- The workflow-worker/ai-worker/digital-twin-worker processes and a managed
-  Redis service have no `render.yaml` entries — the Workflow Engine's
-  event-driven automation isn't live on this exact deployment until that's
-  added.

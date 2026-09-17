@@ -72,3 +72,128 @@ services:
           type: web
           name: accuqual-api
           property: hostport
+
+  # Real Redis Streams event bus — previously undeployed entirely (this
+  # blueprint only ever had accuqual-api/accuqual-web), meaning the three
+  # workers below had nothing to consume from in production even though
+  # they're fully built and tested. A PAID, metered Render resource, unlike
+  # the two web services above — Render will show you its real plan/pricing
+  # before provisioning anything; nothing here spends money by itself.
+  # `ipAllowList: []` keeps it unreachable from the public internet — only
+  # other services in this same Render account/region (the workers, and
+  # accuqual-api if it ever needs it) can reach it. This whole service
+  # block, and the `connectionString` property referenced below, are a
+  # best-effort blueprint addition — same "not yet verified against a real
+  # Render account" caveat DEPLOY.md already gives the accuqual-web
+  # `fromService` wiring; confirm the exact field names against Render's
+  # own current docs/dashboard before relying on this.
+  - type: redis
+    name: accuqual-redis
+    ipAllowList: []
+    plan: starter
+
+  - type: worker
+    name: accuqual-workflow-worker
+    runtime: docker
+    dockerfilePath: ./workers/workflow-worker/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Paste the EXACT SAME value you gave accuqual-api — same real
+      # Supabase Session Pooler string, same database. Render has no
+      # built-in way to share one service's `sync: false` value with
+      # another, so this has to be entered manually in both places.
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: accuqual-redis
+          property: connectionString
+      # Never actually verified by this worker (it has no HTTP endpoint to
+      # authenticate requests against) — only required because this process
+      # transitively imports config/env.ts, which validates the full env
+      # schema at startup regardless of which fields a given process
+      # actually uses. A fresh random value per service is fine.
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      # Same real value as accuqual-api's, not a fresh one — this worker's
+      # ai_suggestion action handler decrypts tenant BYOK keys that were
+      # encrypted under accuqual-api's key; a different value here would
+      # make every decryption fail, not just be redundant.
+      - key: TENANT_AI_CONFIG_ENCRYPTION_KEY
+        sync: false
+      # Optional — only used if a workflow definition's send_email action
+      # fires. Same values as accuqual-api's SMTP_* — leave blank to keep
+      # those sends in log-only stub mode instead.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      # Optional — the platform-wide fallback key an ai_suggestion action
+      # uses when the triggering tenant has no BYOK key of its own
+      # configured. Same values as accuqual-api's, if set there.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+
+  - type: worker
+    name: accuqual-ai-worker
+    runtime: docker
+    dockerfilePath: ./workers/ai-worker/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: accuqual-redis
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: TENANT_AI_CONFIG_ENCRYPTION_KEY
+        sync: false
+      # embedding-engine.ts always calls OpenAI's embeddings API
+      # specifically, regardless of a tenant's own LLM_PROVIDER choice —
+      # unset means this worker logs a warning and falls back to a
+      # deterministic pseudo-embedding (fine for dev, not real semantic
+      # search in production).
+      - key: OPENAI_API_KEY
+        sync: false
+
+  - type: worker
+    name: accuqual-digital-twin-worker
+    runtime: docker
+    dockerfilePath: ./workers/digital-twin-worker/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: accuqual-redis
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: TENANT_AI_CONFIG_ENCRYPTION_KEY
+        sync: false
