@@ -94,7 +94,15 @@ export const riskScore = asyncHandler(async (req: Request, res: Response) => {
     performedBy: req.user?.id,
   });
 
-  res.json(saved);
+  // Additive only — `details` (this endpoint's original field, predating
+  // aiSuggestions/AiStructuredSuggestion) stays exactly as it was; `output`
+  // is a new alias so this is the one AI endpoint every other pipeline's
+  // shape (`{id, status, errorMessage, output}`, read by the shared
+  // AiStructuredSuggestion component) now also matches. No existing caller
+  // read this response before AiInsightsPage.tsx's own real-data-fed
+  // supplier-risk card (the raw pipeline console this replaced only ever
+  // dumped the whole payload as JSON), so this can't regress anything.
+  res.json({ ...saved, output: saved!.details });
 });
 
 export const formSuggest = asyncHandler(async (req: Request, res: Response) => {

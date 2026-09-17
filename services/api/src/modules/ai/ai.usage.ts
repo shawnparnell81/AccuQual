@@ -84,11 +84,30 @@ export async function checkUsageLimit(db: TenantDb, tenantId: number, monthlyLim
 export async function loadTenantLlmOptions(db: TenantDb, tenantId: number): Promise<{ tenant: typeof tenants.$inferSelect | undefined; llmOptions: LlmCallOptions }> {
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
   const aiConfig = tenant?.aiConfig ?? {};
+
+  // A real, live-reproduced bug (found testing the rebuilt AI Insights
+  // dashboard): decryptSecret throws if the stored ciphertext can't be
+  // authenticated under the CURRENT TENANT_AI_CONFIG_ENCRYPTION_KEY — e.g.
+  // after a real key rotation, or any other way stored ciphertext and the
+  // active key fall out of sync. That's exactly as recoverable as "no key
+  // configured" (every pipeline already has a clean stub path for that),
+  // so it's treated the same way instead of crashing the whole request
+  // with an unhandled 500 — this app's own AI philosophy is to degrade to
+  // a labeled stub, never to error out, whenever a real call can't be made.
+  let apiKey: string | undefined;
+  if (aiConfig.apiKeyEncrypted) {
+    try {
+      apiKey = decryptSecret(aiConfig.apiKeyEncrypted);
+    } catch (err) {
+      logger.warn("Tenant AI config key failed to decrypt — falling back to stub mode for this call", { tenantId, err: err instanceof Error ? err.message : err });
+    }
+  }
+
   return {
     tenant,
     llmOptions: {
       provider: aiConfig.provider,
-      apiKey: aiConfig.apiKeyEncrypted ? decryptSecret(aiConfig.apiKeyEncrypted) : undefined,
+      apiKey,
       model: aiConfig.modelName,
       temperature: aiConfig.temperature,
       maxTokens: aiConfig.maxTokens,
