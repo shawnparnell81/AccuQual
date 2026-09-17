@@ -1,5 +1,6 @@
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { ConsumptionVsReceivingPoint } from "../../api/types";
+import { CHART_COLORS } from "./chartPalette";
 
 /** Two-line comparison of total consumed vs. total received per bucket — the same real movements as MovementTrendsChart, isolated to the two flows that matter most for reorder planning. */
 export function ConsumptionVsReceivingChart({ data }: { data: ConsumptionVsReceivingPoint[] }) {
@@ -14,8 +15,8 @@ export function ConsumptionVsReceivingChart({ data }: { data: ConsumptionVsRecei
         <YAxis tickLine={false} axisLine={false} allowDecimals={false} tick={{ fill: "hsl(var(--muted-foreground))" }} />
         <Tooltip />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Line type="monotone" dataKey="consumed" name="Consumed" stroke="#f59e0b" strokeWidth={2} dot={false} />
-        <Line type="monotone" dataKey="received" name="Received" stroke="#10b981" strokeWidth={2} dot={false} />
+        <Line type="monotone" dataKey="consumed" name="Consumed" stroke={CHART_COLORS.attention} strokeWidth={2} dot={false} />
+        <Line type="monotone" dataKey="received" name="Received" stroke={CHART_COLORS.resolved} strokeWidth={2} dot={false} />
       </LineChart>
     </ResponsiveContainer>
   );

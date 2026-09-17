@@ -1,17 +1,23 @@
 import { randomBytes } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { eq, and, gte } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { tenants } from "../../drizzle/schema/tenants.js";
+import { aiSuggestions } from "../../drizzle/schema/ai.js";
 import { users } from "../../drizzle/schema/users.js";
 import { roles } from "../../drizzle/schema/roles.js";
 import { formTemplates } from "../../drizzle/schema/forms.js";
 import { departmentPermissions } from "../../drizzle/schema/permissions.js";
+import { navHiddenItems } from "../../drizzle/schema/navPreferences.js";
 import { AppError } from "../../utils/appError.js";
 import { logger } from "../../utils/logger.js";
 import { env } from "../../config/env.js";
 import { INITIAL_DEFAULT_PERMISSIONS } from "../../db/defaultPermissions.js";
+import { defaultHiddenNavScopes } from "../../db/defaultNavPreferences.js";
+import { isObviousTestName } from "../../utils/testDataGuard.js";
+import { sendEmail } from "../notifications/notification.service.js";
+import { renderTemplate } from "../notifications/templates.js";
 import type { AccessLevel, Department, ResourceKey } from "../../middleware/departmentAccess.js";
 
 /** Every QMS form type that gets a default fillable template on tenant creation. */
@@ -75,6 +81,13 @@ interface CreateTenantInput {
  * not a request-scoped `req.db` (there is no single tenant to scope to yet).
  */
 export async function createTenant(input: CreateTenantInput) {
+  if (env.NODE_ENV === "production" && (isObviousTestName(input.code) || isObviousTestName(input.name))) {
+    throw AppError.badRequest(
+      `Refusing to provision "${input.name}" (${input.code}) in production — its name/code matches the pattern automated tests use ` +
+        "(e.g. \"...-test-<timestamp>\" or \"... Test Tenant ...\"). If this is a real company, rename it to avoid that pattern."
+    );
+  }
+
   const existingCode = await db.select().from(tenants).where(eq(tenants.code, input.code));
   if (existingCode.length > 0) throw AppError.badRequest("Tenant code already in use");
 
@@ -121,6 +134,13 @@ export async function createTenant(input: CreateTenantInput) {
     await db.insert(departmentPermissions).values(defaultPermissionRows).onConflictDoNothing();
   }
 
+  // 3b. Seed default-hidden nav preferences (Phase 1 System-menu cleanup —
+  //     see db/defaultNavPreferences.ts) — same seed-at-creation pattern as
+  //     department_permissions above, so a brand-new tenant starts with the
+  //     "advanced" System items already hidden instead of needing a tenant
+  //     admin to hide them by hand.
+  await db.insert(navHiddenItems).values(defaultHiddenNavScopes().map((scope) => ({ tenantId: tenant.id, scope }))).onConflictDoNothing();
+
   // 4. Provision tenant storage (local filesystem when STORAGE_DRIVER=local; a real
   //    deployment would provision the equivalent Azure Blob prefixes instead).
   if (env.STORAGE_DRIVER === "local") {
@@ -153,18 +173,91 @@ export async function createTenant(input: CreateTenantInput) {
   // 8. Provision tenant digital twin — model/simulation/IoT-device registries
   //    are just empty until the tenant creates its first model; nothing to insert.
 
-  // 9. Send onboarding email — no email service is wired up yet, so this is
-  //    logged rather than actually sent (see README TODOs).
-  logger.info(`[stub email] Onboarding ${input.adminEmail} for tenant "${tenant.name}" (${tenant.code})`, {
-    loginUrl: "/login",
+  // 9. Send onboarding email. Phase 1 fix: this used to be its own
+  //    disconnected `logger.info("[stub email]...")` call that never touched
+  //    the real email service — auth.service.ts's password reset already
+  //    called the real sendEmail()/SmtpTransport, but this path never did,
+  //    so onboarding stayed "logged, not sent" even after real SMTP
+  //    delivery was wired up for everything else. sendEmail() is the right
+  //    fit here (not notify()/notifyDepartment(), which log to a tenant-
+  //    scoped notification_log row this cross-tenant, pre-tenant-context
+  //    createTenant() has no natural transaction to attach one to) — it's
+  //    the exact "one-off, single-recipient... future account-level emails"
+  //    case its own doc comment already anticipated.
+  const onboardingEmail = renderTemplate("tenant_onboarding", {
+    tenantName: tenant.name,
+    adminName: input.adminName ?? "there",
+    adminEmail: input.adminEmail,
+    loginUrl: `${env.FRONTEND_URL}/login`,
     temporaryPassword,
   });
+  const emailStatus = await sendEmail({ to: input.adminEmail, subject: onboardingEmail.subject, body: onboardingEmail.body });
+  logger.info(`Onboarding email for tenant "${tenant.name}" (${tenant.code}): ${emailStatus}`, { to: input.adminEmail });
 
-  return { tenant, adminUser: adminUser ? sanitizeUser(adminUser) : null, temporaryPassword };
+  return { tenant, adminUser: adminUser ? sanitizeUser(adminUser) : null, temporaryPassword, emailStatus };
 }
 
 export async function listTenants() {
   return db.select().from(tenants);
+}
+
+/**
+ * Phase 4 AI Enablement — the Platform Admin AI configuration panel's one
+ * data source: every tenant's AI status, computed live rather than stored,
+ * plus real spend and recent error counts. A tenant's own provider/key
+ * choice (Settings → Tenant AI Config) stays that tenant's own business —
+ * this never exposes the key itself, only whether one is configured — but
+ * platform staff need a cross-tenant view to spot "this tenant has been
+ * failing every AI call for a week" without opening each tenant one by one.
+ */
+export async function getAiOverview() {
+  const platformHasKey = Boolean(env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY);
+  const allTenants = await db.select().from(tenants);
+
+  const sinceDate = new Date();
+  sinceDate.setDate(sinceDate.getDate() - 30);
+
+  const rows = await Promise.all(
+    allTenants.map(async (tenant) => {
+      const tenantHasKey = Boolean(tenant.aiConfig?.apiKeyEncrypted);
+      const enabled = platformHasKey || tenantHasKey;
+
+      const recent = await db
+        .select({ status: aiSuggestions.status })
+        .from(aiSuggestions)
+        .where(and(eq(aiSuggestions.tenantId, tenant.id), gte(aiSuggestions.createdAt, sinceDate)));
+      const errorCount = recent.filter((r) => r.status === "error" || r.status === "malformed").length;
+      const stubCount = recent.filter((r) => r.status === "stub").length;
+      const okCount = recent.filter((r) => r.status === "ok").length;
+
+      // "degraded" beats "disabled" — a tenant with a key that's mostly
+      // failing is a worse, more urgent state than one that was never
+      // configured at all, so this order matters.
+      const mode: "disabled" | "degraded" | "live" | "stub" = !enabled
+        ? "disabled"
+        : errorCount > 0 && errorCount >= okCount
+          ? "degraded"
+          : okCount > 0
+            ? "live"
+            : "stub";
+
+      return {
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        tenantCode: tenant.code,
+        enabled,
+        usesOwnKey: tenantHasKey,
+        mode,
+        last30Days: { ok: okCount, stub: stubCount, error: errorCount },
+        totalTokens: tenant.aiUsageTokens,
+        totalCost: tenant.aiUsageCost,
+        monthlyLimit: tenant.aiMonthlyLimit,
+        limitEnforced: tenant.aiLimitEnforced,
+      };
+    })
+  );
+
+  return { platformHasKey, platformProvider: env.LLM_PROVIDER, platformModel: env.LLM_MODEL, tenants: rows };
 }
 
 export async function updateTenant(id: number, patch: Partial<typeof tenants.$inferInsert>) {

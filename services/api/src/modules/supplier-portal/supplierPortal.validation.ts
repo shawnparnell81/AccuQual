@@ -31,6 +31,7 @@ export const PPAP_DOCUMENT_TYPES = [
 
 export const REVIEW_STATUSES = ["submitted", "under_review", "approved", "rejected"] as const;
 export const RESPONSE_REVIEW_STATUSES = ["submitted", "under_review", "accepted", "rejected"] as const;
+export const MESSAGE_CATEGORIES = ["message", "follow_up", "request", "response"] as const;
 
 export const uploadOnboardingDocumentSchema = z.object({
   documentType: z.enum(ONBOARDING_DOCUMENT_TYPES),
@@ -98,6 +99,17 @@ export const sendMessageSchema = z.object({
   supplierId: z.coerce.number().int().optional(),
   threadKey: z.string().optional(),
   body: z.string().min(1),
+  category: z.enum(MESSAGE_CATEGORIES).optional(),
+  aiDrafted: z.boolean().optional(),
+});
+
+export const sendMessageEmailSchema = z.object({
+  supplierId: z.coerce.number().int().optional(),
+  threadKey: z.string().optional(),
+  subject: z.string().min(1),
+  body: z.string().min(1),
+  category: z.enum(MESSAGE_CATEGORIES).optional(),
+  aiDrafted: z.boolean().optional(),
 });
 
 export const updateSupplierSettingsSchema = z.object({

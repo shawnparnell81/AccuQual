@@ -21,6 +21,7 @@ import { users } from "../../src/drizzle/schema/users.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { aiEmbeddings } from "../../src/drizzle/schema/ai.js";
+import { formData } from "../../src/drizzle/schema/forms.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
@@ -75,6 +76,7 @@ describe("tenant isolation (real DB + real HTTP path)", () => {
     await new Promise((r) => setTimeout(r, 300));
     await db.delete(auditTrail).where(inArray(auditTrail.tenantId, [tenantAId, tenantBId]));
     await db.delete(aiEmbeddings).where(inArray(aiEmbeddings.tenantId, [tenantAId, tenantBId]));
+    await db.delete(formData).where(inArray(formData.tenantId, [tenantAId, tenantBId]));
     await db.delete(ncr).where(eq(ncr.id, ncrIdInTenantA));
     await db.delete(users).where(eq(users.id, userAId));
     await db.delete(users).where(eq(users.id, userBId));

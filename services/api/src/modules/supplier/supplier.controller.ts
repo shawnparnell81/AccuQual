@@ -11,6 +11,7 @@ import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
+import { getSupplierQualityFactors, getSupplierHealth, getSupplierRiskScoreWithTrend, recomputeSupplierRiskScore, exportSupplierScorecard } from "./supplier.qualityRisk.js";
 
 export const baseHandlers = crudFactory(suppliers, { entityName: "Supplier", idColumn: "id" });
 
@@ -127,4 +128,46 @@ export const createPortalAccountHandler = asyncHandler(async (req: Request, res:
 
   const { passwordHash: _omit, ...safe } = created;
   res.status(201).json({ user: safe, temporaryPassword: tempPassword });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 7 — Supplier Quality Risk Score, KPIs, health indicators, scorecard
+// export. All internal-facing (this router's own requireDepartmentAccess
+// ("suppliers") gate — Quality edit, Purchasing/Material Mgmt/Production
+// read); the Supplier Portal's own read-only equivalents live in
+// supplierPortal.controller.ts and share this same underlying module.
+// ---------------------------------------------------------------------------
+
+async function loadSupplierOrThrow(req: Request, id: number) {
+  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, id), eq(suppliers.tenantId, req.tenantId!)));
+  if (!supplier) throw AppError.notFound("Supplier");
+  return supplier;
+}
+
+export const getSupplierRiskScoreHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  await loadSupplierOrThrow(req, id);
+  res.json(await getSupplierRiskScoreWithTrend(req.db!, req.tenantId!, id));
+});
+
+/** POST /suppliers/:id/risk-score/recompute — the one write path for this score; records "Risk score updated (v1 formula)" to the audit trail (see supplier.qualityRisk.ts's own comment). */
+export const recomputeSupplierRiskScoreHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  await loadSupplierOrThrow(req, id);
+  const row = await recomputeSupplierRiskScore(req.db!, req.tenantId!, id, req.user?.id);
+  res.status(201).json(row);
+});
+
+export const getSupplierKpisHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  await loadSupplierOrThrow(req, id);
+  const [factors, health] = await Promise.all([getSupplierQualityFactors(req.db!, req.tenantId!, id), getSupplierHealth(req.db!, req.tenantId!, id)]);
+  res.json({ ...factors, health });
+});
+
+export const exportSupplierScorecardHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const supplier = await loadSupplierOrThrow(req, id);
+  const format = (req.query.format as string | undefined) || "csv";
+  await exportSupplierScorecard(req, res, supplier, format);
 });

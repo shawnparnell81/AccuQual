@@ -1,25 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useCurrentUser, useCurrentTenant } from "../../hooks/useAuth";
+import { useCurrentUser } from "../../hooks/useAuth";
 import { NavigationSettingsPage } from "./NavigationSettingsPage";
-import { SecurityRolesSection } from "./SecurityRolesSection";
 import { ThemeSettingsSection } from "./ThemeSettingsSection";
 import { FeasibilitySettingsPanel } from "./FeasibilitySettingsPanel";
-import { InventoryAdvancedSettingsPanel } from "./InventoryAdvancedSettingsPanel";
 import { ERPSyncSettingsPanel } from "./ERPSyncSettingsPanel";
 
-const TABS = [
-  "User Preferences",
-  "Theme",
-  "Notifications",
-  "Email Alerts",
-  "ERP Integration",
-  "Inventory Settings",
-  "Feasibility",
-  "Security & Roles",
-  "Tenant Settings",
-  "Navigation",
-] as const;
+const TABS = ["User Preferences", "Theme", "Notifications", "Email Alerts", "ERP Integration", "Feasibility", "Navigation"] as const;
 type Tab = (typeof TABS)[number];
 
 /** A section of this page with nothing behind it yet — shown plainly rather than as a working-looking toggle that does nothing. */
@@ -48,7 +35,6 @@ function NotAvailable({ what }: { what: string }) {
 export function SettingsPage() {
   const [tab, setTab] = useState<Tab>("User Preferences");
   const user = useCurrentUser();
-  const tenant = useCurrentTenant();
 
   return (
     <div className="flex flex-col gap-4">
@@ -81,11 +67,11 @@ export function SettingsPage() {
               <dd className="capitalize">{user?.department ?? "—"}</dd>
             </dl>
             <p className="mt-3 text-xs text-muted-foreground">
-              Name, role, and department are managed by a tenant admin — see the{" "}
-              <button onClick={() => setTab("Security & Roles")} className="text-primary hover:underline">
-                Security &amp; Roles
-              </button>{" "}
-              tab.
+              Name, role, and department, along with every other organization-wide setting (users &amp; roles, permissions, AI, supplier/quality/receiving settings, tenant profile), are managed in the{" "}
+              <Link to="/admin" className="text-primary hover:underline">
+                Admin Console
+              </Link>
+              .
             </p>
           </div>
           <div className="rounded-lg border border-border bg-card p-4">
@@ -106,35 +92,7 @@ export function SettingsPage() {
       {tab === "Notifications" && <NotAvailable what="Notifications" />}
       {tab === "Email Alerts" && <NotAvailable what="Email delivery" />}
       {tab === "ERP Integration" && <ERPSyncSettingsPanel />}
-      {tab === "Inventory Settings" && <InventoryAdvancedSettingsPanel />}
       {tab === "Feasibility" && <FeasibilitySettingsPanel />}
-
-      {tab === "Security & Roles" && <SecurityRolesSection />}
-
-      {tab === "Tenant Settings" && (
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="mb-3 text-sm font-medium">Your Organization</h3>
-          {tenant ? (
-            <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm">
-              <dt className="text-muted-foreground">Name</dt>
-              <dd>{tenant.name}</dd>
-              <dt className="text-muted-foreground">Tenant code</dt>
-              <dd className="font-mono">{tenant.code}</dd>
-              <dt className="text-muted-foreground">Branding</dt>
-              <dd className="text-muted-foreground">{tenant.branding?.primaryColor ? `Primary color ${tenant.branding.primaryColor}` : "Using defaults"}</dd>
-            </dl>
-          ) : (
-            <p className="text-sm text-muted-foreground">No tenant context on this account (platform admin accounts aren't scoped to one).</p>
-          )}
-          <p className="mt-3 text-xs text-muted-foreground">
-            Read-only here — organization branding and tenant-level settings are managed through{" "}
-            <Link to="/platform" className="text-primary hover:underline">
-              Platform Administration
-            </Link>
-            , not by individual tenant users.
-          </p>
-        </div>
-      )}
 
       {tab === "Navigation" && <NavigationSettingsPage />}
     </div>

@@ -28,11 +28,6 @@ import {
   Sparkles,
   Package,
   Receipt,
-  Palette,
-  FileUp,
-  Bot,
-  Cpu,
-  TrendingUp,
   Undo2,
   Hammer,
   FileSignature,
@@ -48,6 +43,7 @@ import {
   Globe2,
   RotateCcw,
   ScrollText,
+  LayoutGrid,
 } from "lucide-react";
 
 /**
@@ -69,15 +65,14 @@ import {
  *      belongs to at all (TopNav.tsx renders each user's own department
  *      group from NAV_STRUCTURE, then filters individual leaves by the
  *      LIVE level).
- * Known, documented limitation: a tenant admin CAN grant any department
- * edit/read on any module via the new admin UI, and the backend will
- * correctly enforce it the moment they do (a user can navigate straight to
- * the URL and it works) — but if that module isn't already listed in that
- * department's `items` array below, it won't gain a nav dropdown entry
- * automatically. Rebuilding the nav as a fully dynamic single registry
- * (any leaf, any department, computed live) is a larger follow-up, not
- * attempted here to avoid touching every department's dropdown membership
- * as a side effect of this change.
+ * Fully dynamic nav registry (2026-09-15): a tenant admin granting any
+ * department edit/read on any module via the Roles & Permissions UI now ALSO
+ * gains a real nav dropdown entry for it, not just backend enforcement —
+ * see ALL_MODULE_LEAVES below and TopNav.tsx's `extraGrantedLeaves`. The
+ * per-department `items` arrays here are still the STRUCTURAL default (what
+ * shows up out of the box, and what a leaf's static fallback access is
+ * before GET /permissions/effective resolves) — they're just no longer a
+ * hard ceiling on what CAN appear.
  */
 
 export type AccessLevel = "none" | "read" | "edit";
@@ -102,6 +97,17 @@ export interface NavLeaf {
   priority: 1 | 2 | 3;
   /** Sheet's Notes column, shown as a hover tooltip. */
   notes: string;
+  /**
+   * Phase 1 System-menu cleanup (buyer evaluation: "admin config buried
+   * inside the everyday System menu"). Only meaningful for the System
+   * catch-all group (department: null) — every department-owned leaf stays
+   * in one flat dropdown as before. "advanced" items are seeded hidden by
+   * default for every tenant (see db/defaultNavPreferences.ts /
+   * backfillNavPreferences.ts) — a tenant admin can still turn any of them
+   * back on from Settings > Navigation, same toggle every other nav item
+   * already uses.
+   */
+  section?: "admin" | "quality" | "advanced";
 }
 
 export interface DepartmentMeta {
@@ -354,27 +360,25 @@ export const CUSTOMERS: NavLeaf = {
 };
 
 // PPAP and APQP are two distinct rows in the sheet, but the app currently
-// ships one combined page for both — see ASSUMPTIONS. Both leaves point at
-// the same route until a dedicated APQP page exists.
+// ships one combined page for both — see ASSUMPTIONS. Phase 1 cleanup
+// (buyer evaluation finding "Unnecessary features"): these used to be two
+// separate nav entries both pointing at the exact same /ppap route, reading
+// as a duplicate-menu-item bug rather than two real destinations. Nothing
+// in the actual PPAP route or page ever checks the separate "apqp"
+// ResourceKey (confirmed by reading both) — it's a real, distinct
+// permission a tenant admin could still grant in Roles & Permissions, but
+// there's no second page for it to gate — so merging the nav down to one
+// leaf loses no real access, just the redundant menu row. Revert this back
+// to two leaves the moment a dedicated APQP page actually exists.
 const PPAP: NavLeaf = {
   key: "ppap",
-  label: "PPAP",
+  label: "PPAP / APQP",
   path: "/ppap",
   icon: ClipboardList,
   access: { engineering: "edit" },
   kpi: false,
   priority: 1,
-  notes: "Engineering core module",
-};
-const APQP: NavLeaf = {
-  key: "apqp",
-  label: "APQP",
-  path: "/ppap",
-  icon: FileSearch2,
-  access: { engineering: "edit" },
-  kpi: false,
-  priority: 1,
-  notes: "Engineering planning module (shares the PPAP page until a dedicated APQP view ships)",
+  notes: "Engineering core module — one page covers both PPAP and APQP until a dedicated APQP view ships",
 };
 
 // Rebuilt as a bespoke fixed-structure document (see feasibility.ts's own
@@ -427,7 +431,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "engineering",
-    items: [PPAP, APQP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, SALES_ACCOUNTS, CUSTOMERS, FEASIBILITY, WARRANTY, SUPPLIER_PORTAL, CRAR, RMA_LOG],
+    items: [PPAP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, SALES_ACCOUNTS, CUSTOMERS, FEASIBILITY, WARRANTY, SUPPLIER_PORTAL, CRAR, RMA_LOG],
   },
   {
     department: "production",
@@ -464,6 +468,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
         kpi: false,
         priority: 3,
         notes: "Master index + controlled-document register — folder browsing lives under Document Library instead",
+        section: "quality",
       },
       {
         key: "general_uploads",
@@ -474,9 +479,26 @@ export const NAV_STRUCTURE: NavGroup[] = [
         kpi: false,
         priority: 3,
         notes: "Not in the department sheet — the shared bin for a user's own uploads that aren't evidence on a specific record (see AttachmentsPanel)",
+        section: "quality",
       },
-      { key: "training", label: "Training", path: "/training", icon: GraduationCap, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
-      { key: "change", label: "Change Mgmt", path: "/change", icon: GitBranch, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
+      { key: "training", label: "Training", path: "/training", icon: GraduationCap, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access", section: "quality" },
+      {
+        key: "reporting",
+        label: "Reporting Hub",
+        path: "/reporting",
+        icon: BarChart3,
+        // Ungated at the nav level, same convention as documents/training
+        // above — the page itself (ReportingHubPage.tsx) hides each tab
+        // per the viewer's real, live access to that tab's underlying
+        // module (ncr/suppliers/warranty/inventory), reusing those
+        // existing ResourceKeys rather than a new parallel one.
+        access: {},
+        kpi: false,
+        priority: 2,
+        notes: "Phase 6 — cross-module dashboards, scheduled reports, exports; per-tab visibility enforced inside the page itself",
+        section: "quality",
+      },
+      { key: "change", label: "Change Mgmt", path: "/change", icon: GitBranch, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access", section: "quality" },
       {
         key: "document_change_requests",
         label: "Document Change Requests",
@@ -487,6 +509,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
         kpi: false,
         priority: 3,
         notes: "Not in the department sheet — new QMS-document revision-control form, distinct from Change Mgmt's product/process change_requests",
+        section: "quality",
       },
       {
         key: "qms_forms",
@@ -498,6 +521,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
         kpi: false,
         priority: 3,
         notes: "Not in the department sheet — the generic 'ACCUQUAL Forms' batch (22 form types across every department), each also reachable from its own real Document Folders subfolder",
+        section: "quality",
       },
       {
         key: "scar_forms",
@@ -508,6 +532,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
         kpi: false,
         priority: 3,
         notes: "Not in the department sheet — one of the two real gaps the ACCUQUAL Forms batch review reported (a Supplier Corrective Action Request, distinct from a plain Supplier NCR)",
+        section: "quality",
       },
       {
         key: "quality_inspection_reports",
@@ -518,6 +543,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
         kpi: false,
         priority: 3,
         notes: "Not in the department sheet — the other real gap the ACCUQUAL Forms batch review reported (fills the generic 'Inspection Forms' placeholder)",
+        section: "quality",
       },
       {
         key: "risk",
@@ -532,11 +558,42 @@ export const NAV_STRUCTURE: NavGroup[] = [
         kpi: false,
         priority: 3,
         notes: "Not in the department sheet — new module, mirrors its own backend PERMISSION_MATRIX entry",
+        section: "quality",
       },
-      { key: "mgmt_system", label: "Management System", path: "/management-system", icon: Landmark, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
-      { key: "workflow", label: "Workflow Builder", path: "/workflow", icon: Workflow, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
-      { key: "ai", label: "AI Insights", path: "/ai", icon: Sparkles, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
-      { key: "digital_twin", label: "Digital Twin", path: "/digital-twin", icon: Boxes, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access" },
+      { key: "mgmt_system", label: "Management System", path: "/management-system", icon: Landmark, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access", section: "quality" },
+      {
+        key: "workflow",
+        label: "Workflow Builder",
+        path: "/workflow",
+        icon: Workflow,
+        access: {},
+        kpi: false,
+        priority: 3,
+        notes: "Not in the department sheet — unchanged access. Bare trigger/condition/action form, no visual canvas or run history yet (see the Workflow Engine maturity review) — advanced/technical until that ships.",
+        section: "advanced",
+      },
+      {
+        key: "ai",
+        label: "AI Insights",
+        path: "/ai",
+        icon: Sparkles,
+        access: {},
+        kpi: false,
+        priority: 3,
+        notes: "Not in the department sheet — unchanged access. A raw pipeline-picker + JSON console today, not a business-facing dashboard yet (see the buyer evaluation) — advanced/technical until that ships.",
+        section: "advanced",
+      },
+      {
+        key: "digital_twin",
+        label: "Digital Twin",
+        path: "/digital-twin",
+        icon: Boxes,
+        access: {},
+        kpi: false,
+        priority: 3,
+        notes: "Not in the department sheet — unchanged access. Real simulation/results/AI-interpretation code, but no in-app way to create a model yet (\"create one via the API/DB seed\") — a dead end for a real tenant, hidden until that exists.",
+        section: "advanced",
+      },
       {
         key: "onboarding",
         label: "Onboarding",
@@ -546,30 +603,59 @@ export const NAV_STRUCTURE: NavGroup[] = [
         kpi: false,
         priority: 3,
         notes: "Not in the department sheet — visible to every department, same as AI Insights/Workflow Builder; POST /onboarding/ai-generate has no department gate either",
+        section: "quality",
       },
-      // Admin-only in practice (each page's own AdminOnlyGuard + the real
-      // requireRole("admin") backend gate) — access: {} here just means
-      // "visible in the nav to every department", same as every other leaf
-      // in this catch-all group; there's no role dimension in the nav
-      // access model, only department. See the Tenant Admin UI review.
-      { key: "tenant_branding", label: "Tenant Branding", path: "/admin/tenant-branding", icon: Palette, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard" },
-      { key: "tenant_templates", label: "Tenant Templates", path: "/admin/tenant-templates", icon: FileUp, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard" },
-      { key: "tenant_ai", label: "Tenant AI Config", path: "/admin/tenant-ai", icon: Bot, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard" },
-      { key: "ai_usage", label: "AI Usage", path: "/admin/ai-usage", icon: TrendingUp, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard; BYOK usage dashboard" },
-      { key: "digital_twin_setup", label: "Digital Twin Setup", path: "/admin/digital-twin", icon: Cpu, access: {}, kpi: false, priority: 3, notes: "Admin only — see AdminOnlyGuard" },
+      // Phase 10 — these 6 separate leaves (Tenant Branding/Templates/AI
+      // Config/AI Usage/Digital Twin Setup/Roles & Permissions) collapsed
+      // into ONE "Admin Console" entry: the pages themselves are unchanged
+      // (each still has its own AdminOnlyGuard + real requireRole("admin")
+      // backend gate, and their URLs still work directly) — only the top
+      // nav's list of separate shortcuts is consolidated, since the console
+      // itself (see AdminConsoleLayout.tsx) now provides that same
+      // navigation as a persistent sidebar covering all 10 admin sections,
+      // not just these 6.
       {
-        key: "roles_permissions",
-        label: "Roles & Permissions",
-        path: "/admin/roles-permissions",
-        icon: ShieldCheck,
+        key: "admin_console",
+        label: "Admin Console",
+        path: "/admin",
+        icon: LayoutGrid,
         access: {},
         kpi: false,
         priority: 3,
-        notes: "Admin only — see AdminOnlyGuard; the self-service module replacing departmentAccess.ts's hardcoded PERMISSION_MATRIX",
+        notes: "Users & roles, permissions, AI/supplier/quality/receiving-inventory settings, system health, tenant settings — each section keeps its own real RBAC, not gated as a block",
+        section: "admin",
       },
     ],
   },
 ];
+
+/**
+ * Flat, de-duplicated registry of every leaf that maps to a real,
+ * permission-gated module (i.e. has a non-empty `access` map — a real
+ * ResourceKey in departmentAccess.ts). The System catch-all's ungated items
+ * (Document Control, Training, Workflow Builder, the admin-only pages, etc.)
+ * are deliberately excluded: they have no ResourceKey, are always visible to
+ * every department already, and aren't something a department gets
+ * "granted" in the Roles & Permissions sense.
+ *
+ * This is what lets TopNav.tsx show a department's dropdown ANY module it's
+ * been granted live access to (via department_permissions or a custom
+ * permission role), not just the ones structurally pre-wired into that
+ * department's own `items` array above.
+ */
+export const ALL_MODULE_LEAVES: NavLeaf[] = (() => {
+  const seen = new Set<string>();
+  const out: NavLeaf[] = [];
+  for (const group of NAV_STRUCTURE) {
+    for (const item of group.items) {
+      if (Object.keys(item.access).length === 0) continue;
+      if (seen.has(item.key)) continue;
+      seen.add(item.key);
+      out.push(item);
+    }
+  }
+  return out;
+})();
 
 export const SYSTEM_LABEL = "System";
 export const DASHBOARD_LEAF = { key: "dashboard", label: "Dashboard", path: "/", icon: LayoutDashboard };
@@ -577,6 +663,17 @@ export const PLATFORM_LEAF = { key: "platform", label: "Platform Admin", path: "
 
 /** Every KPI-flagged leaf's key that a live count exists for (GET /nav/kpi-counts). Pareto and Production Log are KPI="Yes" in the sheet but aren't countable the same way — see nav.controller.ts. */
 export const KPI_COUNT_KEYS = ["ncr", "capa", "8d", "di", "complaints"] as const;
+
+/**
+ * The System group's "advanced" leaves, derived from each leaf's own
+ * `section: "advanced"` tag above — used by TopNav.tsx to group the System
+ * dropdown into sections. The backend's db/defaultNavPreferences.ts (which
+ * seeds these hidden by default for every tenant) can't import this file —
+ * apps/web and services/api are separate deployables with no shared
+ * package — so it keeps its own copy of these same three key strings, with
+ * a comment pointing back here as the source of truth to keep them in sync.
+ */
+export const SYSTEM_ADVANCED_KEYS = NAV_STRUCTURE.flatMap((g) => g.items).filter((i) => i.section === "advanced").map((i) => i.key);
 
 /**
  * Looks up one leaf by key across every department's dropdown, plus the

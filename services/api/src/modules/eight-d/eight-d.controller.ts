@@ -4,6 +4,8 @@ import { eightD } from "../../drizzle/schema/eightD.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
+import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 
 export const baseHandlers = crudFactory(eightD, { entityName: "8D Report", idColumn: "id" });
 
@@ -19,6 +21,16 @@ const STEP_KEYS = [
   "d8_closure",
 ] as const;
 
+/**
+ * Phase 9 — previously the one live, genuinely working transition endpoint
+ * in the whole app with ZERO audit trail / workflow event calls (confirmed
+ * by the Phase 9 workflow-engine research), so a completed 8D step was
+ * invisible to the record's own History tab and to any workflow definition
+ * reacting to "8d" events. Additive only — the step-progression logic above
+ * (no prior-step requirement, any step 1-8 in any order) is unchanged; this
+ * only adds observability on top of it, same treatment as the Document
+ * Revision fix right above.
+ */
 export const completeStepHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const step = Number(req.params.step);
@@ -36,6 +48,17 @@ export const completeStepHandler = asyncHandler(async (req: Request, res: Respon
     .set({ data: mergedData, currentStep: nextStep, updatedAt: new Date() })
     .where(and(eq(eightD.id, id), eq(eightD.tenantId, req.tenantId!)))
     .returning();
+
+  const isClosure = step === 8;
+  await recordAuditTrail(req.db!, {
+    tenantId: req.tenantId!,
+    entityType: "8D Report",
+    entityId: id,
+    action: isClosure ? "status_change" : "update",
+    changes: { subAction: "step_completed", step, stepKey, ...(isClosure ? { closed: true } : {}) },
+    performedBy: req.user?.id,
+  });
+  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "eight_d", event: isClosure ? "closed" : "step_completed", entityId: id });
 
   res.json(updated);
 });

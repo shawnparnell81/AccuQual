@@ -20,6 +20,13 @@ export interface SupplierPerformance {
   belowMinAlertCount: number;
   riskScore: "low" | "medium" | "high" | "no_data";
   riskPoints: number;
+  // Phase 7 — % of matched sent-request/receive pairs that arrived at or
+  // under OVERDUE_PENDING_THRESHOLD_DAYS; null with the same "no matched
+  // pairs yet" meaning as deliveryTimeliness.avgDays being null. Feeds the
+  // Supplier Quality Risk Score's delivery factor and the Supplier Portal's
+  // "On-Time Delivery %" KPI tile — computed here (not re-derived
+  // elsewhere) since this function already has the matched pairs in hand.
+  onTimeDeliveryPercent: number | null;
 }
 
 /**
@@ -54,6 +61,7 @@ export async function computeSupplierPerformance(db: TenantDb, tenantId: number,
       belowMinAlertCount: 0,
       riskScore: "no_data",
       riskPoints: 0,
+      onTimeDeliveryPercent: null,
     };
   }
 
@@ -95,6 +103,7 @@ export async function computeSupplierPerformance(db: TenantDb, tenantId: number,
 
   const avgDays = timelinessDays.length > 0 ? timelinessDays.reduce((a, b) => a + b, 0) / timelinessDays.length : null;
   const avgPercent = accuracyPercents.length > 0 ? accuracyPercents.reduce((a, b) => a + b, 0) / accuracyPercents.length : null;
+  const onTimeDeliveryPercent = timelinessDays.length > 0 ? (timelinessDays.filter((d) => d <= OVERDUE_PENDING_THRESHOLD_DAYS).length / timelinessDays.length) * 100 : null;
 
   // Simple, transparent point heuristic — not a black box: each factor
   // contributes 0-2 points, total 0-8 maps to low/medium/high.
@@ -115,6 +124,7 @@ export async function computeSupplierPerformance(db: TenantDb, tenantId: number,
     belowMinAlertCount,
     riskScore,
     riskPoints,
+    onTimeDeliveryPercent: onTimeDeliveryPercent === null ? null : Math.round(onTimeDeliveryPercent * 10) / 10,
   };
 }
 

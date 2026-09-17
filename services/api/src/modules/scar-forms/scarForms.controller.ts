@@ -12,9 +12,10 @@ async function loadScar(req: Request, id: number) {
 }
 
 export const listScarFormsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { status } = req.query as Record<string, string | undefined>;
+  const { status, supplierId } = req.query as Record<string, string | undefined>;
   const conditions = [eq(scarForms.tenantId, req.tenantId!)];
   if (status) conditions.push(eq(scarForms.status, status));
+  if (supplierId) conditions.push(eq(scarForms.supplierId, Number(supplierId)));
   const rows = await req.db!.select().from(scarForms).where(and(...conditions)).orderBy(desc(scarForms.createdAt));
   res.json(rows);
 });

@@ -19,9 +19,18 @@ const STATE_CHANGING_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
  * see the Audit Trail Dictionary for that limitation.
  */
 const ROUTE_ENTITY_TYPES: Record<string, string> = {
-  ncr: "ncr",
-  capa: "capa",
-  quality: "discrepancy_investigation",
+  // Phase 9 fix — ncr/capa/quality were still on their PRE-casing-fix
+  // values ("ncr"/"capa"/"discrepancy_investigation"). Every module's own
+  // successful-path recordAuditTrail calls were aligned to crudFactory's
+  // casing a while back (see workflow.controller.ts's own MODULE_ENTITY_TYPES
+  // comment on that fix), but this map was never updated to match — meaning
+  // a FAILED ncr/capa/quality transition (400/403/500) was logged under a
+  // different entityType than every successful one, making it silently
+  // invisible in that record's own History tab. Confirmed via direct grep
+  // of each module's real recordAuditTrail calls before fixing.
+  ncr: "NCR",
+  capa: "CAPA",
+  quality: "Discrepancy investigation",
   audits: "Audit",
   equipment: "Equipment",
   documents: "Document",
@@ -29,6 +38,16 @@ const ROUTE_ENTITY_TYPES: Record<string, string> = {
   suppliers: "Supplier",
   rma: "Rma",
   "work-orders": "WorkOrder",
+  // Phase 9 additions — real modules with a real transition/status concept
+  // that weren't covered here before (their successful-path casing,
+  // confirmed directly against each module's own recordAuditTrail calls).
+  "8d": "8D Report",
+  warranty: "WarrantyClaim",
+  crar: "Crar",
+  "rma-log": "RmaLog",
+  erp: "PurchaseOrder",
+  inventory: "InventoryItem",
+  risk: "RiskAssessment",
 };
 
 /**
@@ -59,6 +78,17 @@ function inferFailedTransitionTarget(req: Request): { entityType: string; entity
  * resolvable record id and tenant context, get logged; everything else is
  * silently skipped rather than guessed at. Never awaited by the caller and
  * never throws, so it can't delay or break the real error response.
+ *
+ * Phase 9 task 2 — "Add audit trail: 'Permission denied for workflow
+ * transition.'" Before this phase, only 2 of ~15 modules (CRAR, RMA-Log)
+ * ever logged a real `action: "permission_denied"` entry, each with its
+ * own hand-written call site. Since EVERY state-changing request already
+ * flows through this one centralized handler on a 403, this single change
+ * gives every recognized module (see ROUTE_ENTITY_TYPES above) a real,
+ * consistent "permission denied" entry for free — no per-module code
+ * changes needed, and CRAR/RMA-Log's own existing calls are unaffected
+ * (this only fires for requests that reach this top-level handler with no
+ * earlier permission_denied entry already recorded).
  */
 function logFailedTransition(req: Request, err: unknown, statusCode: number): void {
   if (!STATE_CHANGING_METHODS.has(req.method) || req.tenantId === undefined) return;
@@ -66,17 +96,20 @@ function logFailedTransition(req: Request, err: unknown, statusCode: number): vo
   if (!target) return;
 
   const errorMessage = err instanceof ZodError ? "Request failed validation" : err instanceof Error ? err.message : "Unknown error";
+  const isPermissionDenied = statusCode === 403;
 
   recordAuditTrailStandalone(pool, {
     tenantId: req.tenantId,
     entityType: target.entityType,
     entityId: target.entityId,
-    action: "transition_failed",
+    action: isPermissionDenied ? "permission_denied" : "transition_failed",
     changes: {
+      message: isPermissionDenied ? "Permission denied for workflow transition" : undefined,
       attemptedTransition: `${req.method} ${req.path}`,
       errorMessage,
       statusCode,
       userRole: req.user?.roleName ?? null,
+      userDepartment: req.user?.department ?? null,
       ...(err instanceof ZodError ? { validationDetails: err.flatten() } : {}),
     },
     performedBy: req.user?.id,

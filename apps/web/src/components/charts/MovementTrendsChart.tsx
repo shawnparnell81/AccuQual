@@ -1,13 +1,14 @@
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { MovementTrendPoint } from "../../api/types";
+import { CHART_COLORS } from "./chartPalette";
 
 const COLORS: Record<string, string> = {
-  receive: "#10b981",
-  consume: "#f59e0b",
-  produce: "#60a5fa",
-  adjust: "#a78bfa",
-  scrap: "#e11d48",
-  transfer: "#94a3b8",
+  receive: CHART_COLORS.resolved,
+  consume: CHART_COLORS.attention,
+  produce: CHART_COLORS.active,
+  adjust: CHART_COLORS.waiting,
+  scrap: CHART_COLORS.critical,
+  transfer: CHART_COLORS.inert,
 };
 
 const SERIES = ["receive", "consume", "produce", "adjust", "scrap", "transfer"] as const;

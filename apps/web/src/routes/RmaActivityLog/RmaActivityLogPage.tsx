@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { TextField } from "../../components/forms/Field";
 import type { RmaActivityLogEntry } from "../../api/types";
+import { formatDateTime } from "../../lib/dates";
 
 const rmaActivityLogHooks = createResourceHooks<RmaActivityLogEntry>("rma-activity-log");
 
@@ -55,7 +56,7 @@ export function RmaActivityLogPage() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.id} className="border-t border-border align-top">
-                <td className="py-1.5 whitespace-nowrap text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</td>
+                <td className="py-1.5 whitespace-nowrap text-muted-foreground">{formatDateTime(r.createdAt)}</td>
                 <td className="py-1.5 font-medium">{EVENT_LABELS[r.event] ?? r.event}</td>
                 <td className="py-1.5">
                   {r.rmaId ? (

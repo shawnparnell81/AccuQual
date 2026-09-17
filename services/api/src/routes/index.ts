@@ -17,12 +17,21 @@ import { supplierRouter } from "../modules/supplier/supplier.routes.js";
 import { calibrationRouter } from "../modules/calibration/calibration.routes.js";
 import { complaintsRouter } from "../modules/complaints/complaints.routes.js";
 import { workflowRouter } from "../modules/workflow/workflow.routes.js";
+// Phase 9 — registers the real workflow action handlers (send_email,
+// create_ncr, escalate_capa, ai_suggestion, ...) into workflow-engine.ts's
+// registry via its module-level registerActionHandler() side effects.
+// Imported for that side effect alone (no exports used) — must load
+// before any request can reach POST /workflow/:id/run, so it's imported
+// right alongside the router it backs, in the one file every real server
+// AND every integration test's createApp() both already load.
+import "../modules/workflow/workflowActions.js";
 import { aiRouter } from "../modules/ai/ai.routes.js";
 import { digitalTwinRouter } from "../modules/digital-twin/digital-twin.routes.js";
 import { auditTrailRouter } from "../modules/audit-trail/audit-trail.routes.js";
 import { formsRouter } from "../modules/forms/forms.routes.js";
 import { platformRouter } from "../modules/platform/platform.routes.js";
 import { navRouter } from "../modules/nav/nav.routes.js";
+import { notificationsRouter } from "../modules/notifications/notification.routes.js";
 import { inventoryRouter } from "../modules/inventory/inventory.routes.js";
 import { erpRouter } from "../modules/erp/erp.routes.js";
 import { erpRequisitionsRouter } from "../modules/erp/erpRequisitions.routes.js";
@@ -46,6 +55,8 @@ import { crarRouter } from "../modules/crar/crar.routes.js";
 import { rmaActivityLogRouter } from "../modules/rma-activity-log/rmaActivityLog.routes.js";
 import { rmaLogRouter } from "../modules/rma-log/rmaLog.routes.js";
 import { permissionsRouter } from "../modules/permissions/permissions.routes.js";
+import { reportingRouter } from "../modules/reporting/reporting.routes.js";
+import { systemHealthRouter } from "../modules/system-health/systemHealth.routes.js";
 
 export const apiRouter = Router();
 
@@ -70,6 +81,7 @@ apiRouter.use("/workflow", workflowRouter);
 apiRouter.use("/ai", aiRouter);
 apiRouter.use("/digital-twin", digitalTwinRouter);
 apiRouter.use("/audit-trail", auditTrailRouter);
+apiRouter.use("/notifications", notificationsRouter);
 apiRouter.use("/forms", formsRouter);
 apiRouter.use("/platform", platformRouter);
 apiRouter.use("/nav", navRouter);
@@ -100,3 +112,5 @@ apiRouter.use("/crar", crarRouter);
 apiRouter.use("/rma-activity-log", rmaActivityLogRouter);
 apiRouter.use("/rma-log", rmaLogRouter);
 apiRouter.use("/permissions", permissionsRouter);
+apiRouter.use("/reporting", reportingRouter);
+apiRouter.use("/system-health", systemHealthRouter);

@@ -108,6 +108,13 @@ export function ErpPurchaseOrdersPage() {
           { header: "ID", accessor: (po) => `#${po.id}` },
           { header: "Supplier", accessor: (po) => po.supplierName ?? "—" },
           { header: "Status", accessor: (po) => <StatusBadge value={po.status} /> },
+          { header: "Total Value", accessor: (po) => (po.totalValue ? `$${po.totalValue.toFixed(2)}` : "—") },
+          // timeZone: "UTC" — expectedDeliveryDate is a real date-only value
+          // (stored at exact UTC midnight, see erp.controller.ts), not a
+          // moment in time; letting toLocaleDateString convert it to the
+          // viewer's local timezone can shift it back a calendar day (e.g.
+          // 2026-10-15 rendering as 10/14 for anyone west of UTC).
+          { header: "Expected Delivery", accessor: (po) => (po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString(undefined, { timeZone: "UTC" }) : "—") },
           { header: "Created", accessor: (po) => new Date(po.createdAt).toLocaleDateString() },
           { header: "Notes", accessor: (po) => po.notes ?? "—" },
         ]}

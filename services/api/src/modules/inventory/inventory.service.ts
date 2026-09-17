@@ -6,6 +6,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { notifyDepartment } from "../notifications/notification.service.js";
 import type { InventorySettings } from "../settings/settings.service.js";
+import { consumeFromLot } from "./inventoryLots.service.js";
 
 const DEFAULT_LOCATION = "default";
 
@@ -35,7 +36,7 @@ async function setOnHand(db: TenantDb, tenantId: number, itemId: number, locatio
 }
 
 export interface MovementInput {
-  movementType: "receive" | "consume" | "produce" | "adjust" | "scrap" | "transfer";
+  movementType: "receive" | "consume" | "produce" | "adjust" | "scrap" | "transfer" | "return";
   quantity: number; // positive magnitude, except "adjust" which passes a signed delta
   fromLocation?: string;
   toLocation?: string;
@@ -46,6 +47,8 @@ export interface MovementInput {
   /** Caller-supplied — auto-generated instead when unset and settings say to (see generateTrackingNumber below). */
   lotNumber?: string;
   serialNumber?: string;
+  /** Phase 8 — ties this movement to a real inventory_lots row; see inventoryLots.service.ts. */
+  lotId?: number;
 }
 
 /**
@@ -83,7 +86,8 @@ export async function applyMovement(db: TenantDb, tenantId: number, itemId: numb
       break;
     }
     case "consume":
-    case "scrap": {
+    case "scrap":
+    case "return": {
       const loc = input.fromLocation ?? DEFAULT_LOCATION;
       const row = await getOrCreateStockRow(db, tenantId, itemId, loc);
       await setOnHand(db, tenantId, itemId, loc, Number(row.onHand) - input.quantity, performedBy);
@@ -139,9 +143,18 @@ export async function applyMovement(db: TenantDb, tenantId: number, itemId: numb
       referenceId: input.referenceId,
       lotNumber,
       serialNumber,
+      lotId: input.lotId,
       performedBy,
     })
     .returning();
+
+  // Phase 8 — decrement the real per-lot ledger on any outbound movement
+  // against a tracked lot (transfer moves between locations, not out of
+  // inventory at all, so it's excluded — see inventoryLots.service.ts's
+  // own comment on why this never goes negative on its own).
+  if (input.lotId && (input.movementType === "consume" || input.movementType === "scrap" || input.movementType === "return")) {
+    await consumeFromLot(db, tenantId, input.lotId, input.quantity);
+  }
 
   await recomputeState(db, tenantId, itemId, performedBy);
   return { movement, totalBefore };

@@ -3,7 +3,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requirePlatformAdmin } from "../../lib/tenantScope.js";
 import { validate } from "../../middleware/validate.js";
 import { createTenantSchema, updateTenantSchema } from "./platform.validation.js";
-import { createTenantHandler, listTenantsHandler, updateTenantHandler, deleteTenantHandler } from "./platform.controller.js";
+import { createTenantHandler, listTenantsHandler, updateTenantHandler, deleteTenantHandler, getAiOverviewHandler } from "./platform.controller.js";
 
 /**
  * Platform-admin-only, cross-tenant routes (tenant provisioning/management —
@@ -17,3 +17,4 @@ platformRouter.get("/tenants", listTenantsHandler);
 platformRouter.post("/tenants", validate(createTenantSchema), createTenantHandler);
 platformRouter.patch("/tenants/:id", validate(updateTenantSchema), updateTenantHandler);
 platformRouter.delete("/tenants/:id", deleteTenantHandler);
+platformRouter.get("/ai-overview", getAiOverviewHandler);

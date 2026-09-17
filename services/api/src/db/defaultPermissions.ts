@@ -199,4 +199,22 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   rma_log: { quality: "edit", customer_service: "edit", engineering: "read", purchasing: "read", material_management: "read" },
   rma_log_status: { quality: "edit", customer_service: "edit" },
   rma_log_linkage: { quality: "edit", customer_service: "edit" },
+  // Phase 8 — Quality Inspection Reports had NO RBAC gate at all before
+  // this (a real, ungated-since-creation gap, not a deliberate design —
+  // see qualityInspectionReports.routes.ts's own old comment). Mirrors the
+  // "erp" resource's own split exactly (Quality owns inspection outcomes;
+  // Purchasing/Material Management need read visibility since a rejected
+  // receiving inspection is their supplier/goods-movement concern too),
+  // since incoming inspection is functionally the quality half of the same
+  // receiving event erp's own resource key gates the paperwork half of.
+  quality_inspection: { quality: "edit", purchasing: "read", material_management: "read" },
+  // Phase 9 — the Workflow Builder (`/workflow`) previously had NO RBAC gate
+  // at all beyond requireAuth: any authenticated user of any department
+  // could create/run a workflow definition that fires real actions
+  // (send an email, auto-create an NCR/CAPA) against this tenant's data.
+  // Quality owns editing (same "quality owns process/workflow config"
+  // reasoning as every other module's disposition-authority role);
+  // Engineering gets read visibility since several templates target
+  // engineering-relevant modules (8D, document revision).
+  workflow: { quality: "edit", engineering: "read" },
 };

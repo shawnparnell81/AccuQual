@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCurrentUser } from "../../hooks/useAuth";
@@ -7,12 +8,15 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
+import { EntityAuditTrailPanel } from "../../components/shared/EntityAuditTrailPanel";
 import { SelectField } from "../../components/forms/Field";
 import { CrarFormRenderer } from "./CrarFormRenderer";
-import type { CrarClaim, CrarStatus, WarrantyClaim } from "../../api/types";
+import type { CrarClaim, CrarStatus, WarrantyClaim, RmaLogRecord, Customer } from "../../api/types";
 
 const crarHooks = createResourceHooks<CrarClaim>("crar");
 const warrantyHooks = createResourceHooks<WarrantyClaim>("warranty/claims");
+const rmaLogHooks = createResourceHooks<RmaLogRecord>("rma-log");
+const customerHooks = createResourceHooks<Customer>("customers");
 
 /** Same allowed-next-status shape as crar.controller.ts's ALLOWED_NEXT — a fixed linear lifecycle, no branching. */
 const NEXT_STATUS: Record<CrarStatus, { status: CrarStatus; label: string } | null> = {
@@ -35,10 +39,17 @@ export function CrarDetailPage() {
   const crarId = Number(id);
   const { data: record, isLoading } = crarHooks.useOne(crarId);
   const { data: warrantyClaims = [] } = warrantyHooks.useList();
+  const { data: rmaLogRecords = [] } = rmaLogHooks.useList();
+  const { data: customers = [] } = customerHooks.useList();
   const currentUser = useCurrentUser();
   const toast = useToast();
+  const queryClient = useQueryClient();
   const updateCrar = crarHooks.useUpdate();
-  const transitionAction = useWorkflowAction<{ id: number; status: string }>("crar", "transition", { successMessage: "CRAR status updated." });
+  const auditTrailKey = ["audit-trail", "Crar", crarId];
+  const transitionAction = useWorkflowAction<{ id: number; status: string }>("crar", "transition", {
+    successMessage: "CRAR status updated.",
+    invalidateKeys: [auditTrailKey],
+  });
 
   const [draft, setDraft] = useState<Partial<CrarClaim>>({});
   useEffect(() => {
@@ -60,6 +71,7 @@ export function CrarDetailPage() {
   function save() {
     const patch = isLinkOnly ? { warrantyId: draft.warrantyId } : draft;
     updateCrar.mutate({ id: crarId, ...patch } as never, {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: auditTrailKey }),
       onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save this CRAR.")),
     });
   }
@@ -142,7 +154,50 @@ export function CrarDetailPage() {
                 {record.linkedRma.rmaNumber}
               </Link>
             ) : null}
+            {canEditContent ? (
+              <SelectField label="" value={draft.rmaLogId ?? ""} onChange={(e) => setDraft({ ...draft, rmaLogId: e.target.value ? Number(e.target.value) : null })}>
+                <option value="">None</option>
+                {rmaLogRecords.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.rmaNumber}
+                  </option>
+                ))}
+              </SelectField>
+            ) : record.linkedRmaLog ? (
+              <Link to={`/rma-log/${record.linkedRmaLog.id}`} className="text-primary hover:underline">
+                RMA Log {record.linkedRmaLog.rmaNumber} ({record.linkedRmaLog.status.replace(/_/g, " ")})
+              </Link>
+            ) : (
+              <p className="text-muted-foreground">No linked RMA Log entry.</p>
+            )}
           </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="mb-2 text-sm font-medium">Customer Contact</h3>
+          {canEditContent && (
+            <SelectField label="" value={draft.customerId ?? ""} onChange={(e) => setDraft({ ...draft, customerId: e.target.value ? Number(e.target.value) : null })}>
+              <option value="">None — inherit from linked Warranty claim</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.legalName}
+                </option>
+              ))}
+            </SelectField>
+          )}
+          {record.customer ? (
+            <div className="mt-2 flex flex-col gap-1 text-sm">
+              <p className="font-medium">{record.customer.legalName}</p>
+              <p className="text-muted-foreground">{record.customer.primaryContactEmail ?? "No email on file"}</p>
+              <p className="text-muted-foreground">{record.customer.primaryContactPhone ?? "No phone on file"}</p>
+            </div>
+          ) : (
+            !canEditContent && (
+              <p className="text-sm text-muted-foreground">
+                No customer linked — set via a linked Warranty claim, or attach an existing customer from the Customer Onboarding module.
+              </p>
+            )
+          )}
         </div>
       </div>
 
@@ -156,6 +211,11 @@ export function CrarDetailPage() {
 
       <div className="print:hidden">
         <AttachmentsPanel entityType="crar" entityId={crarId} title="Evidence, Photos & Supporting Documents" />
+      </div>
+
+      {/* Phase 2 fix ("Ensure CRAR audit trail shows real actor names") — CRAR had no history display at all before this. */}
+      <div className="print:hidden">
+        <EntityAuditTrailPanel entityType="Crar" entityId={crarId} />
       </div>
     </div>
   );

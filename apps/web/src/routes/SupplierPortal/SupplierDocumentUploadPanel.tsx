@@ -6,6 +6,12 @@ import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { TextField } from "../../components/forms/Field";
 import type { SupplierDocument } from "../../api/types";
 
+// Phase 7 task 2 — explicit categories the brief names (certificates,
+// corrective action evidence) alongside the pre-existing free-text
+// convention; "Other" still lets a supplier type anything not listed, so
+// this is additive, not a new restriction on what category can be.
+const DOCUMENT_CATEGORIES = ["Certificate", "Corrective Action Evidence", "PPAP Document", "Procedure", "Other"] as const;
+
 /** Ongoing document management (post-onboarding) — ISO cert renewals, updated procedures, whatever the supplier needs on file. No approval workflow, unlike onboarding — this is a library, not a gate. */
 export function SupplierDocumentUploadPanel({ supplierId }: { supplierId?: number }) {
   const toast = useToast();
@@ -13,6 +19,7 @@ export function SupplierDocumentUploadPanel({ supplierId }: { supplierId?: numbe
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
+  const [otherCategory, setOtherCategory] = useState("");
 
   const { data: docs = [], isLoading } = useQuery<SupplierDocument[]>({
     queryKey: ["supplier-portal/documents/list", supplierId ?? null],
@@ -24,7 +31,8 @@ export function SupplierDocumentUploadPanel({ supplierId }: { supplierId?: numbe
       const body = new FormData();
       body.append("file", file);
       body.append("name", name || file.name);
-      if (category) body.append("category", category);
+      const resolvedCategory = category === "Other" ? otherCategory : category;
+      if (resolvedCategory) body.append("category", resolvedCategory);
       if (supplierId) body.append("supplierId", String(supplierId));
       return (await apiClient.post("/supplier-portal/documents/upload", body)).data;
     },
@@ -32,6 +40,7 @@ export function SupplierDocumentUploadPanel({ supplierId }: { supplierId?: numbe
       queryClient.invalidateQueries({ queryKey: ["supplier-portal/documents/list"] });
       setName("");
       setCategory("");
+      setOtherCategory("");
       toast.success("Document uploaded.");
     },
     onError: async (err) => toast.error(await extractErrorMessageAsync(err, "Couldn't upload this document.")),
@@ -41,7 +50,18 @@ export function SupplierDocumentUploadPanel({ supplierId }: { supplierId?: numbe
     <div className="flex flex-col gap-4">
       <div className="grid gap-2 rounded-lg border border-border bg-card p-4 sm:grid-cols-3">
         <TextField label="Document Name" value={name} onChange={(e) => setName(e.target.value)} />
-        <TextField label="Category (optional)" placeholder="e.g. Certification, Procedure" value={category} onChange={(e) => setCategory(e.target.value)} />
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Category (optional)</span>
+          <select value={category} onChange={(e) => setCategory(e.target.value)} className="rounded-md border border-form-field bg-background px-3 py-2 text-sm">
+            <option value="">None</option>
+            {DOCUMENT_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          {category === "Other" && <input value={otherCategory} onChange={(e) => setOtherCategory(e.target.value)} placeholder="Describe the category" className="mt-1 rounded-md border border-form-field bg-background px-3 py-2 text-sm" />}
+        </label>
         <div className="flex items-end">
           <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => e.target.files?.[0] && upload.mutate(e.target.files[0])} />
           <button

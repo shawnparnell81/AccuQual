@@ -1,6 +1,8 @@
 import { pgTable, serial, text, integer, timestamp, numeric } from "drizzle-orm/pg-core";
 import { tenants } from "./tenants.js";
 import { users } from "./users.js";
+import { suppliers } from "./supplier.js";
+import { erpReceivingLineItems } from "./erp.js";
 
 /**
  * Quality Inspection Report — the second of the two forms reported as real
@@ -26,6 +28,17 @@ export const qualityInspectionReports = pgTable("quality_inspection_reports", {
   totalQuantity: text("total_quantity"),
   sampleSize: text("sample_size"),
   finalStatus: text("final_status"), // accepted | rejected | rework_required | accepted_via_deviation
+  // Phase 8 — real FK/structured fields added ALONGSIDE the free-text ones
+  // above (supplierVendor/poJobNo/batchLotNo stay as-is, never repurposed,
+  // for backward compatibility with every report entered before this
+  // phase): supplierId/receivingLineItemId let a receiving inspection
+  // actually join back to the real supplier/PO/receiving record it was
+  // performed against, instead of a human-typed name/number a report and
+  // its receiving document could silently disagree on.
+  supplierId: integer("supplier_id").references(() => suppliers.id),
+  receivingLineItemId: integer("receiving_line_item_id").references(() => erpReceivingLineItems.id),
+  defectCategory: text("defect_category"),
+  inspectionMethod: text("inspection_method"), // visual | dimensional | functional | documentation | other
   notesRemarks: text("notes_remarks"),
   inspectorSignature: text("inspector_signature"),
   inspectorSignatureDate: timestamp("inspector_signature_date"),
@@ -46,6 +59,14 @@ export const qualityInspectionItems = pgTable("quality_inspection_items", {
   specification: text("specification"),
   actualFinding: text("actual_finding"),
   result: text("result"), // pass | fail
+  // Phase 8 — real numeric measurement fields alongside the free-text
+  // specification/actualFinding above (kept as-is: a spec is often prose,
+  // e.g. "per drawing rev C", not always a numeric range) — filled in only
+  // when the checklist row actually has a measurable numeric result.
+  specMin: numeric("spec_min"),
+  specMax: numeric("spec_max"),
+  actualValue: numeric("actual_value"),
+  measurementUnit: text("measurement_unit"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });

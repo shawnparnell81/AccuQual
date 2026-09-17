@@ -11,6 +11,19 @@ interface CrudOptions {
   entityName: string;
   idColumn: string; // e.g. "id"
   softDelete?: boolean; // if true, DELETE sets isDeleted instead of removing the row
+  /**
+   * Phase 2 NCR unified-data-model fix: optional side effects run inside the
+   * same request (after the row is written, before the response is sent) —
+   * added so ncr.controller.ts can keep the official NCR document (a
+   * separate form_data row, see ncr.formSync.ts) in sync with the bare
+   * row's own fields without every other crudFactory caller needing to
+   * know or care. Errors here propagate like anything else in an
+   * asyncHandler — same "let it throw" rule the audit trail already
+   * follows (see audit-trail.service.ts's recordAuditTrail comment), not
+   * swallowed.
+   */
+  afterCreate?: (created: Record<string, unknown>, req: Request) => Promise<void>;
+  afterUpdate?: (updated: Record<string, unknown>, req: Request) => Promise<void>;
 }
 
 /**
@@ -22,6 +35,21 @@ interface CrudOptions {
  * these fields from the client, validated or not.
  */
 const CLIENT_OWNED_FIELD_BLOCKLIST = ["id", "tenantId", "createdAt", "createdBy"];
+
+/**
+ * Phase 11 performance pass — this generic `list` had NO limit at all
+ * (confirmed: 13 modules' list endpoints, and DashboardPage.tsx's own
+ * `.useList()` calls, all fetch every row of every tenant-scoped table with
+ * no bound). A real pagination rewrite (new query params, a paginated
+ * response envelope) would be a breaking change to every `useList()` caller
+ * across the frontend — out of scope for a polish phase per "do not modify
+ * architecture from earlier phases." This is a non-breaking safety net
+ * instead: the response shape stays a plain array exactly as before, just
+ * capped so a tenant that accumulates unusually many rows on one table
+ * can't turn one dashboard load into an unbounded query. High enough that
+ * no real list page hits it under normal use.
+ */
+const LIST_SAFETY_LIMIT = 2000;
 
 export function stripClientOwnedFields(body: Record<string, unknown>): Record<string, unknown> {
   const clean = { ...body };
@@ -46,7 +74,7 @@ export function stripClientOwnedFields(body: Record<string, unknown>): Record<st
 export function crudFactory(table: PgTable, options: CrudOptions) {
   const untypedDbOf = (db: TenantDb) =>
     db as unknown as {
-      select: () => { from: (t: unknown) => { where: (w: unknown) => Promise<unknown[]> } & Promise<unknown[]> };
+      select: () => { from: (t: unknown) => { where: (w: unknown) => { limit: (n: number) => Promise<unknown[]> } & Promise<unknown[]> } & Promise<unknown[]> };
       insert: (t: unknown) => { values: (v: unknown) => { returning: () => Promise<unknown[]> } };
       update: (t: unknown) => { set: (v: unknown) => { where: (w: unknown) => { returning: () => Promise<unknown[]> } } };
       delete: (t: unknown) => { where: (w: unknown) => { returning: () => Promise<unknown[]> } };
@@ -61,7 +89,7 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
 
   const list = asyncHandler(async (req: Request, res: Response) => {
     const { db, tenantId } = requireTenantDb(req);
-    const rows = await db.select().from(table).where(eq(tenantCol as never, tenantId));
+    const rows = await db.select().from(table).where(eq(tenantCol as never, tenantId)).limit(LIST_SAFETY_LIMIT);
     res.json(rows);
   });
 
@@ -98,6 +126,7 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
       entityId: createdId,
       content: JSON.stringify(req.body),
     });
+    if (options.afterCreate) await options.afterCreate(created as Record<string, unknown>, req);
     res.status(201).json(created);
   });
 
@@ -118,6 +147,7 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
       changes: req.body,
       performedBy: req.user?.id,
     });
+    if (options.afterUpdate) await options.afterUpdate(updated as Record<string, unknown>, req);
     res.json(updated);
   });
 

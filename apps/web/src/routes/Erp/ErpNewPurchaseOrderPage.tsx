@@ -34,6 +34,7 @@ export function ErpNewPurchaseOrderPage() {
 
   const [supplierId, setSupplierId] = useState("");
   const [notes, setNotes] = useState("");
+  const [expectedDeliveryDate, setExpectedDeliveryDate] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
 
   const updateLine = (i: number, patch: Partial<DraftLine>) => setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -53,6 +54,7 @@ export function ErpNewPurchaseOrderPage() {
             {
               supplierId: Number(supplierId),
               notes: notes || undefined,
+              expectedDeliveryDate: expectedDeliveryDate || undefined,
               lineItems: lines.map((l) => ({
                 itemId: Number(l.itemId),
                 quantity: Number(l.quantity),
@@ -71,7 +73,7 @@ export function ErpNewPurchaseOrderPage() {
         }}
       >
         <div className="rounded-lg border border-border bg-card p-4">
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-3">
             <SelectField label="Supplier" required value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
               <option value="">Select a supplier…</option>
               {suppliers.map((s) => (
@@ -80,6 +82,7 @@ export function ErpNewPurchaseOrderPage() {
                 </option>
               ))}
             </SelectField>
+            <TextField label="Expected Delivery Date (optional)" type="date" value={expectedDeliveryDate} onChange={(e) => setExpectedDeliveryDate(e.target.value)} />
             <TextField label="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
         </div>

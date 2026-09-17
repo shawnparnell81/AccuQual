@@ -1,4 +1,5 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CHART_COLORS } from "./chartPalette";
 
 export interface ScrapByItemDatum {
   sku: string;
@@ -17,7 +18,7 @@ export function ScrapDistributionChart({ data }: { data: ScrapByItemDatum[] }) {
         <XAxis type="number" tickLine={false} axisLine={false} allowDecimals={false} tick={{ fill: "hsl(var(--muted-foreground))" }} />
         <YAxis type="category" dataKey="sku" tickLine={false} axisLine={false} width={90} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
         <Tooltip />
-        <Bar dataKey="quantity" fill="#e11d48" radius={[0, 6, 6, 0]} />
+        <Bar dataKey="quantity" fill={CHART_COLORS.critical} radius={[0, 6, 6, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

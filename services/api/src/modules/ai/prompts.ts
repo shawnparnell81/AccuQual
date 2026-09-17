@@ -109,3 +109,79 @@ Respond as strict JSON: { "severity": number, "probability": number, "rationale"
 
 Risk context:
 ${JSON.stringify(input, null, 2)}`;
+
+/** Phase 4 — NCR triage. A suggestion only: the quality engineer reviews and applies it manually via the NCR's own normal severity field / department assignment, never auto-applied. */
+export const ncrTriagePrompt = (input: unknown) => `You are AccuQual's NCR triage assistant. Given a newly-reported nonconformance's title and description, suggest the most likely severity and which department should own investigating it. If any similar past NCRs are given, use them to judge whether this looks like a recurring issue.
+
+Respond as strict JSON: { "suggestedSeverity": "low" | "medium" | "high" | "critical", "suggestedDepartment": string, "rationale": string, "similarPastNcrs": string[] }
+
+NCR:
+${JSON.stringify(input, null, 2)}`;
+
+/** Phase 4 — Supplier communication drafting. Always a draft for a human to review/edit before sending — supplier-portal.controller.ts's messaging endpoint is a separate, explicit user action, never called automatically from here. */
+export const supplierMessageDraftPrompt = (input: unknown) => `You are AccuQual's supplier relations assistant. Draft a professional message to a supplier based on the given context (e.g. a quality issue, a corrective-action request, an overdue delivery, or a scorecard concern). Keep it factual and specific to the data given — never invent a defect, date, or part number not present in the context.
+
+Respond as strict JSON: { "subject": string, "body": string, "tone": "informational" | "corrective_action_request" | "escalation" }
+
+Context:
+${JSON.stringify(input, null, 2)}`;
+
+/**
+ * Phase 6 Reporting & Analytics Hub — AI-assisted report summaries.
+ * Deliberately generic across the 4 kinds the phase names (quality trends,
+ * supplier risk changes, warranty patterns, production deviations): each
+ * is "summarize this real, already-aggregated rollup for a manager," not
+ * a distinct analysis task, so one prompt + one output schema covers all
+ * 4 (the caller's `kind` just changes which real reporting.service.ts
+ * aggregation feeds `input`). Always a non-authoritative note — never
+ * written back into any report/dashboard's own stored data, only shown
+ * alongside it.
+ */
+export const reportSummaryPrompt = (kind: string, input: unknown) => `You are AccuQual's reporting analyst. Given real, already-aggregated ${kind.replace(/_/g, " ")} data, write a short executive summary: what's notable, what's improving or worsening, and one or two concrete watch-items. Base this strictly on the numbers given — never invent a data point not present below.
+
+Respond as strict JSON: { "summary": string, "watchItems": string[], "trend": "improving" | "worsening" | "stable" | "insufficient_data" }
+
+Data:
+${JSON.stringify(input, null, 2)}`;
+
+/**
+ * Phase 9 — Workflow Actions' generic "ai_suggestion" action kind. A
+ * workflow definition can attach this to ANY trigger/condition path (NCR
+ * closed, receiving rejected, CAPA escalated, ...), so the prompt is
+ * deliberately generic across every real event context this app's
+ * `publishEvent(WORKFLOW_STREAM, ...)` calls already carry — not a
+ * per-module prompt like every other pipeline in this file. Always a
+ * non-authoritative note (same rule as every other AI pipeline in this
+ * app) — never applied back onto the triggering record automatically; see
+ * workflowActions.ts's own comment on what happens to its output.
+ */
+export const workflowAiNotePrompt = (input: unknown) => `You are AccuQual's workflow assistant. A workflow definition triggered this AI action in response to a real event in the system. Given the event's context data below, write a short, specific note a reviewer would find useful: what happened, why it might matter, and one concrete suggested next step. Base this strictly on the data given — never invent a detail not present below.
+
+Respond as strict JSON: { "note": string, "suggestedNextStep": string, "confidence": number }
+
+Event context:
+${JSON.stringify(input, null, 2)}`;
+
+/**
+ * Phase 8 — "AI-assisted inspection notes." Given a Quality Inspection
+ * Report's own checklist rows (parameter/spec/actual/pass-fail, and the
+ * new numeric measurement fields), drafts a plain-language summary for the
+ * report's Notes/Remarks field — a suggestion only: the inspector still
+ * reviews and saves it themselves (same "never auto-applied" rule as
+ * warranty triage below), and the report's own finalStatus disposition is
+ * never set by this pipeline.
+ */
+export const inspectionNotesPrompt = (input: unknown) => `You are AccuQual's quality inspection assistant. Given a real inspection report's checklist rows (each with a parameter, specification, actual finding/value, and pass/fail result), write a concise inspection-summary note suitable for the report's own Notes/Remarks field: what passed, what failed and why, and whether the failures suggest a specific defect category. Base this strictly on the rows given — never invent a measurement, parameter, or defect not present below.
+
+Respond as strict JSON: { "summary": string, "suggestedDefectCategory": string | null, "confidence": number }
+
+Checklist:
+${JSON.stringify(input, null, 2)}`;
+
+/** Phase 4 — Warranty triage. A suggestion only: the disposition is still recorded through the claim's own normal quality-review workflow (warranty.controller.ts), never auto-applied. */
+export const warrantyTriagePrompt = (input: unknown) => `You are AccuQual's warranty claims assistant. Given a warranty claim's failure description, product/part, and time-in-service, suggest a likely disposition and, if there's enough information, a rough repair/replacement cost estimate. Base this strictly on the data given.
+
+Respond as strict JSON: { "suggestedDisposition": "approve" | "deny" | "needs_inspection", "estimatedCost": number | null, "rationale": string }
+
+Claim:
+${JSON.stringify(input, null, 2)}`;

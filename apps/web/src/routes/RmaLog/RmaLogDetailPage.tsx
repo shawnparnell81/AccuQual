@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useWorkflowAccessLevel } from "../../hooks/useWorkflowAccess";
 import { useToast } from "../../components/shared/ToastProvider";
-import { apiClient } from "../../api/client";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
+import { EntityAuditTrailPanel } from "../../components/shared/EntityAuditTrailPanel";
 import { SelectField } from "../../components/forms/Field";
 import { RmaLogFormRenderer } from "./RmaLogFormRenderer";
 import type { RmaLogRecord, RmaLogStatus, WarrantyClaim } from "../../api/types";
@@ -23,42 +23,6 @@ const NEXT_STATUS: Record<RmaLogStatus, { status: RmaLogStatus; label: string } 
   dispositioned: { status: "closed", label: "Close" },
   closed: null,
 };
-
-interface AuditRow {
-  id: number;
-  action: string;
-  changes: Record<string, unknown> | null;
-  createdAt: string;
-}
-
-/** A small, page-specific audit trail viewer — GET /audit-trail/:entityType/:entityId is the app's own generic per-entity endpoint; the shared WorkflowHistoryPanel component's moduleName union doesn't cover rma_log (same as CRAR/Warranty, which don't use it either). */
-function AuditTrailPanel({ recordId }: { recordId: number }) {
-  const { data: rows = [], isLoading } = useQuery<AuditRow[]>({
-    queryKey: ["audit-trail", "RmaLog", recordId],
-    queryFn: async () => (await apiClient.get(`/audit-trail/RmaLog/${recordId}`)).data,
-  });
-  const sorted = [...rows].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-  return (
-    <div className="rounded-lg border border-border bg-card p-4 print:hidden">
-      <h3 className="mb-2 text-sm font-medium">Audit Trail</h3>
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : sorted.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No history yet.</p>
-      ) : (
-        <ul className="flex flex-col gap-1.5 text-sm">
-          {sorted.map((r) => (
-            <li key={r.id} className="flex items-center justify-between border-b border-border pb-1.5 last:border-0">
-              <span className="capitalize">{r.action.replace(/_/g, " ")}</span>
-              <span className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
 /**
  * RMA Log detail page — the JSON-schema form (RmaLogFormRenderer) plus
@@ -201,7 +165,7 @@ export function RmaLogDetailPage() {
         <AttachmentsPanel entityType="rma_log" entityId={recordId} title="Evidence, Photos & Supporting Documents" />
       </div>
 
-      <AuditTrailPanel recordId={recordId} />
+      <EntityAuditTrailPanel entityType="RmaLog" entityId={recordId} />
     </div>
   );
 }

@@ -44,7 +44,9 @@ export type ResourceKey =
   | "rma_log"
   | "rma_log_status"
   | "rma_log_linkage"
-  | "rma_activity_log";
+  | "rma_activity_log"
+  | "quality_inspection"
+  | "workflow";
 
 export const DEPARTMENTS: Department[] = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management", "sales_and_marketing"];
 
@@ -79,6 +81,8 @@ export const MODULE_LABELS: Record<ResourceKey, string> = {
   rma_log_status: "RMA Log — Status Changes",
   rma_log_linkage: "RMA Log — Warranty/Supplier Linkage",
   rma_activity_log: "RMA Activity Log (automated event trail)",
+  quality_inspection: "Quality Inspection Reports",
+  workflow: "Workflow Builder",
 };
 export const RESOURCE_KEYS: ResourceKey[] = Object.keys(MODULE_LABELS) as ResourceKey[];
 

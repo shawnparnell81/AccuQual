@@ -20,6 +20,8 @@ export async function loadTenantForSettings(db: TenantDb, tenantId: number): Pro
 export type FeasibilitySettings = NonNullable<Tenant["feasibilitySettings"]>;
 export type InventorySettings = NonNullable<Tenant["inventorySettings"]>;
 export type ErpSyncSettings = NonNullable<Tenant["erpSyncSettings"]>;
+export type SupplierRiskSettings = NonNullable<Tenant["supplierRiskWeights"]>;
+export type ReceivingSettings = NonNullable<Tenant["receivingSettings"]>;
 
 export function getFeasibilitySettings(tenant: Tenant): FeasibilitySettings {
   return tenant.feasibilitySettings ?? {};
@@ -31,4 +33,12 @@ export function getInventorySettings(tenant: Tenant): InventorySettings {
 
 export function getErpSyncSettings(tenant: Tenant): ErpSyncSettings {
   return tenant.erpSyncSettings ?? {};
+}
+
+export function getSupplierRiskSettings(tenant: Tenant): SupplierRiskSettings {
+  return tenant.supplierRiskWeights ?? {};
+}
+
+export function getReceivingSettings(tenant: Tenant): ReceivingSettings {
+  return tenant.receivingSettings ?? {};
 }

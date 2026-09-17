@@ -13,6 +13,7 @@ import { WorkflowActionButton } from "../../components/shared/WorkflowActionButt
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
+import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 
 const auditHooks = createResourceHooks<Audit>("audits");
@@ -23,6 +24,12 @@ interface AuditItem {
   finding: string | null;
   severity: string | null;
   evidence: string | null;
+}
+
+interface AuditPrepSuggestion {
+  focusAreas: string[];
+  openRisks: string[];
+  suggestedEvidence: string[];
 }
 
 export function AuditDetailPage() {
@@ -70,6 +77,53 @@ export function AuditDetailPage() {
               " requirements are typically relevant for an audit like this. Base it on any prior findings noted for this audit. This is a" +
               " draft for the auditor to review and adapt into the real Audit Plan document — not the document itself."
             }
+          />
+          <AiStructuredSuggestion<AuditPrepSuggestion>
+            endpoint="/ai/analysis"
+            title="AI Audit Prep Summary"
+            triggerLabel="AI Prep Summary"
+            acceptLabel="Acknowledge"
+            buildPayload={() => ({
+              kind: "audit_prep",
+              input: {
+                auditName: audit.name,
+                auditType: audit.type,
+                status: audit.status,
+                items: items.map((i) => ({ question: i.question, finding: i.finding, severity: i.severity })),
+              },
+            })}
+            // No onAccept — this is a non-authoritative summary (logged in
+            // ai_suggestions for traceability, per Phase 5's own "stored as
+            // non-authoritative notes" requirement), never written into any
+            // real audit field.
+            renderPreview={(output) => (
+              <div className="flex flex-col gap-3 text-sm">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Focus Areas</p>
+                  <ul className="list-inside list-disc">
+                    {output.focusAreas.map((a, i) => (
+                      <li key={i}>{a}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Open Risks</p>
+                  <ul className="list-inside list-disc">
+                    {output.openRisks.map((r, i) => (
+                      <li key={i}>{r}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Suggested Evidence to Have Ready</p>
+                  <ul className="list-inside list-disc">
+                    {output.suggestedEvidence.map((e, i) => (
+                      <li key={i}>{e}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
           />
           <WorkflowActionButton
             label="Start Audit"

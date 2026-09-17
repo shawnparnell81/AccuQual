@@ -91,6 +91,11 @@ export const inventoryMovements = pgTable("inventory_movements", {
   // didn't supply one — see inventory.service.ts's generateTrackingNumber.
   lotNumber: text("lot_number"),
   serialNumber: text("serial_number"),
+  // Phase 8 — links this movement to a real inventory_lots row (see that
+  // schema's own comment) when one exists for this item+lotNumber; null for
+  // movements on items/lots with no tracked-lot record (most historical
+  // rows, and any movement on an item that isn't lot-tracked).
+  lotId: integer("lot_id"),
 });
 
 export const inventoryAlerts = pgTable("inventory_alerts", {

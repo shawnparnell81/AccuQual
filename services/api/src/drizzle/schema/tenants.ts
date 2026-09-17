@@ -49,7 +49,16 @@ export const tenants = pgTable("tenants", {
    * when a tenant hasn't configured its own, same honest-stub fallback the
    * gateway already had.
    */
-  aiConfig: jsonb("ai_config").$type<{ provider?: "anthropic" | "openai"; apiKeyEncrypted?: string; modelName?: string; temperature?: number; maxTokens?: number; assistantName?: string }>(),
+  aiConfig: jsonb("ai_config").$type<{
+    provider?: "anthropic" | "openai";
+    apiKeyEncrypted?: string;
+    modelName?: string;
+    temperature?: number;
+    maxTokens?: number;
+    assistantName?: string;
+    /** Phase 4 AI guardrails: "standard" runs every pipeline as today; "strict" rejects any output that fails its schema check instead of falling back to a raw/degraded save (see ai.guardrails.ts's classifyOutput). Tenant-configurable, defaults to "standard" when unset. */
+    safetyMode?: "standard" | "strict";
+  }>(),
   /**
    * BYOK usage/limits — real flat columns, not folded into aiConfig above,
    * because these are counters a concurrent AI call must increment
@@ -124,6 +133,60 @@ export const tenants = pgTable("tenants", {
     webhookUrl?: string;
     webhookSecretEncrypted?: string;
     statusHistory?: { at: string; status: "success" | "failed" | "skipped"; modules: string[]; message?: string }[];
+  }>().default({}),
+  /**
+   * Settings → Supplier Risk (Phase 7). Weights for the deterministic
+   * Supplier Quality Risk Score's 7 factors — see
+   * modules/supplier/supplier.qualityRisk.ts, which reads this (falling
+   * back to DEFAULT_SUPPLIER_RISK_WEIGHTS when unset) every time a score is
+   * recomputed. Same "rarely-changed config a human edits" jsonb-on-tenants
+   * precedent as feasibilitySettings/inventorySettings/erpSyncSettings
+   * above — deliberately NOT placed on PlatformAdminPage (that page is
+   * platform_admin/cross-tenant tenant-provisioning only and holds no
+   * per-tenant module config anywhere today); this follows the Settings
+   * page's own established home for exactly this kind of tenant-scoped,
+   * module-specific configuration instead.
+   */
+  supplierRiskWeights: jsonb("supplier_risk_weights").$type<{
+    ncr?: number;
+    capa?: number;
+    capaRecurrence?: number;
+    delivery?: number;
+    defectRate?: number;
+    warranty?: number;
+    responsiveness?: number;
+  }>().default({}),
+  /**
+   * Settings → Receiving (Phase 8). Read by erp/receivingAutomation.ts
+   * every time a receiving line item's disposition moves to rejected or
+   * quarantined — see that file's own comment for exactly how each field
+   * is used. `autoCreateNcrDefectCategories`: when non-empty, an NCR is
+   * only auto-created if the inspection report's defectCategory is in this
+   * list (in addition to the reject/quarantine toggles above being on);
+   * empty/unset means "any defect category qualifies."
+   */
+  receivingSettings: jsonb("receiving_settings").$type<{
+    autoCreateNcrOnRejection?: boolean;
+    autoCreateNcrOnQuarantine?: boolean;
+    autoCreateNcrDefectCategories?: string[];
+    capaEscalationThreshold?: number;
+    capaEscalationWindowDays?: number;
+  }>().default({}),
+  /**
+   * Phase 10 Admin Console — Tenant Settings. `name` and `branding.logoUrl`
+   * already exist as their own column/field (see above) and are reused as-is
+   * rather than duplicated here; this only adds the two things the schema
+   * genuinely had no home for at all: timezone and a human contact. Same
+   * "rarely-changed config a human edits" jsonb-on-tenants precedent as
+   * every other settings blob on this table — see tenant.controller.ts's
+   * getProfileHandler/updateProfileHandler for the one endpoint that reads
+   * name+branding.logoUrl+this together as a single "tenant profile".
+   */
+  profile: jsonb("profile").$type<{
+    timezone?: string;
+    contactName?: string;
+    contactEmail?: string;
+    contactPhone?: string;
   }>().default({}),
   isDeleted: boolean("is_deleted").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),

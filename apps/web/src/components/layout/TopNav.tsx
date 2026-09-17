@@ -7,8 +7,10 @@ import { apiClient } from "../../api/client";
 import { useCurrentTenant, useCurrentUser } from "../../hooks/useAuth";
 import { departmentScope, itemScope, useHiddenNavScopes } from "../../hooks/useNavPreferences";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { useDepartmentPermissionsGrid } from "../../hooks/useDepartmentPermissionsGrid";
 import { GlobalSearchResults } from "./GlobalSearchResults";
 import {
+  ALL_MODULE_LEAVES,
   DASHBOARD_LEAF,
   DEPARTMENTS,
   KPI_COUNT_KEYS,
@@ -18,6 +20,7 @@ import {
   type AccessLevel,
   type Department,
   type DepartmentMeta,
+  type NavGroup,
   type NavLeaf,
 } from "./navConfig";
 
@@ -29,6 +32,23 @@ type DropdownId = Department | "system" | "library";
 // hand-off doesn't flicker, short enough that it still feels like "closes when
 // you move off it".
 const CLOSE_GRACE_MS = 150;
+
+/**
+ * Phase 1 System-menu cleanup: groups the flat "System" catch-all into three
+ * labeled sections instead of one undifferentiated list mixing day-to-day
+ * tools with admin config — see navConfig.ts's own `section` tag on each
+ * leaf. Order matters here: the everyday tools a quality-team user actually
+ * opens daily come first, admin configuration second, and "advanced" last —
+ * which in practice is usually empty/hidden entirely, since those three
+ * items are hidden by default for every tenant (see
+ * db/defaultNavPreferences.ts) unless an admin has explicitly turned one
+ * back on from Settings > Navigation.
+ */
+const SYSTEM_SECTIONS: { key: "quality" | "admin" | "advanced"; label: string }[] = [
+  { key: "quality", label: "Quality & Compliance" },
+  { key: "admin", label: "Admin" },
+  { key: "advanced", label: "Advanced" },
+];
 
 function useKpiCounts() {
   const { data } = useQuery({
@@ -68,14 +88,44 @@ function useDocumentLibraryTopLevel() {
  * being shown in. `liveLevel` — this viewer's own real-time
  * GET /permissions/effective value for this leaf's key — wins when
  * available; navConfig.ts's static `access` map is only the fallback (used
- * before that query resolves, and when previewing a department other than
- * the viewer's own, e.g. an admin browsing every dropdown — see
- * navConfig.ts's own comment on that documented limitation).
+ * before that query resolves). Admin/platform_admin bypass unconditionally
+ * (matches getUserAccessLevel's own admin short-circuit in
+ * departmentAccess.ts) — NOT gated on the static access map, since that
+ * would hide any live-granted "extra" leaf a department's own array never
+ * listed (see extraGrantedLeaves below).
  */
 function effectiveAccess(leaf: NavLeaf, department: Department, bypass: boolean, liveLevel?: AccessLevel): AccessLevel {
-  if (bypass) return leaf.access[department] ? "edit" : "none";
+  if (bypass) return "edit";
   if (liveLevel !== undefined) return liveLevel;
   return leaf.access[department] ?? "none";
+}
+
+/**
+ * Any module NOT already in this department's static `items` array that the
+ * viewer can currently see is live-granted to that department — the "fully
+ * dynamic nav registry" follow-up: a department gains a real dropdown entry
+ * for a module the moment an admin grants it, without a navConfig.ts edit.
+ *
+ * For the viewer's OWN department, `myEffective` (GET /permissions/effective)
+ * is authoritative — it already folds in custom permission-role grants a
+ * department-level grid can't see. For any OTHER department being previewed
+ * (only admin/platform_admin ever see more than their own), the admin-only
+ * department x module grid is the only live source available.
+ */
+function extraGrantedLeaves(
+  group: NavGroup,
+  isOwnDepartment: boolean,
+  myEffective: Partial<Record<string, AccessLevel>> | undefined,
+  grid: Map<Department, Map<string, AccessLevel>>
+): NavLeaf[] {
+  if (!group.department) return [];
+  const staticKeys = new Set(group.items.map((i) => i.key));
+  const levelFor = isOwnDepartment ? (key: string) => myEffective?.[key] : (key: string) => grid.get(group.department!)?.get(key);
+  return ALL_MODULE_LEAVES.filter((leaf) => {
+    if (staticKeys.has(leaf.key)) return false;
+    const level = levelFor(leaf.key);
+    return level !== undefined && level !== "none";
+  });
 }
 
 export function TopNav() {
@@ -85,6 +135,7 @@ export function TopNav() {
   const isAdmin = user?.roleName === "admin";
   const userDept = user?.department as Department | null | undefined;
   const { effective: myEffective } = useEffectivePermissions();
+  const departmentPermissionsGrid = useDepartmentPermissionsGrid(isAdmin);
   const kpiCounts = useKpiCounts();
   const documentLibrary = useDocumentLibraryTopLevel();
 
@@ -154,14 +205,16 @@ export function TopNav() {
     const seen = new Set<string>();
     const out: NavLeaf[] = [];
     for (const g of visibleGroups) {
-      for (const item of g.items) {
+      const isOwnDept = g.department === userDept;
+      const extra = extraGrantedLeaves(g, isOwnDept, myEffective, departmentPermissionsGrid);
+      for (const item of [...g.items, ...extra]) {
         if (seen.has(item.key)) continue;
         seen.add(item.key);
         out.push(item);
       }
     }
     return out;
-  }, [visibleGroups]);
+  }, [visibleGroups, userDept, myEffective, departmentPermissionsGrid]);
 
   const searchResults = query.trim()
     ? allVisibleLeaves.filter((l) => l.label.toLowerCase().includes(query.trim().toLowerCase()))
@@ -214,7 +267,9 @@ export function TopNav() {
 
           {departmentGroups.map((group) => {
             const meta = DEPARTMENTS.find((d) => d.key === group.department)!;
-            const items = [...group.items].sort((a, b) => a.priority - b.priority);
+            const isOwnDept = group.department === userDept;
+            const extra = extraGrantedLeaves(group, isOwnDept, myEffective, departmentPermissionsGrid);
+            const items = [...group.items, ...extra].sort((a, b) => a.priority - b.priority);
             return (
               <NavDropdown
                 key={group.department}
@@ -233,7 +288,7 @@ export function TopNav() {
                     item={item}
                     department={group.department!}
                     bypass={isAdmin}
-                    liveLevel={group.department === userDept ? myEffective?.[item.key] : undefined}
+                    liveLevel={isOwnDept ? myEffective?.[item.key] : departmentPermissionsGrid.get(group.department!)?.get(item.key)}
                     kpiCounts={kpiCounts}
                     onNavigate={() => setOpenId(null)}
                   />
@@ -252,18 +307,33 @@ export function TopNav() {
               onScheduleClose={() => scheduleClose("system")}
               onCancelClose={cancelClose}
             >
-              {systemGroup.items.map((item) => (
-                <Link
-                  key={item.key}
-                  to={item.path}
-                  title={item.notes ? `${item.label} — ${item.notes}` : item.label}
-                  onClick={() => setOpenId(null)}
-                  className="flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
-                >
-                  <item.icon size={16} className="shrink-0" />
-                  <span className="min-w-0 truncate">{item.label}</span>
-                </Link>
-              ))}
+              {SYSTEM_SECTIONS.map(({ key, label }) => ({ key, label, items: systemGroup.items.filter((item) => (item.section ?? "quality") === key) }))
+                .filter((section) => section.items.length > 0)
+                .map(({ key, label, items }, index) => (
+                  // display:contents so this wrapper doesn't itself become a
+                  // grid cell (which would break the parent's grid-cols-2
+                  // layout) — its children join the grid directly instead,
+                  // letting the section header span both columns. Margin is
+                  // keyed off `index` (not a first-child selector) since
+                  // every section header is already the DOM-first child of
+                  // its own `contents` wrapper — :first-child would match
+                  // every section's header, not just the topmost one.
+                  <div key={key} className="contents">
+                    <div className={clsx("col-span-2 px-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70", index === 0 ? "mt-0" : "mt-2")}>{label}</div>
+                    {items.map((item) => (
+                      <Link
+                        key={item.key}
+                        to={item.path}
+                        title={item.notes ? `${item.label} — ${item.notes}` : item.label}
+                        onClick={() => setOpenId(null)}
+                        className="flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+                      >
+                        <item.icon size={16} className="shrink-0" />
+                        <span className="min-w-0 truncate">{item.label}</span>
+                      </Link>
+                    ))}
+                  </div>
+                ))}
             </NavDropdown>
           )}
 
@@ -399,7 +469,9 @@ export function TopNav() {
               {departmentGroups.map((group) => {
                 const meta = DEPARTMENTS.find((d) => d.key === group.department)!;
                 const expanded = mobileExpanded === group.department;
-                const items = [...group.items].sort((a, b) => a.priority - b.priority);
+                const isOwnDept = group.department === userDept;
+                const extra = extraGrantedLeaves(group, isOwnDept, myEffective, departmentPermissionsGrid);
+                const items = [...group.items, ...extra].sort((a, b) => a.priority - b.priority);
                 return (
                   <div key={group.department}>
                     <button
@@ -422,7 +494,7 @@ export function TopNav() {
                             item={item}
                             department={group.department!}
                             bypass={isAdmin}
-                            liveLevel={group.department === userDept ? myEffective?.[item.key] : undefined}
+                            liveLevel={isOwnDept ? myEffective?.[item.key] : departmentPermissionsGrid.get(group.department!)?.get(item.key)}
                             kpiCounts={kpiCounts}
                             onNavigate={() => setMobileOpen(false)}
                           />
@@ -448,17 +520,24 @@ export function TopNav() {
                   </button>
                   {mobileExpanded === "system" && (
                     <div className="ml-4 flex flex-col gap-0.5 border-l border-border pl-3 py-1">
-                      {systemGroup.items.map((item) => (
-                        <Link
-                          key={item.key}
-                          to={item.path}
-                          onClick={() => setMobileOpen(false)}
-                          className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
-                        >
-                          <item.icon size={16} />
-                          <span>{item.label}</span>
-                        </Link>
-                      ))}
+                      {SYSTEM_SECTIONS.map(({ key, label }) => ({ key, label, items: systemGroup.items.filter((item) => (item.section ?? "quality") === key) }))
+                        .filter((section) => section.items.length > 0)
+                        .map(({ key, label, items }, index) => (
+                          <div key={key} className="flex flex-col gap-0.5">
+                            <div className={clsx("px-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70", index === 0 ? "mt-0" : "mt-2")}>{label}</div>
+                            {items.map((item) => (
+                              <Link
+                                key={item.key}
+                                to={item.path}
+                                onClick={() => setMobileOpen(false)}
+                                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+                              >
+                                <item.icon size={16} />
+                                <span>{item.label}</span>
+                              </Link>
+                            ))}
+                          </div>
+                        ))}
                     </div>
                   )}
                 </div>

@@ -32,6 +32,8 @@ export interface WorkflowHistoryEntry {
   action: "create" | "update" | "delete" | "status_change" | "transition_failed";
   changes: Record<string, unknown> | null;
   performedBy: number | null;
+  /** Resolved server-side (see audit-trail.service.ts's withResolvedActors) — a name, an email, "Deleted User (ID #x)", or null when performedBy itself is null (a system action, rendered as "System"). Prefer this over the bare performedBy id everywhere history is shown. */
+  performedByName: string | null;
   createdAt: string;
 }
 
@@ -53,6 +55,10 @@ export interface Ncr {
   updatedAt: string | null;
   /** Real column (ncr.ts), just never surfaced on the frontend until the dashboard needed it for a closure trend. */
   closedAt: string | null;
+  /** Phase 8 — real, direct supplier link (previously derived only indirectly via RMA/warranty/supplier-portal links). */
+  supplierId: number | null;
+  /** Phase 8 — set when auto-created from a rejected/quarantined receiving inspection; not a real FK (see ncr.ts's own schema comment). */
+  receivingLineItemId: number | null;
 }
 
 export interface Capa {
@@ -67,6 +73,9 @@ export interface Capa {
   createdAt: string;
   /** Real column (capa.ts), same reason as Ncr.closedAt above. */
   closedAt: string | null;
+  /** Phase 8 — set to "receiving_recurrence" when auto-created by receiving's supplier-recurrence escalation; null for every ordinary CAPA. */
+  escalationSource: string | null;
+  supplierId: number | null;
 }
 
 export interface AuditItem {
@@ -216,7 +225,7 @@ export interface InventoryItem {
 export interface InventoryMovement {
   id: number;
   itemId: number;
-  movementType: "receive" | "consume" | "produce" | "adjust" | "scrap" | "transfer";
+  movementType: "receive" | "consume" | "produce" | "adjust" | "scrap" | "transfer" | "return";
   quantity: string;
   fromLocation: string | null;
   toLocation: string | null;
@@ -229,6 +238,36 @@ export interface InventoryMovement {
   /** Caller-supplied, or auto-generated from inventorySettings.lotNumberFormat/serialNumberFormat on receive/produce. */
   lotNumber: string | null;
   serialNumber: string | null;
+  /** Phase 8 — links to a real inventory_lots row when one exists for this item+lot. */
+  lotId: number | null;
+}
+
+/** Phase 8 — the real per-lot/serial ledger (inventoryLots.ts). */
+export interface InventoryLot {
+  id: number;
+  tenantId: number;
+  itemId: number;
+  lotNumber: string;
+  serialNumber: string | null;
+  supplierId: number | null;
+  purchaseOrderId: number | null;
+  receivingLineItemId: number | null;
+  revisionLevel: string | null;
+  expirationDate: string | null;
+  receivedQty: string;
+  remainingQty: string;
+  status: "active" | "consumed" | "scrapped" | "returned" | "expired";
+  createdAt: string;
+}
+
+export interface InventoryLotTraceability {
+  lot: InventoryLot;
+  supplier: { id: number; name: string } | null;
+  receivingLineItem: { id: number; status: string; quantityReceived: number; poLineItemId: number } | null;
+  poLineItem: { id: number; purchaseOrderId: number; itemId: number; quantity: number } | null;
+  purchaseOrder: { id: number; status: string; supplierId: number } | null;
+  inspectionReport: QualityInspectionReport | null;
+  movements: InventoryMovement[];
 }
 
 export interface MovementTrendPoint {
@@ -324,8 +363,13 @@ export interface ErpPurchaseOrder {
   updatedAt: string | null;
   status: PurchaseOrderStatus;
   notes: string | null;
+  expectedDeliveryDate: string | null;
+  /** Only on the list endpoint — summed server-side from line items' quantity * unitCost (see erp.controller.ts's listPurchaseOrdersHandler). */
+  totalValue?: number;
   lineItems?: ErpPoLineItem[]; // only on the single-PO endpoint
 }
+
+export type ReceivingLineItemStatus = "received" | "pending_inspection" | "inspected" | "accepted" | "rejected" | "quarantined" | "disposition_required";
 
 export interface ErpReceivingLineItem {
   id: number;
@@ -333,6 +377,10 @@ export interface ErpReceivingLineItem {
   poLineItemId: number;
   quantityReceived: number;
   notes: string | null;
+  /** Phase 8 — the structured receiving workflow state (see erp.ts's schema comment). */
+  status: ReceivingLineItemStatus;
+  lotNumber: string | null;
+  serialNumber: string | null;
 }
 
 export interface ErpReceivingDocument {
@@ -497,6 +545,10 @@ export interface TenantAiConfig {
   hasApiKey: boolean;
   maskedApiKey?: string | null;
   assistantName: string | null;
+  /** Phase 4 — "standard" runs every AI pipeline as normal; "strict" refuses to save any output that fails its own schema check (see ai.guardrails.ts) instead of showing a degraded/malformed result. */
+  safetyMode: "standard" | "strict";
+  /** Phase 4 — "ready" when this tenant's own key or the platform default is present; "missing" otherwise. There's no "invalid" value: a bad key is rejected at save time (a 400 on PATCH), never stored. */
+  keyStatus: "ready" | "missing";
   // BYOK usage limit — see tenants.aiMonthlyLimit's schema comment for why
   // enforcement itself is computed live from audit trail history, not a
   // stored counter.
@@ -516,6 +568,38 @@ export interface TenantAiUsage {
   moduleBreakdown: Array<{ module: string; tokens: number; calls: number }>;
 }
 
+/** GET/PATCH /tenant/profile — Admin Console "Tenant Settings" (Phase 10). name/logoUrl mirror the tenants.name column and branding.logoUrl (not a separate store); timezone/contact fields are new. */
+export interface TenantProfile {
+  name: string;
+  code: string;
+  logoUrl: string | null;
+  timezone: string | null;
+  contactName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+}
+
+/** GET /system-health (admin only) — Phase 10's consolidated Admin Console dashboard. Each check's shape varies by domain; `status`/`detail` are the two fields every check always has. */
+export type SystemHealthStatus = "ok" | "warning" | "critical";
+export interface SystemHealthCheck {
+  status: SystemHealthStatus;
+  detail: string;
+  [key: string]: unknown;
+}
+export interface SystemHealthReport {
+  overall: SystemHealthStatus;
+  checkedAt: string;
+  checks: {
+    database: SystemHealthCheck & { latencyMs: number };
+    ai: SystemHealthCheck & { mode: "live" | "stub"; recentTotal: number; recentErrorCount: number };
+    workflow: SystemHealthCheck & { total: number; active: number; withIssues: number; neverRun: number };
+    email: SystemHealthCheck & { sent: number; failed: number; loggedOnly: number };
+    reporting: SystemHealthCheck & { totalSchedules: number; enabledSchedules: number; failedSchedules: number; overdueSchedules: number };
+    receivingInventory: SystemHealthCheck & { itemsBelowMin: number };
+    supplierPortal: SystemHealthCheck & { activeSupplierUsers: number; recentlyActiveCount: number };
+  };
+}
+
 /** GET /tenant/assistant-name — open to ANY authenticated user (not just admin), so the floating Assistant panel can label itself for everyone. */
 export interface AssistantNameResponse {
   assistantName: string | null;
@@ -526,6 +610,8 @@ export interface AssistantReply {
   content: string;
   model: string;
   usage: { inputTokens: number; outputTokens: number } | null;
+  /** True when no AI provider is configured for this tenant and `content` is the deterministic placeholder, never a real model response — see AiFieldAssistant.tsx, which refuses to let this be inserted into a real field. */
+  isStub: boolean;
 }
 
 /** GET /search?q=... — one row per real match across NCR/CAPA/PO/Audit/Supplier/Item/Training/Calibration. "WO" is a reserved type never actually returned yet — see search.controller.ts. */
@@ -544,11 +630,65 @@ export interface FormTemplateStatus {
   uploadedAt: string | null;
 }
 
+export interface WorkflowNode {
+  id: string;
+  type: "trigger" | "condition" | "action";
+  kind: string;
+  config: Record<string, unknown>;
+}
+export interface WorkflowEdge {
+  from: string;
+  to: string;
+}
+
+/** Phase 9 — version/versionHistory added for real edit versioning (see workflow.ts's schema comment). */
 export interface WorkflowDefinition {
   id: number;
   name: string;
   module: string | null;
-  definition: { nodes: unknown[]; edges: unknown[] };
+  isActive: string;
+  definition: { nodes: WorkflowNode[]; edges: WorkflowEdge[] };
+  version: number;
+  versionHistory: { version: number; definition: { nodes: WorkflowNode[]; edges: WorkflowEdge[] }; updatedAt: string; updatedBy: number | null }[];
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface WorkflowRun {
+  id: number;
+  workflowId: number;
+  context: Record<string, unknown> | null;
+  status: "running" | "completed" | "failed";
+  error: string | null;
+  simulated: boolean;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+export interface WorkflowTemplate {
+  key: string;
+  name: string;
+  module: string;
+  description: string;
+  definition: { nodes: WorkflowNode[]; edges: WorkflowEdge[] };
+}
+
+export interface WorkflowDefinitionHealth {
+  id: number;
+  name: string;
+  module: string | null;
+  isActive: boolean;
+  version: number;
+  lastSuccessfulRunAt: string | null;
+  lastFailedRunAt: string | null;
+  lastFailedRunError: string | null;
+  issues: string[];
+}
+
+export interface WorkflowHealthReport {
+  definitions: WorkflowDefinitionHealth[];
+  summary: { total: number; active: number; withIssues: number; neverRun: number };
 }
 
 export type WorkOrderStatus = "planned" | "in_progress" | "completed" | "cancelled";
@@ -677,6 +817,7 @@ export interface ScarForm {
   scarNumber: string | null;
   dateIssued: string | null;
   supplierName: string | null;
+  supplierId: number | null;
   responseDueDate: string | null;
   contactPerson: string | null;
   poNumber: string | null;
@@ -714,6 +855,11 @@ export type InspectionType = "incoming" | "in_process" | "final";
 export type InspectionFinalStatus = "accepted" | "rejected" | "rework_required" | "accepted_via_deviation";
 export type InspectionItemResult = "pass" | "fail";
 
+export const DEFECT_CATEGORIES = ["dimensional", "cosmetic", "functional", "material", "documentation", "packaging", "quantity", "other"] as const;
+export type DefectCategory = (typeof DEFECT_CATEGORIES)[number];
+export const INSPECTION_METHODS = ["visual", "dimensional", "functional", "documentation", "other"] as const;
+export type InspectionMethod = (typeof INSPECTION_METHODS)[number];
+
 export interface QualityInspectionItem {
   id: number;
   reportId: number;
@@ -724,6 +870,11 @@ export interface QualityInspectionItem {
   result: InspectionItemResult | null;
   createdAt: string;
   updatedAt: string | null;
+  /** Phase 8 — real numeric measurement fields alongside the free-text specification/actualFinding above. */
+  specMin: string | null;
+  specMax: string | null;
+  actualValue: string | null;
+  measurementUnit: string | null;
 }
 
 export interface QualityInspectionReport {
@@ -734,6 +885,11 @@ export interface QualityInspectionReport {
   partMaterialNo: string | null;
   poJobNo: string | null;
   supplierVendor: string | null;
+  /** Phase 8 — real FK/structured fields alongside the free-text ones above (see qualityInspectionReports.ts's schema comment). */
+  supplierId: number | null;
+  receivingLineItemId: number | null;
+  defectCategory: DefectCategory | null;
+  inspectionMethod: InspectionMethod | null;
   batchLotNo: string | null;
   totalQuantity: string | null;
   sampleSize: string | null;
@@ -1156,6 +1312,8 @@ export interface WarrantyClaimWorkflowEntry {
   toStatus: WarrantyStatus;
   note: string | null;
   performedByUserId: number | null;
+  /** Resolved server-side from performedByUserId (see audit-trail.service.ts's resolveUserNames) — null only when performedByUserId itself is null. */
+  performedByName: string | null;
   createdAt: string;
 }
 
@@ -1290,6 +1448,8 @@ export interface SupplierMessage {
   senderRole: "internal" | "supplier";
   senderUserId: number | null;
   body: string;
+  category: "message" | "follow_up" | "request" | "response";
+  aiDrafted: boolean;
   readAt: string | null;
   createdAt: string;
 }
@@ -1300,6 +1460,78 @@ export interface SupplierPortalPerformance {
   correctiveActionAcceptedCount: number;
   ppapSubmissionCount: number;
   ppapApprovalRate: number | null;
+}
+
+/** Phase 7 — GET /supplier-portal/kpis and /suppliers/:id/kpis share this shape. */
+export interface SupplierQualityFactors {
+  supplierId: number;
+  ncrCount: number;
+  capaCount: number;
+  capaRecurrenceCount: number;
+  rmaCount: number;
+  warrantyClaimCount: number;
+  scarCount: number;
+  openCorrectiveActionCount: number;
+  deliveryTimelinessAvgDays: number | null;
+  deliveryAccuracyAvgPercent: number | null;
+  onTimeDeliveryPercent: number | null;
+  receivingEventCount: number;
+  defectRatePercent: number | null;
+  avgResponseHours: number | null;
+  health: SupplierHealth;
+}
+
+export interface SupplierHealth {
+  lastLoginAt: string | null;
+  lastDocumentUploadAt: string | null;
+  lastCommunicationAt: string | null;
+  openActionCount: number;
+}
+
+export interface SupplierRiskScoreBreakdown {
+  ncrFactor: number;
+  capaFactor: number;
+  capaRecurrenceFactor: number;
+  deliveryFactor: number;
+  defectRateFactor: number;
+  warrantyFactor: number;
+  responsivenessFactor: number;
+  raw: Record<string, number | null>;
+}
+
+export interface SupplierQualityRiskScoreEntry {
+  id: number;
+  supplierId: number;
+  scoreDate: string;
+  score: string;
+  band: "low" | "medium" | "high" | "critical";
+  formulaVersion: string;
+  breakdown: SupplierRiskScoreBreakdown;
+  createdAt: string;
+}
+
+export interface SupplierRiskScoreWithTrend {
+  latest: SupplierQualityRiskScoreEntry;
+  trend: SupplierQualityRiskScoreEntry[];
+}
+
+export interface SupplierRiskSettings {
+  ncr?: number;
+  capa?: number;
+  capaRecurrence?: number;
+  delivery?: number;
+  defectRate?: number;
+  warranty?: number;
+  responsiveness?: number;
+}
+
+/** Phase 8 — Settings → Receiving; read by erp/receivingAutomation.ts. */
+export interface ReceivingSettings {
+  autoCreateNcrOnRejection?: boolean;
+  autoCreateNcrOnQuarantine?: boolean;
+  autoCreateNcrDefectCategories?: string[];
+  capaEscalationThreshold?: number;
+  capaEscalationWindowDays?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -1391,11 +1623,19 @@ export interface CrarClaim {
   createdAt: string;
   updatedAt: string | null;
 
+  // Phase 2 fixes: RMA Log link (was entirely missing) + a real customer
+  // link resolving contact info from the customers table (see crar.ts's
+  // own schema comment on why this isn't new raw text columns).
+  rmaLogId: number | null;
+  customerId: number | null;
+
   // Detail endpoint only.
   warranty?: { id: number; claimNumber: string; status: string } | null;
   linkedNcr?: { id: number; title: string; status: string } | null;
   supplierRequest?: { id: number; companyName: string; status: string } | null;
   linkedRma?: { id: number; rmaNumber: string; status: string } | null;
+  linkedRmaLog?: { id: number; rmaNumber: string; status: string } | null;
+  customer?: { id: number; legalName: string; primaryContactEmail: string | null; primaryContactPhone: string | null } | null;
 }
 
 // ---------------------------------------------------------------------------

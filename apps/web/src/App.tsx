@@ -60,6 +60,7 @@ import { WorkflowBuilderPage } from "./routes/Workflow/WorkflowBuilderPage";
 import { AiInsightsPage } from "./routes/AI/AiInsightsPage";
 import { DigitalTwinPage } from "./routes/DigitalTwin/DigitalTwinPage";
 import { PlatformAdminPage } from "./routes/Platform/PlatformAdminPage";
+import { ReportingHubPage } from "./routes/Reporting/ReportingHubPage";
 import { NavigationSettingsPage } from "./routes/Settings/NavigationSettingsPage";
 import { SettingsPage } from "./routes/Settings/SettingsPage";
 import { InventoryListPage } from "./routes/Inventory/InventoryListPage";
@@ -90,6 +91,15 @@ import { AdminTenantAiConfigPage } from "./routes/Admin/AdminTenantAiConfigPage"
 import { AdminAiUsagePage } from "./routes/Admin/AdminAiUsagePage";
 import { AdminDigitalTwinSetupPage } from "./routes/Admin/AdminDigitalTwinSetupPage";
 import { RolesPermissionsPage } from "./routes/Admin/RolesPermissionsPage";
+import { AdminConsoleLayout } from "./routes/Admin/AdminConsoleLayout";
+import { AdminConsoleHomePage } from "./routes/Admin/AdminConsoleHomePage";
+import { AdminUsersRolesPage } from "./routes/Admin/AdminUsersRolesPage";
+import { AdminAiSettingsPage } from "./routes/Admin/AdminAiSettingsPage";
+import { AdminSupplierSettingsPage } from "./routes/Admin/AdminSupplierSettingsPage";
+import { AdminQualitySettingsPage } from "./routes/Admin/AdminQualitySettingsPage";
+import { AdminReceivingInventorySettingsPage } from "./routes/Admin/AdminReceivingInventorySettingsPage";
+import { AdminSystemHealthPage } from "./routes/Admin/AdminSystemHealthPage";
+import { AdminTenantSettingsPage } from "./routes/Admin/AdminTenantSettingsPage";
 import { useCurrentUser } from "./hooks/useAuth";
 
 function HomeRoute() {
@@ -196,12 +206,27 @@ export function App() {
           <Route path="/settings" element={<SettingsPage />} />
           {/* Kept working as its own URL (embedded as SettingsPage's "Navigation" tab) — anyone with this link bookmarked shouldn't get a 404. */}
           <Route path="/settings/navigation" element={<NavigationSettingsPage />} />
-          <Route path="/admin/tenant-branding" element={<AdminTenantBrandingPage />} />
-          <Route path="/admin/tenant-templates" element={<AdminTenantTemplatesPage />} />
+          {/* Kept working as their own URLs — now also reachable/embedded via the Admin Console shell below, not replaced. */}
           <Route path="/admin/tenant-ai" element={<AdminTenantAiConfigPage />} />
           <Route path="/admin/ai-usage" element={<AdminAiUsagePage />} />
-          <Route path="/admin/digital-twin" element={<AdminDigitalTwinSetupPage />} />
-          <Route path="/admin/roles-permissions" element={<RolesPermissionsPage />} />
+
+          {/* Phase 10 — Admin Console: one shell nesting Roles & Permissions, Tenant Branding/Templates/Digital-Twin-Setup (all pre-existing, unchanged), and the new Users&Roles/AI Settings/Supplier/Quality/Receiving-Inventory/System Health/Tenant Settings sections. */}
+          <Route path="/admin" element={<AdminConsoleLayout />}>
+            <Route index element={<AdminConsoleHomePage />} />
+            <Route path="users" element={<AdminUsersRolesPage />} />
+            <Route path="roles-permissions" element={<RolesPermissionsPage />} />
+            <Route path="ai-settings" element={<AdminAiSettingsPage />} />
+            <Route path="supplier-settings" element={<AdminSupplierSettingsPage />} />
+            <Route path="quality-settings" element={<AdminQualitySettingsPage />} />
+            <Route path="receiving-inventory-settings" element={<AdminReceivingInventorySettingsPage />} />
+            <Route path="system-health" element={<AdminSystemHealthPage />} />
+            <Route path="tenant-settings" element={<AdminTenantSettingsPage />} />
+            <Route path="tenant-branding" element={<AdminTenantBrandingPage />} />
+            <Route path="tenant-templates" element={<AdminTenantTemplatesPage />} />
+            <Route path="digital-twin" element={<AdminDigitalTwinSetupPage />} />
+          </Route>
+
+          <Route path="/reporting" element={<ReportingHubPage />} />
         </Route>
       </Route>
     </Routes>

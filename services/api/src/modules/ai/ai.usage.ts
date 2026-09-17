@@ -5,8 +5,41 @@ import { aiSuggestions } from "../../drizzle/schema/ai.js";
 import { decryptSecret } from "../tenant/crypto.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { estimateCost } from "./pricing.js";
+import { logger } from "../../utils/logger.js";
+import { AppError } from "../../utils/appError.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
 import type { LlmCallOptions, LlmCallResult } from "./llm-gateway.js";
+import type { AiOutputStatus } from "./ai.guardrails.js";
+import type { PipelineRun } from "./ai.pipelines.js";
+
+/**
+ * Phase 4 AI audit trail hooks: the one human-readable label the audit
+ * trail (and any UI reading it back) shows for what actually happened on
+ * this AI call — the literal 4 states the AI Enablement phase asked for,
+ * plus "AI-error" for the one real failure case those 4 didn't name (a
+ * provider call that threw after retries, not a bad response).
+ *
+ * `okVerb` is a free string (not a narrow union) as of Phase 5 — the AI
+ * Feature Rollout phase specifies an exact literal phrase per module
+ * ("AI-assisted triage", "AI-drafted CAPA content", "AI-drafted supplier
+ * communication", "AI-assisted warranty triage", "AI-generated audit
+ * summary", "AI-suggested ERP actions", "AI-assisted risk score") — each
+ * call site below passes its own module's exact required phrase rather
+ * than one of a handful of generic verbs.
+ */
+export function describeAiState(status: AiOutputStatus, okVerb = "AI-suggested"): string {
+  switch (status) {
+    case "stub":
+      return "AI-disabled (no key)";
+    case "malformed":
+      return "AI-error (malformed response)";
+    case "error":
+      return "AI-error";
+    case "ok":
+    default:
+      return okVerb;
+  }
+}
 
 /**
  * BYOK monthly limit enforcement, shared by every AI endpoint that spends
@@ -86,9 +119,14 @@ export async function recordAiSuggestion(
     output: Record<string, unknown>;
     result: LlmCallResult;
     performedBy: number | undefined;
+    /** Phase 4 guardrails — defaults to "ok" for the pre-Phase-4 callers (ai.assistant.ts, Work Order/PR/ERP Automation/Risk pipelines) that never produced anything but a real, well-shaped response or a stub. */
+    status?: AiOutputStatus;
+    errorMessage?: string | null;
+    /** The verb describeAiState uses for a real ("ok") response — lets a drafting pipeline (CAPA plan, 8D, supplier message, form autofill) read "AI-drafted" in the audit trail instead of the generic "AI-suggested" a scoring/analysis pipeline gets. */
+    okVerb?: string;
   }
 ): Promise<typeof aiSuggestions.$inferSelect> {
-  const { tenantId, module, pipeline, input, output, result, performedBy } = params;
+  const { tenantId, module, pipeline, input, output, result, performedBy, status = "ok", errorMessage = null, okVerb } = params;
   const totalTokens = result.usage ? result.usage.inputTokens + result.usage.outputTokens : null;
   // Only a real provider response has real usage to bill/track — the
   // honest no-key stub (result.usage === null) never touches cost, same
@@ -97,7 +135,7 @@ export async function recordAiSuggestion(
 
   const [saved] = await db
     .insert(aiSuggestions)
-    .values({ tenantId, module, pipeline, input, output, createdBy: performedBy })
+    .values({ tenantId, module, pipeline, input, output, status, errorMessage, createdBy: performedBy })
     .returning();
 
   await recordAuditTrail(db, {
@@ -113,9 +151,86 @@ export async function recordAiSuggestion(
       tokensIn: result.usage?.inputTokens ?? null,
       tokensOut: result.usage?.outputTokens ?? null,
       cost,
+      status,
+      errorMessage,
+      aiState: describeAiState(status, okVerb),
     },
     performedBy,
   });
 
   return saved!;
+}
+
+/**
+ * The one call site every `ai.controller.ts` handler now goes through:
+ * checks the tenant's usage limit, runs the pipeline with the tenant's BYOK
+ * options, and always records a row — "ok"/"stub"/"malformed" from the
+ * pipeline's own guardrail check (see ai.guardrails.ts), or "error" (a real
+ * provider failure after retries, e.g. rate-limit exhaustion or a network
+ * error) caught here so a failed attempt still leaves an audit trail entry
+ * instead of silently throwing past asyncHandler with no record at all —
+ * the "AI degraded mode" hook the AI Enablement phase asked for. Re-throws
+ * after logging an "error" row, so the client still gets a real error
+ * response; this only changes what gets recorded, not the request's outcome.
+ */
+export async function runPipelineAndRecord(
+  db: TenantDb,
+  tenantId: number,
+  performedBy: number | undefined,
+  module: string,
+  pipeline: string,
+  input: Record<string, unknown>,
+  okVerb: string,
+  runner: (llmOptions: LlmCallOptions) => Promise<PipelineRun>
+): Promise<{ suggestion: typeof aiSuggestions.$inferSelect; output: Record<string, unknown> }> {
+  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+  const limitError = await checkUsageLimit(db, tenantId, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  if (limitError) throw AppError.forbidden(limitError);
+
+  const { llmOptions } = await loadTenantLlmOptions(db, tenantId);
+
+  try {
+    const { classified, result } = await runner(llmOptions);
+
+    // "strict" safety mode (Settings → Tenant AI Config): a malformed
+    // response is refused outright — recorded for the audit trail exactly
+    // like "standard" mode would, but the request itself fails with a clear
+    // error instead of returning a 200 the caller might render as if it
+    // were a real (if flagged) suggestion.
+    if (classified.status === "malformed" && tenant?.aiConfig?.safetyMode === "strict") {
+      await recordAiSuggestion(db, { tenantId, module, pipeline, input, output: classified.data, result, performedBy, status: classified.status, errorMessage: classified.errorMessage, okVerb });
+      throw new AppError(classified.errorMessage ?? "The AI response didn't match the expected shape and was refused under this tenant's strict safety mode.", 502);
+    }
+
+    const suggestion = await recordAiSuggestion(db, {
+      tenantId,
+      module,
+      pipeline,
+      input,
+      output: classified.data,
+      result,
+      performedBy,
+      status: classified.status,
+      errorMessage: classified.errorMessage,
+      okVerb,
+    });
+    return { suggestion, output: classified.data };
+  } catch (err) {
+    if (err && typeof err === "object" && "statusCode" in err) throw err; // AppError from checkUsageLimit or an already-classified case above — pass through unchanged
+    const message = err instanceof Error ? err.message : "The AI provider request failed.";
+    logger.error("AI pipeline call failed", { module, pipeline, tenantId, err });
+    const [saved] = await db
+      .insert(aiSuggestions)
+      .values({ tenantId, module, pipeline, input, output: {}, status: "error", errorMessage: message, createdBy: performedBy })
+      .returning();
+    await recordAuditTrail(db, {
+      tenantId,
+      entityType: "AiSuggestion",
+      entityId: saved!.id,
+      action: "create",
+      changes: { module, pipeline, status: "error", errorMessage: message, aiState: describeAiState("error") },
+      performedBy,
+    });
+    throw new AppError("The AI provider request failed — please try again.", 502);
+  }
 }

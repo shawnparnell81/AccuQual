@@ -45,3 +45,19 @@ export const updateAiConfigSchema = z.object({
   monthlyLimit: z.coerce.number().int().positive().nullable().optional(),
   limitEnforced: z.boolean().optional(),
 });
+
+/**
+ * PATCH /tenant/profile — Admin Console "Tenant Settings". `name` is the
+ * real top-level `tenants.name` column; `logoUrl` merges into the existing
+ * `branding` jsonb (same field AdminTenantBrandingPage already edits, not a
+ * duplicate); the rest are new `profile` jsonb fields. All optional/patchy,
+ * same "" clears convention as updateBrandingSchema above.
+ */
+export const updateTenantProfileSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  logoUrl: z.string().url().optional().or(z.literal("")),
+  timezone: z.string().max(100).optional().or(z.literal("")),
+  contactName: z.string().max(200).optional().or(z.literal("")),
+  contactEmail: z.string().email().optional().or(z.literal("")),
+  contactPhone: z.string().max(50).optional().or(z.literal("")),
+});

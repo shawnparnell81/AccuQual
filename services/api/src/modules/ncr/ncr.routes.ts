@@ -13,6 +13,7 @@ import {
 } from "./ncr.validation.js";
 import {
   baseHandlers,
+  listHandler,
   assignHandler,
   containmentHandler,
   rootCauseHandler,
@@ -24,7 +25,7 @@ export const ncrRouter = Router();
 // Turns on PERMISSION_MATRIX.ncr (quality: edit) — previously unenforced.
 ncrRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("ncr"));
 
-ncrRouter.get("/", baseHandlers.list);
+ncrRouter.get("/", listHandler);
 ncrRouter.post("/", validate(createNcrSchema), baseHandlers.create);
 ncrRouter.get("/:id", baseHandlers.getOne);
 ncrRouter.patch("/:id", validate(updateNcrSchema), baseHandlers.update);

@@ -13,6 +13,11 @@ import { SupplierScorecard } from "./SupplierScorecard";
 import { SupplierPerformanceDashboard } from "./SupplierPerformanceDashboard";
 import { SupplierNCRList } from "./SupplierNCRList";
 import { SupplierCAPAList } from "./SupplierCAPAList";
+import { SupplierRmaList } from "./SupplierRmaList";
+import { SupplierWarrantyList } from "./SupplierWarrantyList";
+import { SupplierScarList } from "./SupplierScarList";
+import { SupplierInspectionList } from "./SupplierInspectionList";
+import { SupplierLotList } from "./SupplierLotList";
 import { SupplierSettingsPanel } from "./SupplierSettingsPanel";
 import { SupplierRmaRequestForm } from "./SupplierRmaRequestForm";
 import { SupplierRmaRequestStatus } from "./SupplierRmaRequestStatus";
@@ -30,9 +35,14 @@ const TABS: { key: TabKey; label: string; supplierOnly?: boolean }[] = [
   { key: "performance", label: "Performance" },
   { key: "ncr", label: "NCRs" },
   { key: "capa", label: "CAPAs" },
+  { key: "rma", label: "RMAs" },
+  { key: "warranty", label: "Warranty" },
+  { key: "scar", label: "SCARs" },
+  { key: "inspections", label: "Inspections" },
+  { key: "lots", label: "Shipment Lots" },
   { key: "settings", label: "Settings" },
 ];
-type TabKey = "rma_request" | "onboarding" | "documents" | "ppap" | "car" | "8d" | "messages" | "scorecard" | "performance" | "ncr" | "capa" | "settings";
+type TabKey = "rma_request" | "onboarding" | "documents" | "ppap" | "car" | "8d" | "messages" | "scorecard" | "performance" | "ncr" | "capa" | "rma" | "warranty" | "scar" | "inspections" | "lots" | "settings";
 
 // Panels that make sense listing "every supplier at once" when internal
 // staff hasn't picked one — the rest inherently need exactly one supplier.
@@ -111,6 +121,11 @@ export function SupplierPortalHome() {
           {tab === "performance" && <SupplierPerformanceDashboard supplierId={supplierId} />}
           {tab === "ncr" && <SupplierNCRList supplierId={supplierId} />}
           {tab === "capa" && <SupplierCAPAList supplierId={supplierId} />}
+          {tab === "rma" && <SupplierRmaList supplierId={supplierId} />}
+          {tab === "warranty" && <SupplierWarrantyList supplierId={supplierId} />}
+          {tab === "scar" && <SupplierScarList supplierId={supplierId} />}
+          {tab === "inspections" && <SupplierInspectionList supplierId={supplierId} />}
+          {tab === "lots" && <SupplierLotList supplierId={supplierId} />}
           {tab === "settings" && <SupplierSettingsPanel supplierId={supplierId} />}
         </>
       )}

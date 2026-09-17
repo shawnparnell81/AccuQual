@@ -1,4 +1,5 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CHART_COLORS } from "./chartPalette";
 
 export interface SupplierCostDatum {
   supplierName: string;
@@ -17,7 +18,7 @@ export function SupplierCostChart({ data }: { data: SupplierCostDatum[] }) {
         <XAxis type="number" tickLine={false} axisLine={false} tickFormatter={(v: number) => `$${v}`} tick={{ fill: "hsl(var(--muted-foreground))" }} />
         <YAxis type="category" dataKey="supplierName" tickLine={false} axisLine={false} width={110} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
         <Tooltip formatter={(v: number) => `$${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
-        <Bar dataKey="itemValue" fill="#10b981" radius={[0, 6, 6, 0]} />
+        <Bar dataKey="itemValue" fill={CHART_COLORS.resolved} radius={[0, 6, 6, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

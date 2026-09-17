@@ -16,6 +16,7 @@ import { users } from "../../src/drizzle/schema/users.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
 import { aiEmbeddings } from "../../src/drizzle/schema/ai.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
+import { formData } from "../../src/drizzle/schema/forms.js";
 import { departmentPermissions, permissionRoles } from "../../src/drizzle/schema/permissions.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
@@ -75,6 +76,7 @@ describe("Roles & Permissions module (real DB + real HTTP path)", () => {
     // indexing) — same cleanup every test that creates one already needs,
     // see tenant-isolation.test.ts's own comment.
     await db.delete(aiEmbeddings).where(eq(aiEmbeddings.tenantId, tenantId));
+    await db.delete(formData).where(eq(formData.tenantId, tenantId));
     await db.delete(ncr).where(eq(ncr.tenantId, tenantId));
     await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
     await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, otherTenantId));

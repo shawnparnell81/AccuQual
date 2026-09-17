@@ -5,6 +5,22 @@ import { AppError } from "../../utils/appError.js";
 import { callLlmDetailed } from "./llm-gateway.js";
 import { estimateCost } from "./pricing.js";
 import { checkUsageLimit } from "./ai.usage.js";
+
+/**
+ * Phase 5 — the same exact-phrase-per-module labeling ai.controller.ts's
+ * dedicated pipelines use, applied here too: the generic Assistant
+ * (AiFieldAssistant.tsx) is how CAPA's root-cause-narrative/effectiveness
+ * drafting and Supplier Risk AI scoring are actually implemented (see
+ * loadContextSummary's own "capa"/"capa_effectiveness"/"supplier_risk"
+ * cases below), so their audit trail entries need the same literal wording
+ * Phase 5 specifies, not just the generic "AI-assisted" every other module
+ * context falls back to.
+ */
+const ASSISTANT_MODULE_AI_STATE: Record<string, string> = {
+  capa: "AI-drafted CAPA content",
+  capa_effectiveness: "AI-drafted CAPA content",
+  supplier_risk: "AI-assisted risk score",
+};
 import { tenants } from "../../drizzle/schema/tenants.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
@@ -428,9 +444,10 @@ export const assistantHandler = asyncHandler(async (req: Request, res: Response)
       tokensOut: result.usage?.outputTokens ?? null,
       cost,
       aiUsed: true, // trivially always true for this endpoint — kept explicit since it's what module assistance buttons filter/report on
+      aiState: result.isStub ? "AI-disabled (no key)" : (context?.module && ASSISTANT_MODULE_AI_STATE[context.module]) || "AI-assisted",
     },
     performedBy: req.user?.id,
   });
 
-  res.json({ content: result.text, model: result.model, usage: result.usage });
+  res.json({ content: result.text, model: result.model, usage: result.usage, isStub: result.isStub });
 });

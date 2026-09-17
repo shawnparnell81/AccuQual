@@ -5,6 +5,8 @@ import { warrantyClaims } from "./warranty.js";
 import { ncr } from "./ncr.js";
 import { rma } from "./rma.js";
 import { supplierRmaRequests } from "./supplierRma.js";
+import { rmaLogRecords } from "./rmaLog.js";
+import { customers } from "./customers.js";
 
 /**
  * Customer Return Analysis Report (CRAR) — a real, workflow-driven record
@@ -58,6 +60,18 @@ export const crarClaims = pgTable("crar", {
   // in) — this is the actual foreign key for "Integrated with Supplier RMA
   // workflow".
   linkedRmaId: integer("linked_rma_id").references(() => rma.id),
+  // Phase 2 fix ("Ensure CRAR links correctly to Warranty and RMA Log") —
+  // warrantyId above already worked; this same real relational link never
+  // existed to the RMA Log register (the manual customer-return register,
+  // distinct from `rma`/linkedRmaId above and from rma_activity_log) at all.
+  rmaLogId: integer("rma_log_id").references(() => rmaLogRecords.id),
+  // Phase 2 fix ("Add customer contact fields: email, phone") — rather than
+  // duplicating email/phone as new raw text columns here (a second,
+  // driftable copy of data the `customers` table already owns, see its own
+  // primaryContactEmail/primaryContactPhone), this links to that same real
+  // customer record and the contact info is resolved live from there — see
+  // crar.controller.ts's getCrarHandler.
+  customerId: integer("customer_id").references(() => customers.id),
 
   // ---- 1. Return / Customer Identification ----
   customerName: text("customer_name"),

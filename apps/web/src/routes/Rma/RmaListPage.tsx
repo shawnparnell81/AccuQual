@@ -8,6 +8,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { Modal } from "../../components/modals/Modal";
 import { TextField, SelectField, TextAreaField } from "../../components/forms/Field";
 import type { Rma, RmaStatus, RmaReasonCode, Supplier, Ncr, Capa } from "../../api/types";
+import { formatDate } from "../../lib/dates";
 
 const rmaHooks = createResourceHooks<Rma>("rma");
 const supplierHooks = createResourceHooks<Supplier>("suppliers");
@@ -186,7 +187,7 @@ export function RmaListPage() {
           { header: "Supplier", accessor: (r) => r.supplierName ?? "—" },
           { header: "Status", accessor: (r) => <StatusBadge value={r.status} /> },
           { header: "Reason", accessor: (r) => (r.reasonCode ? r.reasonCode.replace(/_/g, " ") : "—") },
-          { header: "Created", accessor: (r) => new Date(r.createdAt).toLocaleDateString() },
+          { header: "Created", accessor: (r) => formatDate(r.createdAt) },
           { header: "Notes", accessor: (r) => r.notes ?? "—" },
         ]}
         rows={rows}

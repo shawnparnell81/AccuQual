@@ -63,6 +63,7 @@ export const erpAutomationSuggestionsHandler = asyncHandler(async (req: Request,
     output: output as Record<string, unknown>,
     result,
     performedBy: req.user?.id,
+    okVerb: "AI-suggested ERP actions",
   });
 
   res.json(saved);

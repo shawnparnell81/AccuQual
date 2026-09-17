@@ -12,6 +12,7 @@ import {
   reviewResponseSchema,
   submit8dSchema,
   sendMessageSchema,
+  sendMessageEmailSchema,
   updateSupplierSettingsSchema,
 } from "./supplierPortal.validation.js";
 import { submitRmaRequestSchema } from "./rmaRequest.validation.js";
@@ -33,11 +34,20 @@ import {
   eightDStatusHandler,
   review8dHandler,
   sendMessageHandler,
+  sendMessageEmailHandler,
   getThreadHandler,
   scorecardHandler,
   performanceHandler,
   supplierNcrListHandler,
   supplierCapaListHandler,
+  supplierRmaListHandler,
+  supplierWarrantyListHandler,
+  supplierScarListHandler,
+  supplierKpisHandler,
+  supplierRiskScoreHandler,
+  supplierScorecardExportHandler,
+  supplierInspectionListHandler,
+  supplierLotListHandler,
   getSupplierSettingsHandler,
   updateSupplierSettingsHandler,
 } from "./supplierPortal.controller.js";
@@ -81,6 +91,7 @@ supplierPortalRouter.post("/8d/:id/review", validate(reviewResponseSchema), revi
 
 // Messaging
 supplierPortalRouter.post("/messages/send", validate(sendMessageSchema), sendMessageHandler);
+supplierPortalRouter.post("/messages/send-email", validate(sendMessageEmailSchema), sendMessageEmailHandler);
 supplierPortalRouter.get("/messages/thread", getThreadHandler);
 
 // Scorecard + performance
@@ -90,6 +101,21 @@ supplierPortalRouter.get("/performance", performanceHandler);
 // NCR/CAPA visibility (read-only, derived — see the controller's own comment)
 supplierPortalRouter.get("/ncr/list", supplierNcrListHandler);
 supplierPortalRouter.get("/capa/list", supplierCapaListHandler);
+
+// Phase 7 — RMA/Warranty/SCAR visibility (real supplierId FK on each — see
+// the controller's own comment on why these still need a wrapper endpoint
+// rather than reusing /rma, /warranty, /scar-forms directly), KPIs/health,
+// and the read-only Quality Risk Score + scorecard export.
+supplierPortalRouter.get("/rma/list", supplierRmaListHandler);
+supplierPortalRouter.get("/warranty/list", supplierWarrantyListHandler);
+supplierPortalRouter.get("/scar/list", supplierScarListHandler);
+supplierPortalRouter.get("/kpis", supplierKpisHandler);
+supplierPortalRouter.get("/risk-score", supplierRiskScoreHandler);
+supplierPortalRouter.get("/scorecard/export", supplierScorecardExportHandler);
+
+// Phase 8 — inspection reports (real supplierId FK) + lots (accepted/rejected shipments) visibility.
+supplierPortalRouter.get("/inspections/list", supplierInspectionListHandler);
+supplierPortalRouter.get("/lots/list", supplierLotListHandler);
 
 // Settings
 supplierPortalRouter.get("/settings", getSupplierSettingsHandler);

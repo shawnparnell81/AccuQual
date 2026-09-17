@@ -9,6 +9,7 @@ import { passwordResetTokens } from "../../drizzle/schema/passwordResetTokens.js
 import { AppError } from "../../utils/appError.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../utils/jwt.js";
 import { sendEmail } from "../notifications/notification.service.js";
+import { renderTemplate } from "../notifications/templates.js";
 import { env } from "../../config/env.js";
 
 // Registration/login run before a tenant transaction exists (the tenant isn't
@@ -98,6 +99,11 @@ export async function login(input: { email: string; password: string }) {
   const valid = await bcrypt.compare(input.password, user.passwordHash);
   if (!valid) throw AppError.unauthorized("Invalid credentials");
 
+  // Phase 7 — Supplier Portal health indicators ("last supplier login")
+  // read this; best-effort, never blocks a successful login on its own
+  // failure.
+  await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id)).catch(() => undefined);
+
   const tokens = issueTokens({ id: user.id, tenantId: user.tenantId, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion });
   return { user: sanitize({ ...user, roleName }), tenant: row.tenants ? { id: row.tenants.id, name: row.tenants.name, code: row.tenants.code, branding: row.tenants.branding } : null, ...tokens };
 }
@@ -163,14 +169,8 @@ export async function forgotPassword(email: string): Promise<void> {
   });
 
   const resetUrl = `${env.FRONTEND_URL}/reset-password?token=${rawToken}`;
-  await sendEmail({
-    to: user.email,
-    subject: "Reset your AccuQual password",
-    body:
-      "We received a request to reset your AccuQual password. This link expires in 30 minutes and can only be used once:\n\n" +
-      `${resetUrl}\n\n` +
-      "If you didn't request this, you can safely ignore this email — your password hasn't been changed.",
-  });
+  const resetEmail = renderTemplate("password_reset", { resetUrl, expiresInMinutes: String(RESET_TOKEN_TTL_MS / 60_000) });
+  await sendEmail({ to: user.email, subject: resetEmail.subject, body: resetEmail.body });
 }
 
 /** Bumps tokenVersion too — a resets password revokes every outstanding refresh token, the same way logout() does. */
