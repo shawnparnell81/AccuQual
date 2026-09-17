@@ -164,6 +164,31 @@ blueprint entries, or a managed Redis add-on), `checkReadiness()` already
 computes a real `redis` status — promoting it to a hard dependency at that
 point is a one-line change in `healthMonitor.ts`, not a rebuild.
 
+## Real email delivery (SMTP)
+
+`notification.service.ts` degrades to an honest log-only stub (every
+"email" is recorded but never actually sent) until all of
+`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD` are set — the same
+opt-in pattern as the AI BYOK key and the alert webhook above. Verified
+working end-to-end against a real Zoho Mail business account:
+
+```
+SMTP_HOST=smtppro.zoho.com
+SMTP_PORT=465
+SMTP_USER=<your business mailbox address>
+SMTP_PASSWORD=<an app-specific password, if 2FA is on>
+SMTP_FROM=AccuQual <your business mailbox address>
+```
+
+Any real SMTP-capable provider works the same way (SendGrid, Mailgun,
+Amazon SES, another Zoho/Google Workspace/Microsoft 365 mailbox) — just
+swap in that provider's host/port/credentials. All five are already
+declared `sync: false` in `render.yaml`, so Render will prompt for them
+on the next blueprint sync; paste the real values into Render's dashboard
+directly, never into this repo. Note port 465 needs SSL — `SmtpTransport`
+already sets that automatically whenever the port is 465, no code change
+needed regardless of which port your provider gives you.
+
 ## What's still not set up (honest gaps, not this file's job to fix)
 
 - No self-serve signup — accounts are still provisioned via the internal

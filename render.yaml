@@ -38,6 +38,21 @@ services:
       # Webhook URL to paste in here.
       - key: ALERT_WEBHOOK_URL
         sync: false
+      # Real SMTP delivery (onboarding/notification email) — all optional;
+      # leave blank to keep every send in the honest log-only stub mode
+      # notification.service.ts already falls back to. Verified working
+      # locally against a real Zoho Mail business account (smtppro.zoho.com,
+      # port 465/SSL) — same four values go here for production.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
 
   - type: web
     name: accuqual-web
