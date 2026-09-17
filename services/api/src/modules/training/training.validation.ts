@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reasonableDate } from "../../utils/validation.js";
 import { rejectAiStubText, AI_STUB_REJECT_MESSAGE } from "../ai/ai.guardrails.js";
 
 // Phase 4 AI guardrails: description is the real onInsert target of
@@ -21,7 +22,7 @@ export const updateCourseSchema = z.object({
 
 export const assignSchema = z.object({
   userIds: z.array(z.number().int()).min(1),
-  dueAt: z.coerce.date().optional(),
+  dueAt: reasonableDate.optional(),
 });
 
 export const completeAssignmentSchema = z.object({

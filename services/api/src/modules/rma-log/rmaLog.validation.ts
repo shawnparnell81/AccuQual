@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reasonableDate } from "../../utils/validation.js";
 
 /** "Warranty, scrap, repair, replace, credit" — the brief's own literal list. */
 export const DISPOSITION_ACTIONS = ["warranty", "scrap", "repair", "replace", "credit"] as const;
@@ -7,7 +8,7 @@ export const DISPOSITION_ACTIONS = ["warranty", "scrap", "repair", "replace", "c
 export const RMA_LOG_STATUSES = ["open", "received", "under_review", "dispositioned", "closed"] as const;
 
 const contentFields = {
-  dateIssued: z.coerce.date().optional(),
+  dateIssued: reasonableDate.optional(),
   trackingNumber: z.string().nullable().optional(),
   customerName: z.string().nullable().optional(),
   partNumber: z.string().nullable().optional(),
@@ -16,12 +17,12 @@ const contentFields = {
   originalOrderNumber: z.string().nullable().optional(),
   serialNumber: z.string().nullable().optional(),
   customerReasonForReturn: z.string().nullable().optional(),
-  dateReceived: z.coerce.date().nullable().optional(),
+  dateReceived: reasonableDate.nullable().optional(),
   qualityTeamFindings: z.string().nullable().optional(),
   dispositionAction: z.enum(DISPOSITION_ACTIONS).nullable().optional(),
   correctiveAction: z.string().nullable().optional(),
   creditMemo: z.string().nullable().optional(),
-  dateClosed: z.coerce.date().nullable().optional(),
+  dateClosed: reasonableDate.nullable().optional(),
 };
 
 /** The three real integration links — gated separately behind rma_log.linkage.write, see rmaLog.controller.ts. */

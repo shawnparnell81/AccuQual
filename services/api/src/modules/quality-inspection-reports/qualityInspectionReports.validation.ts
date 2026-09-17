@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reasonableDate } from "../../utils/validation.js";
 
 export const INSPECTION_TYPES = ["incoming", "in_process", "final"] as const;
 export const INSPECTION_FINAL_STATUSES = ["accepted", "rejected", "rework_required", "accepted_via_deviation"] as const;
@@ -13,7 +14,7 @@ export const createQualityInspectionReportSchema = z.object({
 });
 
 export const updateQualityInspectionReportSchema = z.object({
-  inspectionDate: z.coerce.date().nullable().optional(),
+  inspectionDate: reasonableDate.nullable().optional(),
   inspectorName: z.string().nullable().optional(),
   inspectionType: z.enum(INSPECTION_TYPES).nullable().optional(),
   partMaterialNo: z.string().nullable().optional(),
@@ -29,9 +30,9 @@ export const updateQualityInspectionReportSchema = z.object({
   finalStatus: z.enum(INSPECTION_FINAL_STATUSES).nullable().optional(),
   notesRemarks: z.string().nullable().optional(),
   inspectorSignature: z.string().nullable().optional(),
-  inspectorSignatureDate: z.coerce.date().nullable().optional(),
+  inspectorSignatureDate: reasonableDate.nullable().optional(),
   qaLeadSignature: z.string().nullable().optional(),
-  qaLeadSignatureDate: z.coerce.date().nullable().optional(),
+  qaLeadSignatureDate: reasonableDate.nullable().optional(),
 });
 
 export const createInspectionItemSchema = z.object({

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reasonableDate } from "../../utils/validation.js";
 
 export const CRAR_STATUSES = ["new", "quality_review", "warranty_review", "completed"] as const;
 
@@ -21,13 +22,13 @@ const crarContentFields = {
   partDescription: z.string().nullable().optional(),
   qtyReturned: z.string().nullable().optional(),
   reportInitiatedBy: z.string().nullable().optional(),
-  reportDate: z.coerce.date().nullable().optional(),
+  reportDate: reasonableDate.nullable().optional(),
   approvedBy: z.string().nullable().optional(),
   customerComplaint: z.string().nullable().optional(),
 
   // 3. Customer Complaint & Initial Assessment
   complaintDetail: z.string().nullable().optional(),
-  dateReceived: z.coerce.date().nullable().optional(),
+  dateReceived: reasonableDate.nullable().optional(),
   receivedBy: z.string().nullable().optional(),
   conditionOnReceipt: z.string().nullable().optional(),
 
@@ -43,7 +44,7 @@ const crarContentFields = {
   // 5. Investigation Plan
   investigationPlan: z.string().nullable().optional(),
   investigator: z.string().nullable().optional(),
-  targetCompletion: z.coerce.date().nullable().optional(),
+  targetCompletion: reasonableDate.nullable().optional(),
   priority: z.string().nullable().optional(),
 
   // 6. Receiving Documentation / Evidence
@@ -58,7 +59,7 @@ const crarContentFields = {
   // 9. Tests Performed & Test Results
   testResults: z.string().nullable().optional(),
   testedBy: z.string().nullable().optional(),
-  testDate: z.coerce.date().nullable().optional(),
+  testDate: reasonableDate.nullable().optional(),
   overallTestResult: z.string().nullable().optional(),
 
   // 10. Findings & Conclusion
@@ -75,17 +76,17 @@ const crarContentFields = {
   correctiveActionRequired: z.boolean().optional(),
   engineeringReviewRequired: z.boolean().optional(),
   carNumber: z.string().nullable().optional(),
-  customerCommunicationDate: z.coerce.date().nullable().optional(),
-  dispositionDate: z.coerce.date().nullable().optional(),
+  customerCommunicationDate: reasonableDate.nullable().optional(),
+  dispositionDate: reasonableDate.nullable().optional(),
 
   // 12. Approval / Final Record
   finalReviewComments: z.string().nullable().optional(),
   preparedByFinal: z.string().nullable().optional(),
   preparedSignature: z.string().nullable().optional(),
-  preparedDate: z.coerce.date().nullable().optional(),
+  preparedDate: reasonableDate.nullable().optional(),
   approvedByFinal: z.string().nullable().optional(),
   approvedSignature: z.string().nullable().optional(),
-  approvedDate: z.coerce.date().nullable().optional(),
+  approvedDate: reasonableDate.nullable().optional(),
 
   // 13. Record Retention / Closeout
   recordLocation: z.string().nullable().optional(),

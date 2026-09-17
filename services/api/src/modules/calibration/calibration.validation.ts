@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reasonableDate } from "../../utils/validation.js";
 
 export const createEquipmentSchema = z.object({
   name: z.string().min(1),
@@ -12,7 +13,7 @@ export const createEquipmentSchema = z.object({
 });
 
 export const addCalibrationSchema = z.object({
-  performedAt: z.coerce.date(),
+  performedAt: reasonableDate,
   result: z.enum(["pass", "fail", "adjusted"]),
   technicianName: z.string().optional(),
   notes: z.string().optional(),

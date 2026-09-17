@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reasonableDate } from "../../utils/validation.js";
 
 export const WARRANTY_STATUSES = ["new", "inspection", "supplier_review", "approved", "rejected", "replaced", "repaired", "closed"] as const;
 export const WARRANTY_COST_TYPES = ["parts", "labor", "shipping", "replacement_unit", "other"] as const;
@@ -7,8 +8,8 @@ export const createWarrantyClaimSchema = z.object({
   customerId: z.coerce.number().int().optional(),
   productId: z.coerce.number().int().optional(),
   serialNumber: z.string().optional(),
-  purchaseDate: z.coerce.date().optional(),
-  failureDate: z.coerce.date().optional(),
+  purchaseDate: reasonableDate.optional(),
+  failureDate: reasonableDate.optional(),
   failureDescription: z.string().optional(),
   warrantyCostEstimate: z.coerce.number().optional(),
   supplierId: z.coerce.number().int().optional(),
@@ -27,15 +28,15 @@ export const updateWarrantyClaimSchema = z.object({
   customerId: z.coerce.number().int().nullable().optional(),
   productId: z.coerce.number().int().nullable().optional(),
   serialNumber: z.string().nullable().optional(),
-  purchaseDate: z.coerce.date().nullable().optional(),
-  failureDate: z.coerce.date().nullable().optional(),
+  purchaseDate: reasonableDate.nullable().optional(),
+  failureDate: reasonableDate.nullable().optional(),
   failureDescription: z.string().nullable().optional(),
   warrantyCostEstimate: z.coerce.number().nullable().optional(),
   supplierId: z.coerce.number().int().nullable().optional(),
   linkedNcrId: z.coerce.number().int().nullable().optional(),
   linkedWorkOrderId: z.coerce.number().int().nullable().optional(),
   inspectionNotes: z.string().nullable().optional(),
-  inspectionDate: z.coerce.date().nullable().optional(),
+  inspectionDate: reasonableDate.nullable().optional(),
   supplierReviewNotes: z.string().nullable().optional(),
   dispositionNotes: z.string().nullable().optional(),
 });

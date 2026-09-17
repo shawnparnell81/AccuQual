@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reasonableDate } from "../../utils/validation.js";
 
 const twinNodeSchema = z.object({
   id: z.string(),
@@ -34,7 +35,7 @@ export const simulateSchema = z.object({
 
 export const iotIngestSchema = z.object({
   deviceId: z.string().min(1),
-  timestamp: z.coerce.date().optional(),
+  timestamp: reasonableDate.optional(),
   data: z.record(z.string(), z.unknown()),
 });
 

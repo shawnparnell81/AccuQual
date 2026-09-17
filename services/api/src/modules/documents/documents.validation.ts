@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reasonableDate } from "../../utils/validation.js";
 
 export const createDocumentSchema = z.object({
   title: z.string().min(1),
@@ -16,7 +17,7 @@ export const documentStatusEnum = z.enum(["draft", "in_review", "approved", "obs
 // endpoints own the transition" pattern risk.validation.ts's updateRiskSchema
 // already uses.
 export const updateDocumentSchema = createDocumentSchema.partial().extend({
-  expirationDate: z.coerce.date().nullable().optional(),
+  expirationDate: reasonableDate.nullable().optional(),
   expirationWarningDays: z.number().int().positive().optional(),
   retentionPeriodDays: z.number().int().positive().optional(),
   retentionAction: z.enum(["archive", "delete"]).optional(),

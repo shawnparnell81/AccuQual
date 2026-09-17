@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { reasonableDate } from "../../utils/validation.js";
 
 export const DOCUMENT_CHANGE_STATUSES = ["draft", "active", "obsolete"] as const;
 
 export const createDocumentChangeRequestSchema = z.object({
   formNo: z.string().optional(),
   revision: z.string().optional(),
-  effectiveDate: z.coerce.date().optional(),
+  effectiveDate: reasonableDate.optional(),
   preparedBy: z.string().optional(),
   approvedBy: z.string().optional(),
   additionalComments: z.string().optional(),
@@ -14,7 +15,7 @@ export const createDocumentChangeRequestSchema = z.object({
 export const updateDocumentChangeRequestSchema = z.object({
   formNo: z.string().nullable().optional(),
   revision: z.string().nullable().optional(),
-  effectiveDate: z.coerce.date().nullable().optional(),
+  effectiveDate: reasonableDate.nullable().optional(),
   preparedBy: z.string().nullable().optional(),
   approvedBy: z.string().nullable().optional(),
   status: z.enum(DOCUMENT_CHANGE_STATUSES).optional(),

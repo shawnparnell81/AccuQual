@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reasonableDate } from "../../utils/validation.js";
 
 export const RISK_CATEGORIES = ["supplier", "process", "product", "safety", "regulatory", "other"] as const;
 export const RISK_SOURCE_TYPES = ["NCR", "Supplier", "Receiving", "WorkOrder", "Customer", "Manual"] as const;
@@ -51,14 +52,14 @@ export const addFmeaItemSchema = z.object({
 
 export const createMitigationSchema = z.object({
   action: z.string().min(1),
-  dueDate: z.coerce.date().optional(),
+  dueDate: reasonableDate.optional(),
   ownerId: z.coerce.number().int().optional(),
   aiSuggestionId: z.coerce.number().int().optional(),
 });
 
 export const updateMitigationSchema = z.object({
   action: z.string().min(1).optional(),
-  dueDate: z.coerce.date().nullable().optional(),
+  dueDate: reasonableDate.nullable().optional(),
   ownerId: z.coerce.number().int().nullable().optional(),
   status: z.enum(MITIGATION_STATUSES).optional(),
 });

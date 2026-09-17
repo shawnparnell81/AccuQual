@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reasonableDate } from "../../utils/validation.js";
 import { QMS_FORM_DEFINITIONS } from "./qmsFormDefinitions.js";
 
 const FORM_TYPES = QMS_FORM_DEFINITIONS.map((d) => d.formType) as [string, ...string[]];
@@ -8,7 +9,7 @@ export const createQmsFormSchema = z.object({
   formType: z.enum(FORM_TYPES),
   formNo: z.string().optional(),
   revision: z.string().optional(),
-  effectiveDate: z.coerce.date().optional(),
+  effectiveDate: reasonableDate.optional(),
   preparedBy: z.string().optional(),
   approvedBy: z.string().optional(),
 });
@@ -16,7 +17,7 @@ export const createQmsFormSchema = z.object({
 export const updateQmsFormSchema = z.object({
   formNo: z.string().nullable().optional(),
   revision: z.string().nullable().optional(),
-  effectiveDate: z.coerce.date().nullable().optional(),
+  effectiveDate: reasonableDate.nullable().optional(),
   preparedBy: z.string().nullable().optional(),
   approvedBy: z.string().nullable().optional(),
   status: z.enum(QMS_FORM_STATUSES).optional(),

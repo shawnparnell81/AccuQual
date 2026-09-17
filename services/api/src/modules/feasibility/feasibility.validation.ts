@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reasonableDate } from "../../utils/validation.js";
 
 export const FEASIBLE_VALUES = ["yes", "no", "partial"] as const;
 export const RISK_LEVELS = ["low", "medium", "high"] as const;
@@ -21,13 +22,13 @@ export const createFeasibilitySchema = z.object({
   customerId: z.coerce.number().int().optional(), // set when launched from the Customer Onboarding packet
   documentId: z.string().optional(),
   revision: z.string().optional(),
-  effectiveDate: z.coerce.date().optional(),
+  effectiveDate: reasonableDate.optional(),
   processOwner: z.string().optional(),
   customerName: z.string().optional(),
   rfqQuoteNumber: z.string().optional(),
   partProjectName: z.string().optional(),
   partNumberRev: z.string().optional(),
-  targetDeliveryDate: z.coerce.date().optional(),
+  targetDeliveryDate: reasonableDate.optional(),
   annualEstimatedVolume: z.string().optional(),
 });
 
@@ -38,13 +39,13 @@ export const createFeasibilitySchema = z.object({
 export const updateFeasibilitySchema = z.object({
   documentId: z.string().optional(),
   revision: z.string().optional(),
-  effectiveDate: z.coerce.date().nullable().optional(),
+  effectiveDate: reasonableDate.nullable().optional(),
   processOwner: z.string().optional(),
   customerName: z.string().optional(),
   rfqQuoteNumber: z.string().optional(),
   partProjectName: z.string().optional(),
   partNumberRev: z.string().optional(),
-  targetDeliveryDate: z.coerce.date().nullable().optional(),
+  targetDeliveryDate: reasonableDate.nullable().optional(),
   annualEstimatedVolume: z.string().optional(),
   ...areaFields(),
   newToolingEquipment: z.string().optional(),

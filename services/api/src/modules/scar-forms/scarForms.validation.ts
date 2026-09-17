@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reasonableDate } from "../../utils/validation.js";
 
 export const SCAR_STATUSES = ["open", "closed"] as const;
 
@@ -10,10 +11,10 @@ export const createScarFormSchema = z.object({
 
 export const updateScarFormSchema = z.object({
   scarNumber: z.string().nullable().optional(),
-  dateIssued: z.coerce.date().nullable().optional(),
+  dateIssued: reasonableDate.nullable().optional(),
   supplierName: z.string().nullable().optional(),
   supplierId: z.coerce.number().nullable().optional(),
-  responseDueDate: z.coerce.date().nullable().optional(),
+  responseDueDate: reasonableDate.nullable().optional(),
   contactPerson: z.string().nullable().optional(),
   poNumber: z.string().nullable().optional(),
   partNumberDescription: z.string().nullable().optional(),
@@ -31,14 +32,14 @@ export const updateScarFormSchema = z.object({
   why4: z.string().nullable().optional(),
   why5: z.string().nullable().optional(),
   correctiveActionOwner: z.string().nullable().optional(),
-  correctiveActionTargetDate: z.coerce.date().nullable().optional(),
+  correctiveActionTargetDate: reasonableDate.nullable().optional(),
   preventiveActionOwner: z.string().nullable().optional(),
-  preventiveActionTargetDate: z.coerce.date().nullable().optional(),
+  preventiveActionTargetDate: reasonableDate.nullable().optional(),
   processUpdateOwner: z.string().nullable().optional(),
-  processUpdateTargetDate: z.coerce.date().nullable().optional(),
+  processUpdateTargetDate: reasonableDate.nullable().optional(),
   supplierRepSignature: z.string().nullable().optional(),
-  supplierRepDate: z.coerce.date().nullable().optional(),
+  supplierRepDate: reasonableDate.nullable().optional(),
   qualityEngineerSignature: z.string().nullable().optional(),
-  qualityEngineerDate: z.coerce.date().nullable().optional(),
+  qualityEngineerDate: reasonableDate.nullable().optional(),
   status: z.enum(SCAR_STATUSES).optional(),
 });

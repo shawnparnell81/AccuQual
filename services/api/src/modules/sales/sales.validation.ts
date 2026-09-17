@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reasonableDate } from "../../utils/validation.js";
 
 export const ACCOUNT_STATUSES = ["prospect", "active", "dormant"] as const;
 export const QUOTE_STATUSES = ["draft", "submitted", "accepted", "rejected", "archived"] as const;
@@ -22,7 +23,7 @@ export const createActivitySchema = z.object({
   activityType: z.enum(ACTIVITY_TYPES),
   notes: z.string().optional(),
   nextSteps: z.string().optional(),
-  dueDate: z.coerce.date().optional(),
+  dueDate: reasonableDate.optional(),
   ownerId: z.coerce.number().int().optional(),
   relatedSourceType: z.enum(SALES_RELATED_SOURCE_TYPES).optional(),
   relatedSourceId: z.coerce.number().int().optional(),
@@ -41,12 +42,12 @@ export const updateQuoteSchema = z.object({
 
 export const createContractSchema = z.object({
   contractType: z.enum(CONTRACT_TYPES),
-  effectiveDate: z.coerce.date().optional(),
-  expirationDate: z.coerce.date().optional(),
+  effectiveDate: reasonableDate.optional(),
+  expirationDate: reasonableDate.optional(),
 });
 
 export const updateContractSchema = z.object({
   contractType: z.enum(CONTRACT_TYPES).optional(),
-  effectiveDate: z.coerce.date().nullable().optional(),
-  expirationDate: z.coerce.date().nullable().optional(),
+  effectiveDate: reasonableDate.nullable().optional(),
+  expirationDate: reasonableDate.nullable().optional(),
 });

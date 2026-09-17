@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reasonableDate } from "../../utils/validation.js";
 
 /** The Supplier RMA Request's own field list — the brief's "FINAL, CORRECTED LIST", no more, no less. */
 export const submitRmaRequestSchema = z.object({
@@ -8,7 +9,7 @@ export const submitRmaRequestSchema = z.object({
   phoneNumber: z.string().optional(),
   poNumber: z.string().optional(),
   partNumber: z.string().optional(),
-  poDate: z.coerce.date().optional(), // "Date PO Was Submitted"
+  poDate: reasonableDate.optional(), // "Date PO Was Submitted"
   customerClaimNumber: z.string().optional(),
   shortDescription: z.string().optional(),
   description: z.string().optional(), // the one full text block
