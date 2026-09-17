@@ -280,6 +280,39 @@ describe("Supplier Portal (real DB + real HTTP path)", () => {
     expect(performance.body.correctiveActionAcceptedCount).toBe(1);
   });
 
+  // The new Scorecard entry form (SupplierScorecard.tsx) calls this real
+  // write path — POST /suppliers/:id/scorecard, on the Suppliers router,
+  // not /supplier-portal (that side stays read-only). Quality/admin get
+  // edit on "suppliers"; Purchasing/Engineering are read-only there even
+  // though they can browse the portal itself.
+  it("quality can add a real scorecard entry via POST /suppliers/:id/scorecard, and it's audited", async () => {
+    const res = await request(app)
+      .post(`/suppliers/${supplierAId}/scorecard`)
+      .set("Authorization", `Bearer ${qualityToken}`)
+      .send({ period: `2026-Q2-${suffix}`, qualityScore: 95, deliveryScore: 85, notes: "Strong quarter." });
+    expect(res.status).toBe(201);
+    expect(res.body.overallScore).toBe("90");
+
+    const trail = await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "SupplierScorecard"), eq(auditTrail.entityId, res.body.id)));
+    expect(trail.some((t) => t.action === "create")).toBe(true);
+
+    const portalRead = await request(app).get("/supplier-portal/scorecard").set("Authorization", `Bearer ${supplierAToken}`);
+    expect(portalRead.body.some((r: { id: number }) => r.id === res.body.id)).toBe(true);
+  });
+
+  it("purchasing (read-only on suppliers) cannot add a scorecard entry", async () => {
+    const res = await request(app).post(`/suppliers/${supplierAId}/scorecard`).set("Authorization", `Bearer ${purchasingToken}`).send({ period: "2026-Q3", qualityScore: 50, deliveryScore: 50 });
+    expect(res.status).toBe(403);
+  });
+
+  it("a scorecard entry added for supplier A never appears in supplier B's own read", async () => {
+    const res = await request(app).post(`/suppliers/${supplierAId}/scorecard`).set("Authorization", `Bearer ${qualityToken}`).send({ period: `2026-Q4-${suffix}`, qualityScore: 70, deliveryScore: 70 });
+    expect(res.status).toBe(201);
+
+    const bRead = await request(app).get("/supplier-portal/scorecard").set("Authorization", `Bearer ${supplierBToken}`);
+    expect(bRead.body.some((r: { id: number }) => r.id === res.body.id)).toBe(false);
+  });
+
   it("derived NCR/CAPA visibility: supplier A sees the real NCR linked via its RMA; supplier B sees none", async () => {
     const aList = await request(app).get("/supplier-portal/ncr/list").set("Authorization", `Bearer ${supplierAToken}`);
     expect(aList.status).toBe(200);

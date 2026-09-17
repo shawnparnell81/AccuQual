@@ -43,6 +43,10 @@ export const addScorecardHandler = asyncHandler(async (req: Request, res: Respon
     .db!.insert(supplierScorecards)
     .values({ ...req.body, supplierId, tenantId: req.tenantId!, overallScore: String(overallScore) })
     .returning();
+  // Previously missing — every other create path in this app records one;
+  // this just closes that gap for a table that had no UI writer at all
+  // until now (see SupplierScorecard.tsx's new entry form).
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "SupplierScorecard", entityId: scorecard!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(scorecard);
 });
 
