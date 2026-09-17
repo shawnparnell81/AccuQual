@@ -32,6 +32,12 @@ services:
           type: web
           name: accuqual-web
           property: hostport
+      # Optional — real deployment alerting. Leave blank to skip; the app
+      # still logs a real DB outage loudly either way. See DEPLOY.md's
+      # "Monitoring & alerting" section for how to get a Slack Incoming
+      # Webhook URL to paste in here.
+      - key: ALERT_WEBHOOK_URL
+        sync: false
 
   - type: web
     name: accuqual-web

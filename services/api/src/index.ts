@@ -2,6 +2,7 @@ import { env } from "./config/env.js";
 import { logger } from "./utils/logger.js";
 import { createApp } from "./app.js";
 import { startReportingScheduler } from "./modules/reporting/reporting.scheduler.js";
+import { startHealthMonitor } from "./modules/monitoring/healthMonitor.js";
 
 const app = createApp();
 
@@ -11,6 +12,9 @@ app.listen(env.PORT, () => {
   // scheduled reports, never the test suite (which imports createApp()
   // directly and never reaches this file) and never a one-off script.
   startReportingScheduler();
+  // Same reasoning — real deployment monitoring/alerting, only the real
+  // server process runs it.
+  startHealthMonitor();
 });
 
 process.on("unhandledRejection", (reason) => {

@@ -60,6 +60,14 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   SMTP_FROM: z.string().default("AccuQual <no-reply@accuqual.local>"),
+
+  // Real deployment monitoring/alerting — optional, same graceful-degrade
+  // pattern as SMTP above. Unset means healthMonitor.ts's in-process poller
+  // still runs and still logs a real DB/Redis outage loudly, it just never
+  // POSTs anywhere. Any endpoint accepting a Slack-style `{text}` JSON body
+  // works — a Slack Incoming Webhook URL, Discord's Slack-compatible
+  // `/slack` webhook suffix, or a custom endpoint — see healthMonitor.ts.
+  ALERT_WEBHOOK_URL: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

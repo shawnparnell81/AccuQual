@@ -107,10 +107,62 @@ fallback is manual:
 
 ### 4. Verify
 
-- `curl https://<your-api-url>/health` → `{"status":"ok",...}`
+- `curl https://<your-api-url>/health` → `{"status":"ok","database":{"status":"ok",...},"redis":{"status":"ok"|"critical",...},...}`
+  — a real readiness check now, not a bare liveness ping (see "Monitoring &
+  alerting" below). `status` is 503 only when the database itself is
+  unreachable; `redis` is reported for visibility but never causes a 503,
+  since this blueprint doesn't provision a managed Redis service at all
+  (see that section for why).
 - Open the deployed frontend URL, log in with a real seeded user, confirm
   a page that hits the API (e.g., the NCR list) loads without a CORS or
   network error in the browser console.
+
+## Monitoring & alerting
+
+Two real, complementary pieces exist now — neither requires a paid
+third-party service to get real value, and both degrade gracefully with
+zero setup:
+
+1. **`GET /health` is a real readiness check**, not a bare "the process is
+   up" ping — it pings the actual database (and Redis, informationally)
+   on every request. This is what Render's own `healthCheckPath` already
+   hits (see `render.yaml`), so Render will restart an instance whose
+   database has genuinely gone unreachable, not just one that crashed.
+   Point any external uptime checker at this same URL for a second,
+   independent layer of coverage that survives even if the whole process
+   (not just the database) goes down — Render's own restart-on-failure
+   only catches that case, an *external* checker also tells you about it.
+   A free tier of any of these works: UptimeRobot, Better Stack, or
+   Freshping — point it at `https://<your-api-url>/health` on a 5-minute
+   interval and set it to alert on a non-2xx response.
+
+2. **A built-in alert poller** (`services/api/src/modules/monitoring/healthMonitor.ts`)
+   runs inside the API process itself, re-checking readiness once a minute
+   and logging loudly the moment the database goes unreachable — this
+   happens automatically, with zero configuration, and is visible in
+   Render's own log stream today. To also get a real push notification
+   (Slack, Discord, or anywhere else that accepts a Slack-style `{text}`
+   JSON webhook), set the `ALERT_WEBHOOK_URL` env var:
+   - **Slack**: your workspace → Settings → search "Incoming Webhooks" →
+     add one to a channel → copy the Webhook URL it gives you.
+   - **Discord**: a channel's Settings → Integrations → Webhooks → New
+     Webhook → copy its URL and append `/slack` to the end (Discord's
+     webhooks accept Slack's payload shape at that suffix).
+   Paste either URL into `ALERT_WEBHOOK_URL` in Render's dashboard (it's
+   already declared, `sync: false`, in `render.yaml` — leave it blank to
+   skip this entirely). No redeploy needed for a plain env var change on
+   Render, just a restart.
+
+**Why Redis/the workflow-worker aren't part of this**: this blueprint
+deploys only `accuqual-api` and `accuqual-web` — no managed Redis service
+and no worker processes are defined in `render.yaml` today, so the
+Workflow Engine's event-driven side isn't live on this exact deployment as
+described. Making `/health` fail over a Redis outage would therefore have
+made Render treat an otherwise-fully-functional deployment as permanently
+unhealthy. If Redis + the workers are deployed later (their own Render
+blueprint entries, or a managed Redis add-on), `checkReadiness()` already
+computes a real `redis` status — promoting it to a hard dependency at that
+point is a one-line change in `healthMonitor.ts`, not a rebuild.
 
 ## What's still not set up (honest gaps, not this file's job to fix)
 
@@ -118,5 +170,7 @@ fallback is manual:
   platform-admin flow.
 - No billing/tier enforcement — see the Inspection Report's TIER-01
   finding.
-- No monitoring/alerting beyond the `/health` endpoint — worth an uptime
-  checker at minimum once real customers depend on this.
+- The workflow-worker/ai-worker/digital-twin-worker processes and a managed
+  Redis service have no `render.yaml` entries — the Workflow Engine's
+  event-driven automation isn't live on this exact deployment until that's
+  added.

@@ -6,6 +6,8 @@ import { apiRateLimiter } from "./middleware/rateLimit.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { requestLogger } from "./middleware/requestLogger.js";
 import { env } from "./config/env.js";
+import { checkReadiness } from "./modules/monitoring/healthMonitor.js";
+import { asyncHandler } from "./utils/asyncHandler.js";
 
 // Inspection Report SAAS-03/SEC-02/R04: cors() with no options accepts every
 // origin, which is fine for a throwaway prototype and wrong for a
@@ -32,7 +34,18 @@ export function createApp() {
   app.use(requestLogger);
   app.use(apiRateLimiter);
 
-  app.get("/health", (_req, res) => res.json({ status: "ok", service: "accuqual-api" }));
+  // Render's own healthCheckPath (see render.yaml) — a real readiness check,
+  // not a bare liveness ping. 503 only when the database (the one
+  // dependency this app's real deployment always provisions) is
+  // unreachable; see healthMonitor.ts's own comment on why Redis is
+  // reported but never gates the HTTP status here.
+  app.get(
+    "/health",
+    asyncHandler(async (_req, res) => {
+      const report = await checkReadiness();
+      res.status(report.status === "critical" ? 503 : 200).json({ service: "accuqual-api", ...report });
+    })
+  );
 
   app.use("/", apiRouter);
 
