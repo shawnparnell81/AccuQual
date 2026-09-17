@@ -72,6 +72,29 @@ function assertReviewer(req: Request) {
   }
 }
 
+/**
+ * Sprint 2 fix (accuqual-implementation-sequencing.md) — review8dHandler and
+ * reviewCorrectiveActionHandler previously wrote `status` straight through
+ * with no fetch-and-compare against the current value at all, so a reviewer
+ * could "review" the same submission twice, flip an already-accepted
+ * response straight to rejected, etc. The real, live UI (Supplier8DForm.tsx/
+ * SupplierCARForm.tsx) only ever shows Accept/Reject buttons while a
+ * submission is "submitted" or "under_review" — once it's "accepted" or
+ * "rejected" it's terminal — so this mirrors that real behavior server-side
+ * instead of inventing a stricter one-way sequence the actual product
+ * doesn't have (PPAP's own review flow, which does use a distinct
+ * "under_review" action, is a separate, out-of-scope handler).
+ */
+const RESPONSE_TERMINAL_STATUSES = new Set(["accepted", "rejected"]);
+function assertReviewTransition(currentStatus: string, nextStatus: string) {
+  if (RESPONSE_TERMINAL_STATUSES.has(currentStatus)) {
+    throw AppError.badRequest(`Cannot review a submission that is already "${currentStatus}".`);
+  }
+  if (currentStatus === nextStatus) {
+    throw AppError.badRequest(`Submission is already "${currentStatus}".`);
+  }
+}
+
 async function assertSupplierExists(req: Request, supplierId: number) {
   const [row] = await req.db!.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, req.tenantId!)));
   if (!row) throw AppError.badRequest(`Supplier #${supplierId} not found`);
@@ -279,6 +302,11 @@ export const reviewCorrectiveActionHandler = asyncHandler(async (req: Request, r
   assertReviewer(req);
   const id = Number(req.params.id);
   const { status, reviewNotes } = req.body as { status: string; reviewNotes?: string };
+
+  const [existing] = await req.db!.select({ status: supplierCorrectiveActions.status }).from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.id, id), eq(supplierCorrectiveActions.tenantId, req.tenantId!)));
+  if (!existing) throw AppError.notFound("SupplierCorrectiveAction");
+  assertReviewTransition(existing.status, status);
+
   const [updated] = await req
     .db!.update(supplierCorrectiveActions)
     .set({ status, reviewNotes, reviewedByUserId: req.user?.id, updatedAt: new Date() })
@@ -334,6 +362,11 @@ export const review8dHandler = asyncHandler(async (req: Request, res: Response) 
   assertReviewer(req);
   const id = Number(req.params.id);
   const { status, reviewNotes } = req.body as { status: string; reviewNotes?: string };
+
+  const [existing] = await req.db!.select({ status: supplier8dResponses.status }).from(supplier8dResponses).where(and(eq(supplier8dResponses.id, id), eq(supplier8dResponses.tenantId, req.tenantId!)));
+  if (!existing) throw AppError.notFound("Supplier8dResponse");
+  assertReviewTransition(existing.status, status);
+
   const [updated] = await req
     .db!.update(supplier8dResponses)
     .set({ status, reviewNotes, reviewedByUserId: req.user?.id, updatedAt: new Date() })

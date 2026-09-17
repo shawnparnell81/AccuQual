@@ -34,6 +34,19 @@ export const getReportHandler = asyncHandler(async (req: Request, res: Response)
 
 export const updateReportHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadReport(req, Number(req.params.id));
+
+  // Sprint 2 fix (accuqual-implementation-sequencing.md) — finalStatus isn't
+  // a linear chain (reporting.service.ts treats null as "pending", then one
+  // of 4 terminal values chosen once — see that file's byFinalStatus/
+  // inspectionBacklog logic), so this guards it as "set once from null,
+  // then immutable" rather than inventing an ALLOWED_NEXT order that
+  // doesn't exist in this codebase. Left on the same generic PATCH the real
+  // frontend already calls (QualityInspectionReportDetailPage.tsx's radio
+  // group) instead of a new, unused dedicated endpoint.
+  if (Object.prototype.hasOwnProperty.call(req.body, "finalStatus") && record.finalStatus !== null && req.body.finalStatus !== record.finalStatus) {
+    throw AppError.badRequest(`This report's disposition is already "${record.finalStatus}" and cannot be changed once set.`);
+  }
+
   const [updated] = await req.db!.update(qualityInspectionReports).set({ ...req.body, updatedAt: new Date() }).where(eq(qualityInspectionReports.id, record.id)).returning();
   await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "QualityInspectionReport", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
   res.json(updated);

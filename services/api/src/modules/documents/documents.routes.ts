@@ -11,6 +11,7 @@ import {
   uploadVersionHandler,
   downloadVersionHandler,
   approveHandler,
+  obsoleteHandler,
   historyHandler,
   listExpiringHandler,
   applyRetentionHandler,
@@ -43,6 +44,7 @@ documentsRouter.post("/:id/version", validate(addVersionSchema), addVersionHandl
 documentsRouter.post("/:id/version/upload", upload.single("file"), uploadVersionHandler);
 documentsRouter.get("/version/:versionId/file", downloadVersionHandler);
 documentsRouter.post("/:id/approve", validate(approveSchema), approveHandler);
+documentsRouter.post("/:id/obsolete", obsoleteHandler);
 // On-demand version of the "retention/apply" sweep for a single document.
 documentsRouter.post("/:id/archive", archiveHandler);
 documentsRouter.get("/:id/history", historyHandler);

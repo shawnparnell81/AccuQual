@@ -26,9 +26,12 @@ export const createCapaSchema = z.object({
   ownerId: z.number().int().optional(),
 });
 
-export const updateCapaSchema = createCapaSchema.partial().extend({
-  status: z.enum(["open", "in_progress", "verifying", "closed"]).optional(),
-});
+// Sprint 2 fix (accuqual-implementation-sequencing.md) — deliberately
+// excludes `status`, same reasoning/pattern as risk.validation.ts's
+// updateRiskSchema: status only ever changes through the dedicated
+// transition endpoints (/start, /verify, /close), each with its own
+// ALLOWED_NEXT guard in capa.controller.ts.
+export const updateCapaSchema = createCapaSchema.partial();
 
 /**
  * Phase 2 CAPA fix ("validate CAPA effectiveness fields"): `verification`

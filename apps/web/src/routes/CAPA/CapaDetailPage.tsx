@@ -6,7 +6,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextAreaField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
-import { useWorkflowAction, useWorkflowUpdate } from "../../hooks/useWorkflowAction";
+import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
@@ -31,10 +31,10 @@ export function CapaDetailPage() {
   const { data: capa, isLoading } = capaHooks.useOne(capaId);
   useSetAssistantContext("capa", capaId, `CAPA #${capaId}`);
   const updateCapa = capaHooks.useUpdate();
-  // Open -> In Progress is generic-PATCH-only on the backend (no dedicated
-  // endpoint — see the Transitions/Rules Dictionaries), so this is the one
-  // action here that goes through useWorkflowUpdate, not useWorkflowAction.
-  const startAction = useWorkflowUpdate<{ id: number; status: string }>("capa", { successMessage: "CAPA started.", invalidateKeys: historyKey });
+  // Sprint 2 fix — Open -> In Progress now has a real dedicated, guarded
+  // endpoint (POST /capa/:id/start), same as verify/close below, instead of
+  // the generic PATCH this used to go through.
+  const startAction = useWorkflowAction("capa", "start", { successMessage: "CAPA started.", invalidateKeys: historyKey });
   const verifyAction = useWorkflowAction("capa", "verify", { successMessage: "Verification recorded.", invalidateKeys: historyKey });
   const closeAction = useWorkflowAction("capa", "close", { successMessage: "CAPA closed.", invalidateKeys: historyKey });
   const [verification, setVerification] = useState("");
@@ -67,7 +67,7 @@ export function CapaDetailPage() {
             label="Start Work"
             navKey="capa"
             action={startAction}
-            onClick={() => startAction.mutate({ id: capaId, status: "in_progress" })}
+            onClick={() => startAction.mutate({ id: capaId })}
             visible={capa.status === "open"}
             variant="primary"
           />

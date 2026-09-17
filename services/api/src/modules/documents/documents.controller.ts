@@ -107,6 +107,40 @@ export const approveHandler = asyncHandler(async (req: Request, res: Response) =
 });
 
 /**
+ * Sprint 2 fix — the real, one-way "retire an approved document" hop that
+ * had no dedicated endpoint at all before this (only ever read as a
+ * precondition by decideRetention/applyRetentionHandler/archiveHandler
+ * above, never written by any code path). Only "approved -> obsolete" is
+ * guarded here — real QMS documents are retired/superseded after release,
+ * not before; there's no evidence anywhere in this module that a draft or
+ * in-review document is meant to skip straight to obsolete.
+ */
+export const obsoleteHandler = asyncHandler(async (req: Request, res: Response) => {
+  const documentId = Number(req.params.id);
+  const tenantId = req.tenantId!;
+
+  const [doc] = await req.db!.select().from(documents).where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId)));
+  if (!doc) throw AppError.notFound("Document");
+  if (doc.status !== "approved") {
+    throw AppError.badRequest(`Cannot obsolete a document from status "${doc.status}" — must be "approved".`);
+  }
+
+  const [updated] = await req.db!.update(documents).set({ status: "obsolete", updatedAt: new Date() }).where(eq(documents.id, documentId)).returning();
+
+  await recordAuditTrail(req.db!, {
+    tenantId,
+    entityType: "Document",
+    entityId: documentId,
+    action: "status_change",
+    changes: { action: "obsolete", status: "obsolete" },
+    performedBy: req.user?.id,
+  });
+  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "documents", event: "obsolete", entityId: documentId });
+
+  res.json(updated);
+});
+
+/**
  * Streams a version's file back — only works for versions uploaded through
  * uploadVersionHandler (a real local path). A version created via the JSON
  * `POST .../version` endpoint with an already-hosted fileUrl is just linked

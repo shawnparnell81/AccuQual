@@ -17,12 +17,56 @@ export const listHandler = asyncHandler(async (req: Request, res: Response) => {
   res.json(rows);
 });
 
+/**
+ * Sprint 2 fix (accuqual-implementation-sequencing.md) — matches the same
+ * ALLOWED_NEXT/transition() shape risk.controller.ts already uses. Two of
+ * these three hops (in_progress -> verifying -> closed) were already
+ * individually guarded by ad hoc inline `if` checks in verifyHandler/
+ * closeHandler below; the real gap was open -> in_progress, which had NO
+ * dedicated endpoint at all (the live "Start CAPA" button on
+ * CapaDetailPage.tsx called the generic, unguarded PATCH via useWorkflowUpdate
+ * — see that hook's own comment: "used where a transition has no dedicated
+ * endpoint yet"). Consolidating all three into one map + helper here, and
+ * updating the frontend to call the new dedicated /start endpoint below via
+ * useWorkflowAction like verify/close already do, closes both the missing
+ * endpoint AND the underlying free-PATCH bypass (updateCapaSchema no longer
+ * accepts a raw `status` field at all — see capa.validation.ts).
+ */
+const ALLOWED_NEXT: Record<string, string> = {
+  open: "in_progress",
+  in_progress: "verifying",
+  verifying: "closed",
+};
+
+async function loadCapa(req: Request, id: number) {
+  const [row] = await req.db!.select().from(capa).where(and(eq(capa.id, id), eq(capa.tenantId, req.tenantId!)));
+  if (!row) throw AppError.notFound("CAPA");
+  return row;
+}
+
+function assertTransition(currentStatus: string, newStatus: string) {
+  if (ALLOWED_NEXT[currentStatus] !== newStatus) {
+    throw AppError.badRequest(`Cannot move a CAPA from "${currentStatus}" to "${newStatus}" — workflow is open -> in_progress -> verifying -> closed.`);
+  }
+}
+
+export const startHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const tenantId = req.tenantId!;
+  const current = await loadCapa(req, id);
+  assertTransition(current.status, "in_progress");
+
+  const [updated] = await req.db!.update(capa).set({ status: "in_progress", updatedAt: new Date() }).where(eq(capa.id, id)).returning();
+  await recordAuditTrail(req.db!, { tenantId, entityType: "CAPA", entityId: id, action: "status_change", changes: { action: "start" }, performedBy: req.user?.id });
+  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "capa", event: "start", entityId: id });
+  res.json(updated);
+});
+
 export const verifyHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const tenantId = req.tenantId!;
-  const [current] = await req.db!.select().from(capa).where(and(eq(capa.id, id), eq(capa.tenantId, tenantId)));
-  if (!current) throw AppError.notFound("CAPA");
-  if (current.status !== "in_progress") throw AppError.badRequest(`Cannot verify a CAPA from status "${current.status}" — must be "in_progress"`);
+  const current = await loadCapa(req, id);
+  assertTransition(current.status, "verifying");
 
   const [updated] = await req
     .db!.update(capa)
@@ -41,9 +85,8 @@ export const verifyHandler = asyncHandler(async (req: Request, res: Response) =>
 export const closeHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const tenantId = req.tenantId!;
-  const [current] = await req.db!.select().from(capa).where(and(eq(capa.id, id), eq(capa.tenantId, tenantId)));
-  if (!current) throw AppError.notFound("CAPA");
-  if (current.status !== "verifying") throw AppError.badRequest(`Cannot close a CAPA from status "${current.status}" — must be "verifying"`);
+  const current = await loadCapa(req, id);
+  assertTransition(current.status, "closed");
 
   const [updated] = await req.db!.update(capa).set({ status: "closed", closedAt: new Date() }).where(eq(capa.id, id)).returning();
   await recordAuditTrail(req.db!, { tenantId, entityType: "CAPA", entityId: id, action: "status_change", changes: { action: "close" }, performedBy: req.user?.id });
