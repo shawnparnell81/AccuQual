@@ -1273,6 +1273,23 @@ export interface Attachment {
   createdAt: string;
 }
 
+/** GET/POST/PATCH /customer-communications — real contact history against a real customers.id (see customerCommunications.ts's own schema comment for why this isn't a free-text customer name). Files attach separately via the generic Attachment system above (entityType: "CustomerCommunication", entityId: this row's id). */
+export interface CustomerCommunication {
+  id: number;
+  customerId: number;
+  commsType: "email" | "phone" | "f2f" | "portal";
+  occurredAt: string;
+  subject: string | null;
+  summary: string;
+  followUpRequired: boolean;
+  followUpDate: string | null;
+  sourceType: "NCR" | "Complaint" | null;
+  sourceId: number | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // Warranty module
 // ---------------------------------------------------------------------------

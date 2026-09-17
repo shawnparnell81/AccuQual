@@ -103,6 +103,14 @@ describe("Customer Communications (real DB + real HTTP path)", () => {
     expect(res.status).toBe(400);
   });
 
+  it("rejects an absurd/malformed date with a clean 400, not a real crash — a live-reproduced bug (z.coerce.date() alone accepts a mistyped '91920-02-06' as a real year-91920 Date, which then crashed at the Postgres layer)", async () => {
+    const res = await request(app)
+      .post("/customer-communications")
+      .set("Authorization", `Bearer ${customerServiceToken}`)
+      .send({ customerId, commsType: "phone", summary: "x", followUpDate: "91920-02-06" });
+    expect(res.status).toBe(400);
+  });
+
   it("never shows another tenant's communications, and cross-tenant writes 404", async () => {
     const [otherCustomer] = await db.insert(customers).values({ tenantId: otherTenantId, legalName: "Other Tenant Customer" }).returning();
     otherTenantCustomerId = otherCustomer!.id;

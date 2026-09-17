@@ -1,10 +1,12 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Paperclip, Download, Trash2 } from "lucide-react";
+import { Paperclip, Download, Trash2, Eye } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useToast } from "./ToastProvider";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
+import { Modal } from "../modals/Modal";
+import { PdfViewer } from "../forms/PdfViewer";
 import type { Attachment } from "../../api/types";
 import { formatDateTime } from "../../lib/dates";
 
@@ -77,6 +79,29 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
 
   const isAdmin = user?.roleName === "admin" || user?.roleName === "platform_admin";
 
+  // Real in-app preview for PDF attachments, via the same PdfViewer every
+  // form-export preview already uses — fetches the real bytes on demand
+  // (never pre-fetched for every row in the list) rather than a new,
+  // one-off preview mechanism.
+  const [previewFile, setPreviewFile] = useState<Attachment | null>(null);
+  const [previewBytes, setPreviewBytes] = useState<Uint8Array | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  async function preview(file: Attachment) {
+    setPreviewFile(file);
+    setPreviewBytes(null);
+    setPreviewLoading(true);
+    try {
+      const res = await apiClient.get(`/attachments/${file.id}/download`, { responseType: "arraybuffer" });
+      setPreviewBytes(new Uint8Array(res.data as ArrayBuffer));
+    } catch (err) {
+      toast.error(await extractErrorMessageAsync(err, "Couldn't load that file for preview."));
+      setPreviewFile(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
   return (
     <div className="rounded-lg border border-border bg-card p-4 print:hidden">
       <div className="mb-3 flex items-center justify-between">
@@ -115,6 +140,11 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
                 {formatSize(file.fileSize)} · {formatDateTime(file.createdAt)}
               </div>
             </div>
+            {file.mimeType === "application/pdf" && (
+              <button onClick={() => preview(file)} className="shrink-0 text-muted-foreground hover:text-foreground" title="Preview">
+                <Eye size={16} />
+              </button>
+            )}
             <button onClick={() => download(file)} className="shrink-0 text-muted-foreground hover:text-foreground" title="Download">
               <Download size={16} />
             </button>
@@ -126,6 +156,10 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
           </li>
         ))}
       </ul>
+
+      <Modal title={previewFile?.fileName ?? "Preview"} isOpen={previewFile !== null} onClose={() => setPreviewFile(null)}>
+        <PdfViewer data={previewBytes} isLoading={previewLoading} />
+      </Modal>
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { TextField, TextAreaField, SelectField } from "../../components/forms/Fi
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
+import { CustomerCommunicationsPanel } from "../../components/shared/CustomerCommunicationsPanel";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
@@ -163,6 +164,7 @@ export function CustomerDetailPage() {
         </div>
       </div>
 
+      <CustomerCommunicationsPanel customerId={customerId} />
       <AttachmentsPanel entityType="customers" entityId={customerId} />
       <WorkflowHistoryPanel moduleName="customers" recordId={customerId} />
 
