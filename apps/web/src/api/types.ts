@@ -568,6 +568,27 @@ export interface TenantAiUsage {
   moduleBreakdown: Array<{ module: string; tokens: number; calls: number }>;
 }
 
+/** GET /ai/suggestions (admin only) — real, browsable AI suggestion history. `decision` is null until a user has explicitly accepted/rejected it (see POST /ai/suggestions/:id/decision). */
+export interface AiSuggestionRecord {
+  id: number;
+  module: string | null;
+  pipeline: string | null;
+  input: Record<string, unknown> | null;
+  output: Record<string, unknown> | null;
+  status: "ok" | "stub" | "malformed" | "error";
+  errorMessage: string | null;
+  createdAt: string;
+  createdByName: string;
+  decision: "accepted" | "rejected" | "unknown" | null;
+}
+
+export interface AiSuggestionHistoryResponse {
+  items: AiSuggestionRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 /** GET/PATCH /tenant/profile — Admin Console "Tenant Settings" (Phase 10). name/logoUrl mirror the tenants.name column and branding.logoUrl (not a separate store); timezone/contact fields are new. */
 export interface TenantProfile {
   name: string;

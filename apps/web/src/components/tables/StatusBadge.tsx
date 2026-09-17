@@ -101,6 +101,13 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   // status literally; this is the literal "warning" status string itself,
   // distinct from every other status word that merely buckets INTO warning.
   warning: "warning",
+
+  // ai_suggestions' own per-attempt status (ai.guardrails.ts's classifyOutput) —
+  // "ok"/"stub"/"rejected"/"accepted" above already cover 4 of these; the
+  // two real failure states didn't have an entry yet and were falling back
+  // to the generic "muted" bucket, underselling a real provider failure.
+  malformed: "destructive",
+  error: "destructive",
 };
 
 const BUCKET_CLASSES: Record<string, string> = {

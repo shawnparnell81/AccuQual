@@ -1,10 +1,11 @@
 import type { Request, Response } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { aiRiskScores, aiSuggestions } from "../../drizzle/schema/ai.js";
+import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { tenants } from "../../drizzle/schema/tenants.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
-import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { recordAuditTrail, resolveUserNames } from "../audit-trail/audit-trail.service.js";
 import { runPipelineAndRecord, describeAiState, loadTenantLlmOptions, checkUsageLimit } from "./ai.usage.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
 import * as pipelines from "./ai.pipelines.js";
@@ -209,6 +210,65 @@ export const inspectionNotes = asyncHandler(async (req: Request, res: Response) 
     (opts) => pipelines.runInspectionNotesPipeline(input, opts)
   );
   res.json({ ...suggestion, output });
+});
+
+/**
+ * Real browsable AI suggestion history — previously the ai_suggestions
+ * table was only ever read back one row at a time (recordSuggestionDecision
+ * below) or aggregated into a cross-tenant ok/stub/error COUNT for Platform
+ * Admin's AI Overview (platform.service.ts's getAiOverview); nothing let a
+ * tenant admin actually browse what the AI has produced. Tenant-scoped,
+ * admin-gated (see ai.routes.ts), newest first, with optional `module`/
+ * `status` filters and simple limit/offset paging (this table has no
+ * expected-to-be-huge growth pattern that would need cursor pagination).
+ *
+ * Each row's accept/reject decision isn't a column on ai_suggestions itself
+ * — recordSuggestionDecision below only ever writes it as a separate
+ * audit_trail row (action: "decision") — so this batches one extra query
+ * against audit_trail for the page's own suggestion ids rather than
+ * changing that established recording shape.
+ */
+export const listSuggestions = asyncHandler(async (req: Request, res: Response) => {
+  const db = req.db! as TenantDb;
+  const tenantId = req.tenantId!;
+  const { module, status } = req.query as { module?: string; status?: string };
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+
+  const conditions = [eq(aiSuggestions.tenantId, tenantId)];
+  if (module) conditions.push(eq(aiSuggestions.module, module));
+  if (status) conditions.push(eq(aiSuggestions.status, status));
+
+  const [rows, totalRows] = await Promise.all([
+    db.select().from(aiSuggestions).where(and(...conditions)).orderBy(desc(aiSuggestions.createdAt)).limit(limit).offset(offset),
+    db.select({ total: sql<number>`count(*)::int` }).from(aiSuggestions).where(and(...conditions)),
+  ]);
+  const total = totalRows[0]?.total ?? 0;
+
+  const suggestionIds = rows.map((r) => r.id);
+  const decisionRows = suggestionIds.length
+    ? await db
+        .select({ entityId: auditTrail.entityId, changes: auditTrail.changes, createdAt: auditTrail.createdAt })
+        .from(auditTrail)
+        .where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "AiSuggestion"), eq(auditTrail.action, "decision"), inArray(auditTrail.entityId, suggestionIds)))
+    : [];
+  // Keep the most recent decision per suggestion id — normally there's
+  // exactly one, but a user re-opening and re-deciding an old suggestion
+  // shouldn't show a stale first answer.
+  const decisionByEntityId = new Map<number, string>();
+  for (const d of [...decisionRows].sort((a, b) => new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime())) {
+    decisionByEntityId.set(d.entityId, ((d.changes as { decision?: string } | null)?.decision ?? "unknown") as string);
+  }
+
+  const names = await resolveUserNames(db, rows.map((r) => r.createdBy));
+
+  const items = rows.map((r) => ({
+    ...r,
+    createdByName: r.createdBy === null ? "System" : (names.get(r.createdBy) ?? `Deleted User (ID #${r.createdBy})`),
+    decision: decisionByEntityId.get(r.id) ?? null,
+  }));
+
+  res.json({ items, total, limit, offset });
 });
 
 /**
