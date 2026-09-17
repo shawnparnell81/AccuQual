@@ -238,4 +238,21 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
     material_management: "read",
     sales_and_marketing: "read",
   },
+  // Customer Contact & Communications Log — closes the Buyer Evaluation's
+  // "no communication log" finding. Customer Service (the front-line
+  // customer liaison, per explicit user direction on this module) and
+  // Quality (owns the linked NCR/Complaint side a conversation is often
+  // about) both get full edit; every other department gets read, so a
+  // conversation logged against a customer stays visible tenant-wide
+  // without letting an unrelated department log entries on someone else's
+  // behalf.
+  customer_communications: {
+    customer_service: "edit",
+    quality: "edit",
+    engineering: "read",
+    production: "read",
+    purchasing: "read",
+    material_management: "read",
+    sales_and_marketing: "read",
+  },
 };

@@ -31,6 +31,7 @@ export * from "./passwordResetTokens.js";
 export * from "./workOrders.js";
 export * from "./onboarding.js";
 export * from "./customers.js";
+export * from "./customerCommunications.js";
 export * from "./documentChangeRequests.js";
 export * from "./qmsForms.js";
 export * from "./scarForms.js";

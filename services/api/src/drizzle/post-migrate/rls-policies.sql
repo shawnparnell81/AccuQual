@@ -78,7 +78,8 @@ DECLARE
     'supplier_corrective_actions', 'supplier_8d_responses', 'supplier_messages',
     'crar', 'supplier_rma_requests', 'rma_activity_log', 'rma_log',
     'permission_roles', 'permission_role_modules', 'user_permission_roles', 'department_permissions',
-    'report_schedules', 'supplier_quality_risk_scores', 'inventory_lots'
+    'report_schedules', 'supplier_quality_risk_scores', 'inventory_lots',
+    'customer_communications'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP
