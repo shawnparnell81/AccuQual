@@ -217,4 +217,25 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // Engineering gets read visibility since several templates target
   // engineering-relevant modules (8D, document revision).
   workflow: { quality: "edit", engineering: "read" },
+  // Sprint 1 fix (accuqual-implementation-sequencing.md) — Document Control
+  // previously had NO RBAC gate at all (documents.routes.ts's own old
+  // comment explains why: "read-by-everyone, write-by-few," and copying the
+  // quality-edit-only pattern other modules use would have blocked every
+  // non-quality employee from viewing released documents). Solved without a
+  // controller-narrowing workaround: every department gets at least "read"
+  // here (nobody loses visibility into released documents — the exact
+  // regression the old comment was avoiding), while only the two real
+  // document-owning departments (Quality: QMS/SOP content via
+  // sop_generator; Engineering: technical/training material) get "edit",
+  // so requireDepartmentAccess's existing read-vs-edit split alone already
+  // enforces "write-by-few" with zero new controller logic.
+  documents: {
+    quality: "edit",
+    engineering: "edit",
+    production: "read",
+    customer_service: "read",
+    purchasing: "read",
+    material_management: "read",
+    sales_and_marketing: "read",
+  },
 };

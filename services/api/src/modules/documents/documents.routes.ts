@@ -3,6 +3,7 @@ import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
 import { validate } from "../../middleware/validate.js";
+import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createDocumentSchema, updateDocumentSchema, addVersionSchema, approveSchema } from "./documents.validation.js";
 import {
   baseHandlers,
@@ -16,13 +17,15 @@ import {
   archiveHandler,
 } from "./documents.controller.js";
 
-// Deliberately not gated with requireDepartmentAccess this pass — Documents
-// has no ResourceKey yet, and unlike ncr/capa/audit/calibration/di this is a
-// read-by-everyone, write-by-few resource; copying the quality-edit-only
-// pattern here would block every non-quality employee from viewing released
-// documents. See departmentAccess.ts's comment and Phase 6's summary.
+// Sprint 1 fix (accuqual-implementation-sequencing.md) — previously had NO
+// RBAC gate at all. Solved without blocking the "read-by-everyone,
+// write-by-few" shape this file's old comment was protecting: every
+// department gets at least "read" in defaultPermissions.ts's `documents`
+// entry, so requireDepartmentAccess's existing read-vs-edit split already
+// lets everyone view released documents (GET) while only Quality/Engineering
+// (the two real document-owning departments) can write.
 export const documentsRouter = Router();
-documentsRouter.use(requireAuth, withTenantDb);
+documentsRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("documents"));
 
 // Same memoryStorage pattern as document-folders/calibration.
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });

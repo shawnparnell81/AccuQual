@@ -55,6 +55,20 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     .where(and(eq(users.id, Number(req.params.id)), eq(users.tenantId, req.tenantId!)))
     .returning();
   if (!updated) throw AppError.notFound("User");
+
+  // Previously the only mutating handler in the codebase with zero audit
+  // trail — this is also the real endpoint behind both User Onboarding and
+  // a Role Change's roleId path, so this one change closes both gaps at
+  // once (see accuqual-workflow-architecture.md's audit-gap finding).
+  await recordAuditTrail(req.db!, {
+    tenantId: req.tenantId!,
+    entityType: "User",
+    entityId: updated.id,
+    action: "update",
+    changes: { fieldsChanged: Object.keys(req.body) },
+    performedBy: req.user?.id,
+  });
+
   const { passwordHash: _omit, ...safe } = updated;
   res.json(safe);
 });
