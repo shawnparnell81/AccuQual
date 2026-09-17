@@ -8,7 +8,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
-import { EntityAuditTrailPanel } from "../../components/shared/EntityAuditTrailPanel";
+import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { SelectField } from "../../components/forms/Field";
 import { RmaLogFormRenderer } from "./RmaLogFormRenderer";
 import type { RmaLogRecord, RmaLogStatus, WarrantyClaim } from "../../api/types";
@@ -165,7 +165,11 @@ export function RmaLogDetailPage() {
         <AttachmentsPanel entityType="rma_log" entityId={recordId} title="Evidence, Photos & Supporting Documents" />
       </div>
 
-      <EntityAuditTrailPanel entityType="RmaLog" entityId={recordId} />
+      {/* Sprint 3 (accuqual-implementation-sequencing.md) — swapped from the
+          generic EntityAuditTrailPanel to the shared WorkflowHistoryPanel
+          every other module's detail page uses, now that workflow.controller.ts's
+          MODULE_ENTITY_TYPES map supports "rma_log" (Phase 9). */}
+      <WorkflowHistoryPanel moduleName="rma_log" recordId={recordId} />
     </div>
   );
 }

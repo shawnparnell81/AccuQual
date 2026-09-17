@@ -8,7 +8,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
-import { EntityAuditTrailPanel } from "../../components/shared/EntityAuditTrailPanel";
+import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { SelectField } from "../../components/forms/Field";
 import { CrarFormRenderer } from "./CrarFormRenderer";
 import type { CrarClaim, CrarStatus, WarrantyClaim, RmaLogRecord, Customer } from "../../api/types";
@@ -213,9 +213,12 @@ export function CrarDetailPage() {
         <AttachmentsPanel entityType="crar" entityId={crarId} title="Evidence, Photos & Supporting Documents" />
       </div>
 
-      {/* Phase 2 fix ("Ensure CRAR audit trail shows real actor names") — CRAR had no history display at all before this. */}
+      {/* Sprint 3 (accuqual-implementation-sequencing.md) — swapped from the
+          generic EntityAuditTrailPanel to the shared WorkflowHistoryPanel
+          every other module's detail page uses, now that workflow.controller.ts's
+          MODULE_ENTITY_TYPES map supports "crar" (Phase 9). */}
       <div className="print:hidden">
-        <EntityAuditTrailPanel entityType="Crar" entityId={crarId} />
+        <WorkflowHistoryPanel moduleName="crar" recordId={crarId} />
       </div>
     </div>
   );

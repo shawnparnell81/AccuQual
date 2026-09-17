@@ -6,6 +6,7 @@ import { erpReceivingLineItems, erpPoLineItems, erpPurchaseOrders } from "../../
 import { qualityInspectionReports } from "../../drizzle/schema/qualityInspectionReports.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { AppError } from "../../utils/appError.js";
+import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 
 export interface ReceiveLotInput {
   itemId: number;
@@ -52,6 +53,14 @@ export async function receiveIntoLot(db: TenantDb, tenantId: number, input: Rece
       })
       .where(eq(inventoryLots.id, existing.id))
       .returning();
+    // Sprint 3 (accuqual-implementation-sequencing.md) — Inventory
+    // Traceability had zero Layer-2 event coverage before this (the lot
+    // ledger itself never published anything a workflow definition could
+    // react to). Additive only — the receiving logic above is unchanged.
+    // Same "module: inventory" convention inventory.service.ts's own
+    // state-change events already use, new event name for the lot-specific
+    // hop.
+    await publishEvent(WORKFLOW_STREAM, { tenantId, module: "inventory", event: "lot-received", entityId: updated!.id });
     return updated!;
   }
 
@@ -71,6 +80,7 @@ export async function receiveIntoLot(db: TenantDb, tenantId: number, input: Rece
       remainingQty: String(input.quantity),
     })
     .returning();
+  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "inventory", event: "lot-received", entityId: created!.id });
   return created!;
 }
 
@@ -90,6 +100,12 @@ export async function consumeFromLot(db: TenantDb, tenantId: number, lotId: numb
   const nextRemaining = Math.max(Number(lot.remainingQty) - quantity, 0);
   const nextStatus = nextRemaining === 0 ? "consumed" : lot.status;
   await db.update(inventoryLots).set({ remainingQty: String(nextRemaining), status: nextStatus }).where(eq(inventoryLots.id, lotId));
+  // Sprint 3 — the movement side of the same lot-ledger event gap; fires
+  // "lot-exhausted" specifically when this consumption fully depletes the
+  // lot (its own real, distinct state change), and "lot-consumed" for every
+  // other partial draw, so a workflow definition can distinguish the two
+  // without re-deriving remainingQty itself.
+  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "inventory", event: nextStatus === "consumed" ? "lot-exhausted" : "lot-consumed", entityId: lotId });
 }
 
 export async function getItemLots(db: TenantDb, tenantId: number, itemId: number): Promise<InventoryLot[]> {
