@@ -45,3 +45,17 @@ export const registerDeviceSchema = z.object({
   type: z.enum(["plc", "sensor", "inspection_equipment", "environmental"]).optional(),
   digitalTwinModelId: z.number().int().optional(),
 });
+
+/**
+ * Editing an already-registered device by its real row id — deliberately
+ * excludes `deviceId` (the tenant-unique identifier a real physical device
+ * reports readings under; changing it here would silently orphan every
+ * existing iot_data reading still tagged with the old value, since that
+ * table has no FK to this one — see digitalTwin.ts's schema comment).
+ * `digitalTwinModelId: null` explicitly unlinks a device from its model.
+ */
+export const updateDeviceSchema = z.object({
+  name: z.string().nullable().optional(),
+  type: z.enum(["plc", "sensor", "inspection_equipment", "environmental"]).nullable().optional(),
+  digitalTwinModelId: z.number().int().nullable().optional(),
+});

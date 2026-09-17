@@ -3,8 +3,8 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
 import { validate } from "../../middleware/validate.js";
-import { createModelSchema, updateModelSchema, simulateSchema, iotIngestSchema, registerDeviceSchema } from "./digital-twin.validation.js";
-import { baseHandlers, simulateDigitalTwin, getSimulation, ingestIot, listDevicesHandler, registerDeviceHandler } from "./digital-twin.controller.js";
+import { createModelSchema, updateModelSchema, simulateSchema, iotIngestSchema, registerDeviceSchema, updateDeviceSchema } from "./digital-twin.validation.js";
+import { baseHandlers, simulateDigitalTwin, getSimulation, ingestIot, listDevicesHandler, registerDeviceHandler, updateDeviceHandler, deleteDeviceHandler } from "./digital-twin.controller.js";
 
 export const digitalTwinRouter = Router();
 digitalTwinRouter.use(requireAuth, withTenantDb);
@@ -28,5 +28,7 @@ digitalTwinRouter.get("/simulations/:id", getSimulation);
 
 digitalTwinRouter.get("/devices", listDevicesHandler);
 digitalTwinRouter.post("/devices", requireRole("admin"), validate(registerDeviceSchema), registerDeviceHandler);
+digitalTwinRouter.patch("/devices/:id", requireRole("admin"), validate(updateDeviceSchema), updateDeviceHandler);
+digitalTwinRouter.delete("/devices/:id", requireRole("admin"), deleteDeviceHandler);
 
 digitalTwinRouter.post("/iot-ingest", validate(iotIngestSchema), ingestIot);

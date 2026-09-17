@@ -105,3 +105,48 @@ export const registerDeviceHandler = asyncHandler(async (req: Request, res: Resp
   await recordAuditTrail(req.db!, { tenantId, entityType: "IotDevice", entityId: device!.id, action: "create", changes: { deviceId, name, type, digitalTwinModelId }, performedBy: req.user?.id });
   res.status(201).json(device);
 });
+
+async function loadDevice(req: Request, id: number) {
+  const [row] = await req.db!.select().from(iotDevices).where(and(eq(iotDevices.id, id), eq(iotDevices.tenantId, req.tenantId!)));
+  if (!row) throw AppError.notFound("IoT device");
+  return row;
+}
+
+/**
+ * Real edit-by-id — previously the only way to change a device's
+ * name/type/model link was to re-POST the same deviceId and rely on
+ * registerDeviceHandler's upsert (a working but undiscoverable path with no
+ * frontend UI for it). This is the standard PATCH-by-id shape every other
+ * resource in this app already uses (see digitalTwinRouter's own
+ * PATCH /models/:id above), and the only one that can actually clear a
+ * field back to null (the upsert's COALESCE-against-excluded logic can only
+ * ever keep-or-replace, never clear).
+ */
+export const updateDeviceHandler = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenantId!;
+  const record = await loadDevice(req, Number(req.params.id));
+  const { digitalTwinModelId } = req.body as { digitalTwinModelId?: number | null };
+
+  if (digitalTwinModelId) {
+    const [model] = await req.db!.select().from(digitalTwinModels).where(and(eq(digitalTwinModels.id, digitalTwinModelId), eq(digitalTwinModels.tenantId, tenantId)));
+    if (!model) throw AppError.notFound("Digital twin model");
+  }
+
+  const [updated] = await req.db!.update(iotDevices).set(req.body).where(eq(iotDevices.id, record.id)).returning();
+  await recordAuditTrail(req.db!, { tenantId, entityType: "IotDevice", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  res.json(updated);
+});
+
+/**
+ * Real deletion — previously impossible entirely (no route existed). Safe
+ * to hard-delete: iot_data's own deviceId column is a plain string, not an
+ * FK to this table (see digitalTwin.ts's schema comment), so removing a
+ * device row never cascades into or orphans its historical readings.
+ */
+export const deleteDeviceHandler = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenantId!;
+  const record = await loadDevice(req, Number(req.params.id));
+  await req.db!.delete(iotDevices).where(eq(iotDevices.id, record.id));
+  await recordAuditTrail(req.db!, { tenantId, entityType: "IotDevice", entityId: record.id, action: "delete", changes: { deviceId: record.deviceId }, performedBy: req.user?.id });
+  res.status(204).send();
+});

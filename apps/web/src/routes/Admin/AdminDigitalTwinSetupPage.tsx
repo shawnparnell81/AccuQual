@@ -164,8 +164,74 @@ function RegisterDeviceForm() {
   );
 }
 
+/** Inline edit row for one device — name/type/linked model, matching RegisterDeviceForm's own field set (everything but deviceId, which is immutable — see updateDeviceSchema's own comment). */
+function EditDeviceRow({ device, models, onDone }: { device: IotDevice; models: DigitalTwinModel[]; onDone: () => void }) {
+  const toast = useToast();
+  const update = deviceHooks.useUpdate();
+  const [name, setName] = useState(device.name ?? "");
+  const [type, setType] = useState(device.type ?? "");
+  const [modelId, setModelId] = useState(device.digitalTwinModelId ? String(device.digitalTwinModelId) : "");
+
+  const save = () => {
+    update.mutate(
+      { id: device.id, name: name || null, type: (type || null) as IotDevice["type"], digitalTwinModelId: modelId ? Number(modelId) : null },
+      {
+        onSuccess: () => {
+          toast.success("Device updated.");
+          onDone();
+        },
+        onError: (err) => toast.error(extractErrorMessage(err, "Couldn't update device.")),
+      }
+    );
+  };
+
+  return (
+    <tr className="border-t border-border bg-muted/40">
+      <td className="py-1.5 font-medium">{device.deviceId}</td>
+      <td className="py-1.5">
+        <TextField label="" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" />
+      </td>
+      <td className="py-1.5">
+        <SelectField label="" value={type} onChange={(e) => setType(e.target.value)}>
+          <option value="">Unspecified</option>
+          {DEVICE_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t.replace(/_/g, " ")}
+            </option>
+          ))}
+        </SelectField>
+      </td>
+      <td className="py-1.5">
+        <SelectField label="" value={modelId} onChange={(e) => setModelId(e.target.value)}>
+          <option value="">None</option>
+          {models.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </SelectField>
+      </td>
+      <td className="py-1.5 text-right">
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={save} disabled={update.isPending} className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-60">
+            {update.isPending ? "Saving…" : "Save"}
+          </button>
+          <button type="button" onClick={onDone} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
+            Cancel
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function RegisteredDevices() {
+  const toast = useToast();
   const { data: devices = [] } = deviceHooks.useList();
+  const { data: models = [] } = twinHooks.useList();
+  const deleteDevice = deviceHooks.useDelete();
+  const [editingId, setEditingId] = useState<number | null>(null);
+
   if (devices.length === 0) return <p className="text-sm text-muted-foreground">No devices registered yet.</p>;
   return (
     <table className="w-full text-sm">
@@ -174,18 +240,44 @@ function RegisteredDevices() {
           <th className="pb-2">Device ID</th>
           <th className="pb-2">Name</th>
           <th className="pb-2">Type</th>
+          <th className="pb-2">Linked Model</th>
           <th className="pb-2">Last Seen</th>
+          <th className="pb-2" />
         </tr>
       </thead>
       <tbody>
-        {devices.map((d) => (
-          <tr key={d.id} className="border-t border-border">
-            <td className="py-1.5 font-medium">{d.deviceId}</td>
-            <td className="py-1.5">{d.name ?? "—"}</td>
-            <td className="py-1.5 capitalize">{d.type?.replace(/_/g, " ") ?? "—"}</td>
-            <td className="py-1.5 text-muted-foreground">{d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : "Never (not ingesting yet)"}</td>
-          </tr>
-        ))}
+        {devices.map((d) =>
+          editingId === d.id ? (
+            <EditDeviceRow key={d.id} device={d} models={models} onDone={() => setEditingId(null)} />
+          ) : (
+            <tr key={d.id} className="border-t border-border">
+              <td className="py-1.5 font-medium">{d.deviceId}</td>
+              <td className="py-1.5">{d.name ?? "—"}</td>
+              <td className="py-1.5 capitalize">{d.type?.replace(/_/g, " ") ?? "—"}</td>
+              <td className="py-1.5">{models.find((m) => m.id === d.digitalTwinModelId)?.name ?? "—"}</td>
+              <td className="py-1.5 text-muted-foreground">{d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : "Never (not ingesting yet)"}</td>
+              <td className="py-1.5 text-right">
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={() => setEditingId(d.id)} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      deleteDevice.mutate(d.id, {
+                        onSuccess: () => toast.success("Device removed."),
+                        onError: (err) => toast.error(extractErrorMessage(err, "Couldn't remove device.")),
+                      })
+                    }
+                    className="rounded-md border border-destructive px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </td>
+            </tr>
+          )
+        )}
       </tbody>
     </table>
   );
