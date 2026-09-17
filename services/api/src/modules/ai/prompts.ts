@@ -1,97 +1,99 @@
+import { wrapUntrustedData } from "./promptSafety.js";
+
 export const rootCausePrompt = (ncrData: unknown) => `You are an expert quality engineer. Analyze the following NCR and identify the most probable root cause. Provide reasoning and a confidence score (0-1).
 
 Respond as strict JSON: { "rootCause": string, "confidence": number, "reasoning": string, "suggestedCorrectiveActions": string[] }
 
 NCR Data:
-${JSON.stringify(ncrData, null, 2)}`;
+${wrapUntrustedData(ncrData, "ncr_data")}`;
 
 export const capaPrompt = (rootCause: unknown, ncrData: unknown) => `You are an expert quality engineer. Based on the root cause and NCR details, generate a complete CAPA plan including corrective actions, preventive actions, and verification steps.
 
 Respond as strict JSON: { "actionPlan": string, "preventiveAction": string, "verification": string, "estimatedClosureDays": number }
 
 Root Cause:
-${JSON.stringify(rootCause)}
+${wrapUntrustedData(rootCause, "root_cause_data")}
 
 NCR Data:
-${JSON.stringify(ncrData, null, 2)}`;
+${wrapUntrustedData(ncrData, "ncr_data")}`;
 
 export const eightDPrompt = (ncrData: unknown, capaData: unknown) => `Generate a complete 8D report draft based on the NCR and CAPA information.
 
 Respond as strict JSON matching: { "d1_team": string, "d2_problem": string, "d3_containment": string, "d4_rootCause": string, "d5_correctiveAction": string, "d6_implementation": string, "d7_prevention": string, "d8_closure": string }
 
 NCR:
-${JSON.stringify(ncrData, null, 2)}
+${wrapUntrustedData(ncrData, "ncr_data")}
 
 CAPA:
-${JSON.stringify(capaData, null, 2)}`;
+${wrapUntrustedData(capaData, "capa_data")}`;
 
 export const riskScorePrompt = (input: unknown) => `You are a quality risk analyst. Given supplier history, NCR trends, audit findings, and process data, produce a risk score from 0-100 with contributing factors and mitigations.
 
 Respond as strict JSON: { "score": number, "riskFactors": string[], "recommendedMitigations": string[] }
 
 Input:
-${JSON.stringify(input, null, 2)}`;
+${wrapUntrustedData(input, "risk_score_input")}`;
 
 export const auditPrepPrompt = (input: unknown) => `You are preparing a quality auditor for an upcoming audit. Summarize likely focus areas, open findings from related records, and suggested evidence to have ready.
 
 Respond as strict JSON: { "focusAreas": string[], "openRisks": string[], "suggestedEvidence": string[] }
 
 Input:
-${JSON.stringify(input, null, 2)}`;
+${wrapUntrustedData(input, "audit_prep_input")}`;
 
 export const documentSummaryPrompt = (content: string) => `Summarize the following quality document in 3-5 bullet points suitable for an approval reviewer.
 
 Respond as strict JSON: { "summary": string[] }
 
 Document:
-${content}`;
+${wrapUntrustedData(content, "document_content")}`;
 
-export const formSuggestPrompt = (formType: string, partialData: unknown) => `You are AccuQual's form-completion assistant. Given a partially-filled ${formType} form, suggest values for any fields that are still empty, based on the fields already filled in.
+export const formSuggestPrompt = (formType: string, partialData: unknown) => `You are AccuQual's form-completion assistant. Given a partially-filled ${wrapUntrustedData(formType, "form_type")} form, suggest values for any fields that are still empty, based on the fields already filled in.
 
 Respond as strict JSON: { "suggestions": { [fieldName: string]: string } }
 
 Partial form data:
-${JSON.stringify(partialData, null, 2)}`;
+${wrapUntrustedData(partialData, "partial_form_data")}`;
 
-export const formAutofillPrompt = (formType: string, context: unknown) => `You are AccuQual's form-completion assistant. Draft a complete first pass of a ${formType} form from the given context (e.g. a linked NCR's description, root cause, and severity).
+export const formAutofillPrompt = (formType: string, context: unknown) => `You are AccuQual's form-completion assistant. Draft a complete first pass of a ${wrapUntrustedData(formType, "form_type")} form from the given context (e.g. a linked NCR's description, root cause, and severity).
 
 Respond as strict JSON: { "data": { [fieldName: string]: string } }
 
 Context:
-${JSON.stringify(context, null, 2)}`;
+${wrapUntrustedData(context, "form_context")}`;
 
 export const predictiveQualityPrompt = (input: unknown) => `You are a predictive quality analyst. Given historical defect and process data, forecast likely defect trends and process drift risk for the next period.
 
 Respond as strict JSON: { "forecast": string, "driftRisk": "low" | "medium" | "high", "recommendedActions": string[] }
 
 Input:
-${JSON.stringify(input, null, 2)}`;
+${wrapUntrustedData(input, "predictive_quality_input")}`;
 
 export const workOrderPlanPrompt = (input: unknown) => `You are AccuQual's production planning assistant. Given open NCRs, inventory items below their minimum level or overstocked, disqualified/probation suppliers, and existing open work orders, suggest which production work orders should be created next. Only suggest items that actually appear in the inventory items list below — never invent an item. Prioritize items that are below_min, and factor in any open NCR tied to the same item.
 
 Respond as strict JSON: { "suggestions": { "itemId": number, "quantity": number, "priority": "low" | "medium" | "high", "rationale": string }[] }
 
 Data:
-${JSON.stringify(input, null, 2)}`;
+${wrapUntrustedData(input, "work_order_planning_data")}`;
 
 export const prJustificationPrompt = (input: unknown) => `You are AccuQual's purchasing assistant. Draft a clear, factual justification for a purchase requisition, based on the requested item, quantity, the intended supplier's real performance history, and any linked NCR. Write it as text a purchasing manager would read and approve — not JSON, not bullet points, 2-4 sentences.
 
 Requisition context:
-${JSON.stringify(input, null, 2)}`;
+${wrapUntrustedData(input, "requisition_context")}`;
 
 export const onboardingPrompt = (input: unknown) => `You are AccuQual's onboarding assistant. The user below has access to the listed modules only (their department's real permissions — never mention a module not listed). For each module, write one short, friendly explanation of what it's for and one first concrete action to try. Keep the tone plain and helpful, not salesy.
 
 Respond as strict JSON: { "checklist": { "moduleKey": string, "moduleLabel": string, "explanation": string, "firstAction": string }[] }
 
 User + accessible modules:
-${JSON.stringify(input, null, 2)}`;
+${wrapUntrustedData(input, "onboarding_context")}`;
 
 export const erpAutomationPrompt = (input: unknown) => `You are AccuQual's ERP automation assistant. Given inventory items below their minimum level, supplier risk signals, and audit coverage gaps, suggest concrete next actions. Every suggestion must be one of exactly three types: "create_requisition" (references a real itemId from the data below), "flag_supplier" (references a real supplierId), or "suggest_inspection" (references a real supplierId or itemId). Never invent an id that doesn't appear in the data below.
 
 Respond as strict JSON: { "suggestions": { "type": "create_requisition" | "flag_supplier" | "suggest_inspection", "itemId": number | null, "supplierId": number | null, "quantity": number | null, "rationale": string }[] }
 
 Data:
-${JSON.stringify(input, null, 2)}`;
+${wrapUntrustedData(input, "erp_automation_data")}`;
 
 /**
  * Risk Management module's own AI analysis — deliberately distinct from
@@ -108,7 +110,7 @@ export const riskAnalysisPrompt = (input: unknown) => `You are AccuQual's risk m
 Respond as strict JSON: { "severity": number, "probability": number, "rationale": string, "mitigationActions": { "action": string, "suggestedDepartment": string }[], "monitoringPlan": string }
 
 Risk context:
-${JSON.stringify(input, null, 2)}`;
+${wrapUntrustedData(input, "risk_context")}`;
 
 /** Phase 4 — NCR triage. A suggestion only: the quality engineer reviews and applies it manually via the NCR's own normal severity field / department assignment, never auto-applied. */
 export const ncrTriagePrompt = (input: unknown) => `You are AccuQual's NCR triage assistant. Given a newly-reported nonconformance's title and description, suggest the most likely severity and which department should own investigating it. If any similar past NCRs are given, use them to judge whether this looks like a recurring issue.
@@ -116,7 +118,7 @@ export const ncrTriagePrompt = (input: unknown) => `You are AccuQual's NCR triag
 Respond as strict JSON: { "suggestedSeverity": "low" | "medium" | "high" | "critical", "suggestedDepartment": string, "rationale": string, "similarPastNcrs": string[] }
 
 NCR:
-${JSON.stringify(input, null, 2)}`;
+${wrapUntrustedData(input, "ncr_triage_input")}`;
 
 /** Phase 4 — Supplier communication drafting. Always a draft for a human to review/edit before sending — supplier-portal.controller.ts's messaging endpoint is a separate, explicit user action, never called automatically from here. */
 export const supplierMessageDraftPrompt = (input: unknown) => `You are AccuQual's supplier relations assistant. Draft a professional message to a supplier based on the given context (e.g. a quality issue, a corrective-action request, an overdue delivery, or a scorecard concern). Keep it factual and specific to the data given — never invent a defect, date, or part number not present in the context.
@@ -124,7 +126,7 @@ export const supplierMessageDraftPrompt = (input: unknown) => `You are AccuQual'
 Respond as strict JSON: { "subject": string, "body": string, "tone": "informational" | "corrective_action_request" | "escalation" }
 
 Context:
-${JSON.stringify(input, null, 2)}`;
+${wrapUntrustedData(input, "supplier_message_context")}`;
 
 /**
  * Phase 6 Reporting & Analytics Hub — AI-assisted report summaries.
@@ -135,14 +137,16 @@ ${JSON.stringify(input, null, 2)}`;
  * 4 (the caller's `kind` just changes which real reporting.service.ts
  * aggregation feeds `input`). Always a non-authoritative note — never
  * written back into any report/dashboard's own stored data, only shown
- * alongside it.
+ * alongside it. `kind` is one of 4 literal values dispatched server-side in
+ * ai.controller.ts's `analysis` handler — not client free text — so it's
+ * interpolated as-is, unlike `input` below.
  */
 export const reportSummaryPrompt = (kind: string, input: unknown) => `You are AccuQual's reporting analyst. Given real, already-aggregated ${kind.replace(/_/g, " ")} data, write a short executive summary: what's notable, what's improving or worsening, and one or two concrete watch-items. Base this strictly on the numbers given — never invent a data point not present below.
 
 Respond as strict JSON: { "summary": string, "watchItems": string[], "trend": "improving" | "worsening" | "stable" | "insufficient_data" }
 
 Data:
-${JSON.stringify(input, null, 2)}`;
+${wrapUntrustedData(input, "report_data")}`;
 
 /**
  * Phase 9 — Workflow Actions' generic "ai_suggestion" action kind. A
@@ -160,7 +164,7 @@ export const workflowAiNotePrompt = (input: unknown) => `You are AccuQual's work
 Respond as strict JSON: { "note": string, "suggestedNextStep": string, "confidence": number }
 
 Event context:
-${JSON.stringify(input, null, 2)}`;
+${wrapUntrustedData(input, "workflow_event_context")}`;
 
 /**
  * Phase 8 — "AI-assisted inspection notes." Given a Quality Inspection
@@ -176,7 +180,7 @@ export const inspectionNotesPrompt = (input: unknown) => `You are AccuQual's qua
 Respond as strict JSON: { "summary": string, "suggestedDefectCategory": string | null, "confidence": number }
 
 Checklist:
-${JSON.stringify(input, null, 2)}`;
+${wrapUntrustedData(input, "inspection_checklist")}`;
 
 /** Phase 4 — Warranty triage. A suggestion only: the disposition is still recorded through the claim's own normal quality-review workflow (warranty.controller.ts), never auto-applied. */
 export const warrantyTriagePrompt = (input: unknown) => `You are AccuQual's warranty claims assistant. Given a warranty claim's failure description, product/part, and time-in-service, suggest a likely disposition and, if there's enough information, a rough repair/replacement cost estimate. Base this strictly on the data given.
@@ -184,4 +188,4 @@ export const warrantyTriagePrompt = (input: unknown) => `You are AccuQual's warr
 Respond as strict JSON: { "suggestedDisposition": "approve" | "deny" | "needs_inspection", "estimatedCost": number | null, "rationale": string }
 
 Claim:
-${JSON.stringify(input, null, 2)}`;
+${wrapUntrustedData(input, "warranty_claim_context")}`;

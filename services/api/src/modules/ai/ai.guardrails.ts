@@ -39,6 +39,20 @@ export interface ClassifiedOutput {
 }
 
 /**
+ * A real model call (confirmed live via the prompt-injection hardening's
+ * manual sanity check — every existing automated test only ever exercised
+ * the deterministic stub path below, which never does this) can still wrap
+ * an otherwise-perfect "strict JSON" response in a ```json ... ``` markdown
+ * fence despite being told not to. Stripped before JSON.parse rather than
+ * tightening the prompt wording further, since a prompt instruction is
+ * best-effort and this is a one-line, zero-risk parse-time fix for it.
+ */
+function stripCodeFence(text: string): string {
+  const match = text.trim().match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i);
+  return match?.[1] ?? text;
+}
+
+/**
  * Runs a pipeline's raw LLM text through JSON.parse + this pipeline's own
  * promised-shape schema (see the `*OutputSchema`s below, mirroring
  * prompts.ts's own "Respond as strict JSON: {...}" contract for each
@@ -52,7 +66,7 @@ export function classifyOutput(rawText: string, isStub: boolean, schema: z.ZodTy
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(rawText);
+    parsed = JSON.parse(stripCodeFence(rawText));
   } catch {
     return { status: "malformed", data: { raw: rawText }, errorMessage: "The AI response was not valid JSON." };
   }

@@ -23,7 +23,10 @@ export const suggestionDecisionSchema = z.object({ decision: z.enum(["accepted",
 
 export const assistantSchema = z.object({
   messages: z
-    .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1) }))
+    // max(4000) — a real per-message injection-payload/cost-control cap, on top of the
+    // gateway's combined-prompt size cap (llm-gateway.ts's DEFAULT_MAX_PROMPT_CHARS),
+    // which only catches an oversized request AFTER all 50 messages are flattened together.
+    .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(4000) }))
     .min(1)
     .max(50), // a generous cap on one request's conversation length — this is a per-session, client-held transcript, not a stored one
   context: z.object({ module: z.string(), recordId: z.coerce.number().int().optional() }).optional(),

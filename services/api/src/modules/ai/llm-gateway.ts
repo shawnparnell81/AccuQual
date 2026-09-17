@@ -1,6 +1,7 @@
 import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
 import { AppError } from "../../utils/appError.js";
+import { PROMPT_INJECTION_DEFENSE_SUFFIX } from "./promptSafety.js";
 
 export interface LlmCallOptions {
   system?: string;
@@ -10,6 +11,8 @@ export interface LlmCallOptions {
   provider?: "anthropic" | "openai";
   apiKey?: string;
   model?: string;
+  /** Overrides the default combined prompt+system size cap (see DEFAULT_MAX_PROMPT_CHARS below) — only ai.assistant.ts needs this, for its legitimately larger flattened multi-turn transcript. */
+  maxPromptChars?: number;
 }
 
 export interface LlmCallResult {
@@ -43,16 +46,44 @@ export async function callLlm(prompt: string, options: LlmCallOptions = {}): Pro
   return (await callLlmDetailed(prompt, options)).text;
 }
 
+/**
+ * Prompt-injection hardening (see promptSafety.ts): every current and
+ * future caller goes through this one function — confirmed the only
+ * provider-calling code in the whole app (all 20 prompts.ts builders, all
+ * 5 external AI callers, and ai.assistant.ts's flattened chat transcript
+ * all end up here) — so appending the defense suffix and enforcing the
+ * size cap here, rather than in any individual caller, gives universal,
+ * opt-out-proof coverage with zero edits needed at any call site (except
+ * ai.assistant.ts's one deliberate `maxPromptChars` override for its
+ * legitimately larger transcript).
+ */
+const DEFAULT_MAX_PROMPT_CHARS = 20_000;
+
 export async function callLlmDetailed(prompt: string, options: LlmCallOptions = {}): Promise<LlmCallResult> {
   const provider = options.provider ?? env.LLM_PROVIDER;
   const maxAttempts = 3;
+  const system = [options.system, PROMPT_INJECTION_DEFENSE_SUFFIX].filter(Boolean).join("\n\n");
+  const maxPromptChars = options.maxPromptChars ?? DEFAULT_MAX_PROMPT_CHARS;
+
+  // Checked before the retry loop (and before either provider branch, so it
+  // applies uniformly in stub mode too) so an oversized input is rejected
+  // immediately with a clear 400 — never retried, never silently truncated,
+  // and never sent to the provider (a real cost-control measure alongside
+  // the injection-hardening one: a giant injected payload is exactly the
+  // kind of input this also protects a tenant's own BYOK budget from).
+  const combinedLength = prompt.length + system.length;
+  if (combinedLength > maxPromptChars) {
+    throw new AppError(`AI request input is too large (${combinedLength} characters, limit ${maxPromptChars}).`, 400);
+  }
+
+  const callOptions = { ...options, system };
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       if (provider === "anthropic") {
-        return await callAnthropic(prompt, options);
+        return await callAnthropic(prompt, callOptions);
       }
-      return await callOpenAi(prompt, options);
+      return await callOpenAi(prompt, callOptions);
     } catch (err) {
       const isRateLimited = (err as { status?: number }).status === 429;
       if (attempt === maxAttempts || !isRateLimited) {
