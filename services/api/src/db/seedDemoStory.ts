@@ -15,6 +15,8 @@ import { customers } from "../drizzle/schema/customers.js";
 import { warrantyClaims, warrantyClaimCosts, warrantyClaimWorkflow } from "../drizzle/schema/warranty.js";
 import { rmaLogRecords } from "../drizzle/schema/rmaLog.js";
 import { audits, auditItems } from "../drizzle/schema/audits.js";
+import { trainingCourses, trainingAssignments } from "../drizzle/schema/training.js";
+import { documents } from "../drizzle/schema/documents.js";
 import { recordAuditTrail } from "../modules/audit-trail/audit-trail.service.js";
 import { setContainment, setRootCause, setCorrectiveAction, close as closeNcr } from "../modules/ncr/ncr.service.js";
 import { transitionReceivingLineItem } from "../modules/erp/receivingWorkflow.js";
@@ -358,6 +360,41 @@ async function main() {
   // ---------------------------------------------------------------------
   const titanScore = await recomputeSupplierRiskScore(tdb, tenantId, titan!.id, performedBy);
   const meridianScore = await recomputeSupplierRiskScore(tdb, tenantId, meridian!.id, performedBy);
+
+  // ---------------------------------------------------------------------
+  // Workflow Inbox demo data — a handful of currently-OPEN items assigned
+  // to/owned by the admin user, so the new per-user Workflow Inbox/Calendar
+  // feature (GET /calendar) has real, non-empty data to show out of the
+  // box. Additive only — everything above this block is the original demo
+  // story and is untouched; none of these rows are ever closed/completed.
+  // ---------------------------------------------------------------------
+  const [inboxNcr] = await tdb
+    .insert(ncr)
+    .values({
+      tenantId,
+      title: "Gasket seal leak reported on Meridian Fasteners lot MF-LOT-20",
+      description: "Field report of a minor seal leak; awaiting containment review.",
+      severity: "medium",
+      supplierId: meridian!.id,
+      assignedTo: performedBy,
+      createdBy: performedBy,
+      createdAt: daysAgo(2),
+    })
+    .returning();
+  await recordAuditTrail(tdb, { tenantId, entityType: "NCR", entityId: inboxNcr!.id, action: "create", changes: { message: "Demo story seed (Workflow Inbox)" }, performedBy });
+
+  const [inboxCapa] = await tdb
+    .insert(capa)
+    .values({ tenantId, ncrId: inboxNcr!.id, rootCause: "Under investigation.", status: "in_progress", ownerId: performedBy, supplierId: meridian!.id, createdAt: daysAgo(1) })
+    .returning();
+  await recordAuditTrail(tdb, { tenantId, entityType: "CAPA", entityId: inboxCapa!.id, action: "create", changes: { message: "Demo story seed (Workflow Inbox)" }, performedBy });
+
+  await tdb.insert(audits).values({ tenantId, name: "Q4 Internal Process Audit — Receiving", type: "internal", auditorId: performedBy, status: "scheduled", scheduledAt: daysAgo(-14) });
+
+  const [inboxCourse] = await tdb.insert(trainingCourses).values({ tenantId, title: "Annual Quality System Refresher" }).returning();
+  await tdb.insert(trainingAssignments).values({ tenantId, courseId: inboxCourse!.id, userId: performedBy!, status: "assigned", dueAt: daysAgo(5), assignedBy: performedBy });
+
+  await tdb.insert(documents).values({ tenantId, title: "SOP-114 Incoming Inspection (Rev C)", category: "SOP", status: "in_review", ownerId: performedBy, createdAt: daysAgo(3) });
 
   logger.info("Demo story seed complete.");
   logger.info(`  Supplier "${DEMO_SUPPLIER_NAME}" (id ${titan!.id}): risk score ${titanScore.score} (${titanScore.band})`);

@@ -1,35 +1,31 @@
-import { useCurrentTenant, useCurrentUser } from "../../hooks/useAuth";
-import { DEPARTMENTS, NAV_STRUCTURE } from "../../components/layout/navConfig";
-import { HomepageWireframe } from "./HomepageWireframe";
-import { ModuleTile } from "./ModuleTile";
+import { useCurrentTenant } from "../../hooks/useAuth";
+import { UserDashboardHeader } from "../../components/home/UserDashboardHeader";
+import { WorkflowInbox } from "../../components/home/WorkflowInbox";
 
 /**
- * The tenant portal's landing page at /home. Deliberately lightweight and
- * placeholder-only (per the scoped build this shipped under): reads the
- * same auth/tenant context every other page already uses, reuses
- * navConfig.ts's existing DEPARTMENTS/NAV_STRUCTURE data for the tile grid
- * (real module names and real routes, no invented data), and makes no API
- * calls or data-model changes of its own. The real Dashboard (KPI counts,
- * charts, etc.) is unchanged and still lives at "/" — this page is a
+ * The tenant portal's landing page at /home. Real per-user data throughout
+ * (see UserDashboardHeader/WorkflowInbox, both fed by GET /calendar) — the
+ * earlier placeholder module-tile grid is gone; "what module do I want" is
+ * now the top nav's Modules dropdown (TopNav.tsx's ModulesDropdown), and
+ * "what needs my attention" is this page's own job. The real Dashboard (KPI
+ * counts, charts, etc.) is unchanged and still lives at "/" — this stays a
  * separate, distinct entry point, not a replacement for it.
  */
 export function HomePage() {
-  const user = useCurrentUser();
   const tenant = useCurrentTenant();
 
-  const tiles = DEPARTMENTS.map((dept) => {
-    const group = NAV_STRUCTURE.find((g) => g.department === dept.key);
-    const firstItem = group ? [...group.items].sort((a, b) => a.priority - b.priority)[0] : undefined;
-    return { ...dept, path: firstItem?.path ?? "/" };
-  });
-
   return (
-    <HomepageWireframe
-      welcomeTitle={`Welcome${user?.name ? `, ${user.name}` : ""}`}
-      welcomeSubtitle={tenant?.name}
-      tiles={tiles.map((tile) => (
-        <ModuleTile key={tile.key} label={tile.label} path={tile.path} icon={tile.icon} text={tile.text} bgSoft={tile.bgSoft} />
-      ))}
-    />
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center gap-3 border-b border-border pb-4">
+        <img src="/branding/logo-mark.png" alt="" className="h-10 w-10 rounded-md object-cover" />
+        <div>
+          <h1 className="text-lg font-semibold leading-tight">AccuQual QMS</h1>
+          {tenant && <p className="text-sm text-muted-foreground leading-tight">{tenant.name}</p>}
+        </div>
+      </div>
+
+      <UserDashboardHeader />
+      <WorkflowInbox />
+    </div>
   );
 }

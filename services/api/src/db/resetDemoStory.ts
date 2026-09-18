@@ -3,7 +3,7 @@ import { eq, and, inArray } from "drizzle-orm";
 import { db, pool } from "./index.js";
 import { logger } from "../utils/logger.js";
 import { tenants } from "../drizzle/schema/tenants.js";
-import { suppliers } from "../drizzle/schema/supplier.js";
+import { suppliers, supplierScorecards } from "../drizzle/schema/supplier.js";
 import { inventoryItems, inventoryStock, inventoryMovements } from "../drizzle/schema/inventory.js";
 import { inventoryLots } from "../drizzle/schema/inventoryLots.js";
 import { erpPurchaseOrders, erpPoLineItems, erpReceivingDocuments, erpReceivingLineItems } from "../drizzle/schema/erp.js";
@@ -17,6 +17,9 @@ import { rmaLogRecords } from "../drizzle/schema/rmaLog.js";
 import { audits, auditItems } from "../drizzle/schema/audits.js";
 import { supplierQualityRiskScores } from "../drizzle/schema/supplierQualityRisk.js";
 import { auditTrail } from "../drizzle/schema/auditTrail.js";
+import { customerScorecards } from "../drizzle/schema/customerScorecards.js";
+import { trainingAssignments, trainingCourses } from "../drizzle/schema/training.js";
+import { documents } from "../drizzle/schema/documents.js";
 
 const DEMO_SUPPLIER_NAME = "Titan Components Inc.";
 const HEALTHY_SUPPLIER_NAME = "Meridian Fasteners LLC";
@@ -76,43 +79,66 @@ async function main() {
   const claimRows = customerIds.length ? await db.select({ id: warrantyClaims.id }).from(warrantyClaims).where(inArray(warrantyClaims.customerId, customerIds)) : [];
   const claimIds = claimRows.map((c) => c.id);
 
-  const auditRows = await db.select({ id: audits.id }).from(audits).where(and(eq(audits.tenantId, tenantId), eq(audits.name, "Q3 Supplier Quality Audit — Titan Components")));
+  const auditRows = await db
+    .select({ id: audits.id })
+    .from(audits)
+    .where(and(eq(audits.tenantId, tenantId), inArray(audits.name, ["Q3 Supplier Quality Audit — Titan Components", "Q4 Internal Process Audit — Receiving"])));
   const auditIds = auditRows.map((a) => a.id);
 
-  // Children first, in FK dependency order.
-  if (auditIds.length) await db.delete(auditItems).where(inArray(auditItems.auditId, auditIds));
-  if (auditIds.length) await db.delete(audits).where(inArray(audits.id, auditIds));
+  // Workflow Inbox demo data (seedDemoStory.ts's additive block) — not
+  // reachable via the supplier/customer walk above, so found by the same
+  // recognizable names it seeds.
+  const courseRows = await db.select({ id: trainingCourses.id }).from(trainingCourses).where(and(eq(trainingCourses.tenantId, tenantId), eq(trainingCourses.title, "Annual Quality System Refresher")));
+  const courseIds = courseRows.map((c) => c.id);
+  const documentRows = await db.select({ id: documents.id }).from(documents).where(and(eq(documents.tenantId, tenantId), eq(documents.title, "SOP-114 Incoming Inspection (Rev C)")));
+  const documentIds = documentRows.map((d) => d.id);
 
-  if (claimIds.length) {
-    await db.delete(warrantyClaimCosts).where(inArray(warrantyClaimCosts.claimId, claimIds));
-    await db.delete(warrantyClaimWorkflow).where(inArray(warrantyClaimWorkflow.claimId, claimIds));
-  }
-  await db.delete(rmaLogRecords).where(and(eq(rmaLogRecords.tenantId, tenantId), inArray(rmaLogRecords.qualityId, ncrIds.length ? ncrIds : [-1])));
-  if (claimIds.length) await db.delete(warrantyClaims).where(inArray(warrantyClaims.id, claimIds));
-  if (customerIds.length) await db.delete(customers).where(inArray(customers.id, customerIds));
+  // Wrapped in one transaction — a mid-sequence failure (e.g. a later
+  // schema addition, like customer_scorecards, that references a table
+  // deleted here and was never taught to this script) rolls back cleanly
+  // instead of leaving the demo tenant in a half-deleted state.
+  await db.transaction(async (tx) => {
+    // Children first, in FK dependency order.
+    if (auditIds.length) await tx.delete(auditItems).where(inArray(auditItems.auditId, auditIds));
+    if (auditIds.length) await tx.delete(audits).where(inArray(audits.id, auditIds));
 
-  if (eightDIds.length) await db.delete(supplier8dResponses).where(inArray(supplier8dResponses.linkedEightDId, eightDIds));
-  if (eightDIds.length) await db.delete(eightD).where(inArray(eightD.id, eightDIds));
-  if (capaIds.length) await db.delete(capa).where(inArray(capa.id, capaIds));
-  if (ncrIds.length) await db.delete(ncr).where(inArray(ncr.id, ncrIds));
+    if (claimIds.length) {
+      await tx.delete(warrantyClaimCosts).where(inArray(warrantyClaimCosts.claimId, claimIds));
+      await tx.delete(warrantyClaimWorkflow).where(inArray(warrantyClaimWorkflow.claimId, claimIds));
+    }
+    await tx.delete(rmaLogRecords).where(and(eq(rmaLogRecords.tenantId, tenantId), inArray(rmaLogRecords.qualityId, ncrIds.length ? ncrIds : [-1])));
+    if (claimIds.length) await tx.delete(warrantyClaims).where(inArray(warrantyClaims.id, claimIds));
+    if (customerIds.length) await tx.delete(customerScorecards).where(inArray(customerScorecards.customerId, customerIds));
+    if (customerIds.length) await tx.delete(customers).where(inArray(customers.id, customerIds));
 
-  if (itemIds.length) await db.delete(inventoryLots).where(inArray(inventoryLots.itemId, itemIds));
-  if (itemIds.length) await db.delete(inventoryMovements).where(inArray(inventoryMovements.itemId, itemIds));
-  if (itemIds.length) await db.delete(inventoryStock).where(inArray(inventoryStock.itemId, itemIds));
-  if (lineIds.length) await db.delete(erpReceivingLineItems).where(inArray(erpReceivingLineItems.id, lineIds));
-  if (docIds.length) await db.delete(erpReceivingDocuments).where(inArray(erpReceivingDocuments.id, docIds));
-  if (poLineIds.length) await db.delete(erpPoLineItems).where(inArray(erpPoLineItems.id, poLineIds));
-  if (poIds.length) await db.delete(erpPurchaseOrders).where(inArray(erpPurchaseOrders.id, poIds));
-  if (itemIds.length) await db.delete(inventoryItems).where(inArray(inventoryItems.id, itemIds));
+    if (eightDIds.length) await tx.delete(supplier8dResponses).where(inArray(supplier8dResponses.linkedEightDId, eightDIds));
+    if (eightDIds.length) await tx.delete(eightD).where(inArray(eightD.id, eightDIds));
+    if (capaIds.length) await tx.delete(capa).where(inArray(capa.id, capaIds));
+    if (ncrIds.length) await tx.delete(ncr).where(inArray(ncr.id, ncrIds));
 
-  await db.delete(supplierQualityRiskScores).where(inArray(supplierQualityRiskScores.supplierId, supplierIds));
-  await db.delete(suppliers).where(inArray(suppliers.id, supplierIds));
+    if (courseIds.length) await tx.delete(trainingAssignments).where(inArray(trainingAssignments.courseId, courseIds));
+    if (courseIds.length) await tx.delete(trainingCourses).where(inArray(trainingCourses.id, courseIds));
+    if (documentIds.length) await tx.delete(documents).where(inArray(documents.id, documentIds));
 
-  // Audit trail rows the seed's own recordAuditTrail() calls wrote — tidy up
-  // so a re-seed doesn't leave orphaned history entries pointing at deleted ids.
-  if (ncrIds.length) await db.delete(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "NCR"), inArray(auditTrail.entityId, ncrIds)));
-  if (capaIds.length) await db.delete(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "CAPA"), inArray(auditTrail.entityId, capaIds)));
-  if (claimIds.length) await db.delete(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "WarrantyClaim"), inArray(auditTrail.entityId, claimIds)));
+    if (itemIds.length) await tx.delete(inventoryLots).where(inArray(inventoryLots.itemId, itemIds));
+    if (itemIds.length) await tx.delete(inventoryMovements).where(inArray(inventoryMovements.itemId, itemIds));
+    if (itemIds.length) await tx.delete(inventoryStock).where(inArray(inventoryStock.itemId, itemIds));
+    if (lineIds.length) await tx.delete(erpReceivingLineItems).where(inArray(erpReceivingLineItems.id, lineIds));
+    if (docIds.length) await tx.delete(erpReceivingDocuments).where(inArray(erpReceivingDocuments.id, docIds));
+    if (poLineIds.length) await tx.delete(erpPoLineItems).where(inArray(erpPoLineItems.id, poLineIds));
+    if (poIds.length) await tx.delete(erpPurchaseOrders).where(inArray(erpPurchaseOrders.id, poIds));
+    if (itemIds.length) await tx.delete(inventoryItems).where(inArray(inventoryItems.id, itemIds));
+
+    await tx.delete(supplierQualityRiskScores).where(inArray(supplierQualityRiskScores.supplierId, supplierIds));
+    await tx.delete(supplierScorecards).where(inArray(supplierScorecards.supplierId, supplierIds));
+    await tx.delete(suppliers).where(inArray(suppliers.id, supplierIds));
+
+    // Audit trail rows the seed's own recordAuditTrail() calls wrote — tidy up
+    // so a re-seed doesn't leave orphaned history entries pointing at deleted ids.
+    if (ncrIds.length) await tx.delete(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "NCR"), inArray(auditTrail.entityId, ncrIds)));
+    if (capaIds.length) await tx.delete(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "CAPA"), inArray(auditTrail.entityId, capaIds)));
+    if (claimIds.length) await tx.delete(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "WarrantyClaim"), inArray(auditTrail.entityId, claimIds)));
+  });
 
   logger.info(`Demo story reset complete — removed ${supplierIds.length} supplier(s), ${ncrIds.length} NCR(s), ${capaIds.length} CAPA(s), ${claimIds.length} warranty claim(s), ${auditIds.length} audit(s).`);
   await pool.end();
