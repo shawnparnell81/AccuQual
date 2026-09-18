@@ -1,11 +1,13 @@
-import { useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, Paperclip } from "lucide-react";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
+import { GenericCreateForm, type FieldSpec } from "../../components/forms/GenericCreateForm";
+import { Modal } from "../../components/modals/Modal";
 import { STATUS_COLORS, calibrationStatusFromDueDate } from "../../components/forms/formulas";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
@@ -33,6 +35,16 @@ interface CalibrationEvent {
 }
 
 const equipmentHooks = createResourceHooks<Equipment>("equipment");
+
+// Same field set as CalibrationPage.tsx's createFields — kept in one place
+// per page rather than shared, matching every other module's list-page vs.
+// detail-page field-spec split in this app (e.g. Feasibility).
+const EQUIPMENT_FIELDS: FieldSpec[] = [
+  { name: "name", label: "Equipment name" },
+  { name: "serialNumber", label: "Serial number" },
+  { name: "location", label: "Location" },
+  { name: "calibrationIntervalDays", label: "Calibration interval (days)", type: "number" },
+];
 
 function useUploadCertificate(equipmentId: number) {
   const queryClient = useQueryClient();
@@ -67,11 +79,18 @@ function useUploadCertificate(equipmentId: number) {
 export function EquipmentDetailPage() {
   const { id } = useParams();
   const equipmentId = Number(id);
+  const navigate = useNavigate();
+  const toast = useToast();
   const { data: equipment, isLoading, isError } = equipmentHooks.useOne(equipmentId);
   useSetAssistantContext("calibration", equipmentId, equipment ? equipment.name : `Equipment #${equipmentId}`);
   const uploadCertificate = useUploadCertificate(equipmentId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingUploadTarget = useRef<number | null>(null);
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const updateEquipment = equipmentHooks.useUpdate();
+  const deleteEquipment = equipmentHooks.useDelete();
 
   const { data: calibrations = [] } = useQuery<CalibrationEvent[]>({
     queryKey: ["equipment", equipmentId, "calibration"],
@@ -136,6 +155,12 @@ export function EquipmentDetailPage() {
           <PrintFormButton formType="maintenance_work_order" entityId={equipment.id} label="Print WO" />
           <OpenFormButton formType="gage_rr" entityId={equipment.id} title={`Equipment #${equipment.id} — Gage R&R Study`} label="Gage R&R Study" />
           <PrintFormButton formType="gage_rr" entityId={equipment.id} label="Print R&R" />
+          <button onClick={() => setEditOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+            Edit
+          </button>
+          <button onClick={() => setDeleteOpen(true)} className="rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/10">
+            Delete
+          </button>
         </div>
       </div>
 
@@ -188,6 +213,57 @@ export function EquipmentDetailPage() {
 
       <AttachmentsPanel entityType="calibration" entityId={equipmentId} />
       <WorkflowHistoryPanel moduleName="calibration" recordId={equipmentId} />
+
+      <Modal title="Edit Equipment" isOpen={editOpen} onClose={() => setEditOpen(false)}>
+        <GenericCreateForm
+          fields={EQUIPMENT_FIELDS}
+          initialValues={equipment as unknown as Record<string, unknown>}
+          submitLabel="Save changes"
+          onSubmit={(values) =>
+            updateEquipment.mutate(
+              { id: equipmentId, ...values },
+              {
+                onSuccess: () => {
+                  setEditOpen(false);
+                  toast.success("Equipment updated.");
+                },
+                onError: (err) => toast.error(extractErrorMessage(err, "Couldn't update this equipment.")),
+              }
+            )
+          }
+        />
+      </Modal>
+
+      <Modal title="Delete Equipment" isOpen={deleteOpen} onClose={() => setDeleteOpen(false)}>
+        <div className="flex flex-col gap-4">
+          <p className="text-sm">Permanently delete "{equipment.name}"? This cannot be undone.</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() =>
+                deleteEquipment.mutate(equipmentId, {
+                  onSuccess: () => {
+                    toast.success("Equipment deleted.");
+                    navigate("/calibration");
+                  },
+                  // The backend rejects this with a 400 (not a 500) when
+                  // real calibration history still references this
+                  // equipment (see calibration.controller.ts's
+                  // removeEquipmentHandler) — surfaced here exactly like
+                  // any other validation error, not a generic failure.
+                  onError: (err) => toast.error(extractErrorMessage(err, "Couldn't delete this equipment.")),
+                })
+              }
+              disabled={deleteEquipment.isPending}
+              className="rounded-md bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground disabled:opacity-60"
+            >
+              {deleteEquipment.isPending ? "Deleting…" : "Delete permanently"}
+            </button>
+            <button onClick={() => setDeleteOpen(false)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

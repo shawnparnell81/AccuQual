@@ -12,6 +12,12 @@ export const createEquipmentSchema = z.object({
   calibrationIntervalDays: z.coerce.number().int().positive().optional(),
 });
 
+// Full-System Audit finding H2 — equipment could be created but never
+// edited (no route mounted for baseHandlers.update at all). Same shape as
+// create, all optional, same convention as every other module's
+// updateXSchema (e.g. training's updateCourseSchema).
+export const updateEquipmentSchema = createEquipmentSchema.partial();
+
 export const addCalibrationSchema = z.object({
   performedAt: reasonableDate,
   result: z.enum(["pass", "fail", "adjusted"]),

@@ -12,6 +12,21 @@ interface GenericCreateFormProps {
   fields: FieldSpec[];
   onSubmit: (values: Record<string, unknown>) => void;
   submitLabel?: string;
+  // Full-System Audit finding H2 — lets this same form double as a small
+  // edit form (pre-filled from an existing record) instead of every module
+  // needing its own bespoke edit form; every existing create-only caller
+  // omits this and is unaffected.
+  initialValues?: Record<string, unknown>;
+}
+
+function toFieldStrings(fields: FieldSpec[], initialValues?: Record<string, unknown>): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!initialValues) return result;
+  for (const field of fields) {
+    const value = initialValues[field.name];
+    if (value !== undefined && value !== null) result[field.name] = String(value);
+  }
+  return result;
 }
 
 /**
@@ -34,8 +49,8 @@ function toSubmitValues(fields: FieldSpec[], values: Record<string, string>): Re
 }
 
 /** Renders a small create form from a field spec — used by every simple master-data module page. */
-export function GenericCreateForm({ fields, onSubmit, submitLabel = "Create" }: GenericCreateFormProps) {
-  const [values, setValues] = useState<Record<string, string>>({});
+export function GenericCreateForm({ fields, onSubmit, submitLabel = "Create", initialValues }: GenericCreateFormProps) {
+  const [values, setValues] = useState<Record<string, string>>(() => toFieldStrings(fields, initialValues));
 
   return (
     <form

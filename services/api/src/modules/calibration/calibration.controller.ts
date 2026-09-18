@@ -14,6 +14,28 @@ import type { TenantDb } from "../../lib/tenantScope.js";
 export const baseHandlers = crudFactory(equipment, { entityName: "Equipment", idColumn: "id" });
 
 /**
+ * Full-System Audit finding H2 — equipment's own baseHandlers.remove was
+ * never mounted at all. Mounting it as-is would work for a never-calibrated
+ * item but throw a raw, unhandled Postgres foreign-key violation (a 500
+ * exposing internal DB error text) for the much more common real case: an
+ * item with real calibration history, since calibrations.equipmentId is a
+ * NOT NULL FK with no ON DELETE CASCADE (see drizzle/schema/calibration.ts —
+ * deliberately not cascaded, so calibration history is never silently lost
+ * just because the equipment record itself is removed later). This guard
+ * turns that into the same kind of clean, explained 400 every other
+ * business-rule delete/edit guard in this app already gives (e.g. CRAR's
+ * "completed and can no longer be edited" check) instead of a crash.
+ */
+export const removeEquipmentHandler = asyncHandler(async (req: Request, res: Response, next) => {
+  const equipmentId = Number(req.params.id);
+  const existing = await req.db!.select({ id: calibrations.id }).from(calibrations).where(and(eq(calibrations.equipmentId, equipmentId), eq(calibrations.tenantId, req.tenantId!))).limit(1);
+  if (existing.length > 0) {
+    throw AppError.badRequest("This equipment has recorded calibration history and cannot be deleted. Remove its calibration records first if it must go.");
+  }
+  return baseHandlers.remove(req, res, next);
+});
+
+/**
  * Equipment list, each row carrying its most recent calibration's due date.
  * The 60/30-day-warning and past-due status itself is computed client-side
  * (apps/web's formulas.ts, shared with the FMEA/calibration form layouts) —
