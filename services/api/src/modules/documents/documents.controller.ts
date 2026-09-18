@@ -84,7 +84,13 @@ export const approveHandler = asyncHandler(async (req: Request, res: Response) =
     .set({ approvedBy: req.user?.id, approvedAt: new Date(), approvalNotes })
     .where(and(eq(documentVersions.documentId, documentId), eq(documentVersions.tenantId, tenantId), eq(documentVersions.version, doc.currentVersion)));
 
-  const [updated] = await req.db!.update(documents).set({ status: "approved", updatedAt: new Date() }).where(eq(documents.id, documentId)).returning();
+  // Full-System Audit finding M3 — the SELECT above already scoped this
+  // document to the caller's own tenant, so this couldn't actually approve
+  // someone else's document, but the UPDATE itself dropped the tenantId
+  // predicate every other module's writes keep as defense-in-depth (RLS is
+  // the second, DB-level layer — see the README's "two independent,
+  // deliberately redundant layers" section; this is the first).
+  const [updated] = await req.db!.update(documents).set({ status: "approved", updatedAt: new Date() }).where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId))).returning();
 
   // "approve" isn't in audit_trail's fixed action enum (create/update/delete/
   // status_change) — this is exactly what status_change means, so use it.
@@ -125,7 +131,8 @@ export const obsoleteHandler = asyncHandler(async (req: Request, res: Response) 
     throw AppError.badRequest(`Cannot obsolete a document from status "${doc.status}" — must be "approved".`);
   }
 
-  const [updated] = await req.db!.update(documents).set({ status: "obsolete", updatedAt: new Date() }).where(eq(documents.id, documentId)).returning();
+  // Same M3 defense-in-depth fix as approveHandler above.
+  const [updated] = await req.db!.update(documents).set({ status: "obsolete", updatedAt: new Date() }).where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId))).returning();
 
   await recordAuditTrail(req.db!, {
     tenantId,
@@ -233,10 +240,13 @@ export const applyRetentionHandler = asyncHandler(async (req: Request, res: Resp
     const decision = decideRetention(doc, currentVersion);
     if (!decision.eligible) continue;
 
+    // M3: same defense-in-depth tenantId predicate as approve/obsolete above —
+    // `obsolete` was already loaded scoped to this tenant, so this doesn't
+    // change which documents are affected, only matches convention.
     if (decision.action === "deleted") {
-      await db.update(documents).set({ isDeleted: true, updatedAt: new Date() }).where(eq(documents.id, doc.id));
+      await db.update(documents).set({ isDeleted: true, updatedAt: new Date() }).where(and(eq(documents.id, doc.id), eq(documents.tenantId, tenantId)));
     } else {
-      await db.update(documents).set({ retentionState: "archived", updatedAt: new Date() }).where(eq(documents.id, doc.id));
+      await db.update(documents).set({ retentionState: "archived", updatedAt: new Date() }).where(and(eq(documents.id, doc.id), eq(documents.tenantId, tenantId)));
     }
     results.push({ documentId: doc.id, action: decision.action! });
 
@@ -273,10 +283,11 @@ export const archiveHandler = asyncHandler(async (req: Request, res: Response) =
   const decision = decideRetention(doc, currentVersion);
   if (!decision.eligible) throw AppError.badRequest(`Cannot archive this document: ${decision.reason}`);
 
+  // Same M3 defense-in-depth fix as applyRetentionHandler above.
   const [updated] =
     decision.action === "deleted"
-      ? await req.db!.update(documents).set({ isDeleted: true, updatedAt: new Date() }).where(eq(documents.id, documentId)).returning()
-      : await req.db!.update(documents).set({ retentionState: "archived", updatedAt: new Date() }).where(eq(documents.id, documentId)).returning();
+      ? await req.db!.update(documents).set({ isDeleted: true, updatedAt: new Date() }).where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId))).returning()
+      : await req.db!.update(documents).set({ retentionState: "archived", updatedAt: new Date() }).where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId))).returning();
 
   await recordAuditTrail(req.db!, {
     tenantId,

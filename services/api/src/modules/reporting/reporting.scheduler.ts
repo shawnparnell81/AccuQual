@@ -1,5 +1,5 @@
 import { and, eq, lte } from "drizzle-orm";
-import { db } from "../../db/index.js";
+import { db, pool } from "../../db/index.js";
 import { reportSchedules } from "../../drizzle/schema/reporting.js";
 import { tenants } from "../../drizzle/schema/tenants.js";
 import { notificationLog } from "../../drizzle/schema/notifications.js";
@@ -21,9 +21,13 @@ import { buildReportEmail, type ReportType } from "./reporting.templates.js";
  * horizontally-scaled fleet — see DEPLOY.md/render.yaml): an in-process
  * interval that polls `report_schedules` for rows whose `next_run_at` has
  * passed. This is a real, working scheduler for that deployment shape, not
- * a stand-in — it is NOT a substitute for a real cron/queue if this app
- * ever moves to multiple API instances (two instances would both try to
- * run the same due schedule; there's no distributed lock here).
+ * a stand-in. Full-System Audit finding M5: if this app ever does move to
+ * multiple API instances, pollDueSchedules() below now guards its own poll
+ * cycle with a real Postgres advisory lock (pg_try_advisory_lock) so two
+ * instances can't both pick up and send the same due schedule — still not
+ * a substitute for a real distributed cron/queue (there's no retry/backoff
+ * across instances, no leader election), just the one specific race this
+ * scheduler could otherwise hit closed.
  */
 const POLL_INTERVAL_MS = 60 * 1000;
 let pollHandle: ReturnType<typeof setInterval> | null = null;
@@ -87,12 +91,38 @@ export async function runReportSchedule(scheduleId: number): Promise<void> {
   }
 }
 
+// Full-System Audit finding M5: this function's own header comment already
+// flagged "two instances would both try to run the same due schedule" as a
+// real gap for the day this app moves off one long-lived process. A
+// Postgres advisory lock closes exactly that gap with no new
+// infrastructure (no Redis, no queue) — any arbitrary bigint works as the
+// key as long as it's unique across this app's advisory-lock usage, which
+// today is only this one call site. Session-scoped (not the _xact variant):
+// the lock must stay held across this function's several separate
+// db.select/update calls below, not just one transaction.
+const REPORTING_SCHEDULER_LOCK_KEY = 8_675_309_001;
+
 async function pollDueSchedules(): Promise<void> {
+  const client = await pool.connect();
   try {
-    const due = await db.select({ id: reportSchedules.id }).from(reportSchedules).where(and(eq(reportSchedules.enabled, true), lte(reportSchedules.nextRunAt, new Date())));
-    for (const row of due) await runReportSchedule(row.id);
+    const { rows } = await client.query<{ pg_try_advisory_lock: boolean }>("SELECT pg_try_advisory_lock($1)", [REPORTING_SCHEDULER_LOCK_KEY]);
+    if (!rows[0]?.pg_try_advisory_lock) {
+      // Another instance is already running this poll cycle — skip, don't
+      // wait. Same digest content/schedule either way: this only prevents
+      // the SAME due schedule being sent twice, never delays a real send.
+      return;
+    }
+
+    try {
+      const due = await db.select({ id: reportSchedules.id }).from(reportSchedules).where(and(eq(reportSchedules.enabled, true), lte(reportSchedules.nextRunAt, new Date())));
+      for (const row of due) await runReportSchedule(row.id);
+    } finally {
+      await client.query("SELECT pg_advisory_unlock($1)", [REPORTING_SCHEDULER_LOCK_KEY]);
+    }
   } catch (err) {
     logger.error("Reporting scheduler poll failed", { err });
+  } finally {
+    client.release();
   }
 }
 

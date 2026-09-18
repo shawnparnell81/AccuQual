@@ -21,6 +21,21 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
   const [item] = await req.db!.insert(auditItems).values({ ...req.body, auditId, tenantId: req.tenantId! }).returning();
   if (!item) throw new Error("Insert did not return the created audit item");
 
+  // Full-System Audit finding M2 — this handler previously only ever
+  // called recordAuditTrail inside the discrepancy-cascade branch below,
+  // so a finding on an external audit (never cascades) or an internal
+  // audit's non-nonconformance finding (observation/minor-below-threshold)
+  // left no audit-trail entry for its own creation at all. Every finding
+  // gets one now, regardless of whether it also happens to cascade.
+  await recordAuditTrail(req.db!, {
+    tenantId: req.tenantId!,
+    entityType: "Audit Finding",
+    entityId: item.id,
+    action: "create",
+    changes: { auditId, severity: item.severity, question: item.question },
+    performedBy: req.user?.id,
+  });
+
   // Same "embed" job crudFactory's generic create() already queues for
   // every other entity (see its own comment + workers/ai-worker) — this
   // handler is hand-written, not crudFactory-based, so it never got that
