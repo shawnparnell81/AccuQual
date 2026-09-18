@@ -16,7 +16,7 @@ npm install
 cp .env.example .env               # fill in DATABASE_URL, JWT secrets, LLM API keys
 cp apps/web/.env.example apps/web/.env
 
-docker compose up -d postgres redis elasticsearch
+docker compose up -d postgres redis
 
 npm run db:migrate --workspace services/api   # also enables RLS + policies, see below
 npm run db:seed --workspace services/api
@@ -90,9 +90,10 @@ Verified the same way as the pass above: `tsc -b`/`npm run build` clean on both 
 - **Tenant provisioning depth**: no default workflow_definitions are seeded for a new tenant; onboarding email is logged, not sent (no email service wired up); tenant branding (logo/color) isn't applied to the UI yet (format — hex vs. HSL triplet — isn't settled).
 - **PDF templates**: no tenant ever has a real uploaded AcroForm PDF, so every export falls through to the fallback renderer — a real schema-driven single-page PDF for any form type with a `layouts/*.ts` entry (most of them, as of this pass), a crude key:value dump otherwise. There's still no upload flow for a tenant's own custom template.
 - **Forms without an "Open Form" entry point**: `discrepancy_inspection` is the last one — no DI module/page exists at all to attach it to. Every other formType in the system now has a real entry point (see the two QMS forms passes above).
+- **Form version rollback (Full-System Audit finding L5)**: `POST /forms/:type/:id/version` snapshots and `GET .../history` lists past versions, but there's no restore path — `FormVersionHistory.tsx`'s sidebar is view-only. See `forms.service.ts`'s `listVersions` for the sketch of what a real rollback would need to do (re-snapshot current state first, then overwrite `form_data` with the chosen version). Not planned/implemented.
 - **Management Review and Context of the Organization are fixed singletons**, not a dated history of past reviews — a deliberate simplification (see `ManagementSystemPage.tsx`'s comment); a real "past reviews" list would need an actual list/detail module.
 - **Workers**: still share code with `services/api` via relative imports rather than a shared package (see `workers/README.md`); the AI/workflow workers' own DB connections don't go through the same per-request RLS transaction as the API (they write with an explicit `tenantId` only — layer 1, not layer 2).
-- **Everything already listed in the original pass** (see git history / this file's prior revision): no MFA/password-reset, Azure Blob not wired for `STORAGE_DRIVER=azure`, ElasticSearch indices mapped but unused, Workflow Builder isn't a real drag-and-drop canvas, no integration tests against a real Postgres/Redis, Terraform unvalidated against a real Azure subscription.
+- **Everything already listed in the original pass** (see git history / this file's prior revision): no MFA/password-reset, Azure Blob not wired for `STORAGE_DRIVER=azure`, Workflow Builder isn't a real drag-and-drop canvas, no integration tests against a real Postgres/Redis, Terraform unvalidated against a real Azure subscription. (ElasticSearch, formerly listed here as "mapped but unused," was removed entirely — see the M6 fix: the container, its config, and the unused dependency are gone, not just idle.)
 
 ## Roadmap
 
@@ -101,4 +102,4 @@ Verified the same way as the pass above: `tsc -b`/`npm run build` clean on both 
 3. Build the tenant PDF template upload flow (multipart upload → `form_templates.pdfPath` under `/tenants/<id>/forms/<type>/`) so exports stop falling back to the plain renderer.
 4. Refactor DocumentsPage/AuditDetailPage/AiInsightsPage/DigitalTwinPage to accept props instead of `useParams`, then give document/audit/ai/digitalTwin windows real content.
 5. Seed default workflow_definitions per tenant on creation; wire a real email service for onboarding.
-6. Everything from the original roadmap: real workflow definitions, AI pipelines against a real LLM key, Azure Blob + ElasticSearch, integration tests, a real Terraform apply.
+6. Everything from the original roadmap: real workflow definitions, AI pipelines against a real LLM key, Azure Blob, integration tests, a real Terraform apply. (ElasticSearch dropped from this list — see M6: removed as dead infrastructure, not deferred.)
