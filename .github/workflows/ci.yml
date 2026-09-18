@@ -87,6 +87,42 @@ jobs:
           npm run build --workspace workers/ai-worker
           npm run build --workspace workers/digital-twin-worker
 
+  # Full-System Audit finding L7 — "Build Workers" above only ever ran
+  # `tsc`, never validated that each worker's real Dockerfile (the thing
+  # docker-compose.yml and any real deploy actually run) still builds. The
+  # existing `docker-build` job below could have covered this, but it's
+  # gated on Azure Container Registry secrets that don't exist and is
+  # disabled outside workflow_dispatch — so worker Docker images had zero
+  # CI coverage on a normal push/PR. This is a separate, always-on,
+  # registry-free build-only job (no push, no credentials needed) so a
+  # broken worker Dockerfile fails CI immediately. Does not touch the
+  # existing docker-build job or any worker's application logic.
+  build-worker-images:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - { name: workflow-worker, dockerfile: workers/workflow-worker/Dockerfile }
+          - { name: ai-worker, dockerfile: workers/ai-worker/Dockerfile }
+          - { name: digital-twin-worker, dockerfile: workers/digital-twin-worker/Dockerfile }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (validate only, no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.service.dockerfile }}
+          push: false
+          tags: accuqual-${{ matrix.service.name }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   docker-build:
     needs: build-and-test
     runs-on: ubuntu-latest
