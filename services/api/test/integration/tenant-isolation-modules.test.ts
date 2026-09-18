@@ -5,11 +5,17 @@
 // one module's controller; a genuine cross-tenant leak in a DIFFERENT
 // controller (a forgotten `req.db!` scope, a raw `db` import bypassing the
 // tenant transaction, a crudFactory misconfiguration) would have gone
-// completely uncaught. Covers 6 modules chosen to span this app's real
+// completely uncaught. Covers 9 modules chosen to span this app's real
 // architectural variety: capa/audits (plain crudFactory + PATCH),
 // risk (bespoke controller, PUT not PATCH), documents (Sprint 1's newly
 // RBAC-gated router), suppliers (no generic PATCH at all — a bespoke
-// POST action endpoint instead), inventory items (a nested /items path).
+// POST action endpoint instead), inventory items (a nested /items path),
+// training/change (Full-System Audit C1/C2 — both newly RBAC-gated after
+// having no department gate at all), calibration (like suppliers, no
+// generic PATCH — the real cross-tenant write surface is its bespoke
+// POST /:id/calibration sub-resource; H4/H8's own review of this module
+// also confirmed there is still no way to edit equipment itself at all,
+// a real gap, not something this test works around).
 //
 // Uses the exact same admin-role-bypasses-department-RBAC convention as
 // tenant-isolation.test.ts — this file tests ONLY tenant scoping, never
@@ -28,6 +34,9 @@ import { riskAssessments } from "../../src/drizzle/schema/risk.js";
 import { documents } from "../../src/drizzle/schema/documents.js";
 import { suppliers } from "../../src/drizzle/schema/supplier.js";
 import { inventoryItems, inventoryAlerts } from "../../src/drizzle/schema/inventory.js";
+import { trainingCourses } from "../../src/drizzle/schema/training.js";
+import { changeRequests } from "../../src/drizzle/schema/change.js";
+import { equipment, calibrations } from "../../src/drizzle/schema/calibration.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
@@ -96,6 +105,33 @@ const cases: TenantIsolationCase[] = [
     unchangedField: "description",
     unchangedValue: "Original description",
   },
+  {
+    name: "Training Course",
+    basePath: "/training",
+    createPayload: { title: "Tenant A Course" },
+    mutate: { method: "patch", pathSuffix: "", payload: { title: "HACKED" } },
+    unchangedField: "title",
+    unchangedValue: "Tenant A Course",
+  },
+  {
+    name: "Change Request",
+    basePath: "/change",
+    createPayload: { title: "Tenant A Change" },
+    mutate: { method: "patch", pathSuffix: "", payload: { title: "HACKED" } },
+    unchangedField: "title",
+    unchangedValue: "Tenant A Change",
+  },
+  {
+    name: "Calibration Equipment",
+    // No generic PATCH exists on this router at all (same real gap as
+    // Suppliers above) — the cross-tenant write attempt uses the one real
+    // mutate action, adding a calibration event to tenant A's equipment.
+    basePath: "/equipment",
+    createPayload: { name: "Tenant A Gauge", calibrationIntervalDays: 90 },
+    mutate: { method: "post", pathSuffix: "/calibration", payload: { performedAt: new Date().toISOString(), result: "pass" } },
+    unchangedField: "name",
+    unchangedValue: "Tenant A Gauge",
+  },
 ];
 
 let tenantAId: number;
@@ -146,6 +182,14 @@ describe("tenant isolation across modules (real DB + real HTTP path)", () => {
     // itself, or the FK from inventory_alerts blocks this delete.
     await db.delete(inventoryAlerts).where(eq(inventoryAlerts.itemId, createdIds.get("Inventory Item")!));
     await db.delete(inventoryItems).where(eq(inventoryItems.id, createdIds.get("Inventory Item")!));
+    await db.delete(trainingCourses).where(eq(trainingCourses.id, createdIds.get("Training Course")!));
+    await db.delete(changeRequests).where(eq(changeRequests.id, createdIds.get("Change Request")!));
+    // The successful "tenant A can add its own calibration event" (create,
+    // via seeding above) plus this suite's own cross-tenant attempt both go
+    // through the real /:id/calibration insert — clear its child rows
+    // before the equipment FK they point at is deleted.
+    await db.delete(calibrations).where(eq(calibrations.equipmentId, createdIds.get("Calibration Equipment")!));
+    await db.delete(equipment).where(eq(equipment.id, createdIds.get("Calibration Equipment")!));
     await db.delete(departmentPermissions).where(inArray(departmentPermissions.tenantId, [tenantAId, tenantBId]));
     await db.delete(users).where(inArray(users.id, [userAId, userBId]));
     await db.delete(tenants).where(inArray(tenants.id, [tenantAId, tenantBId]));
