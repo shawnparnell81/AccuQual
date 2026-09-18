@@ -4,6 +4,7 @@ import { TopNav } from "./TopNav";
 import { Header } from "./Header";
 import { TabBar } from "./TabBar";
 import { WindowContainer } from "../../window-manager/WindowContainer";
+import { MinimizedWindowsTaskbar } from "../../window-manager/MinimizedWindowsTaskbar";
 import { useWindowStore } from "../../window-manager/useWindowStore";
 import { useTabStore } from "../../store/useTabStore";
 import { useAuthStore } from "../../store/authStore";
@@ -89,6 +90,7 @@ export function AppLayout() {
       </main>
       <div className="print:hidden">
         <WindowContainer />
+        <MinimizedWindowsTaskbar />
         <AiAssistantPanelGate />
       </div>
     </div>
