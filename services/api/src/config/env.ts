@@ -13,7 +13,6 @@ const envSchema = z.object({
   JWT_REFRESH_TTL: z.string().default("7d"),
 
   REDIS_URL: z.string().default("redis://localhost:6379"),
-  ELASTICSEARCH_URL: z.string().default("http://localhost:9200"),
 
   STORAGE_DRIVER: z.enum(["local", "azure"]).default("local"),
   STORAGE_LOCAL_PATH: z.string().default("./uploads"),

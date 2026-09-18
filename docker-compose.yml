@@ -20,33 +20,22 @@ services:
     ports:
       - "6379:6379"
 
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    ports:
-      - "9200:9200"
-
   api:
     build:
       context: .
       dockerfile: services/api/Dockerfile
     env_file: .env
-    # .env's DATABASE_URL/REDIS_URL/ELASTICSEARCH_URL point at `localhost` on
-    # the host-mapped ports (5433 etc.) for running `npm run dev` directly on
-    # the host — inside this container "localhost" is the container itself,
-    # not the other services, so these override with the compose network's
-    # service names and each service's real internal port.
+    # .env's DATABASE_URL/REDIS_URL point at `localhost` on the host-mapped
+    # ports (5433 etc.) for running `npm run dev` directly on the host —
+    # inside this container "localhost" is the container itself, not the
+    # other services, so these override with the compose network's service
+    # names and each service's real internal port.
     environment:
       DATABASE_URL: postgres://accuqual:accuqual@postgres:5432/accuqual
       REDIS_URL: redis://redis:6379
-      ELASTICSEARCH_URL: http://elasticsearch:9200
     depends_on:
       - postgres
       - redis
-      - elasticsearch
     ports:
       - "3000:3000"
     volumes:
