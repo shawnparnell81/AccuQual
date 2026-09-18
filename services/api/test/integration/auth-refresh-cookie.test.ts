@@ -67,6 +67,16 @@ describe("Auth refresh token cookie (real DB + real HTTP path)", () => {
     expect(res.body.refreshToken).toBeUndefined();
   });
 
+  it("POST /auth/refresh also returns the real tenant, matching login's own shape — a browser whose persisted user/tenant is missing (cleared storage, a new device) couldn't otherwise recover a tenant-scoped session from the cookie alone", async () => {
+    const agent = request.agent(app);
+    await agent.post("/auth/login").send({ email, password: PASSWORD });
+
+    const res = await agent.post("/auth/refresh").send({});
+    expect(res.status).toBe(200);
+    expect(res.body.user?.id).toBe(userId);
+    expect(res.body.tenant).toMatchObject({ id: tenantId, code: `auth-cookie-${suffix}` });
+  });
+
   it("POST /auth/refresh with no cookie at all is rejected — the old body-based refreshToken is no longer accepted either", async () => {
     const res = await request(app).post("/auth/refresh").send({ refreshToken: "whatever" });
     expect(res.status).toBe(401);

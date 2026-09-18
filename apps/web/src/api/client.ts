@@ -1,5 +1,5 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
-import { useAuthStore } from "../store/authStore";
+import { useAuthStore, type AuthUser, type TenantContext } from "../store/authStore";
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "/api",
@@ -45,16 +45,33 @@ apiClient.interceptors.response.use(
   }
 );
 
-/** Exported for useAuthBootstrap — the app's initial silent-session check runs through this same call. */
+interface RefreshResponse {
+  user: AuthUser;
+  tenant?: TenantContext | null;
+  accessToken: string;
+}
+
+/**
+ * Exported for useAuthBootstrap — the app's initial silent-session check
+ * runs through this same call. Applies the full `user`/`tenant` from the
+ * response via `setSession`, not just the accessToken: a browser whose
+ * persisted `user`/`tenant` (authStore's partialize) is missing — a
+ * genuinely new device, or storage cleared without logging out first —
+ * would otherwise refresh into an accessToken with no tenant context
+ * anywhere in the client, breaking every tenant-scoped action (e.g.
+ * useWindowStore's openWindow) with no way to recover short of a real
+ * re-login. auth.service.ts's `refresh()` was fixed to return `tenant` in
+ * the same pass so this has something real to apply.
+ */
 export async function refreshAccessToken(): Promise<string | null> {
   try {
-    const { data } = await axios.post(
+    const { data } = await axios.post<RefreshResponse>(
       `${apiClient.defaults.baseURL}/auth/refresh`,
       {},
       { withCredentials: true }
     );
-    useAuthStore.getState().setAccessToken(data.accessToken);
-    return data.accessToken as string;
+    useAuthStore.getState().setSession(data.user, data.accessToken, data.tenant);
+    return data.accessToken;
   } catch {
     return null;
   }

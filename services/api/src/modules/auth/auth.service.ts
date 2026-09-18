@@ -122,7 +122,30 @@ export async function refresh(refreshToken: string) {
   }
 
   const tokens = issueTokens(full);
-  return { user: sanitize(full), ...tokens };
+  const tenant = full.tenantId ? await tenantById(full.tenantId) : null;
+  return { user: sanitize(full), tenant, ...tokens };
+}
+
+/**
+ * `refresh()`'s own tenant lookup — mirrors `login()`'s `tenant` shape
+ * exactly. Without this, a browser whose persisted `user`/`tenant` (see
+ * authStore.ts's partialize) is missing — a genuinely new device/browser,
+ * or storage cleared without logging out first — could silently refresh
+ * into an "authenticated but contextless" session: a real accessToken with
+ * no tenantId anywhere in the client, so every tenant-scoped action (e.g.
+ * useWindowStore's openWindow) fails with "No tenant context" instead of
+ * the client ever having a chance to rebuild it. `useAuthBootstrap` only
+ * calls `refreshAccessToken()` (client.ts), which only ever consumed the
+ * response's `accessToken` — updated alongside this to also apply `user`/
+ * `tenant` from the same response, so a bootstrap-refresh is self-
+ * sufficient on its own, the way an httpOnly-cookie session is supposed to be.
+ */
+async function tenantById(tenantId: number) {
+  const [row] = await db
+    .select({ id: tenants.id, name: tenants.name, code: tenants.code, branding: tenants.branding })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId));
+  return row ?? null;
 }
 
 /** Bumps the user's tokenVersion, invalidating every outstanding refresh token. */
