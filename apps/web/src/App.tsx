@@ -102,7 +102,7 @@ import { AdminQualitySettingsPage } from "./routes/Admin/AdminQualitySettingsPag
 import { AdminReceivingInventorySettingsPage } from "./routes/Admin/AdminReceivingInventorySettingsPage";
 import { AdminSystemHealthPage } from "./routes/Admin/AdminSystemHealthPage";
 import { AdminTenantSettingsPage } from "./routes/Admin/AdminTenantSettingsPage";
-import { useCurrentUser } from "./hooks/useAuth";
+import { useCurrentUser, useAuthBootstrap } from "./hooks/useAuth";
 
 function HomeRoute() {
   // Platform admins have no tenant, so every tenant-data page 401s for them —
@@ -112,6 +112,7 @@ function HomeRoute() {
 }
 
 export function App() {
+  useAuthBootstrap();
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />

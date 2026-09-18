@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../api/client";
+import { apiClient, refreshAccessToken } from "../api/client";
 import { useAuthStore, type AuthUser, type TenantContext } from "../store/authStore";
 import { useWindowStore } from "../window-manager/useWindowStore";
 
@@ -7,7 +8,8 @@ interface AuthResponse {
   user: AuthUser;
   tenant?: TenantContext | null;
   accessToken: string;
-  refreshToken: string;
+  // No refreshToken field — it now arrives only as the httpOnly accuqual_rt
+  // cookie (see auth.controller.ts), never in a JSON body frontend JS can read.
 }
 
 export function useLogin() {
@@ -26,7 +28,7 @@ export function useLogin() {
     // render a previous user's real NCR/supplier/financial numbers.
     onSuccess: (data) => {
       queryClient.clear();
-      setSession(data.user, data.accessToken, data.refreshToken, data.tenant);
+      setSession(data.user, data.accessToken, data.tenant);
     },
   });
 }
@@ -40,7 +42,7 @@ export function useRegister() {
     // Same reasoning as useLogin's onSuccess above.
     onSuccess: (data) => {
       queryClient.clear();
-      setSession(data.user, data.accessToken, data.refreshToken, data.tenant);
+      setSession(data.user, data.accessToken, data.tenant);
     },
   });
 }
@@ -70,4 +72,42 @@ export function useCurrentUser() {
 
 export function useCurrentTenant() {
   return useAuthStore((s) => s.tenant);
+}
+
+/**
+ * B2 fix: accessToken is no longer persisted (see authStore.ts), so a page
+ * reload always starts with none in memory even though the httpOnly
+ * accuqual_rt cookie may still be good. Runs once per app load to silently
+ * try to mint a fresh accessToken from that cookie before ProtectedRoute
+ * has to decide whether to bounce to /login — see ProtectedRoute.tsx's own
+ * `bootstrapped` check.
+ */
+export function useAuthBootstrap() {
+  const bootstrapped = useAuthStore((s) => s.bootstrapped);
+  const setBootstrapped = useAuthStore((s) => s.setBootstrapped);
+  const logout = useAuthStore((s) => s.logout);
+
+  useEffect(() => {
+    if (bootstrapped) return;
+    let cancelled = false;
+    void refreshAccessToken().then((token) => {
+      if (cancelled) return;
+      // Deliberately unconditional, not just "when there's no token": a
+      // browser that logged in before this fix shipped can still have an
+      // old, now-stale accessToken sitting in this store from a previous
+      // (pre-httpOnly-cookie) localStorage write, and that leftover value
+      // must never substitute for a real check against the actual cookie —
+      // it would leave `bootstrapped` false forever (ProtectedRoute renders
+      // nothing while waiting on a check that never runs) since nothing
+      // else in the app would ever call setBootstrapped for it.
+      if (!token) logout(); // no valid cookie — drop any stale persisted user/tenant too
+      setBootstrapped();
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally once per mount — bootstrapped is read only to decide
+    // whether to even start, not to re-trigger this on every change it
+    // itself causes.
+  }, []);
 }

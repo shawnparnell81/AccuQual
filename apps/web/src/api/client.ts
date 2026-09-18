@@ -3,6 +3,10 @@ import { useAuthStore } from "../store/authStore";
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "/api",
+  // The refresh token now lives in an httpOnly cookie (see
+  // auth.controller.ts) instead of somewhere JS can read it — this is what
+  // makes the browser actually attach it to /auth/refresh and /auth/logout.
+  withCredentials: true,
 });
 
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
@@ -41,13 +45,15 @@ apiClient.interceptors.response.use(
   }
 );
 
-async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = useAuthStore.getState().refreshToken;
-  if (!refreshToken) return null;
-
+/** Exported for useAuthBootstrap — the app's initial silent-session check runs through this same call. */
+export async function refreshAccessToken(): Promise<string | null> {
   try {
-    const { data } = await axios.post(`${apiClient.defaults.baseURL}/auth/refresh`, { refreshToken });
-    useAuthStore.getState().setTokens(data.accessToken, data.refreshToken);
+    const { data } = await axios.post(
+      `${apiClient.defaults.baseURL}/auth/refresh`,
+      {},
+      { withCredentials: true }
+    );
+    useAuthStore.getState().setAccessToken(data.accessToken);
     return data.accessToken as string;
   } catch {
     return null;

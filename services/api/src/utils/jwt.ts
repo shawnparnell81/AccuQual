@@ -31,6 +31,23 @@ export function signRefreshToken(payload: RefreshTokenPayload): string {
   return jwt.sign(payload, env.JWT_REFRESH_SECRET, options);
 }
 
+// jsonwebtoken's own `ms`-style vocabulary (env.ts's JWT_REFRESH_TTL) —
+// reused here so the refresh cookie's Max-Age tracks the same TTL as the
+// token it holds, without adding a dependency on the transitive `ms`
+// package. Falls back to 7 days on a format this doesn't recognize (e.g. a
+// bare "cookie" value some future TTL string might use) rather than
+// crashing the auth module over a cookie's UX-only expiry hint — the JWT's
+// own signature is still what actually enforces expiry.
+function parseDurationMs(ttl: string): number {
+  const match = /^(\d+)\s*(s|m|h|d)?$/i.exec(ttl.trim());
+  if (!match) return 7 * 24 * 60 * 60 * 1000;
+  const value = Number(match[1]);
+  const unitMs = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[match[2]?.toLowerCase() ?? "s"] ?? 1000;
+  return value * unitMs;
+}
+
+export const REFRESH_TOKEN_TTL_MS = parseDurationMs(env.JWT_REFRESH_TTL);
+
 export function verifyAccessToken(token: string): AccessTokenPayload {
   return jwt.verify(token, env.JWT_ACCESS_SECRET) as AccessTokenPayload;
 }

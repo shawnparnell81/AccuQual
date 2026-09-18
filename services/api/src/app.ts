@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { apiRouter } from "./routes/index.js";
 import { apiRateLimiter } from "./middleware/rateLimit.js";
@@ -28,8 +29,15 @@ export function createApp() {
         if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
         callback(new Error(`Origin "${origin}" is not allowed by CORS`));
       },
+      // B2 fix: the refresh token now travels as an httpOnly cookie
+      // (auth.controller.ts) instead of a JSON body field the frontend has
+      // to store itself — the browser only attaches/reads it on a
+      // credentialed request, and only for an origin this allowlist above
+      // already accepts.
+      credentials: true,
     })
   );
+  app.use(cookieParser());
   app.use(express.json({ limit: "5mb" }));
   app.use(requestLogger);
   app.use(apiRateLimiter);
