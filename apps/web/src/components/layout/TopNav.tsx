@@ -253,7 +253,7 @@ export function TopNav() {
             every department to fit on one row. */}
         <nav className="hidden md:flex flex-1 flex-wrap items-center gap-1 min-w-0">
           <HomeButton />
-          <ModulesPlaceholderDropdown />
+          <ModulesDropdown leaves={allVisibleLeaves} />
           <NavLink
             to={DASHBOARD_LEAF.path}
             end
@@ -461,7 +461,7 @@ export function TopNav() {
           ) : (
             <>
               <HomeButton onNavigate={() => setMobileOpen(false)} />
-              <ModulesPlaceholderDropdown />
+              <ModulesDropdown leaves={allVisibleLeaves} onNavigate={() => setMobileOpen(false)} />
               <Link
                 to={DASHBOARD_LEAF.path}
                 onClick={() => setMobileOpen(false)}
@@ -596,13 +596,40 @@ export function TopNav() {
 }
 
 /**
- * Placeholder only, by design — real module navigation already lives in
- * the department dropdowns below (and the real per-department System/
- * Document Library ones); this is intentionally inert (no items, no
- * routing) rather than a second way to reach the same destinations.
+ * Curated cross-department jump list for the Homepage redesign — a flat
+ * shortcut to the modules a user is most likely to want directly from the
+ * top nav, on top of (not instead of) the full per-department dropdowns
+ * below. SCAR and Admin Console (API Access lives inside it) are included
+ * here even though the Workflow Inbox/Calendar feature excludes them (no
+ * real per-user assignee on SCAR, no per-user task concept on Admin Console
+ * at all) — this list is pure navigation, not a per-user assignment claim.
+ * "Process Flow Diagram" has no standalone route (it's a formType opened
+ * inside a PPAP record) and is deliberately not listed here.
  */
-function ModulesPlaceholderDropdown() {
+const MODULES_DROPDOWN_KEYS = [
+  "ncr",
+  "capa",
+  "audit",
+  "documents",
+  "suppliers",
+  "training",
+  "digital_twin",
+  "reporting",
+  "scar_forms",
+  "admin_console",
+];
+
+/**
+ * Filtered against `allVisibleLeaves` (not the static ALL_MODULE_LEAVES),
+ * so this list narrows exactly the same way every other dropdown in this
+ * nav bar does — a department with no live access to a module simply won't
+ * see it here either, no second source of truth for "what can I see".
+ */
+function ModulesDropdown({ leaves, onNavigate }: { leaves: NavLeaf[]; onNavigate?: () => void }) {
   const [open, setOpen] = useState(false);
+  const byKey = new Map(leaves.map((l) => [l.key, l]));
+  const items = MODULES_DROPDOWN_KEYS.map((key) => byKey.get(key)).filter((l): l is NavLeaf => l != null);
+
   return (
     <div className="relative">
       <button
@@ -619,8 +646,25 @@ function ModulesPlaceholderDropdown() {
         <ChevronDown size={14} className={clsx("transition-transform", open && "rotate-180")} />
       </button>
       {open && (
-        <div className="absolute top-full left-0 z-30 mt-1 w-56 rounded-md border border-border bg-card p-3 shadow-lg">
-          <p className="text-xs text-muted-foreground">Module quick-links — coming soon.</p>
+        <div className="absolute top-full left-0 z-30 mt-1 w-56 rounded-md border border-border bg-card p-2 shadow-lg">
+          {items.length === 0 ? (
+            <p className="px-2 py-1 text-xs text-muted-foreground">No modules available.</p>
+          ) : (
+            items.map((item) => (
+              <Link
+                key={item.key}
+                to={item.path}
+                onClick={() => {
+                  setOpen(false);
+                  onNavigate?.();
+                }}
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <item.icon size={16} />
+                <span>{item.label}</span>
+              </Link>
+            ))
+          )}
         </div>
       )}
     </div>

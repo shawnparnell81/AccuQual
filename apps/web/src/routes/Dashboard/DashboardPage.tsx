@@ -46,7 +46,7 @@ const reorderRequestHooks = createResourceHooks<InventoryReorderRequest>("invent
 
 const INVENTORY_STATES = ["in_stock", "below_min", "reorder_pending", "on_order", "overstock", "inactive"] as const;
 
-function StatCard({ label, value }: { label: string; value: number | string }) {
+export function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <p className="text-sm text-muted-foreground">{label}</p>
