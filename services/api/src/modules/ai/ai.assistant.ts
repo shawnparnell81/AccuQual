@@ -4,7 +4,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { callLlmDetailed } from "./llm-gateway.js";
 import { estimateCost } from "./pricing.js";
-import { checkUsageLimit } from "./ai.usage.js";
+import { checkUsageLimit, loadTenantLlmOptions } from "./ai.usage.js";
 import { wrapUntrustedData } from "./promptSafety.js";
 
 /**
@@ -39,7 +39,6 @@ import { customers } from "../../drizzle/schema/customers.js";
 import { computeSupplierPerformance } from "../supplier/supplier.performance.js";
 import { computeCostingSummary } from "../inventory/inventory.costing.js";
 import { findSimilar } from "./embedding-engine.js";
-import { decryptSecret } from "../tenant/crypto.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
 
@@ -398,8 +397,13 @@ export const assistantHandler = asyncHandler(async (req: Request, res: Response)
   const tenantId = req.tenantId!;
   const { messages, context } = req.body as { messages: AssistantMessage[]; context?: { module: string; recordId?: number } };
 
-  const [tenant] = await req.db!.select().from(tenants).where(eq(tenants.id, tenantId));
-  const aiConfig = tenant?.aiConfig ?? {};
+  // Was its own inline db.select + decryptSecret call with no try/catch —
+  // the one AI endpoint that missed the fix ai.usage.ts's loadTenantLlmOptions
+  // already applies everywhere else: a stored key that fails to decrypt
+  // (e.g. after a TENANT_AI_CONFIG_ENCRYPTION_KEY rotation) must degrade to
+  // the stub like every other "no key configured" path, never crash the
+  // request (Full-System Audit finding C4).
+  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db! as TenantDb, tenantId);
 
   const limitError = await checkUsageLimit(req.db!, tenantId, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
@@ -411,11 +415,7 @@ export const assistantHandler = asyncHandler(async (req: Request, res: Response)
 
   const result = await callLlmDetailed(flattenConversation(messages), {
     system,
-    provider: aiConfig.provider,
-    apiKey: aiConfig.apiKeyEncrypted ? decryptSecret(aiConfig.apiKeyEncrypted) : undefined,
-    model: aiConfig.modelName,
-    temperature: aiConfig.temperature,
-    maxTokens: aiConfig.maxTokens,
+    ...llmOptions,
   });
 
   // Only a real provider response has real usage to bill/track — the

@@ -48,7 +48,8 @@ export type ResourceKey =
   | "quality_inspection"
   | "workflow"
   | "documents"
-  | "customer_communications";
+  | "customer_communications"
+  | "change";
 
 export const DEPARTMENTS: Department[] = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management", "sales_and_marketing"];
 
@@ -87,6 +88,7 @@ export const MODULE_LABELS: Record<ResourceKey, string> = {
   workflow: "Workflow Builder",
   documents: "Document Control",
   customer_communications: "Customer Communications",
+  change: "Change / PCN Control",
 };
 export const RESOURCE_KEYS: ResourceKey[] = Object.keys(MODULE_LABELS) as ResourceKey[];
 

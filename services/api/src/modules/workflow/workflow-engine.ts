@@ -109,7 +109,20 @@ export async function runWorkflow(
 
   const triggers = definition.nodes.filter((n) => n.type === "trigger" && (!triggerKind || n.kind === triggerKind));
 
+  // Full-System Audit finding C5: no cycle detection existed here, and the
+  // save-time schema never checks graph structure either — a tenant-authored
+  // workflow with an edge back to an earlier node (via the drag-and-drop
+  // builder) recursed forever the next time a matching trigger fired,
+  // crashing the shared workflow-worker process for every tenant. One
+  // shared visited-set for this whole run (not per top-level trigger) is
+  // the simplest correct fix for this engine's shape: each action already
+  // fires once per run, so a diamond-shaped graph re-reaching a node now
+  // fires it once instead of twice — arguably more correct anyway, not
+  // just an incidental side effect of the guard.
+  const visited = new Set<string>();
   async function walk(nodeId: string) {
+    if (visited.has(nodeId)) return;
+    visited.add(nodeId);
     const node = nodesById.get(nodeId);
     if (!node) return;
 

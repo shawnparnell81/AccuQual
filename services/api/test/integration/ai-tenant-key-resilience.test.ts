@@ -79,4 +79,17 @@ describe("AI pipelines degrade to a stub, never a 500, when a tenant's stored ke
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("stub");
   });
+
+  // Full-System Audit finding C4: this endpoint had its own inline
+  // db.select + decryptSecret call with no try/catch, missing the fix
+  // every other AI endpoint above already had — confirmed live-broken with
+  // a raw 500 before loadTenantLlmOptions replaced that inline call.
+  it("POST /ai/assistant (its own inline decrypt call, found missing the same fix) also degrades to a stub instead of crashing", async () => {
+    const res = await request(app)
+      .post("/ai/assistant")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ messages: [{ role: "user", content: "Summarize the current state." }] });
+    expect(res.status).toBe(200);
+    expect(res.body.isStub).toBe(true);
+  });
 });

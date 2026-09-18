@@ -255,4 +255,19 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
     material_management: "read",
     sales_and_marketing: "read",
   },
+  // Was completely ungated before this — a real gap (Full-System Audit
+  // finding C1). No department-sheet row exists for this module either, so
+  // this follows the same reasoning risk.validation.ts's/feasibility.
+  // validation.ts's own department choice already established: Engineering
+  // authors/assesses a Product/Process Change Notice, Quality signs off on
+  // it, everyone else needs read visibility into what's changing.
+  change: {
+    engineering: "edit",
+    quality: "edit",
+    production: "read",
+    customer_service: "read",
+    purchasing: "read",
+    material_management: "read",
+    sales_and_marketing: "read",
+  },
 };

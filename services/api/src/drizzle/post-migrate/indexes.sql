@@ -46,7 +46,14 @@ DECLARE
     'supplier_onboarding_documents', 'supplier_documents', 'supplier_ppap_submissions',
     'supplier_corrective_actions', 'supplier_8d_responses', 'supplier_messages',
     'crar', 'supplier_rma_requests', 'rma_activity_log', 'rma_log',
-    'permission_roles', 'permission_role_modules', 'user_permission_roles', 'department_permissions'
+    'permission_roles', 'permission_role_modules', 'user_permission_roles', 'department_permissions',
+    -- Real gap found verifying Full-System Audit finding H5 against the
+    -- live database directly (the audit's own named examples turned out to
+    -- already be indexed — these 4 were the genuine miss): added after
+    -- this array was last touched, one per feature that shipped later
+    -- (Customer Communications Log, Customer Scorecard, Phase 8's
+    -- inventory_lots ledger, Phase 6's report_schedules).
+    'customer_communications', 'customer_scorecards', 'inventory_lots', 'report_schedules'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP
