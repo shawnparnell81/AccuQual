@@ -28,6 +28,7 @@ import { staffMeetingMinutesLayout } from "./staffMeetingMinutes";
 import { finalInspectionReleaseChecklistLayout } from "./finalInspectionReleaseChecklist";
 import { inventoryItemLayout } from "./inventoryItem";
 import { customerRequirementsLayout } from "./customerRequirements";
+import { auditChecklistLayout } from "./auditChecklist";
 
 /**
  * formType -> layout, for every form we've derived from a real pasted
@@ -61,6 +62,7 @@ export const FORM_LAYOUTS: Record<string, FormLayout> = {
   maintenance_work_order: maintenanceWorkOrderLayout,
   production_output_log: productionOutputLogLayout,
   audit_plan: internalAuditPlanLayout,
+  audit_checklist: auditChecklistLayout,
   discrepancy_inspection: discrepancyInspectionLayout,
   management_review_minutes: managementReviewMinutesLayout,
   staff_meeting_minutes: staffMeetingMinutesLayout,

@@ -30,13 +30,16 @@ import { gageRRLayout } from "./gageRR.js";
 import { paretoChartLayout } from "./paretoChart.js";
 import { inventoryItemLayout } from "./inventoryItem.js";
 import { customerRequirementsLayout } from "./customerRequirements.js";
+import { auditChecklistLayout } from "./auditChecklist.js";
 
 /**
  * formType -> layout, for every form we've derived from a real pasted
  * document so far. `gage_rr` and `pareto_chart` are export-only here — their
  * on-screen editor is a bespoke component (apps/web's customForms/), so this
  * file is deliberately NOT a 1:1 mirror of apps/web's layouts/index.ts for
- * those two keys; every other key is kept in sync as usual.
+ * those two keys; every other key is kept in sync as usual. `audit_checklist`
+ * is the one exception to "derived from a real pasted document" — see its
+ * own file's header comment for why.
  */
 export const FORM_LAYOUTS: Record<string, FormLayout> = {
   calibration: calibrationLayout,
@@ -62,6 +65,7 @@ export const FORM_LAYOUTS: Record<string, FormLayout> = {
   maintenance_work_order: maintenanceWorkOrderLayout,
   production_output_log: productionOutputLogLayout,
   audit_plan: internalAuditPlanLayout,
+  audit_checklist: auditChecklistLayout,
   discrepancy_inspection: discrepancyInspectionLayout,
   management_review_minutes: managementReviewMinutesLayout,
   staff_meeting_minutes: staffMeetingMinutesLayout,
