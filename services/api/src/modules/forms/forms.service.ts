@@ -88,6 +88,18 @@ export async function createVersion(db: TenantDb, tenantId: number, formId: numb
   return updated;
 }
 
+/**
+ * Read-only history: every past version's data, newest first. There is
+ * deliberately no companion "restore this version" function here.
+ *
+ * Full-System Audit finding L5 — TODO (not planned/implemented): a real
+ * rollback would need to snapshot the form's CURRENT state into
+ * form_versions first (so rolling back is itself undoable, same
+ * immutable-history guarantee createVersion already gives every other
+ * save), then overwrite form_data.data with the chosen past version's data
+ * and bump the version counter. Not built here — this finding is
+ * documentation-only per its own scope.
+ */
 export async function listVersions(db: TenantDb, tenantId: number, formId: number) {
   return db
     .select()
