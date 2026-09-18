@@ -14,6 +14,7 @@ import { capa } from "../../src/drizzle/schema/capa.js";
 import { audits } from "../../src/drizzle/schema/audits.js";
 import { trainingAssignments, trainingCourses } from "../../src/drizzle/schema/training.js";
 import { documents } from "../../src/drizzle/schema/documents.js";
+import { crarClaims } from "../../src/drizzle/schema/crar.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
 const app = createApp();
@@ -57,20 +58,22 @@ describe("GET /calendar (real DB + real HTTP path)", () => {
       [tenantId, userId],
       [otherTenantId, otherUserId],
     ] as const) {
-      await db.insert(ncr).values({ tenantId: tid, title: "Open NCR", status: "open", assignedTo: uid });
+      await db.insert(ncr).values({ tenantId: tid, title: "Open NCR", status: "open", assignedTo: uid, dueDate: pastDue });
       await db.insert(ncr).values({ tenantId: tid, title: "Closed This Month NCR", status: "closed", assignedTo: uid, closedAt: monthStart });
-      await db.insert(capa).values({ tenantId: tid, status: "in_progress", ownerId: uid });
+      await db.insert(capa).values({ tenantId: tid, status: "in_progress", ownerId: uid, dueDate: pastDue });
       await db.insert(capa).values({ tenantId: tid, status: "verifying", verifiedBy: uid });
       await db.insert(audits).values({ tenantId: tid, name: "Scheduled Audit", status: "scheduled", auditorId: uid, scheduledAt: pastDue });
       const [course] = await db.insert(trainingCourses).values({ tenantId: tid, title: "Safety Refresher" }).returning();
       await db.insert(trainingAssignments).values({ tenantId: tid, courseId: course!.id, userId: uid, status: "assigned", dueAt: pastDue });
       await db.insert(documents).values({ tenantId: tid, title: "SOP In Review", status: "in_review", ownerId: uid });
+      await db.insert(crarClaims).values({ tenantId: tid, customerClaim: "Cracked Bracket Return", status: "quality_review", createdByUserId: uid, targetCompletion: pastDue });
     }
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
     for (const tid of cleanupIds.tenants) {
+      await db.delete(crarClaims).where(eq(crarClaims.tenantId, tid));
       await db.delete(trainingAssignments).where(eq(trainingAssignments.tenantId, tid));
       await db.delete(trainingCourses).where(eq(trainingCourses.tenantId, tid));
       await db.delete(documents).where(eq(documents.tenantId, tid));
@@ -88,13 +91,15 @@ describe("GET /calendar (real DB + real HTTP path)", () => {
     expect(res.status).toBe(200);
 
     const modules = res.body.map((item: { module: string }) => item.module);
-    expect(modules).toEqual(expect.arrayContaining(["ncr", "capa", "audit", "training", "document"]));
+    expect(modules).toEqual(expect.arrayContaining(["ncr", "capa", "audit", "training", "document", "crar"]));
   });
 
-  it("includes the open NCR and the closed-this-month NCR, but not a stale closed one", async () => {
+  it("includes the open NCR (with its real due date, flagged overdue) and the closed-this-month NCR, but not a stale closed one", async () => {
     const res = await request(app).get("/calendar").set("Authorization", `Bearer ${token}`);
     const ncrItems = res.body.filter((item: { module: string }) => item.module === "ncr");
-    expect(ncrItems.some((item: { status: string }) => item.status === "open")).toBe(true);
+    const openItem = ncrItems.find((item: { status: string }) => item.status === "overdue");
+    expect(openItem).toBeTruthy();
+    expect(openItem.dueDate).not.toBeNull();
     expect(ncrItems.some((item: { status: string }) => item.status === "closed")).toBe(true);
     expect(ncrItems).toHaveLength(2);
   });
@@ -105,10 +110,22 @@ describe("GET /calendar (real DB + real HTTP path)", () => {
     expect(training.status).toBe("overdue");
   });
 
-  it("includes both the CAPA owned by, and the CAPA awaiting verification from, the caller", async () => {
+  it("includes both the CAPA owned by (with its real due date, flagged overdue), and the CAPA awaiting verification from, the caller", async () => {
     const res = await request(app).get("/calendar").set("Authorization", `Bearer ${token}`);
     const capaItems = res.body.filter((item: { module: string }) => item.module === "capa");
     expect(capaItems).toHaveLength(2);
+    const overdueCapa = capaItems.find((item: { status: string }) => item.status === "overdue");
+    expect(overdueCapa).toBeTruthy();
+    expect(overdueCapa.dueDate).not.toBeNull();
+  });
+
+  it("includes the CRAR created by the caller, flagged overdue by its real target-completion date", async () => {
+    const res = await request(app).get("/calendar").set("Authorization", `Bearer ${token}`);
+    const crar = res.body.find((item: { module: string }) => item.module === "crar");
+    expect(crar).toBeTruthy();
+    expect(crar.status).toBe("overdue");
+    expect(crar.title).toBe("Cracked Bracket Return");
+    expect(crar.dueDate).not.toBeNull();
   });
 
   it("never returns another tenant's identically-shaped data", async () => {
@@ -119,5 +136,7 @@ describe("GET /calendar (real DB + real HTTP path)", () => {
     // Direct DB check: the other tenant's user really does have the same shape of data.
     const otherNcrs = await db.select().from(ncr).where(eq(ncr.tenantId, otherTenantId));
     expect(otherNcrs.length).toBeGreaterThan(0);
+    const otherCrars = await db.select().from(crarClaims).where(eq(crarClaims.tenantId, otherTenantId));
+    expect(otherCrars.length).toBeGreaterThan(0);
   });
 });

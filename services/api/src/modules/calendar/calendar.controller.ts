@@ -6,9 +6,10 @@ import { capa } from "../../drizzle/schema/capa.js";
 import { audits } from "../../drizzle/schema/audits.js";
 import { trainingAssignments, trainingCourses } from "../../drizzle/schema/training.js";
 import { documents } from "../../drizzle/schema/documents.js";
+import { crarClaims } from "../../drizzle/schema/crar.js";
 import { expirationStatus } from "../documents/documents.controller.js";
 
-export type CalendarModule = "ncr" | "capa" | "audit" | "training" | "document";
+export type CalendarModule = "ncr" | "capa" | "audit" | "training" | "document" | "crar";
 
 export interface CalendarItem {
   id: string;
@@ -40,9 +41,9 @@ export const getCalendarItems = asyncHandler(async (req: Request, res: Response)
   const userId = req.user!.id;
   const monthStart = startOfMonth();
 
-  const [myNcrs, myCapas, myAudits, myTraining, myDocuments] = await Promise.all([
+  const [myNcrs, myCapas, myAudits, myTraining, myDocuments, myCrars] = await Promise.all([
     db
-      .select({ id: ncr.id, title: ncr.title, status: ncr.status, closedAt: ncr.closedAt })
+      .select({ id: ncr.id, title: ncr.title, status: ncr.status, dueDate: ncr.dueDate, closedAt: ncr.closedAt })
       .from(ncr)
       .where(
         and(
@@ -53,7 +54,7 @@ export const getCalendarItems = asyncHandler(async (req: Request, res: Response)
         ),
       ),
     db
-      .select({ id: capa.id, status: capa.status, closedAt: capa.closedAt, ownerId: capa.ownerId, verifiedBy: capa.verifiedBy })
+      .select({ id: capa.id, status: capa.status, dueDate: capa.dueDate, closedAt: capa.closedAt, ownerId: capa.ownerId, verifiedBy: capa.verifiedBy })
       .from(capa)
       .where(
         and(
@@ -100,27 +101,51 @@ export const getCalendarItems = asyncHandler(async (req: Request, res: Response)
       })
       .from(documents)
       .where(and(eq(documents.tenantId, tenantId), eq(documents.ownerId, userId), eq(documents.isDeleted, false))),
+    db
+      .select({
+        id: crarClaims.id,
+        customerClaim: crarClaims.customerClaim,
+        status: crarClaims.status,
+        targetCompletion: crarClaims.targetCompletion,
+        updatedAt: crarClaims.updatedAt,
+      })
+      .from(crarClaims)
+      .where(
+        and(
+          eq(crarClaims.tenantId, tenantId),
+          eq(crarClaims.createdByUserId, userId),
+          or(ne(crarClaims.status, "completed"), gte(crarClaims.updatedAt, monthStart)),
+        ),
+      ),
   ]);
 
   const items: CalendarItem[] = [
-    ...myNcrs.map((row): CalendarItem => ({
-      id: `ncr-${row.id}`,
-      title: row.title,
-      module: "ncr",
-      dueDate: null,
-      status: row.status,
-      link: `/ncr/${row.id}`,
-      isTerminal: row.status === "closed",
-    })),
-    ...myCapas.map((row): CalendarItem => ({
-      id: `capa-${row.id}`,
-      title: `CAPA #${row.id}`,
-      module: "capa",
-      dueDate: null,
-      status: row.status,
-      link: `/capa/${row.id}`,
-      isTerminal: row.status === "closed",
-    })),
+    ...myNcrs.map((row): CalendarItem => {
+      const isTerminal = row.status === "closed";
+      const overdue = !isTerminal && row.dueDate != null && row.dueDate < new Date();
+      return {
+        id: `ncr-${row.id}`,
+        title: row.title,
+        module: "ncr",
+        dueDate: row.dueDate ? row.dueDate.toISOString() : null,
+        status: overdue ? "overdue" : row.status,
+        link: `/ncr/${row.id}`,
+        isTerminal,
+      };
+    }),
+    ...myCapas.map((row): CalendarItem => {
+      const isTerminal = row.status === "closed";
+      const overdue = !isTerminal && row.dueDate != null && row.dueDate < new Date();
+      return {
+        id: `capa-${row.id}`,
+        title: `CAPA #${row.id}`,
+        module: "capa",
+        dueDate: row.dueDate ? row.dueDate.toISOString() : null,
+        status: overdue ? "overdue" : row.status,
+        link: `/capa/${row.id}`,
+        isTerminal,
+      };
+    }),
     ...myAudits.map((row): CalendarItem => ({
       id: `audit-${row.id}`,
       title: row.name,
@@ -160,6 +185,19 @@ export const getCalendarItems = asyncHandler(async (req: Request, res: Response)
         };
       })
       .filter((item): item is CalendarItem => item !== null),
+    ...myCrars.map((row): CalendarItem => {
+      const isTerminal = row.status === "completed";
+      const overdue = !isTerminal && row.targetCompletion != null && row.targetCompletion < new Date();
+      return {
+        id: `crar-${row.id}`,
+        title: row.customerClaim ?? `CRAR #${row.id}`,
+        module: "crar",
+        dueDate: row.targetCompletion ? row.targetCompletion.toISOString() : null,
+        status: overdue ? "overdue" : row.status,
+        link: `/crar/${row.id}`,
+        isTerminal,
+      };
+    }),
   ];
 
   items.sort((a, b) => {

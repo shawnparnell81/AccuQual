@@ -9,11 +9,21 @@ const MODULE_LABELS: Record<CalendarModule, string> = {
   audit: "Audit",
   training: "Training",
   document: "Document",
+  crar: "CRAR",
 };
 
+/**
+ * Every due-date-like field this app has (NCR/CAPA's new "Due date",
+ * Audit's "Scheduled date", ...) is entered through a plain `type="date"`
+ * input and serialized as UTC midnight so the calendar day survives
+ * regardless of viewer timezone (see calendarGrid.ts's utcDayKey for the
+ * fuller explanation) — formatting with `timeZone: "UTC"` reads that same
+ * day back, instead of `toLocaleDateString`'s default local-timezone
+ * reading, which shifts it a day earlier for anyone west of UTC.
+ */
 function formatDueDate(dueDate: string | null): string {
   if (!dueDate) return "No due date";
-  return `Due ${new Date(dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+  return `Due ${new Date(dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}`;
 }
 
 /**

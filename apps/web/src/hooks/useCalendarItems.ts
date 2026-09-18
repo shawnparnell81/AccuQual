@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 
-export type CalendarModule = "ncr" | "capa" | "audit" | "training" | "document";
+export type CalendarModule = "ncr" | "capa" | "audit" | "training" | "document" | "crar";
 
 export interface CalendarItem {
   id: string;

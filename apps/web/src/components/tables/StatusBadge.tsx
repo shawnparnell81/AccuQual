@@ -116,7 +116,8 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   error: "destructive",
 };
 
-const BUCKET_CLASSES: Record<string, string> = {
+/** Exported so non-status UI (e.g. Calendar day cells) can color by bucket directly, without inventing a fake status string just to route through StatusBadge's value prop. */
+export const BUCKET_CLASSES: Record<StatusBucket, string> = {
   muted: "bg-muted text-muted-foreground",
   info: "bg-info/15 text-info",
   warning: "bg-warning/15 text-warning",

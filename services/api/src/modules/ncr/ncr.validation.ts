@@ -6,6 +6,7 @@ export const createNcrSchema = z.object({
   description: z.string().optional(),
   severity: z.enum(["low", "medium", "high", "critical"]).optional(),
   assignedTo: z.number().int().optional(),
+  dueDate: z.coerce.date().nullable().optional(),
 });
 
 export const updateNcrSchema = createNcrSchema.partial().extend({
