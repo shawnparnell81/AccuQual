@@ -65,7 +65,7 @@ export const processFlowDiagramLayout: FormLayout = {
               key: "stepType",
               label: "Step Type",
               kind: "select",
-              options: ["Operation", "Inspection", "Op / Insp", "Transport", "Delay", "Storage", "Other"],
+              options: ["Operation", "Inspection", "Op / Insp", "Transport", "Delay", "Storage", "Other", "Decision"],
             },
             { key: "processDescription", label: "Process Description", kind: "textarea" },
             { key: "characteristicNo", label: "Characteristic No.", kind: "text" },

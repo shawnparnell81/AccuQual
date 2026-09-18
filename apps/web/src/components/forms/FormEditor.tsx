@@ -10,6 +10,7 @@ import { getFormLayout } from "./layouts";
 import { GenericFormRenderer } from "./GenericFormRenderer";
 import { getCustomFormComponent } from "./customForms";
 import { useFormEditorState } from "./useFormEditorState";
+import { ProcessFlowDiagramEditor } from "./processFlowDiagram/ProcessFlowDiagramEditor";
 
 interface FormEditorProps {
   formType: string;
@@ -68,6 +69,8 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
         <span>{formData ? `Version ${formData.version}` : "New form"}</span>
         <span>{isSaving ? "Saving…" : "Auto-saved"}</span>
       </div>
+
+      {formType === "process_flow_diagram" && <ProcessFlowDiagramEditor data={values} onChange={updateField} />}
 
       {layout ? (
         <GenericFormRenderer layout={layout} data={values} onChange={updateField} />

@@ -11,12 +11,12 @@ const TEXT_DARK = rgb(0.13, 0.13, 0.15);
 const TEXT_HINT = rgb(0.42, 0.45, 0.5);
 const WHITE = rgb(1, 1, 1);
 
-const PAGE_WIDTH = 612;
-const PAGE_HEIGHT = 792;
-const MARGIN = 40;
-const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
+export const PAGE_WIDTH = 612;
+export const PAGE_HEIGHT = 792;
+export const MARGIN = 40;
+export const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 
-interface RenderContext {
+export interface RenderContext {
   doc: PDFDocument;
   page: PDFPage;
   y: number;
@@ -48,14 +48,14 @@ export async function renderFormLayoutAsPdf(layout: FormLayout, data: Record<str
   return doc.save();
 }
 
-function ensureSpace(ctx: RenderContext, needed: number) {
+export function ensureSpace(ctx: RenderContext, needed: number) {
   if (ctx.y - needed < MARGIN) {
     ctx.page = ctx.doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     ctx.y = PAGE_HEIGHT - MARGIN;
   }
 }
 
-function drawTitle(ctx: RenderContext, title: string) {
+export function drawTitle(ctx: RenderContext, title: string) {
   const lines = wrapText(title, ctx.bold, 16, CONTENT_WIDTH);
   for (const line of lines) {
     const width = ctx.bold.widthOfTextAtSize(line, 16);
@@ -65,14 +65,14 @@ function drawTitle(ctx: RenderContext, title: string) {
   ctx.y -= 8;
 }
 
-function drawSectionHeader(ctx: RenderContext, text: string) {
+export function drawSectionHeader(ctx: RenderContext, text: string) {
   const height = 20;
   ctx.page.drawRectangle({ x: MARGIN, y: ctx.y - height, width: CONTENT_WIDTH, height, color: NAVY });
   ctx.page.drawText(text, { x: MARGIN + 8, y: ctx.y - height + 6, size: 10.5, font: ctx.bold, color: WHITE });
   ctx.y -= height;
 }
 
-function drawBlock(ctx: RenderContext, block: Block, data: Record<string, unknown>) {
+export function drawBlock(ctx: RenderContext, block: Block, data: Record<string, unknown>) {
   switch (block.type) {
     case "row":
       return drawRow(ctx, block.fields, data);
@@ -225,7 +225,7 @@ function drawTable(
 }
 
 /** Greedy word-wrap to a max pixel width for the given font/size. */
-function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+export function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
   const words = text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let current = "";
@@ -243,7 +243,7 @@ function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): 
   return lines.length > 0 ? lines : [""];
 }
 
-function truncate(text: string, font: PDFFont, size: number, maxWidth: number): string {
+export function truncate(text: string, font: PDFFont, size: number, maxWidth: number): string {
   if (font.widthOfTextAtSize(text, size) <= maxWidth) return text;
   let result = text;
   while (result.length > 1 && font.widthOfTextAtSize(`${result}…`, size) > maxWidth) {

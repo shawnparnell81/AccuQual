@@ -4,6 +4,7 @@ import { logger } from "../../utils/logger.js";
 import type { FormTemplate } from "../../drizzle/schema/forms.js";
 import { getFormLayout } from "./layouts/index.js";
 import { renderFormLayoutAsPdf } from "./schema-pdf-renderer.js";
+import { renderProcessFlowDiagramAsPdf } from "./diagram-pdf-renderer.js";
 
 /**
  * Fills a template's AcroForm fields with `data` per `fieldMap` (DB field ->
@@ -29,6 +30,9 @@ export async function mergePdfFields(template: FormTemplate, data: Record<string
 
   const layout = getFormLayout(template.formType);
   if (layout) {
+    if (template.formType === "process_flow_diagram") {
+      return renderProcessFlowDiagramAsPdf(layout, data);
+    }
     return renderFormLayoutAsPdf(layout, data);
   }
 
