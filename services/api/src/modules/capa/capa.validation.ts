@@ -24,6 +24,7 @@ export const createCapaSchema = z.object({
   actionPlan: freeTextField(),
   preventiveAction: freeTextField(),
   ownerId: z.number().int().optional(),
+  dueDate: z.coerce.date().nullable().optional(),
 });
 
 // Sprint 2 fix (accuqual-implementation-sequencing.md) — deliberately

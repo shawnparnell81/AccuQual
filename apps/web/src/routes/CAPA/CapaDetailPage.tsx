@@ -59,7 +59,18 @@ export function CapaDetailPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">CAPA #{capa.id}</h1>
-          <StatusBadge value={capa.status} />
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <StatusBadge value={capa.status} />
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              Due date
+              <input
+                type="date"
+                value={capa.dueDate ? capa.dueDate.slice(0, 10) : ""}
+                onChange={(e) => updateCapa.mutate({ id: capaId, dueDate: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+              />
+            </label>
+          </div>
         </div>
         <div className="flex gap-2">
           <OpenFormButton formType="capa" entityId={capa.id} title={`CAPA #${capa.id} Form`} />

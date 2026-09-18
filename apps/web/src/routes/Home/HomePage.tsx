@@ -1,6 +1,7 @@
 import { useCurrentTenant } from "../../hooks/useAuth";
 import { UserDashboardHeader } from "../../components/home/UserDashboardHeader";
 import { WorkflowInbox } from "../../components/home/WorkflowInbox";
+import { MonthCalendar } from "../../components/calendar/MonthCalendar";
 
 /**
  * The tenant portal's landing page at /home. Real per-user data throughout
@@ -25,7 +26,10 @@ export function HomePage() {
       </div>
 
       <UserDashboardHeader />
-      <WorkflowInbox />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <WorkflowInbox />
+        <MonthCalendar compact />
+      </div>
     </div>
   );
 }

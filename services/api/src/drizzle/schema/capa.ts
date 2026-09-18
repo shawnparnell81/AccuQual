@@ -24,6 +24,10 @@ export const capa = pgTable("capa", {
   // this app is (referenceType, etc.), not a fixed list to migrate later.
   escalationSource: text("escalation_source"),
   supplierId: integer("supplier_id").references(() => suppliers.id),
+  // Real due date — same reasoning as ncr.ts's own dueDate column: there
+  // was no due-date concept on this table before, so it always showed
+  // "No due date" on the Calendar/Workflow Inbox.
+  dueDate: timestamp("due_date"),
   closedAt: timestamp("closed_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),

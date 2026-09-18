@@ -28,6 +28,10 @@ export const ncr = pgTable("ncr", {
   // same "free-form reference, not a foreign key" convention
   // inventory_movements.referenceId already uses for the same reason.
   receivingLineItemId: integer("receiving_line_item_id"),
+  // Real due date — added so NCR can appear on the Calendar/Workflow Inbox
+  // with an honest date instead of always showing "No due date" (there was
+  // no due-date concept on this table before).
+  dueDate: timestamp("due_date"),
   closedAt: timestamp("closed_at"),
   isDeleted: boolean("is_deleted").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),

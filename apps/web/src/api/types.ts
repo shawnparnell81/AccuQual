@@ -53,6 +53,8 @@ export interface Ncr {
   createdBy: number | null;
   createdAt: string;
   updatedAt: string | null;
+  /** Real due date (ncr.ts) — powers the Calendar/Workflow Inbox. */
+  dueDate: string | null;
   /** Real column (ncr.ts), just never surfaced on the frontend until the dashboard needed it for a closure trend. */
   closedAt: string | null;
   /** Phase 8 — real, direct supplier link (previously derived only indirectly via RMA/warranty/supplier-portal links). */
@@ -71,6 +73,8 @@ export interface Capa {
   status: "open" | "in_progress" | "verifying" | "closed";
   ownerId: number | null;
   createdAt: string;
+  /** Real due date (capa.ts) — powers the Calendar/Workflow Inbox. */
+  dueDate: string | null;
   /** Real column (capa.ts), same reason as Ncr.closedAt above. */
   closedAt: string | null;
   /** Phase 8 — set to "receiving_recurrence" when auto-created by receiving's supplier-recurrence escalation; null for every ordinary CAPA. */

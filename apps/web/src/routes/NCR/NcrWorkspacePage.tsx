@@ -53,6 +53,7 @@ export function NcrWorkspacePage() {
   const [showHistory, setShowHistory] = useState(false);
 
   const { data: ncr, isLoading, isError } = ncrHooks.useOne(ncrId);
+  const updateNcr = ncrHooks.useUpdate();
   useSetAssistantContext("ncr", ncrId, ncr ? `NCR #${ncr.id}` : `NCR #${ncrId}`);
 
   const historyKey: unknown[][] = [["workflow-history", "ncr", ncrId]];
@@ -94,10 +95,19 @@ export function NcrWorkspacePage() {
           <h1 className="text-2xl font-semibold">
             NCR #{ncr.id} — {ncr.title}
           </h1>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             <StatusBadge value={ncr.severity} />
             <StatusBadge value={ncr.status} />
             <span className="text-xs text-muted-foreground">{formLoading ? "Loading form…" : isSaving ? "Saving…" : "Saved"}</span>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              Due date
+              <input
+                type="date"
+                value={ncr.dueDate ? ncr.dueDate.slice(0, 10) : ""}
+                onChange={(e) => updateNcr.mutate({ id: ncrId, dueDate: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+              />
+            </label>
           </div>
         </div>
         <div className="flex gap-2">

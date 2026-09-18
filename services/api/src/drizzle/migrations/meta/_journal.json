@@ -351,6 +351,13 @@
       "when": 1789674125359,
       "tag": "0049_dark_phil_sheldon",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1789772379905,
+      "tag": "0050_brief_tarot",
+      "breakpoints": true
     }
   ]
 }
