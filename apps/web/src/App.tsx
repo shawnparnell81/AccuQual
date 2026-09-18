@@ -101,6 +101,7 @@ import { AdminSupplierSettingsPage } from "./routes/Admin/AdminSupplierSettingsP
 import { AdminQualitySettingsPage } from "./routes/Admin/AdminQualitySettingsPage";
 import { AdminReceivingInventorySettingsPage } from "./routes/Admin/AdminReceivingInventorySettingsPage";
 import { AdminSystemHealthPage } from "./routes/Admin/AdminSystemHealthPage";
+import { AdminApiDocsPage } from "./routes/Admin/AdminApiDocsPage";
 import { AdminTenantSettingsPage } from "./routes/Admin/AdminTenantSettingsPage";
 import { useCurrentUser, useAuthBootstrap } from "./hooks/useAuth";
 
@@ -225,6 +226,7 @@ export function App() {
             <Route path="quality-settings" element={<AdminQualitySettingsPage />} />
             <Route path="receiving-inventory-settings" element={<AdminReceivingInventorySettingsPage />} />
             <Route path="system-health" element={<AdminSystemHealthPage />} />
+            <Route path="api-docs" element={<AdminApiDocsPage />} />
             <Route path="tenant-settings" element={<AdminTenantSettingsPage />} />
             <Route path="tenant-branding" element={<AdminTenantBrandingPage />} />
             <Route path="tenant-templates" element={<AdminTenantTemplatesPage />} />

@@ -1,6 +1,6 @@
 import { NavLink, Outlet, Link } from "react-router-dom";
 import clsx from "clsx";
-import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, type LucideIcon } from "lucide-react";
+import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, type LucideIcon } from "lucide-react";
 
 interface ConsoleSection {
   key: string;
@@ -23,6 +23,7 @@ const SECTIONS: ConsoleSection[] = [
   { key: "receiving_inventory", label: "Receiving & Inventory", icon: PackageSearch, path: "receiving-inventory-settings", description: "Aging, lot/serial numbering, and cost rules" },
   { key: "reporting", label: "Reporting Settings", icon: BarChart3, externalPath: "/reporting", description: "Scheduled reports and recipients" },
   { key: "system_health", label: "System Health", icon: HeartPulse, path: "system-health", description: "Cross-module diagnostics: AI, workflow, email, reporting, receiving, supplier portal, database" },
+  { key: "api_docs", label: "API Reference", icon: FileCode2, path: "api-docs", description: "Interactive request/response docs generated from the app's own validation schemas" },
   { key: "tenant", label: "Tenant Settings", icon: Building2, path: "tenant-settings", description: "Organization name, logo, timezone, and contact info" },
 ];
 
