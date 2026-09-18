@@ -19,6 +19,22 @@ export type ResourceKey =
   | "ncr"
   | "capa"
   | "eight_d"
+  // Full-System Audit finding L3 flagged "di" as naming drift and asked
+  // whether to rename it to "quality". Investigated and deliberately NOT
+  // renamed: "quality" is already a distinct, meaningful Department value
+  // (see the Department union above) — reusing it as a ResourceKey too
+  // would create exactly the kind of same-string-different-type confusion
+  // this finding is trying to prevent, not fix it. A rename would also
+  // break every existing tenant's already-persisted department_permissions
+  // rows (moduleName = 'di' is real stored data, not just code) and touch
+  // ~6 other call sites (defaultPermissions.ts, quality.routes.ts,
+  // audit-trail's ENTITY_TYPE_TO_RESOURCE map, forms.routes.ts's
+  // FORM_TYPE_TO_RESOURCE map, nav.controller.ts's KPI key) for a rename
+  // that isn't even more correct. MODULE_LABELS below already gives this
+  // key its real display name ("Discrepancy Investigation") everywhere a
+  // human sees it (Roles & Permissions admin UI included) — "di" the raw
+  // key is internal-only and never user-facing, so there's no real UX gap
+  // to fix here, just an internal identifier some readers find terse.
   | "di"
   | "audit"
   | "calibration"
