@@ -6,6 +6,7 @@ import type { DigitalTwinModel } from "../../api/types";
 import { TextField } from "../../components/forms/Field";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
+import { DigitalTwinDiagram, heatColor } from "./DigitalTwinDiagram";
 
 const twinHooks = createResourceHooks<DigitalTwinModel>("digital-twin/models");
 
@@ -89,6 +90,18 @@ export function DigitalTwinPage() {
       </div>
 
       <div className="flex flex-col gap-4">
+        {selectedModel && (
+          <div className="rounded-lg border border-border bg-card p-4">
+            <h2 className="mb-2 text-sm font-medium">Process Graph</h2>
+            <DigitalTwinDiagram
+              nodes={selectedModel.modelJson?.nodes ?? []}
+              edges={selectedModel.modelJson?.edges ?? []}
+              riskHeatmap={simulate.data?.results.riskHeatmap}
+              bottleneck={simulate.data?.results.bottleneck}
+            />
+          </div>
+        )}
+
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-medium">Simulation Results</h2>
@@ -151,11 +164,4 @@ export function DigitalTwinPage() {
       </div>
     </div>
   );
-}
-
-function heatColor(riskScore: number): string {
-  if (riskScore > 10) return "#e11d48";
-  if (riskScore > 5) return "#fb923c";
-  if (riskScore > 1) return "#f59e0b";
-  return "#64748b";
 }
