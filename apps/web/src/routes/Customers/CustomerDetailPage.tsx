@@ -62,7 +62,7 @@ export function CustomerDetailPage() {
   const canEdit = useCanEditWorkflow("customers");
   const isAdmin = currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin";
 
-  const { data: customer, isLoading } = customerHooks.useOne(customerId);
+  const { data: customer, isLoading, isError } = customerHooks.useOne(customerId);
   useSetAssistantContext("customer", customerId, customer ? customer.legalName : `Customer #${customerId}`);
   const historyKey: unknown[][] = [["workflow-history", "customers", customerId]];
 
@@ -85,6 +85,7 @@ export function CustomerDetailPage() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't delete this case.")),
   });
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !customer) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   const ACTION_MAP: Record<string, typeof submitAction> = { submit: submitAction, review: reviewAction, activate: activateAction };

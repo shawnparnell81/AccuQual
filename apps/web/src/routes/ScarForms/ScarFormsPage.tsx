@@ -8,7 +8,7 @@ const scarHooks = createResourceHooks<ScarForm>("scar-forms");
 
 export function ScarFormsPage() {
   const navigate = useNavigate();
-  const { data: rows = [], isLoading } = scarHooks.useList();
+  const { data: rows = [], isLoading, isError } = scarHooks.useList();
   const createScar = scarHooks.useCreate();
 
   const columns: Column<ScarForm>[] = [
@@ -35,7 +35,7 @@ export function ScarFormsPage() {
         </button>
       </div>
 
-      <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} isLoading={isLoading} onRowClick={(r) => navigate(`/scar-forms/${r.id}`)} />
+      <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={(r) => navigate(`/scar-forms/${r.id}`)} />
     </div>
   );
 }

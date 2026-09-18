@@ -30,7 +30,7 @@ export function NcrListPage() {
     severity: "medium",
   });
 
-  const { data: ncrs = [], isLoading } = ncrHooks.useList();
+  const { data: ncrs = [], isLoading, isError } = ncrHooks.useList();
   const createNcr = ncrHooks.useCreate();
   const navigate = useNavigate();
 
@@ -97,7 +97,7 @@ export function NcrListPage() {
         </select>
       </div>
 
-      <DataTable columns={columns} rows={filtered} rowKey={(n) => n.id} isLoading={isLoading} onRowClick={(n) => navigate(`/ncr/${n.id}`)} />
+      <DataTable columns={columns} rows={filtered} rowKey={(n) => n.id} isLoading={isLoading} isError={isError} onRowClick={(n) => navigate(`/ncr/${n.id}`)} />
 
       <Modal title="Create NCR" isOpen={createOpen} onClose={() => setCreateOpen(false)}>
         <form

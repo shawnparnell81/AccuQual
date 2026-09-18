@@ -8,7 +8,7 @@ const reportHooks = createResourceHooks<QualityInspectionReport>("quality-inspec
 
 export function QualityInspectionReportsPage() {
   const navigate = useNavigate();
-  const { data: rows = [], isLoading } = reportHooks.useList();
+  const { data: rows = [], isLoading, isError } = reportHooks.useList();
   const createReport = reportHooks.useCreate();
 
   const columns: Column<QualityInspectionReport>[] = [
@@ -36,7 +36,7 @@ export function QualityInspectionReportsPage() {
         </button>
       </div>
 
-      <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} isLoading={isLoading} onRowClick={(r) => navigate(`/quality-inspection-reports/${r.id}`)} />
+      <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={(r) => navigate(`/quality-inspection-reports/${r.id}`)} />
     </div>
   );
 }

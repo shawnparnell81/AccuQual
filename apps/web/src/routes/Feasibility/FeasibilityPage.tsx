@@ -19,7 +19,7 @@ const STATUSES: FeasibilityStatus[] = ["draft", "final"];
  */
 export function FeasibilityPage() {
   const navigate = useNavigate();
-  const { data: rows = [], isLoading } = feasibilityHooks.useList();
+  const { data: rows = [], isLoading, isError } = feasibilityHooks.useList();
   const createReview = feasibilityHooks.useCreate();
   const [statusFilter, setStatusFilter] = useState("");
 
@@ -65,7 +65,7 @@ export function FeasibilityPage() {
         </select>
       </div>
 
-      <DataTable columns={columns} rows={filtered} rowKey={(r) => r.id} isLoading={isLoading} onRowClick={(r) => navigate(`/feasibility/${r.id}`)} />
+      <DataTable columns={columns} rows={filtered} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={(r) => navigate(`/feasibility/${r.id}`)} />
     </div>
   );
 }

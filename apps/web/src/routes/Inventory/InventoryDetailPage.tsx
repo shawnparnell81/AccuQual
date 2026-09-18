@@ -240,7 +240,7 @@ export function InventoryDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const itemId = Number(id);
-  const { data: item, isLoading } = itemHooks.useOne(itemId);
+  const { data: item, isLoading, isError } = itemHooks.useOne(itemId);
   useSetAssistantContext("inventory", itemId, item ? `Item ${item.sku}` : `Item #${itemId}`);
   const { data: movements = [] } = useMovementHistory(itemId);
   // Alert history for this item — the whole tenant's alerts are one small
@@ -268,6 +268,7 @@ export function InventoryDetailPage() {
   const onOrderAction = useWorkflowAction("inventory/items", "mark-on-order", { successMessage: "Marked on order.", invalidateKeys: historyKey });
   const acknowledgeAction = useWorkflowAction("inventory/alerts", "acknowledge", { successMessage: "Alert acknowledged." });
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !item) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (

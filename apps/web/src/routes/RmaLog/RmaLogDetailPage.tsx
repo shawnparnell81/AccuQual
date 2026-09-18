@@ -37,7 +37,7 @@ const NEXT_STATUS: Record<RmaLogStatus, { status: RmaLogStatus; label: string } 
 export function RmaLogDetailPage() {
   const { id } = useParams();
   const recordId = Number(id);
-  const { data: record, isLoading } = rmaLogHooks.useOne(recordId);
+  const { data: record, isLoading, isError } = rmaLogHooks.useOne(recordId);
   const { data: warrantyClaims = [] } = warrantyHooks.useList();
   const toast = useToast();
   const updateRecord = rmaLogHooks.useUpdate();
@@ -56,6 +56,7 @@ export function RmaLogDetailPage() {
     if (record) setDraft(record);
   }, [record]);
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !record) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   const isClosed = record.status === "closed";

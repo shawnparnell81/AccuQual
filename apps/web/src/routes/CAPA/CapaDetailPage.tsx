@@ -28,7 +28,7 @@ export function CapaDetailPage() {
   const { id } = useParams();
   const capaId = Number(id);
   const historyKey: unknown[][] = [["workflow-history", "capa", capaId]];
-  const { data: capa, isLoading } = capaHooks.useOne(capaId);
+  const { data: capa, isLoading, isError } = capaHooks.useOne(capaId);
   useSetAssistantContext("capa", capaId, `CAPA #${capaId}`);
   const updateCapa = capaHooks.useUpdate();
   // Sprint 2 fix — Open -> In Progress now has a real dedicated, guarded
@@ -51,6 +51,7 @@ export function CapaDetailPage() {
     if (capa?.verification) setVerification(capa.verification);
   }, [capa?.verification]);
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !capa) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (

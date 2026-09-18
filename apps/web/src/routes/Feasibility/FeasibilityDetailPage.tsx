@@ -19,7 +19,7 @@ export function FeasibilityDetailPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const user = useCurrentUser();
-  const { data: review, isLoading } = feasibilityHooks.useOne(reviewId);
+  const { data: review, isLoading, isError } = feasibilityHooks.useOne(reviewId);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const isAdmin = user?.roleName === "admin" || user?.roleName === "platform_admin";
@@ -28,6 +28,7 @@ export function FeasibilityDetailPage() {
   const finalize = feasibilityHooks.useAction("finalize");
   const deleteReview = feasibilityHooks.useDelete();
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !review) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (

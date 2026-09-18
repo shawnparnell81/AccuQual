@@ -31,11 +31,12 @@ const STATUS_LABELS: Record<AccuQualDocument["status"], string> = {
 export function DocumentDetailPage() {
   const { id } = useParams();
   const documentId = Number(id);
-  const { data: doc, isLoading } = documentHooks.useOne(documentId);
+  const { data: doc, isLoading, isError } = documentHooks.useOne(documentId);
   useSetAssistantContext("sop_generator", documentId, doc ? doc.title : `Document #${documentId}`);
   const [approveOpen, setApproveOpen] = useState(false);
   const [reviseOpen, setReviseOpen] = useState(false);
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !doc) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (

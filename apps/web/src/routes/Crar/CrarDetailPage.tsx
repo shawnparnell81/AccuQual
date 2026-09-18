@@ -37,7 +37,7 @@ const WARRANTY_LINK_ONLY_DEPARTMENTS = ["engineering", "purchasing"];
 export function CrarDetailPage() {
   const { id } = useParams();
   const crarId = Number(id);
-  const { data: record, isLoading } = crarHooks.useOne(crarId);
+  const { data: record, isLoading, isError } = crarHooks.useOne(crarId);
   const { data: warrantyClaims = [] } = warrantyHooks.useList();
   const { data: rmaLogRecords = [] } = rmaLogHooks.useList();
   const { data: customers = [] } = customerHooks.useList();
@@ -56,6 +56,7 @@ export function CrarDetailPage() {
     if (record) setDraft(record);
   }, [record]);
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !record) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   const isAdmin = currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin";

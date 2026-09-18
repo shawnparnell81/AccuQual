@@ -19,7 +19,7 @@ const emptyForm = { title: "", description: "", category: "process", processArea
  */
 export function RiskPage() {
   const navigate = useNavigate();
-  const { data: risks = [], isLoading } = riskHooks.useList();
+  const { data: risks = [], isLoading, isError } = riskHooks.useList();
   const createRisk = riskHooks.useCreate();
   const [statusFilter, setStatusFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -67,7 +67,7 @@ export function RiskPage() {
         </select>
       </div>
 
-      <DataTable columns={columns} rows={filtered} rowKey={(r) => r.id} isLoading={isLoading} onRowClick={(r) => navigate(`/risk/${r.id}`)} />
+      <DataTable columns={columns} rows={filtered} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={(r) => navigate(`/risk/${r.id}`)} />
 
       <Modal title="Create Risk" isOpen={createOpen} onClose={() => setCreateOpen(false)}>
         <form

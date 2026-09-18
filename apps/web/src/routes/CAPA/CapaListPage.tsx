@@ -10,7 +10,7 @@ import { TextField, TextAreaField } from "../../components/forms/Field";
 const capaHooks = createResourceHooks<Capa>("capa");
 
 export function CapaListPage() {
-  const { data: capas = [], isLoading } = capaHooks.useList();
+  const { data: capas = [], isLoading, isError } = capaHooks.useList();
   const createCapa = capaHooks.useCreate();
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
@@ -35,7 +35,7 @@ export function CapaListPage() {
         </button>
       </div>
 
-      <DataTable columns={columns} rows={capas} rowKey={(c) => c.id} isLoading={isLoading} onRowClick={(c) => navigate(`/capa/${c.id}`)} />
+      <DataTable columns={columns} rows={capas} rowKey={(c) => c.id} isLoading={isLoading} isError={isError} onRowClick={(c) => navigate(`/capa/${c.id}`)} />
 
       <Modal title="Create CAPA" isOpen={createOpen} onClose={() => setCreateOpen(false)}>
         <form

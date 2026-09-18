@@ -54,7 +54,7 @@ export function SalesAccountDetailPage() {
   const canEdit = useCanEditWorkflow("sales_accounts");
   const isAdmin = currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin";
 
-  const { data: account, isLoading } = salesAccountHooks.useOne(accountId);
+  const { data: account, isLoading, isError } = salesAccountHooks.useOne(accountId);
   const historyKey: unknown[][] = [["workflow-history", "sales_accounts", accountId]];
 
   const activateAction = useWorkflowAction("sales/accounts", "activate", { successMessage: "Account activated.", invalidateKeys: historyKey });
@@ -73,6 +73,7 @@ export function SalesAccountDetailPage() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't delete this account.")),
   });
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !account) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (

@@ -32,7 +32,7 @@ const trainingHooks = createResourceHooks<TrainingCourse>("training");
 export function TrainingDetailPage() {
   const { id } = useParams();
   const courseId = Number(id);
-  const { data: course, isLoading } = trainingHooks.useOne(courseId);
+  const { data: course, isLoading, isError } = trainingHooks.useOne(courseId);
   useSetAssistantContext("training", courseId, course ? course.title : `Training Course #${courseId}`);
   const updateCourse = trainingHooks.useUpdate();
   const [assignOpen, setAssignOpen] = useState(false);
@@ -58,6 +58,7 @@ export function TrainingDetailPage() {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !course) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (

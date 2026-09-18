@@ -19,8 +19,9 @@ const complaintHooks = createResourceHooks<Complaint>("complaints");
 export function ComplaintDetailPage() {
   const { id } = useParams();
   const complaintId = Number(id);
-  const { data: complaint, isLoading } = complaintHooks.useOne(complaintId);
+  const { data: complaint, isLoading, isError } = complaintHooks.useOne(complaintId);
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !complaint) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (

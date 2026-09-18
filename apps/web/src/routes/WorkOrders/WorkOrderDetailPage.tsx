@@ -17,7 +17,7 @@ const woHooks = createResourceHooks<WorkOrder>("work-orders");
 export function WorkOrderDetailPage() {
   const { id } = useParams();
   const workOrderId = Number(id);
-  const { data: record, isLoading } = woHooks.useOne(workOrderId);
+  const { data: record, isLoading, isError } = woHooks.useOne(workOrderId);
   const [quantityCompleted, setQuantityCompleted] = useState("");
 
   const startAction = useWorkflowAction<{ id: number }>("work-orders", "start", { successMessage: "Work order started.", invalidateKeys: [["workflow-history", "work_orders", workOrderId]] });
@@ -27,6 +27,7 @@ export function WorkOrderDetailPage() {
     invalidateKeys: [["workflow-history", "work_orders", workOrderId], ["inventory/items"]],
   });
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !record) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   const status = record.status as WorkOrderStatus;

@@ -18,7 +18,7 @@ export function DocumentChangeRequestDetailPage() {
   const dcrId = Number(id);
   const navigate = useNavigate();
   const toast = useToast();
-  const { data: dcr, isLoading } = dcrHooks.useOne(dcrId);
+  const { data: dcr, isLoading, isError } = dcrHooks.useOne(dcrId);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const deleteDcr = useMutation({
@@ -30,6 +30,7 @@ export function DocumentChangeRequestDetailPage() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't delete this record.")),
   });
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !dcr) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (

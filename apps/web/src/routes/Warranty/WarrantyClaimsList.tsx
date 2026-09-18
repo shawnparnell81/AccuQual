@@ -28,7 +28,7 @@ export function WarrantyClaimsList() {
     if (dateTo) p.dateTo = dateTo;
     return p;
   }, [status, q, dateFrom, dateTo]);
-  const { data: rows = [], isLoading } = claimHooks.useList(params);
+  const { data: rows = [], isLoading, isError } = claimHooks.useList(params);
 
   return (
     <div className="flex flex-col gap-4">
@@ -71,6 +71,7 @@ export function WarrantyClaimsList() {
         rows={rows}
         rowKey={(c) => c.id}
         isLoading={isLoading}
+        isError={isError}
         onRowClick={(c) => navigate(`/warranty/${c.id}`)}
         emptyMessage="No warranty claims match these filters."
       />

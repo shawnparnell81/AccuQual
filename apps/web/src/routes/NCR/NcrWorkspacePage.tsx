@@ -52,7 +52,7 @@ export function NcrWorkspacePage() {
   const toast = useToast();
   const [showHistory, setShowHistory] = useState(false);
 
-  const { data: ncr, isLoading } = ncrHooks.useOne(ncrId);
+  const { data: ncr, isLoading, isError } = ncrHooks.useOne(ncrId);
   useSetAssistantContext("ncr", ncrId, ncr ? `NCR #${ncr.id}` : `NCR #${ncrId}`);
 
   const historyKey: unknown[][] = [["workflow-history", "ncr", ncrId]];
@@ -84,6 +84,7 @@ export function NcrWorkspacePage() {
     }
   }
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !ncr) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (

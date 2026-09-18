@@ -89,7 +89,7 @@ export function ErpRequisitionsPage() {
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
   const [status, setStatus] = useState("");
-  const { data: rows = [], isLoading } = requisitionHooks.useList(status ? { status } : undefined);
+  const { data: rows = [], isLoading, isError } = requisitionHooks.useList(status ? { status } : undefined);
   const canApprove = useCanEditWorkflow("erp");
 
   return (
@@ -127,6 +127,7 @@ export function ErpRequisitionsPage() {
         rows={rows}
         rowKey={(r) => r.id}
         isLoading={isLoading}
+        isError={isError}
         onRowClick={(r) => navigate(`/erp/requisitions/${r.id}`)}
         emptyMessage="No purchase requisitions yet."
       />

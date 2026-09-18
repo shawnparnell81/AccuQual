@@ -46,7 +46,7 @@ export function RiskDetailPage() {
   const canEdit = useCanEditWorkflow("risk");
   const isAdmin = currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin";
 
-  const { data: risk, isLoading } = riskHooks.useOne(riskId);
+  const { data: risk, isLoading, isError } = riskHooks.useOne(riskId);
   const historyKey: unknown[][] = [["workflow-history", "risk", riskId]];
 
   const startMitigation = useWorkflowAction("risk", "start-mitigation", { successMessage: "Moved to mitigation.", invalidateKeys: historyKey });
@@ -66,6 +66,7 @@ export function RiskDetailPage() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't delete this risk.")),
   });
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !risk) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   const sourceLink = risk.sourceType && risk.sourceId ? SOURCE_LINK[risk.sourceType]?.(risk.sourceId) : undefined;

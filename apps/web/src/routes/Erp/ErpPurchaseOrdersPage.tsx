@@ -85,7 +85,7 @@ function ErpAutomationPanel() {
 /** Purchase Order roster. Creation needs a dynamic line-item builder the generic quick-create modal can't do, so it's its own page (ErpNewPurchaseOrderPage), not a modal. */
 export function ErpPurchaseOrdersPage() {
   const navigate = useNavigate();
-  const { data: purchaseOrders = [], isLoading } = poHooks.useList();
+  const { data: purchaseOrders = [], isLoading, isError } = poHooks.useList();
 
   return (
     <div className="flex flex-col gap-4">
@@ -121,6 +121,7 @@ export function ErpPurchaseOrdersPage() {
         rows={purchaseOrders}
         rowKey={(po) => po.id}
         isLoading={isLoading}
+        isError={isError}
         onRowClick={(po) => navigate(`/erp/${po.id}`)}
         emptyMessage="No purchase orders yet."
       />

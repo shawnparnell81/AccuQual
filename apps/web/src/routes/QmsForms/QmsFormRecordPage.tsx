@@ -32,7 +32,7 @@ export function QmsFormRecordPage() {
   const logoUrl = useAuthStore((s) => s.tenant?.branding?.logoUrl);
   const definition = getQmsFormDefinition(formType!);
 
-  const { data: record, isLoading } = qmsFormHooks.useOne(formId);
+  const { data: record, isLoading, isError } = qmsFormHooks.useOne(formId);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const queryClient = useQueryClient();
@@ -69,6 +69,7 @@ export function QmsFormRecordPage() {
   });
 
   if (!definition) return <p className="text-sm text-destructive">Unknown form type "{formType}".</p>;
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !record) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   const rowsBySection = (sectionKey: string) => (record.rows ?? []).filter((r) => r.sectionKey === sectionKey);

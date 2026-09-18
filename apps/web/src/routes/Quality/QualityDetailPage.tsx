@@ -25,7 +25,7 @@ export function QualityDetailPage() {
   const navigate = useNavigate();
   const discrepancyId = Number(id);
   const historyKey: unknown[][] = [["workflow-history", "di", discrepancyId]];
-  const { data: discrepancy, isLoading } = qualityHooks.useOne(discrepancyId);
+  const { data: discrepancy, isLoading, isError } = qualityHooks.useOne(discrepancyId);
   // Open -> Investigating -> Disposed are generic-PATCH-only on the backend
   // (no dedicated endpoint — see the Transitions/Rules Dictionaries); only
   // Close is a real, sequence-checked, dedicated action.
@@ -33,6 +33,7 @@ export function QualityDetailPage() {
   const disposeAction = useWorkflowUpdate<{ id: number; status: string }>("quality", { successMessage: "Marked disposed.", invalidateKeys: historyKey });
   const closeAction = useWorkflowAction("quality", "close", { successMessage: "Investigation closed.", invalidateKeys: historyKey });
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !discrepancy) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (

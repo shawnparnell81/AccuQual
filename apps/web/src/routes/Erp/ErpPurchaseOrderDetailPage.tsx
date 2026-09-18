@@ -239,7 +239,7 @@ function ReceivingLineItemRow({ lineItem, po }: { lineItem: ErpReceivingLineItem
 export function ErpPurchaseOrderDetailPage() {
   const { id } = useParams();
   const poId = Number(id);
-  const { data: po, isLoading } = poHooks.useOne(poId);
+  const { data: po, isLoading, isError } = poHooks.useOne(poId);
   const { data: receivingDocs = [] } = useReceivingDocuments(poId);
   const currentUser = useCurrentUser();
   const canReceive = currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin" || currentUser?.department === "material_management";
@@ -249,6 +249,7 @@ export function ErpPurchaseOrderDetailPage() {
   const sendAction = useWorkflowAction("erp/purchase-orders", "send", { successMessage: "Purchase order sent.", invalidateKeys: historyKey });
   const cancelAction = useWorkflowAction("erp/purchase-orders", "cancel", { successMessage: "Purchase order cancelled.", invalidateKeys: historyKey });
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !po) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   const canCancel = po.status !== "received" && po.status !== "cancelled";

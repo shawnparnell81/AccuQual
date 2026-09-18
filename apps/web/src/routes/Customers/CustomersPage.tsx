@@ -22,7 +22,7 @@ const emptyForm = { legalName: "", dbaName: "", industry: "", customerType: "", 
  */
 export function CustomersPage() {
   const navigate = useNavigate();
-  const { data: customersList = [], isLoading } = customerHooks.useList();
+  const { data: customersList = [], isLoading, isError } = customerHooks.useList();
   const createCustomer = customerHooks.useCreate();
   const [statusFilter, setStatusFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -67,7 +67,7 @@ export function CustomersPage() {
         </select>
       </div>
 
-      <DataTable columns={columns} rows={filtered} rowKey={(c) => c.id} isLoading={isLoading} onRowClick={(c) => navigate(`/customers/${c.id}`)} />
+      <DataTable columns={columns} rows={filtered} rowKey={(c) => c.id} isLoading={isLoading} isError={isError} onRowClick={(c) => navigate(`/customers/${c.id}`)} />
 
       <Modal title="Start Customer Onboarding" isOpen={createOpen} onClose={() => setCreateOpen(false)}>
         <form

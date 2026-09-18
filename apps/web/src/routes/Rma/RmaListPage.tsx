@@ -140,7 +140,7 @@ export function RmaListPage() {
     if (q) p.q = q;
     return p;
   }, [status, supplierId, reasonCode, dateFrom, dateTo, q]);
-  const { data: rows = [], isLoading } = rmaHooks.useList(params);
+  const { data: rows = [], isLoading, isError } = rmaHooks.useList(params);
 
   return (
     <div className="flex flex-col gap-4">
@@ -193,6 +193,7 @@ export function RmaListPage() {
         rows={rows}
         rowKey={(r) => r.id}
         isLoading={isLoading}
+        isError={isError}
         onRowClick={(r) => navigate(`/rma/${r.id}`)}
         emptyMessage="No RMAs match these filters."
       />

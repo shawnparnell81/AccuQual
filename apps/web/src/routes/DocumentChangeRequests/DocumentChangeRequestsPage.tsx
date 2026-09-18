@@ -17,7 +17,7 @@ const STATUSES: DocumentChangeStatus[] = ["draft", "active", "obsolete"];
  */
 export function DocumentChangeRequestsPage() {
   const navigate = useNavigate();
-  const { data: rows = [], isLoading } = dcrHooks.useList();
+  const { data: rows = [], isLoading, isError } = dcrHooks.useList();
   const createDcr = dcrHooks.useCreate();
   const [statusFilter, setStatusFilter] = useState("");
 
@@ -59,7 +59,7 @@ export function DocumentChangeRequestsPage() {
         </select>
       </div>
 
-      <DataTable columns={columns} rows={filtered} rowKey={(r) => r.id} isLoading={isLoading} onRowClick={(r) => navigate(`/document-change-requests/${r.id}`)} />
+      <DataTable columns={columns} rows={filtered} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={(r) => navigate(`/document-change-requests/${r.id}`)} />
     </div>
   );
 }

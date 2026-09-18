@@ -13,7 +13,7 @@ export function QmsFormTypePage() {
   const { formType } = useParams();
   const navigate = useNavigate();
   const definition = getQmsFormDefinition(formType!);
-  const { data: rows = [], isLoading } = qmsFormHooks.useList({ formType });
+  const { data: rows = [], isLoading, isError } = qmsFormHooks.useList({ formType });
   const createForm = qmsFormHooks.useCreate();
   const [statusFilter, setStatusFilter] = useState("");
 
@@ -60,7 +60,7 @@ export function QmsFormTypePage() {
         </select>
       </div>
 
-      <DataTable columns={columns} rows={filtered} rowKey={(r) => r.id} isLoading={isLoading} onRowClick={(r) => navigate(`/qms-forms/${formType}/${r.id}`)} />
+      <DataTable columns={columns} rows={filtered} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={(r) => navigate(`/qms-forms/${formType}/${r.id}`)} />
     </div>
   );
 }

@@ -119,7 +119,7 @@ export function SupplierDetailPage() {
   const { id } = useParams();
   const supplierId = Number(id);
   const toast = useToast();
-  const { data: supplier, isLoading } = supplierHooks.useOne(supplierId);
+  const { data: supplier, isLoading, isError } = supplierHooks.useOne(supplierId);
   useSetAssistantContext("supplier", supplierId, supplier ? supplier.name : `Supplier #${supplierId}`);
   const { data: performance } = useSupplierPerformance(supplierId);
   const costing = useSupplierCosting(supplierId);
@@ -150,6 +150,7 @@ export function SupplierDetailPage() {
   const suspendAction = useWorkflowAction("suppliers", "suspend", { successMessage: "Supplier suspended.", invalidateKeys: historyKey });
   const removeAction = useWorkflowAction("suppliers", "remove", { successMessage: "Supplier disqualified.", invalidateKeys: historyKey });
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !supplier) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   // Disqualification is terminal on the backend (supplier.controller.ts) —

@@ -47,7 +47,7 @@ const capaHooks = createResourceHooks<Capa>("capa");
 export function EightDDetailPage() {
   const { id } = useParams();
   const reportId = Number(id);
-  const { data: report, isLoading } = eightDHooks.useOne(reportId);
+  const { data: report, isLoading, isError } = eightDHooks.useOne(reportId);
   const queryClient = useQueryClient();
   const completeStep = useMutation({
     mutationFn: async ({ step, data }: { step: number; data: unknown }) =>
@@ -62,6 +62,7 @@ export function EightDDetailPage() {
   const { data: allCapas = [] } = capaHooks.useList();
   const linkedCapa = allCapas.find((c) => c.ncrId === report?.ncrId);
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !report) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (

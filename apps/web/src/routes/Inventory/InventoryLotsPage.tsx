@@ -31,7 +31,7 @@ export function InventoryLotsPage() {
     return p;
   }, [q, status]);
 
-  const { data: rows = [], isLoading } = lotHooks.useList(params);
+  const { data: rows = [], isLoading, isError } = lotHooks.useList(params);
 
   return (
     <div className="flex flex-col gap-4">
@@ -65,6 +65,7 @@ export function InventoryLotsPage() {
         rows={rows}
         rowKey={(l) => l.id}
         isLoading={isLoading}
+        isError={isError}
         onRowClick={(l) => navigate(`/inventory/lots/${l.id}`)}
         emptyMessage={q || status ? "No lots match this search." : "No tracked lots yet — a real one is created the moment an item is received with a lot number on a Purchase Order's Receiving Document."}
       />

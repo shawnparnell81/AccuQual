@@ -153,7 +153,7 @@ export function WorkOrderListPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [status, setStatus] = useState("");
   const { data: items = [] } = itemHooks.useList();
-  const { data: rows = [], isLoading } = woHooks.useList(status ? { status } : undefined);
+  const { data: rows = [], isLoading, isError } = woHooks.useList(status ? { status } : undefined);
   const canEdit = useCanEditWorkflow("work_orders");
 
   return (
@@ -191,6 +191,7 @@ export function WorkOrderListPage() {
         rows={rows}
         rowKey={(wo) => wo.id}
         isLoading={isLoading}
+        isError={isError}
         onRowClick={(wo) => navigate(`/work-orders/${wo.id}`)}
         emptyMessage="No work orders yet."
       />

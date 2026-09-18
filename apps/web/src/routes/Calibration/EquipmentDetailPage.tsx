@@ -67,7 +67,7 @@ function useUploadCertificate(equipmentId: number) {
 export function EquipmentDetailPage() {
   const { id } = useParams();
   const equipmentId = Number(id);
-  const { data: equipment, isLoading } = equipmentHooks.useOne(equipmentId);
+  const { data: equipment, isLoading, isError } = equipmentHooks.useOne(equipmentId);
   useSetAssistantContext("calibration", equipmentId, equipment ? equipment.name : `Equipment #${equipmentId}`);
   const uploadCertificate = useUploadCertificate(equipmentId);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -96,6 +96,7 @@ export function EquipmentDetailPage() {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !equipment) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (

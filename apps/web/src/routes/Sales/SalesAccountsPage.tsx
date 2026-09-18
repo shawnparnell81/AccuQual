@@ -22,7 +22,7 @@ const emptyForm = { customerName: "", industry: "", primaryContactName: "", prim
  */
 export function SalesAccountsPage() {
   const navigate = useNavigate();
-  const { data: accounts = [], isLoading } = salesAccountHooks.useList();
+  const { data: accounts = [], isLoading, isError } = salesAccountHooks.useList();
   const createAccount = salesAccountHooks.useCreate();
   const [statusFilter, setStatusFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -66,7 +66,7 @@ export function SalesAccountsPage() {
         </select>
       </div>
 
-      <DataTable columns={columns} rows={filtered} rowKey={(a) => a.id} isLoading={isLoading} onRowClick={(a) => navigate(`/sales/${a.id}`)} />
+      <DataTable columns={columns} rows={filtered} rowKey={(a) => a.id} isLoading={isLoading} isError={isError} onRowClick={(a) => navigate(`/sales/${a.id}`)} />
 
       <Modal title="Create Sales Account" isOpen={createOpen} onClose={() => setCreateOpen(false)}>
         <form

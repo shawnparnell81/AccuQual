@@ -37,7 +37,7 @@ export function AuditDetailPage() {
   const navigate = useNavigate();
   const auditId = Number(id);
   const historyKey: unknown[][] = [["workflow-history", "audit", auditId]];
-  const { data: audit, isLoading } = auditHooks.useOne(auditId);
+  const { data: audit, isLoading, isError } = auditHooks.useOne(auditId);
   useSetAssistantContext("audit", auditId, audit ? audit.name : `Audit #${auditId}`);
   const startAction = useWorkflowAction("audits", "start", { successMessage: "Audit started.", invalidateKeys: historyKey });
   const completeAction = useWorkflowAction("audits", "complete", { successMessage: "Audit marked completed.", invalidateKeys: historyKey });
@@ -51,6 +51,7 @@ export function AuditDetailPage() {
   const [item, setItem] = useState({ question: "", finding: "", severity: "observation" });
   const [autoOpened, setAutoOpened] = useState<number | null>(null);
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !audit) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (

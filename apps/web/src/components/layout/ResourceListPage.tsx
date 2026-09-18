@@ -33,7 +33,7 @@ export function ResourceListPage<T extends { id: number }>({
   const [createOpen, setCreateOpen] = useState(false);
   const toast = useToast();
   const hooks = createResourceHooks<T>(resource);
-  const { data: rows = [], isLoading } = hooks.useList();
+  const { data: rows = [], isLoading, isError } = hooks.useList();
   const createMutation = hooks.useCreate();
 
   return (
@@ -47,7 +47,7 @@ export function ResourceListPage<T extends { id: number }>({
         )}
       </div>
 
-      <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} isLoading={isLoading} onRowClick={onRowClick} />
+      <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={onRowClick} />
 
       {createFields && (
         <Modal title={`Create ${title}`} isOpen={createOpen} onClose={() => setCreateOpen(false)}>

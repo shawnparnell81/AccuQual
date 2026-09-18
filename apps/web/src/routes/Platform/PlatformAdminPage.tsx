@@ -45,7 +45,7 @@ interface AiOverview {
  * ai_suggestions rows, not a stored flag that could drift stale.
  */
 function AiOverviewSection() {
-  const { data, isLoading } = useQuery<AiOverview>({
+  const { data, isLoading, isError } = useQuery<AiOverview>({
     queryKey: ["platform-ai-overview"],
     queryFn: async () => (await apiClient.get("/platform/ai-overview")).data,
   });
@@ -66,7 +66,7 @@ function AiOverviewSection() {
         Platform default provider: <strong>{data?.platformHasKey ? `${data.platformProvider} (${data.platformModel})` : "not configured"}</strong>.
         Every tenant without its own key falls back to this — with neither, AI features run in stub mode everywhere.
       </p>
-      <DataTable columns={columns} rows={data?.tenants ?? []} rowKey={(t) => t.tenantId} isLoading={isLoading} />
+      <DataTable columns={columns} rows={data?.tenants ?? []} rowKey={(t) => t.tenantId} isLoading={isLoading} isError={isError} />
     </div>
   );
 }
@@ -84,7 +84,7 @@ export function PlatformAdminPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("active");
 
-  const { data: tenants = [], isLoading } = useQuery<Tenant[]>({
+  const { data: tenants = [], isLoading, isError } = useQuery<Tenant[]>({
     queryKey: ["platform-tenants"],
     queryFn: async () => (await apiClient.get("/platform/tenants")).data,
     enabled: user?.roleName === "platform_admin",
@@ -210,7 +210,7 @@ export function PlatformAdminPage() {
             <option value="all">All</option>
           </SelectField>
         </div>
-        <DataTable columns={columns} rows={visibleTenants} rowKey={(t) => t.id} isLoading={isLoading} />
+        <DataTable columns={columns} rows={visibleTenants} rowKey={(t) => t.id} isLoading={isLoading} isError={isError} />
         {!isLoading && tenants.length > 0 && (
           <p className="mt-2 text-xs text-muted-foreground">
             Showing {visibleTenants.length} of {tenants.length} tenant(s).

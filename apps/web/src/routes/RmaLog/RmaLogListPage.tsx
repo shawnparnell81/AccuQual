@@ -40,7 +40,7 @@ export function RmaLogListPage() {
     return p;
   }, [status, partNumber, customerName, q]);
 
-  const { data: rows = [], isLoading } = rmaLogHooks.useList(params);
+  const { data: rows = [], isLoading, isError } = rmaLogHooks.useList(params);
   const createRecord = rmaLogHooks.useCreate();
 
   return (
@@ -95,6 +95,7 @@ export function RmaLogListPage() {
         rows={rows}
         rowKey={(r) => r.id}
         isLoading={isLoading}
+        isError={isError}
         onRowClick={(r) => navigate(`/rma-log/${r.id}`)}
         emptyMessage="No RMA Log entries match these filters."
       />

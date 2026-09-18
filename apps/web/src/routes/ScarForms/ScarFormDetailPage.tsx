@@ -27,7 +27,7 @@ export function ScarFormDetailPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const logoUrl = useAuthStore((s) => s.tenant?.branding?.logoUrl);
-  const { data: scar, isLoading } = scarHooks.useOne(scarId);
+  const { data: scar, isLoading, isError } = scarHooks.useOne(scarId);
   const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
   // Phase 7 — a real supplier link (supplierId), added alongside the
@@ -51,6 +51,7 @@ export function ScarFormDetailPage() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't delete.")),
   });
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !scar) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (

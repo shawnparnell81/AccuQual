@@ -37,7 +37,7 @@ export function QualityInspectionReportDetailPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const logoUrl = useAuthStore((s) => s.tenant?.branding?.logoUrl);
-  const { data: report, isLoading } = reportHooks.useOne(reportId);
+  const { data: report, isLoading, isError } = reportHooks.useOne(reportId);
   const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const { data: suppliers = [] } = useQuery<Supplier[]>({ queryKey: ["suppliers"], queryFn: async () => (await apiClient.get("/suppliers")).data });
@@ -75,6 +75,7 @@ export function QualityInspectionReportDetailPage() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't delete.")),
   });
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !report) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   const items = report.items ?? [];

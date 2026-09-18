@@ -24,7 +24,7 @@ export function CrarListPage() {
     if (q) p.q = q;
     return p;
   }, [status, q]);
-  const { data: rows = [], isLoading } = crarHooks.useList(params);
+  const { data: rows = [], isLoading, isError } = crarHooks.useList(params);
   const createCrar = crarHooks.useCreate();
 
   return (
@@ -71,6 +71,7 @@ export function CrarListPage() {
         rows={rows}
         rowKey={(c) => c.id}
         isLoading={isLoading}
+        isError={isError}
         onRowClick={(c) => navigate(`/crar/${c.id}`)}
         emptyMessage="No Customer Return Analysis Reports match these filters."
       />

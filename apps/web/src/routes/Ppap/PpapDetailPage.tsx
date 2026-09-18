@@ -27,8 +27,9 @@ const DOCUMENTS = [
 export function PpapDetailPage() {
   const { id } = useParams();
   const ppapId = Number(id);
-  const { data: ppap, isLoading } = ppapHooks.useOne(ppapId);
+  const { data: ppap, isLoading, isError } = ppapHooks.useOne(ppapId);
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !ppap) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (

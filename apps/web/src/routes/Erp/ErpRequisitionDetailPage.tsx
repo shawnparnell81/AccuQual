@@ -21,7 +21,7 @@ export function ErpRequisitionDetailPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const requisitionId = Number(id);
-  const { data: record, isLoading } = requisitionHooks.useOne(requisitionId);
+  const { data: record, isLoading, isError } = requisitionHooks.useOne(requisitionId);
   const updateReq = requisitionHooks.useUpdate();
   const canApprove = useCanEditWorkflow("erp"); // purchasing/admin — matches erp.controller.ts's assertDepartment(["purchasing"]) on approve/reject/convert
 
@@ -49,6 +49,7 @@ export function ErpRequisitionDetailPage() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't draft a justification.")),
   });
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !record) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (

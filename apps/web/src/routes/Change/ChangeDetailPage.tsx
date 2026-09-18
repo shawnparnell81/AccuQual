@@ -21,9 +21,10 @@ const changeHooks = createResourceHooks<ChangeRequest>("change");
 export function ChangeDetailPage() {
   const { id } = useParams();
   const changeId = Number(id);
-  const { data: change, isLoading } = changeHooks.useOne(changeId);
+  const { data: change, isLoading, isError } = changeHooks.useOne(changeId);
   const approveAction = changeHooks.useAction("approve");
 
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !change) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (
