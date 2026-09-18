@@ -2,10 +2,12 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Building2, ChevronDown, Grid2x2, Library, Lock, Menu, Search, Settings, X } from "lucide-react";
+import { Building2, ChevronDown, Grid2x2, Library, Lock, Menu, Search, Settings, X, type LucideIcon } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { useCurrentTenant, useCurrentUser } from "../../hooks/useAuth";
 import { HomeButton } from "./HomeButton";
+import { CalendarButton } from "./CalendarButton";
+import { BackButton } from "./BackButton";
 import { departmentScope, itemScope, useHiddenNavScopes } from "../../hooks/useNavPreferences";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { useDepartmentPermissionsGrid } from "../../hooks/useDepartmentPermissionsGrid";
@@ -26,7 +28,7 @@ import {
 } from "./navConfig";
 
 type KpiCounts = Partial<Record<(typeof KPI_COUNT_KEYS)[number], number>>;
-type DropdownId = Department | "system" | "library";
+type DropdownId = Department | "system" | "library" | "modules";
 
 // How long the cursor may be off a dropdown (moving from the trigger down into
 // the panel briefly leaves both) before it auto-closes. Long enough that the
@@ -252,8 +254,17 @@ export function TopNav() {
             or overlapping the search box when the window is too narrow for
             every department to fit on one row. */}
         <nav className="hidden md:flex flex-1 flex-wrap items-center gap-1 min-w-0">
+          <BackButton />
           <HomeButton />
-          <ModulesDropdown leaves={allVisibleLeaves} />
+          <CalendarButton />
+          <ModulesDropdown
+            leaves={allVisibleLeaves}
+            isOpen={openId === "modules"}
+            onOpen={() => openNow("modules")}
+            onScheduleClose={() => scheduleClose("modules")}
+            onCancelClose={cancelClose}
+            onNavigate={() => setOpenId(null)}
+          />
           <NavLink
             to={DASHBOARD_LEAF.path}
             end
@@ -461,7 +472,47 @@ export function TopNav() {
           ) : (
             <>
               <HomeButton onNavigate={() => setMobileOpen(false)} />
-              <ModulesDropdown leaves={allVisibleLeaves} onNavigate={() => setMobileOpen(false)} />
+              <CalendarButton onNavigate={() => setMobileOpen(false)} />
+              {(() => {
+                const expanded = mobileExpanded === "modules";
+                const byKey = new Map(allVisibleLeaves.map((l) => [l.key, l]));
+                const items = MODULES_DROPDOWN_KEYS.map((key) => byKey.get(key)).filter((l): l is NavLeaf => l != null);
+                return (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setMobileExpanded(expanded ? null : "modules")}
+                      className={clsx(
+                        "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium",
+                        expanded ? "bg-muted text-foreground" : "text-foreground hover:bg-muted"
+                      )}
+                    >
+                      <Grid2x2 size={18} />
+                      <span className="flex-1 text-left">Modules</span>
+                      <ChevronDown size={14} className={clsx("transition-transform", expanded && "rotate-180")} />
+                    </button>
+                    {expanded && (
+                      <div className="ml-4 flex flex-col gap-0.5 border-l border-border pl-3 py-1">
+                        {items.length === 0 ? (
+                          <p className="px-2 py-1 text-xs text-muted-foreground">No modules available.</p>
+                        ) : (
+                          items.map((item) => (
+                            <Link
+                              key={item.key}
+                              to={item.path}
+                              onClick={() => setMobileOpen(false)}
+                              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                            >
+                              <item.icon size={16} />
+                              <span>{item.label}</span>
+                            </Link>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               <Link
                 to={DASHBOARD_LEAF.path}
                 onClick={() => setMobileOpen(false)}
@@ -624,50 +675,49 @@ const MODULES_DROPDOWN_KEYS = [
  * so this list narrows exactly the same way every other dropdown in this
  * nav bar does — a department with no live access to a module simply won't
  * see it here either, no second source of truth for "what can I see".
+ *
+ * Built on the same `NavDropdown` shell every department dropdown uses,
+ * driven by the parent's shared `openId` state (hover-open, click-away/
+ * Escape/other-dropdown-open all close it) — a bespoke local `useState`
+ * here previously meant only its own toggle button could close it, unlike
+ * every other dropdown in this bar.
  */
-function ModulesDropdown({ leaves, onNavigate }: { leaves: NavLeaf[]; onNavigate?: () => void }) {
-  const [open, setOpen] = useState(false);
+function ModulesDropdown({
+  leaves,
+  isOpen,
+  onOpen,
+  onScheduleClose,
+  onCancelClose,
+  onNavigate,
+}: {
+  leaves: NavLeaf[];
+  isOpen: boolean;
+  onOpen: () => void;
+  onScheduleClose: () => void;
+  onCancelClose: () => void;
+  onNavigate?: () => void;
+}) {
   const byKey = new Map(leaves.map((l) => [l.key, l]));
   const items = MODULES_DROPDOWN_KEYS.map((key) => byKey.get(key)).filter((l): l is NavLeaf => l != null);
 
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={clsx(
-          "flex items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap",
-          open ? "bg-muted text-foreground font-medium" : "text-muted-foreground hover:bg-muted"
-        )}
-        aria-expanded={open}
-      >
-        <Grid2x2 size={18} />
-        <span>Modules</span>
-        <ChevronDown size={14} className={clsx("transition-transform", open && "rotate-180")} />
-      </button>
-      {open && (
-        <div className="absolute top-full left-0 z-30 mt-1 w-56 rounded-md border border-border bg-card p-2 shadow-lg">
-          {items.length === 0 ? (
-            <p className="px-2 py-1 text-xs text-muted-foreground">No modules available.</p>
-          ) : (
-            items.map((item) => (
-              <Link
-                key={item.key}
-                to={item.path}
-                onClick={() => {
-                  setOpen(false);
-                  onNavigate?.();
-                }}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <item.icon size={16} />
-                <span>{item.label}</span>
-              </Link>
-            ))
-          )}
-        </div>
+    <NavDropdown id="modules" label="Modules" icon={Grid2x2} isOpen={isOpen} onOpen={onOpen} onScheduleClose={onScheduleClose} onCancelClose={onCancelClose}>
+      {items.length === 0 ? (
+        <p className="px-2 py-1 text-xs text-muted-foreground">No modules available.</p>
+      ) : (
+        items.map((item) => (
+          <Link
+            key={item.key}
+            to={item.path}
+            onClick={onNavigate}
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <item.icon size={16} />
+            <span>{item.label}</span>
+          </Link>
+        ))
       )}
-    </div>
+    </NavDropdown>
   );
 }
 
@@ -696,6 +746,7 @@ function NavDropdown({
   id: _id,
   label,
   meta,
+  icon: Icon,
   twoColumn = false,
   isOpen,
   onOpen,
@@ -706,6 +757,8 @@ function NavDropdown({
   id: DropdownId;
   label: string;
   meta?: DepartmentMeta;
+  /** Icon for a dropdown with no `meta` (e.g. Modules) — `meta.icon` wins when both are given. */
+  icon?: LucideIcon;
   twoColumn?: boolean;
   isOpen: boolean;
   onOpen: () => void;
@@ -739,7 +792,7 @@ function NavDropdown({
         )}
         aria-expanded={isOpen}
       >
-        {meta && <meta.icon size={18} className={meta.text} />}
+        {meta ? <meta.icon size={18} className={meta.text} /> : Icon && <Icon size={18} />}
         <span>{label}</span>
         <ChevronDown size={14} className={clsx("transition-transform", isOpen && "rotate-180")} />
       </button>

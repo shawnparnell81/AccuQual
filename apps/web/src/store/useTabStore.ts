@@ -24,13 +24,15 @@ interface TabState {
    */
   openTab: (tab: { path: string; title: string; icon: string }) => string;
   /**
-   * Called on every route change from AppLayout's location effect — keeps
-   * the *active* tab's own path/title in sync with normal navigation
-   * (clicking an existing nav link, the browser back button, ...) rather
-   * than opening a new tab for it. A no-op when the active tab already
-   * shows this path (e.g. right after openTab's own navigate() lands here).
-   * Creates the very first tab if none exist yet (fresh login / cleared
-   * localStorage) so the app is never in a zero-tabs state.
+   * Called on every route change from AppLayout's location effect —
+   * find-or-create a tab for this path and make it active, same as
+   * openTab. Every distinct page the user visits keeps its own tab instead
+   * of overwriting whatever was active (that was the entire "can't see
+   * multiple pages open at once" bug: normal navigation used to just
+   * rename the current tab in place, and only global search's explicit
+   * openTab call ever produced a second one). A no-op when the active tab
+   * already shows this path (e.g. right after openTab's own navigate()
+   * lands here).
    */
   syncActiveTabLocation: (path: string, title: string, icon: string) => void;
   /** Sets the active tab and returns its path so the caller can navigate() to it. */
@@ -97,17 +99,19 @@ export const useTabStore = create<TabState>((set, get) => ({
 
   syncActiveTabLocation: (path, title, icon) => {
     const { tenantId, tabs, activeId } = get();
-    if (tabs.length === 0) {
-      const tab: TabInstance = { id: newTabId(), path, title, icon };
-      persist(tenantId, [tab], tab.id);
-      set({ tabs: [tab], activeId: tab.id });
+    const active = tabs.find((t) => t.id === activeId);
+    if (active?.path === path) return; // already showing this path — e.g. openTab's own navigate() just landed here
+
+    const existing = tabs.find((t) => t.path === path);
+    if (existing) {
+      persist(tenantId, tabs, existing.id);
+      set({ activeId: existing.id });
       return;
     }
-    const active = tabs.find((t) => t.id === activeId) ?? tabs[0]!;
-    if (active.path === path) return; // already showing this path — e.g. openTab's own navigate() just landed here
-    const nextTabs = tabs.map((t) => (t.id === active.id ? { ...t, path, title, icon } : t));
-    persist(tenantId, nextTabs, active.id);
-    set({ tabs: nextTabs, activeId: active.id });
+    const tab: TabInstance = { id: newTabId(), path, title, icon };
+    const nextTabs = [...tabs, tab];
+    persist(tenantId, nextTabs, tab.id);
+    set({ tabs: nextTabs, activeId: tab.id });
   },
 
   activateTab: (id) => {
