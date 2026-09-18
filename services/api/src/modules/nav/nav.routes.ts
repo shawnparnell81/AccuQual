@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
+import { validate } from "../../middleware/validate.js";
+import { navScopeSchema } from "./nav.validation.js";
 import { getKpiCounts } from "./nav.controller.js";
 import { listHidden, hideItem, showItem } from "./nav-preferences.controller.js";
 
@@ -10,5 +12,5 @@ navRouter.use(requireAuth, withTenantDb);
 navRouter.get("/kpi-counts", getKpiCounts);
 
 navRouter.get("/hidden", listHidden);
-navRouter.post("/hidden", hideItem);
-navRouter.delete("/hidden", showItem);
+navRouter.post("/hidden", validate(navScopeSchema), hideItem);
+navRouter.delete("/hidden", validate(navScopeSchema), showItem);
