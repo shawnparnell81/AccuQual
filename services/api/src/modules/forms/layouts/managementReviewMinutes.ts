@@ -7,6 +7,11 @@ import type { FormLayout } from "./types.js";
  * (Management System Performance Evaluation Record) — both are real,
  * kept as separate documents rather than merged. Modeled as a singleton,
  * same simplification as management_review and staff_meeting_minutes.
+ *
+ * Full-System Audit finding M10: intentional, current behavior, documented
+ * explicitly rather than left implicit. TODO (future versioning, not
+ * planned/implemented): see management_review.ts's own TODO — the same
+ * per-entityId seam would apply here.
  */
 export const managementReviewMinutesLayout: FormLayout = {
   formType: "management_review_minutes",

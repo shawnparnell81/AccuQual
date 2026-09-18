@@ -5,6 +5,11 @@ import type { FormLayout } from "./types.js";
  * Template.pdf" (Operational Staff & Cross-Functional Alignment Log).
  * Modeled as a singleton, same simplification as management_review and
  * management_review_minutes.
+ *
+ * Full-System Audit finding M10: intentional, current behavior, documented
+ * explicitly rather than left implicit. TODO (future versioning, not
+ * planned/implemented): see management_review.ts's own TODO — the same
+ * per-entityId seam would apply here.
  */
 export const staffMeetingMinutesLayout: FormLayout = {
   formType: "staff_meeting_minutes",

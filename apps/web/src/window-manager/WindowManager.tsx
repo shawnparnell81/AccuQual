@@ -8,8 +8,14 @@ import { FormWindowContent } from "../components/forms/FormWindowContent";
  * NCR/CAPA/etc. "Open Form" buttons). document/audit/ai/digitalTwin windows
  * render a placeholder: the existing Documents/Audits/AI/DigitalTwin pages
  * read their state from route params via `useParams`, so reusing them inside
- * a window (no route) needs those pages refactored to take props instead —
- * tracked as a follow-up, not done here.
+ * a window (no route) needs those pages refactored to take props instead.
+ *
+ * Full-System Audit finding M9: confirmed these 4 types are genuinely
+ * unreachable today, not just unstyled — nothing in the app ever calls
+ * openWindow() with one of them (see types/window.ts's own comment).
+ * TODO: refactor DocumentsPage/AuditDetailPage/AiInsightsPage/
+ * DigitalTwinPage to accept props instead of useParams, then give these 4
+ * window types real content — tracked as a known gap, not implemented here.
  */
 export function WindowManager({ win }: { win: WindowInstance }) {
   return (

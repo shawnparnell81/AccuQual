@@ -5,6 +5,15 @@ import type { FormLayout } from "./types";
  * (Management System Performance Evaluation Record). Modeled as a singleton
  * document (like the Production Logs) rather than a dated series of past
  * reviews — see ManagementSystemPage.tsx for the simplification note.
+ *
+ * Full-System Audit finding M10: this is intentional, current behavior,
+ * not a bug — documented here explicitly rather than left implicit.
+ * TODO (future versioning, not planned/implemented): if a real dated
+ * history of past reviews is ever wanted, this form_data row would need
+ * to become one row per review date instead of one shared row per tenant
+ * (form_data is keyed by (tenantId, formType, entityId) — see the
+ * backend's forms.ts schema comment — so a real per-review entityId is
+ * the natural seam). Kept in sync with services/api's copy of this file.
  */
 export const managementReviewLayout: FormLayout = {
   formType: "management_review",
