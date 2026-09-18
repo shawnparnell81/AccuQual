@@ -99,5 +99,41 @@ describe("Training module (real DB + real HTTP path)", () => {
     const res = await request(app).post(`/training/assignment/${assignment!.id}/complete`).set("Authorization", `Bearer ${qualityToken}`).send({ trainerName: "J. Smith" });
     expect(res.status).toBe(200);
     expect(res.body.completedAt).toBeTruthy();
+    // status is the actual field the "overdue" vs "completed" distinction
+    // reads from (dueAt/completedAt alone don't say which side of that line
+    // an assignment is on) — completeTrainingAssignment must flip it, not
+    // just stamp completedAt.
+    expect(res.body.status).toBe("completed");
+  });
+
+  // Full-System Audit finding H7 — everything above was already covered by
+  // the C2 RBAC fix; the real remaining gap was course update and the
+  // employee-history read path, neither of which had any coverage at all.
+  it("quality can update a course's title/description; engineering (read-only) cannot", async () => {
+    const blocked = await request(app).patch(`/training/${courseId}`).set("Authorization", `Bearer ${engineeringToken}`).send({ title: "Should be blocked" });
+    expect(blocked.status).toBe(403);
+
+    const res = await request(app).patch(`/training/${courseId}`).set("Authorization", `Bearer ${qualityToken}`).send({ title: "ISO 9001 Awareness (Rev B)", description: "Updated content" });
+    expect(res.status).toBe(200);
+    expect(res.body.title).toBe("ISO 9001 Awareness (Rev B)");
+    expect(res.body.description).toBe("Updated content");
+  });
+
+  it("a due date set at assignment time round-trips correctly through the employee history endpoint", async () => {
+    const [course] = await db.insert(trainingCourses).values({ tenantId, title: "Due-date fixture course" }).returning();
+    const dueAt = new Date(Date.UTC(2027, 0, 15));
+    const assign = await request(app).post(`/training/${course!.id}/assign`).set("Authorization", `Bearer ${qualityToken}`).send({ userIds: [traineeUserId], dueAt: dueAt.toISOString() });
+    expect(assign.status).toBe(201);
+    expect(new Date(assign.body[0].dueAt).getTime()).toBe(dueAt.getTime());
+
+    const history = await request(app).get(`/training/employee/${traineeUserId}/history`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(history.status).toBe(200);
+    const entry = history.body.find((h: { courseId: number }) => h.courseId === course!.id);
+    expect(entry).toBeTruthy();
+    expect(new Date(entry.dueAt).getTime()).toBe(dueAt.getTime());
+    expect(entry.status).toBe("assigned"); // not yet completed
+
+    await db.delete(trainingAssignments).where(eq(trainingAssignments.courseId, course!.id));
+    await db.delete(trainingCourses).where(eq(trainingCourses.id, course!.id));
   });
 });
