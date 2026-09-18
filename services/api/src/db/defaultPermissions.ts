@@ -270,4 +270,40 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
     material_management: "read",
     sales_and_marketing: "read",
   },
+  // Had NO ResourceKey at all before this — structurally excluded from the
+  // permission system, not just mis-wired (Full-System Audit finding C2).
+  // Quality owns training-compliance records in a QMS the same way it owns
+  // audits/calibration above; every other department gets read so an
+  // employee can at least see courses and their own assignment history
+  // (GET /training/employee/:userId/history).
+  training: {
+    quality: "edit",
+    engineering: "read",
+    production: "read",
+    customer_service: "read",
+    purchasing: "read",
+    material_management: "read",
+    sales_and_marketing: "read",
+  },
+  // Had NO ResourceKey at all before this either (Full-System Audit finding
+  // C3) — unlike training above, this one genuinely has no single owning
+  // department: qmsFormDefinitions.ts's own 35 form types span 7 different
+  // department folders (Quality, Engineering, Production, Purchasing,
+  // Material Management, Sales & Marketing, Shipping & Receiving). Every
+  // department gets edit — same "any department that can raise one of
+  // these gets the shared floor" reasoning purchase_requisitions/risk above
+  // already use for a module with no single owner, and zero-behavior-change
+  // from today (every employee already could create/edit any of them) so
+  // this doesn't newly lock anyone out of a form type they use today — it
+  // just makes the module real and tenant-configurable in Roles &
+  // Permissions instead of invisible to that system entirely.
+  qms_forms: {
+    quality: "edit",
+    engineering: "edit",
+    production: "edit",
+    customer_service: "edit",
+    purchasing: "edit",
+    material_management: "edit",
+    sales_and_marketing: "edit",
+  },
 };

@@ -6,11 +6,15 @@
 // on this engine at all). Tests two different formTypes to prove the engine
 // really is generic (not hardcoded to one shape), the row sub-resource CRUD,
 // rejection of an unknown formType or an unknown sectionKey, and full
-// delete cascading the rows. Deliberately ungated — a production-department
-// user proves there's truly no department gate, same as Document Control.
+// delete cascading the rows. Was completely ungated with no ResourceKey at
+// all until Full-System Audit finding C3 — every department now gets
+// "edit" by default (zero-behavior-change: a production-department user
+// still proves normal access works exactly as before), plus one test below
+// proving the new gate is a real, enforceable one by explicitly revoking a
+// department's access and confirming it's actually honored.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
 import { tenants } from "../../src/drizzle/schema/tenants.js";
@@ -43,7 +47,7 @@ describe("Generic QMS Simple Form engine (real DB + real HTTP path)", () => {
     tenantId = tenant!.id;
 
     await seedDefaultPermissions(tenantId);
-    productionToken = await makeUser("production"); // proves there's no department gate at all
+    productionToken = await makeUser("production"); // gets "edit" by default per the new qms_forms permission entry
   });
 
   afterAll(async () => {
@@ -73,7 +77,7 @@ describe("Generic QMS Simple Form engine (real DB + real HTTP path)", () => {
     expect(res.status).toBe(400);
   });
 
-  it("any authenticated user can create a real form — no department gate at all", async () => {
+  it("production (edit by default) can create a real form", async () => {
     const res = await request(app).post("/qms-forms").set("Authorization", `Bearer ${productionToken}`).send({ formType: "record_retention_log", formNo: "QF-004" });
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("draft");
@@ -160,5 +164,20 @@ describe("Generic QMS Simple Form engine (real DB + real HTTP path)", () => {
     const [row] = await db.select().from(auditTrail).where(eq(auditTrail.action, "delete"));
     expect(row).toBeTruthy();
     formId = 0; // already cleaned up — skip afterAll's own cleanup for this id
+  });
+
+  it("the new qms_forms gate is a real, enforceable one — explicitly revoking a department's access is honored", async () => {
+    const customerServiceToken = await makeUser("customer_service");
+    // Sanity check first: the default grant really does work before we revoke it.
+    const before = await request(app).get("/qms-forms/types").set("Authorization", `Bearer ${customerServiceToken}`);
+    expect(before.status).toBe(200);
+
+    await db
+      .update(departmentPermissions)
+      .set({ accessLevel: "none" })
+      .where(and(eq(departmentPermissions.tenantId, tenantId), eq(departmentPermissions.departmentName, "customer_service"), eq(departmentPermissions.moduleName, "qms_forms")));
+
+    const after = await request(app).post("/qms-forms").set("Authorization", `Bearer ${customerServiceToken}`).send({ formType: "record_retention_log" });
+    expect(after.status).toBe(403);
   });
 });

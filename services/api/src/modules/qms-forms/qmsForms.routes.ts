@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
+import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createQmsFormSchema, updateQmsFormSchema, createQmsFormRowSchema, updateQmsFormRowSchema } from "./qmsForms.validation.js";
 import {
@@ -16,11 +17,17 @@ import {
 } from "./qmsForms.controller.js";
 
 export const qmsFormsRouter = Router();
-// Deliberately not gated with requireDepartmentAccess — same convention as
-// Document Control/Document Change Request: any authenticated tenant user
-// may raise/edit one, since these 35 form types each belong to a different
-// department's own real work (see qmsFormDefinitions.ts's folderPath).
-qmsFormsRouter.use(requireAuth, withTenantDb);
+// Previously ungated with a comment claiming parity with Document Control —
+// that comment was stale: Document Control's own router was gated in an
+// earlier sprint specifically because "no RBAC gate at all" was a real bug,
+// not a convention (see documents.routes.ts's own comment). This had no
+// ResourceKey at all, structurally excluded from the permission system
+// (Full-System Audit finding C3). Every department gets edit by default —
+// see defaultPermissions.ts's own comment on why this module (unlike
+// Change/Training above) has no single owning department, and why "every
+// department edit" is zero-behavior-change from today rather than a new
+// restriction.
+qmsFormsRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("qms_forms"));
 
 // Fixed literal path before ":id"-shaped ones, same convention used throughout this app.
 qmsFormsRouter.get("/types", listQmsFormTypesHandler);

@@ -516,7 +516,10 @@ export const NAV_STRUCTURE: NavGroup[] = [
         label: "QMS Forms",
         path: "/qms-forms",
         icon: LibraryBig,
-        // Deliberately ungated, same as "documents"/"document_change_requests" above.
+        // Backend gate added (Full-System Audit finding C3) — every
+        // department gets edit by default, so this nav entry's own
+        // unconditional visibility (department: null, like Document
+        // Control above) still matches real access for everyone.
         access: {},
         kpi: false,
         priority: 3,

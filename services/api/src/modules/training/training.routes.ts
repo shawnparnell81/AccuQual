@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
+import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createCourseSchema, updateCourseSchema, assignSchema, completeAssignmentSchema } from "./training.validation.js";
 import {
@@ -20,7 +21,11 @@ import {
 } from "./training.controller.js";
 
 export const trainingRouter = Router();
-trainingRouter.use(requireAuth, withTenantDb);
+// Had no RBAC gate at all before this, and no ResourceKey existed to add
+// one — structurally excluded from the permission system (Full-System
+// Audit finding C2). Quality edit, everyone else read — see
+// defaultPermissions.ts's own comment on this module's entry.
+trainingRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("training"));
 
 // Same memoryStorage pattern as document-folders/calibration/documents.
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
