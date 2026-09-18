@@ -2,9 +2,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Building2, ChevronDown, Library, Lock, Menu, Search, Settings, X } from "lucide-react";
+import { Building2, ChevronDown, Grid2x2, Library, Lock, Menu, Search, Settings, X } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { useCurrentTenant, useCurrentUser } from "../../hooks/useAuth";
+import { HomeButton } from "./HomeButton";
 import { departmentScope, itemScope, useHiddenNavScopes } from "../../hooks/useNavPreferences";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { useDepartmentPermissionsGrid } from "../../hooks/useDepartmentPermissionsGrid";
@@ -251,6 +252,8 @@ export function TopNav() {
             or overlapping the search box when the window is too narrow for
             every department to fit on one row. */}
         <nav className="hidden md:flex flex-1 flex-wrap items-center gap-1 min-w-0">
+          <HomeButton />
+          <ModulesPlaceholderDropdown />
           <NavLink
             to={DASHBOARD_LEAF.path}
             end
@@ -457,6 +460,8 @@ export function TopNav() {
             </>
           ) : (
             <>
+              <HomeButton onNavigate={() => setMobileOpen(false)} />
+              <ModulesPlaceholderDropdown />
               <Link
                 to={DASHBOARD_LEAF.path}
                 onClick={() => setMobileOpen(false)}
@@ -587,6 +592,38 @@ export function TopNav() {
         </div>
       )}
     </header>
+  );
+}
+
+/**
+ * Placeholder only, by design — real module navigation already lives in
+ * the department dropdowns below (and the real per-department System/
+ * Document Library ones); this is intentionally inert (no items, no
+ * routing) rather than a second way to reach the same destinations.
+ */
+function ModulesPlaceholderDropdown() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={clsx(
+          "flex items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap",
+          open ? "bg-muted text-foreground font-medium" : "text-muted-foreground hover:bg-muted"
+        )}
+        aria-expanded={open}
+      >
+        <Grid2x2 size={18} />
+        <span>Modules</span>
+        <ChevronDown size={14} className={clsx("transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 z-30 mt-1 w-56 rounded-md border border-border bg-card p-3 shadow-lg">
+          <p className="text-xs text-muted-foreground">Module quick-links — coming soon.</p>
+        </div>
+      )}
+    </div>
   );
 }
 

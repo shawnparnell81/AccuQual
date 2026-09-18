@@ -103,6 +103,7 @@ import { AdminReceivingInventorySettingsPage } from "./routes/Admin/AdminReceivi
 import { AdminSystemHealthPage } from "./routes/Admin/AdminSystemHealthPage";
 import { AdminApiDocsPage } from "./routes/Admin/AdminApiDocsPage";
 import { AdminTenantSettingsPage } from "./routes/Admin/AdminTenantSettingsPage";
+import { HomePage } from "./routes/Home/HomePage";
 import { useCurrentUser, useAuthBootstrap } from "./hooks/useAuth";
 
 function HomeRoute() {
@@ -124,6 +125,7 @@ export function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomeRoute />} />
+          <Route path="/home" element={<HomePage />} />
           <Route path="/platform" element={<PlatformAdminPage />} />
 
           <Route path="/ncr" element={<NcrListPage />} />

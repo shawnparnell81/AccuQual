@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { Outlet, useLocation, Navigate } from "react-router-dom";
-import { TopNav } from "./TopNav";
-import { Header } from "./Header";
+import { NavigationShell } from "./NavigationShell";
 import { TabBar } from "./TabBar";
 import { WindowContainer } from "../../window-manager/WindowContainer";
 import { OpenWindowsTaskbar } from "../../window-manager/OpenWindowsTaskbar";
@@ -81,8 +80,7 @@ export function AppLayout() {
       {/* print:hidden — a printable page (e.g. QmsFormRecordPage's Print button) shows only
           <main>'s own content; the app chrome has no place on a printed QMS record. */}
       <div className="print:hidden">
-        <TopNav />
-        <Header />
+        <NavigationShell />
         <TabBar />
       </div>
       <main className="flex-1 overflow-y-auto p-6 print:overflow-visible print:p-0">
