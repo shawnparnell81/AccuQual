@@ -2,13 +2,15 @@ import { useEffect } from "react";
 import type { Block, FormLayout, RowBlock, TableBlock, TextareaBlock, YesNoBlock } from "./layouts/types";
 import { materializeRow, STATUS_COLORS } from "./formulas";
 
-// Colors matched to the reference templates (dark navy header bars, pale
-// blue-gray field boxes) — kept in sync with schema-pdf-renderer.ts's
-// constants so the on-screen form and the exported PDF look like the same
-// document, not two different ones.
+// NAVY (header bars) is matched to the reference templates and kept in sync
+// with schema-pdf-renderer.ts's own constant so the on-screen form and the
+// exported PDF look like the same document — dark navy + white text reads
+// fine against either theme, so unlike the label/border colors below it
+// doesn't need a theme-aware token. Label cells and borders use the app's
+// own `bg-muted`/`border-border`/`text-foreground` tokens instead of a
+// hardcoded hex: those used to be pale-blue-on-dark-text unconditionally,
+// which read as a jarring light patch once dark mode shipped.
 const NAVY = "#1d3a5c";
-const LABEL_BG = "#eef5fb";
-const BORDER = "#c9d8e7";
 
 interface GenericFormRendererProps {
   layout: FormLayout;
@@ -32,11 +34,11 @@ export function GenericFormRenderer({ layout, data, onChange, readOnly = false }
         {layout.title}
       </h2>
       {layout.sections.map((section) => (
-        <div key={section.number} className="overflow-hidden rounded-md border" style={{ borderColor: BORDER }}>
+        <div key={section.number} className="overflow-hidden rounded-md border border-border">
           <div className="px-3 py-1.5 text-xs font-bold text-white" style={{ backgroundColor: NAVY }}>
             {section.number}. {section.title}
           </div>
-          <div className="flex flex-col divide-y" style={{ borderColor: BORDER }}>
+          <div className="flex flex-col divide-y divide-border">
             {section.blocks.map((block, i) => (
               <BlockView key={i} block={block} data={data} onChange={onChange} readOnly={readOnly} />
             ))}
@@ -70,17 +72,17 @@ function BlockView({ block, data, onChange, readOnly }: BlockViewProps<Block>) {
 /** Read-only stand-in for an input/select/textarea — same text size/color as the real value, so the two panes line up. */
 function StaticValue({ value }: { value: unknown }) {
   const text = value === undefined || value === null || value === "" ? "" : String(value);
-  return <p className="min-h-[1.25em] whitespace-pre-wrap text-xs text-slate-800">{text || " "}</p>;
+  return <p className="min-h-[1.25em] whitespace-pre-wrap text-xs text-foreground">{text || " "}</p>;
 }
 
 function RowBlockView({ block, data, onChange, readOnly }: BlockViewProps<RowBlock>) {
   return (
     <div className="grid" style={{ gridTemplateColumns: `repeat(${block.fields.length}, minmax(0, 1fr))` }}>
       {block.fields.map((field) => (
-        <div key={field.name} className="grid grid-cols-[2fr_3fr] border-t first:border-t-0" style={{ borderColor: BORDER }}>
-          <div className="px-2 py-1.5" style={{ backgroundColor: LABEL_BG }}>
-            <p className="text-[11px] font-semibold text-slate-800">{field.label}</p>
-            {field.hint && <p className="text-[9px] italic text-slate-500">{field.hint}</p>}
+        <div key={field.name} className="grid grid-cols-[2fr_3fr] border-t border-border first:border-t-0">
+          <div className="bg-muted px-2 py-1.5">
+            <p className="text-[11px] font-semibold text-foreground">{field.label}</p>
+            {field.hint && <p className="text-[9px] italic text-muted-foreground">{field.hint}</p>}
           </div>
           <div className="px-2 py-1">
             {readOnly ? (
@@ -116,9 +118,9 @@ function RowBlockView({ block, data, onChange, readOnly }: BlockViewProps<RowBlo
 function TextareaBlockView({ block, data, onChange, readOnly }: BlockViewProps<TextareaBlock>) {
   return (
     <div>
-      <div className="px-2 py-1.5" style={{ backgroundColor: LABEL_BG }}>
-        <p className="text-[11px] font-semibold text-slate-800">{block.label}</p>
-        {block.hint && <p className="text-[9px] italic text-slate-500">{block.hint}</p>}
+      <div className="bg-muted px-2 py-1.5">
+        <p className="text-[11px] font-semibold text-foreground">{block.label}</p>
+        {block.hint && <p className="text-[9px] italic text-muted-foreground">{block.hint}</p>}
       </div>
       {readOnly ? (
         <div className="px-2 py-2">
@@ -139,12 +141,12 @@ function TextareaBlockView({ block, data, onChange, readOnly }: BlockViewProps<T
 function YesNoBlockView({ block, data, onChange, readOnly }: BlockViewProps<YesNoBlock>) {
   const value = (data[block.name] as string) ?? "";
   return (
-    <div className="flex items-center justify-between px-2 py-2" style={{ backgroundColor: LABEL_BG }}>
-      <p className="text-[11px] font-semibold text-slate-800">{block.label}</p>
+    <div className="flex items-center justify-between bg-muted px-2 py-2">
+      <p className="text-[11px] font-semibold text-foreground">{block.label}</p>
       <div className="flex items-center gap-3 text-xs">
         {(["yes", "no"] as const).map((opt) =>
           readOnly ? (
-            <span key={opt} className={value === opt ? "font-semibold text-slate-800" : "text-muted-foreground"}>
+            <span key={opt} className={value === opt ? "font-semibold text-foreground" : "text-muted-foreground"}>
               {value === opt ? "● " : "○ "}
               {opt.toUpperCase()}
             </span>
@@ -207,34 +209,34 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
         <thead>
           <tr>
             {block.fixedRowLabels && (
-              <th className="border-t px-2 py-1.5 text-left font-semibold text-slate-800" style={{ backgroundColor: LABEL_BG, borderColor: BORDER }}>
+              <th className="border-t border-border bg-muted px-2 py-1.5 text-left font-semibold text-foreground">
                 {block.labelColumnHeader ?? "Role"}
               </th>
             )}
             {block.columns.map((col) => (
-              <th key={col.key} className="border-t px-2 py-1.5 text-left font-semibold text-slate-800" style={{ backgroundColor: LABEL_BG, borderColor: BORDER }}>
+              <th key={col.key} className="border-t border-border bg-muted px-2 py-1.5 text-left font-semibold text-foreground">
                 {col.label}
               </th>
             ))}
-            {block.addableRows && !readOnly && <th className="border-t w-8" style={{ backgroundColor: LABEL_BG, borderColor: BORDER }} />}
+            {block.addableRows && !readOnly && <th className="w-8 border-t border-border bg-muted" />}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, rowIndex) => (
             <tr key={rowIndex}>
               {block.fixedRowLabels && (
-                <td className="border-t px-2 py-1.5 font-medium text-slate-800" style={{ backgroundColor: LABEL_BG, borderColor: BORDER }}>
+                <td className="border-t border-border bg-muted px-2 py-1.5 font-medium text-foreground">
                   {block.fixedRowLabels[rowIndex]}
                 </td>
               )}
               {block.columns.map((col) => (
-                <td key={col.key} className="border-t px-2 py-1.5 align-top" style={{ borderColor: BORDER }}>
+                <td key={col.key} className="border-t border-border px-2 py-1.5 align-top">
                   {col.kind === "checkboxGroup" ? (
                     <div className="flex flex-col gap-1">
                       {col.options?.map((opt) => {
                         const selected = (row[col.key] as Record<string, boolean> | undefined) ?? {};
                         return readOnly ? (
-                          <span key={opt} className={selected[opt] ? "font-semibold text-slate-800" : "text-muted-foreground"}>
+                          <span key={opt} className={selected[opt] ? "font-semibold text-foreground" : "text-muted-foreground"}>
                             {selected[opt] ? "☑ " : "☐ "}
                             {opt}
                           </span>
@@ -289,7 +291,7 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
                 </td>
               ))}
               {block.addableRows && !readOnly && (
-                <td className="border-t px-1 text-center" style={{ borderColor: BORDER }}>
+                <td className="border-t border-border px-1 text-center">
                   <button onClick={() => removeRow(rowIndex)} className="text-muted-foreground hover:text-destructive" aria-label="Remove row">
                     ×
                   </button>
@@ -300,7 +302,7 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
         </tbody>
       </table>
       {block.addableRows && !readOnly && (
-        <button onClick={addRow} className="mt-2 rounded-md border px-2 py-1 text-xs hover:bg-muted" style={{ borderColor: BORDER }}>
+        <button onClick={addRow} className="mt-2 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
           + Add row
         </button>
       )}
@@ -325,5 +327,5 @@ function ComputedCell({ value }: { value: unknown }) {
       </span>
     );
   }
-  return <span className="text-xs font-semibold text-slate-800">{label}</span>;
+  return <span className="text-xs font-semibold text-foreground">{label}</span>;
 }
