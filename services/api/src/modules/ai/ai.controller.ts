@@ -66,7 +66,18 @@ export const generateEightD = asyncHandler(async (req: Request, res: Response) =
   res.json({ ...suggestion, output });
 });
 
-/** Distinct from riskAnalysisPrompt (risk.ai.ts, the Risk Register's own 1-5x1-5 scorer) and the "v1 formula" (supplier.performance.ts's deterministic computeSupplierPerformance) — this is the free-text 0-100 AI scorer, still logged to ai_risk_scores rather than ai_suggestions since it predates that table and other real code already reads ai_risk_scores back. */
+/**
+ * Distinct from riskAnalysisPrompt (risk.ai.ts, the Risk Register's own 1-5x1-5 scorer) and the "v1 formula" (supplier.performance.ts's deterministic computeSupplierPerformance) — this is the free-text 0-100 AI scorer, still logged to ai_risk_scores rather than ai_suggestions since it predates that table and other real code already reads ai_risk_scores back.
+ *
+ * Full-System Audit finding L9 — flagging this explicitly so a future
+ * "finish unifying every AI endpoint onto ai_suggestions" pass doesn't
+ * change this one without checking callers first: apps/web's
+ * AiInsightsPage.tsx calls this route directly by URL ("/ai/risk-score",
+ * see its own comment near that call) and reads this handler's specific
+ * response shape (`details`/`output`/`score`, backed by ai_risk_scores).
+ * Moving this endpoint's storage or response shape without updating that
+ * page in the same change would silently break it.
+ */
 export const riskScore = asyncHandler(async (req: Request, res: Response) => {
   const { entityType, entityId, input } = req.body;
   const db = req.db! as TenantDb;
