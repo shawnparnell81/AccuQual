@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useCurrentUser } from "../../hooks/useAuth";
@@ -56,6 +57,8 @@ const ALL_SUPPLIER_TABS = new Set<TabKey>(["onboarding", "documents", "ppap", "c
  * staff (Quality/Purchasing/Engineering) get a supplier picker up top since
  * they may review any of them.
  */
+const TAB_KEYS = new Set<string>(TABS.map((t) => t.key));
+
 export function SupplierPortalHome() {
   const currentUser = useCurrentUser();
   const isSupplier = currentUser?.roleName === "supplier";
@@ -65,8 +68,19 @@ export function SupplierPortalHome() {
     queryFn: async () => (await apiClient.get("/suppliers")).data,
     enabled: !isSupplier,
   });
-  const [supplierId, setSupplierId] = useState<number | undefined>(undefined);
-  const [tab, setTab] = useState<TabKey>(isSupplier ? "rma_request" : "onboarding");
+  // Full-System Audit finding L1 — read an optional ?supplierId=&tab=
+  // pair from the URL so a "View Scorecard" link elsewhere (the Suppliers
+  // roster) can land directly on a pre-selected supplier's scorecard,
+  // without changing this page's own default behavior: no query params
+  // (the existing path, e.g. the nav link into /supplier-portal) still
+  // starts exactly as before — no supplier pre-selected, picker shown.
+  const [searchParams] = useSearchParams();
+  const initialSupplierId = !isSupplier ? Number(searchParams.get("supplierId")) || undefined : undefined;
+  const initialTabParam = searchParams.get("tab");
+  const initialTab: TabKey = (initialTabParam && TAB_KEYS.has(initialTabParam) ? initialTabParam : isSupplier ? "rma_request" : "onboarding") as TabKey;
+
+  const [supplierId, setSupplierId] = useState<number | undefined>(initialSupplierId);
+  const [tab, setTab] = useState<TabKey>(initialTab);
 
   const needsPicker = !isSupplier && !ALL_SUPPLIER_TABS.has(tab) && !supplierId;
 
