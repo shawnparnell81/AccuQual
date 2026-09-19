@@ -37,6 +37,7 @@ import { inventoryRouter } from "../modules/inventory/inventory.routes.js";
 import { erpRouter } from "../modules/erp/erp.routes.js";
 import { erpRequisitionsRouter } from "../modules/erp/erpRequisitions.routes.js";
 import { erpPresetsRouter } from "../modules/erp/erpPresets.routes.js";
+import { erpSyncErrorsRouter } from "../modules/erp/erpSyncErrors.routes.js";
 import { tenantRouter } from "../modules/tenant/tenant.routes.js";
 import { searchRouter } from "../modules/search/search.routes.js";
 import { rmaRouter } from "../modules/rma/rma.routes.js";
@@ -100,6 +101,9 @@ apiRouter.use("/erp/requisitions", erpRequisitionsRouter);
 // their own admin-only gate (see erpPresets.routes.ts's own comment), not
 // erpRouter's requireDepartmentAccess("erp").
 apiRouter.use("/erp", erpPresetsRouter);
+// Same precedent again — /erp/errors/* (ERP Sync Error Dashboard) is its
+// own admin-only gate, not erpRouter's requireDepartmentAccess("erp").
+apiRouter.use("/erp", erpSyncErrorsRouter);
 apiRouter.use("/erp", erpRouter);
 apiRouter.use("/tenant", tenantRouter);
 apiRouter.use("/search", searchRouter);

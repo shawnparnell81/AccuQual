@@ -114,6 +114,18 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   // to the generic "muted" bucket, underselling a real provider failure.
   malformed: "destructive",
   error: "destructive",
+
+  // ERP Sync Error Dashboard's errorType (erpMappingEngine.ts's
+  // categorizeError) — config-shaped issues a tenant admin can fix
+  // themselves (a bad mapping/validation rule) read as "warning", while
+  // triggerError/erpApiError/unexpectedError are real failures external to
+  // the tenant's own preset config, read as "destructive".
+  mappingError: "warning",
+  validationError: "warning",
+  transformError: "warning",
+  triggerError: "destructive",
+  erpApiError: "destructive",
+  unexpectedError: "destructive",
 };
 
 /** Exported so non-status UI (e.g. Calendar day cells) can color by bucket directly, without inventing a fake status string just to route through StatusBadge's value prop. */

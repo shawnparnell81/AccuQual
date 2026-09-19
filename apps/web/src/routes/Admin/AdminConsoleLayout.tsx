@@ -1,6 +1,6 @@
 import { NavLink, Outlet, Link } from "react-router-dom";
 import clsx from "clsx";
-import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, Plug, type LucideIcon } from "lucide-react";
+import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, Plug, AlertTriangle, type LucideIcon } from "lucide-react";
 
 interface ConsoleSection {
   key: string;
@@ -25,6 +25,7 @@ const SECTIONS: ConsoleSection[] = [
   // treatment as Workflows/Reporting Settings below: the field-mapping
   // editor genuinely needs the width.
   { key: "erp_presets", label: "ERP Presets", icon: Plug, externalPath: "/erp/presets", description: "Vendor connector presets: field mappings, transforms, and validation rules for the ERP sync engine" },
+  { key: "erp_errors", label: "ERP Sync Errors", icon: AlertTriangle, externalPath: "/erp/errors", description: "Mapping, validation, transform, trigger, and delivery failures from the ERP sync engine" },
   { key: "reporting", label: "Reporting Settings", icon: BarChart3, externalPath: "/reporting", description: "Scheduled reports and recipients" },
   { key: "system_health", label: "System Health", icon: HeartPulse, path: "system-health", description: "Cross-module diagnostics: AI, workflow, email, reporting, receiving, supplier portal, database" },
   { key: "api_docs", label: "API Reference", icon: FileCode2, path: "api-docs", description: "Interactive request/response docs generated from the app's own validation schemas" },

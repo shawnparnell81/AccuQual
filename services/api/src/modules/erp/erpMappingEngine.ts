@@ -3,6 +3,7 @@ import type { TenantDb } from "../../lib/tenantScope.js";
 import type { ErpConnectorPreset, ErpFieldMapping, ErpTransformRule, ErpTriggerRule, ErpValidationRule } from "../../drizzle/schema/erpPresets.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { erpPurchaseOrders } from "../../drizzle/schema/erp.js";
+import { erpSyncErrors, type ErpErrorType, type ErpSyncErrorPayloadSnapshot } from "../../drizzle/schema/erpSyncErrors.js";
 import { logger } from "../../utils/logger.js";
 
 // A tenant may manually trigger a sync at any time (see settings.erpSync.ts's
@@ -146,6 +147,56 @@ export function applyFieldMapping(record: Record<string, unknown>, fieldMappings
   return mapped;
 }
 
+export type ErpPipelineStage = "mapping" | "validation" | "transform" | "trigger" | "erpApi";
+
+/** Deterministic: which pipeline stage failed decides the stored errorType. A stage-less call (a truly uncaught exception, one recordSyncError's own callers couldn't attribute to a specific step) becomes "unexpectedError". */
+export function categorizeError(stage: ErpPipelineStage | undefined): ErpErrorType {
+  switch (stage) {
+    case "mapping":
+      return "mappingError";
+    case "validation":
+      return "validationError";
+    case "transform":
+      return "transformError";
+    case "trigger":
+      return "triggerError";
+    case "erpApi":
+      return "erpApiError";
+    default:
+      return "unexpectedError";
+  }
+}
+
+export interface MappingFieldError {
+  field: string;
+  stage: "mapping" | "transform";
+  message: string;
+}
+
+/**
+ * Same as applyFieldMapping, but never throws — a single mapping's own
+ * resolution or transform failing (an edge case: resolveSourceValue can't
+ * practically throw for any input, so in effect this is "a transform threw
+ * on unexpected data") is caught, categorized, and skipped (the target
+ * field is simply omitted) rather than aborting the whole record. Used by
+ * buildErpPayload; applyFieldMapping itself stays a plain throwing pure
+ * function for direct unit-testing and the frontend's own preview mirror.
+ */
+export function applyFieldMappingSafe(record: Record<string, unknown>, fieldMappings: ErpFieldMapping[]): { fields: Record<string, unknown>; errors: MappingFieldError[] } {
+  const mapped: Record<string, unknown> = {};
+  const errors: MappingFieldError[] = [];
+  for (const mapping of fieldMappings) {
+    try {
+      const rawValue = resolveSourceValue(record, mapping.source);
+      mapped[mapping.target] = mapping.transform ? applyTransform(rawValue, mapping.transform, record) : rawValue;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown mapping error";
+      errors.push({ field: mapping.target, stage: mapping.transform ? "transform" : "mapping", message });
+    }
+  }
+  return { fields: mapped, errors };
+}
+
 export interface InboundMappingResult {
   fields: Record<string, unknown>;
   /** Field mappings whose transform couldn't be reversed — the ERP value was passed through unchanged rather than guessed. Surfaced so a caller can decide whether that's acceptable for this field. */
@@ -231,6 +282,48 @@ async function loadPurchaseOrderRecords(db: TenantDb, tenantId: number): Promise
   return rows as unknown as Record<string, unknown>[];
 }
 
+export interface RecordSyncErrorInput {
+  tenantId: number;
+  module: string;
+  presetId?: number;
+  presetVersion?: number;
+  stage: ErpPipelineStage | undefined;
+  message: string;
+  details?: Record<string, unknown>;
+  payloadSnapshot?: ErpSyncErrorPayloadSnapshot;
+}
+
+/**
+ * Persists one ERP sync failure — closes the gap where buildErpPayload
+ * already computed real validation errors but never stored them anywhere.
+ * Never throws itself (a logging/storage failure must not take down the
+ * sync it's trying to report on); logs a structured summary only
+ * (errorId/module/errorType/message), never payloadSnapshot contents, same
+ * "no raw record content" convention every other logger.* call site in
+ * this app already follows.
+ */
+export async function recordSyncError(db: TenantDb, input: RecordSyncErrorInput): Promise<void> {
+  const errorType = categorizeError(input.stage);
+  try {
+    const [row] = await db
+      .insert(erpSyncErrors)
+      .values({
+        tenantId: input.tenantId,
+        module: input.module,
+        presetId: input.presetId,
+        presetVersion: input.presetVersion,
+        errorType,
+        message: input.message,
+        details: input.details ?? {},
+        payloadSnapshot: input.payloadSnapshot ?? null,
+      })
+      .returning({ id: erpSyncErrors.id });
+    logger.error("ERP sync error recorded", { errorId: row?.id, tenantId: input.tenantId, module: input.module, errorType, message: input.message });
+  } catch (err) {
+    logger.error("Failed to record an ERP sync error (the underlying sync failure is still real)", { tenantId: input.tenantId, module: input.module, errorType, cause: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 /**
  * Wired to real per-record data for "suppliers" and "purchaseOrders" only —
  * the two ERP-native modules a vendor system natively has fields for. Every
@@ -238,6 +331,11 @@ async function loadPurchaseOrderRecords(db: TenantDb, tenantId: number): Promise
  * deferred: this returns null with a logged reason rather than silently
  * producing an empty/misleading payload, so a tenant enabling one of those
  * modules on a sync gets an honest signal instead of a false "synced".
+ *
+ * Every validation failure and every per-record mapping/transform exception
+ * is both returned in-memory (as before, for the outbound webhook payload's
+ * own informational `errors` field) AND persisted via recordSyncError — one
+ * bad record is skipped, never aborts the whole module's mapping run.
  */
 export async function buildErpPayload(db: TenantDb, tenantId: number, module: string, preset: ErpConnectorPreset): Promise<ErpPayloadResult | null> {
   let sourceRecords: Record<string, unknown>[];
@@ -253,12 +351,41 @@ export async function buildErpPayload(db: TenantDb, tenantId: number, module: st
   const records: MappedRecord[] = [];
   const errors: ValidationError[] = [];
   for (const record of sourceRecords) {
+    const sourceId = record.id as number;
     const validationErrors = applyValidation(record, preset.mappingConfig.validationRules);
     if (validationErrors.length > 0) {
-      for (const err of validationErrors) errors.push({ sourceId: record.id as number, ...err });
+      for (const err of validationErrors) errors.push({ sourceId, ...err });
+      await recordSyncError(db, {
+        tenantId,
+        module,
+        presetId: preset.id,
+        presetVersion: preset.version,
+        stage: "validation",
+        message: `Record ${sourceId} failed validation`,
+        details: { sourceId, ruleCount: validationErrors.length },
+        payloadSnapshot: { sourceId, failedFields: validationErrors.map((e) => ({ field: e.field, value: resolveSourceValue(record, e.field), reason: e.message })) },
+      });
       continue;
     }
-    records.push({ sourceId: record.id as number, fields: applyFieldMapping(record, preset.mappingConfig.fieldMappings) });
+
+    const { fields, errors: mappingErrors } = applyFieldMappingSafe(record, preset.mappingConfig.fieldMappings);
+    if (mappingErrors.length > 0) {
+      await recordSyncError(db, {
+        tenantId,
+        module,
+        presetId: preset.id,
+        presetVersion: preset.version,
+        stage: mappingErrors[0]!.stage,
+        message: `Record ${sourceId} failed field mapping`,
+        details: { sourceId, fields: mappingErrors.map((e) => e.field) },
+        payloadSnapshot: { sourceId, failedFields: mappingErrors.map((e) => ({ field: e.field, value: undefined, reason: e.message })) },
+      });
+      // Partial mapping is still delivered — a mapping/transform failure on
+      // one field shouldn't discard every OTHER field this record mapped
+      // successfully, unlike a validation failure (which means the record
+      // itself is invalid, not just one field's translation).
+    }
+    records.push({ sourceId, fields });
   }
   // Structured, multi-tenant-safe summary — counts and preset identity only,
   // never field values (a mapped record can carry a customer/vendor name,

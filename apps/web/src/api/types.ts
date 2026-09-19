@@ -1215,6 +1215,48 @@ export interface ErpConnectorPreset {
   updatedAt: string | null;
 }
 
+export type ErpErrorType = "mappingError" | "validationError" | "transformError" | "triggerError" | "erpApiError" | "unexpectedError";
+
+export interface ErpSyncErrorFailedField {
+  field: string;
+  value: unknown;
+  reason: string;
+}
+
+export interface ErpSyncError {
+  id: number;
+  tenantId: number;
+  module: string;
+  presetId: number | null;
+  presetVersion: number | null;
+  direction: string;
+  errorType: ErpErrorType;
+  message: string;
+  details: Record<string, unknown> | null;
+  payloadSnapshot: { sourceId: number; failedFields: ErpSyncErrorFailedField[] } | null;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolvedBy: number | null;
+}
+
+export interface ErpSyncErrorsListFilters {
+  module?: string;
+  errorType?: ErpErrorType;
+  presetVersion?: number;
+  resolved?: boolean;
+  since?: string;
+  until?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ErpSyncErrorsListResult {
+  rows: ErpSyncError[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export type SalesAccountStatus = "prospect" | "active" | "dormant";
 export type SalesQuoteStatus = "draft" | "submitted" | "accepted" | "rejected" | "archived";
 export type SalesContractStatus = "draft" | "active" | "expired" | "archived";

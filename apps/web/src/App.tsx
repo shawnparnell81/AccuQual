@@ -85,6 +85,7 @@ import { RmaLogDetailPage } from "./routes/RmaLog/RmaLogDetailPage";
 import { ErpRequisitionsPage } from "./routes/Erp/ErpRequisitionsPage";
 import { ErpRequisitionDetailPage } from "./routes/Erp/ErpRequisitionDetailPage";
 import { ErpPresetsListPage } from "./routes/Erp/ErpPresetsListPage";
+import { ErpSyncErrorsPage } from "./routes/Erp/ErpSyncErrorsPage";
 import { ErpPresetEditorPage } from "./routes/Erp/ErpPresetEditorPage";
 import { WorkOrderListPage } from "./routes/WorkOrders/WorkOrderListPage";
 import { WorkOrderDetailPage } from "./routes/WorkOrders/WorkOrderDetailPage";
@@ -198,6 +199,7 @@ export function App() {
           <Route path="/erp/requisitions/:id" element={<ErpRequisitionDetailPage />} />
           <Route path="/erp/presets" element={<ErpPresetsListPage />} />
           <Route path="/erp/presets/:id" element={<ErpPresetEditorPage />} />
+          <Route path="/erp/errors" element={<ErpSyncErrorsPage />} />
           <Route path="/erp/:id" element={<ErpPurchaseOrderDetailPage />} />
           <Route path="/rma" element={<RmaListPage />} />
           <Route path="/rma/:id" element={<RmaDetailPage />} />
