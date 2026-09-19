@@ -1,37 +1,102 @@
 import type { Request, Response } from "express";
 import { and, eq } from "drizzle-orm";
-import { discrepancyInvestigations } from "../../drizzle/schema/quality.js";
+import { discrepancyInvestigations, type DiscrepancyInvestigation } from "../../drizzle/schema/quality.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
+import { assertTenantUser } from "../../utils/assertTenantUser.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
+import { syncDiRecordToForm } from "./quality.formSync.js";
 
-export const baseHandlers = crudFactory(discrepancyInvestigations, { entityName: "Discrepancy investigation", idColumn: "id" });
+// Creating a discrepancy also seeds its investigation form (title/severity/
+// description/status), so the form isn't blank when someone opens it — see
+// quality.formSync.ts.
+export const baseHandlers = crudFactory(discrepancyInvestigations, {
+  entityName: "Discrepancy investigation",
+  idColumn: "id",
+  afterCreate: async (created, req) => {
+    await syncDiRecordToForm(req.db!, req.tenantId!, created as unknown as DiscrepancyInvestigation, req.user?.id);
+  },
+});
 
-export const closeHandler = asyncHandler(async (req: Request, res: Response) => {
-  const id = Number(req.params.id);
-  const tenantId = req.tenantId!;
-  const [current] = await req.db!.select().from(discrepancyInvestigations).where(and(eq(discrepancyInvestigations.id, id), eq(discrepancyInvestigations.tenantId, tenantId)));
-  if (!current) throw AppError.notFound("Discrepancy investigation");
-  if (current.status !== "disposed") throw AppError.badRequest(`Cannot close a discrepancy investigation from status "${current.status}" — must be "disposed"`);
+async function loadOwned(req: Request): Promise<DiscrepancyInvestigation> {
+  const [row] = await req
+    .db!.select()
+    .from(discrepancyInvestigations)
+    .where(and(eq(discrepancyInvestigations.id, Number(req.params.id)), eq(discrepancyInvestigations.tenantId, req.tenantId!)));
+  if (!row) throw AppError.notFound("Discrepancy investigation");
+  return row;
+}
+
+/** Edits to the descriptive fields. Status is not editable here (see quality.validation.ts), and a closed investigation is immutable. */
+export const updateHandler = asyncHandler(async (req: Request, res: Response) => {
+  const current = await loadOwned(req);
+  if (current.status === "closed") throw AppError.badRequest("A closed discrepancy investigation cannot be edited.");
+  if (req.body.assignedTo) await assertTenantUser(req.db!, req.tenantId!, req.body.assignedTo);
 
   const [updated] = await req
     .db!.update(discrepancyInvestigations)
-    .set({ status: "closed", updatedAt: new Date() })
-    .where(eq(discrepancyInvestigations.id, id))
+    .set({ ...req.body, updatedAt: new Date() })
+    .where(and(eq(discrepancyInvestigations.id, current.id), eq(discrepancyInvestigations.tenantId, req.tenantId!)))
     .returning();
-  // "Discrepancy investigation" — must match crudFactory's entityName above
-  // exactly; see the QA sweep review on why a casing mismatch here made
-  // this history invisible.
+  await recordAuditTrail(req.db!, {
+    tenantId: req.tenantId!,
+    entityType: "Discrepancy investigation",
+    entityId: current.id,
+    action: "update",
+    changes: req.body,
+    performedBy: req.user?.id,
+  });
+  await syncDiRecordToForm(req.db!, req.tenantId!, updated!, req.user?.id);
+  res.json(updated);
+});
+
+/**
+ * One guarded hop of open -> investigating -> disposed -> closed. The audit
+ * entityType "Discrepancy investigation" must match crudFactory's entityName
+ * above exactly (see the QA sweep review on why a casing mismatch made this
+ * history invisible).
+ */
+async function transition(req: Request, res: Response, opts: { from: string; to: string; event: string; extra?: (current: DiscrepancyInvestigation) => Partial<typeof discrepancyInvestigations.$inferInsert> }) {
+  const tenantId = req.tenantId!;
+  const current = await loadOwned(req);
+  if (current.status !== opts.from) {
+    throw AppError.badRequest(`Cannot ${opts.event} a discrepancy investigation from status "${current.status}" — must be "${opts.from}"`);
+  }
+
+  const [updated] = await req
+    .db!.update(discrepancyInvestigations)
+    .set({ ...(opts.extra?.(current) ?? {}), status: opts.to, updatedAt: new Date() })
+    .where(and(eq(discrepancyInvestigations.id, current.id), eq(discrepancyInvestigations.tenantId, tenantId)))
+    .returning();
   await recordAuditTrail(req.db!, {
     tenantId,
     entityType: "Discrepancy investigation",
-    entityId: id,
+    entityId: current.id,
     action: "status_change",
-    changes: { action: "close" },
+    changes: { action: opts.event, from: opts.from, to: opts.to },
     performedBy: req.user?.id,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "di", event: "close", entityId: id });
+  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "di", event: opts.event, entityId: current.id });
+  await syncDiRecordToForm(req.db!, tenantId, updated!, req.user?.id);
   res.json(updated);
+}
+
+export const investigateHandler = asyncHandler(async (req: Request, res: Response) => {
+  await transition(req, res, { from: "open", to: "investigating", event: "investigate" });
+});
+
+/** Disposing needs a disposition — supplied in the request or already set on the record. */
+export const disposeHandler = asyncHandler(async (req: Request, res: Response) => {
+  const current = await loadOwned(req);
+  const disposition = (req.body.disposition as string | undefined) ?? current.disposition;
+  if (current.status === "investigating" && !disposition) {
+    throw AppError.badRequest("Select a disposition before marking this investigation disposed.");
+  }
+  await transition(req, res, { from: "investigating", to: "disposed", event: "dispose", extra: () => ({ disposition }) });
+});
+
+export const closeHandler = asyncHandler(async (req: Request, res: Response) => {
+  await transition(req, res, { from: "disposed", to: "closed", event: "close" });
 });

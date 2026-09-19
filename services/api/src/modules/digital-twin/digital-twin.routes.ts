@@ -4,7 +4,7 @@ import { requireRole } from "../../middleware/rbac.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
 import { validate } from "../../middleware/validate.js";
 import { createModelSchema, updateModelSchema, simulateSchema, iotIngestSchema, registerDeviceSchema, updateDeviceSchema } from "./digital-twin.validation.js";
-import { baseHandlers, simulateDigitalTwin, getSimulation, ingestIot, listDevicesHandler, registerDeviceHandler, updateDeviceHandler, deleteDeviceHandler } from "./digital-twin.controller.js";
+import { baseHandlers, simulateDigitalTwin, getSimulation, ingestIot, listDevicesHandler, registerDeviceHandler, updateDeviceHandler, deleteDeviceHandler, listAlertsHandler, rotateDeviceKeyHandler, revokeDeviceKeyHandler } from "./digital-twin.controller.js";
 
 export const digitalTwinRouter = Router();
 digitalTwinRouter.use(requireAuth, withTenantDb);
@@ -30,5 +30,11 @@ digitalTwinRouter.get("/devices", listDevicesHandler);
 digitalTwinRouter.post("/devices", requireRole("admin"), validate(registerDeviceSchema), registerDeviceHandler);
 digitalTwinRouter.patch("/devices/:id", requireRole("admin"), validate(updateDeviceSchema), updateDeviceHandler);
 digitalTwinRouter.delete("/devices/:id", requireRole("admin"), deleteDeviceHandler);
+
+digitalTwinRouter.post("/devices/:id/api-key", requireRole("admin"), rotateDeviceKeyHandler);
+digitalTwinRouter.delete("/devices/:id/api-key", requireRole("admin"), revokeDeviceKeyHandler);
+
+// Drift alerts the worker recorded — viewing stays open to the whole tenant, like every other GET here.
+digitalTwinRouter.get("/alerts", listAlertsHandler);
 
 digitalTwinRouter.post("/iot-ingest", validate(iotIngestSchema), ingestIot);

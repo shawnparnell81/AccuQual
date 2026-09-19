@@ -85,7 +85,7 @@ function RowBlockView({ block, data, onChange, readOnly }: BlockViewProps<RowBlo
             {field.hint && <p className="text-[9px] italic text-muted-foreground">{field.hint}</p>}
           </div>
           <div className="px-2 py-1">
-            {readOnly ? (
+            {readOnly || field.readOnly ? (
               <StaticValue value={data[field.name]} />
             ) : field.kind === "select" ? (
               <select

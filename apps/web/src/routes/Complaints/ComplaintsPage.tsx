@@ -27,6 +27,7 @@ export function ComplaintsPage() {
       ]}
       createFields={[
         { name: "customerName", label: "Customer name" },
+        { name: "productAffected", label: "Product affected" },
         { name: "description", label: "Description" },
         { name: "severity", label: "Severity", type: "select", options: ["low", "medium", "high", "critical"] },
       ]}

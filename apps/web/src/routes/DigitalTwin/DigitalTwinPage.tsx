@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
-import type { DigitalTwinModel } from "../../api/types";
+import type { DigitalTwinModel, IotDriftAlert } from "../../api/types";
+import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextField } from "../../components/forms/Field";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
@@ -24,13 +25,72 @@ interface SimulationRun {
 }
 
 /**
- * Digital Twin: process flow diagram, machine nodes, risk heatmap,
- * simulation controls, time slider for historical playback (IoT stream).
+ * Recent drift alerts from the digital-twin worker — real IoT readings (sent
+ * with a device key or a user token) that jumped to over 3x, or fell under a
+ * third of, a channel's running baseline. Refreshes on its own so an alert
+ * shows up without reloading the page.
+ */
+function DriftAlertsPanel() {
+  const { data: alerts = [], isLoading } = useQuery<IotDriftAlert[]>({
+    queryKey: ["digital-twin/alerts"],
+    queryFn: async () => (await apiClient.get("/digital-twin/alerts", { params: { limit: 25 } })).data,
+    refetchInterval: 30_000,
+  });
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-4">
+      <h2 className="mb-2 text-sm font-medium">Live Drift Alerts</h2>
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : alerts.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No drift detected. Alerts appear here when a device's readings jump well above or below their normal level.</p>
+      ) : (
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs text-muted-foreground">
+            <tr>
+              <th className="pb-2">When</th>
+              <th className="pb-2">Device</th>
+              <th className="pb-2">Channel</th>
+              <th className="pb-2">Reading</th>
+              <th className="pb-2">Normal</th>
+              <th className="pb-2">Severity</th>
+            </tr>
+          </thead>
+          <tbody>
+            {alerts.map((a) => (
+              <tr key={a.id} className="border-t border-border">
+                <td className="py-1.5 text-muted-foreground">{new Date(a.createdAt).toLocaleString()}</td>
+                <td className="py-1.5">
+                  {a.deviceName ?? a.deviceId ?? "—"}
+                  {a.deviceName && a.deviceId && <span className="ml-1 text-xs text-muted-foreground">({a.deviceId})</span>}
+                </td>
+                <td className="py-1.5">{a.channel ?? "—"}</td>
+                <td className="py-1.5 tabular-nums">
+                  {a.reading ?? "—"} <span className="text-xs text-muted-foreground">{a.direction === "up" ? "▲ high" : a.direction === "down" ? "▼ low" : ""}</span>
+                </td>
+                <td className="py-1.5 tabular-nums text-muted-foreground">{a.baseline === null ? "—" : Number(a.baseline.toFixed(2))}</td>
+                <td className="py-1.5">
+                  <StatusBadge value={a.score !== null && a.score >= 85 ? "critical" : a.score !== null && a.score >= 65 ? "high" : "medium"} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Digital Twin: process flow diagram, machine nodes, simulation controls,
+ * a per-node risk heatmap from the simulation, and live IoT drift alerts.
  */
 export function DigitalTwinPage() {
   const { data: models = [] } = twinHooks.useList();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [demandPerHour, setDemandPerHour] = useState(100);
+  const [iterations, setIterations] = useState(1000);
+  const [driftFactor, setDriftFactor] = useState(1);
   const selectedModel = models.find((m) => m.id === selectedId);
 
   const simulate = useMutation({
@@ -38,7 +98,7 @@ export function DigitalTwinPage() {
       (
         await apiClient.post<SimulationRun>("/digital-twin/simulate", {
           modelId: selectedId,
-          parameters: { demandPerHour },
+          parameters: { demandPerHour, iterations, driftFactor },
         })
       ).data,
   });
@@ -69,7 +129,7 @@ export function DigitalTwinPage() {
               </button>
             </li>
           ))}
-          {models.length === 0 && <li className="text-muted-foreground">No models yet — create one via the API/DB seed.</li>}
+          {models.length === 0 && <li className="text-muted-foreground">No models yet — an admin can create one under Admin → Digital Twin Setup.</li>}
         </ul>
 
         <div className="mt-4 flex flex-col gap-2">
@@ -78,6 +138,23 @@ export function DigitalTwinPage() {
             type="number"
             value={demandPerHour}
             onChange={(e) => setDemandPerHour(Number(e.target.value))}
+          />
+          <TextField
+            label="Simulated units"
+            type="number"
+            min={100}
+            max={100000}
+            step={100}
+            value={iterations}
+            onChange={(e) => setIterations(Math.max(100, Math.min(100000, Number(e.target.value) || 1000)))}
+          />
+          <TextField
+            label="Process drift factor (1 = normal)"
+            type="number"
+            min={0.1}
+            step={0.1}
+            value={driftFactor}
+            onChange={(e) => setDriftFactor(Math.max(0.1, Number(e.target.value) || 1))}
           />
           <button
             onClick={() => simulate.mutate()}
@@ -161,6 +238,8 @@ export function DigitalTwinPage() {
             </div>
           )}
         </div>
+
+        <DriftAlertsPanel />
       </div>
     </div>
   );

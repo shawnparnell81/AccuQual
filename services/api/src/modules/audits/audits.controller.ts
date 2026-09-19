@@ -6,6 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { syncDiRecordToForm } from "../quality/quality.formSync.js";
 import { publishEvent, WORKFLOW_STREAM, AI_STREAM } from "../../lib/eventBus.js";
 
 export const baseHandlers = crudFactory(audits, { entityName: "Audit", idColumn: "id" });
@@ -78,6 +79,9 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
       changes: { autoCreated: true, sourceAuditId: audit.id, sourceAuditItemId: item.id, severity: item.severity },
       performedBy: req.user?.id,
     });
+    // Seed the investigation form (title/severity/description/source) so it
+    // opens pre-filled instead of blank.
+    await syncDiRecordToForm(req.db!, req.tenantId!, discrepancy, req.user?.id);
   }
 
   res.status(201).json({ ...item, discrepancyInvestigation: discrepancy });
