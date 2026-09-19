@@ -5,6 +5,8 @@ import { tenants } from "../../drizzle/schema/tenants.js";
 import { decryptSecret } from "../tenant/crypto.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { logger } from "../../utils/logger.js";
+import { assertSafeWebhookUrl } from "../../utils/ssrfGuard.js";
+import { env } from "../../config/env.js";
 import { loadTenantForSettings, getErpSyncSettings, type ErpSyncSettings } from "./settings.service.js";
 
 const MAX_HISTORY_ENTRIES = 20;
@@ -54,7 +56,25 @@ export async function triggerErpSync(db: TenantDb, tenantId: number, performedBy
 
     let lastError: string | undefined;
     let delivered = false;
-    for (attempts = 1; attempts <= maxRetries + 1 && !delivered; attempts++) {
+    // Security-audit finding (S2, high): a tenant-configured webhookUrl was
+    // fetched server-side with no validation against internal/private
+    // targets (e.g. the 169.254.169.254 cloud metadata endpoint) — checked
+    // once before the retry loop, same "reject the config" treatment as an
+    // unreachable/erroring webhook, so it still flows through the normal
+    // history/audit-trail recording below rather than a divergent early exit.
+    // Production-only, same "relax outside production" convention as this
+    // app's cookie secure/sameSite flags and DATABASE_SSL_CA requirement
+    // (config/env.ts) — settings-module.test.ts's own webhook-delivery test
+    // deliberately posts to a real local 127.0.0.1 test server over http.
+    if (env.NODE_ENV === "production") {
+      try {
+        await assertSafeWebhookUrl(config.webhookUrl);
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : "Webhook URL failed validation";
+        logger.error("ERP sync webhook rejected — unsafe target", { tenantId, message: lastError });
+      }
+    }
+    for (attempts = 1; attempts <= maxRetries + 1 && !delivered && !lastError; attempts++) {
       try {
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (config.webhookSecretEncrypted) {
