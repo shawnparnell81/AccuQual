@@ -105,21 +105,32 @@ async function callAnthropic(prompt: string, options: LlmCallOptions): Promise<L
     return { text: stubResponse(prompt), usage: null, model, isStub: true };
   }
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: options.maxTokens ?? 1024,
-      temperature: options.temperature ?? 0.3,
-      system: options.system,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
+  // Newer Claude models reject `temperature` outright (400 "`temperature` is
+  // deprecated for this model"), so it's only sent when a caller explicitly
+  // sets one (a tenant's BYOK config can) — never as a hidden default — and
+  // dropped and retried once if the model refuses it anyway.
+  const send = (withTemperature: boolean) =>
+    fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: options.maxTokens ?? 1024,
+        ...(withTemperature ? { temperature: options.temperature } : {}),
+        system: options.system,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+  const sendsTemperature = options.temperature !== undefined && options.temperature !== null;
+  let response = await send(sendsTemperature);
+  if (response.status === 400 && sendsTemperature && (await response.clone().text()).includes("temperature")) {
+    response = await send(false);
+  }
 
   if (!response.ok) {
     throw Object.assign(new Error(`Anthropic API error: ${response.status}`), { status: response.status });
