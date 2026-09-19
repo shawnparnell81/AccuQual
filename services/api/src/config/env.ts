@@ -30,7 +30,7 @@ const envSchema = z.object({
   LLM_PROVIDER: z.enum(["anthropic", "openai"]).default("anthropic"),
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
-  LLM_MODEL: z.string().default("claude-sonnet-5"),
+  LLM_MODEL: z.string().default("claude-haiku-4-5-20251001"),
 
   // AES-256-GCM key for encrypting a tenant's own stored AI provider API key
   // at rest (see modules/tenant/crypto.ts) — real encryption, not a fictional

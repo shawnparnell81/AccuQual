@@ -13,7 +13,8 @@ const PRICING_PER_MILLION_TOKENS: Record<string, { input: number; output: number
   // Anthropic
   "claude-sonnet-5": { input: 3, output: 15 },
   "claude-opus-5": { input: 15, output: 75 },
-  "claude-haiku-4-5-20251001": { input: 0.8, output: 4 },
+  "claude-haiku-4-5-20251001": { input: 1, output: 5 },
+  "claude-haiku-4-5": { input: 1, output: 5 },
   "claude-3-5-sonnet-20241022": { input: 3, output: 15 },
   "claude-3-haiku-20240307": { input: 0.25, output: 1.25 },
   // OpenAI
