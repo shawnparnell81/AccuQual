@@ -4,7 +4,7 @@ import { requireRole } from "../../middleware/rbac.js";
 import { requireAnyDepartment } from "../../middleware/departmentAccess.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
 import { validate } from "../../middleware/validate.js";
-import { updateFeasibilitySettingsSchema, updateInventorySettingsSchema, updateErpSyncSettingsSchema, updateSupplierRiskSettingsSchema, updateReceivingSettingsSchema } from "./settings.validation.js";
+import { updateFeasibilitySettingsSchema, updateInventorySettingsSchema, updateErpSyncSettingsSchema, triggerErpSyncSchema, updateSupplierRiskSettingsSchema, updateReceivingSettingsSchema } from "./settings.validation.js";
 import {
   getFeasibilitySettingsHandler,
   updateFeasibilitySettingsHandler,
@@ -42,7 +42,7 @@ settingsRouter.post("/inventory", requireAnyDepartment("production", "purchasing
 
 settingsRouter.get("/erp-sync", requireRole("admin"), getErpSyncSettingsHandler);
 settingsRouter.post("/erp-sync", requireRole("admin"), validate(updateErpSyncSettingsSchema), updateErpSyncSettingsHandler);
-settingsRouter.post("/erp-sync/trigger", requireRole("admin"), triggerErpSyncHandler);
+settingsRouter.post("/erp-sync/trigger", requireRole("admin"), validate(triggerErpSyncSchema), triggerErpSyncHandler);
 
 // Phase 7 — Supplier Risk formula weights. PATCH-equivalent restricted to
 // Quality (the "suppliers" ResourceKey's own edit-level department, same as

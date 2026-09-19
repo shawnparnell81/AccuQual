@@ -1151,6 +1151,70 @@ export interface ErpSyncTriggerResult {
   history: ErpSyncStatusHistoryEntry[];
 }
 
+export type ErpPresetVendor = "sap" | "oracle" | "netsuite" | "epicor" | "dynamics" | "custom";
+export type ErpPresetModule = "inventory" | "suppliers" | "purchaseOrders" | "workOrders" | "ncr" | "capa" | "training" | "audits" | "documentControl";
+
+export type ErpTransformRule =
+  | { kind: "dateFormat"; from: string; to: string }
+  | { kind: "statusMap"; map: Record<string, string>; default?: string }
+  | { kind: "codeMap"; map: Record<string, string>; default?: string }
+  | { kind: "stringCase"; case: "upper" | "lower" | "title" }
+  | { kind: "staticValue"; value: string }
+  | { kind: "template"; template: string }
+  | { kind: "numeric"; op: "round" | "multiply" | "divide" | "add"; value?: number }
+  | { kind: "boolean"; op: "invert" | "toYesNo" | "toTrueFalseString" };
+
+export interface ErpFieldMapping {
+  source: string;
+  target: string;
+  direction?: "push" | "pull" | "both";
+  transform?: ErpTransformRule;
+  required?: boolean;
+}
+
+export interface ErpTriggerRule {
+  on: "create" | "update" | "statusChange" | "workflowEvent";
+  statusValues?: string[];
+}
+
+export interface ErpValidationRule {
+  field: string;
+  required?: boolean;
+  type?: "string" | "number" | "date" | "boolean";
+  allowedValues?: string[];
+  pattern?: string;
+  equalsField?: string;
+}
+
+export interface ErpPresetMappingConfig {
+  fieldMappings: ErpFieldMapping[];
+  triggers: ErpTriggerRule[];
+  validationRules: ErpValidationRule[];
+}
+
+export interface ErpPresetVersionEntry {
+  version: number;
+  mappingConfig: ErpPresetMappingConfig;
+  updatedAt: string;
+  updatedBy: number | null;
+}
+
+export interface ErpConnectorPreset {
+  id: number;
+  tenantId: number | null;
+  vendor: ErpPresetVendor;
+  module: ErpPresetModule;
+  name: string;
+  description: string | null;
+  direction: "push" | "pull" | "bidirectional";
+  mappingConfig: ErpPresetMappingConfig;
+  version: number;
+  versionHistory: ErpPresetVersionEntry[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
 export type SalesAccountStatus = "prospect" | "active" | "dormant";
 export type SalesQuoteStatus = "draft" | "submitted" | "accepted" | "rejected" | "archived";
 export type SalesContractStatus = "draft" | "active" | "expired" | "archived";

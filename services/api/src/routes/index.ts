@@ -36,6 +36,7 @@ import { notificationsRouter } from "../modules/notifications/notification.route
 import { inventoryRouter } from "../modules/inventory/inventory.routes.js";
 import { erpRouter } from "../modules/erp/erp.routes.js";
 import { erpRequisitionsRouter } from "../modules/erp/erpRequisitions.routes.js";
+import { erpPresetsRouter } from "../modules/erp/erpPresets.routes.js";
 import { tenantRouter } from "../modules/tenant/tenant.routes.js";
 import { searchRouter } from "../modules/search/search.routes.js";
 import { rmaRouter } from "../modules/rma/rma.routes.js";
@@ -95,6 +96,10 @@ apiRouter.use("/inventory", inventoryRouter);
 // gate — see erpRequisitions.routes.ts's own comment) instead of falling
 // into erpRouter's blanket "erp" gate.
 apiRouter.use("/erp/requisitions", erpRequisitionsRouter);
+// Same precedent as above — /erp/presets/* and /erp/active-preset/* use
+// their own admin-only gate (see erpPresets.routes.ts's own comment), not
+// erpRouter's requireDepartmentAccess("erp").
+apiRouter.use("/erp", erpPresetsRouter);
 apiRouter.use("/erp", erpRouter);
 apiRouter.use("/tenant", tenantRouter);
 apiRouter.use("/search", searchRouter);

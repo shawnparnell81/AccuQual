@@ -8,6 +8,9 @@ import { logger } from "../../utils/logger.js";
 import { assertSafeWebhookUrl } from "../../utils/ssrfGuard.js";
 import { env } from "../../config/env.js";
 import { loadTenantForSettings, getErpSyncSettings, type ErpSyncSettings } from "./settings.service.js";
+import { getActivePresetCached } from "../erp/erpPresets.service.js";
+import { buildErpPayload, evaluateTrigger, type ErpPayloadResult } from "../erp/erpMappingEngine.js";
+import type { ErpTriggerRule } from "../../drizzle/schema/erpPresets.js";
 
 const MAX_HISTORY_ENTRIES = 20;
 const MAX_RETRIES_CAP = 5; // a hard ceiling on retryPolicy.maxRetries — this runs synchronously inside one HTTP request, not a background job
@@ -38,8 +41,19 @@ export interface SyncResult {
  * own schema comment) — `schedule` is stored config for a future worker to
  * read; today a sync only actually runs when this function is called, i.e.
  * from POST /settings/erp-sync/trigger.
+ *
+ * `event`, when supplied, is checked against each enabled module's active
+ * preset trigger rules (erpMappingEngine.ts's evaluateTrigger) to decide
+ * which modules actually get mapped this run — omitted (the existing
+ * "Trigger Sync Now" button's call), every enabled module with an active
+ * preset is mapped unconditionally, exactly as before trigger rules existed.
  */
-export async function triggerErpSync(db: TenantDb, tenantId: number, performedBy: number | undefined): Promise<SyncResult> {
+export async function triggerErpSync(
+  db: TenantDb,
+  tenantId: number,
+  performedBy: number | undefined,
+  event?: { on: ErpTriggerRule["on"]; statusValue?: string }
+): Promise<SyncResult> {
   const tenant = await loadTenantForSettings(db, tenantId);
   const config = getErpSyncSettings(tenant);
   const modules = config.modulesEnabled ?? [];
@@ -50,7 +64,24 @@ export async function triggerErpSync(db: TenantDb, tenantId: number, performedBy
   if (!config.webhookUrl) {
     entry = { at: new Date().toISOString(), status: "skipped", modules, message: "No webhook URL configured — nothing to sync." };
   } else {
-    const payload = JSON.stringify({ tenantId, direction: config.direction ?? "push", modules, triggeredAt: new Date().toISOString() });
+    // ERP Connector Presets: for each enabled module with a real, wired
+    // mapping engine (see erpMappingEngine.ts — suppliers/purchaseOrders
+    // only in this pass) AND an active preset, the outbound payload gets a
+    // real per-record, vendor-field-mapped `mappedData` block alongside the
+    // existing envelope below — additive, not a replacement, so a tenant
+    // with no preset configured still gets exactly today's behavior.
+    const mappedData: Record<string, ErpPayloadResult> = {};
+    for (const module of modules) {
+      const preset = await getActivePresetCached(db, tenantId, module);
+      if (!preset) continue;
+      if (event && !evaluateTrigger(preset.mappingConfig.triggers, event)) {
+        logger.info("ERP preset skipped — no matching trigger rule for this event", { tenantId, module, presetId: preset.id, event: event.on });
+        continue;
+      }
+      const result = await buildErpPayload(db, tenantId, module, preset);
+      if (result) mappedData[module] = result;
+    }
+    const payload = JSON.stringify({ tenantId, direction: config.direction ?? "push", modules, triggeredAt: new Date().toISOString(), ...(Object.keys(mappedData).length > 0 ? { mappedData } : {}) });
     const maxRetries = Math.min(config.retryPolicy?.maxRetries ?? 0, MAX_RETRIES_CAP);
     const backoffSeconds = Math.min(config.retryPolicy?.backoffSeconds ?? 0, MAX_BACKOFF_SECONDS_CAP);
 
