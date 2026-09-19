@@ -7,7 +7,7 @@
 // information-disclosure gap.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
 import { tenants } from "../../src/drizzle/schema/tenants.js";
@@ -49,6 +49,19 @@ describe("Audit trail read RBAC — GET /audit-trail/:entityType/:entityId (real
     const [created] = await db.insert(ncr).values({ tenantId, title: `Audit RBAC test NCR ${suffix}` }).returning();
     ncrId = created!.id;
     await db.insert(auditTrail).values({ tenantId, entityType: "NCR", entityId: ncrId, action: "create", changes: { title: created!.title } });
+
+    // training/qms_forms both default every department to at least "read"
+    // (training) or "edit" (qms_forms) — see defaultPermissions.ts's own
+    // comments — so engineering needs an explicit downgrade here to get a
+    // real "no access" case for these two, unlike ncr above where
+    // engineering already has zero rows by default.
+    await db
+      .update(departmentPermissions)
+      .set({ accessLevel: "none" })
+      .where(and(eq(departmentPermissions.tenantId, tenantId), eq(departmentPermissions.departmentName, "engineering"), inArray(departmentPermissions.moduleName, ["training", "qms_forms"])));
+
+    await db.insert(auditTrail).values({ tenantId, entityType: "TrainingAssignment", entityId: 424242, action: "create", changes: {} });
+    await db.insert(auditTrail).values({ tenantId, entityType: "QmsForm", entityId: 424242, action: "create", changes: {} });
   });
 
   afterAll(async () => {
@@ -86,5 +99,31 @@ describe("Audit trail read RBAC — GET /audit-trail/:entityType/:entityId (real
     const res = await request(app).get(`/audit-trail/DigitalTwinSimulation/999999`).set("Authorization", `Bearer ${engineeringToken}`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual([]);
+  });
+
+  // Regression coverage: TrainingAssignment/QmsForm were missing from
+  // ENTITY_TYPE_TO_RESOURCE even after Training (C2) and QMS Forms (C3)
+  // each gained a real requireDepartmentAccess gate on their own routes —
+  // silently re-opening the exact disclosure gap H1 exists to close.
+  it("quality (edit access to training) can read a TrainingAssignment's audit history", async () => {
+    const res = await request(app).get("/audit-trail/TrainingAssignment/424242").set("Authorization", `Bearer ${qualityToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.length).toBeGreaterThan(0);
+  });
+
+  it("engineering (downgraded to no training access) CANNOT read a TrainingAssignment's audit history", async () => {
+    const res = await request(app).get("/audit-trail/TrainingAssignment/424242").set("Authorization", `Bearer ${engineeringToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it("quality (edit access to qms_forms) can read a QmsForm's audit history", async () => {
+    const res = await request(app).get("/audit-trail/QmsForm/424242").set("Authorization", `Bearer ${qualityToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.length).toBeGreaterThan(0);
+  });
+
+  it("engineering (downgraded to no qms_forms access) CANNOT read a QmsForm's audit history", async () => {
+    const res = await request(app).get("/audit-trail/QmsForm/424242").set("Authorization", `Bearer ${engineeringToken}`);
+    expect(res.status).toBe(403);
   });
 });
