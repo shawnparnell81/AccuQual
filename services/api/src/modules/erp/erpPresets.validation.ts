@@ -33,11 +33,17 @@ const validationRuleSchema = z
     required: z.boolean().optional(),
     type: z.enum(["string", "number", "date", "boolean"]).optional(),
     allowedValues: z.array(z.string()).optional(),
-    pattern: z.string().optional(),
+    pattern: z.string().max(200).optional(),
     equalsField: z.string().optional(),
   })
   // Reject a syntactically invalid pattern at save time, not at every sync run.
-  .refine((rule) => !rule.pattern || isValidRegex(rule.pattern), { message: "pattern is not a valid regular expression", path: ["pattern"] });
+  .refine((rule) => !rule.pattern || isValidRegex(rule.pattern), { message: "pattern is not a valid regular expression", path: ["pattern"] })
+  // applyValidation runs this pattern synchronously against real records on
+  // every sync — a catastrophic-backtracking pattern would hang the single
+  // Node process for every tenant sharing it, not just this one. Rejecting
+  // the classic nested-quantifier shape at save time (rather than trying to
+  // fix it at match time) keeps the match-time code a plain `.test()` call.
+  .refine((rule) => !rule.pattern || !hasCatastrophicBacktrackingShape(rule.pattern), { message: "pattern has a nested repetition operator that can cause catastrophic backtracking (e.g. (a+)+) — simplify it", path: ["pattern"] });
 
 function isValidRegex(source: string): boolean {
   try {
@@ -46,6 +52,20 @@ function isValidRegex(source: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Heuristic, not a full regex-engine analysis: flags a parenthesized group
+ * that itself contains a repetition operator (+/*\/{n,}) and is immediately
+ * repeated again from the outside — the shape behind essentially every
+ * real-world ReDoS report (`(a+)+`, `(\d*)*`, `(x{2,})+`, ...). It won't
+ * catch every possible catastrophic pattern (e.g. cross-group alternation
+ * overlap), but it rejects the common case with no false positives on
+ * ordinary business patterns (email/part-number/SKU formats never nest a
+ * quantifier inside a repeated group).
+ */
+function hasCatastrophicBacktrackingShape(pattern: string): boolean {
+  return /\([^()]*[+*][^()]*\)\s*[+*]/.test(pattern) || /\([^()]*\{\d*,?\d*\}[^()]*\)\s*[+*{]/.test(pattern);
 }
 
 export const mappingConfigSchema = z.object({

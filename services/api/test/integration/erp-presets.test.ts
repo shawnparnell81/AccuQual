@@ -64,6 +64,21 @@ describe("ERP Connector Presets (real DB + real HTTP path)", () => {
     expect((await request(app).post("/erp/presets").set("Authorization", `Bearer ${qualityToken}`).send({ vendor: "sap", module: "suppliers", name: "x" })).status).toBe(403);
   });
 
+  it("rejects a validation rule pattern with a catastrophic-backtracking shape, but accepts an ordinary one", async () => {
+    const evil = await request(app)
+      .post("/erp/presets")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ vendor: "sap", module: "suppliers", name: "Evil pattern", mappingConfig: { fieldMappings: [], triggers: [], validationRules: [{ field: "code", pattern: "^(a+)+$" }] } });
+    expect(evil.status).toBe(400);
+
+    const fine = await request(app)
+      .post("/erp/presets")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ vendor: "sap", module: "suppliers", name: "Ordinary pattern", mappingConfig: { fieldMappings: [], triggers: [], validationRules: [{ field: "code", pattern: "^[A-Z]{2}\\d{4}$" }] } });
+    expect(fine.status).toBe(201);
+    presetIds.push(fine.body.id);
+  });
+
   it("admin creates a preset, tenant-scoped, version 1, empty history", async () => {
     const res = await request(app)
       .post("/erp/presets")
