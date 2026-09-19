@@ -1,15 +1,17 @@
 import bcrypt from "bcryptjs";
-import { randomBytes, createHash } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { randomBytes, randomUUID, createHash } from "node:crypto";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { users } from "../../drizzle/schema/users.js";
 import { roles } from "../../drizzle/schema/roles.js";
 import { tenants } from "../../drizzle/schema/tenants.js";
 import { passwordResetTokens } from "../../drizzle/schema/passwordResetTokens.js";
+import { refreshTokens } from "../../drizzle/schema/refreshTokens.js";
 import { AppError } from "../../utils/appError.js";
-import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../utils/jwt.js";
+import { signAccessToken, signRefreshToken, verifyRefreshToken, REFRESH_TOKEN_TTL_MS } from "../../utils/jwt.js";
 import { sendEmail } from "../notifications/notification.service.js";
 import { renderTemplate } from "../notifications/templates.js";
+import { logger } from "../../utils/logger.js";
 import { env } from "../../config/env.js";
 
 // Registration/login run before a tenant transaction exists (the tenant isn't
@@ -37,7 +39,14 @@ async function userWithRole(userId: number) {
   return row;
 }
 
-function issueTokens(user: {
+/**
+ * Security-audit finding (medium): every issued refresh token now gets a
+ * unique jti, recorded in refresh_tokens (unused/unrevoked) so refresh()
+ * can later tell a normal single redemption apart from the same token
+ * being replayed after it was already rotated — see refreshTokens.ts's
+ * own comment.
+ */
+async function issueTokens(user: {
   id: number;
   tenantId: number | null;
   roleId: number | null;
@@ -54,8 +63,13 @@ function issueTokens(user: {
     department: user.department,
     supplierId: user.supplierId ?? null,
   });
-  const refreshToken = signRefreshToken({ sub: String(user.id), tokenVersion: user.tokenVersion });
-  return { accessToken, refreshToken };
+  const jti = randomUUID();
+  const refreshToken = signRefreshToken({ sub: String(user.id), tokenVersion: user.tokenVersion, jti });
+  await db.insert(refreshTokens).values({ userId: user.id, jti, expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS) });
+  // refreshJti never reaches a response body — auth.controller.ts's
+  // withoutRefreshToken strips it alongside refreshToken itself; it's only
+  // for refresh()'s own internal replacedByJti bookkeeping below.
+  return { accessToken, refreshToken, refreshJti: jti };
 }
 
 export async function register(input: { email: string; password: string; name?: string; tenantCode: string }) {
@@ -76,7 +90,7 @@ export async function register(input: { email: string; password: string; name?: 
 
   const full = await userWithRole(created.id);
   if (!full) throw new AppError("Failed to create user", 500);
-  const tokens = issueTokens(full);
+  const tokens = await issueTokens(full);
   return { user: sanitize(full), tenant: { id: tenant.id, name: tenant.name, code: tenant.code, branding: tenant.branding }, ...tokens };
 }
 
@@ -104,7 +118,7 @@ export async function login(input: { email: string; password: string }) {
   // failure.
   await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id)).catch(() => undefined);
 
-  const tokens = issueTokens({ id: user.id, tenantId: user.tenantId, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion });
+  const tokens = await issueTokens({ id: user.id, tenantId: user.tenantId, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion });
   return { user: sanitize({ ...user, roleName }), tenant: row.tenants ? { id: row.tenants.id, name: row.tenants.name, code: row.tenants.code, branding: row.tenants.branding } : null, ...tokens };
 }
 
@@ -121,9 +135,45 @@ export async function refresh(refreshToken: string) {
     throw AppError.unauthorized("Refresh token has been revoked");
   }
 
-  const tokens = issueTokens(full);
+  // Security-audit finding (medium): reuse detection. `jti` is only absent
+  // on a token minted before this feature existed (graceful degrade — an
+  // old in-flight session isn't force-logged-out by this deploy). For every
+  // token that has one, a second redemption after it was already marked
+  // used means this exact token was replayed — either a client race (rare,
+  // and treated the same as theft on purpose: better a false-positive
+  // logout than silently trusting a replayed credential) or a stolen
+  // token being used after the legitimate client already rotated past it.
+  // Either way the correct response is the same one logout()/resetPassword()
+  // already use: revoke the whole account's session via tokenVersion, not
+  // just this one token.
+  if (payload.jti) {
+    const [tokenRow] = await db.select().from(refreshTokens).where(eq(refreshTokens.jti, payload.jti));
+    if (!tokenRow || tokenRow.revokedAt) {
+      throw AppError.unauthorized("Refresh token has been revoked");
+    }
+    if (tokenRow.usedAt) {
+      logger.warn(`Refresh token reuse detected for user ${full.id} (jti ${payload.jti}) — revoking the account's session.`);
+      await revokeAllRefreshTokens(full.id);
+      await db.update(users).set({ tokenVersion: full.tokenVersion + 1 }).where(eq(users.id, full.id));
+      throw AppError.unauthorized("Refresh token has already been used — session revoked for safety");
+    }
+    await db.update(refreshTokens).set({ usedAt: new Date() }).where(eq(refreshTokens.id, tokenRow.id));
+  }
+
+  const tokens = await issueTokens(full);
+  if (payload.jti) {
+    await db.update(refreshTokens).set({ replacedByJti: tokens.refreshJti }).where(eq(refreshTokens.jti, payload.jti));
+  }
   const tenant = full.tenantId ? await tenantById(full.tenantId) : null;
   return { user: sanitize(full), tenant, ...tokens };
+}
+
+/** Marks every not-yet-revoked refresh token row for this user as revoked — logout()/resetPassword() call this alongside their own tokenVersion bump for real, itemizable revocation instead of relying on tokenVersion alone. */
+async function revokeAllRefreshTokens(userId: number): Promise<void> {
+  await db
+    .update(refreshTokens)
+    .set({ revokedAt: new Date() })
+    .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt)));
 }
 
 /**
@@ -148,12 +198,24 @@ async function tenantById(tenantId: number) {
   return row ?? null;
 }
 
-/** Bumps the user's tokenVersion, invalidating every outstanding refresh token. */
+/**
+ * Bumps the user's tokenVersion, invalidating every outstanding refresh
+ * token's signature check, and also marks every refresh_tokens row
+ * revoked — real, itemizable revocation (security-audit finding) on top
+ * of the coarser tokenVersion mechanism, not a second copy of the same
+ * fact: a revoked row is what makes reuse detection (refresh()) report
+ * "revoked" instead of quietly accepting a token whose only defense was
+ * an already-bumped tokenVersion the payload happens to still match
+ * (impossible today since the JWT itself is re-verified too, but the
+ * explicit row is what a future audit of "was this token really dead"
+ * checks against directly, not an inference from tokenVersion arithmetic).
+ */
 export async function logout(userId: number) {
   await db
     .update(users)
     .set({ tokenVersion: (await currentTokenVersion(userId)) + 1 })
     .where(eq(users.id, userId));
+  await revokeAllRefreshTokens(userId);
 }
 
 async function currentTokenVersion(userId: number): Promise<number> {
@@ -196,7 +258,7 @@ export async function forgotPassword(email: string): Promise<void> {
   await sendEmail({ to: user.email, subject: resetEmail.subject, body: resetEmail.body });
 }
 
-/** Bumps tokenVersion too — a resets password revokes every outstanding refresh token, the same way logout() does. */
+/** Bumps tokenVersion and revokes every refresh_tokens row too — a password reset revokes every outstanding refresh token, the same way logout() does. */
 export async function resetPassword(rawToken: string, newPassword: string): Promise<void> {
   const [tokenRow] = await db.select().from(passwordResetTokens).where(eq(passwordResetTokens.tokenHash, hashResetToken(rawToken)));
 
@@ -207,6 +269,7 @@ export async function resetPassword(rawToken: string, newPassword: string): Prom
   const passwordHash = await bcrypt.hash(newPassword, 10);
   const nextTokenVersion = (await currentTokenVersion(tokenRow.userId)) + 1;
   await db.update(users).set({ passwordHash, tokenVersion: nextTokenVersion }).where(eq(users.id, tokenRow.userId));
+  await revokeAllRefreshTokens(tokenRow.userId);
   await db.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, tokenRow.id));
 }
 
