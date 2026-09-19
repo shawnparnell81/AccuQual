@@ -2,9 +2,13 @@
 // Covers the two forms reported as real gaps in the "ACCUQUAL Forms" batch
 // review (see accuqual-qms-forms-batch memory) — SCAR (fixed-row CAPA/
 // sign-off columns, no child table) and Quality Inspection Report (a real
-// child table for its Inspection Checklist). SCAR stays deliberately
-// ungated. Quality Inspection Reports got a real RBAC gate in Phase 8 (the
-// new "quality_inspection" ResourceKey — quality: edit, purchasing/
+// child table for its Inspection Checklist). SCAR was originally
+// deliberately ungated but got a real RBAC gate (the new "scar"
+// ResourceKey, all-departments-edit default — see defaultPermissions.ts)
+// in a later security-audit pass, once QMS Forms' own identical "no gate"
+// convention was fixed first and left SCAR's justification stale. Quality
+// Inspection Reports got a real RBAC gate in Phase 8 (the new
+// "quality_inspection" ResourceKey — quality: edit, purchasing/
 // material_management: read) after that gap was flagged as a genuine
 // zero-enforcement issue, not a deliberate design — see
 // qualityInspectionReports.routes.ts's own comment.
@@ -46,7 +50,7 @@ describe("SCAR + Quality Inspection Report (real DB + real HTTP path)", () => {
     tenantId = tenant!.id;
 
     await seedDefaultPermissions(tenantId);
-    productionToken = await makeUser("production"); // proves SCAR still has no department gate
+    productionToken = await makeUser("production"); // "scar"'s default grants every department edit access
     qualityToken = await makeUser("quality"); // quality_inspection's real edit-level department (Phase 8)
   });
 
@@ -65,7 +69,13 @@ describe("SCAR + Quality Inspection Report (real DB + real HTTP path)", () => {
     await pool.end();
   });
 
-  it("creates a SCAR (no department gate) and defaults to open", async () => {
+  it("blocks a user with no department at all — the real RBAC gate, not just the all-departments default", async () => {
+    const noDeptToken = await makeUser(null);
+    const res = await request(app).post("/scar-forms").set("Authorization", `Bearer ${noDeptToken}`).send({ scarNumber: "SCAR-BLOCKED", supplierName: "Acme Metals" });
+    expect(res.status).toBe(403);
+  });
+
+  it("creates a SCAR (production has real edit access under scar's all-departments default) and defaults to open", async () => {
     const res = await request(app).post("/scar-forms").set("Authorization", `Bearer ${productionToken}`).send({ scarNumber: "SCAR-001", supplierName: "Acme Metals" });
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("open");
