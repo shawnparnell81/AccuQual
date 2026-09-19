@@ -38,6 +38,11 @@ services:
       # Webhook URL to paste in here.
       - key: ALERT_WEBHOOK_URL
         sync: false
+      # ZeptoMail (agent qms_transactional) Send Mail token — the preferred
+      # delivery path; takes precedence over SMTP_* below. Paste it in
+      # Render's dashboard, never into this repo.
+      - key: ZEPTOMAIL_SEND_TOKEN
+        sync: false
       # Real SMTP delivery (onboarding/notification email) — all optional;
       # leave blank to keep every send in the honest log-only stub mode
       # notification.service.ts already falls back to. Verified working
@@ -125,6 +130,11 @@ services:
       # encrypted under accuqual-api's key; a different value here would
       # make every decryption fail, not just be redundant.
       - key: TENANT_AI_CONFIG_ENCRYPTION_KEY
+        sync: false
+      # ZeptoMail (agent qms_transactional) Send Mail token — the preferred
+      # delivery path; takes precedence over SMTP_* below. Same value as
+      # accuqual-api's.
+      - key: ZEPTOMAIL_SEND_TOKEN
         sync: false
       # Optional — only used if a workflow definition's send_email action
       # fires. Same values as accuqual-api's SMTP_* — leave blank to keep

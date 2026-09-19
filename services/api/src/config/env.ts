@@ -66,7 +66,15 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
-  SMTP_FROM: z.string().default("AccuQual <no-reply@accuqual.local>"),
+  // Sender for BOTH transports. Must be an address on a domain the provider
+  // has verified (ZeptoMail: @accuqualqms.com) or delivery is rejected.
+  SMTP_FROM: z.string().default("AccuQual <noreply@accuqualqms.com>"),
+  // ZeptoMail (agent `qms_transactional`) Send Mail token — env only, never
+  // hard-coded. When set, notification.service.ts delivers through
+  // ZeptoMail's REST API and ignores SMTP_*; unset falls back to SMTP_*,
+  // then to log-only. Accepts the token with or without the
+  // "Zoho-enczapikey " prefix ZeptoMail's dashboard shows.
+  ZEPTOMAIL_SEND_TOKEN: z.string().optional(),
 
   // Real deployment monitoring/alerting — optional, same graceful-degrade
   // pattern as SMTP above. Unset means healthMonitor.ts's in-process poller
