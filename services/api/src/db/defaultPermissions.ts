@@ -306,4 +306,18 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
     material_management: "edit",
     sales_and_marketing: "edit",
   },
+  // Same reasoning as qms_forms above: a SCAR can originate from any
+  // department dealing with a supplier, so every department gets edit —
+  // zero-behavior-change from today (scarForms.routes.ts was previously
+  // entirely ungated), just makes it real and tenant-configurable instead
+  // of invisible to Roles & Permissions (security-audit finding).
+  scar: {
+    quality: "edit",
+    engineering: "edit",
+    production: "edit",
+    customer_service: "edit",
+    purchasing: "edit",
+    material_management: "edit",
+    sales_and_marketing: "edit",
+  },
 };

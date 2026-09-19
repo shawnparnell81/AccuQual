@@ -35,7 +35,10 @@ async function createDocumentVersionRow(db: TenantDb, tenantId: number, document
     .returning();
   if (!version) throw new AppError("Failed to record document version", 500);
 
-  await db.update(documents).set({ currentVersion: nextVersion, status: "in_review", updatedAt: new Date() }).where(eq(documents.id, documentId));
+  await db
+    .update(documents)
+    .set({ currentVersion: nextVersion, status: "in_review", updatedAt: new Date() })
+    .where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId)));
 
   await recordAuditTrail(db, {
     tenantId,
