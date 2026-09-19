@@ -202,7 +202,26 @@ is a genuine, safe one-line change at that point — just not done
 automatically here, since it's a real behavior change to `/health`'s HTTP
 status, not just additive config.
 
-## Real email delivery (SMTP)
+## Real email delivery (ZeptoMail, or SMTP)
+
+The preferred path is ZeptoMail's REST API, using the `qms_transactional`
+agent (not the shut-down `mail_agent_1`) on the verified domain
+`accuqualqms.com`. Set one env var, from ZeptoMail -> Agents ->
+qms_transactional -> SMTP/API -> Send Mail token:
+
+```
+ZEPTOMAIL_SEND_TOKEN=<Send Mail token, with or without its "Zoho-enczapikey " prefix>
+SMTP_FROM=AccuQual <noreply@accuqualqms.com>
+```
+
+`SMTP_FROM` must be an address on `@accuqualqms.com` or ZeptoMail rejects
+the send (the failure is logged with ZeptoMail's own error message). The
+token is env-only: paste it into the host's dashboard, never into this repo.
+When it's set, it takes precedence over the SMTP section below; a 4xx from
+ZeptoMail (bad token, unverified sender) is reported immediately, while
+network errors, 429s and 5xx are retried up to 3 times.
+
+### SMTP fallback
 
 `notification.service.ts` degrades to an honest log-only stub (every
 "email" is recorded but never actually sent) until all of

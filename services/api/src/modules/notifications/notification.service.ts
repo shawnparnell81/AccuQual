@@ -90,8 +90,87 @@ export class SmtpTransport implements EmailTransport {
   }
 }
 
-/** SMTP_HOST/PORT/USER/PASSWORD are all optional and default to unset — real delivery is opt-in, exactly like every other real-external-call feature in this app (BYOK AI, Digital Twin ingestion). */
+// Fixed, non-secret endpoint (deliberately not configurable — an env-overridable
+// URL would let a bad config point the Send Mail token at an arbitrary host).
+const ZEPTOMAIL_API_URL = "https://api.zeptomail.com/v1.1/email";
+const ZEPTOMAIL_TIMEOUT_MS = 15_000;
+
+/** Splits "Name <addr@domain>" (or a bare address) into ZeptoMail's {address, name} shape. */
+export function parseFromAddress(from: string): { address: string; name?: string } {
+  const match = from.match(/^\s*"?([^"<]*?)"?\s*<([^<>\s]+)>\s*$/);
+  if (match) return { address: match[2]!, name: match[1]?.trim() || undefined };
+  return { address: from.trim() };
+}
+
+/**
+ * Delivery through ZeptoMail's REST API (agent `qms_transactional`,
+ * verified domain accuqualqms.com) — the preferred path over SMTP: one HTTPS
+ * call, a structured error body when the sender domain/token is wrong, and
+ * no SMTP port to get blocked. The token comes from env only. ZeptoMail's
+ * dashboard displays it as "Zoho-enczapikey <token>", so a pasted value
+ * with or without that prefix works.
+ *
+ * Same retry shape as SmtpTransport, except only transient failures are
+ * retried (network error, 429, 5xx) — a 4xx such as an unverified sender
+ * domain or a bad token will fail identically every time, so it's reported
+ * immediately with ZeptoMail's own error message instead of burning retries.
+ */
+export class ZeptoMailTransport implements EmailTransport {
+  private authorization: string;
+  private from: { address: string; name?: string };
+
+  constructor(config: { token: string; from: string }) {
+    this.authorization = `Zoho-enczapikey ${config.token.replace(/^\s*Zoho-enczapikey\s+/i, "").trim()}`;
+    this.from = parseFromAddress(config.from);
+  }
+
+  async send(message: { to: string; subject: string; body: string }): Promise<"sent" | "failed"> {
+    const maxAttempts = 3;
+    const payload = JSON.stringify({
+      from: this.from,
+      to: [{ email_address: { address: message.to } }],
+      subject: message.subject,
+      textbody: message.body,
+    });
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      let retryable = true;
+      let reason: unknown;
+      try {
+        const response = await fetch(ZEPTOMAIL_API_URL, {
+          method: "POST",
+          headers: { Authorization: this.authorization, "Content-Type": "application/json", Accept: "application/json" },
+          body: payload,
+          signal: AbortSignal.timeout(ZEPTOMAIL_TIMEOUT_MS),
+        });
+        if (response.ok) return "sent";
+        retryable = response.status === 429 || response.status >= 500;
+        reason = { status: response.status, detail: (await response.text().catch(() => "")).slice(0, 300) };
+      } catch (err) {
+        reason = err;
+      }
+
+      if (!retryable || attempt === maxAttempts) {
+        logger.error("ZeptoMail send failed", { to: message.to, subject: message.subject, attempt, reason });
+        return "failed";
+      }
+      logger.warn("ZeptoMail send failed, retrying", { to: message.to, attempt });
+      await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+    }
+    return "failed";
+  }
+}
+
+/**
+ * Real delivery is opt-in, exactly like every other real-external-call
+ * feature in this app (BYOK AI, Digital Twin ingestion). Precedence:
+ * ZEPTOMAIL_SEND_TOKEN (REST API) → all four SMTP_* vars (SmtpTransport) →
+ * null (log-only, no network attempt).
+ */
 function resolveDefaultTransport(): EmailTransport | null {
+  if (env.ZEPTOMAIL_SEND_TOKEN) {
+    return new ZeptoMailTransport({ token: env.ZEPTOMAIL_SEND_TOKEN, from: env.SMTP_FROM });
+  }
   if (env.SMTP_HOST && env.SMTP_PORT && env.SMTP_USER && env.SMTP_PASSWORD) {
     return new SmtpTransport({ host: env.SMTP_HOST, port: env.SMTP_PORT, user: env.SMTP_USER, password: env.SMTP_PASSWORD });
   }
