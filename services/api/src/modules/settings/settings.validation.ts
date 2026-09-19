@@ -46,6 +46,14 @@ export const SYNC_DIRECTIONS = ["push", "pull", "bidirectional"] as const;
 export const SYNC_MODULES = ["inventory", "suppliers", "purchaseOrders", "workOrders"] as const;
 export const CONFLICT_STRATEGIES = ["local_wins", "remote_wins", "manual_review"] as const;
 
+// Optional body for POST /settings/erp-sync/trigger — see settings.erpSync.ts's
+// own comment on `event`. Omitted entirely, the endpoint keeps its original
+// "sync every enabled module" behavior.
+export const triggerErpSyncSchema = z.object({
+  event: z.enum(["create", "update", "statusChange", "workflowEvent"]).optional(),
+  statusValue: z.string().optional(),
+});
+
 export const updateErpSyncSettingsSchema = z.object({
   schedule: z.enum(SYNC_SCHEDULES).optional(),
   direction: z.enum(SYNC_DIRECTIONS).optional(),
