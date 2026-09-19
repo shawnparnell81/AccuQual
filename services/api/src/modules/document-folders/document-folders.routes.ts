@@ -2,12 +2,17 @@ import { Router } from "express";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
+import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createDocumentFolderSchema, updateDocumentFolderSchema } from "./document-folders.validation.js";
 import { list, create, update, remove, uploadTemplate, uploadDocument, downloadTemplate, removeTemplate } from "./document-folders.controller.js";
 
 export const documentFoldersRouter = Router();
-documentFoldersRouter.use(requireAuth, withTenantDb);
+// Security audit finding (high): this router had no RBAC gate at all — any
+// authenticated tenant user could create/rename/delete folders and
+// upload/remove templates, bypassing the same "documents" gate its sibling
+// documents.routes.ts already enforces.
+documentFoldersRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("documents"));
 
 // memoryStorage: files are modest-sized real documents (policies,
 // procedures, forms), and uploadTemplate/uploadDocument decide the on-disk

@@ -34,10 +34,27 @@ describe("Document Folders — real file upload into the library (real DB + real
     await seedDefaultPermissions(tenantId);
     const [user] = await db.insert(users).values({ tenantId, email: `doc-upload-test-${suffix}@test.local`, passwordHash: "unused" }).returning();
     userId = user!.id;
-    token = signAccessToken({ sub: String(userId), tenantId, roleId: null, roleName: "operator", department: null });
+    // "quality" has real edit access to the "documents" ResourceKey this
+    // router is now gated on (see the security-audit fix that added
+    // requireDepartmentAccess("documents") here, matching its sibling
+    // documents.routes.ts) — department: null would no longer have any
+    // access to this router at all, unlike before that fix.
+    token = signAccessToken({ sub: String(userId), tenantId, roleId: null, roleName: "operator", department: "quality" });
 
     const [dept] = await db.insert(documentFolders).values({ tenantId, name: `Quality Test ${suffix}`, parentId: null }).returning();
     departmentId = dept!.id;
+  });
+
+  it("a department with zero access to documents (e.g. no department at all) CANNOT upload — previously anyone could", async () => {
+    const [noDeptUser] = await db.insert(users).values({ tenantId, email: `doc-upload-nodept-${suffix}@test.local`, passwordHash: "unused" }).returning();
+    const noDeptToken = signAccessToken({ sub: String(noDeptUser!.id), tenantId, roleId: null, roleName: "operator", department: null });
+    const res = await request(app)
+      .post("/document-folders/upload")
+      .set("Authorization", `Bearer ${noDeptToken}`)
+      .field("parentId", String(departmentId))
+      .attach("file", Buffer.from("x"), "sneaky.pdf");
+    expect(res.status).toBe(403);
+    await db.delete(users).where(eq(users.id, noDeptUser!.id));
   });
 
   afterAll(async () => {
