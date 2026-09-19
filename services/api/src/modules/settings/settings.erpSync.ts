@@ -9,7 +9,7 @@ import { assertSafeWebhookUrl } from "../../utils/ssrfGuard.js";
 import { env } from "../../config/env.js";
 import { loadTenantForSettings, getErpSyncSettings, type ErpSyncSettings } from "./settings.service.js";
 import { getActivePresetCached } from "../erp/erpPresets.service.js";
-import { buildErpPayload, evaluateTrigger, type ErpPayloadResult } from "../erp/erpMappingEngine.js";
+import { buildErpPayload, evaluateTrigger, recordSyncError, type ErpPayloadResult } from "../erp/erpMappingEngine.js";
 import type { ErpTriggerRule } from "../../drizzle/schema/erpPresets.js";
 
 const MAX_HISTORY_ENTRIES = 20;
@@ -71,15 +71,26 @@ export async function triggerErpSync(
     // existing envelope below — additive, not a replacement, so a tenant
     // with no preset configured still gets exactly today's behavior.
     const mappedData: Record<string, ErpPayloadResult> = {};
+    // Real resilience fix: one module's mapping throwing an uncaught
+    // exception used to abort this ENTIRE sync request, taking every other
+    // enabled module down with it. Now it's recorded and the loop moves on
+    // — matching this app's own "never crash the sync engine" principle,
+    // already implicit in how buildErpPayload handles a single bad record.
     for (const module of modules) {
-      const preset = await getActivePresetCached(db, tenantId, module);
-      if (!preset) continue;
-      if (event && !evaluateTrigger(preset.mappingConfig.triggers, event)) {
-        logger.info("ERP preset skipped — no matching trigger rule for this event", { tenantId, module, presetId: preset.id, event: event.on });
-        continue;
+      try {
+        const preset = await getActivePresetCached(db, tenantId, module);
+        if (!preset) continue;
+        if (event && !evaluateTrigger(preset.mappingConfig.triggers, event)) {
+          logger.info("ERP preset skipped — no matching trigger rule for this event", { tenantId, module, presetId: preset.id, event: event.on });
+          continue;
+        }
+        const result = await buildErpPayload(db, tenantId, module, preset);
+        if (result) mappedData[module] = result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error mapping this module";
+        logger.error("ERP preset mapping threw — skipping this module, continuing the sync", { tenantId, module, message });
+        await recordSyncError(db, { tenantId, module, stage: undefined, message: `Mapping failed for module "${module}": ${message}` });
       }
-      const result = await buildErpPayload(db, tenantId, module, preset);
-      if (result) mappedData[module] = result;
     }
     const payload = JSON.stringify({ tenantId, direction: config.direction ?? "push", modules, triggeredAt: new Date().toISOString(), ...(Object.keys(mappedData).length > 0 ? { mappedData } : {}) });
     const maxRetries = Math.min(config.retryPolicy?.maxRetries ?? 0, MAX_RETRIES_CAP);
@@ -131,7 +142,22 @@ export async function triggerErpSync(
       ? { at: new Date().toISOString(), status: "success", modules, message: `Delivered to webhook after ${attempts} attempt(s).` }
       : { at: new Date().toISOString(), status: "failed", modules, message: lastError ?? "Webhook delivery failed." };
 
-    if (!delivered) logger.error("ERP sync webhook delivery failed", { tenantId, attempts, lastError });
+    if (!delivered) {
+      logger.error("ERP sync webhook delivery failed", { tenantId, attempts, lastError });
+      // One row per module that actually had data in the failed delivery —
+      // not per retry attempt (matches statusHistory's own "final outcome
+      // only" granularity) — so filtering the errors dashboard by module
+      // surfaces a delivery failure that affected that module's data too.
+      for (const module of Object.keys(mappedData)) {
+        await recordSyncError(db, {
+          tenantId,
+          module,
+          stage: "erpApi",
+          message: lastError ?? "Webhook delivery failed.",
+          details: { attempts, webhookUrl: config.webhookUrl },
+        });
+      }
+    }
   }
 
   const history = [entry, ...(config.statusHistory ?? [])].slice(0, MAX_HISTORY_ENTRIES);
