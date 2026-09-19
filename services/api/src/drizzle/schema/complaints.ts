@@ -12,6 +12,10 @@ export const complaints = pgTable("complaints", {
   status: text("status").notNull().default("open"), // open, investigating, resolved, closed
   linkedNcrId: integer("linked_ncr_id"),
   assignedTo: integer("assigned_to").references(() => users.id),
+  // What was found and how it was resolved — required to move to "resolved".
+  resolution: text("resolution"),
+  resolvedAt: timestamp("resolved_at"),
+  closedAt: timestamp("closed_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });

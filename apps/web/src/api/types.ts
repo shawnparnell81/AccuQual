@@ -38,7 +38,7 @@ export interface WorkflowHistoryEntry {
 }
 
 /** Friendly moduleName values the history endpoint accepts — kept in sync with services/api's workflow.controller.ts MODULE_ENTITY_TYPES. */
-export type WorkflowModuleName = "calibration" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp" | "rma" | "work_orders" | "risk" | "feasibility" | "sales_accounts" | "customers" | "document_change_requests" | "qms_forms" | "scar_forms" | "quality_inspection_reports" | "crar" | "rma_log";
+export type WorkflowModuleName = "calibration" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp" | "rma" | "work_orders" | "risk" | "feasibility" | "sales_accounts" | "customers" | "document_change_requests" | "qms_forms" | "scar_forms" | "quality_inspection_reports" | "crar" | "rma_log" | "complaints";
 
 export interface Ncr {
   id: number;
@@ -519,6 +519,21 @@ export interface IotDevice {
   type: "plc" | "sensor" | "inspection_equipment" | "environmental" | null;
   digitalTwinModelId: number | null;
   lastSeenAt: string | null;
+  /** Whether an ingest key has been issued — the key itself is shown once at issue time and never returned again. */
+  hasApiKey: boolean;
+  createdAt: string;
+}
+
+/** GET /digital-twin/alerts — a drift alert the digital-twin worker recorded for one channel of one device. */
+export interface IotDriftAlert {
+  id: number;
+  deviceId: string | null;
+  deviceName: string | null;
+  channel: string | null;
+  reading: number | null;
+  baseline: number | null;
+  direction: "up" | "down" | null;
+  score: number | null;
   createdAt: string;
 }
 

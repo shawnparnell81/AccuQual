@@ -136,6 +136,7 @@ const MODULE_ENTITY_TYPES: Record<string, string> = {
   ncr: "NCR",
   capa: "CAPA",
   di: "Discrepancy investigation",
+  complaints: "Complaint",
   suppliers: "Supplier",
   inventory: "InventoryItem",
   erp: "PurchaseOrder",
