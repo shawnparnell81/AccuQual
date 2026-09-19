@@ -249,6 +249,18 @@ export function evaluateTrigger(triggers: ErpTriggerRule[], event: { on: ErpTrig
   });
 }
 
+// Defense in depth for `rule.pattern` below, NOT the primary defense — that's
+// erpPresets.validation.ts's save-time rejection of the classic
+// nested-quantifier ReDoS shape (e.g. `(a+)+`). That check can't cover a
+// preset saved before it existed (the 4 seeded global vendor presets
+// predate it) or a catastrophic shape the heuristic doesn't recognize, and a
+// truncated input still doesn't make a genuinely exponential pattern fast —
+// it only bounds it to a fixed, finite worst case instead of scaling with
+// whatever length a source record's own field happens to be. No legitimate
+// business field this validates (part number, code, email local part) needs
+// more than this to check.
+const MAX_PATTERN_MATCH_INPUT_LENGTH = 200;
+
 /** Checked against the ORIGINAL source record (not the mapped output) — a validation rule names an AccuQual field, same as a field mapping's own `source`. */
 export function applyValidation(record: Record<string, unknown>, validationRules: ErpValidationRule[]): { field: string; message: string }[] {
   const errors: { field: string; message: string }[] = [];
@@ -263,7 +275,7 @@ export function applyValidation(record: Record<string, unknown>, validationRules
     if (rule.type === "boolean" && typeof value !== "boolean") errors.push({ field: rule.field, message: `${rule.field} must be a boolean` });
     if (rule.type === "date" && isNaN(new Date(String(value)).getTime())) errors.push({ field: rule.field, message: `${rule.field} must be a valid date` });
     if (rule.allowedValues && !rule.allowedValues.includes(String(value))) errors.push({ field: rule.field, message: `${rule.field} must be one of: ${rule.allowedValues.join(", ")}` });
-    if (rule.pattern && !new RegExp(rule.pattern).test(String(value))) errors.push({ field: rule.field, message: `${rule.field} does not match the required pattern` });
+    if (rule.pattern && !new RegExp(rule.pattern).test(String(value).slice(0, MAX_PATTERN_MATCH_INPUT_LENGTH))) errors.push({ field: rule.field, message: `${rule.field} does not match the required pattern` });
     if (rule.equalsField) {
       const otherValue = resolveSourceValue(record, rule.equalsField);
       if (String(value) !== String(otherValue)) errors.push({ field: rule.field, message: `${rule.field} must equal ${rule.equalsField}` });

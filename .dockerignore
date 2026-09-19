@@ -3,3 +3,15 @@ node_modules
 dist
 **/dist
 .git
+
+# Real secrets (DATABASE_URL, JWT secrets, encryption keys, SMTP password,
+# etc.) — never let these enter the build context. Docker builds these
+# Dockerfiles' `build` stage with a broad `COPY <workspace> ./<workspace>`,
+# which would otherwise bake a locally-present .env straight into that
+# stage's image layer even though the final runtime stage never uses it.
+.env
+**/.env
+.env.*
+**/.env.*
+!.env.example
+!**/.env.example

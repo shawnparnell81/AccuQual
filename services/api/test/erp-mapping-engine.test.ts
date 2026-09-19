@@ -136,6 +136,11 @@ describe("applyValidation", () => {
     expect(applyValidation({ code: "AB1234" }, [{ field: "code", pattern: "^[A-Z]{2}\\d{4}$" }])).toEqual([]);
   });
 
+  it("truncates an overlong value before matching against a pattern (ReDoS defense-in-depth) — a pattern that only matches 250+ chars fails against a 300-char value", () => {
+    const longValue = "a".repeat(300);
+    expect(applyValidation({ code: longValue }, [{ field: "code", pattern: "^.{250,}$" }])).toHaveLength(1);
+  });
+
   it("cross-field equalsField check", () => {
     expect(applyValidation({ email: "a@x.com", confirmEmail: "a@x.com" }, [{ field: "email", equalsField: "confirmEmail" }])).toEqual([]);
     expect(applyValidation({ email: "a@x.com", confirmEmail: "b@x.com" }, [{ field: "email", equalsField: "confirmEmail" }])).toHaveLength(1);
