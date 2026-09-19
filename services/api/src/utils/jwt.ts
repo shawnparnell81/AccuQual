@@ -19,6 +19,14 @@ export interface AccessTokenPayload {
 export interface RefreshTokenPayload {
   sub: string;
   tokenVersion: number;
+  // Security-audit finding (medium): unique per issued token, tracked in
+  // the new refresh_tokens table — lets auth.service.ts's refresh() detect
+  // a token being redeemed a second time after it was already rotated
+  // (see refreshTokens.ts's own comment). Optional only so any code that
+  // still verifies an old, already-issued token from before this field
+  // existed doesn't throw on a missing key — every new token this app
+  // issues from here on always sets it.
+  jti?: string;
 }
 
 export function signAccessToken(payload: AccessTokenPayload): string {

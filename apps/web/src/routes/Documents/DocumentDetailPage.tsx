@@ -28,9 +28,14 @@ const STATUS_LABELS: Record<AccuQualDocument["status"], string> = {
  * "approved" documents are meant to be live in a module — Draft/In Review
  * stay effectively unreleased, Obsolete stays visible here for history only.
  */
-export function DocumentDetailPage() {
+interface DocumentDetailPageProps {
+  /** When set (embedded in a window), used instead of the route's :id param. */
+  entityId?: number;
+}
+
+export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
   const { id } = useParams();
-  const documentId = Number(id);
+  const documentId = entityId ?? Number(id);
   const { data: doc, isLoading, isError } = documentHooks.useOne(documentId);
   useSetAssistantContext("sop_generator", documentId, doc ? doc.title : `Document #${documentId}`);
   const [approveOpen, setApproveOpen] = useState(false);

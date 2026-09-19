@@ -68,7 +68,11 @@ export async function refreshAccessToken(): Promise<string | null> {
     const { data } = await axios.post<RefreshResponse>(
       `${apiClient.defaults.baseURL}/auth/refresh`,
       {},
-      { withCredentials: true }
+      // X-AccuQual-Csrf (security-audit finding): this endpoint is
+      // authenticated purely by an ambient cookie, so the backend requires
+      // this header to force a CORS preflight — see middleware/csrf.ts.
+      // The value carries no secret; only its presence matters.
+      { withCredentials: true, headers: { "X-AccuQual-Csrf": "1" } }
     );
     useAuthStore.getState().setSession(data.user, data.accessToken, data.tenant);
     return data.accessToken;

@@ -36,12 +36,14 @@ function describeTable(table: PgTable) {
  * Tables that intentionally have no tenant_id column and are deliberately
  * excluded from RLS: `roles` (platform-wide constants, see README's own
  * documented exception), `tenants` itself (it IS the tenant, not owned by
- * one), and `password_reset_tokens` (queried before a tenant is even known —
- * see that schema file's own comment). Nothing else is silently exempted:
- * a real future table with no tenant_id and not listed here fails the third
- * test below instead of passing unnoticed.
+ * one), `password_reset_tokens` (queried before a tenant is even known —
+ * see that schema file's own comment), and `refresh_tokens` (same reasoning
+ * — auth.service.ts's refresh() derives the user/tenant from the token
+ * itself, before any req.tenantId exists). Nothing else is silently
+ * exempted: a real future table with no tenant_id and not listed here fails
+ * the third test below instead of passing unnoticed.
  */
-const DELIBERATELY_GLOBAL_TABLES = new Set(["roles", "tenants", "password_reset_tokens"]);
+const DELIBERATELY_GLOBAL_TABLES = new Set(["roles", "tenants", "password_reset_tokens", "refresh_tokens"]);
 
 function tenantTablesArrayFromSql(): Set<string> {
   const sql = readFileSync(rlsPoliciesPath, "utf8");

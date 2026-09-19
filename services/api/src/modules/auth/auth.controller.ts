@@ -50,9 +50,15 @@ function clearRefreshCookie(res: Response) {
   });
 }
 
-/** Strips the refresh token out of a service result before it's ever serialized into a response body. */
-function withoutRefreshToken<T extends { refreshToken: string }>(result: T) {
-  const { refreshToken: _refreshToken, ...rest } = result;
+/**
+ * Strips the refresh token — and its jti (security-audit finding: refresh
+ * token rotation/reuse tracking, see refreshTokens.ts) — out of a service
+ * result before it's ever serialized into a response body. The jti is
+ * auth.service.ts's own internal bookkeeping key for the refresh_tokens
+ * table; it has no reason to ever reach the client.
+ */
+function withoutRefreshToken<T extends { refreshToken: string; refreshJti?: string }>(result: T) {
+  const { refreshToken: _refreshToken, refreshJti: _refreshJti, ...rest } = result;
   return rest;
 }
 
