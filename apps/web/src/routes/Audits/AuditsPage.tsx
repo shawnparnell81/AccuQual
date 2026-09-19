@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { StatusBadge } from "../../components/tables/StatusBadge";
+import { OpenWindowButton } from "../../components/shared/OpenWindowButton";
 import type { Audit } from "../../api/types";
 
 export function AuditsPage() {
@@ -17,6 +18,10 @@ export function AuditsPage() {
         { header: "Type", accessor: (a) => a.type ?? "—" },
         { header: "Status", accessor: (a) => <StatusBadge value={a.status} /> },
         { header: "Scheduled", accessor: (a) => (a.scheduledAt ? new Date(a.scheduledAt).toLocaleDateString() : "—") },
+        {
+          header: "",
+          accessor: (a) => <OpenWindowButton type="audit" entityId={a.id} title={`Audit #${a.id} — ${a.name}`} />,
+        },
       ]}
       createFields={[
         { name: "name", label: "Audit name" },

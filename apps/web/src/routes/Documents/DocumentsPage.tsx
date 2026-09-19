@@ -3,6 +3,7 @@ import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
+import { OpenWindowButton } from "../../components/shared/OpenWindowButton";
 import type { AccuQualDocument } from "../../api/types";
 
 /** A tenant-wide master index of every controlled document, not one document record — a fixed singleton, same pattern as the Production Logs page. */
@@ -41,6 +42,10 @@ export function DocumentsPage() {
           { header: "Category", accessor: (d) => d.category ?? "—" },
           { header: "Version", accessor: (d) => `v${d.currentVersion}` },
           { header: "Status", accessor: (d) => <StatusBadge value={d.status} /> },
+          {
+            header: "",
+            accessor: (d) => <OpenWindowButton type="document" entityId={d.id} title={`Document #${d.id} — ${d.title}`} />,
+          },
         ]}
         createFields={[
           { name: "title", label: "Title" },

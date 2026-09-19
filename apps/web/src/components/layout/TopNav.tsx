@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Building2, ChevronDown, Grid2x2, Library, Lock, Menu, Search, Settings, X, type LucideIcon } from "lucide-react";
+import { Box, Building2, ChevronDown, Grid2x2, Library, Lock, Menu, Search, Settings, Sparkles, X, type LucideIcon } from "lucide-react";
+import { useWindowStore } from "../../window-manager/useWindowStore";
 import { apiClient } from "../../api/client";
 import { useCurrentTenant, useCurrentUser } from "../../hooks/useAuth";
 import { HomeButton } from "./HomeButton";
@@ -141,6 +142,7 @@ export function TopNav() {
   const departmentPermissionsGrid = useDepartmentPermissionsGrid(isAdmin);
   const kpiCounts = useKpiCounts();
   const documentLibrary = useDocumentLibraryTopLevel();
+  const openWindow = useWindowStore((s) => s.openWindow);
 
   const [openId, setOpenId] = useState<DropdownId | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -411,6 +413,26 @@ export function TopNav() {
             </div>
           )}
         </div>
+
+        {/* Quick-view launchers: pop AI Insights / Digital Twin open as a floating window without leaving whatever page you're on — see WindowManager.tsx (Full-System Audit finding M9). */}
+        <button
+          type="button"
+          onClick={() => openWindow({ type: "ai", title: "AI Insights" })}
+          className="hidden md:flex shrink-0 p-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="Quick AI Insights"
+          title="Quick AI Insights"
+        >
+          <Sparkles size={18} />
+        </button>
+        <button
+          type="button"
+          onClick={() => openWindow({ type: "digitalTwin", title: "Digital Twin" })}
+          className="hidden md:flex shrink-0 p-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="Quick Digital Twin"
+          title="Quick Digital Twin"
+        >
+          <Box size={18} />
+        </button>
 
         {/* General app settings — nav customization is now one tab inside it, not this button's whole purpose. */}
         <Link

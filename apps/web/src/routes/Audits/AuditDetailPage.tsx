@@ -32,10 +32,15 @@ interface AuditPrepSuggestion {
   suggestedEvidence: string[];
 }
 
-export function AuditDetailPage() {
+interface AuditDetailPageProps {
+  /** When set (embedded in a window), used instead of the route's :id param. */
+  entityId?: number;
+}
+
+export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
   const { id } = useParams();
   const navigate = useNavigate();
-  const auditId = Number(id);
+  const auditId = entityId ?? Number(id);
   const historyKey: unknown[][] = [["workflow-history", "audit", auditId]];
   const { data: audit, isLoading, isError } = auditHooks.useOne(auditId);
   useSetAssistantContext("audit", auditId, audit ? audit.name : `Audit #${auditId}`);
