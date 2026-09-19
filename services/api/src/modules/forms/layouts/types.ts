@@ -21,6 +21,8 @@ export interface SimpleField {
   label: string;
   hint?: string;
   options?: string[];
+  /** Display-only even in an editable form — for values owned by the parent record's workflow (e.g. a status that only moves through guarded endpoints). */
+  readOnly?: boolean;
 }
 
 /** N fields laid out side by side (e.g. "CAPA Number" | "Date Initiated"). */

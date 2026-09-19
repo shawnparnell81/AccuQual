@@ -1,8 +1,11 @@
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { StatusBadge } from "../../components/tables/StatusBadge";
+import { SelectField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
+import { useToast } from "../../components/shared/ToastProvider";
 import { useWorkflowAction, useWorkflowUpdate } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
@@ -13,9 +16,19 @@ interface DiscrepancyInvestigation {
   description: string | null;
   severity: string | null;
   status: string;
+  disposition: string | null;
   autoCreated: boolean;
   sourceAuditId: number | null;
 }
+
+const DISPOSITIONS: Array<{ value: string; label: string }> = [
+  { value: "use-as-is", label: "Use as-is" },
+  { value: "rework", label: "Rework" },
+  { value: "repair", label: "Repair" },
+  { value: "scrap", label: "Scrap" },
+  { value: "return-to-supplier", label: "Return to supplier" },
+  { value: "sort", label: "Sort" },
+];
 
 const qualityHooks = createResourceHooks<DiscrepancyInvestigation>("quality");
 
@@ -23,18 +36,25 @@ const qualityHooks = createResourceHooks<DiscrepancyInvestigation>("quality");
 export function QualityDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
   const discrepancyId = Number(id);
   const historyKey: unknown[][] = [["workflow-history", "di", discrepancyId]];
   const { data: discrepancy, isLoading, isError } = qualityHooks.useOne(discrepancyId);
-  // Open -> Investigating -> Disposed are generic-PATCH-only on the backend
-  // (no dedicated endpoint — see the Transitions/Rules Dictionaries); only
-  // Close is a real, sequence-checked, dedicated action.
-  const investigateAction = useWorkflowUpdate<{ id: number; status: string }>("quality", { successMessage: "Marked investigating.", invalidateKeys: historyKey });
-  const disposeAction = useWorkflowUpdate<{ id: number; status: string }>("quality", { successMessage: "Marked disposed.", invalidateKeys: historyKey });
+  // Status moves only through these dedicated, sequence-checked endpoints
+  // (open -> investigating -> disposed -> closed); the generic PATCH no
+  // longer accepts `status`.
+  const investigateAction = useWorkflowAction("quality", "investigate", { successMessage: "Marked investigating.", invalidateKeys: historyKey });
+  const disposeAction = useWorkflowAction<{ id: number; disposition: string }>("quality", "dispose", { successMessage: "Marked disposed.", invalidateKeys: historyKey });
   const closeAction = useWorkflowAction("quality", "close", { successMessage: "Investigation closed.", invalidateKeys: historyKey });
+  const saveDisposition = useWorkflowUpdate<{ id: number; disposition: string | null }>("quality", { successMessage: "Disposition saved.", invalidateKeys: historyKey });
+
+  const [disposition, setDisposition] = useState("");
+  useEffect(() => setDisposition(discrepancy?.disposition ?? ""), [discrepancy?.disposition]);
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !discrepancy) return <p className="text-sm text-muted-foreground">Loading…</p>;
+
+  const closed = discrepancy.status === "closed";
 
   return (
     <div className="flex flex-col gap-4">
@@ -60,7 +80,7 @@ export function QualityDetailPage() {
             label="Mark Investigating"
             navKey="di"
             action={investigateAction}
-            onClick={() => investigateAction.mutate({ id: discrepancyId, status: "investigating" })}
+            onClick={() => investigateAction.mutate({ id: discrepancyId })}
             visible={discrepancy.status === "open"}
             variant="primary"
           />
@@ -68,7 +88,13 @@ export function QualityDetailPage() {
             label="Mark Disposed"
             navKey="di"
             action={disposeAction}
-            onClick={() => disposeAction.mutate({ id: discrepancyId, status: "disposed" })}
+            onClick={() => {
+              if (!disposition) {
+                toast.error("Select a disposition before marking this investigation disposed.");
+                return;
+              }
+              disposeAction.mutate({ id: discrepancyId, disposition });
+            }}
             visible={discrepancy.status === "investigating"}
             variant="primary"
           />
@@ -83,6 +109,34 @@ export function QualityDetailPage() {
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">{discrepancy.description || "No description provided."}</div>
+
+      <div className="rounded-lg border border-border bg-card p-4">
+        <h2 className="mb-2 text-sm font-medium">Disposition</h2>
+        {closed ? (
+          <p className="text-sm">{DISPOSITIONS.find((d) => d.value === discrepancy.disposition)?.label ?? "None"}</p>
+        ) : (
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="w-64">
+              <SelectField label="" value={disposition} onChange={(e) => setDisposition(e.target.value)} aria-label="Disposition">
+                <option value="">Not decided</option>
+                {DISPOSITIONS.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {d.label}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+            <button
+              onClick={() => saveDisposition.mutate({ id: discrepancyId, disposition: disposition || null })}
+              disabled={saveDisposition.isPending || disposition === (discrepancy.disposition ?? "")}
+              className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+            >
+              Save disposition
+            </button>
+            {discrepancy.status === "investigating" && <span className="text-xs text-muted-foreground">Required before this can be marked disposed.</span>}
+          </div>
+        )}
+      </div>
 
       <WorkflowHistoryPanel moduleName="di" recordId={discrepancyId} />
     </div>
