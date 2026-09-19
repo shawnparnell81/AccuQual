@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyFieldMapping, applyValidation, evaluateTrigger, mapInboundRecord } from "../src/modules/erp/erpMappingEngine.js";
+import { applyFieldMapping, applyFieldMappingSafe, applyValidation, categorizeError, evaluateTrigger, mapInboundRecord } from "../src/modules/erp/erpMappingEngine.js";
 
 describe("applyFieldMapping", () => {
   it("maps a field with no transform straight through", () => {
@@ -139,5 +139,36 @@ describe("applyValidation", () => {
   it("cross-field equalsField check", () => {
     expect(applyValidation({ email: "a@x.com", confirmEmail: "a@x.com" }, [{ field: "email", equalsField: "confirmEmail" }])).toEqual([]);
     expect(applyValidation({ email: "a@x.com", confirmEmail: "b@x.com" }, [{ field: "email", equalsField: "confirmEmail" }])).toHaveLength(1);
+  });
+});
+
+describe("categorizeError", () => {
+  it("maps each known pipeline stage to its errorType", () => {
+    expect(categorizeError("mapping")).toBe("mappingError");
+    expect(categorizeError("validation")).toBe("validationError");
+    expect(categorizeError("transform")).toBe("transformError");
+    expect(categorizeError("trigger")).toBe("triggerError");
+    expect(categorizeError("erpApi")).toBe("erpApiError");
+  });
+
+  it("an undefined stage (an uncaught exception with no known attribution) becomes unexpectedError", () => {
+    expect(categorizeError(undefined)).toBe("unexpectedError");
+  });
+});
+
+describe("applyFieldMappingSafe", () => {
+  it("behaves the same as applyFieldMapping when nothing throws", () => {
+    const mappings = [{ source: "name", target: "NAME1" }];
+    expect(applyFieldMappingSafe({ name: "Acme" }, mappings)).toEqual({ fields: { NAME1: "Acme" }, errors: [] });
+  });
+
+  it("maps every field independently, including one with a transform, in a single non-throwing pass", () => {
+    const mappings = [
+      { source: "name", target: "NAME1" },
+      { source: "qty", target: "MENGE", transform: { kind: "numeric" as const, op: "multiply" as const, value: 2 } },
+    ];
+    const result = applyFieldMappingSafe({ name: "Acme", qty: 5 }, mappings);
+    expect(result.errors).toEqual([]);
+    expect(result.fields).toEqual({ NAME1: "Acme", MENGE: 10 });
   });
 });
