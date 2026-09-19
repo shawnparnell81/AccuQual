@@ -60,3 +60,14 @@ export const updateDeviceSchema = z.object({
   type: z.enum(["plc", "sensor", "inspection_equipment", "environmental"]).nullable().optional(),
   digitalTwinModelId: z.number().int().nullable().optional(),
 });
+
+/**
+ * Body of the device-authenticated ingest endpoint. Unlike /iot-ingest, no
+ * deviceId here: the device is identified by its X-Device-Key alone, so a
+ * device can never write a reading under a different device's id. Payload
+ * size is capped since this endpoint is reachable without a user login.
+ */
+export const deviceIngestSchema = z.object({
+  timestamp: reasonableDate.optional(),
+  data: z.record(z.string(), z.unknown()).refine((d) => JSON.stringify(d).length <= 16_384, { message: "Reading payload is too large (16 KB max)" }),
+});

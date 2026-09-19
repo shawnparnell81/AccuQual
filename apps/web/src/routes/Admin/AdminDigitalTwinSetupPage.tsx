@@ -8,6 +8,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { TextField, SelectField } from "../../components/forms/Field";
+import { Modal } from "../../components/modals/Modal";
 import type { DigitalTwinModel, IotDevice, TwinNode } from "../../api/types";
 
 const twinHooks = createResourceHooks<DigitalTwinModel>("digital-twin/models");
@@ -225,8 +226,57 @@ function EditDeviceRow({ device, models, onDone }: { device: IotDevice; models: 
   );
 }
 
+/** The plain key exists only in this response — it's shown once here and never retrievable again. */
+function DeviceKeyModal({ issued, onClose }: { issued: { deviceId: string; apiKey: string } | null; onClose: () => void }) {
+  const toast = useToast();
+  const baseUrl = String(apiClient.defaults.baseURL ?? "").replace(/\/$/, "");
+  const example = `curl -X POST ${baseUrl}/digital-twin/device-ingest \\\n  -H "X-Device-Key: ${issued?.apiKey ?? ""}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"data":{"temperature":72.5}}'`;
+
+  return (
+    <Modal title={issued ? `Ingest key for ${issued.deviceId}` : ""} isOpen={issued !== null} onClose={onClose}>
+      {issued && (
+        <div className="flex flex-col gap-3 text-sm">
+          <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs">Copy this key now — it's shown only once and can't be retrieved later. Issuing a new key replaces it.</p>
+          <div className="flex gap-2">
+            <input readOnly value={issued.apiKey} aria-label="Device key" className="w-full rounded-md border border-form-field bg-background px-2 py-1.5 font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+            <button
+              type="button"
+              onClick={() => navigator.clipboard.writeText(issued.apiKey).then(() => toast.success("Key copied."), () => toast.error("Couldn't copy — select the key and copy it manually."))}
+              className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
+            >
+              Copy
+            </button>
+          </div>
+          <div>
+            <p className="mb-1 text-xs font-medium text-muted-foreground">Send readings like this</p>
+            <pre className="overflow-x-auto rounded-md bg-muted p-2 text-xs">{example}</pre>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 function RegisteredDevices() {
   const toast = useToast();
+  const queryClient = useQueryClient();
+  const [issued, setIssued] = useState<{ deviceId: string; apiKey: string } | null>(null);
+  const issueKey = useMutation({
+    mutationFn: async (id: number) => (await apiClient.post<{ apiKey: string; deviceId: string }>(`/digital-twin/devices/${id}/api-key`)).data,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["digital-twin/devices"] });
+      setIssued({ deviceId: data.deviceId, apiKey: data.apiKey });
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't issue a key.")),
+  });
+  const revokeKey = useMutation({
+    mutationFn: async (id: number) => apiClient.delete(`/digital-twin/devices/${id}/api-key`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["digital-twin/devices"] });
+      toast.success("Key revoked — this device can no longer send readings.");
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't revoke the key.")),
+  });
   const { data: devices = [] } = deviceHooks.useList();
   const { data: models = [] } = twinHooks.useList();
   const deleteDevice = deviceHooks.useDelete();
@@ -234,6 +284,8 @@ function RegisteredDevices() {
 
   if (devices.length === 0) return <p className="text-sm text-muted-foreground">No devices registered yet.</p>;
   return (
+    <>
+    <DeviceKeyModal issued={issued} onClose={() => setIssued(null)} />
     <table className="w-full text-sm">
       <thead className="text-left text-xs text-muted-foreground">
         <tr>
@@ -242,6 +294,7 @@ function RegisteredDevices() {
           <th className="pb-2">Type</th>
           <th className="pb-2">Linked Model</th>
           <th className="pb-2">Last Seen</th>
+          <th className="pb-2">Ingest Key</th>
           <th className="pb-2" />
         </tr>
       </thead>
@@ -256,6 +309,25 @@ function RegisteredDevices() {
               <td className="py-1.5 capitalize">{d.type?.replace(/_/g, " ") ?? "—"}</td>
               <td className="py-1.5">{models.find((m) => m.id === d.digitalTwinModelId)?.name ?? "—"}</td>
               <td className="py-1.5 text-muted-foreground">{d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : "Never (not ingesting yet)"}</td>
+              <td className="py-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{d.hasApiKey ? "Issued" : "None"}</span>
+                  <button
+                    type="button"
+                    onClick={() => issueKey.mutate(d.id)}
+                    disabled={issueKey.isPending}
+                    title={d.hasApiKey ? "Issue a new key — the current one stops working immediately" : "Issue a key so this device can send readings"}
+                    className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
+                  >
+                    {d.hasApiKey ? "Rotate" : "Generate"}
+                  </button>
+                  {d.hasApiKey && (
+                    <button type="button" onClick={() => revokeKey.mutate(d.id)} disabled={revokeKey.isPending} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50">
+                      Revoke
+                    </button>
+                  )}
+                </div>
+              </td>
               <td className="py-1.5 text-right">
                 <div className="flex justify-end gap-2">
                   <button type="button" onClick={() => setEditingId(d.id)} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
@@ -280,6 +352,7 @@ function RegisteredDevices() {
         )}
       </tbody>
     </table>
+    </>
   );
 }
 

@@ -27,6 +27,7 @@ import { workflowRouter } from "../modules/workflow/workflow.routes.js";
 import "../modules/workflow/workflowActions.js";
 import { aiRouter } from "../modules/ai/ai.routes.js";
 import { digitalTwinRouter } from "../modules/digital-twin/digital-twin.routes.js";
+import { deviceIngestRouter } from "../modules/digital-twin/digital-twin.deviceIngest.routes.js";
 import { auditTrailRouter } from "../modules/audit-trail/audit-trail.routes.js";
 import { formsRouter } from "../modules/forms/forms.routes.js";
 import { platformRouter } from "../modules/platform/platform.routes.js";
@@ -84,6 +85,9 @@ apiRouter.use("/equipment", calibrationRouter);
 apiRouter.use("/complaints", complaintsRouter);
 apiRouter.use("/workflow", workflowRouter);
 apiRouter.use("/ai", aiRouter);
+// Before /digital-twin: device ingest authenticates with X-Device-Key, not a user session,
+// and digitalTwinRouter applies requireAuth to everything beneath its prefix.
+apiRouter.use("/digital-twin/device-ingest", deviceIngestRouter);
 apiRouter.use("/digital-twin", digitalTwinRouter);
 apiRouter.use("/audit-trail", auditTrailRouter);
 apiRouter.use("/notifications", notificationsRouter);

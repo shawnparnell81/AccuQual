@@ -46,6 +46,11 @@ export const iotDevices = pgTable(
     type: text("type"), // plc, sensor, inspection_equipment, environmental
     digitalTwinModelId: integer("digital_twin_model_id").references(() => digitalTwinModels.id),
     lastSeenAt: timestamp("last_seen_at"),
+    // SHA-256 of the device's ingest secret (never the secret itself) — lets a
+    // real PLC/sensor authenticate with an X-Device-Key header instead of a
+    // user's short-lived login token. See digital-twin.deviceKeys.ts.
+    apiKeyHash: text("api_key_hash"),
+    apiKeyCreatedAt: timestamp("api_key_created_at"),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => [unique("iot_devices_tenant_device_unique").on(table.tenantId, table.deviceId)]
