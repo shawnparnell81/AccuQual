@@ -45,8 +45,16 @@ export async function assertSafeWebhookUrl(rawUrl: string): Promise<void> {
   if (BLOCKED_HOSTNAMES.has(url.hostname.toLowerCase())) {
     throw AppError.badRequest("Webhook URL may not target a local hostname");
   }
-  if (isIP(url.hostname)) {
-    if (isPrivateIp(url.hostname)) throw AppError.badRequest("Webhook URL may not target a private or reserved address");
+  // WHATWG URL.hostname keeps the brackets around an IPv6 literal
+  // ("[::1]"), but net.isIP() (and every address-shaped check above) needs
+  // them stripped — found via a real CI failure: Linux's dns.lookup()
+  // correctly rejects "[::1]" as an invalid hostname (ENOTFOUND), while
+  // Windows silently tolerates and resolves it anyway, masking the bug
+  // locally. Without this, every IPv6-literal webhook URL — private or
+  // genuinely public — fell through to a DNS lookup that can never succeed.
+  const bareHost = url.hostname.replace(/^\[|\]$/g, "");
+  if (isIP(bareHost)) {
+    if (isPrivateIp(bareHost)) throw AppError.badRequest("Webhook URL may not target a private or reserved address");
     return;
   }
   const { address } = await lookup(url.hostname);
