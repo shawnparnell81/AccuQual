@@ -26,13 +26,18 @@ auditTrailRouter.use(requireAuth, withTenantDb);
  * Deliberately does NOT cover every entityType ever recorded — two real
  * categories are left out on purpose, not missed:
  *   1. Types whose own module has no department gate at all today (Digital
- *      Twin, AI usage records, Attachments — polymorphic, can't be
- *      attributed to one department reliably — Report exports/schedules,
- *      Form Templates, QMS Forms, SCAR Forms): gating their audit history
+ *      Twin/IotDevice, AI usage records, Attachments — polymorphic, can't
+ *      be attributed to one department reliably — Report exports/
+ *      schedules, Form Templates, SCAR Forms): gating their audit history
  *      more strictly than the records themselves would be a new
- *      restriction this fix isn't meant to introduce. QMS Forms/SCAR Forms
- *      losing their own ungated status is Full-System Audit finding
- *      C3/a sibling gap — a separate fix, not this one.
+ *      restriction this fix isn't meant to introduce. Training and QMS
+ *      Forms used to belong on this list too (Full-System Audit findings
+ *      C2/C3), but both later gained a real requireDepartmentAccess gate
+ *      on their own routes — leaving their entityTypes off this map after
+ *      that would have re-opened exactly the intra-tenant disclosure gap
+ *      this fix exists to close, so TrainingAssignment/QmsForm are mapped
+ *      below instead. SCAR Forms is still genuinely ungated at the route
+ *      level; revisit it here if that ever changes too.
  *   2. Genuinely system/permission-level types (Tenant, User, department
  *      and role permission grants) — no single business department owns
  *      these, so they require admin/platform_admin outright instead of a
@@ -64,6 +69,7 @@ const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   "PPAP package": "ppap",
   PurchaseOrder: "erp",
   PurchaseRequisition: "purchase_requisitions",
+  QmsForm: "qms_forms",
   QualityInspectionReport: "quality_inspection",
   ReceivingDocument: "erp",
   ReceivingSettings: "erp",
@@ -84,6 +90,7 @@ const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   SupplierRiskSettings: "suppliers",
   SupplierRmaRequest: "supplier_portal",
   SupplierScorecard: "suppliers",
+  TrainingAssignment: "training",
   WarrantyClaim: "warranty",
   warranty_claim: "warranty", // a real inconsistent-casing duplicate found across call sites — mapped defensively, not "fixed" (out of this change's scope)
   WorkOrder: "work_orders",
