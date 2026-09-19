@@ -58,6 +58,7 @@ const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   Document: "documents",
   DocumentChangeRequest: "documents",
   Equipment: "calibration",
+  ErpConnectorPreset: "erp",
   ErpReceivingLineItem: "erp",
   ErpSyncSettings: "erp",
   FeasibilityReview: "feasibility",

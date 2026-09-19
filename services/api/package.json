@@ -14,6 +14,7 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
     "db:seed-demo-story": "tsx src/db/seedDemoStory.ts",
+    "db:seed-erp-presets": "tsx src/db/seedErpPresets.ts",
     "db:reset-demo-story": "tsx src/db/resetDemoStory.ts",
     "db:backfill-permissions": "tsx src/db/backfillDepartmentPermissions.ts",
     "db:backfill-nav-preferences": "tsx src/db/backfillNavPreferences.ts",

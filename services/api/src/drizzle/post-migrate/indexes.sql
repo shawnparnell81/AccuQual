@@ -53,7 +53,8 @@ DECLARE
     -- this array was last touched, one per feature that shipped later
     -- (Customer Communications Log, Customer Scorecard, Phase 8's
     -- inventory_lots ledger, Phase 6's report_schedules).
-    'customer_communications', 'customer_scorecards', 'inventory_lots', 'report_schedules'
+    'customer_communications', 'customer_scorecards', 'inventory_lots', 'report_schedules',
+    'erp_connector_presets'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP

@@ -79,7 +79,7 @@ DECLARE
     'crar', 'supplier_rma_requests', 'rma_activity_log', 'rma_log',
     'permission_roles', 'permission_role_modules', 'user_permission_roles', 'department_permissions',
     'report_schedules', 'supplier_quality_risk_scores', 'inventory_lots',
-    'customer_communications', 'customer_scorecards'
+    'customer_communications', 'customer_scorecards', 'erp_connector_presets'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP
@@ -93,3 +93,21 @@ BEGIN
     );
   END LOOP;
 END $$;
+
+-- erp_connector_presets is the one table above with a legitimately nullable
+-- tenant_id: most rows are tenant-owned, but a real subset are global/
+-- AccuQual-provided starter presets (tenant_id NULL, seeded by
+-- db/seedErpPresets.ts running as the unrestricted owner role outside RLS,
+-- never by app code under accuqual_app). tenant_isolation's plain equality
+-- check above would make NULL rows invisible to every tenant, since
+-- `NULL = current_tenant_id` is never true. This SECOND, additive
+-- PERMISSIVE policy (Postgres OR's multiple permissive policies of the same
+-- command together) lets every tenant also SELECT the global rows, without
+-- ever allowing accuqual_app to WRITE one: it's scoped to SELECT only, so
+-- INSERT/UPDATE/DELETE still only has tenant_isolation's own WITH CHECK
+-- (tenant_id = current_tenant_id) to satisfy — an app-level attempt to
+-- create or repoint a row to tenant_id NULL is still rejected.
+DROP POLICY IF EXISTS erp_presets_global_read ON erp_connector_presets;
+CREATE POLICY erp_presets_global_read ON erp_connector_presets
+  FOR SELECT
+  USING (tenant_id IS NULL);
