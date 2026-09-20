@@ -3,9 +3,10 @@ import { Navigate, Link } from "react-router-dom";
 import { useLogin } from "../../hooks/useAuth";
 import { useAuthStore } from "../../store/authStore";
 import { TextField } from "../../components/forms/Field";
+import { StandardsDisclaimer } from "../../components/shared/StandardsDisclaimer";
 
 export function LoginPage() {
-  const [email, setEmail] = useState("admin@accuqual.local");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const login = useLogin();
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -14,6 +15,7 @@ export function LoginPage() {
 
   return (
     <div className="flex h-screen items-center justify-center bg-background">
+      <StandardsDisclaimer className="fixed inset-x-0 bottom-3 px-4 text-center" />
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -25,7 +27,7 @@ export function LoginPage() {
           <img src="/branding/logo-mark.png" alt="" className="h-10 w-10 rounded-lg object-cover" />
           <div>
             <h1 className="text-xl font-semibold tracking-wide text-foreground">ACCUQUAL QMS</h1>
-            <p className="text-[10px] tracking-widest text-muted-foreground">ISO 9001 / IATF 16949 COMPLIANT</p>
+            <p className="text-[10px] tracking-widest text-muted-foreground">QUALITY MANAGEMENT SYSTEM</p>
           </div>
         </div>
         <p className="mb-6 mt-3 text-sm text-muted-foreground">Sign in to your quality management workspace</p>

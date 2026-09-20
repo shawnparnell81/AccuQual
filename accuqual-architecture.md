@@ -2,7 +2,7 @@
 
 ## 0. Vision
 AccuQual is a next-generation Quality Management System combining:
-- ISO/IATF/FDA compliance modules
+- Quality modules structured around ISO 9001 / IATF 16949-style practices (not a certification claim)
 - Modern SaaS features
 - AI-driven quality intelligence
 - Digital twin simulation
@@ -30,7 +30,7 @@ AccuQual is a next-generation Quality Management System combining:
 - Quality Engine (NCR, CAPA, 8D, Audits, Training, Change, Risk, Supplier, Calibration, Complaints)
 - Workflow Engine (drag-and-drop automation)
 - AI Engine (LLM-powered quality intelligence)
-- Compliance Engine (ISO/IATF/FDA rules)
+- Quality rules engine (structured around ISO 9001 / IATF 16949-style practices)
 - Notification Engine
 - File Storage Service
 - Audit Trail Service
