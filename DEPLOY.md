@@ -276,6 +276,11 @@ run `npm run db:migrate` (recreates the application role, grants and security po
 the secrets in `.env` (notably `TENANT_AI_CONFIG_ENCRYPTION_KEY`) are **not** in a database backup — keep separate
 copies. Never store a dump as a GitHub artifact: the repository is public.
 
+**Nightly off-platform backup.** `.github/workflows/backup.yml` takes an AES-256-encrypted backup every night to a private
+S3-compatible bucket you own (14 daily / 8 weekly / 12 monthly) and, monthly, restores the newest one into a scratch database
+and verifies it. It needs a bucket plus repository secrets (`BACKUP_DATABASE_URL`, `BACKUP_PASSPHRASE`, `BACKUP_S3_*`,
+optional `BACKUP_HEARTBEAT_URL`); see "Automated nightly backup" in the runbook. Losing `BACKUP_PASSPHRASE` makes every backup unreadable.
+
 ## Real email delivery (ZeptoMail, or SMTP)
 
 The preferred path is ZeptoMail's REST API, using the `qms_transactional`

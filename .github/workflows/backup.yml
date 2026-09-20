@@ -1,0 +1,95 @@
+name: Backup
+
+# Nightly encrypted off-platform database backup, plus a monthly proof that the newest backup actually restores.
+# Setup (bucket, secrets) is in docs/operations/backup-and-restore.md. Schedules only run from the default branch.
+#
+# Notes for anyone editing this file:
+#  - This repository is PUBLIC. Never upload a dump or any backup file as a workflow artifact, and never print a secret.
+#    The dump is encrypted inside the container before it goes anywhere, straight to the bucket.
+#  - GitHub pauses scheduled workflows in a repository with no activity for 60 days. The dead-man's-switch
+#    (BACKUP_HEARTBEAT_URL) is what tells you if a night is ever skipped, not only if one fails.
+on:
+  schedule:
+    - cron: "23 7 * * *" # nightly backup, 07:23 UTC
+    - cron: "41 8 1 * *" # restore drill, 1st of each month, 08:41 UTC
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "What to run"
+        type: choice
+        options: [backup, restore-drill]
+        default: backup
+
+permissions:
+  contents: read
+
+concurrency:
+  group: accuqual-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Encrypted backup
+    if: (github.event_name == 'schedule' && github.event.schedule == '23 7 * * *') || (github.event_name == 'workflow_dispatch' && inputs.task == 'backup')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check configuration
+        env:
+          HAVE_DB: ${{ secrets.BACKUP_DATABASE_URL != '' }}
+          HAVE_PASS: ${{ secrets.BACKUP_PASSPHRASE != '' }}
+          HAVE_BUCKET: ${{ secrets.BACKUP_S3_BUCKET != '' }}
+          HAVE_KEY: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID != '' && secrets.BACKUP_S3_SECRET_ACCESS_KEY != '' }}
+        run: |
+          missing=""
+          [ "$HAVE_DB" = "true" ] || missing="$missing BACKUP_DATABASE_URL"
+          [ "$HAVE_PASS" = "true" ] || missing="$missing BACKUP_PASSPHRASE"
+          [ "$HAVE_BUCKET" = "true" ] || missing="$missing BACKUP_S3_BUCKET"
+          [ "$HAVE_KEY" = "true" ] || missing="$missing BACKUP_S3_ACCESS_KEY_ID/BACKUP_S3_SECRET_ACCESS_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Backups are not configured. Missing repository secrets:$missing. See docs/operations/backup-and-restore.md."
+            exit 1
+          fi
+
+      - name: Build backup tool
+        run: docker build -q -f ops/backup/Dockerfile -t accuqual-backup:ci .
+
+      - name: Take, encrypt and upload the backup
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+          BACKUP_HEARTBEAT_URL: ${{ secrets.BACKUP_HEARTBEAT_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.BACKUP_S3_REGION || 'auto' }}
+        run: |
+          docker run --rm \
+            -e BACKUP_DATABASE_URL -e BACKUP_PASSPHRASE -e BACKUP_S3_BUCKET -e BACKUP_S3_ENDPOINT -e BACKUP_HEARTBEAT_URL \
+            -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
+            accuqual-backup:ci backup
+
+  restore-drill:
+    name: Restore drill (newest backup into a scratch database)
+    if: (github.event_name == 'schedule' && github.event.schedule == '41 8 1 * *') || (github.event_name == 'workflow_dispatch' && inputs.task == 'restore-drill')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+
+      - name: Restore the newest backup and verify it against its manifest
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.BACKUP_S3_REGION || 'auto' }}
+        run: bash ops/backup/restore-drill.sh latest daily
