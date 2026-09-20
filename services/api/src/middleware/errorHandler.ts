@@ -4,6 +4,8 @@ import { AppError } from "../utils/appError.js";
 import { logger } from "../utils/logger.js";
 import { pool } from "../db/index.js";
 import { recordAuditTrailStandalone } from "../modules/audit-trail/audit-trail.service.js";
+import { getRequestId } from "../modules/monitoring/requestContext.js";
+import { captureError } from "../modules/monitoring/sentry.js";
 
 const STATE_CHANGING_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
@@ -123,6 +125,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
       error: "ValidationError",
       message: "Request failed validation",
       details: err.flatten(),
+      requestId: getRequestId(),
     });
   }
 
@@ -131,21 +134,26 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
       logger.error(err.message, { stack: err.stack });
     }
     logFailedTransition(req, err, err.statusCode);
+    if (err.statusCode >= 500) captureError(err, { path: req.path, method: req.method });
     return res.status(err.statusCode).json({
       error: err.name,
       message: err.message,
       details: err.details,
+      requestId: getRequestId(),
     });
   }
 
   logger.error("Unhandled error", { message: err?.message, stack: err?.stack, path: req.path });
   logFailedTransition(req, err, 500);
+  captureError(err, { path: req.path, method: req.method });
   return res.status(500).json({
     error: "InternalServerError",
     message: "An unexpected error occurred",
+    // Quote this to support: it is on every log line and error report for this request.
+    requestId: getRequestId(),
   });
 };
 
 export const notFoundHandler: RequestHandler = (req, res) => {
-  res.status(404).json({ error: "NotFound", message: `No route for ${req.method} ${req.path}` });
+  res.status(404).json({ error: "NotFound", message: `No route for ${req.method} ${req.path}`, requestId: getRequestId() });
 };

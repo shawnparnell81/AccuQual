@@ -38,6 +38,15 @@ services:
       # Webhook URL to paste in here.
       - key: ALERT_WEBHOOK_URL
         sync: false
+      # Monitoring (see DEPLOY.md "Monitoring & alerting"). Each is optional and does nothing until set.
+      # SENTRY_DSN: error tracking for the API. HEARTBEAT_URL: dead-man's-switch ping (Healthchecks.io etc.).
+      - key: SENTRY_DSN
+        sync: false
+      - key: HEARTBEAT_URL
+        sync: false
+      # Watch these background workers; the alert names any that stop reporting in. Remove a name if you don't deploy that worker.
+      - key: MONITOR_EXPECTED_WORKERS
+        value: workflow,ai,digital-twin
       # ZeptoMail (agent qms_transactional) Send Mail token — the preferred
       # delivery path; takes precedence over SMTP_* below. Paste it in
       # Render's dashboard, never into this repo.
@@ -77,6 +86,9 @@ services:
           type: web
           name: accuqual-api
           property: hostport
+      # Optional browser error tracking (Sentry DSN for the web project). Baked into the build, so changing it needs a redeploy.
+      - key: VITE_SENTRY_DSN
+        sync: false
 
   # Real Redis Streams event bus — previously undeployed entirely (this
   # blueprint only ever had accuqual-api/accuqual-web), meaning the three

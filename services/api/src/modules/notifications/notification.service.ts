@@ -6,6 +6,7 @@ import { notificationLog } from "../../drizzle/schema/notifications.js";
 import { logger } from "../../utils/logger.js";
 import { env } from "../../config/env.js";
 import type { Department } from "../../middleware/departmentAccess.js";
+import { metrics } from "../monitoring/metrics.js";
 
 interface NotifyDepartmentInput {
   tenantId: number;
@@ -194,18 +195,25 @@ export function setEmailTransport(transport: EmailTransport | null) {
  * there's no tenant-scoped table to write it against pre-auth. Real
  * delivery still goes through the exact same transport.
  */
+/** One delivery attempt through the active transport; a failure is counted for the "outgoing email" alert. */
+async function deliver(transport: EmailTransport, message: { to: string; subject: string; body: string }): Promise<"sent" | "failed"> {
+  const status = await transport.send(message).catch(() => "failed" as const);
+  if (status === "failed") metrics.emailFailures.add();
+  return status;
+}
+
 export async function sendEmail(message: { to: string; subject: string; body: string }): Promise<"sent" | "logged_only" | "failed"> {
   if (!activeTransport) {
     logger.info("Email (logged, not delivered — no transport configured)", message);
     return "logged_only";
   }
-  return activeTransport.send(message).catch(() => "failed" as const);
+  return deliver(activeTransport, message);
 }
 
 /** Writes one notification_log row per recipient and returns how many were notified. */
 async function notify(db: TenantDb, tenantId: number, recipients: string[], subject: string, body: string, relatedEntityType?: string, relatedEntityId?: number): Promise<number> {
   for (const recipient of recipients) {
-    const status = activeTransport ? await activeTransport.send({ to: recipient, subject, body }).catch(() => "failed" as const) : "logged_only";
+    const status = activeTransport ? await deliver(activeTransport, { to: recipient, subject, body }) : "logged_only";
     await db.insert(notificationLog).values({ tenantId, channel: "email", recipient, subject, body, status, relatedEntityType, relatedEntityId });
   }
   return recipients.length;
@@ -255,7 +263,7 @@ export async function retryFailedNotifications(db: TenantDb, tenantId: number): 
 
   let sent = 0;
   for (const entry of failed) {
-    const status = await activeTransport.send({ to: entry.recipient, subject: entry.subject, body: entry.body }).catch(() => "failed" as const);
+    const status = await deliver(activeTransport, { to: entry.recipient, subject: entry.subject, body: entry.body });
     await db.update(notificationLog).set({ status }).where(eq(notificationLog.id, entry.id));
     if (status === "sent") sent++;
   }

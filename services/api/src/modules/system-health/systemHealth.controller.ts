@@ -10,6 +10,9 @@ import { notificationLog } from "../../drizzle/schema/notifications.js";
 import { users } from "../../drizzle/schema/users.js";
 import { env } from "../../config/env.js";
 import { buildWorkflowHealthReport } from "../workflow/workflow.controller.js";
+import { currentAlerts } from "../monitoring/alerts.js";
+import { metrics } from "../monitoring/metrics.js";
+import { sentryEnabled } from "../monitoring/sentry.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
 
 type Status = "ok" | "warning" | "critical";
@@ -131,6 +134,29 @@ async function checkSupplierPortal(db: TenantDb, tenantId: number): Promise<Heal
   };
 }
 
+/** The monitoring system itself: what is firing right now, and which of its outside connections are switched on. */
+function checkMonitoring(): HealthCheck {
+  const alerts = currentAlerts();
+  const firing = alerts.filter((a) => a.firing);
+  const requests5m = metrics.requests.total(5 * 60_000);
+  const errors5m = metrics.serverErrors.total(5 * 60_000);
+  return {
+    status: firing.some((a) => a.key === "database") ? "critical" : firing.length > 0 ? "warning" : "ok",
+    detail: firing.length === 0 ? "No alerts firing" : `${firing.length} alert${firing.length === 1 ? "" : "s"} firing: ${firing.map((a) => a.title).join(", ")}`,
+    alerts,
+    requests5m,
+    serverErrors5m: errors5m,
+    version: env.APP_VERSION,
+    uptimeSeconds: Math.round(process.uptime()),
+    configured: {
+      errorTracking: sentryEnabled(),
+      alertWebhook: !!env.ALERT_WEBHOOK_URL,
+      heartbeat: !!env.HEARTBEAT_URL,
+      workersMonitored: env.MONITOR_EXPECTED_WORKERS.split(",").map((s) => s.trim()).filter(Boolean),
+    },
+  };
+}
+
 /**
  * GET /system-health — Phase 10's System Health dashboard. Aggregates
  * lightweight signals from across the app into one consolidated view;
@@ -153,7 +179,7 @@ export const getSystemHealthHandler = asyncHandler(async (req: Request, res: Res
     checkSupplierPortal(db, tenantId),
   ]);
 
-  const checks = { database, ai, workflow, email, reporting, receivingInventory, supplierPortal };
+  const checks = { database, monitoring: checkMonitoring(), ai, workflow, email, reporting, receivingInventory, supplierPortal };
   const overall: Status = Object.values(checks).some((c) => c.status === "critical")
     ? "critical"
     : Object.values(checks).some((c) => c.status === "warning")

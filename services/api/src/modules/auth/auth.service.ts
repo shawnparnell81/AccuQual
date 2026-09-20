@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { randomBytes, randomUUID, createHash } from "node:crypto";
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { assertPasswordAcceptable } from "../../utils/passwordPolicy.js";
+import { metrics } from "../monitoring/metrics.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { checkSecondFactor, clearMfa, confirmEnrollment, evaluateMfa, markMfaRequired, recoveryCodesRemaining, regenerateRecoveryCodes, signMfaToken, startEnrollment, verifyMfaToken } from "./mfa.service.js";
 import { db } from "../../db/index.js";
@@ -232,6 +233,7 @@ export async function confirmEnrollmentWithToken(mfaToken: string, code: string)
  * that actually flips the account to locked writes the audit entry and email.
  */
 async function recordFailedLogin(user: { id: number; email: string; tenantId: number | null; firstFailedLoginAt: Date | null }): Promise<void> {
+  metrics.loginFailures.add(); // feeds the "sign-in attacks" alert
   const windowMs = env.LOGIN_FAILURE_WINDOW_MINUTES * 60_000;
   const windowExpired = !user.firstFailedLoginAt || user.firstFailedLoginAt.getTime() < Date.now() - windowMs;
   const [after] = await db
@@ -249,6 +251,7 @@ async function recordFailedLogin(user: { id: number; email: string; tenantId: nu
     .where(and(eq(users.id, user.id), or(isNull(users.lockedUntil), lt(users.lockedUntil, now))))
     .returning({ id: users.id });
   if (!locked) return; // a parallel request already locked it
+  metrics.lockouts.add();
 
   if (user.tenantId) {
     await recordAuditTrail(db, {

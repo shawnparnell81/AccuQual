@@ -650,6 +650,14 @@ export interface SystemHealthReport {
   checkedAt: string;
   checks: {
     database: SystemHealthCheck & { latencyMs: number };
+    monitoring: SystemHealthCheck & {
+      alerts: { key: string; title: string; firing: boolean; since: string | null; message: string }[];
+      requests5m: number;
+      serverErrors5m: number;
+      version: string;
+      uptimeSeconds: number;
+      configured: { errorTracking: boolean; alertWebhook: boolean; heartbeat: boolean; workersMonitored: string[] };
+    };
     ai: SystemHealthCheck & { mode: "live" | "stub"; recentTotal: number; recentErrorCount: number };
     workflow: SystemHealthCheck & { total: number; active: number; withIssues: number; neverRun: number };
     email: SystemHealthCheck & { sent: number; failed: number; loggedOnly: number };

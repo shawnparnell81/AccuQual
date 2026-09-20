@@ -2,6 +2,7 @@ import { createClient } from "redis";
 import { pool } from "../../db/index.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
+import { monitorTick, resetAlertState } from "./alerts.js";
 
 export type DependencyStatus = "ok" | "critical";
 
@@ -115,19 +116,13 @@ export async function sendAlert(message: string, webhookUrl: string | undefined 
  */
 const POLL_INTERVAL_MS = 60 * 1000;
 let pollHandle: ReturnType<typeof setInterval> | null = null;
-let lastStatus: DependencyStatus | null = null;
 
+/** Runs every alert rule (database, error burst, workers, workflow failures, sign-in attacks, email) — see alerts.ts. */
 async function pollReadiness(): Promise<void> {
   try {
-    const report = await checkReadiness();
-    if (report.status === "critical" && lastStatus !== "critical") {
-      await sendAlert(`Database unreachable — ${report.database.detail}`);
-    } else if (report.status === "ok" && lastStatus === "critical") {
-      await sendAlert("Database reachable again — recovered.");
-    }
-    lastStatus = report.status;
+    await monitorTick();
   } catch (err) {
-    logger.error("[health-monitor] readiness poll itself failed", err);
+    logger.error("[health-monitor] alert cycle itself failed", err);
   }
 }
 
@@ -140,5 +135,5 @@ export function startHealthMonitor(): void {
 export function stopHealthMonitor(): void {
   if (pollHandle) clearInterval(pollHandle);
   pollHandle = null;
-  lastStatus = null;
+  resetAlertState();
 }
