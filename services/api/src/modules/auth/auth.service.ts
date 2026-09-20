@@ -553,3 +553,21 @@ export async function startSessionForSsoUser(userId: number) {
   if (row.users.tenantId && (!row.tenants || row.tenants.status !== "active" || row.tenants.isDeleted)) throw AppError.forbidden("Tenant is inactive");
   return completeLogin(row.users, row.roles?.name ?? null, row.tenants);
 }
+
+/**
+ * Re-confirms who is at the keyboard before something sensitive (a full data export): the current password, and a
+ * two-step code when the account uses one. Wrong answers count toward the same lockout as wrong sign-ins.
+ */
+export async function confirmIdentity(userId: number, password: string, code?: string): Promise<void> {
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
+  if (!user) throw AppError.notFound("User");
+  if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) throw new AppError("Too many failed attempts. Try again later.", 429);
+  if (!(await bcrypt.compare(password, user.passwordHash))) {
+    await recordFailedLogin(user);
+    throw AppError.unauthorized("That password isn't correct. (If you normally sign in with single sign-on, use “Forgot password” once to set one.)");
+  }
+  if (user.mfaEnabled && !(code && (await checkSecondFactor(userId, code)))) {
+    await recordFailedLogin(user);
+    throw AppError.unauthorized("Enter a current code from your authenticator app.");
+  }
+}

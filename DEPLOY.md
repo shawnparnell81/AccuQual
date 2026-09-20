@@ -227,6 +227,22 @@ and all three workers are deployed and healthy, promoting `redis` to a hard depe
 `checkReadiness()` (`services/api/src/modules/monitoring/healthMonitor.ts`) is a safe one-line change —
 just not done automatically, since it changes `/health`'s HTTP status.
 
+## Data export & privacy documents
+
+**Data export.** Admin Console → **Data Export** lets an organization's administrator download everything it holds
+(records, history, uploaded files) as a ZIP, in JSON Lines or CSV. They re-enter their password (and authenticator
+code) first; the browser then downloads from a single-use link that expires in two minutes; each export is audited
+(who, when, row and file counts). Credentials are withheld and named in the manifest. Files are read only from the
+organization's own folder under `STORAGE_LOCAL_PATH`, so what an export includes depends on that storage persisting
+(a Docker volume, or a persistent disk on Render). Limits: 3 exports an hour per organization, one at a time, 250,000
+rows per table, 1 GB of files (each file 100 MB).
+
+**Privacy documents** live in `docs/privacy/`: `data-handling-summary.md` (for security questionnaires),
+`subprocessors.md`, and `data-processing-addendum-template.md`. They contain **[bracketed]** items that need
+values from your hosting accounts (regions, backup retention, deletion timeline) and the DPA template needs a
+lawyer's review before it goes to a customer. Update `subprocessors.md` in the same change that adds or removes a
+service that handles customer data.
+
 ## Real email delivery (ZeptoMail, or SMTP)
 
 The preferred path is ZeptoMail's REST API, using the `qms_transactional`

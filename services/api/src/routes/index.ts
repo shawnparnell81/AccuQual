@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authRouter } from "../modules/auth/auth.routes.js";
 import { workflowRunsRouter } from "../modules/workflow/workflow.runs.js";
+import { dataExportRouter } from "../modules/data-export/dataExport.routes.js";
 import { managementReviewRouter, contextRouter } from "../modules/versioning/versioning.routes.js";
 import { ssoPublicRouter, ssoAdminRouter } from "../modules/sso/sso.routes.js";
 import { usersRouter } from "../modules/users/users.routes.js";
@@ -73,6 +74,7 @@ export const apiRouter = Router();
 apiRouter.use("/auth/sso", ssoPublicRouter);
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/sso", ssoAdminRouter);
+apiRouter.use("/data-export", dataExportRouter);
 apiRouter.use("/users", usersRouter);
 apiRouter.use("/roles", rolesRouter);
 apiRouter.use("/documents", documentsRouter);

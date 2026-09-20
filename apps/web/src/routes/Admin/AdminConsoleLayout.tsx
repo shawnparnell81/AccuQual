@@ -1,6 +1,6 @@
 import { NavLink, Outlet, Link } from "react-router-dom";
 import clsx from "clsx";
-import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, Plug, AlertTriangle, KeyRound, type LucideIcon } from "lucide-react";
+import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, Plug, AlertTriangle, KeyRound, DatabaseBackup, type LucideIcon } from "lucide-react";
 
 interface ConsoleSection {
   key: string;
@@ -30,6 +30,7 @@ const SECTIONS: ConsoleSection[] = [
   { key: "system_health", label: "System Health", icon: HeartPulse, path: "system-health", description: "Cross-module diagnostics: AI, workflow, email, reporting, receiving, supplier portal, database" },
   { key: "api_docs", label: "API Reference", icon: FileCode2, path: "api-docs", description: "Interactive request/response docs generated from the app's own validation schemas" },
   { key: "sso", label: "Single Sign-On", icon: KeyRound, path: "sso", description: "Sign in with your company identity provider (OpenID Connect): domains, provider, and rules" },
+  { key: "data_export", label: "Data Export", icon: DatabaseBackup, path: "data-export", description: "Download everything your organization keeps in AccuQual as a ZIP" },
   { key: "tenant", label: "Tenant Settings", icon: Building2, path: "tenant-settings", description: "Organization name, logo, timezone, and contact info" },
 ];
 
