@@ -54,8 +54,9 @@ export function ResetPasswordPage() {
         <p className="mb-6 mt-3 text-sm text-muted-foreground">Choose a new password for your account.</p>
 
         <div className="flex flex-col gap-4">
-          <TextField label="New Password" type="password" minLength={8} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
-          <TextField label="Confirm New Password" type="password" minLength={8} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+          <TextField label="New Password" type="password" minLength={12} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+          <p className="text-xs text-muted-foreground">At least 12 characters. Common passwords, and anything containing your email, are refused.</p>
+          <TextField label="Confirm New Password" type="password" minLength={12} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
         </div>
 
         {error && <p className="mt-3 text-sm text-destructive">{error}</p>}

@@ -14,6 +14,8 @@ export interface AccessTokenPayload {
   // compiling unchanged; verifyAccessToken callers must still treat a
   // missing value the same as null.
   supplierId?: number | null;
+  // users.tokenVersion at issue time — requireAuth compares it with the live value, so logout, a password reset, a role change or a deactivation end this token at once instead of at its expiry. Optional so tokens issued before this field existed still verify.
+  tv?: number;
 }
 
 export interface RefreshTokenPayload {

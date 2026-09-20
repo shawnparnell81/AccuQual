@@ -20,6 +20,17 @@ const envSchema = z.object({
   JWT_ACCESS_TTL: z.string().default("15m"),
   JWT_REFRESH_TTL: z.string().default("7d"),
 
+  // Login hardening. A session ends after this many minutes without the
+  // browser needing a new access token (an active user renews every
+  // JWT_ACCESS_TTL, so real idleness is what trips it).
+  SESSION_IDLE_TIMEOUT_MINUTES: z.coerce.number().int().min(1).default(60),
+  // This many wrong passwords inside LOGIN_FAILURE_WINDOW_MINUTES lock the account for LOGIN_LOCKOUT_MINUTES.
+  LOGIN_MAX_FAILURES: z.coerce.number().int().min(1).default(5),
+  LOGIN_FAILURE_WINDOW_MINUTES: z.coerce.number().int().min(1).default(15),
+  LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().min(1).default(15),
+  // Rejects passwords found in known breaches via the Have I Been Pwned range API (k-anonymity: only the first 5 hex chars of the SHA-1 leave the server). Fails open if the service is unreachable. Defaults to on, except under test.
+  PASSWORD_BREACH_CHECK: z.enum(["true", "false"]).optional(),
+
   REDIS_URL: z.string().default("redis://localhost:6379"),
 
   STORAGE_DRIVER: z.enum(["local", "azure"]).default("local"),

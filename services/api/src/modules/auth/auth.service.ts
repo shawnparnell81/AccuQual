@@ -1,6 +1,8 @@
 import bcrypt from "bcryptjs";
 import { randomBytes, randomUUID, createHash } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { assertPasswordAcceptable } from "../../utils/passwordPolicy.js";
+import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { db } from "../../db/index.js";
 import { users } from "../../drizzle/schema/users.js";
 import { roles } from "../../drizzle/schema/roles.js";
@@ -62,6 +64,7 @@ async function issueTokens(user: {
     roleName: user.roleName,
     department: user.department,
     supplierId: user.supplierId ?? null,
+    tv: user.tokenVersion,
   });
   const jti = randomUUID();
   const refreshToken = signRefreshToken({ sub: String(user.id), tokenVersion: user.tokenVersion, jti });
@@ -81,10 +84,11 @@ export async function register(input: { email: string; password: string; name?: 
   const existing = await db.select().from(users).where(eq(users.email, input.email));
   if (existing.length > 0) throw AppError.badRequest("Email already registered");
 
+  await assertPasswordAcceptable(input.password, { email: input.email, name: input.name });
   const passwordHash = await bcrypt.hash(input.password, 10);
   const [created] = await db
     .insert(users)
-    .values({ email: input.email, passwordHash, name: input.name, tenantId: tenant.id })
+    .values({ email: input.email, passwordHash, name: input.name, tenantId: tenant.id, passwordChangedAt: new Date() })
     .returning();
   if (!created) throw new AppError("Failed to create user", 500);
 
@@ -110,16 +114,71 @@ export async function login(input: { email: string; password: string }) {
     throw AppError.forbidden("Tenant is inactive");
   }
 
+  // A locked account is refused BEFORE the password is even compared, so
+  // guessing during the lock learns nothing and cannot extend it.
+  if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+    const minutes = Math.max(1, Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000));
+    throw new AppError(`Too many failed sign-in attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}, or reset your password.`, 429);
+  }
+
   const valid = await bcrypt.compare(input.password, user.passwordHash);
-  if (!valid) throw AppError.unauthorized("Invalid credentials");
+  if (!valid) {
+    await recordFailedLogin(user);
+    throw AppError.unauthorized("Invalid credentials");
+  }
 
   // Phase 7 — Supplier Portal health indicators ("last supplier login")
   // read this; best-effort, never blocks a successful login on its own
-  // failure.
-  await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id)).catch(() => undefined);
+  // failure. Also clears the failed-attempt counters (and an expired lock).
+  await db.update(users).set({ lastLoginAt: new Date(), failedLoginCount: 0, firstFailedLoginAt: null, lockedUntil: null }).where(eq(users.id, user.id)).catch(() => undefined);
 
   const tokens = await issueTokens({ id: user.id, tenantId: user.tenantId, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion });
   return { user: sanitize({ ...user, roleName }), tenant: row.tenants ? { id: row.tenants.id, name: row.tenants.name, code: row.tenants.code, branding: row.tenants.branding } : null, ...tokens };
+}
+
+/**
+ * Counts one wrong password. LOGIN_MAX_FAILURES of them inside
+ * LOGIN_FAILURE_WINDOW_MINUTES lock the account for LOGIN_LOCKOUT_MINUTES,
+ * leaving an audit entry and emailing the owner. The increment itself is one
+ * atomic SQL statement, so parallel guesses can't undercount; only the request
+ * that actually flips the account to locked writes the audit entry and email.
+ */
+async function recordFailedLogin(user: { id: number; email: string; tenantId: number | null; firstFailedLoginAt: Date | null }): Promise<void> {
+  const windowMs = env.LOGIN_FAILURE_WINDOW_MINUTES * 60_000;
+  const windowExpired = !user.firstFailedLoginAt || user.firstFailedLoginAt.getTime() < Date.now() - windowMs;
+  const [after] = await db
+    .update(users)
+    .set(windowExpired ? { failedLoginCount: 1, firstFailedLoginAt: new Date() } : { failedLoginCount: sql`${users.failedLoginCount} + 1` })
+    .where(eq(users.id, user.id))
+    .returning({ count: users.failedLoginCount });
+  if (!after || after.count < env.LOGIN_MAX_FAILURES) return;
+
+  const now = new Date();
+  const lockedUntil = new Date(now.getTime() + env.LOGIN_LOCKOUT_MINUTES * 60_000);
+  const [locked] = await db
+    .update(users)
+    .set({ lockedUntil, failedLoginCount: 0, firstFailedLoginAt: null })
+    .where(and(eq(users.id, user.id), or(isNull(users.lockedUntil), lt(users.lockedUntil, now))))
+    .returning({ id: users.id });
+  if (!locked) return; // a parallel request already locked it
+
+  if (user.tenantId) {
+    await recordAuditTrail(db, {
+      tenantId: user.tenantId,
+      entityType: "User",
+      entityId: user.id,
+      action: "status_change",
+      changes: { action: "account_locked", reason: "too_many_failed_logins", failedAttempts: after.count, lockedUntil: lockedUntil.toISOString() },
+    }).catch((err) => logger.error("Failed to audit an account lockout", { userId: user.id, err }));
+  }
+  logger.warn(`Account ${user.id} locked for ${env.LOGIN_LOCKOUT_MINUTES} minutes after ${after.count} failed sign-ins.`);
+
+  const notice = renderTemplate("account_locked", {
+    attempts: String(after.count),
+    lockoutMinutes: String(env.LOGIN_LOCKOUT_MINUTES),
+    resetUrl: `${env.FRONTEND_URL}/forgot-password`,
+  });
+  await sendEmail({ to: user.email, subject: notice.subject, body: notice.body }).catch((err) => logger.error("Failed to send the account-locked email", { userId: user.id, err }));
 }
 
 export async function refresh(refreshToken: string) {
@@ -133,6 +192,11 @@ export async function refresh(refreshToken: string) {
   const full = await userWithRole(Number(payload.sub));
   if (!full || full.tokenVersion !== payload.tokenVersion) {
     throw AppError.unauthorized("Refresh token has been revoked");
+  }
+  // A deactivated account must not be able to mint new access tokens.
+  if (!full.isActive) {
+    await revokeRefreshTokenRows(full.id);
+    throw AppError.unauthorized("Account is deactivated");
   }
 
   // Security-audit finding (medium): reuse detection. `jti` is only absent
@@ -150,6 +214,13 @@ export async function refresh(refreshToken: string) {
     const [tokenRow] = await db.select().from(refreshTokens).where(eq(refreshTokens.jti, payload.jti));
     if (!tokenRow || tokenRow.revokedAt) {
       throw AppError.unauthorized("Refresh token has been revoked");
+    }
+    // Idle timeout: an active browser renews its access token every
+    // JWT_ACCESS_TTL, so a refresh token this old means nobody used the
+    // session for that long. Ends the session; the user signs in again.
+    if (tokenRow.createdAt && Date.now() - tokenRow.createdAt.getTime() > env.SESSION_IDLE_TIMEOUT_MINUTES * 60_000) {
+      await revokeRefreshTokenRows(full.id);
+      throw AppError.unauthorized("Your session ended after a period of inactivity. Please sign in again.");
     }
     if (tokenRow.usedAt) {
       logger.warn(`Refresh token reuse detected for user ${full.id} (jti ${payload.jti}) — revoking the account's session.`);
@@ -169,6 +240,8 @@ export async function refresh(refreshToken: string) {
 }
 
 /** Marks every not-yet-revoked refresh token row for this user as revoked — logout()/resetPassword() call this alongside their own tokenVersion bump for real, itemizable revocation instead of relying on tokenVersion alone. */
+export const revokeRefreshTokenRows = revokeAllRefreshTokens;
+
 async function revokeAllRefreshTokens(userId: number): Promise<void> {
   await db
     .update(refreshTokens)
@@ -266,9 +339,26 @@ export async function resetPassword(rawToken: string, newPassword: string): Prom
     throw AppError.badRequest("This reset link is invalid or has expired.");
   }
 
+  const [owner] = await db.select({ email: users.email, name: users.name, tenantId: users.tenantId, lockedUntil: users.lockedUntil }).from(users).where(eq(users.id, tokenRow.userId));
+  await assertPasswordAcceptable(newPassword, { email: owner?.email, name: owner?.name ?? undefined });
+
   const passwordHash = await bcrypt.hash(newPassword, 10);
   const nextTokenVersion = (await currentTokenVersion(tokenRow.userId)) + 1;
-  await db.update(users).set({ passwordHash, tokenVersion: nextTokenVersion }).where(eq(users.id, tokenRow.userId));
+  // Proving control of the mailbox also clears any lockout.
+  await db
+    .update(users)
+    .set({ passwordHash, tokenVersion: nextTokenVersion, passwordChangedAt: new Date(), failedLoginCount: 0, firstFailedLoginAt: null, lockedUntil: null })
+    .where(eq(users.id, tokenRow.userId));
+  if (owner?.tenantId) {
+    await recordAuditTrail(db, {
+      tenantId: owner.tenantId,
+      entityType: "User",
+      entityId: tokenRow.userId,
+      action: "status_change",
+      changes: { action: "password_reset", unlockedAccount: !!owner.lockedUntil && owner.lockedUntil.getTime() > Date.now() },
+      performedBy: tokenRow.userId,
+    }).catch((err) => logger.error("Failed to audit a password reset", { userId: tokenRow.userId, err }));
+  }
   await revokeAllRefreshTokens(tokenRow.userId);
   await db.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, tokenRow.id));
 }
