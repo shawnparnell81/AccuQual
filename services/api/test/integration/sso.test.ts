@@ -138,15 +138,18 @@ let adminToken: string;
 let workerRoleId: number;
 let adminRoleId: number;
 const userIds: number[] = [];
-const createdRoleIds: number[] = [];
+const createdRoleIds: number[] = []; // only the uniquely named worker role; 'admin' is a shared system role and is left in place (parallel test files use it)
 const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
 
 async function ensureRole(name: string): Promise<number> {
   const [existing] = await db.select().from(roles).where(eq(roles.name, name));
   if (existing) return existing.id;
-  const [r] = await db.insert(roles).values({ name }).returning();
-  createdRoleIds.push(r!.id);
-  return r!.id;
+  const [r] = await db.insert(roles).values({ name }).onConflictDoNothing().returning();
+  if (r) {
+    if (name.startsWith("sso-worker-")) createdRoleIds.push(r.id);
+    return r.id;
+  }
+  return (await db.select().from(roles).where(eq(roles.name, name)))[0]!.id;
 }
 
 async function makeUser(label: string, tenant: number, extra: Partial<typeof users.$inferInsert> = {}) {

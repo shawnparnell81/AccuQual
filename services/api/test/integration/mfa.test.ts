@@ -30,14 +30,14 @@ let tenantId: number;
 let adminRoleId: number;
 let platformRoleId: number;
 const userIds: number[] = [];
-const createdRoleIds: number[] = [];
 
+// 'admin' and 'platform_admin' are real system roles; a fresh CI database may not have them yet. They are created if missing and deliberately left in place afterwards — other test files run in parallel and their users reference the same rows.
 async function ensureRole(name: string): Promise<number> {
   const [existing] = await db.select().from(roles).where(eq(roles.name, name));
   if (existing) return existing.id;
-  const [r] = await db.insert(roles).values({ name }).returning();
-  createdRoleIds.push(r!.id);
-  return r!.id;
+  const [r] = await db.insert(roles).values({ name }).onConflictDoNothing().returning();
+  if (r) return r.id;
+  return (await db.select().from(roles).where(eq(roles.name, name)))[0]!.id;
 }
 
 async function makeUser(label: string, extra: Partial<typeof users.$inferInsert> = {}) {
@@ -76,7 +76,6 @@ describe("TOTP multi-factor authentication (real DB + real HTTP path)", () => {
     await db.delete(mfaRecoveryCodes).where(inArray(mfaRecoveryCodes.userId, userIds));
     await db.delete(refreshTokens).where(inArray(refreshTokens.userId, userIds));
     await db.delete(users).where(inArray(users.id, userIds));
-    if (createdRoleIds.length) await db.delete(roles).where(inArray(roles.id, createdRoleIds));
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, tenantId));
     await pool.end();
