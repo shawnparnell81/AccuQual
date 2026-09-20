@@ -25,7 +25,7 @@ import * as authService from "./auth.service.js";
 // exposure (still httpOnly + Secure in production either way).
 const REFRESH_COOKIE_NAME = "accuqual_rt";
 
-function setRefreshCookie(res: Response, refreshToken: string) {
+export function setRefreshCookie(res: Response, refreshToken: string) {
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
@@ -68,10 +68,53 @@ export const registerHandler = asyncHandler(async (req: Request, res: Response) 
   res.status(201).json(withoutRefreshToken(result));
 });
 
-export const loginHandler = asyncHandler(async (req: Request, res: Response) => {
-  const result = await authService.login(req.body);
+/** A finished sign-in sets the refresh cookie; a pending second step (or forced enrollment) issues nothing but its short-lived challenge token. */
+function sendSession(res: Response, result: Awaited<ReturnType<typeof authService.login>>) {
+  if ("mfaRequired" in result || "mfaEnrollmentRequired" in result) {
+    res.json(result);
+    return;
+  }
   setRefreshCookie(res, result.refreshToken);
   res.json(withoutRefreshToken(result));
+}
+
+export const loginHandler = asyncHandler(async (req: Request, res: Response) => {
+  sendSession(res, await authService.login(req.body));
+});
+
+export const mfaVerifyHandler = asyncHandler(async (req: Request, res: Response) => {
+  sendSession(res, await authService.verifyMfaLogin(req.body.mfaToken, req.body.code));
+});
+
+export const mfaEnrollStartHandler = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await authService.startEnrollmentWithToken(req.body.mfaToken));
+});
+
+export const mfaEnrollConfirmHandler = asyncHandler(async (req: Request, res: Response) => {
+  const result = await authService.confirmEnrollmentWithToken(req.body.mfaToken, req.body.code);
+  setRefreshCookie(res, result.refreshToken);
+  res.json(withoutRefreshToken(result));
+});
+
+export const mfaStatusHandler = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await authService.mfaStatus(req.user!.id));
+});
+
+export const mfaSetupHandler = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await authService.startMfaSetup(req.user!.id));
+});
+
+export const mfaEnableHandler = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await authService.enableMfa(req.user!.id, req.body.code));
+});
+
+export const mfaDisableHandler = asyncHandler(async (req: Request, res: Response) => {
+  await authService.disableMfa(req.user!.id, req.body.password, req.body.code);
+  res.status(204).send();
+});
+
+export const mfaRecoveryCodesHandler = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await authService.newRecoveryCodes(req.user!.id, req.body.password, req.body.code));
 });
 
 export const refreshHandler = asyncHandler(async (req: Request, res: Response) => {

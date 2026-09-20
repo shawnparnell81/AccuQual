@@ -80,7 +80,8 @@ DECLARE
     'permission_roles', 'permission_role_modules', 'user_permission_roles', 'department_permissions',
     'report_schedules', 'supplier_quality_risk_scores', 'inventory_lots',
     'customer_communications', 'customer_scorecards', 'erp_connector_presets',
-    'erp_sync_errors', 'audit_row_changes'
+    'erp_sync_errors', 'audit_row_changes',
+    'sso_connections', 'sso_domains', 'user_identities'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP
@@ -155,6 +156,11 @@ CREATE POLICY roles_read_all ON roles
 ALTER TABLE refresh_tokens ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS owner_only ON refresh_tokens;
 CREATE POLICY owner_only ON refresh_tokens
+  USING (false)
+  WITH CHECK (false);
+ALTER TABLE mfa_recovery_codes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS owner_only ON mfa_recovery_codes;
+CREATE POLICY owner_only ON mfa_recovery_codes
   USING (false)
   WITH CHECK (false);
 ALTER TABLE password_reset_tokens ENABLE ROW LEVEL SECURITY;

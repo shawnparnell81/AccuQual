@@ -6,6 +6,10 @@ export interface AppUser {
   roleId: number | null;
   department: string | null;
   isActive: boolean;
+  /** Whether the user has two-step sign-in turned on. */
+  mfaEnabled?: boolean;
+  /** Set while the account is locked out after repeated failed sign-ins. */
+  lockedUntil?: string | null;
   createdAt: string;
 }
 

@@ -43,7 +43,7 @@ function describeTable(table: PgTable) {
  * exempted: a real future table with no tenant_id and not listed here fails
  * the third test below instead of passing unnoticed.
  */
-const DELIBERATELY_GLOBAL_TABLES = new Set(["roles", "tenants", "password_reset_tokens", "refresh_tokens"]);
+const DELIBERATELY_GLOBAL_TABLES = new Set(["roles", "tenants", "password_reset_tokens", "refresh_tokens", "mfa_recovery_codes"]);
 
 function tenantTablesArrayFromSql(): Set<string> {
   const sql = readFileSync(rlsPoliciesPath, "utf8");

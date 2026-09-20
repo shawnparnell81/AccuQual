@@ -3,10 +3,12 @@ import { randomBytes, randomUUID, createHash } from "node:crypto";
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { assertPasswordAcceptable } from "../../utils/passwordPolicy.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { checkSecondFactor, clearMfa, confirmEnrollment, evaluateMfa, markMfaRequired, recoveryCodesRemaining, regenerateRecoveryCodes, signMfaToken, startEnrollment, verifyMfaToken } from "./mfa.service.js";
 import { db } from "../../db/index.js";
 import { users } from "../../drizzle/schema/users.js";
 import { roles } from "../../drizzle/schema/roles.js";
 import { tenants } from "../../drizzle/schema/tenants.js";
+import { ssoConnections } from "../../drizzle/schema/sso.js";
 import { passwordResetTokens } from "../../drizzle/schema/passwordResetTokens.js";
 import { refreshTokens } from "../../drizzle/schema/refreshTokens.js";
 import { AppError } from "../../utils/appError.js";
@@ -34,9 +36,13 @@ async function userWithRole(userId: number) {
       roleName: roles.name,
       department: users.department,
       supplierId: users.supplierId,
+      mfaEnabled: users.mfaEnabled,
+      mfaRequiredSince: users.mfaRequiredSince,
+      tenantMfaPolicy: tenants.mfaPolicy,
     })
     .from(users)
     .leftJoin(roles, eq(users.roleId, roles.id))
+    .leftJoin(tenants, eq(users.tenantId, tenants.id))
     .where(eq(users.id, userId));
   return row;
 }
@@ -127,13 +133,95 @@ export async function login(input: { email: string; password: string }) {
     throw AppError.unauthorized("Invalid credentials");
   }
 
+  // When the tenant has made single sign-on mandatory, passwords no longer work — except for admins, who keep a break-glass way in if the identity provider is down or misconfigured.
+  if (user.tenantId && roleName !== "admin" && roleName !== "platform_admin") {
+    const [sso] = await db.select({ enabled: ssoConnections.enabled, enforce: ssoConnections.enforceSso }).from(ssoConnections).where(eq(ssoConnections.tenantId, user.tenantId));
+    if (sso?.enabled && sso.enforce) throw AppError.forbidden("Your organization requires single sign-on. Use the Single sign-on option on the sign-in page.");
+  }
+
+  // The password alone is not enough when the account has a second factor, or
+  // when the tenant's policy says it must have one. Nothing is issued (no
+  // tokens, no cookie) and the failure counters stay untouched until the
+  // second step succeeds.
+  const mfa = evaluateMfa(user, roleName, row.tenants?.mfaPolicy);
+  if (user.mfaEnabled) return { mfaRequired: true as const, mfaToken: signMfaToken(user.id, "verify", user.tokenVersion) };
+  if (mfa.state === "blocked") return { mfaEnrollmentRequired: true as const, mfaToken: signMfaToken(user.id, "enroll", user.tokenVersion) };
+  if (mfa.required && !user.mfaRequiredSince) await markMfaRequired(user.id);
+
+  return completeLogin(user, roleName, row.tenants, mfa.state === "grace" ? mfa.graceEndsAt : null);
+}
+
+type LoginUserRow = typeof users.$inferSelect;
+type LoginTenantRow = typeof tenants.$inferSelect | null;
+
+/** Stamps the successful sign-in, clears the failed-attempt counters (and an expired lock), and issues the session. */
+async function completeLogin(user: LoginUserRow, roleName: string | null, tenant: LoginTenantRow, mfaGraceEndsAt: Date | null = null) {
   // Phase 7 — Supplier Portal health indicators ("last supplier login")
   // read this; best-effort, never blocks a successful login on its own
-  // failure. Also clears the failed-attempt counters (and an expired lock).
+  // failure.
   await db.update(users).set({ lastLoginAt: new Date(), failedLoginCount: 0, firstFailedLoginAt: null, lockedUntil: null }).where(eq(users.id, user.id)).catch(() => undefined);
 
   const tokens = await issueTokens({ id: user.id, tenantId: user.tenantId, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion });
-  return { user: sanitize({ ...user, roleName }), tenant: row.tenants ? { id: row.tenants.id, name: row.tenants.name, code: row.tenants.code, branding: row.tenants.branding } : null, ...tokens };
+  return {
+    user: sanitize({ ...user, roleName }),
+    tenant: tenant ? { id: tenant.id, name: tenant.name, code: tenant.code, branding: tenant.branding } : null,
+    ...(mfaGraceEndsAt ? { mfaGraceEndsAt: mfaGraceEndsAt.toISOString() } : {}),
+    ...tokens,
+  };
+}
+
+async function loginContext(userId: number) {
+  const [row] = await db
+    .select()
+    .from(users)
+    .leftJoin(roles, eq(users.roleId, roles.id))
+    .leftJoin(tenants, eq(users.tenantId, tenants.id))
+    .where(eq(users.id, userId));
+  if (!row) throw AppError.unauthorized("Your sign-in expired. Please start again.");
+  if (row.users.lockedUntil && row.users.lockedUntil.getTime() > Date.now()) {
+    const minutes = Math.max(1, Math.ceil((row.users.lockedUntil.getTime() - Date.now()) / 60_000));
+    throw new AppError(`Too many failed sign-in attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}, or reset your password.`, 429);
+  }
+  return { user: row.users, roleName: row.roles?.name ?? null, tenant: row.tenants };
+}
+
+/** Second step of a sign-in: the authenticator (or recovery) code. Wrong codes count toward the same lockout as wrong passwords. */
+export async function verifyMfaLogin(mfaToken: string, code: string) {
+  const userId = await verifyMfaToken(mfaToken, "verify");
+  const ctx = await loginContext(userId);
+  const kind = await checkSecondFactor(userId, code);
+  if (!kind) {
+    await recordFailedLogin(ctx.user);
+    throw AppError.unauthorized("That code didn't work. Try the newest code from your authenticator app, or a recovery code.");
+  }
+  if (kind === "recovery" && ctx.user.tenantId) {
+    await recordAuditTrail(db, { tenantId: ctx.user.tenantId, entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_recovery_code_used" }, performedBy: userId }).catch((err) => logger.error("Failed to audit a recovery-code sign-in", { userId, err }));
+  }
+  return completeLogin(ctx.user, ctx.roleName, ctx.tenant);
+}
+
+/** Enrollment that is forced at sign-in (tenant policy requires MFA and the grace period is over): the challenge token stands in for a session. */
+export async function startEnrollmentWithToken(mfaToken: string) {
+  const userId = await verifyMfaToken(mfaToken, "enroll");
+  const ctx = await loginContext(userId);
+  return startEnrollment(userId, ctx.user.email);
+}
+
+export async function confirmEnrollmentWithToken(mfaToken: string, code: string) {
+  const userId = await verifyMfaToken(mfaToken, "enroll");
+  const ctx = await loginContext(userId);
+  let recoveryCodes: string[];
+  try {
+    recoveryCodes = await confirmEnrollment(userId, code);
+  } catch (err) {
+    if (err instanceof AppError && err.statusCode === 400 && /didn't match/.test(err.message)) await recordFailedLogin(ctx.user);
+    throw err;
+  }
+  if (ctx.user.tenantId) {
+    await recordAuditTrail(db, { tenantId: ctx.user.tenantId, entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_enabled" }, performedBy: userId }).catch((err) => logger.error("Failed to audit MFA enrollment", { userId, err }));
+  }
+  const [fresh] = await db.select().from(users).where(eq(users.id, userId));
+  return { ...(await completeLogin(fresh ?? ctx.user, ctx.roleName, ctx.tenant)), recoveryCodes };
 }
 
 /**
@@ -197,6 +285,10 @@ export async function refresh(refreshToken: string) {
   if (!full.isActive) {
     await revokeRefreshTokenRows(full.id);
     throw AppError.unauthorized("Account is deactivated");
+  }
+  // Tenant policy may have started requiring MFA since this session began; once the grace period is over the user must go back through sign-in, which walks them through enrollment.
+  if (evaluateMfa(full, full.roleName, full.tenantMfaPolicy).state === "blocked") {
+    throw AppError.unauthorized("Multi-factor authentication setup is required. Please sign in again.");
   }
 
   // Security-audit finding (medium): reuse detection. `jti` is only absent
@@ -369,7 +461,92 @@ export async function me(userId: number) {
   return sanitize(full);
 }
 
+/** Everything a session response may show about a user — never the password hash, the MFA secret, or lockout bookkeeping. */
 function sanitize<T extends { passwordHash?: string }>(user: T) {
-  const { passwordHash: _passwordHash, ...rest } = user;
+  const {
+    passwordHash: _passwordHash,
+    mfaSecretEncrypted: _mfaSecret,
+    mfaLastUsedStep: _mfaStep,
+    failedLoginCount: _failedCount,
+    firstFailedLoginAt: _firstFailed,
+    lockedUntil: _lockedUntil,
+    tenantMfaPolicy: _policy,
+    ...rest
+  } = user as T & Record<string, unknown>;
   return rest;
+}
+
+// ---- Signed-in MFA management (My account) --------------------------------------------------------------------------------------------------
+
+export async function mfaStatus(userId: number) {
+  const full = await userWithRole(userId);
+  if (!full) throw AppError.notFound("User");
+  const mfa = evaluateMfa(full, full.roleName, full.tenantMfaPolicy);
+  return {
+    enabled: mfa.enabled,
+    required: mfa.required,
+    state: mfa.state,
+    graceEndsAt: mfa.graceEndsAt ? mfa.graceEndsAt.toISOString() : null,
+    policy: full.tenantMfaPolicy ?? null,
+    recoveryCodesRemaining: mfa.enabled ? await recoveryCodesRemaining(userId) : 0,
+  };
+}
+
+export async function startMfaSetup(userId: number) {
+  const full = await userWithRole(userId);
+  if (!full) throw AppError.notFound("User");
+  return startEnrollment(userId, full.email);
+}
+
+export async function enableMfa(userId: number, code: string) {
+  const full = await userWithRole(userId);
+  if (!full) throw AppError.notFound("User");
+  const recoveryCodes = await confirmEnrollment(userId, code);
+  if (full.tenantId) {
+    await recordAuditTrail(db, { tenantId: full.tenantId, entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_enabled" }, performedBy: userId }).catch((err) => logger.error("Failed to audit MFA enrollment", { userId, err }));
+  }
+  return { recoveryCodes };
+}
+
+/** Re-proves who is at the keyboard (password AND a current code) before a security-sensitive change. Wrong answers count toward the lockout. */
+async function reverify(userId: number, password: string, code: string) {
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
+  if (!user) throw AppError.notFound("User");
+  if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) throw new AppError("Too many failed attempts. Try again later.", 429);
+  const passwordOk = await bcrypt.compare(password, user.passwordHash);
+  const codeOk = passwordOk ? await checkSecondFactor(userId, code) : null;
+  if (!passwordOk || !codeOk) {
+    await recordFailedLogin(user);
+    throw AppError.unauthorized("Password or code was incorrect.");
+  }
+  return user;
+}
+
+export async function disableMfa(userId: number, password: string, code: string) {
+  const user = await reverify(userId, password, code);
+  const full = await userWithRole(userId);
+  if (full && evaluateMfa({ mfaEnabled: false, mfaRequiredSince: full.mfaRequiredSince }, full.roleName, full.tenantMfaPolicy).required) {
+    throw AppError.forbidden("Your organization requires multi-factor authentication, so it can't be turned off.");
+  }
+  await clearMfa(userId);
+  if (user.tenantId) {
+    await recordAuditTrail(db, { tenantId: user.tenantId, entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_disabled" }, performedBy: userId }).catch((err) => logger.error("Failed to audit MFA being turned off", { userId, err }));
+  }
+}
+
+export async function newRecoveryCodes(userId: number, password: string, code: string) {
+  const user = await reverify(userId, password, code);
+  const recoveryCodes = await regenerateRecoveryCodes(userId);
+  if (user.tenantId) {
+    await recordAuditTrail(db, { tenantId: user.tenantId, entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_recovery_codes_regenerated" }, performedBy: userId }).catch((err) => logger.error("Failed to audit recovery-code regeneration", { userId, err }));
+  }
+  return { recoveryCodes };
+}
+
+/** Finishes a sign-in the identity provider already vouched for: the provider did the authenticating (including any MFA it enforces), so the local password/lockout/MFA steps do not apply. */
+export async function startSessionForSsoUser(userId: number) {
+  const [row] = await db.select().from(users).leftJoin(roles, eq(users.roleId, roles.id)).leftJoin(tenants, eq(users.tenantId, tenants.id)).where(eq(users.id, userId));
+  if (!row || !row.users.isActive) throw AppError.forbidden("Account is deactivated");
+  if (row.users.tenantId && (!row.tenants || row.tenants.status !== "active" || row.tenants.isDeleted)) throw AppError.forbidden("Tenant is inactive");
+  return completeLogin(row.users, row.roles?.name ?? null, row.tenants);
 }

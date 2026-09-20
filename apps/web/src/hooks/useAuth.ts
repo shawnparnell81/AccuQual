@@ -4,20 +4,40 @@ import { apiClient, refreshAccessToken } from "../api/client";
 import { useAuthStore, type AuthUser, type TenantContext } from "../store/authStore";
 import { useWindowStore } from "../window-manager/useWindowStore";
 
-interface AuthResponse {
+export interface AuthResponse {
   user: AuthUser;
   tenant?: TenantContext | null;
   accessToken: string;
   // No refreshToken field — it now arrives only as the httpOnly accuqual_rt
   // cookie (see auth.controller.ts), never in a JSON body frontend JS can read.
+  /** Set while the tenant requires MFA but this user is still inside the enrollment grace period. */
+  mfaGraceEndsAt?: string;
+  /** Present once, right after enrollment — never retrievable again. */
+  recoveryCodes?: string[];
+}
+
+/** The password was right but the sign-in is not finished: an authenticator code is needed, or the user must enroll first. */
+export type LoginResponse = AuthResponse | { mfaRequired: true; mfaToken: string } | { mfaEnrollmentRequired: true; mfaToken: string };
+
+export function isSession(r: LoginResponse): r is AuthResponse {
+  return "accessToken" in r;
+}
+
+/** Starts a real session from a finished sign-in response. Clears the query cache first — same cross-user-leak reasoning as useLogin. */
+export function useStartSession() {
+  const setSession = useAuthStore((s) => s.setSession);
+  const queryClient = useQueryClient();
+  return (data: AuthResponse) => {
+    queryClient.clear();
+    setSession(data.user, data.accessToken, data.tenant);
+  };
 }
 
 export function useLogin() {
-  const setSession = useAuthStore((s) => s.setSession);
-  const queryClient = useQueryClient();
+  const startSession = useStartSession();
   return useMutation({
     mutationFn: async (input: { email: string; password: string }) =>
-      (await apiClient.post<AuthResponse>("/auth/login", input)).data,
+      (await apiClient.post<LoginResponse>("/auth/login", input)).data,
     // Cross-user data leakage must be impossible — clear any query cache
     // left over from a previous session (someone logging back in as a
     // different user without ever hitting Logout, e.g. after their token
@@ -26,9 +46,9 @@ export function useLogin() {
     // login can start a session without one ever having been explicitly
     // ended first. See the QA sweep review — a stale query cache used to
     // render a previous user's real NCR/supplier/financial numbers.
+    // A response that still needs a second step has no session yet — the login page walks the user through it.
     onSuccess: (data) => {
-      queryClient.clear();
-      setSession(data.user, data.accessToken, data.tenant);
+      if (isSession(data)) startSession(data);
     },
   });
 }
@@ -111,3 +131,10 @@ export function useAuthBootstrap() {
     // itself causes.
   }, []);
 }
+
+/** Mid-sign-in MFA calls: they authenticate with the short-lived mfaToken from the password step, not a session. */
+export const mfaApi = {
+  verify: async (mfaToken: string, code: string) => (await apiClient.post<AuthResponse>("/auth/mfa/verify", { mfaToken, code })).data,
+  enrollStart: async (mfaToken: string) => (await apiClient.post<{ secret: string; otpauthUri: string }>("/auth/mfa/enroll/start", { mfaToken })).data,
+  enrollConfirm: async (mfaToken: string, code: string) => (await apiClient.post<AuthResponse>("/auth/mfa/enroll/confirm", { mfaToken, code })).data,
+};

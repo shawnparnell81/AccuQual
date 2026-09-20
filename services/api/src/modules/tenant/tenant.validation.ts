@@ -61,3 +61,7 @@ export const updateTenantProfileSchema = z.object({
   contactEmail: z.string().email().optional().or(z.literal("")),
   contactPhone: z.string().max(50).optional().or(z.literal("")),
 });
+
+export const updateTenantSecuritySchema = z.object({
+  mfaPolicy: z.enum(["optional", "admins", "all"]),
+});

@@ -34,6 +34,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^10.0.9",
+    "openid-client": "^6.8.8",
     "pdf-lib": "^1.17.1",
     "pg": "^8.12.0",
     "redis": "^4.7.0",

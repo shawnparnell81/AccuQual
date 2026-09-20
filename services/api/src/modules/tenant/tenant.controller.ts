@@ -290,3 +290,24 @@ export const getAssistantNameHandler = asyncHandler(async (req: Request, res: Re
   const tenant = await loadTenant(req);
   res.json({ assistantName: tenant.aiConfig?.assistantName ?? null });
 });
+
+/** Who in this organization must use multi-factor authentication. Readable by any signed-in user (the UI explains the policy); only an admin changes it. */
+export const getSecurityHandler = asyncHandler(async (req: Request, res: Response) => {
+  const tenant = await loadTenant(req);
+  res.json({ mfaPolicy: tenant.mfaPolicy });
+});
+
+export const updateSecurityHandler = asyncHandler(async (req: Request, res: Response) => {
+  const tenant = await loadTenant(req);
+  const { mfaPolicy } = req.body as { mfaPolicy: "optional" | "admins" | "all" };
+  await req.db!.update(tenants).set({ mfaPolicy }).where(eq(tenants.id, req.tenantId!));
+  await recordAuditTrail(req.db!, {
+    tenantId: req.tenantId!,
+    entityType: "Tenant",
+    entityId: req.tenantId!,
+    action: "update",
+    changes: { setting: "mfaPolicy", from: tenant.mfaPolicy, to: mfaPolicy },
+    performedBy: req.user?.id,
+  });
+  res.json({ mfaPolicy });
+});
