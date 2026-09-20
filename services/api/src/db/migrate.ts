@@ -26,6 +26,11 @@ async function main() {
   await pool.query(auditSql);
   logger.info("Audit triggers applied.");
 
+  logger.info("Applying version-freeze trigger...");
+  const versionFreezeSql = readFileSync(join(__dirname, "../drizzle/post-migrate/version-freeze.sql"), "utf-8");
+  await pool.query(versionFreezeSql);
+  logger.info("Version-freeze trigger applied.");
+
   logger.info("Applying indexes...");
   const indexesSql = readFileSync(join(__dirname, "../drizzle/post-migrate/indexes.sql"), "utf-8");
   await pool.query(indexesSql);

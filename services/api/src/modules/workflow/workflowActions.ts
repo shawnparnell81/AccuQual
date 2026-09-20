@@ -12,6 +12,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import type { Department } from "../../middleware/departmentAccess.js";
 import { runPipelineAndRecord } from "../ai/ai.usage.js";
 import { runWorkflowAiNotePipeline } from "../ai/ai.pipelines.js";
+import { triggerErpSync } from "../settings/settings.erpSync.js";
 
 /**
  * Phase 9 task 4 — real action handlers registered into workflow-engine.ts's
@@ -276,4 +277,23 @@ registerActionHandler("ai_suggestion", async (node, context, dryRun) => {
     runWorkflowAiNotePipeline(input, opts)
   );
   recordActionRun(context, "ai_suggestion", { suggestionId: suggestion.id, output });
+});
+
+// Integration node: hand the tenant's configured ERP sync a nudge — the same
+// triggerErpSync() the "Trigger Sync Now" button calls, so it obeys the tenant's
+// own webhook, enabled modules, presets and error log. Reports "skipped" (not
+// "sent") when no webhook is configured, exactly as the button does.
+registerActionHandler("erp_sync", async (_node, context, dryRun) => {
+  if (dryRun) {
+    recordActionRun(context, "erp_sync", { simulated: true, note: "would trigger the configured ERP sync" });
+    return;
+  }
+  const db = context.__db as TenantDb | undefined;
+  const tenantId = context.__tenantId as number | undefined;
+  if (!db || !tenantId) {
+    recordActionRun(context, "erp_sync", { skipped: true, reason: "no tenant database context available" });
+    return;
+  }
+  const result = await triggerErpSync(db, tenantId, context.__performedBy as number | undefined);
+  recordActionRun(context, "erp_sync", { status: result.status, message: result.message });
 });

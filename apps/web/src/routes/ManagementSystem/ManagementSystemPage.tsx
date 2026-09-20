@@ -1,12 +1,11 @@
+import { Link } from "react-router-dom";
+import { FileText } from "lucide-react";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 
 /**
- * Both documents are periodic/point-in-time corporate records rather than
- * per-record entities with their own list — modeled as fixed singletons
- * (the "current" context analysis, the "current" review), same
- * simplification as the Production Logs page. A tenant that wants a dated
- * history of past management reviews would need a real list/detail module
- * instead; flagged as a simplification, not attempted here.
+ * Context of the Organization and Management Review are version-controlled: each has one record per
+ * organization, and what everyone reads is its published version. Changes are made on a draft that a
+ * reviewer approves (see ControlledDocumentPage). The two minutes forms below remain plain singletons.
  */
 const SINGLETON_ENTITY_ID = 1;
 
@@ -22,12 +21,9 @@ export function ManagementSystemPage() {
             ISO 9001 clause 4.1 SWOT-style analysis — internal strengths/weaknesses and external
             opportunities/threats, by interested party.
           </p>
-          <OpenFormButton
-            formType="context_of_organization"
-            entityId={SINGLETON_ENTITY_ID}
-            title="Context of the Organization"
-            label="Open Context of the Organization"
-          />
+          <Link to="/management-system/context" className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+            <FileText size={16} /> Open Context of the Organization
+          </Link>
         </div>
 
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
@@ -36,12 +32,9 @@ export function ManagementSystemPage() {
             Management system performance evaluation — strategic core review inputs and the action items
             they produce.
           </p>
-          <OpenFormButton
-            formType="management_review"
-            entityId={SINGLETON_ENTITY_ID}
-            title="Management System Performance Evaluation Record"
-            label="Open Management Review"
-          />
+          <Link to="/management-system/management-review" className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+            <FileText size={16} /> Open Management Review
+          </Link>
         </div>
 
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">

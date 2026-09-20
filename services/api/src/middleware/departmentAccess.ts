@@ -63,6 +63,8 @@ export type ResourceKey =
   | "rma_activity_log"
   | "quality_inspection"
   | "workflow"
+  | "management_review"
+  | "context_of_org"
   | "documents"
   | "customer_communications"
   | "change"
@@ -105,6 +107,8 @@ export const MODULE_LABELS: Record<ResourceKey, string> = {
   rma_activity_log: "RMA Activity Log (automated event trail)",
   quality_inspection: "Quality Inspection Reports",
   workflow: "Workflow Builder",
+  management_review: "Management Review",
+  context_of_org: "Context of the Organization",
   documents: "Document Control",
   customer_communications: "Customer Communications",
   change: "Change / PCN Control",
