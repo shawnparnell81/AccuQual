@@ -56,14 +56,18 @@ describe("System Health (real DB + real HTTP path)", () => {
     expect(res.status).toBe(403);
   });
 
-  it("admin gets a full report with all 7 sub-checks and an overall status", async () => {
+  it("admin gets a full report with all 8 sub-checks and an overall status", async () => {
     const res = await request(app).get("/system-health").set("Authorization", `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
     expect(["ok", "warning", "critical"]).toContain(res.body.overall);
-    for (const key of ["database", "ai", "workflow", "email", "reporting", "receivingInventory", "supplierPortal"]) {
+    for (const key of ["database", "monitoring", "ai", "workflow", "email", "reporting", "receivingInventory", "supplierPortal"]) {
       expect(res.body.checks[key]).toBeTruthy();
       expect(["ok", "warning", "critical"]).toContain(res.body.checks[key].status);
     }
+    // The monitoring card lists every alert rule and which outside connections are switched on.
+    const m = res.body.checks.monitoring;
+    expect(m.alerts.map((a: { key: string }) => a.key)).toEqual(["database", "api_errors", "workers", "workflow_failures", "login_attacks", "email_failures"]);
+    expect(m.configured).toMatchObject({ errorTracking: expect.any(Boolean), alertWebhook: expect.any(Boolean), heartbeat: expect.any(Boolean), workersMonitored: expect.any(Array) });
   });
 
   it("receivingInventory reports ok with zero unacknowledged below-min alerts, and counts real ones when present", async () => {

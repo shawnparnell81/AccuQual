@@ -4,6 +4,7 @@ import { verifyAccessToken } from "../utils/jwt.js";
 import { AppError } from "../utils/appError.js";
 import { db } from "../db/index.js";
 import { users } from "../drizzle/schema/users.js";
+import { enrichRequestContext } from "../modules/monitoring/requestContext.js";
 
 export interface AuthenticatedUser {
   id: number;
@@ -65,6 +66,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       department: payload.department,
       supplierId: payload.supplierId ?? null,
     };
+    enrichRequestContext({ userId: req.user.id, ...(req.user.tenantId ? { tenantId: req.user.tenantId } : {}) });
     next();
   } catch (err) {
     next(err);

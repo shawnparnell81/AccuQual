@@ -2,6 +2,7 @@ import "dotenv/config";
 import winston from "winston";
 import { and, eq } from "drizzle-orm";
 import { consumeStream } from "./redis-consumer.js";
+import { startHeartbeat } from "./heartbeat.js";
 import { db, workflowDefinitions, workflowRuns } from "./db.js";
 import { executeWorkflow, WorkflowNodeError, type WorkflowDefinition } from "../../../services/api/src/modules/workflow/workflow-engine.js";
 // Phase 9 — registers the real action handlers (send_email, create_ncr,
@@ -89,6 +90,7 @@ async function handleEvent(fields: Record<string, string>) {
 }
 
 logger.info(`AccuQual workflow-worker listening on ${WORKFLOW_STREAM}`);
+startHeartbeat("workflow", REDIS_URL);
 consumeStream(REDIS_URL, WORKFLOW_STREAM, "workflow-worker", "consumer-1", handleEvent).catch((err) => {
   logger.error("workflow-worker crashed", err);
   process.exit(1);

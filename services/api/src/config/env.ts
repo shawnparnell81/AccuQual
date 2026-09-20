@@ -98,6 +98,18 @@ const envSchema = z.object({
   // works — a Slack Incoming Webhook URL, Discord's Slack-compatible
   // `/slack` webhook suffix, or a custom endpoint — see healthMonitor.ts.
   ALERT_WEBHOOK_URL: z.string().optional(),
+  // Error tracking (Sentry). Unset = disabled, nothing is sent anywhere. See modules/monitoring/sentry.ts for what is (and is not) sent.
+  SENTRY_DSN: z.string().optional(),
+  SENTRY_ENVIRONMENT: z.string().optional(),
+  // Shown in /health and attached to error reports so a problem can be tied to a deploy. Set to the git commit in CI/hosting.
+  // On Render the deploy's git commit is provided automatically (RENDER_GIT_COMMIT).
+  APP_VERSION: z.string().default(process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? process.env.GIT_SHA?.slice(0, 7) ?? "dev"),
+  // A URL pinged once a minute while the database is reachable (Healthchecks.io, Better Stack, Uptime Kuma...). When the
+  // pings stop — the process died, the host is down — that service alerts you. Unset = off.
+  HEARTBEAT_URL: z.string().url().optional().or(z.literal("").transform(() => undefined)),
+  // Comma-separated background workers that must keep reporting in ("workflow,ai,digital-twin"). Empty = don't monitor
+  // them (right for local dev, and for a deployment that doesn't run the workers).
+  MONITOR_EXPECTED_WORKERS: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(process.env);

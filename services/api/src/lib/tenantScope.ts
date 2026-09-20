@@ -5,6 +5,7 @@ import { pool } from "../db/index.js";
 import * as schema from "../drizzle/schema/index.js";
 import { AppError } from "../utils/appError.js";
 import { logger } from "../utils/logger.js";
+import { enrichRequestContext } from "../modules/monitoring/requestContext.js";
 // Importing this (even just for its type) pulls its `declare global` Request.user
 // augmentation into any program that includes this file — needed because the
 // workers import this module directly for the TenantDb type, in a separate
@@ -48,6 +49,7 @@ export function withTenantDb(req: Request, res: Response, next: NextFunction) {
   }
 
   const tenantId = user.tenantId;
+  enrichRequestContext({ tenantId });
 
   pool
     .connect()

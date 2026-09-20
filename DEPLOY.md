@@ -154,53 +154,78 @@ fallback is manual:
 
 ## Monitoring & alerting
 
-Two real, complementary pieces exist now — neither requires a paid
-third-party service to get real value, and both degrade gracefully with
-zero setup:
+Monitoring has four layers. Each works on its own, none needs a paid plan to be
+useful, and every one is off until you give it a URL or key — nothing breaks if
+you skip it.
 
-1. **`GET /health` is a real readiness check**, not a bare "the process is
-   up" ping — it pings the actual database (and Redis, informationally)
-   on every request. This is what Render's own `healthCheckPath` already
-   hits (see `render.yaml`), so Render will restart an instance whose
-   database has genuinely gone unreachable, not just one that crashed.
-   Point any external uptime checker at this same URL for a second,
-   independent layer of coverage that survives even if the whole process
-   (not just the database) goes down — Render's own restart-on-failure
-   only catches that case, an *external* checker also tells you about it.
-   A free tier of any of these works: UptimeRobot, Better Stack, or
-   Freshping — point it at `https://<your-api-url>/health` on a 5-minute
-   interval and set it to alert on a non-2xx response.
+| Layer | What it tells you | Set up |
+|---|---|---|
+| **External uptime check** | The whole service is unreachable (process crashed, host down) | Point UptimeRobot / Better Stack / Freshping at `https://<api-url>/health`, 5-minute interval, alert on non-2xx |
+| **Heartbeat (dead-man's switch)** | The API process stopped running | Create a Healthchecks.io check (period 2 min, grace 3 min), put its ping URL in `HEARTBEAT_URL` |
+| **Alert webhook** | Something inside is wrong right now | Put a Slack/Discord webhook in `ALERT_WEBHOOK_URL` (see below) |
+| **Error tracking (Sentry)** | A bug happened, with the stack trace and the request that hit it | Two Sentry projects; DSNs into `SENTRY_DSN` (API) and `VITE_SENTRY_DSN` (web) |
 
-2. **A built-in alert poller** (`services/api/src/modules/monitoring/healthMonitor.ts`)
-   runs inside the API process itself, re-checking readiness once a minute
-   and logging loudly the moment the database goes unreachable — this
-   happens automatically, with zero configuration, and is visible in
-   Render's own log stream today. To also get a real push notification
-   (Slack, Discord, or anywhere else that accepts a Slack-style `{text}`
-   JSON webhook), set the `ALERT_WEBHOOK_URL` env var:
-   - **Slack**: your workspace → Settings → search "Incoming Webhooks" →
-     add one to a channel → copy the Webhook URL it gives you.
-   - **Discord**: a channel's Settings → Integrations → Webhooks → New
-     Webhook → copy its URL and append `/slack` to the end (Discord's
-     webhooks accept Slack's payload shape at that suffix).
-   Paste either URL into `ALERT_WEBHOOK_URL` in Render's dashboard (it's
-   already declared, `sync: false`, in `render.yaml` — leave it blank to
-   skip this entirely). No redeploy needed for a plain env var change on
-   Render, just a restart.
+### Follow one request end to end
 
-**Why `/health` still doesn't fail over a Redis outage, even now that a
-real managed Redis is part of this blueprint**: not every account deploying
-this blueprint necessarily re-synced to pick up the 4 new services (see
-step 3) — an account still running only the original `accuqual-api`/
-`accuqual-web` pair would have `/health` permanently reporting `redis` as
-unreachable (nothing is listening at `REDIS_URL`'s default), which would
-make Render treat an otherwise-fully-functional deployment as permanently
-unhealthy. Once you've confirmed the Redis service and all three workers
-are actually deployed and healthy, promoting `redis` to a hard dependency
-in `checkReadiness()` (`services/api/src/modules/monitoring/healthMonitor.ts`)
-is a genuine, safe one-line change at that point — just not done
-automatically here, since it's a real behavior change to `/health`'s HTTP
-status, not just additive config.
+Every API response carries an `X-Request-Id` header. The same id is on every log
+line written while handling that request, on the error body (`requestId`), and on
+the Sentry event. When a user sees "An unexpected error occurred (reference
+3f9a1c2e)", search the logs for that reference — the first 8 characters are
+enough to search — and you have everything that request did. A caller may supply its own
+`X-Request-Id` (8–64 letters, digits, `-`, `_`, `.`) to tie the API's logs to its own.
+
+### The built-in alerts
+
+The API checks these once a minute and messages the webhook only when something
+**starts** or **clears** (plus a reminder every 4 hours if it's still going):
+
+| Alert | Fires when | What to do |
+|---|---|---|
+| **Database** | The database can't be reached | Check Supabase status and the connection string; nothing works without it |
+| **API errors** | ≥ 5 server errors *and* ≥ 5% of requests in 5 minutes | Look in Sentry / the logs for the newest 5xx; usually one broken endpoint or a bad deploy — roll back |
+| **Background workers** | A worker hasn't reported in for 90 s (or Redis is unreachable) | Restart that worker; check its logs. Workflows, AI jobs and IoT drift detection stop while it's down |
+| **Workflow runs** | ≥ 3 workflow runs failed in 15 minutes | Admin Console → System Health, then Workflow Builder → Health for the failing definition |
+| **Sign-in attacks** | ≥ 25 failed sign-ins in 10 minutes, or ≥ 3 accounts locked in 15 | Likely password guessing. Lockouts are already protecting accounts; consider blocking the source IP at the host |
+| **Outgoing email** | ≥ 3 emails failed in 15 minutes | Check the ZeptoMail token / SMTP settings and provider status |
+
+Admin Console → **System Health** shows the same six with what is firing right
+now, which connections above are switched on, and the recent error rate.
+`MONITOR_EXPECTED_WORKERS` (default empty; set in `render.yaml` and
+`docker-compose.yml`) lists the workers to watch — remove a name if you don't run that worker.
+A worker "reporting in" means its process is alive; it can't detect a worker that is up but stuck.
+
+### Getting a webhook URL
+
+- **Slack**: your workspace → Settings → search "Incoming Webhooks" → add one to a channel → copy the URL.
+- **Discord**: channel Settings → Integrations → Webhooks → New Webhook → copy the URL and append `/slack`.
+
+Paste either into `ALERT_WEBHOOK_URL` (already declared, `sync: false`, in `render.yaml`).
+
+### Sentry
+
+Create two projects (one Node.js, one React) and copy each DSN. Set `SENTRY_DSN`
+on the API and `VITE_SENTRY_DSN` on the web service (a build-time value: redeploy
+the web after setting it). What is sent: the error, its stack, the page path without the query string, the
+tenant id and user id (numbers only), the request id, and the release (`APP_VERSION` —
+the git commit on Render). What is never sent: request bodies, form values, cookies,
+authorization headers, query strings, email addresses, IP addresses, session recordings.
+Performance tracing is off. The API also exits (so the host restarts it) after an uncaught
+exception rather than carrying on in an unknown state.
+
+### /health, /health/live
+
+`GET /health` is the readiness check Render's `healthCheckPath` uses: it pings the database
+(and Redis, informationally) and reports `version` and `uptimeSeconds`; HTTP 503 only when the database is
+unreachable. `GET /health/live` answers as long as the process is up and touches no dependency — for
+a supervisor that should restart a *hung* process but never one that merely can't reach its database.
+
+**Why `/health` still doesn't fail over a Redis outage**: not every account deploying this blueprint
+necessarily re-synced to pick up the worker services. An account still running only the original
+`accuqual-api`/`accuqual-web` pair would have `/health` permanently reporting `redis` as unreachable,
+which would make Render treat an otherwise-functional deployment as unhealthy. Once you've confirmed Redis
+and all three workers are deployed and healthy, promoting `redis` to a hard dependency in
+`checkReadiness()` (`services/api/src/modules/monitoring/healthMonitor.ts`) is a safe one-line change —
+just not done automatically, since it changes `/health`'s HTTP status.
 
 ## Real email delivery (ZeptoMail, or SMTP)
 

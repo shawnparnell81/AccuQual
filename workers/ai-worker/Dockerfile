@@ -26,6 +26,8 @@ COPY workers/ai-worker ./workers/ai-worker
 # TypeScript instantiate drizzle-orm's types twice (once per module format)
 # and fail with spurious "private property" incompatibility errors.
 COPY services/api/package.json ./services/api/package.json
+# services/api/src/utils/logger.ts (and the auth/tenant-scope helpers) read the per-request context from this one file.
+COPY services/api/src/modules/monitoring/requestContext.ts ./services/api/src/modules/monitoring/requestContext.ts
 COPY services/api/src/drizzle ./services/api/src/drizzle
 COPY services/api/src/modules/ai ./services/api/src/modules/ai
 COPY services/api/src/config ./services/api/src/config

@@ -6,6 +6,7 @@ import { apiRouter } from "./routes/index.js";
 import { apiRateLimiter } from "./middleware/rateLimit.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { requestLogger } from "./middleware/requestLogger.js";
+import { requestIdMiddleware } from "./modules/monitoring/requestContext.js";
 import { env } from "./config/env.js";
 import { checkReadiness } from "./modules/monitoring/healthMonitor.js";
 import { asyncHandler } from "./utils/asyncHandler.js";
@@ -19,6 +20,8 @@ const allowedOrigins = env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filte
 export function createApp() {
   const app = express();
 
+  // First: everything after this — including CORS rejections and the request log — runs with a request id.
+  app.use(requestIdMiddleware);
   app.use(helmet());
   app.use(
     cors({
@@ -51,9 +54,14 @@ export function createApp() {
     "/health",
     asyncHandler(async (_req, res) => {
       const report = await checkReadiness();
-      res.status(report.status === "critical" ? 503 : 200).json({ service: "accuqual-api", ...report });
+      res.status(report.status === "critical" ? 503 : 200).json({ service: "accuqual-api", version: env.APP_VERSION, uptimeSeconds: Math.round(process.uptime()), ...report });
     })
   );
+  // Liveness only — answers as long as the process is up, touching no dependency. For a supervisor that should restart
+  // a hung process but never one that merely can't reach its database.
+  app.get("/health/live", (_req, res) => {
+    res.json({ service: "accuqual-api", status: "ok", version: env.APP_VERSION, uptimeSeconds: Math.round(process.uptime()) });
+  });
 
   app.use("/", apiRouter);
 

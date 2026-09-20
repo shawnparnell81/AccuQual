@@ -34,6 +34,8 @@ services:
     # where Postgres lives.
     environment:
       REDIS_URL: redis://redis:6379
+      # This stack runs all three workers, so the monitor should notice if one stops reporting in.
+      MONITOR_EXPECTED_WORKERS: workflow,ai,digital-twin
     depends_on:
       - postgres
       - redis
@@ -50,6 +52,9 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        # Optional browser error tracking DSN from .env; empty = Sentry code is never loaded.
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
     depends_on:
       - api
     ports:

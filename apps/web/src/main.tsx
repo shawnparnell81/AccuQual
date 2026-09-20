@@ -6,6 +6,10 @@ import { App } from "./App";
 import { ToastProvider } from "./components/shared/ToastProvider";
 import "./styles/globals.css";
 import { getStoredMode } from "./lib/theme";
+import { initErrorTracking } from "./lib/errorTracking";
+import { ErrorBoundary } from "./components/shared/ErrorBoundary";
+
+initErrorTracking();
 
 // Stamps the last-known mode before React even mounts, so the very first
 // frame matches the previous session instead of flashing dark-then-light
@@ -21,12 +25,14 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <ToastProvider>
-          <App />
-        </ToastProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <ToastProvider>
+            <App />
+          </ToastProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );

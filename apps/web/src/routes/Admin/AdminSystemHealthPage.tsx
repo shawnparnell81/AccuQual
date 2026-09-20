@@ -87,6 +87,38 @@ const CARDS: CardDef[] = [
   },
 ];
 
+function MonitoringPanel({ report }: { report: SystemHealthReport }) {
+  const m = report.checks.monitoring;
+  const on = (v: boolean) => (v ? <span className="text-success">on</span> : <span className="text-muted-foreground">off</span>);
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium">Monitoring &amp; alerts</h3>
+        <StatusBadge value={m.status} />
+      </div>
+      <ul className="grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+        {m.alerts.map((a) => (
+          <li key={a.key} className="flex items-start gap-2">
+            <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${a.firing ? "bg-destructive" : "bg-success"}`} />
+            <span>
+              <span className="font-medium">{a.title}</span>
+              <span className="block text-xs text-muted-foreground">{a.firing && a.since ? `Since ${new Date(a.since).toLocaleTimeString()} — ` : ""}{a.message}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
+        <span>Error tracking: {on(m.configured.errorTracking)}</span>
+        <span>Alert webhook: {on(m.configured.alertWebhook)}</span>
+        <span>External heartbeat: {on(m.configured.heartbeat)}</span>
+        <span>Workers watched: {m.configured.workersMonitored.length > 0 ? m.configured.workersMonitored.join(", ") : <span>none</span>}</span>
+        <span>Last 5 min: {m.serverErrors5m} server errors / {m.requests5m} requests</span>
+        <span>Version {m.version}, up {Math.floor(m.uptimeSeconds / 3600)}h {Math.floor((m.uptimeSeconds % 3600) / 60)}m</span>
+      </div>
+    </div>
+  );
+}
+
 function HealthCard({ def, report }: { def: CardDef; report: SystemHealthReport }) {
   const check = report.checks[def.key];
   return (
@@ -131,6 +163,7 @@ export function AdminSystemHealthPage() {
               <StatusBadge value={report.overall} />
               <span className="ml-auto text-xs text-muted-foreground">Last checked {new Date(dataUpdatedAt).toLocaleTimeString()}</span>
             </div>
+            <MonitoringPanel report={report} />
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {CARDS.map((def) => (
                 <HealthCard key={def.key} def={def} report={report} />

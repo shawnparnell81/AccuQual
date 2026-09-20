@@ -7,6 +7,8 @@ import { useToast } from "../components/shared/ToastProvider";
 interface ApiErrorBody {
   error?: string;
   message?: string;
+  /** Present on every API error (also in the X-Request-Id header): the reference that finds this request in the server logs. */
+  requestId?: string;
 }
 
 /**
@@ -39,7 +41,11 @@ export function extractErrorMessage(err: unknown, fallback: string): string {
   // extractErrorMessageAsync below for callers that can await it.
   if (typeof Blob !== "undefined" && data instanceof Blob) return fallback;
 
-  return (data as ApiErrorBody | undefined)?.message ?? fallback;
+  const body = data as ApiErrorBody | undefined;
+  const message = body?.message ?? fallback;
+  // A server fault is not something the user can fix, so give them something to quote instead of a bare "unexpected error".
+  const status = axiosErr.response?.status ?? 0;
+  return status >= 500 && body?.requestId ? `${message} (reference ${body.requestId.slice(0, 8)})` : message;
 }
 
 /** Same decoding as extractErrorMessage, but awaits a Blob error body too (axios `responseType: "blob"`) — use where the call site is already async. */

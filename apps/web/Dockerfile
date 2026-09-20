@@ -8,6 +8,11 @@ COPY tsconfig.base.json ./
 COPY apps/web ./apps/web
 ARG VITE_API_BASE_URL=/api
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+# Optional browser error tracking (see apps/web/src/lib/errorTracking.ts). Empty = the Sentry code is never loaded.
+ARG VITE_SENTRY_DSN=
+ARG VITE_APP_VERSION=
+ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
+ENV VITE_APP_VERSION=$VITE_APP_VERSION
 RUN npm run build --workspace apps/web
 
 # ---- Stage 2: serve via NGINX ----
