@@ -103,7 +103,7 @@ DECLARE
 BEGIN
   FOR spec IN
     SELECT * FROM (VALUES
-      ('users',                       ARRAY['last_login_at', 'theme_preferences', 'failed_login_count', 'first_failed_login_at']),
+      ('users',                       ARRAY['last_login_at', 'theme_preferences', 'failed_login_count', 'first_failed_login_at', 'mfa_last_used_step']),
       ('tenants',                     ARRAY['ai_config', 'erp_sync_settings', 'ai_usage_tokens', 'ai_usage_cost']),
       ('department_permissions',      ARRAY[]::text[]),
       ('permission_roles',            ARRAY[]::text[]),
@@ -162,7 +162,10 @@ BEGIN
       ('iot_devices',                 ARRAY['last_seen_at']),
       ('sales_accounts',              ARRAY[]::text[]),
       ('sales_quotes',                ARRAY[]::text[]),
-      ('sales_contracts',             ARRAY[]::text[])
+      ('sales_contracts',             ARRAY[]::text[]),
+      ('sso_connections',             ARRAY[]::text[]),
+      ('sso_domains',                 ARRAY[]::text[]),
+      ('user_identities',             ARRAY['last_login_at'])
     ) AS s(tbl, excluded)
   LOOP
     CONTINUE WHEN to_regclass('public.' || spec.tbl) IS NULL;

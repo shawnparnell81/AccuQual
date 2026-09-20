@@ -407,6 +407,20 @@
       "when": 1789873562234,
       "tag": "0057_oval_maestro",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1789874825060,
+      "tag": "0058_melted_scorpion",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1789875504124,
+      "tag": "0059_little_famine",
+      "breakpoints": true
     }
   ]
 }

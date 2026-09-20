@@ -13,6 +13,10 @@ export const tenants = pgTable("tenants", {
   name: text("name").notNull(),
   code: text("code").notNull().unique(),
   status: text("status").notNull().default("active"), // active, inactive (soft-deleted)
+  // Who must use multi-factor authentication: "optional" (nobody is forced),
+  // "admins" (default), or "all" users of the tenant. platform_admin accounts
+  // always need it regardless of this value.
+  mfaPolicy: text("mfa_policy").notNull().default("admins"),
   /**
    * Theme colors (secondaryColor..borderColor) extend this same object
    * rather than a parallel "theme" jsonb — they're all one tenant-branding

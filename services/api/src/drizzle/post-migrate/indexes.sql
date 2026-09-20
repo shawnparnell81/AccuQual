@@ -54,7 +54,8 @@ DECLARE
     -- (Customer Communications Log, Customer Scorecard, Phase 8's
     -- inventory_lots ledger, Phase 6's report_schedules).
     'customer_communications', 'customer_scorecards', 'inventory_lots', 'report_schedules',
-    'erp_connector_presets', 'erp_sync_errors', 'audit_row_changes'
+    'erp_connector_presets', 'erp_sync_errors', 'audit_row_changes',
+    'sso_connections', 'sso_domains', 'user_identities'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP
@@ -156,3 +157,4 @@ CREATE INDEX IF NOT EXISTS permission_role_modules_role_idx ON permission_role_m
 -- rate-limiting/cleanup looks it up by user_id.
 CREATE INDEX IF NOT EXISTS password_reset_tokens_hash_idx ON password_reset_tokens (token_hash);
 CREATE INDEX IF NOT EXISTS password_reset_tokens_user_idx ON password_reset_tokens (user_id);
+CREATE INDEX IF NOT EXISTS mfa_recovery_codes_user_idx ON mfa_recovery_codes (user_id);

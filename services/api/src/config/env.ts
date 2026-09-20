@@ -30,6 +30,10 @@ const envSchema = z.object({
   LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().min(1).default(15),
   // Rejects passwords found in known breaches via the Have I Been Pwned range API (k-anonymity: only the first 5 hex chars of the SHA-1 leave the server). Fails open if the service is unreachable. Defaults to on, except under test.
   PASSWORD_BREACH_CHECK: z.enum(["true", "false"]).optional(),
+  // How long a user whose tenant policy newly requires MFA may keep signing in before they must enroll. platform_admin accounts get none.
+  MFA_ENROLLMENT_GRACE_DAYS: z.coerce.number().int().min(0).default(7),
+  // Public base URL of this API as the browser sees it — where the identity provider sends users back after SSO sign-in (`<this>/auth/sso/callback`). Defaults to FRONTEND_URL + "/api", which is how the bundled nginx proxies it; set it when the API lives on its own origin (e.g. Render).
+  API_PUBLIC_URL: z.string().optional(),
 
   REDIS_URL: z.string().default("redis://localhost:6379"),
 

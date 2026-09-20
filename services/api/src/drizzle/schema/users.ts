@@ -42,6 +42,16 @@ export const users = pgTable("users", {
   firstFailedLoginAt: timestamp("first_failed_login_at"),
   lockedUntil: timestamp("locked_until"),
   passwordChangedAt: timestamp("password_changed_at"),
+  // Multi-factor authentication (TOTP). The secret is AES-256-GCM ciphertext
+  // (tenant/crypto.ts) and is written on enrollment start but only counts once
+  // mfaEnabled flips true after the user proves a first code.
+  mfaEnabled: boolean("mfa_enabled").notNull().default(false),
+  mfaSecretEncrypted: text("mfa_secret_encrypted"),
+  mfaEnrolledAt: timestamp("mfa_enrolled_at"),
+  // Highest TOTP time-step already accepted — a code can never be replayed.
+  mfaLastUsedStep: integer("mfa_last_used_step"),
+  // When the user was first told their tenant policy requires MFA; the enrollment grace period counts from here.
+  mfaRequiredSince: timestamp("mfa_required_since"),
   // This user's own theme overrides, layered on top of their tenant's theme
   // (tenants.branding) — see the Theme System review. mode is "light" |
   // "dark" | "system"; unset means "follow the tenant/default theme" for

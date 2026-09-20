@@ -12,6 +12,7 @@ import { AiAssistantPanelGate } from "../shared/AiAssistantPanel";
 import { useThemeSync } from "../../hooks/useThemeSync";
 import { deriveTabMeta } from "../../lib/tabMeta";
 import { StandardsDisclaimer } from "../shared/StandardsDisclaimer";
+import { MfaGraceBanner } from "../auth/MfaGraceBanner";
 
 /**
  * An external Supplier Portal login (roleName:"supplier") gets none of the
@@ -86,6 +87,7 @@ export function AppLayout() {
       <div className="print:hidden">
         <NavigationShell />
         <TabBar />
+        <MfaGraceBanner />
       </div>
       <main className="flex-1 overflow-y-auto p-6 print:overflow-visible print:p-0">
         <Outlet />

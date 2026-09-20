@@ -4,7 +4,7 @@ import { requireRole } from "../../middleware/rbac.js";
 import { validate } from "../../middleware/validate.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
 import { createUserSchema, updateUserSchema, updateMyThemeSchema } from "./users.validation.js";
-import { listUsers, getUser, createUser, updateUser, deleteUser, unlockUser, getMyTheme, updateMyTheme } from "./users.controller.js";
+import { listUsers, getUser, createUser, updateUser, deleteUser, unlockUser, resetUserMfa, getMyTheme, updateMyTheme } from "./users.controller.js";
 
 export const usersRouter = Router();
 
@@ -22,3 +22,4 @@ usersRouter.get("/:id", getUser);
 usersRouter.patch("/:id", requireRole("admin"), validate(updateUserSchema), updateUser);
 usersRouter.delete("/:id", requireRole("admin"), deleteUser);
 usersRouter.post("/:id/unlock", requireRole("admin"), unlockUser);
+usersRouter.post("/:id/mfa/reset", requireRole("admin"), resetUserMfa);

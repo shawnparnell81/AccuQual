@@ -6,6 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { revokeRefreshTokenRows } from "../auth/auth.service.js";
+import { clearMfa } from "../auth/mfa.service.js";
 import { assertPasswordAcceptable } from "../../utils/passwordPolicy.js";
 
 export const listUsers = asyncHandler(async (req: Request, res: Response) => {
@@ -17,6 +18,8 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
       roleId: users.roleId,
       department: users.department,
       isActive: users.isActive,
+      mfaEnabled: users.mfaEnabled,
+      lockedUntil: users.lockedUntil,
       createdAt: users.createdAt,
     })
     .from(users)
@@ -143,5 +146,16 @@ export const unlockUser = asyncHandler(async (req: Request, res: Response) => {
     .returning({ id: users.id });
   if (!updated) throw AppError.notFound("User");
   await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "User", entityId: updated.id, action: "status_change", changes: { action: "account_unlocked" }, performedBy: req.user?.id });
+  res.status(204).send();
+});
+
+/** Lost phone and no recovery codes: an admin clears the user's second factor. Their sessions end, and they re-enroll at next sign-in if policy requires it. */
+export const resetUserMfa = asyncHandler(async (req: Request, res: Response) => {
+  const [target] = await req.db!.select({ id: users.id, mfaEnabled: users.mfaEnabled }).from(users).where(and(eq(users.id, Number(req.params.id)), eq(users.tenantId, req.tenantId!)));
+  if (!target) throw AppError.notFound("User");
+  await clearMfa(target.id);
+  await req.db!.update(users).set({ tokenVersion: sql`${users.tokenVersion} + 1` }).where(eq(users.id, target.id));
+  await revokeRefreshTokenRows(target.id);
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "User", entityId: target.id, action: "status_change", changes: { action: "mfa_reset_by_admin", hadMfa: target.mfaEnabled }, performedBy: req.user?.id });
   res.status(204).send();
 });

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authRouter } from "../modules/auth/auth.routes.js";
+import { ssoPublicRouter, ssoAdminRouter } from "../modules/sso/sso.routes.js";
 import { usersRouter } from "../modules/users/users.routes.js";
 import { rolesRouter } from "../modules/roles/roles.routes.js";
 import { documentsRouter } from "../modules/documents/documents.routes.js";
@@ -66,7 +67,10 @@ import { docsRouter } from "../docs/docs.routes.js";
 
 export const apiRouter = Router();
 
+// Before /auth: /auth/sso/* is its own router (no session yet), and authRouter would otherwise never see it as anything but an unknown path.
+apiRouter.use("/auth/sso", ssoPublicRouter);
 apiRouter.use("/auth", authRouter);
+apiRouter.use("/sso", ssoAdminRouter);
 apiRouter.use("/users", usersRouter);
 apiRouter.use("/roles", rolesRouter);
 apiRouter.use("/documents", documentsRouter);

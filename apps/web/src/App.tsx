@@ -106,6 +106,7 @@ import { AdminReceivingInventorySettingsPage } from "./routes/Admin/AdminReceivi
 import { AdminSystemHealthPage } from "./routes/Admin/AdminSystemHealthPage";
 import { AdminApiDocsPage } from "./routes/Admin/AdminApiDocsPage";
 import { AdminTenantSettingsPage } from "./routes/Admin/AdminTenantSettingsPage";
+import { AdminSsoPage } from "./routes/Admin/AdminSsoPage";
 import { HomePage } from "./routes/Home/HomePage";
 import { CalendarPage } from "./routes/Calendar/CalendarPage";
 import { useCurrentUser, useAuthBootstrap } from "./hooks/useAuth";
@@ -238,6 +239,7 @@ export function App() {
             <Route path="system-health" element={<AdminSystemHealthPage />} />
             <Route path="api-docs" element={<AdminApiDocsPage />} />
             <Route path="tenant-settings" element={<AdminTenantSettingsPage />} />
+            <Route path="sso" element={<AdminSsoPage />} />
             <Route path="tenant-branding" element={<AdminTenantBrandingPage />} />
             <Route path="tenant-templates" element={<AdminTenantTemplatesPage />} />
             <Route path="digital-twin" element={<AdminDigitalTwinSetupPage />} />

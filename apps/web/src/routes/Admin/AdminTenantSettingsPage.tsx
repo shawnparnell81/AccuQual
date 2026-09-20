@@ -5,7 +5,7 @@ import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
-import { TextField } from "../../components/forms/Field";
+import { TextField, SelectField } from "../../components/forms/Field";
 import type { TenantProfile } from "../../api/types";
 
 function useTenantProfile() {
@@ -44,6 +44,16 @@ export function AdminTenantSettingsPage() {
       setContactPhone(profile.contactPhone ?? "");
     }
   }, [profile]);
+
+  const { data: security } = useQuery<{ mfaPolicy: "optional" | "admins" | "all" }>({ queryKey: ["tenant/security"], queryFn: async () => (await apiClient.get("/tenant/security")).data });
+  const saveSecurity = useMutation({
+    mutationFn: async (mfaPolicy: string) => (await apiClient.patch("/tenant/security", { mfaPolicy })).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tenant/security"] });
+      toast.success("Sign-in security policy saved.");
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save the policy.")),
+  });
 
   const save = useMutation({
     mutationFn: async () => (await apiClient.patch("/tenant/profile", { name, logoUrl, timezone, contactName, contactEmail, contactPhone })).data,
@@ -91,6 +101,18 @@ export function AdminTenantSettingsPage() {
               {save.isPending ? "Saving…" : "Save Tenant Settings"}
             </button>
           </form>
+
+          <div className="mt-4 flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
+            <h2 className="text-sm font-medium">Sign-in security</h2>
+            <SelectField label="Who must use two-step sign-in (authenticator app)?" value={security?.mfaPolicy ?? "admins"} onChange={(e) => saveSecurity.mutate(e.target.value)} disabled={saveSecurity.isPending}>
+              <option value="optional">Nobody is required (users may opt in)</option>
+              <option value="admins">Administrators (recommended)</option>
+              <option value="all">Everyone in this organization</option>
+            </SelectField>
+            <p className="text-xs text-muted-foreground">
+              People newly covered have 7 days to set it up before they're asked at sign-in. Platform administrators always need it. An admin can reset a user's two-step sign-in from Users &amp; Roles if they lose their phone.
+            </p>
+          </div>
         </AdminOnlyGuard>
       )}
     </div>

@@ -117,7 +117,7 @@ describe("RLS coverage drift guard (live database)", () => {
   });
 
   it("auth token tables are invisible to a tenant-scoped session (login/refresh/reset use the owner connection)", async () => {
-    for (const table of ["refresh_tokens", "password_reset_tokens"]) {
+    for (const table of ["refresh_tokens", "password_reset_tokens", "mfa_recovery_codes"]) {
       const count = await asTenant(tenantAId, async (q) => Number((await q(`SELECT count(*)::int AS n FROM ${table}`)).rows[0]!.n));
       expect(count, table).toBe(0);
     }

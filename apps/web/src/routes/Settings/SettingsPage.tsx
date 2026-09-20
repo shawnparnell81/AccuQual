@@ -3,10 +3,11 @@ import { Link } from "react-router-dom";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { NavigationSettingsPage } from "./NavigationSettingsPage";
 import { ThemeSettingsSection } from "./ThemeSettingsSection";
+import { MfaSettingsSection } from "./MfaSettingsSection";
 import { FeasibilitySettingsPanel } from "./FeasibilitySettingsPanel";
 import { ERPSyncSettingsPanel } from "./ERPSyncSettingsPanel";
 
-const TABS = ["User Preferences", "Theme", "Notifications", "Email Alerts", "ERP Integration", "Feasibility", "Navigation"] as const;
+const TABS = ["User Preferences", "Security", "Theme", "Notifications", "Email Alerts", "ERP Integration", "Feasibility", "Navigation"] as const;
 type Tab = (typeof TABS)[number];
 
 /** A section of this page with nothing behind it yet — shown plainly rather than as a working-looking toggle that does nothing. */
@@ -87,6 +88,7 @@ export function SettingsPage() {
         </div>
       )}
 
+      {tab === "Security" && <MfaSettingsSection />}
       {tab === "Theme" && <ThemeSettingsSection />}
 
       {tab === "Notifications" && <NotAvailable what="Notifications" />}

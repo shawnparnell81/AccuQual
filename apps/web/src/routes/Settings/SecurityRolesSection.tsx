@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useToast } from "../../components/shared/ToastProvider";
@@ -48,6 +50,17 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
   const createUser = userHooks.useCreate();
   const updateUser = userHooks.useUpdate();
   const removeUser = userHooks.useDelete();
+  const queryClient = useQueryClient();
+
+  async function adminAction(path: string, done: string) {
+    try {
+      await apiClient.post(path);
+      toast.success(done);
+      void queryClient.invalidateQueries({ queryKey: ["users"] });
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "That didn't work."));
+    }
+  }
 
   const [form, setForm] = useState({ email: "", password: "", name: "", roleId: "", department: "" });
 
@@ -62,6 +75,7 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
             <th className="pb-2">Role</th>
             <th className="pb-2">Department</th>
             <th className="pb-2">Status</th>
+            <th className="pb-2">2-step</th>
             {isAdmin && <th className="pb-2" />}
           </tr>
         </thead>
@@ -91,9 +105,26 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
               <td className="py-1.5 capitalize">{u.department ?? "—"}</td>
               <td className="py-1.5">
                 <StatusBadge value={u.isActive ? "active" : "disqualified"} label={u.isActive ? "Active" : "Deactivated"} />
+                {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && <span className="ml-2 text-xs text-destructive">Locked</span>}
               </td>
+              <td className="py-1.5 text-xs text-muted-foreground">{u.mfaEnabled ? "On" : "Off"}</td>
               {isAdmin && (
-                <td className="py-1.5 text-right">
+                <td className="space-x-3 py-1.5 text-right">
+                  {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && (
+                    <button onClick={() => void adminAction(`/users/${u.id}/unlock`, "Account unlocked.")} className="text-xs text-primary hover:underline">
+                      Unlock
+                    </button>
+                  )}
+                  {u.mfaEnabled && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Reset two-step sign-in for ${u.email}? They will be signed out and can set it up again.`)) void adminAction(`/users/${u.id}/mfa/reset`, "Two-step sign-in reset.");
+                      }}
+                      className="text-xs text-muted-foreground hover:text-destructive"
+                    >
+                      Reset 2-step
+                    </button>
+                  )}
                   {u.isActive && (
                     <button
                       onClick={() => removeUser.mutate(u.id)}
