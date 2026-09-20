@@ -1,4 +1,5 @@
-import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, jsonb, bigint } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { users } from "./users.js";
 import { tenants } from "./tenants.js";
 
@@ -12,6 +13,8 @@ export const auditTrail = pgTable("audit_trail", {
   changes: jsonb("changes").$type<Record<string, unknown>>(),
   performedBy: integer("performed_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
+  // Postgres transaction id — shared with the audit_row_changes rows the same request wrote, which is how a history entry finds its field-level old/new values.
+  txid: bigint("txid", { mode: "number" }).default(sql`txid_current()`),
 });
 
 export type AuditTrailEntry = typeof auditTrail.$inferSelect;

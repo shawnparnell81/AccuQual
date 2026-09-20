@@ -54,7 +54,7 @@ DECLARE
     -- (Customer Communications Log, Customer Scorecard, Phase 8's
     -- inventory_lots ledger, Phase 6's report_schedules).
     'customer_communications', 'customer_scorecards', 'inventory_lots', 'report_schedules',
-    'erp_connector_presets', 'erp_sync_errors'
+    'erp_connector_presets', 'erp_sync_errors', 'audit_row_changes'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP

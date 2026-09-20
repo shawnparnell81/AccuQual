@@ -15,7 +15,7 @@ import {
 import clsx from "clsx";
 import { WorkflowMetadataViewer } from "./WorkflowMetadataViewer";
 import { formatDateTime } from "../../lib/dates";
-import type { WorkflowHistoryEntry } from "../../api/types";
+import type { FieldChange, WorkflowHistoryEntry } from "../../api/types";
 
 type Bucket = "muted" | "info" | "warning" | "success" | "destructive";
 
@@ -65,10 +65,76 @@ function resultingStatus(entry: WorkflowHistoryEntry): string | null {
   return typeof status === "string" ? status : null;
 }
 
+const HIDDEN = "[redacted]";
+
+/** "assigned_to" -> "Assigned to" */
+function fieldLabel(column: string): string {
+  const spaced = column.replace(/_/g, " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined) return "empty";
+  if (typeof value === "boolean") return value ? "yes" : "no";
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text.length > 80 ? text.slice(0, 80) + "…" : text;
+}
+
+interface FieldRow {
+  key: string;
+  label: string;
+  from?: string;
+  to?: string;
+  hidden: boolean;
+}
+
+function toRows(fieldChanges: FieldChange[] | undefined, ops: FieldChange["op"][]): FieldRow[] {
+  return (fieldChanges ?? [])
+    .filter((c) => ops.includes(c.op))
+    .flatMap((c) =>
+      Object.entries(c.changes).map(([column, v]) => ({
+        key: `${c.table}.${column}`,
+        label: fieldLabel(column),
+        from: "from" in v ? formatValue(v.from) : undefined,
+        to: "to" in v ? formatValue(v.to) : undefined,
+        hidden: v.from === HIDDEN || v.to === HIDDEN,
+      }))
+    );
+}
+
+/** "Priority: low → high" lines — what actually changed, and from what, not just which fields were touched. */
+function FieldChangeList({ rows, limit }: { rows: FieldRow[]; limit?: number }) {
+  if (rows.length === 0) return null;
+  const shown = limit ? rows.slice(0, limit) : rows;
+  return (
+    <ul className="mt-1.5 flex flex-col gap-0.5 text-xs">
+      {shown.map((r) => (
+        <li key={r.key} className="flex flex-wrap items-baseline gap-x-1.5">
+          <span className="font-medium text-foreground">{r.label}:</span>
+          {r.hidden ? (
+            <span className="text-muted-foreground">changed (value hidden)</span>
+          ) : r.from !== undefined && r.to !== undefined ? (
+            <>
+              <span className="text-muted-foreground line-through decoration-muted-foreground/50">{r.from}</span>
+              <span className="text-muted-foreground">→</span>
+              <span className="text-foreground">{r.to}</span>
+            </>
+          ) : (
+            <span className="text-foreground">{r.to ?? r.from}</span>
+          )}
+        </li>
+      ))}
+      {limit && rows.length > limit && <li className="text-muted-foreground">+{rows.length - limit} more in Details</li>}
+    </ul>
+  );
+}
+
 export function WorkflowHistoryItem({ entry, highlighted }: { entry: WorkflowHistoryEntry; highlighted?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const { icon: Icon, bucket } = resolveVisual(entry);
   const toStatus = resultingStatus(entry);
+  const editRows = toRows(entry.fieldChanges, ["UPDATE", "DELETE"]);
+  const allRows = toRows(entry.fieldChanges, ["INSERT", "UPDATE", "DELETE"]);
 
   return (
     <li
@@ -91,8 +157,15 @@ export function WorkflowHistoryItem({ entry, highlighted }: { entry: WorkflowHis
               Details <ChevronDown size={12} className={clsx("transition-transform", expanded && "rotate-180")} />
             </button>
           </div>
+          <FieldChangeList rows={editRows} limit={5} />
           {expanded && (
             <div className="mt-2 rounded-md border border-border bg-card p-3">
+              {allRows.length > 0 && (
+                <div className="mb-2 border-b border-border pb-2">
+                  <p className="text-xs font-medium text-muted-foreground">Field changes</p>
+                  <FieldChangeList rows={allRows} />
+                </div>
+              )}
               <WorkflowMetadataViewer changes={entry.changes} />
             </div>
           )}

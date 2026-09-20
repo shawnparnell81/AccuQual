@@ -1,8 +1,9 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Pool } from "pg";
 import type { TenantDb } from "../../lib/tenantScope.js";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
+import { auditRowChanges } from "../../drizzle/schema/auditRowChanges.js";
 import { users } from "../../drizzle/schema/users.js";
 import * as schema from "../../drizzle/schema/index.js";
 import { logger } from "../../utils/logger.js";
@@ -135,4 +136,69 @@ export async function resolveUserNames(db: TenantDb, userIds: (number | null | u
 export async function withResolvedActors<T extends { performedBy: number | null }>(db: TenantDb, rows: T[]): Promise<(T & { performedByName: string | null })[]> {
   const names = await resolveUserNames(db, rows.map((r) => r.performedBy));
   return rows.map((r) => ({ ...r, performedByName: r.performedBy === null ? null : (names.get(r.performedBy) ?? null) }));
+}
+
+/** audit_trail.entityType -> the table whose row it describes, so a history entry only shows ITS row's field changes. Unlisted types fall back to matching on row id alone within the same transaction. */
+const ENTITY_TABLE: Record<string, string> = {
+  NCR: "ncr",
+  CAPA: "capa",
+  "8D Report": "eight_d",
+  Audit: "audits",
+  "Audit Finding": "audit_items",
+  Document: "documents",
+  Supplier: "suppliers",
+  Complaint: "complaints",
+  "Discrepancy investigation": "discrepancy_investigations",
+  Equipment: "equipment",
+  TrainingAssignment: "training_assignments",
+  "Change request": "change_requests",
+  RiskAssessment: "risk_assessments",
+  WorkOrder: "work_orders",
+  PurchaseOrder: "erp_purchase_orders",
+  Rma: "rma",
+  RmaLog: "rma_log",
+  WarrantyClaim: "warranty_claims",
+  Crar: "crar",
+  Customer: "customers",
+  User: "users",
+  Tenant: "tenants",
+  FeasibilityReview: "feasibility_reviews",
+  QmsForm: "qms_forms",
+  ScarForm: "scar_forms",
+  QualityInspectionReport: "quality_inspection_reports",
+};
+
+export interface FieldChange {
+  table: string;
+  op: string;
+  changes: Record<string, { from?: unknown; to?: unknown }>;
+}
+
+/**
+ * Adds `fieldChanges` (old -> new per field, from the audit_row_changes
+ * trigger) to each audit_trail row, matched on the shared Postgres
+ * transaction id + the row the entry is about. One batched query for the
+ * whole list. Entries written before the trigger existed (txid null) just
+ * get an empty list.
+ */
+export async function attachFieldChanges<T extends { txid: number | null; entityType: string; entityId: number }>(
+  db: TenantDb,
+  tenantId: number,
+  rows: T[]
+): Promise<(T & { fieldChanges: FieldChange[] })[]> {
+  const txids = [...new Set(rows.map((r) => r.txid).filter((x): x is number => x !== null && x !== undefined))];
+  if (txids.length === 0) return rows.map((r) => ({ ...r, fieldChanges: [] }));
+
+  const changes = await db
+    .select()
+    .from(auditRowChanges)
+    .where(and(eq(auditRowChanges.tenantId, tenantId), inArray(auditRowChanges.txid, txids)));
+
+  return rows.map((r) => {
+    const table = ENTITY_TABLE[r.entityType];
+    const fieldChanges = changes
+      .filter((c) => c.txid === r.txid && c.rowId === r.entityId && (!table || c.tableName === table))
+      .map((c) => ({ table: c.tableName, op: c.op, changes: c.changes }));
+    return { ...r, fieldChanges };
+  });
 }

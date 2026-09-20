@@ -80,7 +80,7 @@ DECLARE
     'permission_roles', 'permission_role_modules', 'user_permission_roles', 'department_permissions',
     'report_schedules', 'supplier_quality_risk_scores', 'inventory_lots',
     'customer_communications', 'customer_scorecards', 'erp_connector_presets',
-    'erp_sync_errors'
+    'erp_sync_errors', 'audit_row_changes'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP

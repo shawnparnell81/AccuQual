@@ -115,5 +115,7 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
     .where(and(eq(users.id, Number(req.params.id)), eq(users.tenantId, req.tenantId!)))
     .returning();
   if (!updated) throw AppError.notFound("User");
+  // Deactivation is an access-removal event an auditor asks about — it used to leave no entry at all.
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "User", entityId: updated.id, action: "status_change", changes: { action: "deactivate" }, performedBy: req.user?.id });
   res.status(204).send();
 });
