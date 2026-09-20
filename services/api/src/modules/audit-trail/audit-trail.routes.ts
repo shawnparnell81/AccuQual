@@ -6,7 +6,7 @@ import { AppError } from "../../utils/appError.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
 import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmentAccess.js";
-import { withResolvedActors } from "./audit-trail.service.js";
+import { withResolvedActors, attachFieldChanges } from "./audit-trail.service.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
 
 export const auditTrailRouter = Router();
@@ -130,6 +130,7 @@ auditTrailRouter.get(
       .from(auditTrail)
       .where(and(eq(auditTrail.entityId, Number(req.params.entityId)), eq(auditTrail.tenantId, req.tenantId!)));
     const filtered = rows.filter((r) => r.entityType === entityType);
-    res.json(await withResolvedActors(req.db! as TenantDb, filtered));
+    const withActors = await withResolvedActors(req.db! as TenantDb, filtered);
+    res.json(await attachFieldChanges(req.db! as TenantDb, req.tenantId!, withActors));
   })
 );

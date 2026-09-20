@@ -35,6 +35,14 @@ export interface WorkflowHistoryEntry {
   /** Resolved server-side (see audit-trail.service.ts's withResolvedActors) — a name, an email, "Deleted User (ID #x)", or null when performedBy itself is null (a system action, rendered as "System"). Prefer this over the bare performedBy id everywhere history is shown. */
   performedByName: string | null;
   createdAt: string;
+  /** Field-level old -> new values the audit_row_change() database trigger recorded in the same transaction as this entry (empty for entries older than the trigger). */
+  fieldChanges?: FieldChange[];
+}
+
+export interface FieldChange {
+  table: string;
+  op: "INSERT" | "UPDATE" | "DELETE";
+  changes: Record<string, { from?: unknown; to?: unknown }>;
 }
 
 /** Friendly moduleName values the history endpoint accepts — kept in sync with services/api's workflow.controller.ts MODULE_ENTITY_TYPES. */

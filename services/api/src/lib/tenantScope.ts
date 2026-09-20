@@ -55,6 +55,8 @@ export function withTenantDb(req: Request, res: Response, next: NextFunction) {
       await client.query("BEGIN");
       await client.query("SET LOCAL ROLE accuqual_app");
       await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [String(tenantId)]);
+      // Read by the audit_row_change() trigger (see post-migrate/audit-triggers.sql) so every field-level change records who made it.
+      await client.query("SELECT set_config('app.current_user_id', $1, true)", [String(user.id)]);
 
       req.tenantId = tenantId;
       req.db = drizzle(client, { schema });

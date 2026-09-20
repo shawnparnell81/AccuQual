@@ -393,6 +393,13 @@
       "when": 1789851666592,
       "tag": "0055_new_loa",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1789870554098,
+      "tag": "0056_vengeful_skreet",
+      "breakpoints": true
     }
   ]
 }

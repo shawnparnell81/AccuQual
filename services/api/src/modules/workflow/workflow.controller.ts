@@ -5,7 +5,7 @@ import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { runWorkflow, getRegisteredActionKinds, type WorkflowDefinition } from "./workflow-engine.js";
-import { recordAuditTrail, withResolvedActors } from "../audit-trail/audit-trail.service.js";
+import { recordAuditTrail, withResolvedActors, attachFieldChanges } from "../audit-trail/audit-trail.service.js";
 import { RESOURCE_KEYS } from "../../middleware/departmentAccess.js";
 import { WORKFLOW_TEMPLATES } from "./workflow.templates.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
@@ -174,7 +174,8 @@ export const historyHandler = asyncHandler(async (req: Request, res: Response) =
     .where(and(eq(auditTrail.entityId, Number(recordId)), eq(auditTrail.entityType, entityType), eq(auditTrail.tenantId, req.tenantId!)));
 
   const sorted = [...rows].sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
-  res.json(await withResolvedActors(req.db! as TenantDb, sorted));
+  const withActors = await withResolvedActors(req.db! as TenantDb, sorted);
+  res.json(await attachFieldChanges(req.db! as TenantDb, req.tenantId!, withActors));
 });
 
 /** GET /workflow/templates — Phase 9 task 6's starter templates (real, static graphs mirroring each module's own real states/events — see workflow.templates.ts). Loading one into the builder still requires an explicit Save; nothing here has any side effect. */
