@@ -107,6 +107,84 @@ gone (a real disaster), run it against a second copy, or use the checklist below
 7. Restart the three workers. Anything mid-run when the loss happened will not resume; re-trigger it.
 8. Record the incident and the data-loss window (the time between the backup and the failure) for affected customers.
 
+## Automated nightly backup
+
+**Status: built and tested, but not running until you finish the one-time setup below.** Schedules only run from the
+default branch, so nothing fires until this is merged; after that, a run with no secrets configured fails with a message
+naming exactly which secrets are missing.
+
+**What it does.** `.github/workflows/backup.yml` runs every night at 07:23 UTC on a GitHub-hosted runner (so it does not
+depend on your laptop being on). It uses `ops/backup/backup.mjs` inside `ops/backup/Dockerfile` (PostgreSQL 17 tools) to:
+
+1. Export one database snapshot and dump the `public` and `drizzle` schemas from **that same snapshot**, and count every
+   table's rows inside it, so the manifest is exactly what the dump contains.
+2. Refuse to store it if it is obviously the wrong database (fewer than 20 tables or under 50 KB).
+3. Bundle dump + manifest, **encrypt with AES-256** (key derived from `BACKUP_PASSPHRASE`), and decrypt it again to prove the
+   ciphertext round-trips before anything is uploaded. The bucket only ever holds ciphertext.
+4. Upload to your bucket and confirm the stored size. Every night goes in `daily/`; Sundays also in `weekly/`; the 1st also
+   in `monthly/`. Retention: 14 daily, 8 weekly, 12 monthly (`BACKUP_KEEP_DAILY/WEEKLY/MONTHLY`). Pruning only ever deletes
+   files this tool named, never the newest, and never anything else in the bucket.
+5. Ping a dead-man switch URL (`BACKUP_HEARTBEAT_URL`) on success and `/fail` on failure. A failed run also emails you
+   through GitHub's normal failed-workflow notification.
+
+On the 1st of each month a second job, **restore drill**, downloads the newest backup, decrypts it, restores it into a
+scratch PostgreSQL, runs `db:migrate`, and verifies it against the backup's manifest (structure, security policies, app-role
+access, exact row count of every table). No production database is touched. A backup you have never restored is a hope.
+
+### One-time setup
+
+1. **A private bucket you control**, off the platforms that host the app: Cloudflare R2 or Backblaze B2 (both have a free tier
+   far larger than these backups) or any S3-compatible store. Keep public access off. Create an access key limited to that
+   one bucket with read, write and delete (delete is needed for retention pruning).
+2. **A passphrase**, generated once: `openssl rand -base64 33`. Store it in your password manager **and** one offline copy.
+   **If it is lost, every backup is permanently unreadable**; there is no recovery. It must not live only in GitHub.
+3. **The database URL for the runner.** Use Supabase's **Session pooler** connection string (IPv4; GitHub's runners cannot use
+   the direct IPv6 one, the same rule as the Render deploy in DEPLOY.md). `pg_dump` needs a session-mode connection, not the
+   transaction pooler. The role must be able to read every table through row-level security (the Supabase `postgres` role can).
+4. **An optional Healthchecks.io check** for the backup (period 1 day, grace ~3 hours): its ping URL is `BACKUP_HEARTBEAT_URL`.
+   Use a *separate* check from the API's `HEARTBEAT_URL`. This is what tells you when a night is *skipped*, not only failed.
+5. **Repository secrets** (Settings, Secrets and variables, Actions; or `gh secret set NAME`):
+
+| Secret | Value |
+|---|---|
+| `BACKUP_DATABASE_URL` | the Session pooler connection string |
+| `BACKUP_PASSPHRASE` | the passphrase from step 2 |
+| `BACKUP_S3_BUCKET` | bucket name |
+| `BACKUP_S3_ENDPOINT` | the provider's S3 endpoint (R2: `https://<account>.r2.cloudflarestorage.com`; B2: `https://s3.<region>.backblazeb2.com`); leave unset for AWS S3 |
+| `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | the bucket-scoped key |
+| `BACKUP_S3_REGION` | optional; defaults to `auto` (R2). Set it for AWS S3 / B2 (e.g. `us-west-004`) |
+| `BACKUP_HEARTBEAT_URL` | optional, from step 4 |
+
+6. **Prove it**: Actions, **Backup**, *Run workflow*, `backup`; then again with `restore-drill`. Both should go green. Do
+   this before relying on it, and note the drill's own timing here.
+
+### Getting a backup back
+
+```sh
+# any machine with Docker; the same variables as the secrets above
+docker build -f ops/backup/Dockerfile -t accuqual-backup .
+docker run --rm -e BACKUP_PASSPHRASE -e BACKUP_S3_BUCKET -e BACKUP_S3_ENDPOINT -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
+  -v "$PWD/out:/out" --user "$(id -u):$(id -g)" accuqual-backup fetch latest --out /out     # or: fetch <key> --tier weekly
+# -> out/accuqual.dump (checksum-verified) and out/manifest.json; then follow "Restoring" above.
+# Whole recovery rehearsal in one command (scratch database, nothing else touched):
+bash ops/backup/restore-drill.sh latest daily
+```
+
+Without this repository: `openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:BACKUP_PASSPHRASE -in X.tar.enc -out X.tar && tar -xf X.tar`.
+After restoring, verify with the manifest instead of the (gone) original:
+`MANIFEST_FILE=out/manifest.json DATABASE_URL=<restored> npm run db:verify-restore`.
+
+### Limits, stated plainly
+
+- **Data-loss window: up to ~24 hours** (nightly). Supabase's own backups may be finer-grained **[confirm your plan]**.
+- **Uploaded files and `.env` secrets are not in it** (see the table at the top). Only the database is.
+- **The GitHub secrets hold a powerful database credential and a bucket key that can delete backups.** Only repository
+  administrators can read or change secrets, and pull requests from forks never receive them, but treat repository admin access
+  accordingly. To limit damage from a compromised bucket key, turn on the provider's object versioning or object lock.
+- GitHub **pauses scheduled workflows after 60 days without repository activity**; that is what the heartbeat is for.
+- Tested here against the live Supabase database and against an S3-compatible server (MinIO). It has **not yet run on GitHub's
+  runners or against your real bucket**; step 6 does that.
+
 ## The drill of 2026-09-20 — what was actually run
 
 Source: the live Supabase database (demo data). Target: a new `pgvector/pgvector:pg17` container on the same laptop.
@@ -130,7 +208,7 @@ failed on the restored copy), and the verifier's own privilege check could error
   customer. What a real recovery adds on top is human time: provisioning the new database host, updating the
   connection settings, and running the checklist — plan on an hour, not seconds.
 - **Data-loss window (RPO).** For a manual backup it is the age of your newest dump, so it is exactly as good as your
-  schedule. Nothing runs a scheduled dump today. For platform backups it is whatever your Supabase plan provides
+  schedule. The automated nightly backup (above) makes it at most about 24 hours once it is switched on. For platform backups it is whatever your Supabase plan provides
   **[confirm]**.
 
 ## What is still unproven
@@ -138,8 +216,8 @@ failed on the restored copy), and the verifier's own privilege check could error
 - Restoring from **Supabase's own** backup (daily backup or point-in-time recovery) has not been tried.
 - The drill was run on a copy of the demo dataset, at small scale.
 - Restoring the uploaded-files folder has not been drilled (it is a plain folder copy, but untested).
-- No scheduled off-platform backup exists yet. Suggested next step: a nightly `pg_dump` to encrypted storage you control,
-  with an alert when it fails, plus a repeat of this drill quarterly.
+- The nightly off-platform backup is built and tested locally but is not running until the bucket and secrets are
+  configured, and it has not yet run on GitHub's runners or against a real bucket (setup above, step 6).
 
 ## Cleaning up after a drill
 

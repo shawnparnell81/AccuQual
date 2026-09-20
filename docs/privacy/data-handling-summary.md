@@ -79,7 +79,7 @@ even if a query forgot to filter. This is covered by automated tests that run on
   verified: the structure, the security policies, and the row count of every table matched the original, and the
   application ran correctly against the restored copy, including tenant isolation and the append-only audit log.
 - **Not yet done:** restoring from the database host's own backups has not been tested; the drill used a small
-  dataset, so recovery time at production size is unmeasured; and no scheduled off-platform backup exists yet.
+  dataset, so recovery time at production size is unmeasured; and the nightly off-platform encrypted backup is built but not yet switched on (needs a bucket and secrets).
 
 ## Getting data out, and getting it deleted
 
@@ -97,7 +97,7 @@ See [subprocessors.md](subprocessors.md).
 
 ## Known gaps (stated plainly)
 
-1. Restore from the database host's own backups is untested, and no scheduled off-platform backup exists (above).
+1. Restore from the database host's own backups is untested, and the nightly off-platform backup is not yet switched on (above).
 2. Permanent deletion of an organization is manual.
 3. The database certificate is not verified unless `DATABASE_SSL_CA` is set.
 4. Mid-session enforcement of two-step sign-in is at sign-in and token refresh (within about 15 minutes), not every request.

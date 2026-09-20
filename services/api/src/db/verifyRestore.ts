@@ -1,4 +1,5 @@
 import "dotenv/config";
+import fs from "node:fs";
 import pg from "pg";
 
 /**
@@ -11,15 +12,21 @@ import pg from "pg";
  * extensions; each sequence sits at or above its table's highest id (so the next insert cannot collide); and that the
  * restricted application role exists with the same table access. Exits non-zero on any difference, so it can gate a
  * scripted drill. See docs/operations/backup-and-restore.md.
+ *
+ * Second mode, for when the original no longer exists (a real recovery, or the monthly automated drill): set
+ * MANIFEST_FILE=<manifest.json from a backup> instead of SOURCE_DATABASE_URL. The manifest holds the exact row counts and
+ * structure counts taken from the same snapshot as the dump (ops/backup/backup.mjs), so the restored copy is checked against
+ * what the database looked like at the moment of the backup, not against a live database that has moved on since.
  */
 
 const source = process.env.SOURCE_DATABASE_URL;
 const target = process.env.DATABASE_URL;
-if (!source || !target) {
-  console.error("Set SOURCE_DATABASE_URL (the original) and DATABASE_URL (the restored copy).");
+const manifestFile = process.env.MANIFEST_FILE;
+if ((!source && !manifestFile) || !target) {
+  console.error("Set DATABASE_URL (the restored copy) and either SOURCE_DATABASE_URL (the original) or MANIFEST_FILE (a backup's manifest.json).");
   process.exit(2);
 }
-if (source === target) {
+if (source && source === target) {
   console.error("SOURCE_DATABASE_URL and DATABASE_URL are the same database — nothing to compare.");
   process.exit(2);
 }
@@ -70,7 +77,64 @@ async function sequencesBehind(p: pg.Pool): Promise<string[]> {
   return behind;
 }
 
+interface Manifest {
+  migrations: number;
+  catalog: Record<string, number>;
+  tables: Record<string, number>;
+}
+
+/** Verifies a restored copy against a backup's manifest (no original database available). */
+async function verifyAgainstManifest(file: string): Promise<void> {
+  const m = JSON.parse(fs.readFileSync(file, "utf8")) as Manifest;
+  const b = mk(target!);
+  const problems: string[] = [];
+  const line = (ok: boolean, label: string, detail = "") => console.log(`${ok ? "PASS" : "FAIL"}  ${label}${detail ? ` — ${detail}` : ""}`);
+  try {
+    for (const [name, sql] of Object.entries(CATALOG_QUERIES)) {
+      if (name === "appRoleExists" || name === "appRoleReadableTables") continue; // not in a backup by design; checked below
+      const want = m.catalog[name];
+      if (want === undefined) continue;
+      const got = await scalar(b, sql);
+      line(got === want, name, got === want ? String(got) : `backup ${want}, restored ${got}`);
+      if (got !== want) problems.push(`${name}: backup ${want}, restored ${got}`);
+    }
+    const migrations = await scalar(b, "SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations");
+    line(migrations === m.migrations, "migration history", `${migrations} recorded`);
+    if (migrations !== m.migrations) problems.push(`migration history: backup ${m.migrations}, restored ${migrations}`);
+
+    // After db:migrate the application role must exist and be able to read every table.
+    const roleOk = (await scalar(b, CATALOG_QUERIES.appRoleExists!)) === 1;
+    const readable = await scalar(b, CATALOG_QUERIES.appRoleReadableTables!);
+    line(roleOk, "application role exists (run db:migrate first)");
+    line(readable === m.catalog.tables, "application role can read every table", `${readable} of ${m.catalog.tables}`);
+    if (!roleOk) problems.push("application role missing");
+    if (readable !== m.catalog.tables) problems.push(`application role reads ${readable} of ${m.catalog.tables} tables`);
+
+    const got = await tableCounts(b);
+    const diffs: string[] = [];
+    let total = 0;
+    for (const [t, n] of Object.entries(m.tables)) {
+      total += got.get(t) ?? 0;
+      if ((got.get(t) ?? -1) !== n) diffs.push(`${t}: backup ${n}, restored ${got.get(t) ?? "MISSING"}`);
+    }
+    for (const t of got.keys()) if (!(t in m.tables)) diffs.push(`${t}: only in the restored copy`);
+    line(diffs.length === 0, `row counts for all ${Object.keys(m.tables).length} tables`, diffs.length === 0 ? `${total.toLocaleString()} rows` : `${diffs.length} differ`);
+    for (const d of diffs) console.log(`        ${d}`);
+    problems.push(...diffs);
+
+    const behind = await sequencesBehind(b);
+    line(behind.length === 0, "id sequences are ahead of the data", behind.length ? `${behind.length} behind` : "no collisions possible");
+    for (const x of behind) console.log(`        ${x}`);
+    problems.push(...behind.map((x) => `sequence behind: ${x}`));
+  } finally {
+    await b.end();
+  }
+  console.log(problems.length === 0 ? "\nRESTORE VERIFIED — the restored database matches the backup's manifest." : `\nRESTORE DIFFERS — ${problems.length} problem(s) above.`);
+  process.exit(problems.length === 0 ? 0 : 1);
+}
+
 async function main() {
+  if (manifestFile) return verifyAgainstManifest(manifestFile);
   const a = mk(source!);
   const b = mk(target!);
   const problems: string[] = [];
