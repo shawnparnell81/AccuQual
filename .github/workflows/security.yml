@@ -1,0 +1,109 @@
+name: Security
+
+# Runs on every PR and merge, and weekly — a new vulnerability in a dependency is published without anyone
+# pushing code, so a schedule is what notices it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays, 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Fails the build when a dependency that SHIPS (production deps of every workspace) has a high or critical
+  # known vulnerability. Development-only tooling (test runner, dev server, migration generator) is reported
+  # but does not block: it never runs in production, and its fixes are major-version upgrades that Dependabot
+  # proposes and CI then tests.
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Production dependencies (blocks on high/critical)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Development dependencies (report only)
+        run: |
+          {
+            echo "### Development-dependency advisories (not blocking)"
+            echo
+            echo '```'
+            npm audit --audit-level=high 2>&1 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Static analysis for security bugs (injection, unsafe deserialization, path traversal, weak crypto, ...).
+  # Findings appear under the repository's Security tab and as annotations on pull requests.
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          config-file: ./.github/codeql/codeql-config.yml
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:javascript-typescript"
+
+  # Looks for credentials committed anywhere in the full history. GitHub's own secret scanning already covers
+  # known provider token formats; this catches generic patterns (a password or key assigned in code) too.
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  # Vulnerabilities in the operating-system packages and libraries inside each image we ship. Blocks only on
+  # CRITICAL issues that have a fix available (the fix is usually "rebuild on a newer base image"); HIGH are listed.
+  # Not run on pull requests: it builds five images, and base-image advisories are not something a PR causes.
+  container-scan:
+    name: Image scan (${{ matrix.image.name }})
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - { name: api, dockerfile: services/api/Dockerfile }
+          - { name: web, dockerfile: apps/web/Dockerfile }
+          - { name: workflow-worker, dockerfile: workers/workflow-worker/Dockerfile }
+          - { name: ai-worker, dockerfile: workers/ai-worker/Dockerfile }
+          - { name: digital-twin-worker, dockerfile: workers/digital-twin-worker/Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -f ${{ matrix.image.dockerfile }} -t accuqual-${{ matrix.image.name }}:scan .
+      - name: Report HIGH and CRITICAL (not blocking)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: accuqual-${{ matrix.image.name }}:scan
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+      - name: Block on CRITICAL with a fix available
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: accuqual-${{ matrix.image.name }}:scan
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"

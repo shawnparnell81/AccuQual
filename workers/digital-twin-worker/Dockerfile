@@ -5,6 +5,15 @@ COPY package.json ./
 COPY workers/digital-twin-worker/package.json workers/digital-twin-worker/package.json
 RUN npm install --workspace workers/digital-twin-worker --include-workspace-root
 
+# ---- Stage 1b: production-only dependencies ----
+# What the RUNNING container needs. The full install above (compilers, the test runner, the dev server) is only for
+# the build stage; shipping it made the image larger and dragged known-vulnerable dev tooling into production.
+FROM node:20-alpine AS proddeps
+WORKDIR /repo
+COPY package.json ./
+COPY workers/digital-twin-worker/package.json workers/digital-twin-worker/package.json
+RUN npm install --workspace workers/digital-twin-worker --include-workspace-root --omit=dev
+
 # ---- Stage 2: build TypeScript ----
 FROM node:20-alpine AS build
 WORKDIR /repo
@@ -34,6 +43,9 @@ RUN npm run build --workspace workers/digital-twin-worker
 
 # ---- Stage 3: run ----
 FROM node:20-alpine AS runtime
+# Pick up OS security patches released since the base image was built, and drop npm/yarn: nothing runs a package
+# manager in production, and npm's own bundled libraries were a source of scanner findings.
+RUN apk upgrade --no-cache && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /repo/workers/digital-twin-worker/dist ./dist
@@ -41,5 +53,5 @@ COPY --from=build /repo/workers/digital-twin-worker/package.json ./package.json
 # The hoisted root node_modules, not a per-workspace one (see the build stage's
 # comment) — placed at /app/node_modules so Node's upward module resolution
 # finds it regardless of how deep dist's own layout is.
-COPY --from=deps /repo/node_modules ./node_modules
+COPY --from=proddeps /repo/node_modules ./node_modules
 CMD ["node", "dist/workers/digital-twin-worker/src/index.js"]

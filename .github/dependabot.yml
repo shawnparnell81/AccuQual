@@ -1,0 +1,33 @@
+version: 2
+updates:
+  # One entry covers every npm workspace: they share the root package-lock.json.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      # Routine minor/patch bumps arrive as one PR a week instead of a dozen.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    labels: ["dependencies"]
+
+  - package-ecosystem: "docker"
+    directories:
+      - "/services/api"
+      - "/apps/web"
+      - "/workers/workflow-worker"
+      - "/workers/ai-worker"
+      - "/workers/digital-twin-worker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels: ["dependencies"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels: ["dependencies"]
