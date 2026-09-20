@@ -45,6 +45,10 @@ auditTrailRouter.use(requireAuth, withTenantDb);
  */
 const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   "8D Report": "eight_d",
+  WorkflowVersion: "workflow",
+  WorkflowRun: "workflow",
+  ManagementReviewVersion: "management_review",
+  ContextVersion: "context_of_org",
   Audit: "audit",
   "Audit Finding": "audit",
   CAPA: "capa",

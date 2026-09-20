@@ -691,13 +691,18 @@ export interface FormTemplateStatus {
 
 export interface WorkflowNode {
   id: string;
-  type: "trigger" | "condition" | "action";
+  type: "trigger" | "condition" | "action" | "integration" | "approval" | "parallel" | "end";
   kind: string;
   config: Record<string, unknown>;
+  label?: string;
+  position?: { x: number; y: number };
 }
 export interface WorkflowEdge {
   from: string;
   to: string;
+  /** "true"/"false" out of a condition, "approved"/"rejected" out of an approval. */
+  branch?: string;
+  label?: string;
 }
 
 /** Phase 9 — version/versionHistory added for real edit versioning (see workflow.ts's schema comment). */
@@ -718,9 +723,11 @@ export interface WorkflowRun {
   id: number;
   workflowId: number;
   context: Record<string, unknown> | null;
-  status: "running" | "completed" | "failed";
+  status: "running" | "waiting_approval" | "completed" | "failed";
   error: string | null;
   simulated: boolean;
+  definitionVersion?: number | null;
+  currentNodeId?: string | null;
   startedAt: string;
   finishedAt: string | null;
 }

@@ -53,10 +53,12 @@ import { EquipmentDetailPage } from "./routes/Calibration/EquipmentDetailPage";
 import { ComplaintsPage } from "./routes/Complaints/ComplaintsPage";
 import { ComplaintDetailPage } from "./routes/Complaints/ComplaintDetailPage";
 import { ManagementSystemPage } from "./routes/ManagementSystem/ManagementSystemPage";
+import { ControlledDocumentPage } from "./routes/ManagementSystem/ControlledDocumentPage";
 import { QualityPage } from "./routes/Quality/QualityPage";
 import { QualityDetailPage } from "./routes/Quality/QualityDetailPage";
 import { ParetoAnalysisPage } from "./routes/Pareto/ParetoAnalysisPage";
 import { WorkflowBuilderPage } from "./routes/Workflow/WorkflowBuilderPage";
+import { WorkflowCanvasPage } from "./routes/Workflow/WorkflowCanvasPage";
 import { AiInsightsPage } from "./routes/AI/AiInsightsPage";
 import { DigitalTwinPage } from "./routes/DigitalTwin/DigitalTwinPage";
 import { PlatformAdminPage } from "./routes/Platform/PlatformAdminPage";
@@ -182,6 +184,14 @@ export function App() {
           <Route path="/ppap/:id" element={<PpapDetailPage />} />
           <Route path="/production-logs" element={<ProductionLogsPage />} />
           <Route path="/management-system" element={<ManagementSystemPage />} />
+          <Route
+            path="/management-system/management-review"
+            element={<ControlledDocumentPage basePath="/management-review" formType="management_review" title="Management Review" noun="management review" description="Management system performance evaluation — strategic core review inputs and the action items they produce." />}
+          />
+          <Route
+            path="/management-system/context"
+            element={<ControlledDocumentPage basePath="/context" formType="context_of_organization" title="Context of the Organization" noun="context analysis" description="ISO 9001 clause 4.1 — internal strengths and weaknesses, external opportunities and threats, by interested party." />}
+          />
           <Route path="/pareto" element={<ParetoAnalysisPage />} />
           <Route path="/suppliers" element={<SuppliersPage />} />
           <Route path="/suppliers/:id" element={<SupplierDetailPage />} />
@@ -218,6 +228,7 @@ export function App() {
           <Route path="/onboarding" element={<OnboardingPage />} />
 
           <Route path="/workflow" element={<WorkflowBuilderPage />} />
+          <Route path="/workflow/:id" element={<WorkflowCanvasPage />} />
           <Route path="/ai" element={<AiInsightsPage />} />
           <Route path="/digital-twin" element={<DigitalTwinPage />} />
           <Route path="/settings" element={<SettingsPage />} />

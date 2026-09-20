@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { authRouter } from "../modules/auth/auth.routes.js";
+import { workflowRunsRouter } from "../modules/workflow/workflow.runs.js";
+import { managementReviewRouter, contextRouter } from "../modules/versioning/versioning.routes.js";
 import { ssoPublicRouter, ssoAdminRouter } from "../modules/sso/sso.routes.js";
 import { usersRouter } from "../modules/users/users.routes.js";
 import { rolesRouter } from "../modules/roles/roles.routes.js";
@@ -87,7 +89,11 @@ apiRouter.use("/quality", qualityRouter);
 apiRouter.use("/suppliers", supplierRouter);
 apiRouter.use("/equipment", calibrationRouter);
 apiRouter.use("/complaints", complaintsRouter);
+// Before /workflow: approving a run is assigned per approval node, not gated by access to the builder itself.
+apiRouter.use("/workflow/runs", workflowRunsRouter);
 apiRouter.use("/workflow", workflowRouter);
+apiRouter.use("/management-review", managementReviewRouter);
+apiRouter.use("/context", contextRouter);
 apiRouter.use("/ai", aiRouter);
 // Before /digital-twin: device ingest authenticates with X-Device-Key, not a user session,
 // and digitalTwinRouter applies requireAuth to everything beneath its prefix.

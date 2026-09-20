@@ -1,10 +1,13 @@
 import type { Request, Response } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
+import { controlledVersions } from "../../drizzle/schema/versioning.js";
 import { workflowDefinitions, workflowRuns, type WorkflowDefinition as WorkflowDefinitionRow } from "../../drizzle/schema/workflow.js";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
-import { runWorkflow, getRegisteredActionKinds, type WorkflowDefinition } from "./workflow-engine.js";
+import { executeWorkflow, WorkflowNodeError, getRegisteredActionKinds, type WorkflowDefinition } from "./workflow-engine.js";
+import { createInitialDraft, getCurrent } from "../versioning/versioning.service.js";
+import { toWorkflowPayload, workflowAdapter } from "../versioning/adapters.js";
 import { recordAuditTrail, withResolvedActors, attachFieldChanges } from "../audit-trail/audit-trail.service.js";
 import { RESOURCE_KEYS } from "../../middleware/departmentAccess.js";
 import { WORKFLOW_TEMPLATES } from "./workflow.templates.js";
@@ -16,12 +19,29 @@ export const listHandler = asyncHandler(async (req: Request, res: Response) => {
   res.json(await req.db!.select().from(workflowDefinitions).where(eq(workflowDefinitions.tenantId, req.tenantId!)));
 });
 
+/**
+ * POST /workflow — creates the workflow AND its first draft. The workflow starts inactive: it only goes live when a
+ * reviewer approves a version and it is published (see modules/versioning). The stored definition mirrors the draft so
+ * the row is never empty, but nothing reads it as in force until then.
+ */
 export const createHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { name, module, definition, metadata } = req.body as { name: string; module?: string; definition?: { nodes?: never[]; edges?: never[] }; metadata?: Record<string, unknown> };
+  const payload = toWorkflowPayload({ nodes: definition?.nodes, edges: definition?.edges, metadata: { ...(metadata ?? {}), name, ...(module ? { module } : {}) } });
   const [created] = await req
     .db!.insert(workflowDefinitions)
-    .values({ ...req.body, tenantId: req.tenantId!, createdBy: req.user?.id, version: 1, versionHistory: [] })
+    .values({ name, module, tenantId: req.tenantId!, createdBy: req.user?.id, isActive: "false", definition: payload as unknown as Record<string, unknown>, version: 1, versionHistory: [] })
     .returning();
-  res.status(201).json(created);
+  if (!created) throw new AppError("Failed to create workflow", 500);
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkflowDefinition", entityId: created.id, action: "create", changes: { name, module: module ?? null }, performedBy: req.user?.id });
+  const draft = await createInitialDraft(req.db as TenantDb, workflowAdapter, req.tenantId!, created.id, { id: req.user!.id, roleName: req.user!.roleName }, payload as unknown as Record<string, unknown>);
+  res.status(201).json({ ...created, draftVersionId: draft.id });
+});
+
+/** GET /workflow/:id — the workflow, what is in force, and what is being worked on. */
+export const getHandler = asyncHandler(async (req: Request, res: Response) => {
+  const workflow = await loadDefinition(req, Number(req.params.id));
+  const current = await getCurrent(req.db as TenantDb, workflowAdapter, req.tenantId!, workflow.id);
+  res.json({ ...workflow, ...current });
 });
 
 async function loadDefinition(req: Request, id: number): Promise<WorkflowDefinitionRow> {
@@ -43,14 +63,13 @@ export const updateHandler = asyncHandler(async (req: Request, res: Response) =>
   const existing = await loadDefinition(req, id);
   const body = req.body as { name?: string; module?: string; isActive?: string; definition?: Record<string, unknown> };
 
-  const definitionChanged = body.definition !== undefined && JSON.stringify(body.definition) !== JSON.stringify(existing.definition);
-  const patch: Record<string, unknown> = { ...body, updatedAt: new Date() };
-
-  if (definitionChanged) {
-    const historyEntry = { version: existing.version, definition: existing.definition, updatedAt: new Date().toISOString(), updatedBy: req.user?.id ?? null };
-    patch.version = existing.version + 1;
-    patch.versionHistory = [...(existing.versionHistory ?? []), historyEntry].slice(-VERSION_HISTORY_CAP);
+  // The graph a workflow runs is controlled: it changes only by publishing a reviewed version (POST /workflow/:id/draft, /review, /publish).
+  if (body.definition !== undefined && JSON.stringify(body.definition) !== JSON.stringify(existing.definition)) {
+    throw new AppError("A workflow's steps can't be changed directly any more. Start a draft, get it reviewed, and publish it.", 409);
   }
+  const { definition: _ignored, ...allowed } = body;
+  const patch: Record<string, unknown> = { ...allowed, updatedAt: new Date() };
+  const definitionChanged = false;
 
   const [updated] = await req.db!.update(workflowDefinitions).set(patch).where(eq(workflowDefinitions.id, id)).returning();
   await recordAuditTrail(req.db!, {
@@ -67,6 +86,10 @@ export const updateHandler = asyncHandler(async (req: Request, res: Response) =>
 export const deleteHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const existing = await loadDefinition(req, id);
+  // A workflow with published versions is a controlled record: those versions can never be deleted, so neither can it. Deactivate it instead.
+  const [published] = await req.db!.select({ id: controlledVersions.id }).from(controlledVersions).where(and(eq(controlledVersions.tenantId, req.tenantId!), eq(controlledVersions.subjectType, "workflow"), eq(controlledVersions.subjectId, id), inArray(controlledVersions.status, ["published", "archived"]))).limit(1);
+  if (published) throw new AppError("This workflow has published versions, which are kept for the record, so it can't be deleted. Deactivate it instead.", 409);
+  await req.db!.delete(controlledVersions).where(and(eq(controlledVersions.tenantId, req.tenantId!), eq(controlledVersions.subjectType, "workflow"), eq(controlledVersions.subjectId, id)));
   await req.db!.delete(workflowRuns).where(and(eq(workflowRuns.workflowId, id), eq(workflowRuns.tenantId, req.tenantId!)));
   await req.db!.delete(workflowDefinitions).where(eq(workflowDefinitions.id, id));
   await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkflowDefinition", entityId: id, action: "delete", changes: { name: existing.name }, performedBy: req.user?.id });
@@ -96,17 +119,23 @@ export const runHandler = asyncHandler(async (req: Request, res: Response) => {
   const { context: inputContext, simulate } = req.body as { context?: Record<string, unknown>; simulate?: boolean };
   const [run] = await req
     .db!.insert(workflowRuns)
-    .values({ workflowId: id, tenantId: req.tenantId!, context: inputContext, status: "running", simulated: !!simulate })
+    .values({ workflowId: id, tenantId: req.tenantId!, context: inputContext, status: "running", simulated: !!simulate, definitionVersion: workflow.version })
     .returning();
   if (!run) throw new AppError("Failed to start workflow run", 500);
 
   const runContext = { ...(inputContext ?? {}), __db: req.db, __tenantId: req.tenantId, __performedBy: req.user?.id };
 
   try {
-    const result = await runWorkflow(workflow.definition as unknown as WorkflowDefinition, runContext, undefined, !!simulate);
-    const { __db: _db, __tenantId: _tenantId, __performedBy: _performedBy, ...persistable } = result;
+    const execution = await executeWorkflow(workflow.definition as unknown as WorkflowDefinition, runContext, { dryRun: !!simulate });
+    const { __db: _db, __tenantId: _tenantId, __performedBy: _performedBy, ...persistable } = execution.context;
 
-    const [finished] = await req.db!.update(workflowRuns).set({ status: "completed", context: persistable, finishedAt: new Date() }).where(eq(workflowRuns.id, run.id)).returning();
+    // A run that reached an approval node stays open, with its position saved, until someone decides (POST /workflow/runs/:id/decision).
+    const waiting = execution.status === "waiting_approval";
+    const [finished] = await req
+      .db!.update(workflowRuns)
+      .set({ status: waiting ? "waiting_approval" : "completed", context: persistable, currentNodeId: execution.currentNodeId, runState: waiting ? execution.state : null, finishedAt: waiting ? null : new Date() })
+      .where(eq(workflowRuns.id, run.id))
+      .returning();
 
     if (simulate) {
       await recordAuditTrail(req.db!, {
@@ -122,7 +151,7 @@ export const runHandler = asyncHandler(async (req: Request, res: Response) => {
   } catch (err) {
     await req
       .db!.update(workflowRuns)
-      .set({ status: "failed", error: (err as Error).message, finishedAt: new Date() })
+      .set({ status: "failed", error: (err as Error).message, currentNodeId: err instanceof WorkflowNodeError ? err.nodeId : null, finishedAt: new Date() })
       .where(eq(workflowRuns.id, run.id));
     throw err;
   }

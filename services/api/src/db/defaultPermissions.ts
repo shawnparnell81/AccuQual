@@ -217,6 +217,12 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // Engineering gets read visibility since several templates target
   // engineering-relevant modules (8D, document revision).
   workflow: { quality: "edit", engineering: "read" },
+  // Management Review and Context of the Organization are ISO-style controlled
+  // documents (see modules/versioning): every department needs to read the
+  // published version, Quality owns drafting. Publishing further requires a
+  // reviewer role (admin / quality manager), enforced in the versioning router.
+  management_review: { quality: "edit", engineering: "read", production: "read", customer_service: "read", purchasing: "read", material_management: "read", sales_and_marketing: "read" },
+  context_of_org: { quality: "edit", engineering: "read", production: "read", customer_service: "read", purchasing: "read", material_management: "read", sales_and_marketing: "read" },
   // Sprint 1 fix (accuqual-implementation-sequencing.md) — Document Control
   // previously had NO RBAC gate at all (documents.routes.ts's own old
   // comment explains why: "read-by-everyone, write-by-few," and copying the

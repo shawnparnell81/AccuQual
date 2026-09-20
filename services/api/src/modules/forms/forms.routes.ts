@@ -3,6 +3,7 @@ import { Router } from "express";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
+import { AppError } from "../../utils/appError.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
@@ -76,6 +77,19 @@ function gateKnownFormTypes(req: Request, res: Response, next: NextFunction) {
   return requireDepartmentAccess(resourceKey)(req, res, next);
 }
 
+/**
+ * Management Review and Context of the Organization are version-controlled documents: what is in force only changes
+ * by publishing a reviewed version (see modules/versioning). Their form_data row is written by publishing alone, so
+ * the generic save/snapshot endpoints refuse them — otherwise anyone could edit the live document around the review.
+ */
+const CONTROLLED_FORM_TYPES = new Set(["management_review", "context_of_organization"]);
+function refuseControlledForms(req: Request, _res: Response, next: NextFunction) {
+  if (req.params.type && CONTROLLED_FORM_TYPES.has(req.params.type)) {
+    return next(new AppError("This document is version-controlled. Start a draft under Management System, get it reviewed, and publish it.", 409));
+  }
+  next();
+}
+
 // Fixed literal path before ":type"-shaped ones, same convention used
 // throughout this app.
 formsRouter.get("/templates", requireRole("admin"), listTemplatesHandler);
@@ -85,7 +99,7 @@ formsRouter.post("/:type/template", requireRole("admin"), upload.single("file"),
 formsRouter.delete("/:type/template", requireRole("admin"), deleteTemplateHandler);
 formsRouter.get("/:type/template/file", downloadTemplateHandler);
 formsRouter.get("/:type/:id", getForm);
-formsRouter.post("/:type/:id/save", gateKnownFormTypes, validate(saveFormSchema), saveForm);
-formsRouter.post("/:type/:id/version", gateKnownFormTypes, createVersion);
+formsRouter.post("/:type/:id/save", refuseControlledForms, gateKnownFormTypes, validate(saveFormSchema), saveForm);
+formsRouter.post("/:type/:id/version", refuseControlledForms, gateKnownFormTypes, createVersion);
 formsRouter.get("/:type/:id/history", getHistory);
 formsRouter.post("/:type/:id/export", exportForm);

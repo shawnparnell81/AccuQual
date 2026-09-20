@@ -1,26 +1,46 @@
 import { z } from "zod";
 
-const nodeSchema = z.object({
-  id: z.string(),
-  type: z.enum(["trigger", "condition", "action"]),
-  kind: z.string(), // e.g. "ncr_created", "severity_equals", "assign_user", "create_capa", "send_email"
+export const nodeSchema = z.object({
+  id: z.string().min(1).max(100),
+  type: z.enum(["trigger", "condition", "action", "integration", "approval", "parallel", "end"]),
+  kind: z.string().max(100), // e.g. "ncr_created", "severity_equals", "assign_user", "create_capa", "send_email"
   config: z.record(z.string(), z.unknown()).default({}),
+  label: z.string().max(200).optional(),
+  position: z.object({ x: z.number(), y: z.number() }).optional(),
 });
 
-const edgeSchema = z.object({
+export const edgeSchema = z.object({
   from: z.string(),
   to: z.string(),
+  branch: z.string().max(40).optional(),
+  label: z.string().max(200).optional(),
 });
 
 export const workflowDefinitionSchema = z.object({
-  nodes: z.array(nodeSchema),
-  edges: z.array(edgeSchema),
+  nodes: z.array(nodeSchema).max(500),
+  edges: z.array(edgeSchema).max(2000),
+});
+
+/** What a draft version stores: the graph plus the descriptive metadata the canvas edits. */
+export const workflowPayloadSchema = workflowDefinitionSchema.extend({
+  metadata: z
+    .object({
+      name: z.string().max(200).optional(),
+      description: z.string().max(2000).optional(),
+      category: z.string().max(100).optional(),
+      module: z.string().max(100).optional(),
+      allowLoops: z.boolean().optional(),
+    })
+    .passthrough()
+    .optional(),
 });
 
 export const createWorkflowSchema = z.object({
   name: z.string().min(1),
   module: z.string().optional(),
-  definition: workflowDefinitionSchema,
+  // Optional: the canvas starts a new workflow blank; a template supplies a starting graph. Either way it begins as a draft.
+  definition: workflowDefinitionSchema.default({ nodes: [], edges: [] }),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 /** PATCH /workflow/:id — every field optional; only a real `definition` change bumps version/versionHistory (see workflow.controller.ts's updateHandler). */

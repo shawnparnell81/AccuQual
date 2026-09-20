@@ -33,7 +33,7 @@ export const workflowRuns = pgTable("workflow_runs", {
   tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   workflowId: integer("workflow_id").references(() => workflowDefinitions.id).notNull(),
   context: jsonb("context").$type<Record<string, unknown>>(),
-  status: text("status").notNull().default("running"), // running, completed, failed
+  status: text("status").notNull().default("running"), // running, waiting_approval, completed, failed
   error: text("error"),
   // Phase 9 task 9 — Workflow Simulation Mode. A simulated run executes the
   // exact same graph-walking logic (so conditions/RBAC/reachability are
@@ -44,6 +44,11 @@ export const workflowRuns = pgTable("workflow_runs", {
   // unchanged and a health check can trivially exclude simulated runs from
   // "last successful/failed transition" (task 8).
   simulated: boolean("simulated").notNull().default(false),
+  // Execution model: which published version of the workflow this run used, the node it is at (or died on), and — for a run
+  // paused on an approval node — the saved position (see workflow-engine.ts's WorkflowRunState) so it can be resumed.
+  definitionVersion: integer("definition_version"),
+  currentNodeId: text("current_node_id"),
+  runState: jsonb("run_state").$type<{ stack: string[]; visited: string[]; waitingNodeId: string | null }>(),
   startedAt: timestamp("started_at").defaultNow(),
   finishedAt: timestamp("finished_at"),
 });

@@ -72,7 +72,12 @@ describe("Forms engine RBAC — POST /forms/:type/:id/save (real DB + real HTTP 
   });
 
   it("a genuinely unowned form type (no corresponding module) stays open to any authenticated user, unchanged from before this fix", async () => {
-    const res = await request(app).post("/forms/management_review/1/save").set("Authorization", `Bearer ${engineeringToken}`).send({ data: {} });
+    const res = await request(app).post("/forms/staff_meeting_minutes/1/save").set("Authorization", `Bearer ${engineeringToken}`).send({ data: {} });
     expect(res.status).toBe(200);
+  });
+
+  it("Management Review is version-controlled now: the generic save refuses it for everyone (see versioning.test.ts)", async () => {
+    const res = await request(app).post("/forms/management_review/1/save").set("Authorization", `Bearer ${engineeringToken}`).send({ data: {} });
+    expect(res.status).toBe(409);
   });
 });

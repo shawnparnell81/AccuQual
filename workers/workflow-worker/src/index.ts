@@ -3,7 +3,7 @@ import winston from "winston";
 import { and, eq } from "drizzle-orm";
 import { consumeStream } from "./redis-consumer.js";
 import { db, workflowDefinitions, workflowRuns } from "./db.js";
-import { runWorkflow, type WorkflowDefinition } from "../../../services/api/src/modules/workflow/workflow-engine.js";
+import { executeWorkflow, WorkflowNodeError, type WorkflowDefinition } from "../../../services/api/src/modules/workflow/workflow-engine.js";
 // Phase 9 — registers the real action handlers (send_email, create_ncr,
 // escalate_capa, ai_suggestion, ...) for THIS process. The API process and
 // this worker are separate Node processes with separate module-level
@@ -52,7 +52,7 @@ async function handleEvent(fields: Record<string, string>) {
     // Spreading into a plain object (same as runContext below) fixes it.
     const [run] = await db
       .insert(workflowRuns)
-      .values({ workflowId: definition.id, tenantId: Number(tenantId), context: { ...fields }, status: "running", simulated: false })
+      .values({ workflowId: definition.id, tenantId: Number(tenantId), context: { ...fields }, status: "running", simulated: false, definitionVersion: definition.version })
       .returning();
     if (!run) continue;
 
@@ -64,14 +64,24 @@ async function handleEvent(fields: Record<string, string>) {
     const runContext = { ...fields, entityId, __db: db, __tenantId: Number(tenantId), __performedBy: undefined };
 
     try {
-      const result = await runWorkflow(definition.definition as unknown as WorkflowDefinition, runContext, event, false);
-      const { __db: _db, __tenantId: _tenantId, __performedBy: _performedBy, ...persistable } = result;
-      await db.update(workflowRuns).set({ status: "completed", context: persistable, finishedAt: new Date() }).where(eq(workflowRuns.id, run.id));
-      logger.info(`Workflow "${definition.name}" completed for ${module}.${event}`);
+      const result = await executeWorkflow(definition.definition as unknown as WorkflowDefinition, runContext, { triggerKind: event, dryRun: false });
+      const { __db: _db, __tenantId: _tenantId, __performedBy: _performedBy, ...persistable } = result.context;
+      // A run that reached an approval node stays open (saved position included) until a person decides — see POST /workflow/runs/:id/decision.
+      await db
+        .update(workflowRuns)
+        .set({
+          status: result.status === "waiting_approval" ? "waiting_approval" : "completed",
+          context: persistable,
+          currentNodeId: result.currentNodeId,
+          runState: result.status === "waiting_approval" ? result.state : null,
+          finishedAt: result.status === "waiting_approval" ? null : new Date(),
+        })
+        .where(eq(workflowRuns.id, run.id));
+      logger.info(`Workflow "${definition.name}" ${result.status === "waiting_approval" ? "is waiting for approval" : "completed"} for ${module}.${event}`);
     } catch (err) {
       await db
         .update(workflowRuns)
-        .set({ status: "failed", error: (err as Error).message, finishedAt: new Date() })
+        .set({ status: "failed", error: (err as Error).message, currentNodeId: err instanceof WorkflowNodeError ? err.nodeId : null, finishedAt: new Date() })
         .where(eq(workflowRuns.id, run.id));
       logger.error(`Workflow "${definition.name}" failed`, err);
     }
