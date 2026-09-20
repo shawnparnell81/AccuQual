@@ -266,6 +266,16 @@ values from your hosting accounts (regions, backup retention, deletion timeline)
 lawyer's review before it goes to a customer. Update `subprocessors.md` in the same change that adds or removes a
 service that handles customer data.
 
+## Backup & restore
+
+The procedure, the checklist for a real recovery, and the results of the 2026-09-20 restore drill are in
+[docs/operations/backup-and-restore.md](docs/operations/backup-and-restore.md). Short version: dump **both** the
+`public` and `drizzle` schemas with `pg_dump --format=custom`, restore into an empty PostgreSQL 17 + pgvector,
+run `npm run db:migrate` (recreates the application role, grants and security policies), then prove it with
+`npm run db:verify-restore` (`SOURCE_DATABASE_URL` = original, `DATABASE_URL` = restored copy). Uploaded files and
+the secrets in `.env` (notably `TENANT_AI_CONFIG_ENCRYPTION_KEY`) are **not** in a database backup — keep separate
+copies. Never store a dump as a GitHub artifact: the repository is public.
+
 ## Real email delivery (ZeptoMail, or SMTP)
 
 The preferred path is ZeptoMail's REST API, using the `qms_transactional`
