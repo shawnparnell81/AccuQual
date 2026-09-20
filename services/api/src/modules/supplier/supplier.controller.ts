@@ -16,18 +16,16 @@ import { getSupplierQualityFactors, getSupplierHealth, getSupplierRiskScoreWithT
 export const baseHandlers = crudFactory(suppliers, { entityName: "Supplier", idColumn: "id" });
 
 /**
- * Self-heals the "supplier" role (see users.ts's own supplierId comment)
- * instead of assuming db/seed.ts has run — CI's fresh database only ever
- * runs migrations, never the separate seed step, so a real deploy or test
- * run can't rely on this row already existing. Same self-creating pattern
- * as forms.service.ts's loadTemplate / document-folders' ensureLibraryPool.
- * `roles` isn't a tenant-scoped table (not in rls-policies.sql's array), so
- * this is safe to call from inside a tenant-scoped transaction.
+ * Looks up the "supplier" role (see users.ts's own supplierId comment). The row
+ * is created by the post-migrate step (rls-policies.sql), not here: `roles` is
+ * global reference data and the tenant-scoped app role may only READ it, so
+ * this can't self-heal by inserting from inside a tenant-scoped transaction
+ * (Supabase turns RLS on for it, and the policy is deliberately SELECT-only).
+ * CI's fresh database runs migrations, so the row exists there too.
  */
 export async function ensureSupplierRole(db: TenantDb): Promise<Role> {
-  await db.insert(roles).values({ name: "supplier", description: "External supplier portal access" }).onConflictDoNothing({ target: roles.name });
   const [role] = await db.select().from(roles).where(eq(roles.name, "supplier"));
-  if (!role) throw new AppError("Failed to create or find the 'supplier' role", 500);
+  if (!role) throw new AppError("The 'supplier' role is missing — run `npm run db:migrate` to create it", 500);
   return role;
 }
 

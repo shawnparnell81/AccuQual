@@ -112,3 +112,61 @@ DROP POLICY IF EXISTS erp_presets_global_read ON erp_connector_presets;
 CREATE POLICY erp_presets_global_read ON erp_connector_presets
   FOR SELECT
   USING (tenant_id IS NULL);
+
+-- The four public tables with NO tenant_id column, so none of them is in the
+-- tenant_tables array above. They still need explicit RLS, because Supabase
+-- runs an `ensure_rls` event trigger that switches RLS ON for every table a
+-- migration creates — and RLS-on with zero policies means the app's
+-- accuqual_app role sees NO rows. That silently broke everything reading
+-- `tenants` through the tenant-scoped connection on Supabase (branding, AI
+-- config/usage, profile, ERP sync settings: all "Tenant not found"; a
+-- tenant's own BYOK key and AI limit were skipped) while plain Postgres in
+-- local/CI, which has no such trigger, kept working — so tests never saw it.
+-- Enabling RLS here (idempotent) makes every environment behave the same,
+-- and rls-live-coverage.test.ts now fails on any RLS table left policy-less.
+
+-- tenants: a request may read and update ONLY its own tenant's row. No
+-- INSERT/DELETE policy on purpose — tenants are created/removed by the
+-- platform (owner connection, outside RLS), never by a tenant-scoped session.
+ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_self_select ON tenants;
+CREATE POLICY tenant_self_select ON tenants
+  FOR SELECT
+  USING (id = current_setting('app.current_tenant_id', true)::int);
+DROP POLICY IF EXISTS tenant_self_update ON tenants;
+CREATE POLICY tenant_self_update ON tenants
+  FOR UPDATE
+  USING (id = current_setting('app.current_tenant_id', true)::int)
+  WITH CHECK (id = current_setting('app.current_tenant_id', true)::int);
+
+-- roles: the small global list of system roles (admin, ...) — not tenant
+-- data, and every tenant's users reference the same rows, so it is readable
+-- by any session. Read-only: the app writes roles only on the owner connection.
+ALTER TABLE roles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS roles_read_all ON roles;
+CREATE POLICY roles_read_all ON roles
+  FOR SELECT
+  USING (true);
+
+-- Auth token tables: only ever touched by the login/refresh/reset code on the
+-- owner connection, before any tenant context exists. An explicit deny-all
+-- policy (rather than none) records that intent and keeps the "every RLS table
+-- has a policy" check honest.
+ALTER TABLE refresh_tokens ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS owner_only ON refresh_tokens;
+CREATE POLICY owner_only ON refresh_tokens
+  USING (false)
+  WITH CHECK (false);
+ALTER TABLE password_reset_tokens ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS owner_only ON password_reset_tokens;
+CREATE POLICY owner_only ON password_reset_tokens
+  USING (false)
+  WITH CHECK (false);
+
+-- The "supplier" role (external supplier-portal logins) is reference data the
+-- tenant-scoped app role can no longer create — roles is read-only to it (see
+-- roles_read_all above) — so it is created here, idempotently, on every
+-- migrate. supplier.controller.ts's ensureSupplierRole only reads it.
+INSERT INTO roles (name, description)
+VALUES ('supplier', 'External supplier portal access')
+ON CONFLICT (name) DO NOTHING;
