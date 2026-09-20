@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { TextField } from "../../components/forms/Field";
+import { StandardsDisclaimer } from "../../components/shared/StandardsDisclaimer";
 
 /** The page the emailed reset link (see auth.service.ts's forgotPassword) actually points at — reads its token from the URL, never stores or displays the raw token itself beyond what's already in the address bar. */
 export function ResetPasswordPage() {
@@ -23,6 +24,7 @@ export function ResetPasswordPage() {
   if (!token) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
+      <StandardsDisclaimer className="fixed inset-x-0 bottom-3 px-4 text-center" />
         <div className="w-full max-w-sm rounded-lg border border-border bg-card p-6 text-center shadow-sm">
           <p className="text-sm text-destructive">This reset link is missing its token — it may have been copied incorrectly.</p>
           <Link to="/forgot-password" className="mt-4 inline-block text-sm text-primary">
@@ -35,6 +37,7 @@ export function ResetPasswordPage() {
 
   return (
     <div className="flex h-screen items-center justify-center bg-background">
+      <StandardsDisclaimer className="fixed inset-x-0 bottom-3 px-4 text-center" />
       <form
         onSubmit={(e) => {
           e.preventDefault();

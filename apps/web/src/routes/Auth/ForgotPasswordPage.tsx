@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
+import { StandardsDisclaimer } from "../../components/shared/StandardsDisclaimer";
 
 /** Inspection Report ONB-02/R05 — there was previously no way for a locked-out user to recover their own account. Always shows the same confirmation regardless of whether the email is registered, matching the backend's own deliberately-generic response. */
 export function ForgotPasswordPage() {
@@ -16,6 +17,7 @@ export function ForgotPasswordPage() {
 
   return (
     <div className="flex h-screen items-center justify-center bg-background">
+      <StandardsDisclaimer className="fixed inset-x-0 bottom-3 px-4 text-center" />
       <div className="w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-sm">
         <h1 className="text-xl font-semibold tracking-wide text-foreground">Reset your password</h1>
 

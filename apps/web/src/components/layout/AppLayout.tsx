@@ -11,6 +11,7 @@ import { useLogout } from "../../hooks/useAuth";
 import { AiAssistantPanelGate } from "../shared/AiAssistantPanel";
 import { useThemeSync } from "../../hooks/useThemeSync";
 import { deriveTabMeta } from "../../lib/tabMeta";
+import { StandardsDisclaimer } from "../shared/StandardsDisclaimer";
 
 /**
  * An external Supplier Portal login (roleName:"supplier") gets none of the
@@ -35,6 +36,9 @@ function SupplierPortalShell() {
       <main className="flex-1 overflow-y-auto p-6">
         <Outlet />
       </main>
+      <div className="border-t border-border bg-card px-4 py-1 text-center print:hidden">
+        <StandardsDisclaimer />
+      </div>
     </div>
   );
 }
@@ -86,6 +90,9 @@ export function AppLayout() {
       <main className="flex-1 overflow-y-auto p-6 print:overflow-visible print:p-0">
         <Outlet />
       </main>
+      <div className="border-t border-border bg-card px-4 py-1 text-center print:hidden">
+        <StandardsDisclaimer />
+      </div>
       <div className="print:hidden">
         <WindowContainer />
         <OpenWindowsTaskbar />

@@ -1,6 +1,6 @@
 # AccuQual
 
-A multi-tenant, next-generation Quality Management System SaaS: ISO/IATF/FDA compliance modules, AI-driven quality intelligence, digital twin simulation, browser-native fillable PDF forms, and a multi-window desktop-style workspace — built as a TypeScript monorepo.
+A multi-tenant, next-generation Quality Management System SaaS: quality modules structured around ISO 9001 / IATF 16949-style practices (AccuQual itself is not certified, registered or endorsed by ISO, IATF or any other standards body), AI-driven quality intelligence, digital twin simulation, browser-native fillable PDF forms, and a multi-window desktop-style workspace — built as a TypeScript monorepo.
 
 ## Stack
 

@@ -3,6 +3,7 @@ import { Navigate, Link } from "react-router-dom";
 import { useRegister } from "../../hooks/useAuth";
 import { useAuthStore } from "../../store/authStore";
 import { TextField } from "../../components/forms/Field";
+import { StandardsDisclaimer } from "../../components/shared/StandardsDisclaimer";
 
 export function RegisterPage() {
   const [name, setName] = useState("");
@@ -16,6 +17,7 @@ export function RegisterPage() {
 
   return (
     <div className="flex h-screen items-center justify-center bg-background">
+      <StandardsDisclaimer className="fixed inset-x-0 bottom-3 px-4 text-center" />
       <form
         onSubmit={(e) => {
           e.preventDefault();

@@ -94,7 +94,7 @@ export function FeasibilityReviewForm({ review }: { review: FeasibilityReview })
           )}
           <div>
             <h1 className="text-xl font-semibold uppercase tracking-wide">Contract &amp; Project Feasibility Review</h1>
-            <p className="text-xs text-muted-foreground print:text-black">Quality Management System Form | ISO 9001 / IATF 16949 Compliant</p>
+            <p className="text-xs text-muted-foreground print:text-black">Quality Management System Form</p>
           </div>
         </div>
         <div className="text-right text-xs text-muted-foreground print:text-black">
