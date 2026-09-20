@@ -103,7 +103,7 @@ DECLARE
 BEGIN
   FOR spec IN
     SELECT * FROM (VALUES
-      ('users',                       ARRAY['last_login_at', 'theme_preferences']),
+      ('users',                       ARRAY['last_login_at', 'theme_preferences', 'failed_login_count', 'first_failed_login_at']),
       ('tenants',                     ARRAY['ai_config', 'erp_sync_settings', 'ai_usage_tokens', 'ai_usage_cost']),
       ('department_permissions',      ARRAY[]::text[]),
       ('permission_roles',            ARRAY[]::text[]),

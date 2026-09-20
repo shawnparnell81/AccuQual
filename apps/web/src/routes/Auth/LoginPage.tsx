@@ -3,6 +3,7 @@ import { Navigate, Link } from "react-router-dom";
 import { useLogin } from "../../hooks/useAuth";
 import { useAuthStore } from "../../store/authStore";
 import { TextField } from "../../components/forms/Field";
+import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { StandardsDisclaimer } from "../../components/shared/StandardsDisclaimer";
 
 export function LoginPage() {
@@ -42,7 +43,7 @@ export function LoginPage() {
           </div>
         </div>
 
-        {login.isError && <p className="mt-3 text-sm text-destructive">Invalid email or password.</p>}
+        {login.isError && <p className="mt-3 text-sm text-destructive">{extractErrorMessage(login.error, "Invalid email or password.").replace(/^Invalid credentials$/, "Invalid email or password.")}</p>}
 
         <button
           type="submit"

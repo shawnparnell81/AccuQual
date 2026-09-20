@@ -1,4 +1,5 @@
 import rateLimit from "express-rate-limit";
+import { env } from "../config/env.js";
 
 const DEVICE_INGEST_PATH = "/digital-twin/device-ingest";
 
@@ -15,7 +16,8 @@ export const apiRateLimiter = rateLimit({
 
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 20,
+  // Integration tests sign in dozens of times from one address; the per-account lockout is what they exercise.
+  limit: env.NODE_ENV === "test" ? 100_000 : 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "TooManyRequests", message: "Too many auth attempts, try again later" },

@@ -13,7 +13,7 @@
  * engine) makes the same call: build what's actually needed, not what a
  * library would default to.
  */
-export type EmailTemplateName = "tenant_onboarding" | "password_reset";
+export type EmailTemplateName = "tenant_onboarding" | "password_reset" | "account_locked";
 
 interface EmailTemplate {
   subject: string;
@@ -31,6 +31,14 @@ const TEMPLATES: Record<EmailTemplateName, EmailTemplate> = {
       "  Temporary password: {{temporaryPassword}}\n\n" +
       "You'll be asked to set a new password on first sign-in.\n\n" +
       "— The AccuQual Team",
+  },
+  account_locked: {
+    subject: "Your AccuQual account was temporarily locked",
+    body:
+      "There were {{attempts}} failed sign-in attempts on your AccuQual account, so it has been locked for {{lockoutMinutes}} minutes.\n\n" +
+      "If that was you, wait and try again, or reset your password now:\n\n" +
+      "{{resetUrl}}\n\n" +
+      "If it wasn't you, someone may be guessing your password — resetting it is the safest response. Your administrator can see this event in the audit trail.",
   },
   password_reset: {
     subject: "Reset your AccuQual password",

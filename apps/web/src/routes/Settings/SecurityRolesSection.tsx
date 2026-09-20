@@ -127,7 +127,7 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
           }}
         >
           <TextField label="Email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <TextField label="Temporary password" type="password" required minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+          <TextField label="Temporary password" type="password" required minLength={12} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
           <TextField label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <SelectField label="Role" value={form.roleId} onChange={(e) => setForm({ ...form, roleId: e.target.value })}>
             <option value="">No role</option>

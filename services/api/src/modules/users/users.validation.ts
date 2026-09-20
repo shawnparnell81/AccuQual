@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { passwordSchema } from "../../utils/passwordPolicy.js";
 
 // Mirrors Department in components/layout/navConfig.ts (web) and
 // middleware/departmentAccess.ts — which nav dropdown's RWX rules a user gets.
@@ -19,7 +20,7 @@ export const departmentSchema = z.enum([
 
 export const createUserSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(8),
+  password: passwordSchema,
   name: z.string().optional(),
   roleId: z.number().int().optional(),
   department: departmentSchema.nullable().optional(),

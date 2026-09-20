@@ -36,6 +36,12 @@ export const users = pgTable("users", {
   // consumer today is the Supplier Portal / internal Supplier health-
   // indicators view, which reads it only for roleName:"supplier" accounts.
   lastLoginAt: timestamp("last_login_at"),
+  // Login lockout (auth.service.ts): wrong passwords counted inside a rolling
+  // window, then a timed lock. Cleared by a good login, a password reset, or an admin unlock.
+  failedLoginCount: integer("failed_login_count").notNull().default(0),
+  firstFailedLoginAt: timestamp("first_failed_login_at"),
+  lockedUntil: timestamp("locked_until"),
+  passwordChangedAt: timestamp("password_changed_at"),
   // This user's own theme overrides, layered on top of their tenant's theme
   // (tenants.branding) — see the Theme System review. mode is "light" |
   // "dark" | "system"; unset means "follow the tenant/default theme" for

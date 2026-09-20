@@ -3,6 +3,7 @@ import { Navigate, Link } from "react-router-dom";
 import { useRegister } from "../../hooks/useAuth";
 import { useAuthStore } from "../../store/authStore";
 import { TextField } from "../../components/forms/Field";
+import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { StandardsDisclaimer } from "../../components/shared/StandardsDisclaimer";
 
 export function RegisterPage() {
@@ -38,15 +39,16 @@ export function RegisterPage() {
           <TextField
             label="Password"
             type="password"
-            minLength={8}
+            minLength={12}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+          <p className="-mt-2 text-xs text-muted-foreground">At least 12 characters. Common passwords, and anything containing your email, are refused.</p>
         </div>
 
         {register.isError && (
-          <p className="mt-3 text-sm text-destructive">Could not register — check the tenant code, or try a different email.</p>
+          <p className="mt-3 text-sm text-destructive">{extractErrorMessage(register.error, "Could not register — check the tenant code, or try a different email.")}</p>
         )}
 
         <button
