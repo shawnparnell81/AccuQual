@@ -74,8 +74,12 @@ even if a query forgot to filter. This is covered by automated tests that run on
 ## Backups and recovery
 
 - Database backups are provided by the database host. **[confirm plan, frequency and retention]**
-- **Not yet done:** a restore from backup has not yet been tested end to end, and there is no written recovery
-  procedure. This is the next item on the operations plan.
+- A written backup and recovery procedure exists ([../operations/backup-and-restore.md](../operations/backup-and-restore.md)).
+  On 2026-09-20 a full logical backup of the live database was restored into a new, empty database server and
+  verified: the structure, the security policies, and the row count of every table matched the original, and the
+  application ran correctly against the restored copy, including tenant isolation and the append-only audit log.
+- **Not yet done:** restoring from the database host's own backups has not been tested; the drill used a small
+  dataset, so recovery time at production size is unmeasured; and no scheduled off-platform backup exists yet.
 
 ## Getting data out, and getting it deleted
 
@@ -93,7 +97,7 @@ See [subprocessors.md](subprocessors.md).
 
 ## Known gaps (stated plainly)
 
-1. Restore from backup is untested (above).
+1. Restore from the database host's own backups is untested, and no scheduled off-platform backup exists (above).
 2. Permanent deletion of an organization is manual.
 3. The database certificate is not verified unless `DATABASE_SSL_CA` is set.
 4. Mid-session enforcement of two-step sign-in is at sign-in and token refresh (within about 15 minutes), not every request.

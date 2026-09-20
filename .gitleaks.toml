@@ -1,0 +1,13 @@
+title = "AccuQual secret scanning"
+
+[extend]
+useDefault = true
+
+# Throwaway passwords the integration tests use against disposable test databases (never a real credential).
+# Deliberately narrow: only these exact strings, and only inside the test folder — a real secret pasted into a
+# test file would still be caught.
+[[allowlists]]
+description = "Fixture passwords in integration tests"
+condition = "AND"
+paths = ['''^services/api/test/''']
+regexes = ['''violet-lantern-quarry-88|granite-meadow-lamp-42|qwertyuiop12|letmein123456''']
