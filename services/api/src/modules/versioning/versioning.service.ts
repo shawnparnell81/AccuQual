@@ -6,7 +6,7 @@ import { AppError } from "../../utils/appError.js";
 import { logger } from "../../utils/logger.js";
 import type { Department } from "../../middleware/departmentAccess.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
-import { notifyDepartment, sendEmail } from "../notifications/notification.service.js";
+import { notifyDepartment, notifyRecipients, sendEmail } from "../notifications/notification.service.js";
 import type { DiffResult } from "./diff.js";
 
 // The shared draft -> review -> publish engine behind workflows, the Management
@@ -29,17 +29,47 @@ export interface SubjectAdapter {
   /** Human noun for messages, e.g. "workflow". */
   noun: string;
   /** The live record's current state, used to seed version 1 for subjects that pre-date versioning. Throws 404 if the subject does not exist. */
-  loadLive(db: TenantDb, tenantId: number, subjectId: number): Promise<{ payload: Record<string, unknown>; version: number | null; author: number | null; exists: boolean }>;
+  loadLive(db: TenantDb, tenantId: number, subjectId: number): Promise<LiveState>;
   /** Empty starting payload for a subject with no content yet. */
   blank(): Record<string, unknown>;
   /** Errors block submitting/publishing; warnings are shown only. */
   validate(payload: Record<string, unknown>): { errors: Issue[]; warnings: Issue[] };
   /** Writes a version's payload into the live record. Runs inside the publishing transaction. */
-  apply(db: TenantDb, tenantId: number, subjectId: number, payload: Record<string, unknown>, info: { versionNumber: number; actor: number; firstPublish: boolean; previousLive: Record<string, unknown> | null }): Promise<void>;
+  apply(db: TenantDb, tenantId: number, subjectId: number, payload: Record<string, unknown>, info: { versionNumber: number; actor: number; firstPublish: boolean; previousLive: Record<string, unknown> | null; version: ControlledVersion }): Promise<void>;
   diff(before: Record<string, unknown>, after: Record<string, unknown>): DiffResult;
   /** Departments told when a version is published. */
   notifyDepartments: Department[];
+
+  // ---- Optional hooks. A subject that does not define them behaves exactly as before. ----
+  /** Status version 1 starts in for a subject that pre-dates versioning (default "published"). */
+  bootstrapStatus?(live: LiveState): "published" | "draft" | "in_review";
+  /** Refuses starting a new draft or rollback draft (e.g. a retired document). Throw an AppError. */
+  guardDraft?(db: TenantDb, tenantId: number, subjectId: number): Promise<void>;
+  /** The content of a new draft or rollback draft, derived from the payload it starts from (e.g. next revision code). */
+  seedDraft?(payload: Record<string, unknown>, ctx: { versionNumber: number; rollbackTo?: number; currentPayload: Record<string, unknown> | null }): Record<string, unknown>;
+  /**
+   * Checks that need the database: references exist in this organization, no duplicate revision code. "save" runs on
+   * every draft save (security-relevant checks only); "submit" and "publish" also run the completeness checks.
+   */
+  checkPayload?(db: TenantDb, tenantId: number, subjectId: number, versionNumber: number, payload: Record<string, unknown>, stage: "save" | "submit" | "publish"): Promise<Issue[]>;
+  /** Runs inside the request transaction after each lifecycle step, so a mirrored status on the live record stays true. */
+  onTransition?(db: TenantDb, tenantId: number, subjectId: number, event: TransitionEvent): Promise<void>;
+  /** When true, sending for review and each review decision also notify the people involved. */
+  notifyReviewLifecycle?: boolean;
 }
+
+export interface LiveState {
+  payload: Record<string, unknown>;
+  version: number | null;
+  author: number | null;
+  exists: boolean;
+  /** The live record's own status word, for a subject whose bootstrapStatus needs it. */
+  legacyStatus?: string;
+}
+
+export type TransitionEvent =
+  | { type: "draft_created" | "discarded"; version: number; hasPublished: boolean }
+  | { type: "submitted" | "approved" | "rejected"; version: number; hasPublished: boolean };
 
 export interface Actor {
   id: number;
@@ -61,17 +91,18 @@ export async function ensureBootstrapped(db: TenantDb, adapter: SubjectAdapter, 
     .where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId)))
     .limit(1);
   if (any) return;
+  const startStatus = adapter.bootstrapStatus?.(live) ?? "published";
   await db.insert(controlledVersions).values({
     tenantId,
     subjectType: adapter.subject,
     subjectId,
     versionNumber: live.version && live.version > 0 ? live.version : 1,
-    status: "published",
+    status: startStatus,
     payload: live.exists ? live.payload : adapter.blank(),
-    metadata: { bootstrapped: true, note: "Version 1 is the record as it stood when version control started." },
+    metadata: { bootstrapped: true, note: startStatus === "published" ? "Version 1 is the record as it stood when version control started." : "Started from the record as it stood when version control started; it had not been released." },
     createdBy: live.author,
-    publishedBy: live.author,
-    publishedAt: new Date(),
+    ...(startStatus === "published" ? { publishedBy: live.author, publishedAt: new Date() } : {}),
+    ...(startStatus === "in_review" ? { submittedBy: live.author, submittedAt: new Date() } : {}),
   }).onConflictDoNothing(); // two first requests may race; either one seeds version 1
 }
 
@@ -161,10 +192,16 @@ export async function createDraft(
   opts: { payload?: Record<string, unknown>; summary?: string } = {},
 ): Promise<ControlledVersion> {
   await ensureBootstrapped(db, adapter, tenantId, subjectId);
+  await adapter.guardDraft?.(db, tenantId, subjectId);
   const existing = await openVersion(db, adapter, tenantId, subjectId);
   if (existing) throw conflict(`There is already an open ${adapter.noun} version (v${existing.versionNumber}, ${existing.status.replace("_", " ")}). Finish or discard it first.`);
   const published = await publishedVersion(db, adapter, tenantId, subjectId);
   const number = await nextNumber(db, adapter, tenantId, subjectId);
+  const startPayload = opts.payload ?? (published ? (adapter.seedDraft?.(published.payload, { versionNumber: number, currentPayload: published.payload }) ?? published.payload) : adapter.blank());
+  if (opts.payload) {
+    const problems = (await adapter.checkPayload?.(db, tenantId, subjectId, number, startPayload, "save")) ?? [];
+    if (problems.length > 0) throw new AppError(problems[0]!.message, 422, { errors: problems, warnings: [] });
+  }
   const [created] = await db
     .insert(controlledVersions)
     .values({
@@ -173,13 +210,14 @@ export async function createDraft(
       subjectId,
       versionNumber: number,
       status: "draft",
-      payload: opts.payload ?? published?.payload ?? adapter.blank(),
+      payload: startPayload,
       metadata: opts.summary ? { summary: opts.summary } : {},
       basedOnVersion: published?.versionNumber ?? null,
       createdBy: actor.id,
     })
     .returning();
   await audit(db, adapter, tenantId, subjectId, "create", actor.id, { event: "draft_created", version: number, basedOn: published?.versionNumber ?? null });
+  await adapter.onTransition?.(db, tenantId, subjectId, { type: "draft_created", version: number, hasPublished: !!published });
   return created!;
 }
 
@@ -190,6 +228,7 @@ export async function createInitialDraft(db: TenantDb, adapter: SubjectAdapter, 
     .values({ tenantId, subjectType: adapter.subject, subjectId, versionNumber: 1, status: "draft", payload, metadata: { summary: "Initial version" }, createdBy: actor.id })
     .returning();
   await audit(db, adapter, tenantId, subjectId, "create", actor.id, { event: "draft_created", version: 1, basedOn: null });
+  await adapter.onTransition?.(db, tenantId, subjectId, { type: "draft_created", version: 1, hasPublished: false });
   return created!;
 }
 
@@ -206,6 +245,10 @@ export async function saveDraft(
   input: { payload?: Record<string, unknown>; summary?: string },
 ): Promise<ControlledVersion> {
   const v = await getVersion(db, adapter, tenantId, subjectId, versionId);
+  if (v.status === "draft" && input.payload) {
+    const problems = (await adapter.checkPayload?.(db, tenantId, subjectId, v.versionNumber, input.payload, "save")) ?? [];
+    if (problems.length > 0) throw new AppError(problems[0]!.message, 422, { errors: problems, warnings: [] });
+  }
   if (v.status !== "draft") throw conflict(v.status === "in_review" ? "This version is in review and can't be edited. Ask the reviewer to send it back, or start again from the published version." : "Only a draft can be edited — published versions are frozen.");
 
   // Every autosave would otherwise write an audit row; record the edit once per window instead, with who and when.
@@ -228,21 +271,44 @@ export async function discardDraft(db: TenantDb, adapter: SubjectAdapter, tenant
   if (v.status !== "draft") throw conflict("Only a draft can be discarded.");
   await db.delete(controlledVersions).where(eq(controlledVersions.id, v.id));
   await audit(db, adapter, tenantId, subjectId, "delete", actor.id, { event: "draft_discarded", version: v.versionNumber });
+  await adapter.onTransition?.(db, tenantId, subjectId, { type: "discarded", version: v.versionNumber, hasPublished: !!(await publishedVersion(db, adapter, tenantId, subjectId)) });
 }
 
 /** draft -> in_review. The content must pass the subject's validation first. */
-export async function submitForReview(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, actor: Actor, notes?: string): Promise<ControlledVersion> {
+export async function submitForReview(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, actor: Actor, notes?: string, opts: { reviewerId?: number } = {}): Promise<ControlledVersion> {
   const v = await getVersion(db, adapter, tenantId, subjectId, versionId);
   if (v.status !== "draft") throw conflict("Only a draft can be sent for review.");
   const report = adapter.validate(v.payload);
-  if (report.errors.length > 0) throw new AppError(`This ${adapter.noun} can't be sent for review yet: ${report.errors[0]!.message}`, 422, { errors: report.errors, warnings: report.warnings });
+  const dbIssues = (await adapter.checkPayload?.(db, tenantId, subjectId, v.versionNumber, v.payload, "submit")) ?? [];
+  const errors = [...report.errors, ...dbIssues];
+  if (errors.length > 0) throw new AppError(`This ${adapter.noun} can't be sent for review yet: ${errors[0]!.message}`, 422, { errors, warnings: report.warnings });
+
+  // A named reviewer must be someone in this organization who is allowed to review, and not the author.
+  let assignedReviewerId: number | undefined;
+  if (opts.reviewerId !== undefined) {
+    const [reviewer] = await db.select({ id: users.id }).from(users).where(and(eq(users.id, opts.reviewerId), eq(users.tenantId, tenantId), eq(users.isActive, true)));
+    if (!reviewer) throw AppError.badRequest("That reviewer isn't a user in this organization.");
+    if (reviewer.id === actor.id) throw AppError.badRequest("Choose someone other than yourself to review it.");
+    assignedReviewerId = reviewer.id;
+  }
 
   const [updated] = await db
     .update(controlledVersions)
-    .set({ status: "in_review", submittedBy: actor.id, submittedAt: new Date(), reviewDecision: null, reviewedBy: null, reviewedAt: null, reviewNotes: notes ?? null })
+    .set({
+      status: "in_review",
+      submittedBy: actor.id,
+      submittedAt: new Date(),
+      reviewDecision: null,
+      reviewedBy: null,
+      reviewedAt: null,
+      reviewNotes: notes ?? null,
+      metadata: assignedReviewerId !== undefined ? { ...v.metadata, assignedReviewerId } : Object.fromEntries(Object.entries(v.metadata ?? {}).filter(([k]) => k !== "assignedReviewerId")),
+    })
     .where(eq(controlledVersions.id, v.id))
     .returning();
-  await audit(db, adapter, tenantId, subjectId, "status_change", actor.id, { event: "submitted_for_review", version: v.versionNumber, notes: notes ?? null });
+  await audit(db, adapter, tenantId, subjectId, "status_change", actor.id, { event: "submitted_for_review", version: v.versionNumber, notes: notes ?? null, ...(assignedReviewerId !== undefined ? { assignedReviewerId } : {}) });
+  await adapter.onTransition?.(db, tenantId, subjectId, { type: "submitted", version: v.versionNumber, hasPublished: !!(await publishedVersion(db, adapter, tenantId, subjectId)) });
+  if (adapter.notifyReviewLifecycle) await notifyReview(db, adapter, tenantId, subjectId, updated!, "requested", actor).catch((err) => logger.error("Review notification failed", { err: String(err), subject: adapter.subject, subjectId }));
   return updated!;
 }
 
@@ -270,6 +336,8 @@ export async function reviewVersion(db: TenantDb, adapter: SubjectAdapter, tenan
     .where(eq(controlledVersions.id, v.id))
     .returning();
   await audit(db, adapter, tenantId, subjectId, "status_change", actor.id, { event: decision === "approved" ? "review_approved" : "review_rejected", version: v.versionNumber, notes: notes ?? null, ...(selfReview ? { selfReviewed: true } : {}) });
+  await adapter.onTransition?.(db, tenantId, subjectId, { type: decision === "approved" ? "approved" : "rejected", version: v.versionNumber, hasPublished: !!(await publishedVersion(db, adapter, tenantId, subjectId)) });
+  if (adapter.notifyReviewLifecycle) await notifyReview(db, adapter, tenantId, subjectId, updated!, decision === "approved" ? "approved" : "rejected", actor).catch((err) => logger.error("Review notification failed", { err: String(err), subject: adapter.subject, subjectId }));
   return updated!;
 }
 
@@ -284,15 +352,23 @@ export async function publishVersion(db: TenantDb, adapter: SubjectAdapter, tena
   if (v.reviewDecision !== "approved") throw conflict("A reviewer has to approve this version before it can be published.");
 
   const report = adapter.validate(v.payload);
-  if (report.errors.length > 0) throw new AppError(`Can't publish: ${report.errors[0]!.message}`, 422, { errors: report.errors, warnings: report.warnings });
+  const dbIssues = (await adapter.checkPayload?.(db, tenantId, subjectId, v.versionNumber, v.payload, "publish")) ?? [];
+  const errors = [...report.errors, ...dbIssues];
+  if (errors.length > 0) throw new AppError(`Can't publish: ${errors[0]!.message}`, 422, { errors, warnings: report.warnings });
 
   const previous = await publishedVersion(db, adapter, tenantId, subjectId);
   const live = await adapter.loadLive(db, tenantId, subjectId);
-  await adapter.apply(db, tenantId, subjectId, v.payload, { versionNumber: v.versionNumber, actor: actor.id, firstPublish: !previous, previousLive: live.exists ? live.payload : null });
+  await adapter.apply(db, tenantId, subjectId, v.payload, { versionNumber: v.versionNumber, actor: actor.id, firstPublish: !previous, previousLive: live.exists ? live.payload : null, version: v });
 
   if (previous) await db.update(controlledVersions).set({ status: "archived" }).where(eq(controlledVersions.id, previous.id));
   const [published] = await db.update(controlledVersions).set({ status: "published", publishedBy: actor.id, publishedAt: new Date() }).where(eq(controlledVersions.id, v.id)).returning();
-  await audit(db, adapter, tenantId, subjectId, "status_change", actor.id, { event: "published", version: v.versionNumber, replaced: previous?.versionNumber ?? null, ...(v.isRollback ? { rollbackTo: v.basedOnVersion } : {}) });
+  await audit(db, adapter, tenantId, subjectId, "status_change", actor.id, {
+    event: "published",
+    version: v.versionNumber,
+    replaced: previous?.versionNumber ?? null,
+    ...(v.isRollback ? { rollbackTo: v.basedOnVersion } : {}),
+    ...(previous ? { changes: adapter.diff(previous.payload, v.payload).summary } : {}),
+  });
 
   await notifyPublished(db, adapter, tenantId, subjectId, v, actor).catch((err) => logger.error("Publish notification failed", { err: String(err), subject: adapter.subject, subjectId }));
   return published!;
@@ -306,6 +382,24 @@ async function notifyPublished(db: TenantDb, adapter: SubjectAdapter, tenantId: 
   for (const u of names) await sendEmail({ to: u.email, subject, body });
 }
 
+/** Tells the right people about a review step: the named reviewer (or the department if none was named) when it is requested, the author when it is decided. */
+async function notifyReview(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, v: ControlledVersion, kind: "requested" | "approved" | "rejected", actor: Actor) {
+  const noun = `${adapter.noun[0]!.toUpperCase()}${adapter.noun.slice(1)}`;
+  const emailsOf = async (ids: number[]) => (ids.length === 0 ? [] : (await db.select({ email: users.email }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.isActive, true), inArray(users.id, ids)))).map((r) => r.email));
+  if (kind === "requested") {
+    const subject = `${noun} version ${v.versionNumber} is waiting for your review`;
+    const body = `A new version of the ${adapter.noun} was sent for review${v.reviewNotes ? `: ${v.reviewNotes}` : "."}`;
+    const assigned = typeof v.metadata?.assignedReviewerId === "number" ? (v.metadata.assignedReviewerId as number) : null;
+    if (assigned !== null) await notifyRecipients(db, tenantId, await emailsOf([assigned]), subject, body, adapter.entityType, subjectId);
+    else for (const department of adapter.notifyDepartments) await notifyDepartment(db, { tenantId, department, subject, body, relatedEntityType: adapter.entityType, relatedEntityId: subjectId });
+    return;
+  }
+  const author = v.submittedBy && v.submittedBy !== actor.id ? [v.submittedBy] : [];
+  const subject = kind === "approved" ? `${noun} version ${v.versionNumber} was approved` : `${noun} version ${v.versionNumber} was sent back`;
+  const body = kind === "approved" ? `The review is complete and it can now be published${v.reviewNotes ? `. Reviewer's note: ${v.reviewNotes}` : "."}` : `It needs changes before it can be released${v.reviewNotes ? `: ${v.reviewNotes}` : "."}`;
+  await notifyRecipients(db, tenantId, await emailsOf(author), subject, body, adapter.entityType, subjectId);
+}
+
 /** Rollback: a new draft whose content is an earlier version's. It still goes through review and publishing like any other change. */
 export async function rollbackTo(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionNumber: number, actor: Actor): Promise<ControlledVersion> {
   await ensureBootstrapped(db, adapter, tenantId, subjectId);
@@ -317,10 +411,12 @@ export async function rollbackTo(db: TenantDb, adapter: SubjectAdapter, tenantId
   if (target.status !== "published" && target.status !== "archived") throw conflict("You can only roll back to a version that was published.");
   if (target.status === "published") throw conflict("That version is already the live one.");
 
+  await adapter.guardDraft?.(db, tenantId, subjectId);
   const existing = await openVersion(db, adapter, tenantId, subjectId);
   if (existing) throw conflict(`There is already an open ${adapter.noun} version (v${existing.versionNumber}). Finish or discard it first.`);
 
   const number = await nextNumber(db, adapter, tenantId, subjectId);
+  const inForce = await publishedVersion(db, adapter, tenantId, subjectId);
   const [created] = await db
     .insert(controlledVersions)
     .values({
@@ -329,7 +425,7 @@ export async function rollbackTo(db: TenantDb, adapter: SubjectAdapter, tenantId
       subjectId,
       versionNumber: number,
       status: "draft",
-      payload: target.payload,
+      payload: adapter.seedDraft?.(target.payload, { versionNumber: number, rollbackTo: versionNumber, currentPayload: inForce?.payload ?? null }) ?? target.payload,
       metadata: { summary: `Rollback to version ${versionNumber}` },
       basedOnVersion: versionNumber,
       isRollback: true,
@@ -337,6 +433,7 @@ export async function rollbackTo(db: TenantDb, adapter: SubjectAdapter, tenantId
     })
     .returning();
   await audit(db, adapter, tenantId, subjectId, "create", actor.id, { event: "rollback_draft_created", version: number, rollbackTo: versionNumber });
+  await adapter.onTransition?.(db, tenantId, subjectId, { type: "draft_created", version: number, hasPublished: true });
   return created!;
 }
 

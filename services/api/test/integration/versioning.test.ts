@@ -250,7 +250,8 @@ describe("Version control: workflows, Management Review, Context of the Organiza
     it("a never-published workflow can be deleted along with its drafts", async () => {
       const created = await request(app).post("/workflow").set(as(author)).send({ name: "Scratch" });
       expect((await request(app).delete(`/workflow/${created.body.id}`).set(as(admin))).status).toBe(204);
-      expect(await db.select().from(controlledVersions).where(eq(controlledVersions.subjectId, created.body.id))).toHaveLength(0);
+      // Scoped to this organization and subject type: ids are only unique within a subject, and other suites' documents share the table.
+      expect(await db.select().from(controlledVersions).where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, "workflow"), eq(controlledVersions.subjectId, created.body.id)))).toHaveLength(0);
     });
 
     it("keeps a workflow that existed before version control, starting its history at version 1 = as it stood", async () => {

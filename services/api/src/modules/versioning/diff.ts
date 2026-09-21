@@ -1,7 +1,7 @@
 import type { FormLayout } from "../forms/layouts/types.js";
 
 export type DiffChange = "added" | "removed" | "changed";
-export type DiffScope = "node" | "transition" | "metadata" | "field" | "row";
+export type DiffScope = "node" | "transition" | "metadata" | "field" | "row" | "content" | "attachment" | "link";
 
 export interface DiffEntry {
   change: DiffChange;
@@ -14,6 +14,8 @@ export interface DiffEntry {
   to?: unknown;
   /** For a changed node or transition: which of its properties differ. */
   details?: { field: string; from: unknown; to: unknown }[];
+  /** For a text body: the line-by-line comparison (every line, marked same / added / removed). */
+  lines?: { op: "add" | "del" | "same"; text: string }[];
 }
 
 export interface DiffResult {

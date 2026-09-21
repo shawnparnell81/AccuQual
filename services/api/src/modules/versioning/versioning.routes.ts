@@ -25,6 +25,8 @@ export const reviewSchema = z.object({
   versionId: z.number().int().positive(),
   action: z.enum(["request", "approve", "reject"]),
   notes: z.string().max(4000).optional(),
+  /** Name who should review it (used by controlled documents; ignored elsewhere). */
+  reviewerId: z.number().int().positive().optional(),
 });
 export const publishSchema = z.object({ versionId: z.number().int().positive() });
 export const rollbackSchema = z.object({ versionNumber: z.number().int().positive() });
@@ -131,7 +133,7 @@ export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAda
       await new Promise<void>((resolve, reject) => gate(req, res, (err?: unknown) => (err ? reject(err) : resolve())));
       const db = dbOf(req);
       const id = idParam(req);
-      if (body.action === "request") res.json(await engine.submitForReview(db, adapter, req.tenantId!, id, body.versionId, actorOf(req), body.notes));
+      if (body.action === "request") res.json(await engine.submitForReview(db, adapter, req.tenantId!, id, body.versionId, actorOf(req), body.notes, { reviewerId: body.reviewerId }));
       else res.json(await engine.reviewVersion(db, adapter, req.tenantId!, id, body.versionId, actorOf(req), body.action === "approve" ? "approved" : "rejected", body.notes));
     }),
   );

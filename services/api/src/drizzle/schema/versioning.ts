@@ -5,7 +5,7 @@ import { users } from "./users.js";
 
 export const VERSION_STATUSES = ["draft", "in_review", "published", "archived"] as const;
 export type VersionStatus = (typeof VERSION_STATUSES)[number];
-export const VERSION_SUBJECTS = ["workflow", "management_review", "context_of_organization"] as const;
+export const VERSION_SUBJECTS = ["workflow", "management_review", "context_of_organization", "document"] as const;
 export type VersionSubject = (typeof VERSION_SUBJECTS)[number];
 
 /**

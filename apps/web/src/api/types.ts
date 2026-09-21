@@ -125,6 +125,12 @@ export interface AccuQualDocument {
   retentionPeriodDays: number;
   retentionAction: "archive" | "delete";
   retentionState: "active" | "archived";
+  /** Mirrors the released revision (controlled-document versioning): its id, "Rev A" label, effective date, and the kinds of record it links to. */
+  currentVersionId: number | null;
+  revisionCode: string | null;
+  effectiveDate: string | null;
+  tags: string[];
+  linkedModules: string[];
   /** Real column, set on every write (approve/revise/archive) — used as an activity-by-month proxy since there's no bulk revision-history endpoint. */
   updatedAt: string | null;
 }

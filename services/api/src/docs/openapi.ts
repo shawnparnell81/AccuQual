@@ -2,7 +2,7 @@ import { z } from "zod";
 import { extendZodWithOpenApi, OpenAPIRegistry, OpenApiGeneratorV3 } from "@asteasolutions/zod-to-openapi";
 import { createNcrSchema, updateNcrSchema, containmentNcrSchema, rootCauseNcrSchema, correctiveActionNcrSchema } from "../modules/ncr/ncr.validation.js";
 import { createCapaSchema, updateCapaSchema, verifyCapaSchema } from "../modules/capa/capa.validation.js";
-import { createDocumentSchema, updateDocumentSchema, addVersionSchema, approveSchema } from "../modules/documents/documents.validation.js";
+import { createDocumentSchema, updateDocumentSchema, requestReviewSchema, decisionSchema } from "../modules/documents/documents.validation.js";
 import { createCourseSchema, updateCourseSchema, assignSchema, completeAssignmentSchema } from "../modules/training/training.validation.js";
 
 extendZodWithOpenApi(z);
@@ -101,22 +101,23 @@ registry.registerPath({
 });
 
 registerCrud("Documents", "/documents", createDocumentSchema, updateDocumentSchema);
-registry.registerPath({
-  method: "post",
-  path: "/documents/{id}/version",
-  tags: ["Documents"],
-  summary: "Add a new version to a document",
-  request: { params: z.object({ id: z.string() }), body: { content: { "application/json": { schema: addVersionSchema } } } },
-  responses: { 200: genericResponses[200], 400: genericResponses[400] },
-});
-registry.registerPath({
-  method: "post",
-  path: "/documents/{id}/approve",
-  tags: ["Documents"],
-  summary: "draft/in_review → approved",
-  request: { params: z.object({ id: z.string() }), body: { content: { "application/json": { schema: approveSchema } } } },
-  responses: { 200: genericResponses[200], 400: genericResponses[400] },
-});
+// Controlled-document versioning: draft -> review -> publish, with a frozen version after publication.
+const docVersionParams = z.object({ id: z.string(), versionId: z.string() });
+registry.registerPath({ method: "get", path: "/documents/{id}/versions", tags: ["Documents"], summary: "Version timeline of a document", request: { params: z.object({ id: z.string() }) }, responses: { 200: genericResponses[200] } });
+registry.registerPath({ method: "get", path: "/documents/{id}/version/{versionId}", tags: ["Documents"], summary: "One version, with its full content, metadata, files and links", request: { params: docVersionParams }, responses: { 200: genericResponses[200] } });
+registry.registerPath({ method: "get", path: "/documents/{id}/version/{versionId}/diff", tags: ["Documents"], summary: "Compare a version with the previous one (or ?against=<versionId>): content, metadata, files, links", request: { params: docVersionParams }, responses: { 200: genericResponses[200] } });
+registry.registerPath({ method: "post", path: "/documents/{id}/draft", tags: ["Documents"], summary: "Start a draft from the released version (409 if one is already open)", request: { params: z.object({ id: z.string() }) }, responses: { 201: genericResponses[200], 409: genericResponses[400] } });
+registry.registerPath({ method: "patch", path: "/documents/{id}/draft/{versionId}", tags: ["Documents"], summary: "Save a draft (autosave). Only drafts can be edited; released versions are frozen.", request: { params: docVersionParams }, responses: { 200: genericResponses[200], 409: genericResponses[400] } });
+registry.registerPath({ method: "post", path: "/documents/{id}/draft/{versionId}/review", tags: ["Documents"], summary: "Send a draft for review, optionally naming the reviewer", request: { params: docVersionParams, body: { content: { "application/json": { schema: requestReviewSchema } } } }, responses: { 200: genericResponses[200], 422: genericResponses[400] } });
+registry.registerPath({ method: "post", path: "/documents/{id}/version/{versionId}/review/approve", tags: ["Documents"], summary: "Approve a version in review (someone other than its author)", request: { params: docVersionParams, body: { content: { "application/json": { schema: decisionSchema } } } }, responses: { 200: genericResponses[200], 403: genericResponses[400] } });
+registry.registerPath({ method: "post", path: "/documents/{id}/version/{versionId}/review/reject", tags: ["Documents"], summary: "Send a version back to draft (a reason is required)", request: { params: docVersionParams, body: { content: { "application/json": { schema: decisionSchema } } } }, responses: { 200: genericResponses[200], 400: genericResponses[400] } });
+registry.registerPath({ method: "post", path: "/documents/{id}/version/{versionId}/publish", tags: ["Documents"], summary: "Publish an approved version: it becomes the released, frozen revision", request: { params: docVersionParams }, responses: { 200: genericResponses[200], 409: genericResponses[400] } });
+registry.registerPath({ method: "post", path: "/documents/{id}/version/{versionId}/rollback", tags: ["Documents"], summary: "Restore an earlier released version as a new draft (which is then reviewed and published)", request: { params: docVersionParams }, responses: { 201: genericResponses[200], 409: genericResponses[400] } });
+registry.registerPath({ method: "post", path: "/documents/{id}/version/{versionId}/attachments", tags: ["Documents"], summary: "Attach a file (multipart field `file`; PDF, DOCX, XLSX or image, 15 MB) to a draft", request: { params: docVersionParams }, responses: { 201: genericResponses[200], 400: genericResponses[400] } });
+registry.registerPath({ method: "delete", path: "/documents/{id}/version/{versionId}/attachments/{attachmentId}", tags: ["Documents"], summary: "Remove a file from a draft", request: { params: z.object({ id: z.string(), versionId: z.string(), attachmentId: z.string() }) }, responses: { 204: genericResponses[200] } });
+registry.registerPath({ method: "get", path: "/documents/{id}/version/{versionId}/attachments/{attachmentId}/url", tags: ["Documents"], summary: "A short-lived signed download link for one file of one version", request: { params: z.object({ id: z.string(), versionId: z.string(), attachmentId: z.string() }) }, responses: { 200: genericResponses[200] } });
+registry.registerPath({ method: "get", path: "/documents/{id}/link-history", tags: ["Documents"], summary: "Every record the document has linked to, and in which versions", request: { params: z.object({ id: z.string() }) }, responses: { 200: genericResponses[200] } });
+registry.registerPath({ method: "get", path: "/documents/linked", tags: ["Documents"], summary: "Released documents linked to a record (?type=equipment|supplier|ncr|capa|audit|workflow|training&id=)", responses: { 200: genericResponses[200] } });
 registry.registerPath({
   method: "post",
   path: "/documents/{id}/obsolete",

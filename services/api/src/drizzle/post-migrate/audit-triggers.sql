@@ -132,6 +132,7 @@ BEGIN
       ('calibrations',                ARRAY[]::text[]),
       ('documents',                   ARRAY[]::text[]),
       ('document_versions',           ARRAY[]::text[]),
+      ('document_files',              ARRAY[]::text[]),
       ('document_change_requests',    ARRAY[]::text[]),
       ('document_change_items',       ARRAY[]::text[]),
       ('document_change_reviews',     ARRAY[]::text[]),

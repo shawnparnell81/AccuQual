@@ -1,33 +1,31 @@
 import { z } from "zod";
-import { reasonableDate } from "../../utils/validation.js";
 
 export const createDocumentSchema = z.object({
-  title: z.string().min(1),
-  category: z.string().optional(),
+  title: z.string().trim().min(1).max(300),
+  category: z.string().trim().max(100).optional(),
 });
 
 export const documentStatusEnum = z.enum(["draft", "in_review", "approved", "obsolete"]);
 
-// Sprint 2 fix (accuqual-implementation-sequencing.md) — deliberately excludes
-// `status`. It previously changed via a free PATCH field with no guard at
-// all, bypassing the real workflow (draft -> in_review is automatic, set only
-// by createDocumentVersionRow on a new version; -> approved only via the
-// dedicated /approve endpoint; -> obsolete only via the new dedicated
-// /obsolete endpoint below). Same "matrix/schema grants nothing, dedicated
-// endpoints own the transition" pattern risk.validation.ts's updateRiskSchema
-// already uses.
-export const updateDocumentSchema = createDocumentSchema.partial().extend({
-  expirationDate: reasonableDate.nullable().optional(),
-  expirationWarningDays: z.number().int().positive().optional(),
-  retentionPeriodDays: z.number().int().positive().optional(),
-  retentionAction: z.enum(["archive", "delete"]).optional(),
+// What can still be changed on the document record itself: settings that are not part of a revision. The title, category,
+// dates, content, files and links are all part of a revision and change only through a draft (reviewed, published, and
+// recorded in the version history) — so they are deliberately not accepted here, and neither is `status`, which only the
+// lifecycle endpoints move. Any other key is rejected rather than silently ignored.
+export const updateDocumentSchema = z
+  .object({
+    tags: z.array(z.string().trim().min(1).max(50)).max(30).optional(),
+    ownerId: z.number().int().positive().nullable().optional(),
+    expirationWarningDays: z.number().int().positive().optional(),
+    retentionPeriodDays: z.number().int().positive().optional(),
+    retentionAction: z.enum(["archive", "delete"]).optional(),
+  })
+  .strict();
+
+/** Send a draft for review, optionally naming who should review it. */
+export const requestReviewSchema = z.object({
+  notes: z.string().max(4000).optional(),
+  reviewerId: z.number().int().positive().optional(),
 });
 
-export const addVersionSchema = z.object({
-  fileUrl: z.string().min(1),
-  changeNotes: z.string().optional(),
-});
-
-export const approveSchema = z.object({
-  approvalNotes: z.string().optional(),
-});
+/** A reviewer's decision. Sending a version back needs a reason (enforced by the engine). */
+export const decisionSchema = z.object({ notes: z.string().max(4000).optional() });

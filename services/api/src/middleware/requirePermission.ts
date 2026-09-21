@@ -25,6 +25,7 @@ export const PERMISSION_SUBJECTS = {
   workflow: { resource: "workflow", entityType: "WorkflowVersion" },
   managementReview: { resource: "management_review", entityType: "ManagementReviewVersion" },
   context: { resource: "context_of_org", entityType: "ContextVersion" },
+  document: { resource: "documents", entityType: "DocumentVersion" },
 } as const satisfies Record<string, { resource: ResourceKey; entityType: string }>;
 
 export type PermissionSubject = keyof typeof PERMISSION_SUBJECTS;

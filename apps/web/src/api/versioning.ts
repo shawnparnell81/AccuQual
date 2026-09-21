@@ -44,12 +44,14 @@ export interface CurrentState<P = Record<string, unknown>> {
 
 export interface DiffEntry {
   change: "added" | "removed" | "changed";
-  scope: "node" | "transition" | "metadata" | "field" | "row";
+  scope: "node" | "transition" | "metadata" | "field" | "row" | "content" | "attachment" | "link";
   key: string;
   label: string;
   from?: unknown;
   to?: unknown;
   details?: { field: string; from: unknown; to: unknown }[];
+  /** A text body's line-by-line comparison (controlled documents). */
+  lines?: { op: "add" | "del" | "same"; text: string }[];
 }
 export interface VersionDiff {
   from: { id: number; versionNumber: number; status: VersionStatus } | null;
@@ -96,7 +98,7 @@ export function useVersioning<P = Record<string, unknown>>(basePath: string, id:
   });
   const discard = useMutation({ mutationFn: async (versionId: number) => apiClient.delete(`${root}/versions/${versionId}`), onSuccess: invalidate });
   const review = useMutation({
-    mutationFn: async (input: { versionId: number; action: "request" | "approve" | "reject"; notes?: string }) => (await apiClient.post<VersionFull<P>>(`${root}/review`, input)).data,
+    mutationFn: async (input: { versionId: number; action: "request" | "approve" | "reject"; notes?: string; reviewerId?: number }) => (await apiClient.post<VersionFull<P>>(`${root}/review`, input)).data,
     onSuccess: invalidate,
   });
   const publish = useMutation({

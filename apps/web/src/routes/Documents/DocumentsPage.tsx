@@ -40,7 +40,9 @@ export function DocumentsPage() {
           { header: "ID", accessor: (d) => `#${d.id}` },
           { header: "Title", accessor: (d) => d.title },
           { header: "Category", accessor: (d) => d.category ?? "—" },
-          { header: "Version", accessor: (d) => `v${d.currentVersion}` },
+          { header: "Revision", accessor: (d) => (d.currentVersion > 0 ? `${d.revisionCode ?? "—"} (v${d.currentVersion})` : "Not released") },
+          { header: "Effective", accessor: (d) => (d.effectiveDate ? new Date(d.effectiveDate).toLocaleDateString() : "—") },
+          { header: "Expires", accessor: (d) => (d.expirationDate ? new Date(d.expirationDate).toLocaleDateString() : "—") },
           { header: "Status", accessor: (d) => <StatusBadge value={d.status} /> },
           {
             header: "",

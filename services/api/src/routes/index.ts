@@ -7,6 +7,7 @@ import { ssoPublicRouter, ssoAdminRouter } from "../modules/sso/sso.routes.js";
 import { usersRouter } from "../modules/users/users.routes.js";
 import { rolesRouter } from "../modules/roles/roles.routes.js";
 import { documentsRouter } from "../modules/documents/documents.routes.js";
+import { documentFilesRouter } from "../modules/documents/documents.versions.routes.js";
 import { documentFoldersRouter } from "../modules/document-folders/document-folders.routes.js";
 import { ncrRouter } from "../modules/ncr/ncr.routes.js";
 import { capaRouter } from "../modules/capa/capa.routes.js";
@@ -77,6 +78,8 @@ apiRouter.use("/sso", ssoAdminRouter);
 apiRouter.use("/data-export", dataExportRouter);
 apiRouter.use("/users", usersRouter);
 apiRouter.use("/roles", rolesRouter);
+// Before /documents: a signed file link is its own credential (no bearer header on an <img>/<iframe>), so it must not fall into the authenticated router.
+apiRouter.use("/documents/files", documentFilesRouter);
 apiRouter.use("/documents", documentsRouter);
 apiRouter.use("/document-folders", documentFoldersRouter);
 apiRouter.use("/ncr", ncrRouter);
