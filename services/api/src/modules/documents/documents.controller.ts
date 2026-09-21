@@ -1,118 +1,47 @@
 import type { Request, Response } from "express";
-import { mkdir, writeFile } from "node:fs/promises";
 import { createReadStream, existsSync } from "node:fs";
 import { and, eq } from "drizzle-orm";
 import { documents, documentVersions, type Document, type DocumentVersion } from "../../drizzle/schema/documents.js";
+import { controlledVersions } from "../../drizzle/schema/versioning.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
-import { env } from "../../config/env.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import * as engine from "../versioning/versioning.service.js";
+import { blankDocumentPayload } from "./documentPayload.js";
+import { documentAdapter, isInsideTenantStorage } from "./documentVersioning.js";
 
 export const baseHandlers = crudFactory(documents, { entityName: "Document", idColumn: "id", softDelete: true });
 
-interface AddVersionInput {
-  fileUrl: string;
-  changeNotes?: string;
-}
+/**
+ * A new controlled document: the record plus its first draft (revision A). Nothing is in force until that draft has been
+ * reviewed and published — see documentVersioning.ts. The title and category live in the revision itself, so they are
+ * changed through a draft (with the change history a controlled document needs), never by editing the record directly.
+ */
+export const createDocumentHandler = asyncHandler(async (req: Request, res: Response) => {
+  const db = req.db!;
+  const tenantId = req.tenantId!;
+  const { title, category } = req.body as { title: string; category?: string };
+  const actor = { id: req.user!.id, roleName: req.user!.roleName };
+
+  const [doc] = await db
+    .insert(documents)
+    .values({ tenantId, title: title.trim(), category: category?.trim() || null, status: "draft", currentVersion: 0, ownerId: actor.id })
+    .returning();
+  if (!doc) throw new AppError("Failed to create the document", 500);
+  const draft = await engine.createInitialDraft(db, documentAdapter, tenantId, doc.id, actor, { ...blankDocumentPayload(), title: doc.title, category: doc.category ?? null } as unknown as Record<string, unknown>);
+  await recordAuditTrail(db, { tenantId, entityType: "Document", entityId: doc.id, action: "create", changes: { title: doc.title, category: doc.category }, performedBy: actor.id });
+  res.status(201).json({ ...doc, openVersionId: draft.id });
+});
 
 /**
- * Shared by the JSON path (addVersionHandler, fileUrl already known) and the
- * multipart upload path (uploadVersionHandler, fileUrl is the just-saved
- * file's path) — one place that bumps currentVersion, writes the version
- * row, and records the audit entry, so the two can't diverge.
+ * The old one-step endpoints let a revision be recorded, and approved by the same person, with nothing frozen and no
+ * review. Revisions now go through a draft, a reviewer and publication (POST /documents/:id/draft, .../review,
+ * .../publish), so these say so instead of quietly bypassing that.
  */
-async function createDocumentVersionRow(db: TenantDb, tenantId: number, documentId: number, input: AddVersionInput, userId?: number) {
-  const [doc] = await db.select().from(documents).where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId)));
-  if (!doc) throw AppError.notFound("Document");
-
-  const nextVersion = doc.currentVersion + 1;
-  const [version] = await db
-    .insert(documentVersions)
-    .values({ tenantId, documentId, version: nextVersion, fileUrl: input.fileUrl, changeNotes: input.changeNotes, createdBy: userId })
-    .returning();
-  if (!version) throw new AppError("Failed to record document version", 500);
-
-  await db
-    .update(documents)
-    .set({ currentVersion: nextVersion, status: "in_review", updatedAt: new Date() })
-    .where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId)));
-
-  await recordAuditTrail(db, {
-    tenantId,
-    entityType: "Document",
-    entityId: documentId,
-    action: "update",
-    changes: { action: "revise", versionId: version.id, version: nextVersion, changeNotes: input.changeNotes },
-    performedBy: userId,
-  });
-
-  return version;
-}
-
-export const addVersionHandler = asyncHandler(async (req: Request, res: Response) => {
-  const version = await createDocumentVersionRow(req.db!, req.tenantId!, Number(req.params.id), req.body, req.user?.id);
-  res.status(201).json(version);
-});
-
-/** Same as addVersionHandler, but the file comes from a real upload instead of an already-hosted fileUrl. */
-export const uploadVersionHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
-  const documentId = Number(req.params.id);
-  const file = req.file;
-  if (!file) throw AppError.badRequest("No file uploaded");
-  if (file.mimetype !== "application/pdf") throw AppError.badRequest("Only PDF files are accepted");
-
-  const dir = `${env.STORAGE_LOCAL_PATH}/tenants/${tenantId}/forms/custom/document-versions`;
-  await mkdir(dir, { recursive: true });
-  const path = `${dir}/${documentId}-${Date.now()}.pdf`;
-  await writeFile(path, file.buffer);
-
-  const version = await createDocumentVersionRow(req.db!, tenantId, documentId, { fileUrl: path, changeNotes: req.body.changeNotes }, req.user?.id);
-  res.status(201).json(version);
-});
-
-export const approveHandler = asyncHandler(async (req: Request, res: Response) => {
-  const documentId = Number(req.params.id);
-  const tenantId = req.tenantId!;
-  const { approvalNotes } = req.body as { approvalNotes?: string };
-
-  const [doc] = await req.db!.select().from(documents).where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId)));
-  if (!doc) throw AppError.notFound("Document");
-
-  await req
-    .db!.update(documentVersions)
-    .set({ approvedBy: req.user?.id, approvedAt: new Date(), approvalNotes })
-    .where(and(eq(documentVersions.documentId, documentId), eq(documentVersions.tenantId, tenantId), eq(documentVersions.version, doc.currentVersion)));
-
-  // Full-System Audit finding M3 — the SELECT above already scoped this
-  // document to the caller's own tenant, so this couldn't actually approve
-  // someone else's document, but the UPDATE itself dropped the tenantId
-  // predicate every other module's writes keep as defense-in-depth (RLS is
-  // the second, DB-level layer — see the README's "two independent,
-  // deliberately redundant layers" section; this is the first).
-  const [updated] = await req.db!.update(documents).set({ status: "approved", updatedAt: new Date() }).where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId))).returning();
-
-  // "approve" isn't in audit_trail's fixed action enum (create/update/delete/
-  // status_change) — this is exactly what status_change means, so use it.
-  await recordAuditTrail(req.db!, {
-    tenantId,
-    entityType: "Document",
-    entityId: documentId,
-    action: "status_change",
-    changes: { action: "approve", version: doc.currentVersion, approvalNotes, status: "approved" },
-    performedBy: req.user?.id,
-  });
-  // Phase 9 — Document Revision was the one status-changing module with no
-  // publishEvent(WORKFLOW_STREAM, ...) call at all (confirmed by the Phase
-  // 9 workflow-engine research), so no workflow definition could ever react
-  // to a document being approved. Additive only — the approval logic above
-  // is unchanged.
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "documents", event: "approved", entityId: documentId });
-
-  res.json(updated);
+export const retiredRevisionHandler = asyncHandler(async (_req: Request, _res: Response) => {
+  throw new AppError("This endpoint has been replaced. Revise a document by starting a draft (POST /documents/:id/draft), sending it for review, and publishing it once a reviewer approves.", 410);
 });
 
 /**
@@ -133,6 +62,17 @@ export const obsoleteHandler = asyncHandler(async (req: Request, res: Response) 
   if (doc.status !== "approved") {
     throw AppError.badRequest(`Cannot obsolete a document from status "${doc.status}" — must be "approved".`);
   }
+  // A revision still being worked on would come back to life the moment it was published.
+  const [open] = await req
+    .db!.select({ n: controlledVersions.versionNumber })
+    .from(controlledVersions)
+    .where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, "document"), eq(controlledVersions.subjectId, documentId), eq(controlledVersions.status, "draft")));
+  const [inReview] = await req
+    .db!.select({ n: controlledVersions.versionNumber })
+    .from(controlledVersions)
+    .where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, "document"), eq(controlledVersions.subjectId, documentId), eq(controlledVersions.status, "in_review")));
+  const pending = open ?? inReview;
+  if (pending) throw new AppError(`Version ${pending.n} of this document is still being worked on. Discard it or finish it before retiring the document.`, 409);
 
   // Same M3 defense-in-depth fix as approveHandler above.
   const [updated] = await req.db!.update(documents).set({ status: "obsolete", updatedAt: new Date() }).where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId))).returning();
@@ -151,10 +91,9 @@ export const obsoleteHandler = asyncHandler(async (req: Request, res: Response) 
 });
 
 /**
- * Streams a version's file back — only works for versions uploaded through
- * uploadVersionHandler (a real local path). A version created via the JSON
- * `POST .../version` endpoint with an already-hosted fileUrl is just linked
- * to directly by the frontend instead.
+ * Streams a released revision's PDF back (the revision ledger's file). Only files inside this organization's own
+ * storage folder are ever served: an older endpoint accepted any path as a "file URL", so a stored value is not trusted
+ * to point where it should.
  */
 export const downloadVersionHandler = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = req.tenantId!;
@@ -162,11 +101,12 @@ export const downloadVersionHandler = asyncHandler(async (req: Request, res: Res
 
   const [version] = await req.db!.select().from(documentVersions).where(and(eq(documentVersions.id, versionId), eq(documentVersions.tenantId, tenantId)));
   if (!version) throw AppError.notFound("Document version");
-  if (!version.fileUrl || /^https?:\/\//i.test(version.fileUrl) || !existsSync(version.fileUrl)) {
+  if (!version.fileUrl || /^https?:\/\//i.test(version.fileUrl) || !isInsideTenantStorage(tenantId, version.fileUrl) || !existsSync(version.fileUrl)) {
     throw AppError.notFound("Uploaded file for this version");
   }
 
   res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Content-Disposition", `inline; filename="document-${version.documentId}-rev${version.version}.pdf"`);
   createReadStream(version.fileUrl).pipe(res);
 });
@@ -212,7 +152,7 @@ interface RetentionDecision {
  * action (archiveHandler) so the age-out math can't drift between them.
  * "Aged out" is measured from the current version's approval date, since
  * that's the closest thing this table has to "when did this stop being the
- * active document" (see approveHandler above).
+ * active document" (see the approval date the revision ledger records on publish).
  */
 function decideRetention(doc: Document, currentVersion?: Pick<DocumentVersion, "approvedAt">): RetentionDecision {
   if (doc.status !== "obsolete") return { eligible: false, reason: `document is "${doc.status}", not "obsolete"` };

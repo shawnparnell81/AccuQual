@@ -40,6 +40,37 @@ BEGIN
 END;
 $$;
 
+-- Uploaded document files are evidence of what a revision contained: once stored, a row's identity and content
+-- fingerprint can never be rewritten (a wrong file is replaced by uploading another and dropping the reference).
+CREATE OR REPLACE FUNCTION document_files_immutable() RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF NEW.tenant_id IS DISTINCT FROM OLD.tenant_id
+     OR NEW.document_id IS DISTINCT FROM OLD.document_id
+     OR NEW.file_name IS DISTINCT FROM OLD.file_name
+     OR NEW.mime_type IS DISTINCT FROM OLD.mime_type
+     OR NEW.size_bytes IS DISTINCT FROM OLD.size_bytes
+     OR NEW.sha256 IS DISTINCT FROM OLD.sha256
+     OR NEW.file_path IS DISTINCT FROM OLD.file_path
+     OR NEW.uploaded_by IS DISTINCT FROM OLD.uploaded_by THEN
+    RAISE EXCEPTION 'A stored document file cannot be edited (file %)', OLD.id USING ERRCODE = '23000';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.document_files') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS document_files_immutable ON document_files;
+    CREATE TRIGGER document_files_immutable
+      BEFORE UPDATE ON document_files
+      FOR EACH ROW EXECUTE FUNCTION document_files_immutable();
+  END IF;
+END $$;
+
 DROP TRIGGER IF EXISTS controlled_versions_freeze ON controlled_versions;
 CREATE TRIGGER controlled_versions_freeze
   BEFORE UPDATE OR DELETE ON controlled_versions

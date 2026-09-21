@@ -85,7 +85,7 @@ const CHANGE_STYLE: Record<DiffEntry["change"], { bar: string; tag: string; labe
   removed: { bar: "border-l-destructive", tag: "bg-destructive/15 text-destructive", label: "Removed" },
   changed: { bar: "border-l-warning", tag: "bg-warning/15 text-warning", label: "Changed" },
 };
-const SCOPE_TITLE: Record<DiffEntry["scope"], string> = { node: "Steps", transition: "Transitions", metadata: "Details", field: "Fields", row: "Table rows" };
+const SCOPE_TITLE: Record<DiffEntry["scope"], string> = { node: "Steps", transition: "Transitions", metadata: "Details", field: "Fields", row: "Table rows", content: "Content", attachment: "Files", link: "Linked records" };
 
 function show(v: unknown): string {
   if (v === undefined || v === null || v === "") return "—";
@@ -94,6 +94,7 @@ function show(v: unknown): string {
     const o = v as Record<string, unknown>;
     if ("type" in o && "kind" in o) return `${o.label ? `${o.label} — ` : ""}${String(o.type)}: ${String(o.kind)}`; // a whole node
     if ("from" in o && "to" in o) return `${String(o.from)} → ${String(o.to)}${o.branch ? ` (${String(o.branch)})` : ""}`; // a whole transition
+    if ("sha256" in o) return `${Number(o.sizeBytes ?? 0).toLocaleString()} bytes · checksum ${String(o.sha256).slice(0, 8)}`; // a stored file
     return Object.values(o).filter((x) => x !== "" && x != null).join(" · ") || JSON.stringify(v);
   }
   return String(v);
@@ -101,7 +102,7 @@ function show(v: unknown): string {
 
 export function DiffEntries({ entries }: { entries: DiffEntry[] }) {
   if (entries.length === 0) return <p className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">No differences.</p>;
-  const groups = (["node", "transition", "field", "row", "metadata"] as const).map((scope) => ({ scope, items: entries.filter((e) => e.scope === scope) })).filter((g) => g.items.length > 0);
+  const groups = (["node", "transition", "field", "row", "metadata", "content", "attachment", "link"] as const).map((scope) => ({ scope, items: entries.filter((e) => e.scope === scope) })).filter((g) => g.items.length > 0);
   return (
     <div className="flex flex-col gap-4">
       {groups.map(({ scope, items }) => (
@@ -114,15 +115,16 @@ export function DiffEntries({ entries }: { entries: DiffEntry[] }) {
                   <span className={clsx("rounded px-1.5 py-0.5 text-[10px] font-bold uppercase", CHANGE_STYLE[e.change].tag)}>{CHANGE_STYLE[e.change].label}</span>
                   <span className="font-medium">{e.label}</span>
                 </div>
-                {e.change === "changed" && !e.details && (
+                {e.lines && <LineDiffBlock lines={e.lines} />}
+                {e.change === "changed" && !e.details && !e.lines && (
                   <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
                     <span className="rounded bg-destructive/10 px-1.5 py-0.5 line-through">{show(e.from)}</span>
                     <ArrowRight size={12} className="text-muted-foreground" />
                     <span className="rounded bg-success/10 px-1.5 py-0.5">{show(e.to)}</span>
                   </p>
                 )}
-                {e.change === "added" && e.to !== undefined && scope !== "node" && scope !== "transition" && <p className="mt-1 rounded bg-success/10 px-1.5 py-0.5 text-xs">{show(e.to)}</p>}
-                {e.change === "removed" && e.from !== undefined && scope !== "node" && scope !== "transition" && <p className="mt-1 rounded bg-destructive/10 px-1.5 py-0.5 text-xs line-through">{show(e.from)}</p>}
+                {e.change === "added" && e.to !== undefined && !e.lines && scope !== "node" && scope !== "transition" && <p className="mt-1 rounded bg-success/10 px-1.5 py-0.5 text-xs">{show(e.to)}</p>}
+                {e.change === "removed" && e.from !== undefined && !e.lines && scope !== "node" && scope !== "transition" && <p className="mt-1 rounded bg-destructive/10 px-1.5 py-0.5 text-xs line-through">{show(e.from)}</p>}
                 {e.details?.map((d) => (
                   <p key={d.field} className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
                     <span className="text-muted-foreground">{d.field}:</span>
@@ -138,6 +140,32 @@ export function DiffEntries({ entries }: { entries: DiffEntry[] }) {
       ))}
     </div>
   );
+}
+
+/** A text body's comparison: every changed line, with a little unchanged context; long unchanged runs are folded. */
+function LineDiffBlock({ lines }: { lines: NonNullable<DiffEntry["lines"]> }) {
+  const CONTEXT = 2;
+  const keep = lines.map((l, i) => l.op !== "same" || lines.slice(Math.max(0, i - CONTEXT), i + CONTEXT + 1).some((n) => n.op !== "same"));
+  const rows: ReactNode[] = [];
+  let folded = 0;
+  lines.forEach((l, i) => {
+    if (!keep[i]) {
+      folded += 1;
+      return;
+    }
+    if (folded > 0) {
+      rows.push(<div key={`f${i}`} className="px-2 py-0.5 text-[11px] italic text-muted-foreground">… {folded} unchanged line{folded === 1 ? "" : "s"}</div>);
+      folded = 0;
+    }
+    rows.push(
+      <div key={i} className={clsx("whitespace-pre-wrap break-words px-2 py-0.5", l.op === "add" && "bg-success/10", l.op === "del" && "bg-destructive/10 line-through")}>
+        <span className="mr-2 select-none text-muted-foreground">{l.op === "add" ? "+" : l.op === "del" ? "−" : " "}</span>
+        {l.text || " "}
+      </div>,
+    );
+  });
+  if (folded > 0) rows.push(<div key="ftail" className="px-2 py-0.5 text-[11px] italic text-muted-foreground">… {folded} unchanged line{folded === 1 ? "" : "s"}</div>);
+  return <div className="mt-1.5 overflow-x-auto rounded-md border border-border bg-background font-mono text-xs">{rows}</div>;
 }
 
 /** Loads and shows the comparison of one version with the one before it (or a named one). */
@@ -179,12 +207,15 @@ interface ReviewModalProps {
   mode: "request" | "decide";
   versionNumber: number;
   isOwnSubmission?: boolean;
-  onSubmit: (action: "request" | "approve" | "reject", notes: string) => Promise<void>;
+  /** People who could be asked to review (controlled documents). When given, "Request review" can name one. */
+  reviewers?: { id: number; label: string }[];
+  onSubmit: (action: "request" | "approve" | "reject", notes: string, reviewerId?: number) => Promise<void>;
 }
 
 /** Ask for review, or (for a reviewer) approve / send back. Sending back requires saying why. */
-export function ReviewModal({ isOpen, onClose, mode, versionNumber, isOwnSubmission, onSubmit }: ReviewModalProps) {
+export function ReviewModal({ isOpen, onClose, mode, versionNumber, isOwnSubmission, reviewers, onSubmit }: ReviewModalProps) {
   const [notes, setNotes] = useState("");
+  const [reviewerId, setReviewerId] = useState("");
   const [busy, setBusy] = useState(false);
   const toast = useToast();
 
@@ -195,8 +226,9 @@ export function ReviewModal({ isOpen, onClose, mode, versionNumber, isOwnSubmiss
     }
     setBusy(true);
     try {
-      await onSubmit(action, notes);
+      await onSubmit(action, notes, action === "request" && reviewerId ? Number(reviewerId) : undefined);
       setNotes("");
+      setReviewerId("");
       onClose();
     } catch (err) {
       toast.error(extractErrorMessage(err, "That didn't work."));
@@ -212,6 +244,19 @@ export function ReviewModal({ isOpen, onClose, mode, versionNumber, isOwnSubmiss
           <p className="text-muted-foreground">A reviewer (an admin or quality manager) will check this version. While it is in review it can't be edited.</p>
         ) : (
           <p className="text-muted-foreground">Approving lets it be published. Sending it back returns it to draft with your note.</p>
+        )}
+        {mode === "request" && reviewers && reviewers.length > 0 && (
+          <label className="flex flex-col gap-1">
+            <span className="font-medium">Ask a specific reviewer (optional)</span>
+            <select className="rounded-md border border-border bg-background p-2 text-sm" value={reviewerId} onChange={(e) => setReviewerId(e.target.value)}>
+              <option value="">Anyone in Quality</option>
+              {reviewers.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
         {mode === "decide" && isOwnSubmission && <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs">You submitted this version yourself. As an admin you may review it, but the record will show it was self-reviewed.</p>}
         <label className="flex flex-col gap-1">
@@ -293,7 +338,7 @@ export interface LifecycleActions {
   discardDraft: (versionId: number) => Promise<unknown>;
   /** Called before asking for review so pending autosaves are flushed. */
   flush?: () => Promise<void>;
-  review: (versionId: number, action: "request" | "approve" | "reject", notes: string) => Promise<unknown>;
+  review: (versionId: number, action: "request" | "approve" | "reject", notes: string, reviewerId?: number) => Promise<unknown>;
   publish: (versionId: number) => Promise<unknown>;
 }
 
@@ -305,11 +350,13 @@ interface LifecycleBarProps {
   blockedReason?: string | null;
   warnings?: ValidationIssue[];
   actions: LifecycleActions;
+  /** People who could be named as the reviewer when asking for review. */
+  reviewers?: { id: number; label: string }[];
   children?: ReactNode;
 }
 
 /** The status strip and the one or two buttons that make sense for where the open version is in its lifecycle. */
-export function LifecycleBar({ noun, state, canEdit, blockedReason, warnings, actions, children }: LifecycleBarProps) {
+export function LifecycleBar({ noun, state, canEdit, blockedReason, warnings, actions, reviewers, children }: LifecycleBarProps) {
   const user = useCurrentUser();
   const toast = useToast();
   const isReviewer = !!user?.roleName && REVIEWER_ROLES.includes(user.roleName);
@@ -403,9 +450,10 @@ export function LifecycleBar({ noun, state, canEdit, blockedReason, warnings, ac
             mode={reviewMode ?? "request"}
             versionNumber={open.versionNumber}
             isOwnSubmission={open.submittedBy === user?.id}
-            onSubmit={async (action, notes) => {
+            reviewers={reviewers}
+            onSubmit={async (action, notes, reviewerId) => {
               if (action === "request") await actions.flush?.();
-              await actions.review(open.id, action, notes);
+              await actions.review(open.id, action, notes, reviewerId);
               toast.success(action === "request" ? "Sent for review." : action === "approve" ? "Approved." : "Sent back to the author.");
             }}
           />

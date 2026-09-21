@@ -55,7 +55,8 @@ DECLARE
     -- inventory_lots ledger, Phase 6's report_schedules).
     'customer_communications', 'customer_scorecards', 'inventory_lots', 'report_schedules',
     'erp_connector_presets', 'erp_sync_errors', 'audit_row_changes',
-    'sso_connections', 'sso_domains', 'user_identities', 'controlled_versions'
+    'sso_connections', 'sso_domains', 'user_identities', 'controlled_versions',
+    'document_files'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP

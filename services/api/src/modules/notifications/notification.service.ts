@@ -211,6 +211,10 @@ export async function sendEmail(message: { to: string; subject: string; body: st
 }
 
 /** Writes one notification_log row per recipient and returns how many were notified. */
+export async function notifyRecipients(db: TenantDb, tenantId: number, recipients: string[], subject: string, body: string, relatedEntityType?: string, relatedEntityId?: number): Promise<number> {
+  return notify(db, tenantId, recipients, subject, body, relatedEntityType, relatedEntityId);
+}
+
 async function notify(db: TenantDb, tenantId: number, recipients: string[], subject: string, body: string, relatedEntityType?: string, relatedEntityId?: number): Promise<number> {
   for (const recipient of recipients) {
     const status = activeTransport ? await deliver(activeTransport, { to: recipient, subject, body }) : "logged_only";

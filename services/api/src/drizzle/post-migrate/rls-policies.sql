@@ -81,7 +81,8 @@ DECLARE
     'report_schedules', 'supplier_quality_risk_scores', 'inventory_lots',
     'customer_communications', 'customer_scorecards', 'erp_connector_presets',
     'erp_sync_errors', 'audit_row_changes',
-    'sso_connections', 'sso_domains', 'user_identities', 'controlled_versions'
+    'sso_connections', 'sso_domains', 'user_identities', 'controlled_versions',
+    'document_files'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP

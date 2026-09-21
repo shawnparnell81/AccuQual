@@ -16,8 +16,9 @@ import type { AccuQualDocument } from "../../api/types";
  * the rule ahead of time regardless of current status.
  */
 export function DocumentRetentionPanel({ document }: { document: AccuQualDocument }) {
+  // The expiration date belongs to the released revision (change it by revising the document), so it is shown, not edited, here.
+  const expirationDate = document.expirationDate?.slice(0, 10) ?? "";
   const [form, setForm] = useState({
-    expirationDate: document.expirationDate?.slice(0, 10) ?? "",
     expirationWarningDays: document.expirationWarningDays,
     retentionPeriodDays: document.retentionPeriodDays,
     retentionAction: document.retentionAction,
@@ -29,7 +30,6 @@ export function DocumentRetentionPanel({ document }: { document: AccuQualDocumen
     mutationFn: async () =>
       (
         await apiClient.patch(`/documents/${document.id}`, {
-          expirationDate: form.expirationDate || null,
           expirationWarningDays: Number(form.expirationWarningDays),
           retentionPeriodDays: Number(form.retentionPeriodDays),
           retentionAction: form.retentionAction,
@@ -66,7 +66,7 @@ export function DocumentRetentionPanel({ document }: { document: AccuQualDocumen
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't archive this document.")),
   });
 
-  const status = documentExpirationStatus(form.expirationDate || null, Number(form.expirationWarningDays));
+  const status = documentExpirationStatus(expirationDate || null, Number(form.expirationWarningDays));
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
@@ -85,7 +85,11 @@ export function DocumentRetentionPanel({ document }: { document: AccuQualDocumen
           save.mutate();
         }}
       >
-        <TextField label="Expiration Date" type="date" value={form.expirationDate} onChange={(e) => setForm({ ...form, expirationDate: e.target.value })} />
+        <div className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Expiration Date</span>
+          <span className="rounded-md border border-border bg-muted/40 px-3 py-2">{expirationDate || "None"}</span>
+          <span className="text-xs text-muted-foreground">Set by the released revision — change it by revising the document.</span>
+        </div>
         <TextField
           label="Warn Before Expiring (days)"
           type="number"

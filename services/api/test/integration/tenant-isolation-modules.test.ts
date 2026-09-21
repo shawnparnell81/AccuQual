@@ -23,7 +23,7 @@
 // job).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
 import { tenants } from "../../src/drizzle/schema/tenants.js";
@@ -32,6 +32,7 @@ import { capa } from "../../src/drizzle/schema/capa.js";
 import { audits } from "../../src/drizzle/schema/audits.js";
 import { riskAssessments } from "../../src/drizzle/schema/risk.js";
 import { documents } from "../../src/drizzle/schema/documents.js";
+import { controlledVersions } from "../../src/drizzle/schema/versioning.js";
 import { suppliers } from "../../src/drizzle/schema/supplier.js";
 import { inventoryItems, inventoryAlerts } from "../../src/drizzle/schema/inventory.js";
 import { trainingCourses } from "../../src/drizzle/schema/training.js";
@@ -83,9 +84,11 @@ const cases: TenantIsolationCase[] = [
     name: "Document",
     basePath: "/documents",
     createPayload: { title: "Tenant A Document" },
-    mutate: { method: "patch", pathSuffix: "", payload: { title: "HACKED" } },
-    unchangedField: "title",
-    unchangedValue: "Tenant A Document",
+    // The title is part of a controlled revision now (changed only through a draft), so the cross-tenant write attempt uses a
+    // field the record still accepts directly.
+    mutate: { method: "patch", pathSuffix: "", payload: { expirationWarningDays: 99 } },
+    unchangedField: "expirationWarningDays",
+    unchangedValue: 30,
   },
   {
     name: "Supplier",
@@ -175,6 +178,8 @@ describe("tenant isolation across modules (real DB + real HTTP path)", () => {
     await db.delete(capa).where(eq(capa.id, createdIds.get("CAPA")!));
     await db.delete(audits).where(eq(audits.id, createdIds.get("Audit")!));
     await db.delete(riskAssessments).where(eq(riskAssessments.id, createdIds.get("Risk")!));
+    // Creating a document also opens its first draft revision (controlled_versions), which points at the user.
+    await db.delete(controlledVersions).where(and(eq(controlledVersions.subjectType, "document"), eq(controlledVersions.subjectId, createdIds.get("Document")!)));
     await db.delete(documents).where(eq(documents.id, createdIds.get("Document")!));
     await db.delete(suppliers).where(eq(suppliers.id, createdIds.get("Supplier")!));
     // A fresh item can trigger a real "below_min" alert (see

@@ -9,8 +9,6 @@ import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { TextAreaField } from "../../components/forms/Field";
 import { TrainingAssignmentModal } from "../../components/training/TrainingAssignmentModal";
 import { TrainingCompletionModal } from "../../components/training/TrainingCompletionModal";
-import { DocumentApprovalModal } from "../../components/documents/DocumentApprovalModal";
-import { DocumentRevisionModal } from "../../components/documents/DocumentRevisionModal";
 import { DocumentRetentionPanel } from "../../components/documents/DocumentRetentionPanel";
 import { DocumentHistoryPanel } from "../../components/documents/DocumentHistoryPanel";
 import { StatusBadge } from "../../components/tables/StatusBadge";
@@ -37,8 +35,6 @@ export function TrainingDetailPage() {
   const updateCourse = trainingHooks.useUpdate();
   const [assignOpen, setAssignOpen] = useState(false);
   const [completingId, setCompletingId] = useState<number | null>(null);
-  const [approveOpen, setApproveOpen] = useState(false);
-  const [reviseOpen, setReviseOpen] = useState(false);
 
   const { data: assignments = [] } = useQuery<TrainingAssignment[]>({
     queryKey: ["training-assignments", courseId],
@@ -103,22 +99,14 @@ export function TrainingDetailPage() {
               <p className="text-sm text-muted-foreground capitalize">Status: {material.status.replace("_", " ")}</p>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setReviseOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-                Revise
-              </button>
-              <button
-                onClick={() => setApproveOpen(true)}
-                disabled={material.status === "approved" || material.status === "obsolete"}
-                className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-40"
-              >
-                Approve
-              </button>
+              {/* Revising and approving a controlled document happens on the document itself: draft, review, publish. */}
+              <Link to={`/documents/${material.id}`} className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">
+                Open document to revise or approve
+              </Link>
             </div>
           </div>
           <DocumentRetentionPanel document={material} />
           <DocumentHistoryPanel documentId={material.id} />
-          <DocumentApprovalModal documentId={material.id} isOpen={approveOpen} onClose={() => setApproveOpen(false)} />
-          <DocumentRevisionModal documentId={material.id} isOpen={reviseOpen} onClose={() => setReviseOpen(false)} />
         </>
       ) : (
         <p className="text-xs text-muted-foreground">
