@@ -15,6 +15,8 @@ import { EightDDetailPage } from "./routes/EightD/EightDDetailPage";
 import { AuditsPage } from "./routes/Audits/AuditsPage";
 import { AuditDetailPage } from "./routes/Audits/AuditDetailPage";
 import { DocumentsPage } from "./routes/Documents/DocumentsPage";
+import { QuarantinePage } from "./routes/Quarantine/QuarantinePage";
+import { QuarantineDetailPage } from "./routes/Quarantine/QuarantineDetailPage";
 import { DocumentDetailPage } from "./routes/Documents/DocumentDetailPage";
 import { FolderExplorerPage } from "./routes/Documents/FolderExplorerPage";
 import { GeneralUploadsPage } from "./routes/Documents/GeneralUploadsPage";
@@ -198,6 +200,8 @@ export function App() {
           <Route path="/suppliers/:id" element={<SupplierDetailPage />} />
           <Route path="/calibration" element={<CalibrationPage />} />
           <Route path="/calibration/:id" element={<EquipmentDetailPage />} />
+          <Route path="/quarantine" element={<QuarantinePage />} />
+          <Route path="/quarantine/:id" element={<QuarantineDetailPage />} />
           <Route path="/complaints" element={<ComplaintsPage />} />
           <Route path="/complaints/:id" element={<ComplaintDetailPage />} />
           <Route path="/inventory" element={<InventoryListPage />} />

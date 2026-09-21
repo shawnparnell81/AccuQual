@@ -14,6 +14,7 @@ import { tenants } from "../../src/drizzle/schema/tenants.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { trainingCourses, trainingAssignments } from "../../src/drizzle/schema/training.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
+import { notificationLog } from "../../src/drizzle/schema/notifications.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
@@ -51,6 +52,8 @@ describe("Training module (real DB + real HTTP path)", () => {
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
     await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
+    // Assigning training now tells the person, which leaves a notice behind.
+    await db.delete(notificationLog).where(eq(notificationLog.tenantId, tenantId));
     if (courseId) {
       await db.delete(trainingAssignments).where(eq(trainingAssignments.courseId, courseId));
       await db.delete(trainingCourses).where(eq(trainingCourses.id, courseId));

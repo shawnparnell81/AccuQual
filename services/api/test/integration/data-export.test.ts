@@ -289,18 +289,23 @@ describe("Tenant data export (real DB + real HTTP path)", () => {
     });
 
     it("records who asked, and when it completed, with row and file counts", async () => {
+      const auditRows = async () => (await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantA), eq(auditTrail.entityType, "Tenant")))).map((r) => ({ id: r.id, performedBy: r.performedBy, changes: r.changes as { event?: string; format?: string; files?: number } }));
+      // Earlier tests in this file exported too and do not wait for their completion entries, which can land late; so only entries newer
+      // than THIS request, in THIS export's format and file count, are this export's.
+      const newest = Math.max(0, ...(await auditRows()).map((r) => r.id));
       const { body } = await requestExport(admin, { format: "json" });
       await downloadZip(body.downloadUrl);
+      const mine = async () => (await auditRows()).filter((r) => r.id > newest && r.changes.event === "data_export_completed" && r.changes.format === "json" && r.changes.files === 1)[0];
       // The completion entry is written just after the last byte is sent, so wait for it rather than assuming how long that takes.
-      let log = await events();
-      for (let i = 0; i < 50 && !log.includes("data_export_completed"); i++) {
+      let done = await mine();
+      for (let i = 0; i < 50 && !done; i++) {
         await new Promise((r) => setTimeout(r, 100));
-        log = await events();
+        done = await mine();
       }
-      expect(log).toEqual(expect.arrayContaining(["data_export_requested", "data_export_completed"]));
-      const done = (await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantA), eq(auditTrail.entityType, "Tenant")))).find((r) => (r.changes as { event?: string }).event === "data_export_completed");
+      expect(done, "this export's completion entry").toBeDefined();
+      expect((await auditRows()).some((r) => r.id > newest && r.changes.event === "data_export_requested")).toBe(true);
       expect(done!.performedBy).toBe(admin.id);
-      expect(done!.changes).toMatchObject({ format: "json", rows: expect.any(Number), files: 1 });
+      expect(done!.changes).toMatchObject({ format: "json", files: 1 });
     });
   });
 

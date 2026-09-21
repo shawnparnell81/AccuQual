@@ -435,6 +435,27 @@
       "when": 1789945023455,
       "tag": "0061_document_versioning",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1790021173308,
+      "tag": "0062_equipment_calibration_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1790022223460,
+      "tag": "0063_quarantine_module",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1790023523998,
+      "tag": "0064_training_competency",
+      "breakpoints": true
     }
   ]
 }

@@ -96,6 +96,10 @@ export async function receiveIntoLot(db: TenantDb, tenantId: number, input: Rece
 export async function consumeFromLot(db: TenantDb, tenantId: number, lotId: number, quantity: number): Promise<void> {
   const [lot] = await db.select().from(inventoryLots).where(and(eq(inventoryLots.id, lotId), eq(inventoryLots.tenantId, tenantId)));
   if (!lot) throw AppError.badRequest(`Lot #${lotId} not found`);
+  // Second layer behind applyMovement's own check: never draw down units that are on quarantine hold.
+  if (Number(lot.heldQty) > 0 && Number(lot.remainingQty) - Number(lot.heldQty) < quantity) {
+    throw new AppError(`Lot ${lot.lotNumber} has ${Number(lot.heldQty)} unit(s) on quarantine hold; only ${Math.max(Number(lot.remainingQty) - Number(lot.heldQty), 0)} can be used.`, 409);
+  }
 
   const nextRemaining = Math.max(Number(lot.remainingQty) - quantity, 0);
   const nextStatus = nextRemaining === 0 ? "consumed" : lot.status;

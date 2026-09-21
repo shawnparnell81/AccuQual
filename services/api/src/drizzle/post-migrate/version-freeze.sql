@@ -71,6 +71,51 @@ BEGIN
   END IF;
 END $$;
 
+-- The quarantine decision log is history: a release or destroy, once recorded, is never rewritten or removed.
+CREATE OR REPLACE FUNCTION quarantine_resolutions_append_only() RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  RAISE EXCEPTION 'A quarantine decision cannot be edited or deleted (decision %)', OLD.id USING ERRCODE = '23000';
+END;
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.quarantine_resolutions') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS quarantine_resolutions_append_only ON quarantine_resolutions;
+    CREATE TRIGGER quarantine_resolutions_append_only
+      BEFORE UPDATE OR DELETE ON quarantine_resolutions
+      FOR EACH ROW EXECUTE FUNCTION quarantine_resolutions_append_only();
+  END IF;
+END $$;
+
+-- A competency evaluation that has been decided (pass or fail) is a record of that assessment: it is never rewritten or removed.
+-- A re-evaluation is a new row. Only a pending (scheduled) evaluation can still be filled in.
+CREATE OR REPLACE FUNCTION training_competencies_decided_frozen() RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF OLD.status IN ('pass', 'fail') THEN
+    RAISE EXCEPTION 'A decided competency evaluation cannot be edited or deleted (evaluation %)', OLD.id USING ERRCODE = '23000';
+  END IF;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.training_competencies') IS NOT NULL THEN
+    DROP TRIGGER IF EXISTS training_competencies_decided_frozen ON training_competencies;
+    CREATE TRIGGER training_competencies_decided_frozen
+      BEFORE UPDATE OR DELETE ON training_competencies
+      FOR EACH ROW EXECUTE FUNCTION training_competencies_decided_frozen();
+  END IF;
+END $$;
+
 DROP TRIGGER IF EXISTS controlled_versions_freeze ON controlled_versions;
 CREATE TRIGGER controlled_versions_freeze
   BEFORE UPDATE OR DELETE ON controlled_versions

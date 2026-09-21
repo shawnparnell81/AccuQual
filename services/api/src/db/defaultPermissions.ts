@@ -326,4 +326,8 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
     material_management: "edit",
     sales_and_marketing: "edit",
   },
+  // Quarantine: Quality places and decides holds; Material Management physically handles held stock (edit lets it place and move a hold —
+  // releasing or destroying additionally needs a reviewer role, see requirePermission's "release" action); Production and Purchasing
+  // can see what is held.
+  quarantine: { quality: "edit", material_management: "edit", production: "read", purchasing: "read" },
 };

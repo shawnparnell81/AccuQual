@@ -7,6 +7,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { notifyDepartment } from "../notifications/notification.service.js";
 import type { InventorySettings } from "../settings/settings.service.js";
 import { consumeFromLot } from "./inventoryLots.service.js";
+import { assertNotHeld, heldUnits } from "./inventoryHoldGuard.js";
 
 const DEFAULT_LOCATION = "default";
 
@@ -76,6 +77,12 @@ export function generateTrackingNumber(format: string, sku: string, seq: number)
 export async function applyMovement(db: TenantDb, tenantId: number, itemId: number, input: MovementInput, performedBy: number | undefined, inventorySettings?: InventorySettings) {
   const stockRows = await getStockRows(db, tenantId, itemId);
   const totalBefore = stockRows.reduce((sum, r) => sum + Number(r.onHand), 0);
+
+  // Units on quarantine hold can't leave through any outbound movement; they leave only through a Quarantine decision
+  // (inventoryHolds.service.ts lifts the hold first, then calls this).
+  if (input.movementType === "consume" || input.movementType === "scrap" || input.movementType === "return") {
+    await assertNotHeld(db, tenantId, itemId, input.quantity, totalBefore, input.lotId);
+  }
 
   switch (input.movementType) {
     case "receive":
@@ -306,6 +313,13 @@ export async function reserveStock(db: TenantDb, tenantId: number, itemId: numbe
 
   if (!settings?.reservationRules?.allowNegativeAllocation && quantity > unallocated) {
     throw AppError.badRequest(`Cannot reserve ${quantity} — only ${unallocated} unallocated unit(s) at "${loc}" (reservationRules.allowNegativeAllocation is off).`);
+  }
+  // Held units are never available to promise, whatever the negative-allocation setting says.
+  const held = await heldUnits(db, tenantId, itemId);
+  if (held > 0) {
+    const rows = await getStockRows(db, tenantId, itemId);
+    const usable = rows.reduce((s, r) => s + Number(r.onHand) - Number(r.allocated), 0) - held;
+    if (quantity > usable) throw new AppError(`Cannot reserve ${quantity} — ${held} unit(s) of this item are on quarantine hold, leaving ${Math.max(usable, 0)} available to reserve.`, 409);
   }
 
   await db.update(inventoryStock).set({ allocated: String(nextAllocated), allocatedAt: new Date() }).where(and(eq(inventoryStock.itemId, itemId), eq(inventoryStock.tenantId, tenantId), eq(inventoryStock.location, loc)));

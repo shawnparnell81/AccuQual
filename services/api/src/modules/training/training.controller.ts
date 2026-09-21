@@ -7,6 +7,7 @@ import { users } from "../../drizzle/schema/users.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import * as service from "./training.service.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
@@ -21,6 +22,7 @@ export const listCourses = asyncHandler(async (req: Request, res: Response) => {
 
 export const createCourse = asyncHandler(async (req: Request, res: Response) => {
   const [created] = await req.db!.insert(trainingCourses).values({ ...req.body, tenantId: req.tenantId! }).returning();
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "TrainingCourse", entityId: created!.id, action: "create", changes: { title: created!.title }, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
@@ -31,23 +33,20 @@ export const getCourse = asyncHandler(async (req: Request, res: Response) => {
   res.json(course);
 });
 
-/** Only title/description/documentId are editable — linking a course's material to a real controlled document is the main reason this exists. */
+/** Title, description, the linked document, who the course is required of, how long it stays valid, and what an evaluation checks. */
 export const updateCourse = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const { title, description, documentId } = req.body as { title?: string; description?: string; documentId?: number | null };
-  const patch: Record<string, unknown> = {};
-  if (title !== undefined) patch.title = title;
-  if (description !== undefined) patch.description = description;
-  if (documentId !== undefined) patch.documentId = documentId;
-
-  const [updated] = await req
-    .db!.update(trainingCourses)
-    .set(patch)
-    .where(and(eq(trainingCourses.id, id), eq(trainingCourses.tenantId, req.tenantId!)))
-    .returning();
+  const patch: Record<string, unknown> = { ...(req.body as Record<string, unknown>), updatedAt: new Date() };
+  const [updated] = await req.db!.update(trainingCourses).set(patch).where(and(eq(trainingCourses.id, id), eq(trainingCourses.tenantId, req.tenantId!))).returning();
   if (!updated) throw AppError.notFound("Training course");
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "TrainingCourse", entityId: id, action: "update", changes: req.body as Record<string, unknown>, performedBy: req.user?.id });
   res.json(updated);
 });
+
+/** An open assignment past its due date reads as overdue (the stored status only ever says assigned / in progress / completed). */
+function withEffectiveStatus<T extends { status: string; dueAt: Date | null }>(row: T): T {
+  return (row.status === "assigned" || row.status === "in_progress") && row.dueAt && row.dueAt.getTime() < Date.now() ? { ...row, status: "overdue" } : row;
+}
 
 /** Assignments for one course, with the employee's email/name for display — used by TrainingDetailPage's assignment list. */
 export const listAssignmentsForCourse = asyncHandler(async (req: Request, res: Response) => {
@@ -63,51 +62,30 @@ export const listAssignmentsForCourse = asyncHandler(async (req: Request, res: R
       trainerName: trainingAssignments.trainerName,
       notes: trainingAssignments.notes,
       certificatePath: trainingAssignments.certificatePath,
+      expiresAt: trainingAssignments.expiresAt,
+      documentVersion: trainingAssignments.documentVersion,
+      sessionId: trainingAssignments.sessionId,
       userEmail: users.email,
       userName: users.name,
     })
     .from(trainingAssignments)
     .leftJoin(users, eq(trainingAssignments.userId, users.id))
     .where(and(eq(trainingAssignments.courseId, courseId), eq(trainingAssignments.tenantId, req.tenantId!)));
-  res.json(rows);
+  res.json(rows.map(withEffectiveStatus));
 });
 
-/** Assigns a course to one or more employees at once — one audit entry per employee for individual traceability. */
+/** Assigns a course to one or more employees at once — one audit entry and one notice per person; anyone who already has it open is skipped, and every person must belong to this organization. */
 export const assignHandler = asyncHandler(async (req: Request, res: Response) => {
-  const courseId = Number(req.params.id);
-  const tenantId = req.tenantId!;
   const { userIds, dueAt } = req.body as { userIds: number[]; dueAt?: Date };
-
-  const [course] = await req.db!.select().from(trainingCourses).where(and(eq(trainingCourses.id, courseId), eq(trainingCourses.tenantId, tenantId)));
-  if (!course) throw AppError.notFound("Training course");
-
-  const created: TrainingAssignment[] = [];
-  for (const userId of userIds) {
-    const [assignment] = await req.db!.insert(trainingAssignments).values({ tenantId, courseId, userId, dueAt, assignedBy: req.user?.id }).returning();
-    if (!assignment) continue;
-    created.push(assignment);
-    await recordAuditTrail(req.db!, {
-      tenantId,
-      entityType: AUDIT_ENTITY_TYPE,
-      entityId: assignment.id,
-      action: "create",
-      changes: { action: "assign", courseId, userId, dueAt },
-      performedBy: req.user?.id,
-    });
-  }
-  res.status(201).json(created);
+  res.status(201).json(await service.assignCourse(req.db!, req.tenantId!, Number(req.params.id), userIds, { dueAt }, req.user?.id));
 });
 
-/** Legacy: marks every assignment for this course complete at once. Kept working; the per-assignment flow below is the real completion path now. */
-export const completeHandler = asyncHandler(async (req: Request, res: Response) => {
-  const courseId = Number(req.params.id);
-  const [updated] = await req
-    .db!.update(trainingAssignments)
-    .set({ status: "completed", completedAt: new Date() })
-    .where(and(eq(trainingAssignments.courseId, courseId), eq(trainingAssignments.tenantId, req.tenantId!)))
-    .returning();
-  if (!updated) throw AppError.notFound("Training assignment");
-  res.json(updated);
+/**
+ * The old bulk completion marked EVERY assignment of a course complete in one call, with no record of who actually did the
+ * training. Completion is now per person (POST /training/assignment/:id/complete) or through a session's attendance.
+ */
+export const completeHandler = asyncHandler(async (_req: Request, _res: Response) => {
+  throw new AppError("This endpoint has been replaced: record each person's training with POST /training/assignment/:id/complete, or complete a session with its attendance (POST /training/session/:id/complete).", 410);
 });
 
 export interface CompleteAssignmentInput {
@@ -116,39 +94,9 @@ export interface CompleteAssignmentInput {
   notes?: string;
 }
 
-/**
- * The one place a training assignment gets marked complete — used by both
- * the dedicated endpoint (completeAssignmentHandler) and the "Training
- * Record" form's save hook (forms.controller.ts), so the two can't diverge.
- * Mirrors Calibration's createCalibrationEvent.
- */
-export async function completeTrainingAssignment(
-  db: TenantDb,
-  tenantId: number,
-  assignmentId: number,
-  input: CompleteAssignmentInput,
-  performedBy?: number
-): Promise<TrainingAssignment> {
-  const [assignment] = await db.select().from(trainingAssignments).where(and(eq(trainingAssignments.id, assignmentId), eq(trainingAssignments.tenantId, tenantId)));
-  if (!assignment) throw AppError.notFound("Training assignment");
-
-  const [updated] = await db
-    .update(trainingAssignments)
-    .set({ status: "completed", completedAt: input.completedAt, trainerName: input.trainerName, notes: input.notes })
-    .where(eq(trainingAssignments.id, assignmentId))
-    .returning();
-  if (!updated) throw new AppError("Failed to complete training assignment", 500);
-
-  await recordAuditTrail(db, {
-    tenantId,
-    entityType: AUDIT_ENTITY_TYPE,
-    entityId: assignmentId,
-    action: "status_change",
-    changes: { action: "complete", trainerName: input.trainerName, completedAt: input.completedAt },
-    performedBy,
-  });
-
-  return updated;
+/** Used by the dedicated endpoint and the "Training Record" form's save hook (forms.controller.ts); the rules live in training.service.ts. */
+export function completeTrainingAssignment(db: TenantDb, tenantId: number, assignmentId: number, input: CompleteAssignmentInput, performedBy?: number): Promise<TrainingAssignment> {
+  return service.completeAssignment(db, tenantId, assignmentId, input, performedBy);
 }
 
 export const completeAssignmentHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -215,13 +163,14 @@ export const employeeHistoryHandler = asyncHandler(async (req: Request, res: Res
       trainerName: trainingAssignments.trainerName,
       notes: trainingAssignments.notes,
       certificatePath: trainingAssignments.certificatePath,
+      expiresAt: trainingAssignments.expiresAt,
       courseTitle: trainingCourses.title,
       documentId: trainingCourses.documentId,
     })
     .from(trainingAssignments)
     .leftJoin(trainingCourses, eq(trainingAssignments.courseId, trainingCourses.id))
     .where(and(eq(trainingAssignments.userId, userId), eq(trainingAssignments.tenantId, req.tenantId!)));
-  res.json(rows);
+  res.json(rows.map(withEffectiveStatus));
 });
 
 /** Employees for the assignment picker (TrainingAssignmentModal) — every active user in the tenant. */

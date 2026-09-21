@@ -382,6 +382,7 @@ export const searchLotsHandler = asyncHandler(async (req: Request, res: Response
       expirationDate: inventoryLots.expirationDate,
       receivedQty: inventoryLots.receivedQty,
       remainingQty: inventoryLots.remainingQty,
+      heldQty: inventoryLots.heldQty,
       status: inventoryLots.status,
       createdAt: inventoryLots.createdAt,
     })

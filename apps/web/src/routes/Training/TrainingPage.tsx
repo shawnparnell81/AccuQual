@@ -1,11 +1,16 @@
 import { useNavigate } from "react-router-dom";
 import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { TrainingAttentionStrip } from "../../components/training/TrainingPanels";
+import { departmentLabel } from "../../api/training";
 
 interface TrainingCourse {
   id: number;
   title: string;
   description: string | null;
+  requiredForDepartment: string | null;
+  validityMonths: number | null;
+  active: boolean;
 }
 
 /** Competency Matrix is a tenant-wide roster of every operator's station qualifications, not tied to one course — so it's a fixed singleton document, same pattern as the Production Logs page. */
@@ -23,6 +28,8 @@ export function TrainingPage() {
         <OpenFormButton formType="competency_matrix" entityId={COMPETENCY_MATRIX_ENTITY_ID} title="Competency Matrix" label="Open Competency Matrix" />
       </div>
 
+      <TrainingAttentionStrip />
+
       <ResourceListPage<TrainingCourse>
         title="Training"
         resource="training"
@@ -32,6 +39,9 @@ export function TrainingPage() {
           { header: "ID", accessor: (c) => `#${c.id}` },
           { header: "Course", accessor: (c) => c.title },
           { header: "Description", accessor: (c) => c.description ?? "—" },
+          { header: "Required for", accessor: (c) => (c.requiredForDepartment ? departmentLabel(c.requiredForDepartment) : "—") },
+          { header: "Valid for", accessor: (c) => (c.validityMonths ? `${c.validityMonths} months` : "Doesn't expire") },
+          { header: "", accessor: (c) => (c.active ? "" : "Retired") },
         ]}
         createFields={[
           { name: "title", label: "Course title" },

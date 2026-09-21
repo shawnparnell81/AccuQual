@@ -412,6 +412,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
       { key: "di", label: "DI", path: "/quality", icon: FileSearch2, access: { quality: "edit" }, kpi: true, priority: 1, notes: "Discrepancy Investigation — auto-linked to CAPA" },
       { key: "audit", label: "Audit", path: "/audits", icon: ClipboardCheck, access: { quality: "edit" }, kpi: false, priority: 2, notes: "Standard audit module" },
       { key: "calibration", label: "Calibration", path: "/calibration", icon: Gauge, access: { quality: "edit" }, kpi: false, priority: 2, notes: "Calibration records" },
+      { key: "quarantine", label: "Quarantine", path: "/quarantine", icon: ShieldAlert, access: { quality: "edit", material_management: "edit", production: "read", purchasing: "read" }, kpi: false, priority: 2, notes: "Holds on nonconforming material" },
       { key: "pareto", label: "Pareto Analysis", path: "/pareto", icon: BarChart3, access: { quality: "read" }, kpi: true, priority: 1, notes: "KPI dashboard item" },
       SUPPLIERS,
       COMPLAINTS,

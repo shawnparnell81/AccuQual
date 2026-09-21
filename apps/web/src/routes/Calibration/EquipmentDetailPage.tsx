@@ -8,7 +8,7 @@ import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { GenericCreateForm, type FieldSpec } from "../../components/forms/GenericCreateForm";
 import { Modal } from "../../components/modals/Modal";
-import { STATUS_COLORS, calibrationStatusFromDueDate } from "../../components/forms/formulas";
+import { EquipmentStatusBadge, EquipmentStatusModal, LinkedDocumentsPanel, ScheduleCalibrationModal, useMayEditEquipment, type EquipmentState } from "../../components/calibration/EquipmentPanels";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
@@ -16,17 +16,20 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 
-interface Equipment {
-  id: number;
-  name: string;
+interface Equipment extends EquipmentState {
   serialNumber: string | null;
   location: string | null;
+  type: string | null;
   calibrationIntervalDays: number;
 }
 
 interface CalibrationEvent {
   id: number;
-  performedAt: string;
+  /** Null while the calibration is only scheduled. */
+  performedAt: string | null;
+  status: "scheduled" | "completed" | "failed";
+  scheduledAt: string | null;
+  results: Record<string, unknown> | null;
   result: string | null;
   technicianName: string | null;
   notes: string | null;
@@ -36,11 +39,14 @@ interface CalibrationEvent {
 
 const equipmentHooks = createResourceHooks<Equipment>("equipment");
 
+const eventTime = (c: CalibrationEvent) => new Date(c.performedAt ?? c.scheduledAt ?? 0).getTime();
+
 // Same field set as CalibrationPage.tsx's createFields — kept in one place
 // per page rather than shared, matching every other module's list-page vs.
 // detail-page field-spec split in this app (e.g. Feasibility).
 const EQUIPMENT_FIELDS: FieldSpec[] = [
   { name: "name", label: "Equipment name" },
+  { name: "type", label: "Type (caliper, torque wrench, scale…)" },
   { name: "serialNumber", label: "Serial number" },
   { name: "location", label: "Location" },
   { name: "calibrationIntervalDays", label: "Calibration interval (days)", type: "number" },
@@ -89,6 +95,19 @@ export function EquipmentDetailPage() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const { mayEdit } = useMayEditEquipment();
+  const queryClient = useQueryClient();
+  const cancelSchedule = useMutation({
+    mutationFn: async (calibrationId: number) => apiClient.delete(`/equipment/calibration/${calibrationId}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["equipment"] });
+      void queryClient.invalidateQueries({ queryKey: ["workflow-history", "calibration", equipmentId] });
+      toast.success("Scheduled calibration cancelled.");
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't cancel it.")),
+  });
   const updateEquipment = equipmentHooks.useUpdate();
   const deleteEquipment = equipmentHooks.useDelete();
 
@@ -96,12 +115,6 @@ export function EquipmentDetailPage() {
     queryKey: ["equipment", equipmentId, "calibration"],
     queryFn: async () => (await apiClient.get(`/equipment/${equipmentId}/calibration`)).data,
   });
-
-  const latest = calibrations.length
-    ? calibrations.reduce((a, b) => (new Date(a.performedAt) > new Date(b.performedAt) ? a : b))
-    : null;
-  const statusLabel = calibrationStatusFromDueDate(latest?.nextDueAt);
-  const statusColors = STATUS_COLORS[statusLabel] ?? { bg: "#EAEAE6", fg: "#66655D" };
 
   function requestUpload(calibrationId: number) {
     pendingUploadTarget.current = calibrationId;
@@ -138,14 +151,11 @@ export function EquipmentDetailPage() {
         <div>
           <h1 className="text-2xl font-semibold">{equipment.name}</h1>
           <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+            {equipment.type && <span>{equipment.type} —</span>}
             <span>{equipment.serialNumber ?? "No serial #"}</span>
             <span>— {equipment.location ?? "No location"}</span>
-            <span
-              className="rounded-full px-2 py-0.5 text-xs font-semibold"
-              style={{ backgroundColor: statusColors.bg, color: statusColors.fg }}
-            >
-              {statusLabel}
-            </span>
+            <EquipmentStatusBadge status={equipment.status} dueStatus={equipment.dueStatus} />
+            {equipment.nextDueAt && equipment.status !== "out_of_service" && <span>· next due {new Date(equipment.nextDueAt).toLocaleDateString()}</span>}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -155,6 +165,16 @@ export function EquipmentDetailPage() {
           <PrintFormButton formType="maintenance_work_order" entityId={equipment.id} label="Print WO" />
           <OpenFormButton formType="gage_rr" entityId={equipment.id} title={`Equipment #${equipment.id} — Gage R&R Study`} label="Gage R&R Study" />
           <PrintFormButton formType="gage_rr" entityId={equipment.id} label="Print R&R" />
+          {mayEdit && (
+            <>
+              <button onClick={() => setScheduleOpen(true)} disabled={equipment.status === "inactive" || !!equipment.scheduledCalibrationId} title={equipment.scheduledCalibrationId ? "A calibration is already scheduled" : undefined} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50">
+                Schedule calibration
+              </button>
+              <button onClick={() => setStatusOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+                Change status
+              </button>
+            </>
+          )}
           <button onClick={() => setEditOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             Edit
           </button>
@@ -163,6 +183,23 @@ export function EquipmentDetailPage() {
           </button>
         </div>
       </div>
+
+      {equipment.status === "out_of_service" && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
+          <p className="font-medium text-destructive">Out of service — do not use.</p>
+          <p className="text-xs">
+            {equipment.statusReason ?? "No reason recorded."}
+            {equipment.statusCause === "calibration_failure" && " It returns to service automatically when a calibration passes; an admin or quality manager can override that with a recorded reason."}
+          </p>
+        </div>
+      )}
+      {equipment.dueStatus === "failed" && equipment.status !== "out_of_service" && <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs">The latest calibration failed. It needs a passing calibration.</p>}
+      {equipment.nextScheduledAt && (
+        <p className="rounded-md border border-border bg-muted/40 p-2 text-xs">
+          Calibration scheduled for <strong>{new Date(equipment.nextScheduledAt).toLocaleDateString()}</strong>
+          {equipment.scheduleOverdue ? " — that date has passed and it has not been logged." : "."} Log it with the Calibration Record to complete it.
+        </p>
+      )}
 
       <div className="rounded-lg border border-border bg-card p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
@@ -187,15 +224,21 @@ export function EquipmentDetailPage() {
           {calibrations.length === 0 && <li className="text-muted-foreground">No calibration events logged yet.</li>}
           {calibrations
             .slice()
-            .sort((a, b) => new Date(b.performedAt).getTime() - new Date(a.performedAt).getTime())
+            .sort((a, b) => eventTime(b) - eventTime(a))
             .map((c) => (
               <li key={c.id} className="flex flex-col gap-1 border-b border-border pb-2">
                 <div className="flex items-center gap-3">
-                  <span className="w-24 flex-none">{new Date(c.performedAt).toLocaleDateString()}</span>
-                  <span className="w-20 flex-none capitalize">{c.result ?? "—"}</span>
+                  <span className="w-24 flex-none">{c.performedAt ? new Date(c.performedAt).toLocaleDateString() : c.scheduledAt ? new Date(c.scheduledAt).toLocaleDateString() : "—"}</span>
+                  <span className={`w-20 flex-none capitalize ${c.status === "failed" ? "font-semibold text-destructive" : ""}`}>{c.status === "scheduled" ? "Scheduled" : (c.result ?? "—")}</span>
                   <span className="flex-1 text-muted-foreground">{c.technicianName ?? "No technician recorded"}</span>
                   <span className="flex-none text-muted-foreground">Next due: {c.nextDueAt ? new Date(c.nextDueAt).toLocaleDateString() : "—"}</span>
-                  {c.certificatePath ? (
+                  {c.status === "scheduled" ? (
+                    mayEdit ? (
+                      <button onClick={() => { if (confirm("Cancel this scheduled calibration?")) cancelSchedule.mutate(c.id); }} className="flex-none text-xs text-muted-foreground hover:text-destructive">
+                        Cancel
+                      </button>
+                    ) : null
+                  ) : c.certificatePath ? (
                     <button onClick={() => viewCertificate(c.id)} className="flex-none text-primary hover:opacity-80" aria-label="View certificate">
                       <FileText size={14} />
                     </button>
@@ -206,13 +249,18 @@ export function EquipmentDetailPage() {
                   )}
                 </div>
                 {c.notes && <p className="pl-24 text-xs text-muted-foreground">{c.notes}</p>}
+                {c.results && Object.keys(c.results).length > 0 && <p className="pl-24 text-xs text-muted-foreground">Readings: {JSON.stringify(c.results)}</p>}
               </li>
             ))}
         </ul>
       </div>
 
+      <LinkedDocumentsPanel equipmentId={equipmentId} />
       <AttachmentsPanel entityType="calibration" entityId={equipmentId} />
       <WorkflowHistoryPanel moduleName="calibration" recordId={equipmentId} />
+
+      <ScheduleCalibrationModal equipmentId={equipmentId} isOpen={scheduleOpen} onClose={() => setScheduleOpen(false)} />
+      <EquipmentStatusModal key={equipment.status} equipment={equipment} isOpen={statusOpen} onClose={() => setStatusOpen(false)} />
 
       <Modal title="Edit Equipment" isOpen={editOpen} onClose={() => setEditOpen(false)}>
         <GenericCreateForm

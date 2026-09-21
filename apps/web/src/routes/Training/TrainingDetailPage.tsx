@@ -12,6 +12,8 @@ import { TrainingCompletionModal } from "../../components/training/TrainingCompl
 import { DocumentRetentionPanel } from "../../components/documents/DocumentRetentionPanel";
 import { DocumentHistoryPanel } from "../../components/documents/DocumentHistoryPanel";
 import { StatusBadge } from "../../components/tables/StatusBadge";
+import { CompetencyPanel, QualificationPanel, RequirementsPanel, SessionsPanel } from "../../components/training/TrainingPanels";
+import type { CourseFull } from "../../api/training";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
@@ -115,6 +117,11 @@ export function TrainingDetailPage() {
         </p>
       )}
 
+      <RequirementsPanel course={course as CourseFull} />
+      <QualificationPanel courseId={courseId} />
+      <SessionsPanel course={course as CourseFull} />
+      <CompetencyPanel course={course as CourseFull} />
+
       <div className="rounded-lg border border-border bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-medium">Assignments</h2>
@@ -140,6 +147,7 @@ export function TrainingDetailPage() {
                 <span className="flex-1 text-xs text-muted-foreground">
                   {a.completedAt ? `Completed ${new Date(a.completedAt).toLocaleDateString()}` : a.dueAt ? `Due ${new Date(a.dueAt).toLocaleDateString()}` : "No due date"}
                 </span>
+                {a.expiresAt && <span className="flex-none text-xs text-muted-foreground">valid to {new Date(a.expiresAt).toLocaleDateString()}</span>}
                 {a.certificatePath ? (
                   <button onClick={() => viewCertificate(a.id)} className="flex-none text-primary hover:opacity-80" aria-label="View certificate">
                     <FileText size={14} />

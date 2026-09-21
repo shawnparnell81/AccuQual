@@ -7,9 +7,11 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { hasPermission } from "../../middleware/requirePermission.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
+import * as service from "./calibration.service.js";
 
 export const baseHandlers = crudFactory(equipment, { entityName: "Equipment", idColumn: "id" });
 
@@ -36,33 +38,17 @@ export const removeEquipmentHandler = asyncHandler(async (req: Request, res: Res
 });
 
 /**
- * Equipment list, each row carrying its most recent calibration's due date.
- * The 60/30-day-warning and past-due status itself is computed client-side
- * (apps/web's formulas.ts, shared with the FMEA/calibration form layouts) —
- * this just resolves the one fact the client can't derive on its own: which
- * calibration record is the latest one for that equipment.
+ * Equipment list, each row carrying where it stands: its latest finished calibration, next due date, a due status computed HERE
+ * (overdue / due_soon / upcoming / current / uncalibrated / failed) and any open scheduled calibration. The 60/30-day colour bands
+ * the pages draw are the same thresholds; computing them on the server as well is what lets a digest, an alert and a workflow
+ * see the same answer the screen shows.
  */
 export const listWithStatus = asyncHandler(async (req: Request, res: Response) => {
-  const items = await req.db!.select().from(equipment).where(eq(equipment.tenantId, req.tenantId!));
-  const cals = await req.db!.select().from(calibrations).where(eq(calibrations.tenantId, req.tenantId!));
+  res.json(await service.listEquipmentWithSummary(req.db!, req.tenantId!));
+});
 
-  const latestByEquipment = new Map<number, Calibration>();
-  for (const c of cals) {
-    const current = latestByEquipment.get(c.equipmentId);
-    if (!current || new Date(c.performedAt) > new Date(current.performedAt)) latestByEquipment.set(c.equipmentId, c);
-  }
-
-  const withStatus = items.map((item) => {
-    const latest = latestByEquipment.get(item.id);
-    return {
-      ...item,
-      lastCalibratedAt: latest?.performedAt ?? null,
-      nextDueAt: latest?.nextDueAt ?? null,
-      lastResult: latest?.result ?? null,
-    };
-  });
-
-  res.json(withStatus);
+export const getEquipmentHandler = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await service.getEquipmentWithSummary(req.db!, req.tenantId!, Number(req.params.id)));
 });
 
 export interface CalibrationEventInput {
@@ -73,63 +59,50 @@ export interface CalibrationEventInput {
 }
 
 /**
- * The one place a calibration event gets created — used by both the direct
- * API (addCalibrationHandler below) and the "Calibration Record" form save
- * hook (forms.controller.ts), so the two can never drift into recording
- * events differently. Recomputes nextDueAt from the equipment's own
- * calibrationIntervalDays (the live status color on the list/detail pages
- * is derived from that, computed at read time — nothing to keep in sync)
- * and appends an audit trail entry for every event, not just equipment edits.
+ * The one place a finished calibration gets recorded — used by both the direct API (addCalibrationHandler below) and the
+ * "Calibration Record" form save hook (forms.controller.ts), so the two can never drift into recording events differently.
+ * Completes the equipment's scheduled calibration when there is one; a failed result takes the equipment out of service and a
+ * passing one returns it (see calibration.service.ts).
  */
-export async function createCalibrationEvent(
-  db: TenantDb,
-  tenantId: number,
-  equipmentId: number,
-  input: CalibrationEventInput,
-  performedBy?: number
-): Promise<Calibration> {
-  const [item] = await db.select().from(equipment).where(and(eq(equipment.id, equipmentId), eq(equipment.tenantId, tenantId)));
-  if (!item) throw AppError.notFound("Equipment");
-
-  const nextDueAt = new Date(input.performedAt);
-  nextDueAt.setDate(nextDueAt.getDate() + item.calibrationIntervalDays);
-
-  const [calibration] = await db
-    .insert(calibrations)
-    .values({
-      tenantId,
-      equipmentId,
-      performedAt: input.performedAt,
-      result: input.result,
-      technicianName: input.technicianName,
-      notes: input.notes,
-      performedBy,
-      nextDueAt,
-    })
-    .returning();
-  if (!calibration) throw new AppError("Failed to record calibration event", 500);
-
-  // "create" is the closest fit in audit_trail's fixed action enum (see
-  // audit-trail.service.ts) — the specifics live in `changes`, same as every
-  // other module's audit entries.
-  await recordAuditTrail(db, {
-    tenantId,
-    entityType: "Equipment",
-    entityId: equipmentId,
-    action: "create",
-    changes: { calibrationId: calibration.id, technicianName: input.technicianName, result: input.result, nextDueAt },
-    performedBy,
-  });
-
-  return calibration;
+export async function createCalibrationEvent(db: TenantDb, tenantId: number, equipmentId: number, input: CalibrationEventInput, performedBy?: number): Promise<Calibration> {
+  return service.recordCompletedCalibration(db, tenantId, equipmentId, input, performedBy);
 }
 
 export const addCalibrationHandler = asyncHandler(async (req: Request, res: Response) => {
   const equipmentId = Number(req.params.id);
-  // validate(addCalibrationSchema) already coerced performedAt to a real Date.
-  const { performedAt, result, technicianName, notes } = req.body as { performedAt: Date; result?: string; technicianName?: string; notes?: string };
-  const calibration = await createCalibrationEvent(req.db!, req.tenantId!, equipmentId, { performedAt, result, technicianName, notes }, req.user?.id);
-  res.status(201).json(calibration);
+  const body = req.body as { scheduledAt?: Date; performedAt?: Date; result?: string; results?: Record<string, unknown>; technicianName?: string; notes?: string };
+  if (body.performedAt) {
+    const calibration = await service.recordCompletedCalibration(req.db!, req.tenantId!, equipmentId, { performedAt: body.performedAt, result: body.result, results: body.results, technicianName: body.technicianName, notes: body.notes }, req.user?.id);
+    return void res.status(201).json(calibration);
+  }
+  const scheduled = await service.scheduleCalibration(req.db!, req.tenantId!, equipmentId, { scheduledAt: body.scheduledAt!, notes: body.notes }, req.user?.id);
+  res.status(201).json(scheduled);
+});
+
+export const completeCalibrationHandler = asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body as { performedAt?: Date; result: "pass" | "fail" | "adjusted"; results?: Record<string, unknown>; technicianName?: string; notes?: string };
+  const done = await service.completeCalibration(req.db!, req.tenantId!, Number(req.params.calibrationId), { performedAt: body.performedAt ?? new Date(), result: body.result, results: body.results, technicianName: body.technicianName, notes: body.notes }, req.user?.id);
+  res.json(done);
+});
+
+export const cancelScheduleHandler = asyncHandler(async (req: Request, res: Response) => {
+  await service.cancelScheduledCalibration(req.db!, req.tenantId!, Number(req.params.calibrationId), req.user?.id);
+  res.status(204).send();
+});
+
+export const changeStatusHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { status, reason } = req.body as { status: "active" | "inactive" | "out_of_service"; reason?: string };
+  const override = await hasPermission(req.db!, req.tenantId!, req.user!, "equipment.override");
+  const updated = await service.changeEquipmentStatus(req.db!, req.tenantId!, Number(req.params.id), status, { reason, canOverride: override.allowed }, req.user?.id);
+  res.json(updated);
+});
+
+export const attentionHandler = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await service.attention(req.db!, req.tenantId!));
+});
+
+export const notifyDueHandler = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await service.notifyDue(req.db!, req.tenantId!));
 });
 
 export const listCalibrationsHandler = asyncHandler(async (req: Request, res: Response) => {
