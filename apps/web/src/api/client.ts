@@ -7,6 +7,11 @@ export const apiClient = axios.create({
   // auth.controller.ts) instead of somewhere JS can read it — this is what
   // makes the browser actually attach it to /auth/refresh and /auth/logout.
   withCredentials: true,
+  // Anti-CSRF header (see services/api middleware/csrf.ts): the API refuses a
+  // state-changing request carried by our cookie without it, and the browser's
+  // cross-origin rules only let our own frontend add it. Sent on every call so
+  // a stale cookie can never turn a login into a refusal.
+  headers: { "X-AccuQual-Csrf": "1" },
 });
 
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {

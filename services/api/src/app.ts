@@ -4,6 +4,7 @@ import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { apiRouter } from "./routes/index.js";
 import { apiRateLimiter } from "./middleware/rateLimit.js";
+import { csrfProtection } from "./middleware/csrf.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { requestLogger } from "./middleware/requestLogger.js";
 import { requestIdMiddleware } from "./modules/monitoring/requestContext.js";
@@ -41,6 +42,8 @@ export function createApp() {
     })
   );
   app.use(cookieParser());
+  // Refuses cookie-carried state-changing requests that lack the anti-CSRF header, before any handler runs (see middleware/csrf.ts).
+  app.use(csrfProtection);
   app.use(express.json({ limit: "5mb" }));
   app.use(requestLogger);
   app.use(apiRateLimiter);
