@@ -109,9 +109,10 @@ gone (a real disaster), run it against a second copy, or use the checklist below
 
 ## Automated nightly backup
 
-**Status: built and tested, but not running until you finish the one-time setup below.** Schedules only run from the
-default branch, so nothing fires until this is merged; after that, a run with no secrets configured fails with a message
-naming exactly which secrets are missing.
+**Status: running.** Set up on 2026-09-20 with a private Cloudflare R2 bucket (`accuqual-nightly`). A manual run on
+GitHub's runners succeeded that day, and a restore drill from the bucket passed. The setup steps below are kept so the
+whole thing can be rebuilt (a new bucket, a rotated key) without guesswork. If a secret is ever missing, a run fails with
+a message naming exactly which one.
 
 **What it does.** `.github/workflows/backup.yml` runs every night at 07:23 UTC on a GitHub-hosted runner (so it does not
 depend on your laptop being on). It uses `ops/backup/backup.mjs` inside `ops/backup/Dockerfile` (PostgreSQL 17 tools) to:
@@ -171,8 +172,18 @@ bash ops/backup/restore-drill.sh latest daily
 ```
 
 Without this repository: `openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:BACKUP_PASSPHRASE -in X.tar.enc -out X.tar && tar -xf X.tar`.
-After restoring, verify with the manifest instead of the (gone) original:
-`MANIFEST_FILE=out/manifest.json DATABASE_URL=<restored> npm run db:verify-restore`.
+After restoring, verify with the manifest instead of the (gone) original. A backup is usually older than the newest
+migration in the repository, so check the data **before** `db:migrate` and the application role **after** it:
+
+```sh
+cd services/api
+MANIFEST_FILE=../../out/manifest.json DATABASE_URL=<restored> VERIFY_PHASE=data  npm run db:verify-restore   # right after pg_restore
+DATABASE_URL=<restored> npm run db:migrate
+MANIFEST_FILE=../../out/manifest.json DATABASE_URL=<restored> VERIFY_PHASE=roles npm run db:verify-restore   # after migrating
+```
+
+`ops/backup/restore-drill.sh` does exactly this sequence. Without `VERIFY_PHASE` both checks run together, which is only
+meaningful when the backup and the repository are at the same migration.
 
 ### Limits, stated plainly
 
@@ -182,8 +193,9 @@ After restoring, verify with the manifest instead of the (gone) original:
   administrators can read or change secrets, and pull requests from forks never receive them, but treat repository admin access
   accordingly. To limit damage from a compromised bucket key, turn on the provider's object versioning or object lock.
 - GitHub **pauses scheduled workflows after 60 days without repository activity**; that is what the heartbeat is for.
-- Tested here against the live Supabase database and against an S3-compatible server (MinIO). It has **not yet run on GitHub's
-  runners or against your real bucket**; step 6 does that.
+- Proven so far: a real backup of the live Supabase database into the real R2 bucket (locally and on GitHub's runners), and
+  a restore drill from that bucket (download, decrypt, restore, verify: 14 s). The **scheduled** monthly drill job has not
+  run yet (first on 2026-10-01); it can be started by hand from Actions, Backup, Run workflow, `restore-drill`.
 
 ## The drill of 2026-09-20 — what was actually run
 
@@ -216,8 +228,8 @@ failed on the restored copy), and the verifier's own privilege check could error
 - Restoring from **Supabase's own** backup (daily backup or point-in-time recovery) has not been tried.
 - The drill was run on a copy of the demo dataset, at small scale.
 - Restoring the uploaded-files folder has not been drilled (it is a plain folder copy, but untested).
-- The nightly off-platform backup is built and tested locally but is not running until the bucket and secrets are
-  configured, and it has not yet run on GitHub's runners or against a real bucket (setup above, step 6).
+- The nightly job's skipped-night alert (Healthchecks, `BACKUP_HEARTBEAT_URL`) is not connected yet, so a *failed* night
+  emails you but a *skipped* night is silent. The uploaded-files folder is not backed up yet.
 
 ## Cleaning up after a drill
 

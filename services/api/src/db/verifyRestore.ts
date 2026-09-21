@@ -17,6 +17,12 @@ import pg from "pg";
  * MANIFEST_FILE=<manifest.json from a backup> instead of SOURCE_DATABASE_URL. The manifest holds the exact row counts and
  * structure counts taken from the same snapshot as the dump (ops/backup/backup.mjs), so the restored copy is checked against
  * what the database looked like at the moment of the backup, not against a live database that has moved on since.
+ *
+ * A backup is usually older than the newest migration in the repository, so restoring it and then running db:migrate
+ * legitimately changes the structure. The manifest check is therefore split with VERIFY_PHASE:
+ *   VERIFY_PHASE=data   right after pg_restore, BEFORE db:migrate: structure, migration history, every row count, sequences
+ *   VERIFY_PHASE=roles  after db:migrate: the application role exists and can read every table, and the schema is at or ahead of the backup
+ *   (unset)             both — only meaningful when the repository and the backup are at the same migration
  */
 
 const source = process.env.SOURCE_DATABASE_URL;
@@ -85,30 +91,47 @@ interface Manifest {
 
 /** Verifies a restored copy against a backup's manifest (no original database available). */
 async function verifyAgainstManifest(file: string): Promise<void> {
+  const phase = process.env.VERIFY_PHASE ?? "all";
+  if (!["all", "data", "roles"].includes(phase)) {
+    console.error('VERIFY_PHASE must be "data", "roles", or unset.');
+    process.exit(2);
+  }
   const m = JSON.parse(fs.readFileSync(file, "utf8")) as Manifest;
   const b = mk(target!);
   const problems: string[] = [];
   const line = (ok: boolean, label: string, detail = "") => console.log(`${ok ? "PASS" : "FAIL"}  ${label}${detail ? ` — ${detail}` : ""}`);
   try {
-    for (const [name, sql] of Object.entries(CATALOG_QUERIES)) {
-      if (name === "appRoleExists" || name === "appRoleReadableTables") continue; // not in a backup by design; checked below
-      const want = m.catalog[name];
-      if (want === undefined) continue;
-      const got = await scalar(b, sql);
-      line(got === want, name, got === want ? String(got) : `backup ${want}, restored ${got}`);
-      if (got !== want) problems.push(`${name}: backup ${want}, restored ${got}`);
-    }
     const migrations = await scalar(b, "SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations");
-    line(migrations === m.migrations, "migration history", `${migrations} recorded`);
-    if (migrations !== m.migrations) problems.push(`migration history: backup ${m.migrations}, restored ${migrations}`);
 
-    // After db:migrate the application role must exist and be able to read every table.
-    const roleOk = (await scalar(b, CATALOG_QUERIES.appRoleExists!)) === 1;
-    const readable = await scalar(b, CATALOG_QUERIES.appRoleReadableTables!);
-    line(roleOk, "application role exists (run db:migrate first)");
-    line(readable === m.catalog.tables, "application role can read every table", `${readable} of ${m.catalog.tables}`);
-    if (!roleOk) problems.push("application role missing");
-    if (readable !== m.catalog.tables) problems.push(`application role reads ${readable} of ${m.catalog.tables} tables`);
+    if (phase !== "roles") {
+      for (const [name, sql] of Object.entries(CATALOG_QUERIES)) {
+        if (name === "appRoleExists" || name === "appRoleReadableTables") continue; // not in a backup by design; checked in the roles phase
+        const want = m.catalog[name];
+        if (want === undefined) continue;
+        const got = await scalar(b, sql);
+        line(got === want, name, got === want ? String(got) : `backup ${want}, restored ${got}`);
+        if (got !== want) problems.push(`${name}: backup ${want}, restored ${got}`);
+      }
+      line(migrations === m.migrations, "migration history", `${migrations} recorded`);
+      if (migrations !== m.migrations) problems.push(`migration history: backup ${m.migrations}, restored ${migrations}`);
+    }
+
+    if (phase !== "data") {
+      // After db:migrate the application role must exist and be able to read every table that now exists.
+      const roleOk = (await scalar(b, CATALOG_QUERIES.appRoleExists!)) === 1;
+      const readable = await scalar(b, CATALOG_QUERIES.appRoleReadableTables!);
+      const tablesNow = await scalar(b, CATALOG_QUERIES.tables!);
+      line(roleOk, "application role exists");
+      line(readable === tablesNow, "application role can read every table", `${readable} of ${tablesNow}`);
+      line(migrations >= m.migrations, "schema is at or ahead of the backup", `${migrations} migrations, backup had ${m.migrations}`);
+      if (!roleOk) problems.push("application role missing");
+      if (readable !== tablesNow) problems.push(`application role reads ${readable} of ${tablesNow} tables`);
+      if (migrations < m.migrations) problems.push(`schema has ${migrations} migrations but the backup had ${m.migrations}`);
+    }
+    if (phase === "roles") {
+      console.log("\nROLES VERIFIED — the application role and its grants are in place.");
+      process.exit(problems.length === 0 ? 0 : 1);
+    }
 
     const got = await tableCounts(b);
     const diffs: string[] = [];

@@ -57,11 +57,18 @@ echo "restored in $(( $(date +%s) - restore_started ))s"
 
 URL="postgres://drill:${PASS}@localhost:${PORT}/restored"
 
+# The backup is usually older than the newest migration in this repository, so the data is checked exactly as restored
+# (before any migration can change the structure), and the application role is checked after db:migrate recreates it.
+MANIFEST="$(winpath "$WORK/out")/manifest.json"
+
+step "Verifying the restored data against the backup's manifest (before migrating)"
+(cd "$ROOT/services/api" && DATABASE_URL="$URL" DATABASE_SSL_CA= MANIFEST_FILE="$MANIFEST" VERIFY_PHASE=data npm run --silent db:verify-restore)
+
 step "Recreating the application role, grants, security policies, audit triggers (db:migrate)"
 (cd "$ROOT/services/api" && DATABASE_URL="$URL" DATABASE_SSL_CA= npm run --silent db:migrate 2>&1 | tail -3)
 
-step "Verifying against the backup's manifest"
-(cd "$ROOT/services/api" && DATABASE_URL="$URL" DATABASE_SSL_CA= MANIFEST_FILE="$(winpath "$WORK/out")/manifest.json" npm run --silent db:verify-restore)
+step "Verifying the application role and grants after migrating"
+(cd "$ROOT/services/api" && DATABASE_URL="$URL" DATABASE_SSL_CA= MANIFEST_FILE="$MANIFEST" VERIFY_PHASE=roles npm run --silent db:verify-restore)
 
 echo
 echo "DRILL PASSED in $(( $(date +%s) - started ))s — the newest backup restores and matches its manifest."
