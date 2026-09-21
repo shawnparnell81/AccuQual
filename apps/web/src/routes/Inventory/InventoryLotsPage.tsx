@@ -59,6 +59,7 @@ export function InventoryLotsPage() {
           { header: "Description", accessor: (l) => l.description ?? "—" },
           { header: "Received", accessor: (l) => l.receivedQty, className: "tabular-nums" },
           { header: "Remaining", accessor: (l) => l.remainingQty, className: "tabular-nums" },
+          { header: "On hold", accessor: (l) => (Number(l.heldQty) > 0 ? <span className="font-semibold text-destructive">{l.heldQty}</span> : "—"), className: "tabular-nums" },
           { header: "Expires", accessor: (l) => (l.expirationDate ? new Date(l.expirationDate).toLocaleDateString() : "—") },
           { header: "Status", accessor: (l) => <StatusBadge value={l.status} /> },
         ]}

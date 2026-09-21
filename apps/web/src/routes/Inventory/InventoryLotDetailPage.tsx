@@ -69,6 +69,7 @@ export function InventoryLotDetailPage() {
           <Field label="Item" value={`${item.sku} — ${item.description ?? "—"}`} />
           <Field label="Received Qty" value={lot.receivedQty} />
           <Field label="Remaining Qty" value={lot.remainingQty} />
+          {Number(lot.heldQty) > 0 && <Field label="On quarantine hold" value={`${lot.heldQty} (usable: ${Math.max(Number(lot.remainingQty) - Number(lot.heldQty), 0)})`} />}
           <Field label="Revision Level" value={lot.revisionLevel} />
           <Field label="Expiration Date" value={lot.expirationDate ? new Date(lot.expirationDate).toLocaleDateString() : null} />
           <Field label="Received On" value={new Date(lot.createdAt).toLocaleDateString()} />

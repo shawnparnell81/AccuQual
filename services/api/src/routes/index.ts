@@ -20,6 +20,7 @@ import { ppapRouter } from "../modules/ppap/ppap.routes.js";
 import { qualityRouter } from "../modules/quality/quality.routes.js";
 import { supplierRouter } from "../modules/supplier/supplier.routes.js";
 import { calibrationRouter } from "../modules/calibration/calibration.routes.js";
+import { quarantineRouter } from "../modules/quarantine/quarantine.routes.js";
 import { complaintsRouter } from "../modules/complaints/complaints.routes.js";
 import { workflowRouter } from "../modules/workflow/workflow.routes.js";
 // Phase 9 — registers the real workflow action handlers (send_email,
@@ -93,6 +94,7 @@ apiRouter.use("/ppap", ppapRouter);
 apiRouter.use("/quality", qualityRouter);
 apiRouter.use("/suppliers", supplierRouter);
 apiRouter.use("/equipment", calibrationRouter);
+apiRouter.use("/quarantine", quarantineRouter);
 apiRouter.use("/complaints", complaintsRouter);
 // Before /workflow: approving a run is assigned per approval node, not gated by access to the builder itself.
 apiRouter.use("/workflow/runs", workflowRunsRouter);

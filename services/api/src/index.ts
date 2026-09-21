@@ -4,6 +4,8 @@ import { logger } from "./utils/logger.js";
 import { createApp } from "./app.js";
 import { startReportingScheduler } from "./modules/reporting/reporting.scheduler.js";
 import { startHealthMonitor } from "./modules/monitoring/healthMonitor.js";
+import { startCalibrationSweep } from "./modules/calibration/calibration.service.js";
+import { startTrainingSweep } from "./modules/training/training.service.js";
 
 // Before anything else can fail, so start-up errors are reported too.
 initSentry();
@@ -19,6 +21,11 @@ app.listen(env.PORT, () => {
   // Same reasoning — real deployment monitoring/alerting, only the real
   // server process runs it.
   startHealthMonitor();
+  // Emails the Quality department a digest of equipment that is overdue, failed, out of service or due soon (at most one per
+  // organization per 20 hours). Same rule: only the real server process, never the test suite.
+  startCalibrationSweep();
+  // Same for training: a digest to Quality of people who are overdue, expired, failed, or whose document has been revised.
+  startTrainingSweep();
 });
 
 process.on("unhandledRejection", (reason) => {

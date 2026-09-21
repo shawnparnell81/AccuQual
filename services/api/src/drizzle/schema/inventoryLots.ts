@@ -39,6 +39,8 @@ export const inventoryLots = pgTable("inventory_lots", {
   expirationDate: timestamp("expiration_date"),
   receivedQty: numeric("received_qty").notNull(),
   remainingQty: numeric("remaining_qty").notNull(),
+  // Units of this lot on quarantine hold: remaining - held is what can be issued. See inventoryHolds.service.ts.
+  heldQty: numeric("held_qty").notNull().default("0"),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow(),
 });

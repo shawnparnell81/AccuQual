@@ -499,7 +499,10 @@ export function InventoryDetailPage() {
                   <td className="py-1.5 font-medium">{l.lotNumber}</td>
                   <td className="py-1.5 text-muted-foreground">{l.serialNumber ?? "—"}</td>
                   <td className="py-1.5 tabular-nums">{l.receivedQty}</td>
-                  <td className="py-1.5 tabular-nums">{l.remainingQty}</td>
+                  <td className="py-1.5 tabular-nums">
+                    {l.remainingQty}
+                    {Number(l.heldQty) > 0 && <span className="ml-1 text-xs font-semibold text-destructive">({l.heldQty} on hold)</span>}
+                  </td>
                   <td className="py-1.5 text-muted-foreground">{l.revisionLevel ?? "—"}</td>
                   <td className="py-1.5 text-muted-foreground">{l.expirationDate ? new Date(l.expirationDate).toLocaleDateString() : "—"}</td>
                   <td className="py-1.5">

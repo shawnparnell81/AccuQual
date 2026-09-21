@@ -5,6 +5,7 @@ import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { maybeAutoCreateNcr, checkCapaEscalation } from "./receivingAutomation.js";
+import { openFromReceivingLine, resolveFromReceivingLine, linkNcrFromReceiving } from "../quarantine/quarantine.service.js";
 
 /**
  * Phase 8 task 1 — the 7 structured receiving states the brief names,
@@ -86,9 +87,17 @@ export async function transitionReceivingLineItem(db: TenantDb, tenantId: number
   });
   await publishEvent(WORKFLOW_STREAM, { tenantId, module: "receiving", event: targetStatus, entityId: lineItemId });
 
+  // A line moving to "quarantined" really holds the stock (the quarantine module asks the inventory system to protect it); a line
+  // leaving quarantine as accepted releases that hold, and one rejected stays held until it is returned or scrapped.
+  const hold = targetStatus === "quarantined" ? await openFromReceivingLine(db, tenantId, lineItemId, options.performedBy) : null;
+  if (line.status === "quarantined" && (targetStatus === "accepted" || targetStatus === "rejected")) {
+    await resolveFromReceivingLine(db, tenantId, lineItemId, targetStatus, { id: options.performedBy ?? 0, roleName: options.isAdminOrPlatformAdmin ? "admin" : null });
+  }
+
   if (targetStatus === "rejected" || targetStatus === "quarantined") {
     const supplierId = await getSupplierIdForReceivingLineItem(db, tenantId, lineItemId);
     const ncr = await maybeAutoCreateNcr(db, tenantId, updated!, targetStatus, supplierId, options.defectCategory, options.performedBy);
+    if (hold && ncr) await linkNcrFromReceiving(db, tenantId, hold.id, ncr.id);
     if (supplierId) await checkCapaEscalation(db, tenantId, supplierId, ncr?.id, options.performedBy);
   }
 

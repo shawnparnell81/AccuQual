@@ -159,6 +159,7 @@ export const runHandler = asyncHandler(async (req: Request, res: Response) => {
 
 const MODULE_ENTITY_TYPES: Record<string, string> = {
   calibration: "Equipment",
+  quarantine: "Quarantine",
   documents: "Document",
   training: "TrainingAssignment",
   audit: "Audit",

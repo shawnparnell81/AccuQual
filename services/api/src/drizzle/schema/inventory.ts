@@ -28,6 +28,9 @@ export const inventoryItems = pgTable("inventory_items", {
   // applied retroactively to past movements for scrap/consumption cost.
   unitCost: numeric("unit_cost"),
   state: text("state").notNull().default("in_stock"),
+  // Units of this item currently on quarantine hold (all lots plus any not tracked by lot). Written only by inventoryHolds.service.ts,
+  // and enforced there and in applyMovement / reserveStock: on-hand can never be issued below this.
+  heldQty: numeric("held_qty").notNull().default("0"),
   active: boolean("active").notNull().default(true),
   notes: text("notes"),
   // Settings → Inventory Module expansion (tenants.inventorySettings.

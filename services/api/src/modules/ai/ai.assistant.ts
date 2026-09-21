@@ -152,13 +152,16 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
     const [row] = await db.select().from(equipment).where(and(eq(equipment.id, recordId), eq(equipment.tenantId, tenantId)));
     if (!row) return null;
     const events = await db.select().from(calibrations).where(and(eq(calibrations.equipmentId, recordId), eq(calibrations.tenantId, tenantId)));
-    const latest = events.length > 0 ? events.reduce((a, b) => (new Date(a.performedAt) > new Date(b.performedAt) ? a : b)) : null;
+    const finished = events.filter((e) => e.status !== "scheduled" && e.performedAt);
+    const scheduled = events.find((e) => e.status === "scheduled" && e.scheduledAt);
+    const latest = finished.length > 0 ? finished.reduce((a, b) => (new Date(a.performedAt!) > new Date(b.performedAt!) ? a : b)) : null;
     return (
-      `The user is viewing Equipment "${row.name}" (serial: ${row.serialNumber ?? "none"}, location: ${row.location ?? "none"}). ` +
-      `Calibration interval: ${row.calibrationIntervalDays} days. ${events.length} calibration event(s) recorded. ` +
+      `The user is viewing Equipment "${row.name}" (serial: ${row.serialNumber ?? "none"}, location: ${row.location ?? "none"}, status: ${row.status.replace("_", " ")}${row.statusReason ? ` — ${row.statusReason}` : ""}). ` +
+      `Calibration interval: ${row.calibrationIntervalDays} days. ${finished.length} finished calibration(s) recorded. ` +
       (latest
-        ? `Most recent: ${new Date(latest.performedAt).toISOString().slice(0, 10)}, result: ${latest.result ?? "not recorded"}, next due: ${latest.nextDueAt ? new Date(latest.nextDueAt).toISOString().slice(0, 10) : "not set"}.`
-        : "No calibration events recorded yet.")
+        ? `Most recent: ${new Date(latest.performedAt!).toISOString().slice(0, 10)}, result: ${latest.result ?? "not recorded"}, next due: ${latest.nextDueAt ? new Date(latest.nextDueAt).toISOString().slice(0, 10) : "not set"}. `
+        : "No calibration events recorded yet. ") +
+      (scheduled ? `A calibration is scheduled for ${new Date(scheduled.scheduledAt!).toISOString().slice(0, 10)}.` : "")
     );
   }
   if (module === "audit_finding") {

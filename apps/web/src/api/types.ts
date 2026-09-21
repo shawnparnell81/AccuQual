@@ -50,7 +50,7 @@ export interface FieldChange {
 }
 
 /** Friendly moduleName values the history endpoint accepts — kept in sync with services/api's workflow.controller.ts MODULE_ENTITY_TYPES. */
-export type WorkflowModuleName = "calibration" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp" | "rma" | "work_orders" | "risk" | "feasibility" | "sales_accounts" | "customers" | "document_change_requests" | "qms_forms" | "scar_forms" | "quality_inspection_reports" | "crar" | "rma_log" | "complaints";
+export type WorkflowModuleName = "calibration" | "quarantine" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp" | "rma" | "work_orders" | "risk" | "feasibility" | "sales_accounts" | "customers" | "document_change_requests" | "qms_forms" | "scar_forms" | "quality_inspection_reports" | "crar" | "rma_log" | "complaints";
 
 export interface Ncr {
   id: number;
@@ -140,6 +140,10 @@ export interface TrainingCourse {
   title: string;
   description: string | null;
   requiredForRoleId: number | null;
+  requiredForDepartment: string | null;
+  requirements: { evaluationRequired?: boolean; passingScore?: number; criteria?: string[]; instructions?: string };
+  validityMonths: number | null;
+  active: boolean;
   documentId: number | null;
 }
 
@@ -153,6 +157,10 @@ export interface TrainingAssignment {
   trainerName: string | null;
   notes: string | null;
   certificatePath: string | null;
+  /** When this completed training stops being valid; null = does not expire. */
+  expiresAt?: string | null;
+  sessionId?: number | null;
+  documentVersion?: number | null;
   userEmail?: string | null;
   userName?: string | null;
   courseTitle?: string | null;
@@ -278,6 +286,8 @@ export interface InventoryLot {
   expirationDate: string | null;
   receivedQty: string;
   remainingQty: string;
+  /** Units on quarantine hold: remaining minus held is what can be used. */
+  heldQty: string;
   status: "active" | "consumed" | "scrapped" | "returned" | "expired";
   createdAt: string;
 }
