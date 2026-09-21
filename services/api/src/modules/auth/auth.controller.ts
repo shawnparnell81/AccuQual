@@ -23,7 +23,7 @@ import * as authService from "./auth.service.js";
 // origin with no such prefix, where "/auth" would have looked correct, but
 // scoping the cookie to work under BOTH topologies is worth the small extra
 // exposure (still httpOnly + Secure in production either way).
-const REFRESH_COOKIE_NAME = "accuqual_rt";
+export const REFRESH_COOKIE_NAME = "accuqual_rt";
 
 export function setRefreshCookie(res: Response, refreshToken: string) {
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
