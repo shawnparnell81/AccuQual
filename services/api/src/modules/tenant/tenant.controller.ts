@@ -311,3 +311,19 @@ export const updateSecurityHandler = asyncHandler(async (req: Request, res: Resp
   });
   res.json({ mfaPolicy });
 });
+
+/** First-run onboarding checklist — open to any signed-in user (the dashboard shows it), same as branding/profile above. Reads back a sane default for a tenant created before this shipped and never backfilled, rather than null. */
+export const getOnboardingHandler = asyncHandler(async (req: Request, res: Response) => {
+  const tenant = await loadTenant(req);
+  res.json(tenant.onboardingProgress ?? { dismissed: false, completedItems: [] });
+});
+
+/** Marks one item complete, and/or dismisses the whole checklist — admin-only, same as every other tenant-settings PATCH here. Merge-patch: a body with only `completedItems` leaves `dismissed` as it was, and vice versa. */
+export const updateOnboardingHandler = asyncHandler(async (req: Request, res: Response) => {
+  const tenant = await loadTenant(req);
+  const existing = tenant.onboardingProgress ?? { dismissed: false, completedItems: [] };
+  const body = req.body as { completedItems?: string[]; dismissed?: boolean };
+  const merged = { dismissed: body.dismissed ?? existing.dismissed, completedItems: body.completedItems ?? existing.completedItems };
+  await req.db!.update(tenants).set({ onboardingProgress: merged }).where(eq(tenants.id, req.tenantId!));
+  res.json(merged);
+});

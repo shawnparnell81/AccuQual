@@ -19,6 +19,7 @@
     "db:reset-demo-story": "tsx src/db/resetDemoStory.ts",
     "db:backfill-permissions": "tsx src/db/backfillDepartmentPermissions.ts",
     "db:backfill-nav-preferences": "tsx src/db/backfillNavPreferences.ts",
+    "db:backfill-onboarding-checklist": "tsx src/db/backfillOnboardingChecklist.ts",
     "db:apply-timescale": "tsx src/db/applyTimescaleHypertables.ts"
   },
   "dependencies": {

@@ -4,6 +4,7 @@ import { WorkflowInbox } from "../../components/home/WorkflowInbox";
 import { MonthCalendar } from "../../components/calendar/MonthCalendar";
 import { AttentionStrip } from "../../components/calibration/EquipmentPanels";
 import { TrainingAttentionStrip } from "../../components/training/TrainingPanels";
+import { OnboardingChecklist } from "../../components/layout/OnboardingChecklist";
 
 /**
  * The tenant portal's landing page at /home. Real per-user data throughout
@@ -37,6 +38,7 @@ export function HomePage() {
       </div>
 
       <UserDashboardHeader />
+      <OnboardingChecklist />
       <AttentionStrip />
       <TrainingAttentionStrip />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

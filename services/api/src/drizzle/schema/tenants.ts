@@ -192,6 +192,11 @@ export const tenants = pgTable("tenants", {
     contactEmail?: string;
     contactPhone?: string;
   }>().default({}),
+  // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for a brand-new tenant's first admin.
+  // `dismissed: true` for every tenant that existed before this shipped (backfillOnboardingChecklist.ts) — an
+  // established company must never see a "new tenant" checklist; a genuinely new tenant starts with this unset,
+  // reads back as { dismissed: false, completedItems: [] } (see getOnboardingHandler).
+  onboardingProgress: jsonb("onboarding_progress").$type<{ dismissed: boolean; completedItems: string[] }>(),
   isDeleted: boolean("is_deleted").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
