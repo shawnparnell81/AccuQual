@@ -10,6 +10,7 @@ import {
   containmentNcrSchema,
   rootCauseNcrSchema,
   correctiveActionNcrSchema,
+  bulkUpdateNcrSchema,
 } from "./ncr.validation.js";
 import {
   baseHandlers,
@@ -27,6 +28,9 @@ ncrRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("ncr"));
 
 ncrRouter.get("/", listHandler);
 ncrRouter.post("/", validate(createNcrSchema), baseHandlers.create);
+// Bulk actions pilot (see crudFactory.ts's bulkUpdate) — "bulk" must be registered before the ":id" param route
+// below, or a request to PATCH /ncr/bulk would be read as :id="bulk" instead of reaching this handler.
+ncrRouter.patch("/bulk", validate(bulkUpdateNcrSchema), baseHandlers.bulkUpdate);
 ncrRouter.get("/:id", baseHandlers.getOne);
 ncrRouter.patch("/:id", validate(updateNcrSchema), baseHandlers.update);
 

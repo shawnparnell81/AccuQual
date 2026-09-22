@@ -172,5 +172,49 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
     res.status(204).send();
   });
 
-  return { list, getOne, create, update, remove };
+  /**
+   * Optional — a module opts in by wiring its own `PATCH /<resource>/bulk`
+   * route to this (see ncr.routes.ts for the first, pilot caller). Loops
+   * per row calling the exact same predicate + audit-trail write `update`
+   * above makes, on purpose: training's old bulk-complete-all-assignments
+   * feature was removed specifically because a blanket action lost
+   * per-person completion attribution (see training module history) — a
+   * real per-row `recordAuditTrail` call for every affected record, never
+   * one summary row for the whole batch, is the hard constraint here, not
+   * a style choice a single bulk SQL UPDATE could "optimize" away.
+   *
+   * Fail-closed, not partial-apply: the first id that doesn't exist (wrong
+   * tenant, already deleted, typo) throws before `res.json` is ever
+   * called — and since `withTenantDb` already wraps the whole request in
+   * one Postgres transaction (commit only on a < 400 response), every
+   * update and every audit row written so far in this same request rolls
+   * back with it. No new transaction handling needed here; it's already
+   * the request's own.
+   */
+  const bulkUpdate = asyncHandler(async (req: Request, res: Response) => {
+    const { db, tenantId } = requireTenantDb(req);
+    const { ids, patch } = req.body as { ids: number[]; patch: Record<string, unknown> };
+    const clean = stripClientOwnedFields(patch);
+    const updatedRows: unknown[] = [];
+    for (const id of ids) {
+      const [updated] = await db
+        .update(table)
+        .set({ ...clean, updatedAt: new Date() })
+        .where(and(eq(idCol as never, id), eq(tenantCol as never, tenantId)))
+        .returning();
+      if (!updated) throw AppError.notFound(`${options.entityName} #${id}`);
+      await recordAuditTrail(req.db!, {
+        tenantId,
+        entityType: options.entityName,
+        entityId: id,
+        action: "update",
+        changes: patch,
+        performedBy: req.user?.id,
+      });
+      updatedRows.push(updated);
+    }
+    res.json(updatedRows);
+  });
+
+  return { list, getOne, create, update, remove, bulkUpdate };
 }

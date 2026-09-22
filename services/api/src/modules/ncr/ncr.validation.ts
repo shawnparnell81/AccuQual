@@ -13,6 +13,12 @@ export const updateNcrSchema = createNcrSchema.partial().extend({
   status: z.enum(["open", "contained", "investigating", "corrective_action", "closed"]).optional(),
 });
 
+/** Bulk actions pilot (see crudFactory.ts's bulkUpdate) — the same fields a single PATCH accepts, applied to up to 100 NCRs at once, each still getting its own real audit-trail entry. */
+export const bulkUpdateNcrSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(100),
+  patch: updateNcrSchema,
+});
+
 export const assignNcrSchema = z.object({ assignedTo: z.number().int() });
 // Phase 4 AI guardrails: these 3 fields are the real onInsert targets of
 // AiFieldAssistant's "Insert" button on the NCR workspace page (see Phase
