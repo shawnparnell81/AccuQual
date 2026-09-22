@@ -74,6 +74,7 @@ import { InventoryDetailPage } from "./routes/Inventory/InventoryDetailPage";
 import { InventoryAlertsPage } from "./routes/Inventory/InventoryAlertsPage";
 import { InventoryLotsPage } from "./routes/Inventory/InventoryLotsPage";
 import { InventoryLotDetailPage } from "./routes/Inventory/InventoryLotDetailPage";
+import { LotLabelPrint } from "./routes/Inventory/LotLabelPrint";
 import { ErpPurchaseOrdersPage } from "./routes/Erp/ErpPurchaseOrdersPage";
 import { ErpNewPurchaseOrderPage } from "./routes/Erp/ErpNewPurchaseOrderPage";
 import { ErpPurchaseOrderDetailPage } from "./routes/Erp/ErpPurchaseOrderDetailPage";
@@ -212,6 +213,7 @@ export function App() {
           <Route path="/inventory/alerts" element={<InventoryAlertsPage />} />
           <Route path="/inventory/lots" element={<InventoryLotsPage />} />
           <Route path="/inventory/lots/:id" element={<InventoryLotDetailPage />} />
+          <Route path="/inventory/lots/:id/label" element={<LotLabelPrint />} />
           <Route path="/inventory/:id" element={<InventoryDetailPage />} />
           <Route path="/erp" element={<ErpPurchaseOrdersPage />} />
           <Route path="/erp/new" element={<ErpNewPurchaseOrderPage />} />

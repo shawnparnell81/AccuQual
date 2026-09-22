@@ -60,7 +60,12 @@ export function InventoryLotDetailPage() {
             {lot.serialNumber && <span className="text-muted-foreground"> / SN {lot.serialNumber}</span>}
           </h1>
         </div>
-        <StatusBadge value={lot.status} />
+        <div className="flex items-center gap-3">
+          <Link to={`/inventory/lots/${lot.id}/label`} className="text-sm text-primary hover:underline">
+            Print label
+          </Link>
+          <StatusBadge value={lot.status} />
+        </div>
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4">
