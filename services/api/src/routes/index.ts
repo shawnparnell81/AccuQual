@@ -41,6 +41,7 @@ import { navRouter } from "../modules/nav/nav.routes.js";
 import { calendarRouter } from "../modules/calendar/calendar.routes.js";
 import { workerRouter } from "../modules/worker/worker.routes.js";
 import { notificationsRouter } from "../modules/notifications/notification.routes.js";
+import { notificationsMeRouter } from "../modules/notifications/notification.me.routes.js";
 import { inventoryRouter } from "../modules/inventory/inventory.routes.js";
 import { erpRouter } from "../modules/erp/erp.routes.js";
 import { erpRequisitionsRouter } from "../modules/erp/erpRequisitions.routes.js";
@@ -108,6 +109,9 @@ apiRouter.use("/ai", aiRouter);
 apiRouter.use("/digital-twin/device-ingest", deviceIngestRouter);
 apiRouter.use("/digital-twin", digitalTwinRouter);
 apiRouter.use("/audit-trail", auditTrailRouter);
+// Self-service router mounted first — it defines only /me and /:id/read, so it never intercepts /retry-failed, but it
+// must come before the admin-gated router below or that router's blanket requireRole("admin") would refuse everyone.
+apiRouter.use("/notifications", notificationsMeRouter);
 apiRouter.use("/notifications", notificationsRouter);
 apiRouter.use("/forms", formsRouter);
 apiRouter.use("/platform", platformRouter);

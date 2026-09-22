@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import nodemailer from "nodemailer";
 import type { TenantDb } from "../../lib/tenantScope.js";
 import { users } from "../../drizzle/schema/users.js";
@@ -272,4 +272,41 @@ export async function retryFailedNotifications(db: TenantDb, tenantId: number): 
     if (status === "sent") sent++;
   }
   return { retried: failed.length, sent };
+}
+
+/** The caller's own email — req.user carries no email claim (see AuthenticatedUser), only id/tenantId/role/department, so every self-service notification query resolves it fresh from `users` rather than trusting anything client-supplied. */
+async function ownEmail(db: TenantDb, tenantId: number, userId: number): Promise<string | null> {
+  const [row] = await db.select({ email: users.email }).from(users).where(and(eq(users.id, userId), eq(users.tenantId, tenantId)));
+  return row?.email ?? null;
+}
+
+/**
+ * In-app notification bell — the first thing that ever reads notification_log back for display, so every query here
+ * is hard-scoped to `recipient = the caller's own email` (never a client-supplied recipient, never another user's rows
+ * even within the same tenant) on top of the usual tenant scoping. Newest first, capped, with an unread count computed
+ * from the same rows rather than a second query.
+ */
+export async function listMyNotifications(db: TenantDb, tenantId: number, userId: number, limit = 30) {
+  const email = await ownEmail(db, tenantId, userId);
+  if (!email) return { rows: [], unreadCount: 0 };
+  const rows = await db
+    .select()
+    .from(notificationLog)
+    .where(and(eq(notificationLog.tenantId, tenantId), eq(notificationLog.recipient, email)))
+    .orderBy(desc(notificationLog.createdAt))
+    .limit(limit);
+  const unreadCount = rows.filter((r) => r.readAt === null).length;
+  return { rows, unreadCount };
+}
+
+/** Marks one notification read — ownership is `recipient = the caller's own email`, not just a matching id, so a guessed id can never mark someone else's notification read (or reveal whether it exists). */
+export async function markNotificationRead(db: TenantDb, tenantId: number, id: number, userId: number): Promise<boolean> {
+  const email = await ownEmail(db, tenantId, userId);
+  if (!email) return false;
+  const [updated] = await db
+    .update(notificationLog)
+    .set({ readAt: new Date() })
+    .where(and(eq(notificationLog.id, id), eq(notificationLog.tenantId, tenantId), eq(notificationLog.recipient, email)))
+    .returning({ id: notificationLog.id });
+  return !!updated;
 }
