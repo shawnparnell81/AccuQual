@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -9,22 +9,19 @@ import { useCurrentTenant, useCurrentUser } from "../../hooks/useAuth";
 import { HomeButton } from "./HomeButton";
 import { CalendarButton } from "./CalendarButton";
 import { BackButton } from "./BackButton";
-import { departmentScope, itemScope, useHiddenNavScopes } from "../../hooks/useNavPreferences";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { extraGrantedLeaves, useNavVisibility } from "./navVisibility";
 import { useDepartmentPermissionsGrid } from "../../hooks/useDepartmentPermissionsGrid";
 import { GlobalSearchResults } from "./GlobalSearchResults";
 import {
-  ALL_MODULE_LEAVES,
   DASHBOARD_LEAF,
   DEPARTMENTS,
   KPI_COUNT_KEYS,
-  NAV_STRUCTURE,
   PLATFORM_LEAF,
   SYSTEM_LABEL,
   type AccessLevel,
   type Department,
   type DepartmentMeta,
-  type NavGroup,
   type NavLeaf,
 } from "./navConfig";
 
@@ -104,33 +101,9 @@ function effectiveAccess(leaf: NavLeaf, department: Department, bypass: boolean,
   return leaf.access[department] ?? "none";
 }
 
-/**
- * Any module NOT already in this department's static `items` array that the
- * viewer can currently see is live-granted to that department — the "fully
- * dynamic nav registry" follow-up: a department gains a real dropdown entry
- * for a module the moment an admin grants it, without a navConfig.ts edit.
- *
- * For the viewer's OWN department, `myEffective` (GET /permissions/effective)
- * is authoritative — it already folds in custom permission-role grants a
- * department-level grid can't see. For any OTHER department being previewed
- * (only admin/platform_admin ever see more than their own), the admin-only
- * department x module grid is the only live source available.
- */
-function extraGrantedLeaves(
-  group: NavGroup,
-  isOwnDepartment: boolean,
-  myEffective: Partial<Record<string, AccessLevel>> | undefined,
-  grid: Map<Department, Map<string, AccessLevel>>
-): NavLeaf[] {
-  if (!group.department) return [];
-  const staticKeys = new Set(group.items.map((i) => i.key));
-  const levelFor = isOwnDepartment ? (key: string) => myEffective?.[key] : (key: string) => grid.get(group.department!)?.get(key);
-  return ALL_MODULE_LEAVES.filter((leaf) => {
-    if (staticKeys.has(leaf.key)) return false;
-    const level = levelFor(leaf.key);
-    return level !== undefined && level !== "none";
-  });
-}
+// extraGrantedLeaves moved to navVisibility.ts (imported above) so
+// CommandPalette.tsx can compute the exact same "what's live-granted"
+// result without a second copy of this logic.
 
 export function TopNav() {
   const tenant = useCurrentTenant();
@@ -186,40 +159,15 @@ export function TopNav() {
     };
   }, []);
 
-  const hiddenScopes = useHiddenNavScopes();
-  const hidden = useMemo(() => new Set(hiddenScopes), [hiddenScopes]);
-
-  // Which department groups this viewer gets a dropdown for at all — then
-  // layer the tenant's own "I don't use this" nav customization on top:
-  // a whole department can be hidden, or just one item within it, and
-  // either can always be turned back on from Settings > Navigation (see
-  // NavigationSettingsPage) since the catalog itself never changes.
-  const visibleGroups = useMemo(() => {
-    return NAV_STRUCTURE.filter((g) => g.department === null || isAdmin || isPlatformAdmin || g.department === userDept)
-      .filter((g) => !hidden.has(departmentScope(g.department ?? "system")))
-      .map((g) => ({
-        ...g,
-        items: g.items.filter((item) => !hidden.has(itemScope(g.department ?? "system", item.key))),
-      }));
-  }, [isAdmin, isPlatformAdmin, userDept, hidden]);
+  // visibleGroups/allVisibleLeaves: which department dropdowns this viewer
+  // gets at all (admin/own-department + the tenant's own hidden-nav
+  // customization) and the flat, live-granted-inclusive leaf list derived
+  // from them — moved to navVisibility.ts so CommandPalette.tsx computes
+  // the exact same "what can this viewer see right now" result.
+  const { visibleGroups, allVisibleLeaves } = useNavVisibility();
 
   const systemGroup = visibleGroups.find((g) => g.department === null);
   const departmentGroups = visibleGroups.filter((g) => g.department !== null);
-
-  const allVisibleLeaves = useMemo(() => {
-    const seen = new Set<string>();
-    const out: NavLeaf[] = [];
-    for (const g of visibleGroups) {
-      const isOwnDept = g.department === userDept;
-      const extra = extraGrantedLeaves(g, isOwnDept, myEffective, departmentPermissionsGrid);
-      for (const item of [...g.items, ...extra]) {
-        if (seen.has(item.key)) continue;
-        seen.add(item.key);
-        out.push(item);
-      }
-    }
-    return out;
-  }, [visibleGroups, userDept, myEffective, departmentPermissionsGrid]);
 
   const searchResults = query.trim()
     ? allVisibleLeaves.filter((l) => l.label.toLowerCase().includes(query.trim().toLowerCase()))

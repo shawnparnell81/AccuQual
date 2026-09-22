@@ -1,7 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, useLocation, Navigate } from "react-router-dom";
 import { NavigationShell } from "./NavigationShell";
 import { TabBar } from "./TabBar";
+import { CommandPalette } from "./CommandPalette";
+import { useGlobalHotkey } from "../../hooks/useGlobalHotkey";
 import { WindowContainer } from "../../window-manager/WindowContainer";
 import { OpenWindowsTaskbar } from "../../window-manager/OpenWindowsTaskbar";
 import { useWindowStore } from "../../window-manager/useWindowStore";
@@ -54,6 +56,15 @@ export function AppLayout() {
   const isSupplierPortal = roleName === "supplier";
   useThemeSync();
 
+  // Cmd/Ctrl+K quick-jump — internal shell only (see below), not the
+  // Supplier Portal's minimal shell, same reasoning every other piece of
+  // internal chrome here (TabBar, floating windows, AI panel) is skipped
+  // for that login type.
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  useGlobalHotkey(() => {
+    if (!isSupplierPortal) setPaletteOpen(true);
+  });
+
   // Restores only the active tenant's saved windows/tabs, and re-runs
   // (clearing the previous tenant's) if the logged-in tenant ever changes —
   // see the Multi-Tenant Patch Pack §D "Clear windows when tenant changes";
@@ -99,6 +110,7 @@ export function AppLayout() {
         <WindowContainer />
         <OpenWindowsTaskbar />
         <AiAssistantPanelGate />
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       </div>
     </div>
   );
