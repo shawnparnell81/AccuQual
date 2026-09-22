@@ -65,3 +65,9 @@ export const updateTenantProfileSchema = z.object({
 export const updateTenantSecuritySchema = z.object({
   mfaPolicy: z.enum(["optional", "admins", "all"]),
 });
+
+/** First-run onboarding checklist — merge-patch, so either field alone is a valid body (see updateOnboardingHandler). */
+export const updateOnboardingSchema = z.object({
+  completedItems: z.array(z.string().min(1).max(60)).max(50).optional(),
+  dismissed: z.boolean().optional(),
+});

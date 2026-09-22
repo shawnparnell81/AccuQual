@@ -484,6 +484,13 @@
       "when": 1790117238917,
       "tag": "0068_notification_read_state",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1790120518075,
+      "tag": "0069_tenant_onboarding",
+      "breakpoints": true
     }
   ]
 }

@@ -91,10 +91,12 @@ export async function createTenant(input: CreateTenantInput) {
   const existingCode = await db.select().from(tenants).where(eq(tenants.code, input.code));
   if (existingCode.length > 0) throw AppError.badRequest("Tenant code already in use");
 
-  // 1. Create tenant record
+  // 1. Create tenant record — onboardingProgress starts fresh/incomplete (see
+  //    db/defaultOnboardingChecklist.ts); an EXISTING tenant instead gets marked
+  //    all-complete/dismissed once, by db/backfillOnboardingChecklist.ts.
   const [tenant] = await db
     .insert(tenants)
-    .values({ name: input.name, code: input.code, branding: input.branding ?? {} })
+    .values({ name: input.name, code: input.code, branding: input.branding ?? {}, onboardingProgress: { dismissed: false, completedItems: [] } })
     .returning();
   if (!tenant) throw new AppError("Failed to create tenant", 500);
 
