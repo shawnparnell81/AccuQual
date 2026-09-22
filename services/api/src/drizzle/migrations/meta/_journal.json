@@ -463,6 +463,13 @@
       "when": 1790107521238,
       "tag": "0065_worker_profiles",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1790112290500,
+      "tag": "0066_users_changelog_seen",
+      "breakpoints": true
     }
   ]
 }

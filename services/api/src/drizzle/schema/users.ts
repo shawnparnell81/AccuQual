@@ -57,6 +57,10 @@ export const users = pgTable("users", {
   // "dark" | "system"; unset means "follow the tenant/default theme" for
   // every field independently, not an all-or-nothing override.
   themePreferences: jsonb("theme_preferences").$type<{ mode?: "light" | "dark" | "system"; primaryColor?: string; accentColor?: string }>(),
+  // The newest changelog version (see apps/web/src/data/changelog.ts) this user has opened the "what's new" panel at —
+  // null means they've never opened it. Compared client-side against the changelog's own latest entry to decide whether
+  // the header badge shows; nothing server-side needs to know what the entries actually say.
+  lastSeenChangelogVersion: text("last_seen_changelog_version"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });

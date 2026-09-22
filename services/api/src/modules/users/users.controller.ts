@@ -124,6 +124,20 @@ export const updateMyTheme = asyncHandler(async (req: Request, res: Response) =>
   res.json(updated.themePreferences);
 });
 
+/** What's new: the version this user last opened the changelog panel at. null = never opened it (matches the pre-any-release default, so a brand-new account doesn't see a spurious badge before the app has any changelog entries at all to compare against). */
+export const getMyChangelogSeen = asyncHandler(async (req: Request, res: Response) => {
+  const [row] = await req.db!.select({ lastSeenChangelogVersion: users.lastSeenChangelogVersion }).from(users).where(eq(users.id, req.user!.id));
+  res.json({ lastSeenVersion: row?.lastSeenChangelogVersion ?? null });
+});
+
+/** Marks the changelog seen as of `version` — called once when the panel is opened, not per-scroll or per-item. */
+export const updateMyChangelogSeen = asyncHandler(async (req: Request, res: Response) => {
+  const { version } = req.body as { version: string };
+  const [updated] = await req.db!.update(users).set({ lastSeenChangelogVersion: version, updatedAt: new Date() }).where(eq(users.id, req.user!.id)).returning({ lastSeenChangelogVersion: users.lastSeenChangelogVersion });
+  if (!updated) throw AppError.notFound("User");
+  res.json({ lastSeenVersion: updated.lastSeenChangelogVersion });
+});
+
 export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   const [updated] = await req
     .db!.update(users)
