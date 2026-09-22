@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
 import type { Ncr } from "../../api/types";
 import { DataTable, type Column } from "../../components/tables/DataTable";
@@ -9,6 +11,10 @@ import { TextField, TextAreaField, SelectField } from "../../components/forms/Fi
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import { formatDate } from "../../lib/dates";
+import { useToast } from "../../components/shared/ToastProvider";
+import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+
+const NCR_STATUSES = ["open", "contained", "investigating", "corrective_action", "closed"] as const;
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
 
@@ -33,6 +39,21 @@ export function NcrListPage() {
   const { data: ncrs = [], isLoading, isError } = ncrHooks.useList();
   const createNcr = ncrHooks.useCreate();
   const navigate = useNavigate();
+  const toast = useToast();
+  const qc = useQueryClient();
+
+  // Bulk actions pilot (see crudFactory.ts's bulkUpdate) — status change only, on the pilot module. Each affected NCR
+  // still gets its own real audit-trail entry server-side; this is just the selection + one-call UI over that.
+  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
+  const bulkStatusChange = useMutation({
+    mutationFn: async (status: Ncr["status"]) => apiClient.patch("/ncr/bulk", { ids: [...selectedIds], patch: { status } }),
+    onSuccess: (_data, status) => {
+      qc.invalidateQueries({ queryKey: ["ncr"] });
+      toast.success(`${selectedIds.size} NCR${selectedIds.size === 1 ? "" : "s"} set to ${status.replace("_", " ")}.`);
+      setSelectedIds(new Set());
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't update all of the selected NCRs — none were changed.")),
+  });
 
   const filtered = useMemo(
     () =>
@@ -97,7 +118,36 @@ export function NcrListPage() {
         </select>
       </div>
 
-      <DataTable columns={columns} rows={filtered} rowKey={(n) => n.id} isLoading={isLoading} isError={isError} onRowClick={(n) => navigate(`/ncr/${n.id}`)} />
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/50 px-3 py-2">
+          <span className="text-sm font-medium">{selectedIds.size} selected</span>
+          <span className="text-sm text-muted-foreground">Set status:</span>
+          {NCR_STATUSES.map((s) => (
+            <button
+              key={s}
+              onClick={() => bulkStatusChange.mutate(s)}
+              disabled={bulkStatusChange.isPending}
+              className="rounded-md border border-border px-2 py-1 text-xs capitalize hover:bg-muted disabled:opacity-60"
+            >
+              {s.replace("_", " ")}
+            </button>
+          ))}
+          <button onClick={() => setSelectedIds(new Set())} className="ml-auto text-xs text-muted-foreground hover:underline">
+            Clear selection
+          </button>
+        </div>
+      )}
+
+      <DataTable
+        columns={columns}
+        rows={filtered}
+        rowKey={(n) => n.id}
+        isLoading={isLoading}
+        isError={isError}
+        onRowClick={(n) => navigate(`/ncr/${n.id}`)}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       <Modal title="Create NCR" isOpen={createOpen} onClose={() => setCreateOpen(false)}>
         <form
