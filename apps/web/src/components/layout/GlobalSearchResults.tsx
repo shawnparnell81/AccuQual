@@ -14,6 +14,13 @@ const TYPE_TO_ICON: Record<SearchResult["type"], string> = {
   Item: "inventory",
   Training: "training",
   Calibration: "calibration",
+  // Same icon keys tabMeta.ts's own path-based rules already use for these routes.
+  RMA: "rma",
+  "8D": "capa",
+  Complaint: "capa",
+  Change: "default",
+  Risk: "default",
+  PPAP: "default",
 };
 
 /**
