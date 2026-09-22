@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { and, eq, gte, ne, or } from "drizzle-orm";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import type { TenantDb } from "../../lib/tenantScope.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { audits } from "../../drizzle/schema/audits.js";
@@ -28,17 +29,18 @@ function startOfMonth(): Date {
 }
 
 /**
- * Everything that needs this user's attention, plus anything of theirs that
- * reached a terminal state this month (so a "completed this month" stat has
- * real data) — see plan §"Design decisions" #1. Always scoped to req.user.id,
- * never a client-supplied id (see nav.controller.ts's getKpiCounts for the
- * same Promise.all-of-independent-queries precedent, including the choice to
- * skip requireDepartmentAccess for this class of "my own" endpoint).
+ * Everything that needs a given user's attention, plus anything of theirs
+ * that reached a terminal state this month (so a "completed this month"
+ * stat has real data) — see plan §"Design decisions" #1. Extracted so it
+ * can be reused for two different callers: the self-service Calendar
+ * below (always `req.user.id`, never a client-supplied id — see
+ * nav.controller.ts's getKpiCounts for the same precedent) and Worker
+ * Runtime's `getWorkerActivity` (a permission-gated *other* user's id,
+ * for a manager looking at someone's workload) — see
+ * `modules/worker/worker.controller.ts`. One aggregation, two access
+ * rules layered on top of it, not two copies of the aggregation itself.
  */
-export const getCalendarItems = asyncHandler(async (req: Request, res: Response) => {
-  const db = req.db!;
-  const tenantId = req.tenantId!;
-  const userId = req.user!.id;
+export async function getItemsForUser(db: TenantDb, tenantId: number, userId: number): Promise<CalendarItem[]> {
   const monthStart = startOfMonth();
 
   const [myNcrs, myCapas, myAudits, myTraining, myDocuments, myCrars] = await Promise.all([
@@ -207,5 +209,10 @@ export const getCalendarItems = asyncHandler(async (req: Request, res: Response)
     return a.dueDate.localeCompare(b.dueDate);
   });
 
+  return items;
+}
+
+export const getCalendarItems = asyncHandler(async (req: Request, res: Response) => {
+  const items = await getItemsForUser(req.db!, req.tenantId!, req.user!.id);
   res.json(items);
 });

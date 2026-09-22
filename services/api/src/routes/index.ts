@@ -39,6 +39,7 @@ import { formsRouter } from "../modules/forms/forms.routes.js";
 import { platformRouter } from "../modules/platform/platform.routes.js";
 import { navRouter } from "../modules/nav/nav.routes.js";
 import { calendarRouter } from "../modules/calendar/calendar.routes.js";
+import { workerRouter } from "../modules/worker/worker.routes.js";
 import { notificationsRouter } from "../modules/notifications/notification.routes.js";
 import { inventoryRouter } from "../modules/inventory/inventory.routes.js";
 import { erpRouter } from "../modules/erp/erp.routes.js";
@@ -112,6 +113,7 @@ apiRouter.use("/forms", formsRouter);
 apiRouter.use("/platform", platformRouter);
 apiRouter.use("/nav", navRouter);
 apiRouter.use("/calendar", calendarRouter);
+apiRouter.use("/workers", workerRouter);
 apiRouter.use("/inventory", inventoryRouter);
 // Registered before /erp: a more specific prefix match must come first so
 // /erp/requisitions/* is handled by its own router (a different department

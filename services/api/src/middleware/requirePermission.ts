@@ -29,6 +29,7 @@ export const PERMISSION_SUBJECTS = {
   equipment: { resource: "calibration", entityType: "Equipment" },
   quarantine: { resource: "quarantine", entityType: "Quarantine" },
   training: { resource: "training", entityType: "TrainingAssignment" },
+  workerProfile: { resource: "worker_profile", entityType: "WorkerProfile" },
 } as const satisfies Record<string, { resource: ResourceKey; entityType: string }>;
 
 export type PermissionSubject = keyof typeof PERMISSION_SUBJECTS;

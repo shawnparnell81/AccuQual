@@ -330,4 +330,15 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // releasing or destroying additionally needs a reviewer role, see requirePermission's "release" action); Production and Purchasing
   // can see what is held.
   quarantine: { quality: "edit", material_management: "edit", production: "read", purchasing: "read" },
+  // Worker Profiles: an HR-adjacent record on top of `users` (job title, shift, notes) — Quality owns it by the same convention as
+  // training/calibration above; every other department gets read so anyone can look up a coworker's role and current workload.
+  worker_profile: {
+    quality: "edit",
+    engineering: "read",
+    production: "read",
+    customer_service: "read",
+    purchasing: "read",
+    material_management: "read",
+    sales_and_marketing: "read",
+  },
 };

@@ -57,7 +57,7 @@ DECLARE
     'erp_connector_presets', 'erp_sync_errors', 'audit_row_changes',
     'sso_connections', 'sso_domains', 'user_identities', 'controlled_versions',
     'document_files', 'quarantine_records', 'quarantine_inventory', 'quarantine_resolutions',
-    'training_sessions', 'training_competencies'
+    'training_sessions', 'training_competencies', 'worker_profiles'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP

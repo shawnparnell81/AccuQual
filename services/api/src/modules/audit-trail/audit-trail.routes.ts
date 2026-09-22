@@ -63,6 +63,7 @@ const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   DocumentChangeRequest: "documents",
   Equipment: "calibration",
   Quarantine: "quarantine",
+  WorkerProfile: "worker_profile",
   TrainingCourse: "training",
   TrainingSession: "training",
   TrainingCompetency: "training",
