@@ -61,6 +61,12 @@ export const users = pgTable("users", {
   // null means they've never opened it. Compared client-side against the changelog's own latest entry to decide whether
   // the header badge shows; nothing server-side needs to know what the entries actually say.
   lastSeenChangelogVersion: text("last_seen_changelog_version"),
+  // Per-user saved list-view search filters, keyed by an opaque page id the caller chooses (e.g. "ncr-list") — one blob
+  // holds every list page's saved views rather than a table-per-page, same reasoning themePreferences uses for a single
+  // jsonb column instead of several scalar ones. Scoped to a free-text search string, not per-column sort/filter state:
+  // ResourceListPage's Column<T>.accessor returns ReactNode, not a plain sortable value, so a generic sort control isn't
+  // type-safe to build without touching every one of DataTable's ~21 existing callers — deliberately out of scope here.
+  savedViews: jsonb("saved_views").$type<Record<string, { label: string; searchText: string }[]>>().default({}),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });

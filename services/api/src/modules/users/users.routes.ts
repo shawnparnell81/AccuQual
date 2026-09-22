@@ -3,8 +3,8 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
 import { validate } from "../../middleware/validate.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
-import { createUserSchema, updateUserSchema, updateMyThemeSchema, updateMyChangelogSeenSchema } from "./users.validation.js";
-import { listUsers, getUser, createUser, updateUser, deleteUser, unlockUser, resetUserMfa, getMyTheme, updateMyTheme, getMyChangelogSeen, updateMyChangelogSeen } from "./users.controller.js";
+import { createUserSchema, updateUserSchema, updateMyThemeSchema, updateMyChangelogSeenSchema, updateMySavedViewsSchema } from "./users.validation.js";
+import { listUsers, getUser, createUser, updateUser, deleteUser, unlockUser, resetUserMfa, getMyTheme, updateMyTheme, getMyChangelogSeen, updateMyChangelogSeen, getMySavedViews, updateMySavedViews } from "./users.controller.js";
 
 export const usersRouter = Router();
 
@@ -19,6 +19,8 @@ usersRouter.get("/me/theme", getMyTheme);
 usersRouter.patch("/me/theme", validate(updateMyThemeSchema), updateMyTheme);
 usersRouter.get("/me/changelog-seen", getMyChangelogSeen);
 usersRouter.patch("/me/changelog-seen", validate(updateMyChangelogSeenSchema), updateMyChangelogSeen);
+usersRouter.get("/me/saved-views", getMySavedViews);
+usersRouter.patch("/me/saved-views", validate(updateMySavedViewsSchema), updateMySavedViews);
 
 usersRouter.get("/:id", getUser);
 usersRouter.patch("/:id", requireRole("admin"), validate(updateUserSchema), updateUser);

@@ -470,6 +470,13 @@
       "when": 1790112290500,
       "tag": "0066_users_changelog_seen",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1790113948022,
+      "tag": "0067_users_saved_views",
+      "breakpoints": true
     }
   ]
 }

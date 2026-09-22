@@ -138,6 +138,33 @@ export const updateMyChangelogSeen = asyncHandler(async (req: Request, res: Resp
   res.json({ lastSeenVersion: updated.lastSeenChangelogVersion });
 });
 
+/** Saved list-view search filters — the whole per-page blob, same "return everything, let the caller pick the key it wants" shape getMyTheme uses. */
+export const getMySavedViews = asyncHandler(async (req: Request, res: Response) => {
+  const [row] = await req.db!.select({ savedViews: users.savedViews }).from(users).where(eq(users.id, req.user!.id));
+  res.json(row?.savedViews ?? {});
+});
+
+/** Merge-patches one or more page keys into the saved-views blob — identical shape to updateMyTheme's per-field merge, just keyed by page id instead of a fixed theme field. Sending `{ "ncr-list": [] }` clears that page's saved views without touching any other page's. */
+export const updateMySavedViews = asyncHandler(async (req: Request, res: Response) => {
+  const [existing] = await req.db!.select({ savedViews: users.savedViews }).from(users).where(eq(users.id, req.user!.id));
+  const patch = req.body as Record<string, { label: string; searchText: string }[]>;
+  const merged = { ...existing?.savedViews, ...patch };
+  const fieldsChanged = Object.keys(patch);
+
+  const [updated] = await req.db!.update(users).set({ savedViews: merged, updatedAt: new Date() }).where(eq(users.id, req.user!.id)).returning();
+  if (!updated) throw AppError.notFound("User");
+
+  await recordAuditTrail(req.db!, {
+    tenantId: req.tenantId!,
+    entityType: "User",
+    entityId: req.user!.id,
+    action: "update",
+    changes: { fieldsChanged: fieldsChanged.map((page) => `savedViews.${page}`) },
+    performedBy: req.user?.id,
+  });
+  res.json(updated.savedViews);
+});
+
 export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   const [updated] = await req
     .db!.update(users)

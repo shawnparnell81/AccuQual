@@ -18,6 +18,7 @@ export function SuppliersPage() {
       resource="suppliers"
       onRowClick={(s) => navigate(`/suppliers/${s.id}`)}
       onCreated={(s) => navigate(`/suppliers/${s.id}`)}
+      searchable={(s) => `${s.name} ${s.status ?? ""} ${s.riskLevel ?? ""}`}
       columns={[
         { header: "ID", accessor: (s) => `#${s.id}` },
         { header: "Name", accessor: (s) => s.name },
