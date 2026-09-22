@@ -22,6 +22,8 @@ import { FolderExplorerPage } from "./routes/Documents/FolderExplorerPage";
 import { GeneralUploadsPage } from "./routes/Documents/GeneralUploadsPage";
 import { TrainingPage } from "./routes/Training/TrainingPage";
 import { TrainingDetailPage } from "./routes/Training/TrainingDetailPage";
+import { WorkersPage } from "./routes/Workers/WorkersPage";
+import { WorkerDetailPage } from "./routes/Workers/WorkerDetailPage";
 import { EmployeeTrainingHistoryPage } from "./routes/Training/EmployeeTrainingHistoryPage";
 import { ChangePage } from "./routes/Change/ChangePage";
 import { ChangeDetailPage } from "./routes/Change/ChangeDetailPage";
@@ -161,6 +163,8 @@ export function App() {
           <Route path="/training" element={<TrainingPage />} />
           <Route path="/training/employee/:userId" element={<EmployeeTrainingHistoryPage />} />
           <Route path="/training/:id" element={<TrainingDetailPage />} />
+          <Route path="/workers" element={<WorkersPage />} />
+          <Route path="/workers/:id" element={<WorkerDetailPage />} />
           <Route path="/change" element={<ChangePage />} />
           <Route path="/change/:id" element={<ChangeDetailPage />} />
           <Route path="/risk" element={<RiskPage />} />

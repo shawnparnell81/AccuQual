@@ -71,7 +71,8 @@ export type ResourceKey =
   | "training"
   | "qms_forms"
   | "scar"
-  | "quarantine";
+  | "quarantine"
+  | "worker_profile";
 
 export const DEPARTMENTS: Department[] = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management", "sales_and_marketing"];
 
@@ -117,6 +118,7 @@ export const MODULE_LABELS: Record<ResourceKey, string> = {
   qms_forms: "QMS Forms",
   scar: "SCAR (Supplier Corrective Action Request)",
   quarantine: "Quarantine",
+  worker_profile: "Worker Profiles",
 };
 export const RESOURCE_KEYS: ResourceKey[] = Object.keys(MODULE_LABELS) as ResourceKey[];
 

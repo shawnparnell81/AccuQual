@@ -44,6 +44,7 @@ import {
   RotateCcw,
   ScrollText,
   LayoutGrid,
+  Users,
 } from "lucide-react";
 
 /**
@@ -483,6 +484,18 @@ export const NAV_STRUCTURE: NavGroup[] = [
         section: "quality",
       },
       { key: "training", label: "Training", path: "/training", icon: GraduationCap, access: {}, kpi: false, priority: 3, notes: "Not in the department sheet — unchanged access", section: "quality" },
+      {
+        key: "worker_profile",
+        label: "Worker Profiles",
+        path: "/workers",
+        icon: Users,
+        // Mirrors defaultPermissions.ts's worker_profile block: Quality edits, every other department can at least look a coworker up.
+        access: { quality: "edit", engineering: "read", production: "read", customer_service: "read", purchasing: "read", material_management: "read", sales_and_marketing: "read" },
+        kpi: false,
+        priority: 3,
+        notes: "Worker Runtime — job title/shift/notes on top of `users`, plus what someone is currently assigned to",
+        section: "quality",
+      },
       {
         key: "reporting",
         label: "Reporting Hub",

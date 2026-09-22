@@ -133,6 +133,14 @@ registry.registerPath({ method: "get", path: "/training/competency", tags: ["Tra
 registry.registerPath({ method: "post", path: "/training/competency", tags: ["Training"], summary: "Request (status pending) or record (pass / fail) an evaluation. You can't evaluate yourself (admin excepted).", responses: { 201: genericResponses[200], 403: genericResponses[400] } });
 registry.registerPath({ method: "post", path: "/training/competency/{id}/evaluate", tags: ["Training"], summary: "Decide a pending evaluation. A decided evaluation can't be edited; a re-evaluation is a new record.", request: { params: trnId }, responses: { 200: genericResponses[200], 409: genericResponses[400] } });
 
+// Worker Runtime: a small profile on top of each internal user (job title, shift, notes), plus a read-only activity view reusing the
+// existing per-user Calendar aggregator instead of duplicating it.
+const workerId = z.object({ userId: z.string() });
+registry.registerPath({ method: "get", path: "/workers", tags: ["Workers"], summary: "Roster: every internal user with their department/role and worker-profile fields", responses: { 200: genericResponses[200] } });
+registry.registerPath({ method: "get", path: "/workers/me", tags: ["Workers"], summary: "Your own profile + activity (no extra permission needed — it's your own data)", responses: { 200: genericResponses[200] } });
+registry.registerPath({ method: "get", path: "/workers/{userId}", tags: ["Workers"], summary: "A worker's profile + activity: what they're currently assigned to across NCR/CAPA/audits/training/documents/CRAR", request: { params: workerId }, responses: { 200: genericResponses[200], 404: genericResponses[400] } });
+registry.registerPath({ method: "patch", path: "/workers/{userId}", tags: ["Workers"], summary: "Create or update a worker's profile fields (job title, shift, hire date, skills, employment status, notes)", request: { params: workerId }, responses: { 200: genericResponses[200], 404: genericResponses[400] } });
+
 // Quarantine: holds on material; inventory lots and items are enforced by the inventory system itself.
 const quarParams = z.object({ id: z.string() });
 registry.registerPath({ method: "get", path: "/quarantine", tags: ["Quarantine"], summary: "Holds (?status=quarantined|released|destroyed&itemType=&q=&olderThanDays=)", responses: { 200: genericResponses[200] } });
