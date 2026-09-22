@@ -47,3 +47,8 @@ export const updateMyThemeSchema = z.object({
     .optional()
     .or(z.literal("")),
 });
+
+/** What's new: the changelog version string being marked seen — matches apps/web/src/data/changelog.ts's own version format (a plain dated tag, not semver), so kept as a general-purpose short string rather than a strict semver regex. */
+export const updateMyChangelogSeenSchema = z.object({
+  version: z.string().trim().min(1).max(40),
+});

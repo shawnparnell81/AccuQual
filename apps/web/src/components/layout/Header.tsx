@@ -1,5 +1,6 @@
 import { LogOut } from "lucide-react";
 import { useCurrentUser, useLogout } from "../../hooks/useAuth";
+import { WhatsNewDropdown } from "./WhatsNewDropdown";
 
 export function Header() {
   const user = useCurrentUser();
@@ -8,6 +9,7 @@ export function Header() {
   return (
     <header className="h-14 border-b border-border flex items-center justify-end px-4">
       <div className="flex items-center gap-3 text-sm">
+        <WhatsNewDropdown />
         <span className="text-muted-foreground">{user?.email}</span>
         {user?.roleName && <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{user.roleName}</span>}
         <button
