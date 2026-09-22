@@ -9,6 +9,12 @@ import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { audits } from "../../drizzle/schema/audits.js";
 import { trainingCourses } from "../../drizzle/schema/training.js";
 import { equipment } from "../../drizzle/schema/calibration.js";
+import { rma } from "../../drizzle/schema/rma.js";
+import { eightD } from "../../drizzle/schema/eightD.js";
+import { complaints } from "../../drizzle/schema/complaints.js";
+import { changeRequests } from "../../drizzle/schema/change.js";
+import { riskAssessments } from "../../drizzle/schema/risk.js";
+import { ppapPackages } from "../../drizzle/schema/ppap.js";
 import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmentAccess.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
@@ -16,7 +22,7 @@ import type { TenantDb } from "../../lib/tenantScope.js";
 const RESULTS_PER_TYPE = 5;
 
 export interface SearchResult {
-  type: "NCR" | "CAPA" | "PO" | "WO" | "Audit" | "Supplier" | "Item" | "Training" | "Calibration";
+  type: "NCR" | "CAPA" | "PO" | "WO" | "Audit" | "Supplier" | "Item" | "Training" | "Calibration" | "RMA" | "8D" | "Complaint" | "Change" | "Risk" | "PPAP";
   id: number;
   label: string;
   path: string;
@@ -49,9 +55,7 @@ function idPrefix(column: SQLWrapper, digits: string) {
 /**
  * GET /search?q=... — read-only across every module's own real table, no
  * new table of its own. Covers NCR/CAPA/PO/Work Order/Audit/Supplier/
- * Item/Training/Calibration — RMA, 8D, Complaints, Change, Risk, and PPAP
- * aren't wired in here yet (pre-existing gaps, not something any one
- * change should silently fix as a side effect).
+ * Item/Training/Calibration/RMA/8D/Complaint/Change/Risk/PPAP.
  */
 export const searchHandler = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db! as TenantDb;
@@ -92,6 +96,36 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
   if (digits && await canRead(db, tenantId, user, "audit")) {
     const rows = await db.select().from(audits).where(and(eq(audits.tenantId, tenantId), idPrefix(audits.id, digits))).limit(RESULTS_PER_TYPE);
     for (const r of rows) results.push({ type: "Audit", id: r.id, label: `Audit #${r.id} — ${r.name}`, path: `/audits/${r.id}` });
+  }
+
+  if (digits && await canRead(db, tenantId, user, "rma")) {
+    const rows = await db.select().from(rma).where(and(eq(rma.tenantId, tenantId), idPrefix(rma.id, digits))).limit(RESULTS_PER_TYPE);
+    for (const r of rows) results.push({ type: "RMA", id: r.id, label: `RMA ${r.rmaNumber} (${r.status})`, path: `/rma/${r.id}` });
+  }
+
+  if (digits && await canRead(db, tenantId, user, "eight_d")) {
+    const rows = await db.select().from(eightD).where(and(eq(eightD.tenantId, tenantId), idPrefix(eightD.id, digits))).limit(RESULTS_PER_TYPE);
+    for (const r of rows) results.push({ type: "8D", id: r.id, label: `8D #${r.id}${r.ncrId ? ` (NCR #${r.ncrId})` : ""}`, path: `/8d/${r.id}` });
+  }
+
+  if (digits && await canRead(db, tenantId, user, "complaints")) {
+    const rows = await db.select().from(complaints).where(and(eq(complaints.tenantId, tenantId), idPrefix(complaints.id, digits))).limit(RESULTS_PER_TYPE);
+    for (const r of rows) results.push({ type: "Complaint", id: r.id, label: `Complaint #${r.id}${r.customerName ? ` — ${r.customerName}` : ""}`, path: `/complaints/${r.id}` });
+  }
+
+  if (digits && await canRead(db, tenantId, user, "change")) {
+    const rows = await db.select().from(changeRequests).where(and(eq(changeRequests.tenantId, tenantId), idPrefix(changeRequests.id, digits))).limit(RESULTS_PER_TYPE);
+    for (const r of rows) results.push({ type: "Change", id: r.id, label: `Change #${r.id} — ${r.title}`, path: `/change/${r.id}` });
+  }
+
+  if (digits && await canRead(db, tenantId, user, "risk")) {
+    const rows = await db.select().from(riskAssessments).where(and(eq(riskAssessments.tenantId, tenantId), idPrefix(riskAssessments.id, digits))).limit(RESULTS_PER_TYPE);
+    for (const r of rows) results.push({ type: "Risk", id: r.id, label: `Risk #${r.id} — ${r.title}`, path: `/risk/${r.id}` });
+  }
+
+  if (digits && await canRead(db, tenantId, user, "ppap")) {
+    const rows = await db.select().from(ppapPackages).where(and(eq(ppapPackages.tenantId, tenantId), idPrefix(ppapPackages.id, digits))).limit(RESULTS_PER_TYPE);
+    for (const r of rows) results.push({ type: "PPAP", id: r.id, label: `PPAP #${r.id} — ${r.partNumber}`, path: `/ppap/${r.id}` });
   }
 
   if (await canRead(db, tenantId, user, "suppliers")) {

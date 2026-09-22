@@ -699,7 +699,7 @@ export interface AssistantReply {
 
 /** GET /search?q=... — one row per real match across NCR/CAPA/PO/Audit/Supplier/Item/Training/Calibration. "WO" is a reserved type never actually returned yet — see search.controller.ts. */
 export interface SearchResult {
-  type: "NCR" | "CAPA" | "PO" | "WO" | "Audit" | "Supplier" | "Item" | "Training" | "Calibration";
+  type: "NCR" | "CAPA" | "PO" | "WO" | "Audit" | "Supplier" | "Item" | "Training" | "Calibration" | "RMA" | "8D" | "Complaint" | "Change" | "Risk" | "PPAP";
   id: number;
   label: string;
   path: string;
