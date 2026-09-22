@@ -52,3 +52,9 @@ export const updateMyThemeSchema = z.object({
 export const updateMyChangelogSeenSchema = z.object({
   version: z.string().trim().min(1).max(40),
 });
+
+/** Saved list-view search filters — a body of `{ [pageKey]: view[] }`, merge-patched one page key at a time (see updateMySavedViews). Each page key is capped at 20 saved views; a page id itself is just a short caller-chosen slug like "ncr-list". */
+export const updateMySavedViewsSchema = z.record(
+  z.string().trim().min(1).max(60),
+  z.array(z.object({ label: z.string().trim().min(1).max(60), searchText: z.string().max(200) })).max(20)
+);
