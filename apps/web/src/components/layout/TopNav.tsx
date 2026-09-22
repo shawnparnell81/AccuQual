@@ -13,6 +13,7 @@ import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { extraGrantedLeaves, useNavVisibility } from "./navVisibility";
 import { useDepartmentPermissionsGrid } from "../../hooks/useDepartmentPermissionsGrid";
 import { GlobalSearchResults } from "./GlobalSearchResults";
+import { ScanToFindDialog } from "./ScanToFindDialog";
 import {
   DASHBOARD_LEAF,
   DEPARTMENTS,
@@ -361,6 +362,8 @@ export function TopNav() {
             </div>
           )}
         </div>
+
+        <ScanToFindDialog />
 
         {/* Quick-view launchers: pop AI Insights / Digital Twin open as a floating window without leaving whatever page you're on — see WindowManager.tsx (Full-System Audit finding M9). */}
         <button
