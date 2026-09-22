@@ -16,7 +16,7 @@ ENV VITE_APP_VERSION=$VITE_APP_VERSION
 RUN npm run build --workspace apps/web
 
 # ---- Stage 2: serve via NGINX ----
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.29-alpine AS runtime
 # Pick up OS security patches (OpenSSL, etc.) released since the base image was built.
 RUN apk upgrade --no-cache
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
