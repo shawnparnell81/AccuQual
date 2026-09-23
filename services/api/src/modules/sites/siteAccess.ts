@@ -13,7 +13,12 @@ export function isSiteAdmin(roleName: string | null | undefined): boolean {
 
 /** Short code stored on the plant. Callers may pass an explicit code instead. */
 export function slugifyPlantCode(name: string): string {
+  // Cap input length before any regex work, not after — CodeQL flags the
+  // uncapped chain as a ReDoS risk on attacker-controlled length (a name of
+  // many repeated non-alphanumeric characters). The final result is sliced
+  // to 32 chars anyway, so a generous pre-cap changes no real output.
   const slug = name
+    .slice(0, 256)
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
