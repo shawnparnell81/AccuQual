@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { suppliers, supplierScorecards } from "../../drizzle/schema/supplier.js";
 import { users } from "../../drizzle/schema/users.js";
 import { roles, type Role } from "../../drizzle/schema/roles.js";
@@ -112,7 +112,7 @@ export const createPortalAccountHandler = asyncHandler(async (req: Request, res:
   if (!supplier) throw AppError.notFound("Supplier");
 
   const { email, name } = req.body as { email: string; name?: string };
-  const [existing] = await req.db!.select({ id: users.id }).from(users).where(eq(users.email, email));
+  const [existing] = await req.db!.select({ id: users.id }).from(users).where(sql`lower(${users.email}) = lower(${email})`);
   if (existing) throw AppError.badRequest("Email already registered");
 
   const supplierRole = await ensureSupplierRole(req.db!);

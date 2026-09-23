@@ -88,7 +88,7 @@ export async function register(input: { email: string; password: string; name?: 
     throw AppError.badRequest("Unknown or inactive tenant code");
   }
 
-  const existing = await db.select().from(users).where(eq(users.email, input.email));
+  const existing = await db.select().from(users).where(sql`lower(${users.email}) = lower(${input.email})`);
   if (existing.length > 0) throw AppError.badRequest("Email already registered");
 
   await assertPasswordAcceptable(input.password, { email: input.email, name: input.name });
@@ -111,7 +111,7 @@ export async function login(input: { email: string; password: string }) {
     .from(users)
     .leftJoin(roles, eq(users.roleId, roles.id))
     .leftJoin(tenants, eq(users.tenantId, tenants.id))
-    .where(eq(users.email, input.email));
+    .where(sql`lower(${users.email}) = lower(${input.email})`);
   if (!row) throw AppError.unauthorized("Invalid credentials");
 
   const user = row.users;
@@ -411,7 +411,7 @@ function hashResetToken(rawToken: string): string {
  * "email sent" claim.
  */
 export async function forgotPassword(email: string): Promise<void> {
-  const [user] = await db.select().from(users).where(eq(users.email, email));
+  const [user] = await db.select().from(users).where(sql`lower(${users.email}) = lower(${email})`);
   if (!user || !user.isActive) return;
 
   const rawToken = randomBytes(32).toString("hex");

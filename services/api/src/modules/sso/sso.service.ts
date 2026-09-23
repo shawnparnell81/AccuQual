@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { users } from "../../drizzle/schema/users.js";
 import { roles } from "../../drizzle/schema/roles.js";
@@ -90,7 +90,7 @@ export async function handleCallback(callbackUrl: URL, flow: SsoFlowState): Prom
 
   if (userId === null) {
     // 2. An existing account with this email — only ever inside this tenant.
-    const [existing] = await db.select().from(users).where(eq(users.email, email));
+    const [existing] = await db.select().from(users).where(sql`lower(${users.email}) = lower(${email})`);
     if (existing) {
       if (existing.tenantId !== conn.tenantId) throw new SsoDenied("email_in_other_organization", conn.tenantId, { email });
       userId = existing.id;

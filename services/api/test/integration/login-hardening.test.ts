@@ -125,6 +125,15 @@ describe("Login hardening (real DB + real HTTP path)", () => {
     });
   });
 
+  describe("email case-insensitivity", () => {
+    it("logs in regardless of how the caller cases the email, and still fails on a genuinely unknown one", async () => {
+      const u = await makeUser("casing");
+      expect((await login(u.email.toUpperCase(), GOOD)).status).toBe(200);
+      expect((await login(`Login-Hard-Casing-${suffix}@Test.Local`, GOOD)).status).toBe(200);
+      expect((await login(`not-${u.email}`, GOOD)).status).toBe(401);
+    });
+  });
+
   describe("password policy", () => {
     it("rejects short, common, sequential, repetitive and email-derived passwords", () => {
       expect(passwordProblem("Sh0rt!pw")).toMatch(/at least 12/);
