@@ -11,7 +11,7 @@ export function EightDPage() {
   const navigate = useNavigate();
   return (
     <ResourceListPage<EightDReport>
-      title="8D Reports"
+      title="8D reports"
       resource="8d"
       onRowClick={(r) => navigate(`/8d/${r.id}`)}
       onCreated={(r) => navigate(`/8d/${r.id}`)}

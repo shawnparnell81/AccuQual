@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import type { Capa } from "../../api/types";
-import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextAreaField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
@@ -13,6 +12,10 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
+import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
+import { CAPA_LOOP, READ_ONLY_REASON, capaLoopIndex, capaNextAction, duePhrase, isPastDue, statusPhrase } from "../../lib/opsLanguage";
+import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
+import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 
 const capaHooks = createResourceHooks<Capa>("capa");
 
@@ -28,6 +31,8 @@ export function CapaDetailPage() {
   const { id } = useParams();
   const capaId = Number(id);
   const historyKey: unknown[][] = [["workflow-history", "capa", capaId]];
+  const canEdit = useCanEditWorkflow("capa");
+  const { label, people } = usePersonDirectory();
   const { data: capa, isLoading, isError } = capaHooks.useOne(capaId);
   useSetAssistantContext("capa", capaId, `CAPA #${capaId}`);
   const updateCapa = capaHooks.useUpdate();
@@ -51,53 +56,99 @@ export function CapaDetailPage() {
     if (capa?.verification) setVerification(capa.verification);
   }, [capa?.verification]);
 
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !capa) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this fix. Refresh the page and try again.</p>;
+  if (isLoading || !capa) return <p className="text-sm text-muted-foreground">Loading this fix…</p>;
+
+  const owner = label(capa.ownerId);
+  const closed = capa.status === "closed";
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">CAPA #{capa.id}</h1>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <StatusBadge value={capa.status} />
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              Due date
-              <input
-                type="date"
-                value={capa.dueDate ? capa.dueDate.slice(0, 10) : ""}
-                onChange={(e) => updateCapa.mutate({ id: capaId, dueDate: e.target.value ? new Date(e.target.value).toISOString() : null })}
-                className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-              />
-            </label>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <OpenFormButton formType="capa" entityId={capa.id} title={`CAPA #${capa.id} Form`} />
-          <PrintFormButton formType="capa" entityId={capa.id} />
-          <WorkflowActionButton
-            label="Start Work"
-            navKey="capa"
-            action={startAction}
-            onClick={() => startAction.mutate({ id: capaId })}
-            visible={capa.status === "open"}
-            variant="primary"
-          />
-          <WorkflowActionButton
-            label="Close CAPA"
-            navKey="capa"
-            action={closeAction}
-            onClick={() => closeAction.mutate({ id: capaId })}
-            visible={capa.status === "verifying"}
-          />
-        </div>
-      </div>
+      <RecordGlance
+        crumbs={[
+          { label: "Fixes", to: "/capa" },
+          ...(capa.ncrId ? [{ label: `Issue #${capa.ncrId}`, to: `/ncr/${capa.ncrId}` }] : []),
+          { label: `Fix #${capa.id}` },
+        ]}
+        title={`Fix #${capa.id}`}
+        standard="CAPA"
+        stateValue={capa.status}
+        stateLabel={statusPhrase(capa.status)}
+        owner={owner}
+        ownerControl={
+          canEdit && people.length > 0 ? (
+            <select
+              aria-label="Owner"
+              value={capa.ownerId ?? ""}
+              onChange={(e) => {
+                if (!e.target.value) return;
+                updateCapa.mutate({ id: capaId, ownerId: Number(e.target.value) });
+              }}
+              className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+            >
+              {!capa.ownerId && <option value="">Unassigned</option>}
+              {people.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name?.trim() || person.email}
+                </option>
+              ))}
+            </select>
+          ) : undefined
+        }
+        due={duePhrase(capa.dueDate, closed)}
+        dueLate={isPastDue(capa.dueDate, closed)}
+        dueControl={
+          canEdit ? (
+            <input
+              type="date"
+              aria-label="Due date"
+              value={capa.dueDate ? capa.dueDate.slice(0, 10) : ""}
+              onChange={(e) => updateCapa.mutate({ id: capaId, dueDate: e.target.value ? new Date(e.target.value).toISOString() : null })}
+              className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+            />
+          ) : undefined
+        }
+        blocked={closed ? "Nobody" : owner === "Unassigned" ? "Nobody is assigned" : owner}
+        next={capaNextAction(capa.status)}
+        accessNote={canEdit ? null : READ_ONLY_REASON}
+        actions={
+          <>
+            <OpenFormButton formType="capa" entityId={capa.id} title={`CAPA #${capa.id} Form`} />
+            <PrintFormButton formType="capa" entityId={capa.id} />
+            <WorkflowActionButton
+              label="Start the work"
+              navKey="capa"
+              action={startAction}
+              onClick={() => startAction.mutate({ id: capaId })}
+              visible={capa.status === "open"}
+              variant="primary"
+            />
+            <WorkflowActionButton
+              label="Close the fix"
+              navKey="capa"
+              action={closeAction}
+              onClick={() => closeAction.mutate({ id: capaId })}
+              visible={capa.status === "verifying"}
+            />
+          </>
+        }
+        trail={<LoopTrail steps={CAPA_LOOP} current={capaLoopIndex(capa.status)} />}
+      />
+      <p className="text-sm text-muted-foreground">
+        {capa.ncrId ? (
+          <>
+            Opened from <Link to={`/ncr/${capa.ncrId}`} className="text-primary hover:underline">issue #{capa.ncrId}</Link>.
+          </>
+        ) : (
+          <>This fix isn't tied to an issue yet. Link it from the issue so containment, the fix, and the check stay one story.</>
+        )}
+      </p>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-medium">Root Cause Summary</h2>
-            <AiFieldAssistant
+            <h2 className="text-sm font-medium">Cause</h2>
+            {canEdit && <AiFieldAssistant
               module="capa"
               recordId={capaId}
               triggerLabel="AI Root Cause Analysis"
@@ -109,43 +160,49 @@ export function CapaDetailPage() {
               }
               onInsert={(text) => updateCapa.mutate({ id: capaId, rootCause: text })}
               insertLabel="Insert as Root Cause"
-            />
+            />}
           </div>
           <TextAreaField
             label=""
             value={capa.rootCause ?? ""}
-            placeholder="Not yet documented."
-            onChange={(e) => updateCapa.mutate({ id: capaId, rootCause: e.target.value })}
+            placeholder="Not written yet."
+            readOnly={!canEdit}
+            onChange={(e) => canEdit && updateCapa.mutate({ id: capaId, rootCause: e.target.value })}
           />
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
-          <h2 className="mb-2 text-sm font-medium">Action Plan</h2>
+          <h2 className="mb-2 text-sm font-medium">What you'll do</h2>
           <TextAreaField
             label=""
             value={capa.actionPlan ?? ""}
-            onChange={(e) => updateCapa.mutate({ id: capaId, actionPlan: e.target.value })}
+            readOnly={!canEdit}
+            onChange={(e) => canEdit && updateCapa.mutate({ id: capaId, actionPlan: e.target.value })}
           />
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
-          <h2 className="mb-2 text-sm font-medium">Preventive Action</h2>
+          <h2 className="mb-2 text-sm font-medium">How you'll keep it from coming back</h2>
           <TextAreaField
             label=""
             value={capa.preventiveAction ?? ""}
-            onChange={(e) => updateCapa.mutate({ id: capaId, preventiveAction: e.target.value })}
+            readOnly={!canEdit}
+            onChange={(e) => canEdit && updateCapa.mutate({ id: capaId, preventiveAction: e.target.value })}
           />
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
-          <h2 className="mb-2 text-sm font-medium">Verification Steps</h2>
+          <h2 className="mb-2 text-sm font-medium">Did the fix work?</h2>
           {capa.status === "open" ? (
-            <p className="text-sm text-muted-foreground">Start work above first — verification can't be recorded before that.</p>
+            <p className="text-sm text-muted-foreground">Start the work above first. You can't check the fix before that.</p>
           ) : (
             <>
-              <TextAreaField label="" value={verification} onChange={(e) => setVerification(e.target.value)} readOnly={capa.status !== "in_progress"} />
+              {!capa.verification && capa.status === "in_progress" && (
+                <p className="mb-2 text-sm text-muted-foreground">Nothing recorded yet. Write what you checked, then submit it.</p>
+              )}
+              <TextAreaField label="" value={verification} onChange={(e) => setVerification(e.target.value)} readOnly={!canEdit || capa.status !== "in_progress"} />
               <WorkflowActionButton
-                label="Submit verification"
+                label="Submit the check"
                 navKey="capa"
                 action={verifyAction}
                 onClick={() => verifyAction.mutate({ id: capaId, verification })}
@@ -158,8 +215,8 @@ export function CapaDetailPage() {
 
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-medium">AI Effectiveness Score</h2>
-            <AiFieldAssistant
+            <h2 className="text-sm font-medium">How solid is this writeup?</h2>
+            {canEdit && <AiFieldAssistant
               module="capa_effectiveness"
               recordId={capaId}
               triggerLabel="AI Effectiveness Score"
@@ -169,7 +226,7 @@ export function CapaDetailPage() {
                 " Respond with: the effectiveness score (0–100), a short reasoning summary for that score, a few recommended follow-up" +
                 " actions, and an assessment of the risk of recurrence (low/medium/high with a one-line justification)."
               }
-            />
+            />}
           </div>
           <p className="text-xs text-muted-foreground">
             Scores this CAPA's documentation and verification completeness and estimates recurrence risk — an insight for the CAPA owner
@@ -179,8 +236,8 @@ export function CapaDetailPage() {
 
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-medium">AI-Generated CAPA Recommendations</h2>
-            <AiStructuredSuggestion<CapaGeneratedPlan>
+            <h2 className="text-sm font-medium">Draft a plan</h2>
+            {canEdit && <AiStructuredSuggestion<CapaGeneratedPlan>
               endpoint="/ai/capa"
               title="AI-Drafted CAPA Content"
               triggerLabel="Generate Recommendations"
@@ -213,7 +270,7 @@ export function CapaDetailPage() {
                   <p className="text-xs text-muted-foreground">Estimated closure: {output.estimatedClosureDays} days</p>
                 </div>
               )}
-            />
+            />}
           </div>
           <p className="text-xs text-muted-foreground">
             Accepting fills in the Action Plan, Preventive Action, and Verification fields above — review and edit them before this CAPA

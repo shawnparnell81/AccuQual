@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { Block, FormLayout, RowBlock, TableBlock, TextareaBlock, YesNoBlock } from "./layouts/types";
 import { materializeRow, STATUS_COLORS } from "./formulas";
+import { DetailsDisclosure } from "./DetailsDisclosure";
 
 // NAVY (header bars) is matched to the reference templates and kept in sync
 // with schema-pdf-renderer.ts's own constant so the on-screen form and the
@@ -25,26 +26,58 @@ interface GenericFormRendererProps {
    * in-memory state, not a PDF export round trip.
    */
   readOnly?: boolean;
+  /**
+   * Section numbers parked behind "Add details" (root cause, closure,
+   * document-control metadata). Omitted sections stay in front. The
+   * read-only preview omits this so the full document still shows.
+   */
+  detailSectionNumbers?: string[];
 }
 
-export function GenericFormRenderer({ layout, data, onChange, readOnly = false }: GenericFormRendererProps) {
+function SectionCard({
+  section,
+  data,
+  onChange,
+  readOnly,
+}: {
+  section: FormLayout["sections"][number];
+  data: Record<string, unknown>;
+  onChange: (name: string, value: unknown) => void;
+  readOnly: boolean;
+}) {
+  return (
+    <div className="overflow-hidden rounded-md border border-border">
+      <div className="px-3 py-1.5 text-xs font-bold text-white" style={{ backgroundColor: NAVY }}>
+        {section.number}. {section.title}
+      </div>
+      <div className="flex flex-col divide-y divide-border">
+        {section.blocks.map((block, i) => (
+          <BlockView key={i} block={block} data={data} onChange={onChange} readOnly={readOnly} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function GenericFormRenderer({ layout, data, onChange, readOnly = false, detailSectionNumbers }: GenericFormRendererProps) {
+  const parked = new Set(detailSectionNumbers ?? []);
+  const primary = layout.sections.filter((section) => !parked.has(section.number));
+  const details = layout.sections.filter((section) => parked.has(section.number));
   return (
     <div className="flex flex-col gap-5">
       <h2 className="text-center text-base font-bold uppercase tracking-wide" style={{ color: NAVY }}>
         {layout.title}
       </h2>
-      {layout.sections.map((section) => (
-        <div key={section.number} className="overflow-hidden rounded-md border border-border">
-          <div className="px-3 py-1.5 text-xs font-bold text-white" style={{ backgroundColor: NAVY }}>
-            {section.number}. {section.title}
-          </div>
-          <div className="flex flex-col divide-y divide-border">
-            {section.blocks.map((block, i) => (
-              <BlockView key={i} block={block} data={data} onChange={onChange} readOnly={readOnly} />
-            ))}
-          </div>
-        </div>
+      {primary.map((section) => (
+        <SectionCard key={section.number} section={section} data={data} onChange={onChange} readOnly={readOnly} />
       ))}
+      {details.length > 0 && (
+        <DetailsDisclosure label="Add details — cause, fix, and closure">
+          {details.map((section) => (
+            <SectionCard key={section.number} section={section} data={data} onChange={onChange} readOnly={readOnly} />
+          ))}
+        </DetailsDisclosure>
+      )}
     </div>
   );
 }

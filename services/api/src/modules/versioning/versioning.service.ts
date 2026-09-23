@@ -7,6 +7,8 @@ import { logger } from "../../utils/logger.js";
 import type { Department } from "../../middleware/departmentAccess.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { notifyDepartment, notifyRecipients, sendEmail } from "../notifications/notification.service.js";
+import { env } from "../../config/env.js";
+import { appRecordUrl } from "../../lib/recordLink.js";
 import type { DiffResult } from "./diff.js";
 
 // The shared draft -> review -> publish engine behind workflows, the Management
@@ -374,10 +376,20 @@ export async function publishVersion(db: TenantDb, adapter: SubjectAdapter, tena
   return published!;
 }
 
+function versionRecordUrl(subject: string, subjectId: number): string | null {
+  const path = subject === "document" ? `/documents/${subjectId}` : subject === "workflow" ? `/workflow/${subjectId}` : null;
+  return path ? appRecordUrl(env.FRONTEND_URL, path) : null;
+}
+
+function withRecordLink(body: string, subject: string, subjectId: number): string {
+  const link = versionRecordUrl(subject, subjectId);
+  return link ? `${body}\n\nOpen it: ${link}` : body;
+}
+
 async function notifyPublished(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, v: ControlledVersion, actor: Actor) {
   const subject = `${adapter.noun[0]!.toUpperCase()}${adapter.noun.slice(1)} version ${v.versionNumber} was published`;
-  const body = `A new version of the ${adapter.noun} is now in force (version ${v.versionNumber}${v.isRollback ? `, restoring version ${v.basedOnVersion}` : ""}).`;
-  for (const department of adapter.notifyDepartments) await notifyDepartment(db, { tenantId, department, subject, body });
+  const body = withRecordLink(`A new version of the ${adapter.noun} is now in force (version ${v.versionNumber}${v.isRollback ? `, restoring version ${v.basedOnVersion}` : ""}).`, adapter.subject, subjectId);
+  for (const department of adapter.notifyDepartments) await notifyDepartment(db, { tenantId, department, subject, body, relatedEntityType: adapter.entityType, relatedEntityId: subjectId });
   const names = await db.select({ email: users.email, id: users.id }).from(users).where(inArray(users.id, [v.createdBy, v.submittedBy].filter((i): i is number => typeof i === "number" && i !== actor.id)));
   for (const u of names) await sendEmail({ to: u.email, subject, body });
 }
@@ -388,7 +400,7 @@ async function notifyReview(db: TenantDb, adapter: SubjectAdapter, tenantId: num
   const emailsOf = async (ids: number[]) => (ids.length === 0 ? [] : (await db.select({ email: users.email }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.isActive, true), inArray(users.id, ids)))).map((r) => r.email));
   if (kind === "requested") {
     const subject = `${noun} version ${v.versionNumber} is waiting for your review`;
-    const body = `A new version of the ${adapter.noun} was sent for review${v.reviewNotes ? `: ${v.reviewNotes}` : "."}`;
+    const body = withRecordLink(`A new version of the ${adapter.noun} was sent for review${v.reviewNotes ? `: ${v.reviewNotes}` : "."}`, adapter.subject, subjectId);
     const assigned = typeof v.metadata?.assignedReviewerId === "number" ? (v.metadata.assignedReviewerId as number) : null;
     if (assigned !== null) await notifyRecipients(db, tenantId, await emailsOf([assigned]), subject, body, adapter.entityType, subjectId);
     else for (const department of adapter.notifyDepartments) await notifyDepartment(db, { tenantId, department, subject, body, relatedEntityType: adapter.entityType, relatedEntityId: subjectId });
@@ -396,7 +408,11 @@ async function notifyReview(db: TenantDb, adapter: SubjectAdapter, tenantId: num
   }
   const author = v.submittedBy && v.submittedBy !== actor.id ? [v.submittedBy] : [];
   const subject = kind === "approved" ? `${noun} version ${v.versionNumber} was approved` : `${noun} version ${v.versionNumber} was sent back`;
-  const body = kind === "approved" ? `The review is complete and it can now be published${v.reviewNotes ? `. Reviewer's note: ${v.reviewNotes}` : "."}` : `It needs changes before it can be released${v.reviewNotes ? `: ${v.reviewNotes}` : "."}`;
+  const body = withRecordLink(
+    kind === "approved" ? `The review is complete and it can now be published${v.reviewNotes ? `. Reviewer's note: ${v.reviewNotes}` : "."}` : `It needs changes before it can be released${v.reviewNotes ? `: ${v.reviewNotes}` : "."}`,
+    adapter.subject,
+    subjectId
+  );
   await notifyRecipients(db, tenantId, await emailsOf(author), subject, body, adapter.entityType, subjectId);
 }
 

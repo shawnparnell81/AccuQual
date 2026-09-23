@@ -77,7 +77,7 @@ export function DocumentChangeRequestForm({ dcr }: { dcr: DocumentChangeRequest 
           )}
           <div>
             <h1 className="text-xl font-semibold uppercase tracking-wide">Document Change Request</h1>
-            <p className="text-xs text-muted-foreground print:text-black">Controls proposed changes to QMS documents.</p>
+            <p className="text-xs text-muted-foreground print:text-black">A change to a controlled document (document change request).</p>
           </div>
         </div>
         <div className="text-right text-xs text-muted-foreground print:text-black">
@@ -127,7 +127,7 @@ export function DocumentChangeRequestForm({ dcr }: { dcr: DocumentChangeRequest 
             {items.length === 0 && (
               <tr>
                 <td colSpan={7} className="border border-border px-2 py-2 text-center text-muted-foreground print:border-black">
-                  No change items yet.
+                  Add the document or process you're changing. That's the row this form needs.
                 </td>
               </tr>
             )}

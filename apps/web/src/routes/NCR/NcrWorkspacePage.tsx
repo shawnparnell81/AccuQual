@@ -20,6 +20,10 @@ import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
 import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
 import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
+import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
+import { NCR_LOOP, READ_ONLY_REASON, duePhrase, isPastDue, ncrLoopIndex, ncrNextAction, statusPhrase } from "../../lib/opsLanguage";
+import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
+import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 
 const FORM_TYPE = "ncr";
 
@@ -50,6 +54,8 @@ export function NcrWorkspacePage() {
   const { id } = useParams();
   const ncrId = Number(id);
   const toast = useToast();
+  const canEdit = useCanEditWorkflow("ncr");
+  const { label, people } = usePersonDirectory();
   const [showHistory, setShowHistory] = useState(false);
 
   const { data: ncr, isLoading, isError } = ncrHooks.useOne(ncrId);
@@ -69,6 +75,8 @@ export function NcrWorkspacePage() {
 
   const layout = getFormLayout(FORM_TYPE);
   const { isLoading: formLoading, values, updateField, isSaving } = useFormEditorState(FORM_TYPE, ncrId);
+  const { data: linkedCapaRows = [] } = capaHooks.useList();
+  const hasFix = linkedCapaRows.some((capa) => capa.ncrId === ncrId);
 
   async function handleDownload() {
     try {
@@ -85,48 +93,82 @@ export function NcrWorkspacePage() {
     }
   }
 
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !ncr) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this issue. Refresh the page and try again.</p>;
+  if (isLoading || !ncr) return <p className="text-sm text-muted-foreground">Loading this issue…</p>;
+
+  const owner = label(ncr.assignedTo);
+  const closed = ncr.status === "closed";
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-semibold">
-            NCR #{ncr.id} — {ncr.title}
-          </h1>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
+      <RecordGlance
+        crumbs={[
+          { label: "Issues", to: "/ncr" },
+          { label: `Issue #${ncr.id}` },
+        ]}
+        title={ncr.title}
+        standard={`NCR #${ncr.id}`}
+        stateValue={ncr.status}
+        stateLabel={statusPhrase(ncr.status)}
+        owner={owner}
+        ownerControl={
+          canEdit && people.length > 0 ? (
+            <select
+              aria-label="Owner"
+              value={ncr.assignedTo ?? ""}
+              onChange={(e) => {
+                if (!e.target.value) return;
+                updateNcr.mutate({ id: ncrId, assignedTo: Number(e.target.value) });
+              }}
+              className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+            >
+              {!ncr.assignedTo && <option value="">Unassigned</option>}
+              {people.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name?.trim() || person.email}
+                </option>
+              ))}
+            </select>
+          ) : undefined
+        }
+        due={duePhrase(ncr.dueDate, closed)}
+        dueLate={isPastDue(ncr.dueDate, closed)}
+        dueControl={
+          canEdit ? (
+            <input
+              type="date"
+              aria-label="Due date"
+              value={ncr.dueDate ? ncr.dueDate.slice(0, 10) : ""}
+              onChange={(e) => updateNcr.mutate({ id: ncrId, dueDate: e.target.value ? new Date(e.target.value).toISOString() : null })}
+              className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+            />
+          ) : undefined
+        }
+        blocked={closed ? "Nobody" : owner === "Unassigned" ? "Nobody is assigned" : owner}
+        next={ncrNextAction(ncr.status, hasFix)}
+        accessNote={canEdit ? null : READ_ONLY_REASON}
+        actions={
+          <>
+            <span className="self-center text-xs text-muted-foreground">{formLoading ? "Loading form…" : isSaving ? "Saving…" : "Saved"}</span>
             <StatusBadge value={ncr.severity} />
-            <StatusBadge value={ncr.status} />
-            <span className="text-xs text-muted-foreground">{formLoading ? "Loading form…" : isSaving ? "Saving…" : "Saved"}</span>
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              Due date
-              <input
-                type="date"
-                value={ncr.dueDate ? ncr.dueDate.slice(0, 10) : ""}
-                onChange={(e) => updateNcr.mutate({ id: ncrId, dueDate: e.target.value ? new Date(e.target.value).toISOString() : null })}
-                className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-              />
-            </label>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowHistory(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-            History
-          </button>
-          <button onClick={handleDownload} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-            Download PDF
-          </button>
-          <WorkflowActionButton
-            label="Close NCR"
-            navKey="ncr"
-            action={closeAction}
-            onClick={() => closeAction.mutate({ id: ncrId })}
-            visible={ncr.status === "corrective_action"}
-            variant="primary"
-          />
-        </div>
-      </div>
+            <button onClick={() => setShowHistory(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+              History
+            </button>
+            <button onClick={handleDownload} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+              Download PDF
+            </button>
+            <WorkflowActionButton
+              label="Close issue"
+              navKey="ncr"
+              action={closeAction}
+              onClick={() => closeAction.mutate({ id: ncrId })}
+              visible={ncr.status === "corrective_action"}
+              variant="primary"
+            />
+          </>
+        }
+        trail={<LoopTrail steps={NCR_LOOP} current={ncrLoopIndex(ncr.status)} />}
+      />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {/* Left pane — status/linking controls + the real editable form. */}
@@ -135,6 +177,7 @@ export function NcrWorkspacePage() {
             <p className="text-sm">{ncr.description || "No description provided."}</p>
             <ActionForm
               label="Containment"
+              readOnly={!canEdit}
               value={ncr.containment}
               onSubmit={(value) => containmentAction.mutate({ id: ncrId, containment: value })}
               assistant={{
@@ -146,11 +189,12 @@ export function NcrWorkspacePage() {
               }}
             />
             {ncr.status === "open" ? (
-              <p className="text-sm text-muted-foreground">Record containment above first — root cause can't be recorded before that.</p>
+              <p className="text-sm text-muted-foreground">Record containment first. The cause and the fix stay locked until the parts are held.</p>
             ) : (
               <div className="border-t border-border pt-4">
                 <ActionForm
-                  label="Root cause"
+                  label="Cause"
+                  readOnly={!canEdit}
                   value={ncr.rootCause}
                   onSubmit={(value) => rootCauseAction.mutate({ id: ncrId, rootCause: value })}
                   structuredRootCause={{ ncrId: ncr.id, title: ncr.title, description: ncr.description, containment: ncr.containment }}
@@ -161,6 +205,7 @@ export function NcrWorkspacePage() {
               <div className="border-t border-border pt-4">
                 <ActionForm
                   label="Corrective action"
+                  readOnly={!canEdit}
                   value={ncr.correctiveAction}
                   onSubmit={(value) => correctiveActionAction.mutate({ id: ncrId, correctiveAction: value })}
                 />
@@ -168,7 +213,7 @@ export function NcrWorkspacePage() {
             )}
           </div>
 
-          <LinkedRecordsPanel ncrId={ncrId} ncrTitle={ncr.title} />
+          <LinkedRecordsPanel ncrId={ncrId} ncrTitle={ncr.title} canEdit={canEdit} />
 
           <AttachmentsPanel entityType="ncr" entityId={ncrId} />
 
@@ -176,7 +221,7 @@ export function NcrWorkspacePage() {
             {formLoading || !layout ? (
               <p className="text-sm text-muted-foreground">Loading form…</p>
             ) : (
-              <GenericFormRenderer layout={layout} data={values} onChange={updateField} />
+              <GenericFormRenderer layout={layout} data={values} onChange={canEdit ? updateField : () => {}} readOnly={!canEdit} detailSectionNumbers={["0", "3", "4", "5", "6", "7", "8"]} />
             )}
           </div>
         </div>
@@ -211,6 +256,7 @@ function ActionForm({
   onSubmit,
   assistant,
   structuredRootCause,
+  readOnly = false,
 }: {
   label: string;
   value: string | null;
@@ -218,6 +264,7 @@ function ActionForm({
   assistant?: { module: string; recordId: number; buildPrompt: () => string };
   /** Root-cause specific — wires the real, schema-validated /ai/root-cause pipeline (Phase 4 built it, Phase 5 gives it its first real UI) via the standardized accept/reject panel, instead of the free-text assistant every other ActionForm uses. */
   structuredRootCause?: { ncrId: number; title: string; description: string | null; containment: string | null };
+  readOnly?: boolean;
 }) {
   const [draft, setDraft] = useState(value ?? "");
   return (
@@ -230,10 +277,10 @@ function ActionForm({
     >
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium">{label}</span>
-        {assistant && (
+        {assistant && !readOnly && (
           <AiFieldAssistant module={assistant.module} recordId={assistant.recordId} buildInitialPrompt={assistant.buildPrompt} onInsert={setDraft} />
         )}
-        {structuredRootCause && (
+        {structuredRootCause && !readOnly && (
           <AiStructuredSuggestion<NcrRootCauseSuggestion>
             endpoint="/ai/root-cause"
             title="AI Root Cause Suggestion"
@@ -266,10 +313,12 @@ function ActionForm({
           />
         )}
       </div>
-      <TextAreaField label="" value={draft} onChange={(e) => setDraft(e.target.value)} />
-      <button type="submit" className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground">
-        Save
-      </button>
+      <TextAreaField label="" value={draft} readOnly={readOnly} onChange={(e) => setDraft(e.target.value)} />
+      {!readOnly && (
+        <button type="submit" className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground">
+          Save
+        </button>
+      )}
     </form>
   );
 }
@@ -285,11 +334,12 @@ function ActionForm({
  * gap, without inventing new create-from-NCR flows for them (out of scope;
  * each already has its own real creation flow in its own module).
  */
-function LinkedRecordsPanel({ ncrId, ncrTitle }: { ncrId: number; ncrTitle: string }) {
+function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTitle: string; canEdit: boolean }) {
   const navigate = useNavigate();
   const { data: capas = [] } = capaHooks.useList();
   const createCapa = capaHooks.useCreate();
   const attachCapa = capaHooks.useUpdate();
+  const createEightD = eightDHooks.useCreate();
   const { data: eightDs = [] } = eightDHooks.useList();
   const { data: rmas = [] } = rmaHooks.useList();
   const { data: workOrders = [] } = workOrderHooks.useList();
@@ -301,19 +351,29 @@ function LinkedRecordsPanel({ ncrId, ncrTitle }: { ncrId: number; ncrTitle: stri
   const linkedRmas = rmas.filter((r) => r.linkedNcrId === ncrId);
   const linkedWorkOrders = workOrders.filter((w) => w.linkedNcrId === ncrId);
   const linkedRequisitions = requisitions.filter((r) => r.linkedNcrId === ncrId);
-  const totalLinked = linkedCapas.length + linkedEightDs.length + linkedRmas.length + linkedWorkOrders.length + linkedRequisitions.length;
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">Linked Records</h3>
+        <h3 className="text-sm font-medium">What this connects to</h3>
         <div className="flex flex-wrap items-center gap-2">
+          {canEdit && (
           <button
             onClick={() => createCapa.mutate({ ncrId }, { onSuccess: (created) => navigate(`/capa/${created.id}`) })}
+            className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground"
+          >
+            Open a fix
+          </button>
+          )}
+          {canEdit && (
+          <button
+            onClick={() => createEightD.mutate({ ncrId }, { onSuccess: (created) => navigate(`/8d/${created.id}`) })}
             className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
           >
-            + Create linked CAPA
+            Start 8D
           </button>
+          )}
+          {canEdit && (
           <form
             className="flex items-center gap-1"
             onSubmit={(e) => {
@@ -330,23 +390,29 @@ function LinkedRecordsPanel({ ncrId, ncrTitle }: { ncrId: number; ncrTitle: stri
               className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-xs"
             />
             <button type="submit" className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
-              Attach existing CAPA
+              Attach existing fix
             </button>
           </form>
-          <CreateRiskButton sourceType="NCR" sourceId={ncrId} defaultTitle={`Risk from ${ncrTitle}`} defaultDepartment="quality" defaultCategory="process" />
-          <LinkSalesAccountButton sourceType="NCR" sourceId={ncrId} defaultAccountName={ncrTitle} />
-          <CreateCustomerButton sourceType="NCR" sourceId={ncrId} defaultLegalName={ncrTitle} />
+          )}
+          {canEdit && <CreateRiskButton sourceType="NCR" sourceId={ncrId} defaultTitle={`Risk from ${ncrTitle}`} defaultDepartment="quality" defaultCategory="process" />}
+          {canEdit && <LinkSalesAccountButton sourceType="NCR" sourceId={ncrId} defaultAccountName={ncrTitle} />}
+          {canEdit && <CreateCustomerButton sourceType="NCR" sourceId={ncrId} defaultLegalName={ncrTitle} />}
         </div>
       </div>
 
-      {totalLinked === 0 && <p className="text-sm text-muted-foreground">No linked records yet.</p>}
+      {linkedCapas.length === 0 && (
+        <p className="mb-2 text-sm text-muted-foreground">No fix is tied to this issue yet. Open one so containment doesn't end here.</p>
+      )}
+      {linkedEightDs.length === 0 && (
+        <p className="mb-2 text-sm text-muted-foreground">No 8D report yet. Start one when this issue needs the eight-step writeup.</p>
+      )}
 
       <ul className="flex flex-col gap-2 text-sm">
         {linkedCapas.map((c) => (
           <li key={`capa-${c.id}`} className="border-b border-border pb-1">
             <button onClick={() => navigate(`/capa/${c.id}`)} className="flex w-full items-center justify-between text-left hover:text-primary">
-              <span>CAPA #{c.id}</span>
-              <StatusBadge value={c.status} />
+              <span>Fix #{c.id}</span>
+              <StatusBadge value={c.status} label={statusPhrase(c.status)} />
             </button>
           </li>
         ))}

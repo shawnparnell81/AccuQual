@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
@@ -9,6 +9,9 @@ import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import type { Ncr, Capa } from "../../api/types";
+import { RecordCrumbs } from "../../components/records/RecordStatus";
+import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
+import { READ_ONLY_REASON } from "../../lib/opsLanguage";
 
 interface EightDReport {
   id: number;
@@ -47,6 +50,7 @@ const capaHooks = createResourceHooks<Capa>("capa");
 export function EightDDetailPage() {
   const { id } = useParams();
   const reportId = Number(id);
+  const canEdit = useCanEditWorkflow("8d");
   const { data: report, isLoading, isError } = eightDHooks.useOne(reportId);
   const queryClient = useQueryClient();
   const completeStep = useMutation({
@@ -62,17 +66,44 @@ export function EightDDetailPage() {
   const { data: allCapas = [] } = capaHooks.useList();
   const linkedCapa = allCapas.find((c) => c.ncrId === report?.ncrId);
 
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !report) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this 8D report. Refresh the page and try again.</p>;
+  if (isLoading || !report) return <p className="text-sm text-muted-foreground">Loading this 8D report…</p>;
+
+  const step = STEPS[report.currentStep - 1];
 
   return (
     <div className="flex flex-col gap-4">
+      <RecordCrumbs
+        items={[
+          { label: "Issues", to: "/ncr" },
+          ...(report.ncrId ? [{ label: `Issue #${report.ncrId}`, to: `/ncr/${report.ncrId}` }] : []),
+          ...(linkedCapa ? [{ label: `Fix #${linkedCapa.id}`, to: `/capa/${linkedCapa.id}` }] : []),
+          { label: `8D #${report.id}` },
+        ]}
+      />
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">
-          8D Report #{report.id} {report.ncrId && <span className="text-muted-foreground">— NCR #{report.ncrId}</span>}
-        </h1>
+        <div>
+          <h1 className="text-2xl font-semibold">8D report #{report.id}</h1>
+          <p className="text-sm text-muted-foreground">
+            {step ? `Next: ${step.label.replace(/—/, "·")}` : "Eight-step writeup"}
+            {report.ncrId ? (
+              <>
+                {" "}
+                · from <Link to={`/ncr/${report.ncrId}`} className="text-primary hover:underline">issue #{report.ncrId}</Link>
+              </>
+            ) : null}
+            {linkedCapa ? (
+              <>
+                {" "}
+                · <Link to={`/capa/${linkedCapa.id}`} className="text-primary hover:underline">fix #{linkedCapa.id}</Link>
+              </>
+            ) : report.ncrId ? (
+              <> · no fix linked yet</>
+            ) : null}
+          </p>
+        </div>
         <div className="flex items-center gap-2">
-          {linkedNcr && (
+          {linkedNcr && canEdit && (
             <AiStructuredSuggestion<EightDSuggestion>
               endpoint="/ai/8d"
               title="AI 8D Draft"
@@ -102,8 +133,9 @@ export function EightDDetailPage() {
           <PrintFormButton formType="eight_d" entityId={report.id} />
         </div>
       </div>
+      {!canEdit && <p className="text-sm text-muted-foreground">{READ_ONLY_REASON}</p>}
       {!report.ncrId && (
-        <p className="text-xs text-muted-foreground">Link this 8D to an NCR (see the record's own linkage) to unlock an AI-drafted starting point for all 8 disciplines.</p>
+        <p className="text-sm text-muted-foreground">This report isn't tied to an issue. Link it from the issue so the 8D, the fix, and the check stay one story.</p>
       )}
 
       <div className="flex flex-col gap-3">
@@ -120,9 +152,11 @@ export function EightDDetailPage() {
               </div>
               <TextAreaField
                 label=""
+                readOnly={!canEdit}
                 value={draftByStep[step.key] ?? report.data?.[step.key] ?? ""}
                 onChange={(e) => setDraftByStep((d) => ({ ...d, [step.key]: e.target.value }))}
               />
+              {canEdit && (
               <button
                 onClick={() =>
                   completeStep.mutate({
@@ -134,6 +168,7 @@ export function EightDDetailPage() {
               >
                 Save step
               </button>
+              )}
             </div>
           );
         })}

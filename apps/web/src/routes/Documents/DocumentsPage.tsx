@@ -23,8 +23,8 @@ export function DocumentsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between rounded-lg border border-border bg-card p-4">
         <div>
-          <h2 className="text-sm font-medium">Document Control Master Index</h2>
-          <p className="text-sm text-muted-foreground">Revision level, deployment date, next review date, and control status for every controlled document.</p>
+          <h2 className="text-sm font-medium">Master index</h2>
+          <p className="text-sm text-muted-foreground">Revision, release date, next review, and state for every controlled document.</p>
         </div>
         <div className="flex items-center gap-2">
           <OpenFormButton formType="document_control_index" entityId={DOCUMENT_CONTROL_INDEX_ENTITY_ID} title="Document Control Master Index" label="Open Master Index" />
@@ -33,7 +33,7 @@ export function DocumentsPage() {
       </div>
 
       <ResourceListPage<AccuQualDocument>
-        title="Document Control"
+        title="Documents"
         resource="documents"
         onRowClick={(d) => navigate(`/documents/${d.id}`)}
         columns={[

@@ -1,5 +1,6 @@
 import { LogOut } from "lucide-react";
 import { useCurrentUser, useLogout } from "../../hooks/useAuth";
+import { rolePhrase } from "../../lib/opsLanguage";
 import { WhatsNewDropdown } from "./WhatsNewDropdown";
 import { NotificationDropdown } from "./NotificationDropdown";
 
@@ -14,7 +15,7 @@ export function Header() {
         <WhatsNewDropdown />
         <span className="text-muted-foreground">{user?.email}</span>
         {user?.roleName && (
-          <span className="rounded-full border border-accent/40 bg-accent/15 px-2 py-0.5 text-xs text-accent">{user.roleName}</span>
+          <span title={user.roleName} className="rounded-full border border-accent/40 bg-accent/15 px-2 py-0.5 text-xs text-accent">{rolePhrase(user.roleName)}</span>
         )}
         <button
           onClick={() => logout.mutate()}
