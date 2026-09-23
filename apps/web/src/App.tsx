@@ -106,6 +106,7 @@ import { RolesPermissionsPage } from "./routes/Admin/RolesPermissionsPage";
 import { AdminConsoleLayout } from "./routes/Admin/AdminConsoleLayout";
 import { AdminConsoleHomePage } from "./routes/Admin/AdminConsoleHomePage";
 import { AdminUsersRolesPage } from "./routes/Admin/AdminUsersRolesPage";
+import { AdminPlantsPage } from "./routes/Admin/AdminPlantsPage";
 import { AdminAiSettingsPage } from "./routes/Admin/AdminAiSettingsPage";
 import { AdminSupplierSettingsPage } from "./routes/Admin/AdminSupplierSettingsPage";
 import { AdminQualitySettingsPage } from "./routes/Admin/AdminQualitySettingsPage";
@@ -253,6 +254,7 @@ export function App() {
           <Route path="/admin" element={<AdminConsoleLayout />}>
             <Route index element={<AdminConsoleHomePage />} />
             <Route path="users" element={<AdminUsersRolesPage />} />
+            <Route path="plants" element={<AdminPlantsPage />} />
             <Route path="roles-permissions" element={<RolesPermissionsPage />} />
             <Route path="ai-settings" element={<AdminAiSettingsPage />} />
             <Route path="supplier-settings" element={<AdminSupplierSettingsPage />} />

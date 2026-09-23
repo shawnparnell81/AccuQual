@@ -3,13 +3,15 @@ import { useCurrentUser, useLogout } from "../../hooks/useAuth";
 import { rolePhrase } from "../../lib/opsLanguage";
 import { WhatsNewDropdown } from "./WhatsNewDropdown";
 import { NotificationDropdown } from "./NotificationDropdown";
+import { SiteSwitcher } from "./SiteSwitcher";
 
 export function Header() {
   const user = useCurrentUser();
   const logout = useLogout();
 
   return (
-    <header className="h-14 border-b border-border flex items-center justify-end px-4">
+    <header className="h-14 border-b border-border flex items-center justify-between gap-3 px-4">
+      <SiteSwitcher />
       <div className="flex items-center gap-3 text-sm">
         <NotificationDropdown />
         <WhatsNewDropdown />

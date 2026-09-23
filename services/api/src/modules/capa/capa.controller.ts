@@ -5,15 +5,20 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 
-export const baseHandlers = crudFactory(capa, { entityName: "CAPA", idColumn: "id" });
+export const baseHandlers = crudFactory(capa, { entityName: "CAPA", idColumn: "id", siteScoped: true });
 
 /** GET /capa — Phase 8 adds an optional `?supplierId=` filter (same reasoning as ncr.controller.ts's own listHandler) for the receiving → CAPA traceability chain; falls through to baseHandlers.list's plain query when omitted. */
 export const listHandler = asyncHandler(async (req: Request, res: Response) => {
   const { supplierId } = req.query as Record<string, string | undefined>;
   if (!supplierId) return baseHandlers.list(req, res, () => undefined);
-  const rows = await req.db!.select().from(capa).where(and(eq(capa.tenantId, req.tenantId!), eq(capa.supplierId, Number(supplierId))));
+  if (!req.siteId) {
+    res.json([]);
+    return;
+  }
+  const rows = await req.db!.select().from(capa).where(and(eq(capa.tenantId, req.tenantId!), eq(capa.siteId, req.siteId), eq(capa.supplierId, Number(supplierId))));
   res.json(rows);
 });
 
@@ -41,6 +46,7 @@ const ALLOWED_NEXT: Record<string, string> = {
 async function loadCapa(req: Request, id: number) {
   const [row] = await req.db!.select().from(capa).where(and(eq(capa.id, id), eq(capa.tenantId, req.tenantId!)));
   if (!row) throw AppError.notFound("CAPA");
+  assertRecordOnAllowedSite(row.siteId, req.allowedSiteIds, "CAPA");
   return row;
 }
 

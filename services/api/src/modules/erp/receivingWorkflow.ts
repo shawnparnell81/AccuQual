@@ -51,6 +51,8 @@ export interface TransitionOptions {
   defectCategory?: string;
   notes?: string;
   performedBy: number | undefined;
+  /** Plant the person is working in, so an auto-created issue stays on that plant. */
+  siteId?: number | null;
 }
 
 /**
@@ -96,9 +98,9 @@ export async function transitionReceivingLineItem(db: TenantDb, tenantId: number
 
   if (targetStatus === "rejected" || targetStatus === "quarantined") {
     const supplierId = await getSupplierIdForReceivingLineItem(db, tenantId, lineItemId);
-    const ncr = await maybeAutoCreateNcr(db, tenantId, updated!, targetStatus, supplierId, options.defectCategory, options.performedBy);
+    const ncr = await maybeAutoCreateNcr(db, tenantId, updated!, targetStatus, supplierId, options.defectCategory, options.performedBy, options.siteId);
     if (hold && ncr) await linkNcrFromReceiving(db, tenantId, hold.id, ncr.id);
-    if (supplierId) await checkCapaEscalation(db, tenantId, supplierId, ncr?.id, options.performedBy);
+    if (supplierId) await checkCapaEscalation(db, tenantId, supplierId, ncr?.id, options.performedBy, ncr?.siteId);
   }
 
   return updated!;

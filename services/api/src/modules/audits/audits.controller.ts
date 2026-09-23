@@ -8,8 +8,9 @@ import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { syncDiRecordToForm } from "../quality/quality.formSync.js";
 import { publishEvent, WORKFLOW_STREAM, AI_STREAM } from "../../lib/eventBus.js";
+import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 
-export const baseHandlers = crudFactory(audits, { entityName: "Audit", idColumn: "id" });
+export const baseHandlers = crudFactory(audits, { entityName: "Audit", idColumn: "id", siteScoped: true });
 
 /** A logged finding is a real nonconformance once it's rated past a mere observation. */
 const NONCONFORMANCE_SEVERITIES = ["minor", "major", "critical"];
@@ -18,6 +19,7 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
   const auditId = Number(req.params.id);
   const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, auditId), eq(audits.tenantId, req.tenantId!)));
   if (!audit) throw AppError.notFound("Audit");
+  assertRecordOnAllowedSite(audit.siteId, req.allowedSiteIds, "Audit");
 
   const [item] = await req.db!.insert(auditItems).values({ ...req.body, auditId, tenantId: req.tenantId! }).returning();
   if (!item) throw new Error("Insert did not return the created audit item");
@@ -88,6 +90,9 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const listItemsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, Number(req.params.id)), eq(audits.tenantId, req.tenantId!)));
+  if (!audit) throw AppError.notFound("Audit");
+  assertRecordOnAllowedSite(audit.siteId, req.allowedSiteIds, "Audit");
   const items = await req
     .db!.select()
     .from(auditItems)
@@ -101,6 +106,7 @@ export const startHandler = asyncHandler(async (req: Request, res: Response) => 
   const tenantId = req.tenantId!;
   const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, id), eq(audits.tenantId, tenantId)));
   if (!audit) throw AppError.notFound("Audit");
+  assertRecordOnAllowedSite(audit.siteId, req.allowedSiteIds, "Audit");
   if (audit.status !== "scheduled") throw AppError.badRequest(`Cannot start an audit from status "${audit.status}" — must be "scheduled"`);
 
   const [updated] = await req.db!.update(audits).set({ status: "in_progress" }).where(eq(audits.id, id)).returning();
@@ -116,6 +122,7 @@ export const completeHandler = asyncHandler(async (req: Request, res: Response) 
   const tenantId = req.tenantId!;
   const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, id), eq(audits.tenantId, tenantId)));
   if (!audit) throw AppError.notFound("Audit");
+  assertRecordOnAllowedSite(audit.siteId, req.allowedSiteIds, "Audit");
   if (audit.status !== "in_progress") throw AppError.badRequest(`Cannot complete an audit from status "${audit.status}" — must be "in_progress"`);
 
   const [updated] = await req.db!.update(audits).set({ status: "completed", completedAt: new Date() }).where(eq(audits.id, id)).returning();

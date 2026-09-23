@@ -13,11 +13,13 @@ import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { summarizeCalendarItems } from "../../lib/calendarMetrics";
 import { departmentPhrase, homeKind, isPastDue, lateItems, ncrNextAction, rolePhrase, statusPhrase, type HomeKind } from "../../lib/opsLanguage";
+import { useSites } from "../../hooks/useSites";
+import { useSiteStore } from "../../store/siteStore";
 import { WorkflowInbox } from "./WorkflowInbox";
 
-function useModuleList<T>(resource: string, enabled: boolean) {
+function useModuleList<T>(resource: string, enabled: boolean, siteKey: number | null | "shared") {
   return useQuery({
-    queryKey: [resource, undefined],
+    queryKey: [resource, siteKey, undefined],
     queryFn: async () => (await apiClient.get<T[]>(`/${resource}`)).data,
     enabled,
     staleTime: 30_000,
@@ -33,6 +35,9 @@ function useModuleList<T>(resource: string, enabled: boolean) {
  */
 export function RoleHome() {
   const user = useCurrentUser();
+  const { data: plants } = useSites();
+  const siteId = useSiteStore((s) => s.currentSiteId);
+  const plantName = plants?.sites.find((site) => site.id === (siteId ?? plants.currentSiteId))?.name;
   const kind = homeKind(user?.roleName);
   const { effective, isLoading: permsLoading } = useEffectivePermissions();
   const bypass = user?.roleName === "admin" || user?.roleName === "platform_admin";
@@ -40,10 +45,10 @@ export function RoleHome() {
   const can = (key: string) => ready && (bypass || (!!effective && effective[key] !== undefined && effective[key] !== "none"));
 
   const wantPlant = kind === "lead" || kind === "auditor";
-  const ncrs = useModuleList<Ncr>("ncr", wantPlant && can("ncr"));
-  const capas = useModuleList<Capa>("capa", wantPlant && can("capa"));
-  const documents = useModuleList<AccuQualDocument>("documents", wantPlant && can("documents"));
-  const audits = useModuleList<Audit>("audits", wantPlant && can("audit"));
+  const ncrs = useModuleList<Ncr>("ncr", wantPlant && can("ncr"), siteId);
+  const capas = useModuleList<Capa>("capa", wantPlant && can("capa"), siteId);
+  const documents = useModuleList<AccuQualDocument>("documents", wantPlant && can("documents"), "shared");
+  const audits = useModuleList<Audit>("audits", wantPlant && can("audit"), siteId);
   const { label } = usePersonDirectory();
   const { items } = useCalendarItems();
   const summary = summarizeCalendarItems(items);
@@ -95,7 +100,7 @@ export function RoleHome() {
 
   const heading =
     kind === "lead" ? "What's stuck" : kind === "auditor" ? "Reviews and audits" : "Your work today";
-  const sub = [rolePhrase(user?.roleName), departmentPhrase(user?.department)].filter(Boolean).join(" · ");
+  const sub = [plantName, rolePhrase(user?.roleName), departmentPhrase(user?.department)].filter(Boolean).join(" · ");
 
   return (
     <div className="flex flex-col gap-6">

@@ -73,6 +73,8 @@ export interface Ncr {
   supplierId: number | null;
   /** Phase 8 — set when auto-created from a rejected/quarantined receiving inspection; not a real FK (see ncr.ts's own schema comment). */
   receivingLineItemId: number | null;
+  /** Plant this issue belongs to. Lists default to the current plant. */
+  siteId?: number | null;
 }
 
 export interface Capa {
@@ -92,6 +94,8 @@ export interface Capa {
   /** Phase 8 — set to "receiving_recurrence" when auto-created by receiving's supplier-recurrence escalation; null for every ordinary CAPA. */
   escalationSource: string | null;
   supplierId: number | null;
+  /** Plant this fix belongs to. */
+  siteId?: number | null;
 }
 
 export interface AuditItem {
@@ -111,6 +115,8 @@ export interface Audit {
   auditorId: number | null;
   scheduledAt: string | null;
   completedAt: string | null;
+  /** Plant this audit belongs to. */
+  siteId?: number | null;
 }
 
 export interface AccuQualDocument {

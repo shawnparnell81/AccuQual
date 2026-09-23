@@ -3,10 +3,13 @@ import { ncr } from "./ncr.js";
 import { users } from "./users.js";
 import { tenants } from "./tenants.js";
 import { suppliers } from "./supplier.js";
+import { sites } from "./sites.js";
 
 export const capa = pgTable("capa", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
+  // Same plant rule as ncr.siteId — omitted inserts land on the default plant.
+  siteId: integer("site_id").references(() => sites.id),
   ncrId: integer("ncr_id").references(() => ncr.id),
   rootCause: text("root_cause"),
   actionPlan: text("action_plan"),

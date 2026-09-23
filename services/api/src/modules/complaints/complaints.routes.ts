@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
+import { withSiteContext } from "../sites/siteContext.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createComplaintSchema, updateComplaintSchema, resolveComplaintSchema } from "./complaints.validation.js";
@@ -10,7 +11,7 @@ export const complaintsRouter = Router();
 
 // Complaints is shared by 4 departments (Quality/Engineering/Customer Service:
 // edit, Production: read-only) — see departmentAccess.ts.
-complaintsRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("complaints"));
+complaintsRouter.use(requireAuth, withTenantDb, withSiteContext, requireDepartmentAccess("complaints"));
 
 /**
  * Lifecycle: open -> investigating -> resolved -> closed (a resolved

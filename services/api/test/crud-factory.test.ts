@@ -7,10 +7,11 @@ describe("stripClientOwnedFields", () => {
     expect(cleaned).toEqual({ title: "Leak attempt" });
   });
 
-  it("removes id/createdAt/createdBy alongside tenantId", () => {
+  it("removes id/createdAt/createdBy/siteId alongside tenantId", () => {
     const cleaned = stripClientOwnedFields({
       id: 1,
       tenantId: 2,
+      siteId: 9,
       createdAt: "2020-01-01",
       createdBy: 3,
       description: "kept",

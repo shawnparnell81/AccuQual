@@ -1,6 +1,6 @@
 import { NavLink, Outlet, Link } from "react-router-dom";
 import clsx from "clsx";
-import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, Plug, AlertTriangle, KeyRound, DatabaseBackup, type LucideIcon } from "lucide-react";
+import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, Plug, AlertTriangle, KeyRound, DatabaseBackup, Factory, type LucideIcon } from "lucide-react";
 
 interface ConsoleSection {
   key: string;
@@ -15,6 +15,7 @@ interface ConsoleSection {
 
 const SECTIONS: ConsoleSection[] = [
   { key: "users", label: "Users & Roles", icon: Users, path: "users", description: "Create, edit, and deactivate users; assign system roles" },
+  { key: "plants", label: "Plants", icon: Factory, path: "plants", description: "Add plants and choose who works at each one" },
   { key: "permissions", label: "Permissions", icon: ShieldCheck, path: "roles-permissions", description: "Department access, custom roles, and user-role assignments" },
   { key: "workflows", label: "Workflows", icon: Workflow, externalPath: "/workflow", description: "Edit workflow states, transitions, conditions, and actions" },
   { key: "ai", label: "AI Settings", icon: Bot, path: "ai-settings", description: "LLM provider, model, safety mode, and usage" },

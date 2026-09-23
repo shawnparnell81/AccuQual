@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, refreshAccessToken } from "../api/client";
 import { useAuthStore, type AuthUser, type TenantContext } from "../store/authStore";
 import { useWindowStore } from "../window-manager/useWindowStore";
+import { clearCurrentPlant } from "./useSites";
 
 export interface AuthResponse {
   user: AuthUser;
@@ -29,6 +30,7 @@ export function useStartSession() {
   const queryClient = useQueryClient();
   return (data: AuthResponse) => {
     queryClient.clear();
+    clearCurrentPlant();
     setSession(data.user, data.accessToken, data.tenant);
   };
 }
@@ -62,6 +64,7 @@ export function useRegister() {
     // Same reasoning as useLogin's onSuccess above.
     onSuccess: (data) => {
       queryClient.clear();
+      clearCurrentPlant();
       setSession(data.user, data.accessToken, data.tenant);
     },
   });
@@ -81,6 +84,7 @@ export function useLogout() {
     onSettled: () => {
       clearWindows();
       queryClient.clear();
+      clearCurrentPlant();
       logout();
     },
   });

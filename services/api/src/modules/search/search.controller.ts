@@ -69,12 +69,12 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
   const results: SearchResult[] = [];
 
   if (digits && await canRead(db, tenantId, user, "ncr")) {
-    const rows = await db.select().from(ncr).where(and(eq(ncr.tenantId, tenantId), idPrefix(ncr.id, digits))).limit(RESULTS_PER_TYPE);
+    const rows = await db.select().from(ncr).where(and(eq(ncr.tenantId, tenantId), eq(ncr.siteId, req.siteId ?? -1), idPrefix(ncr.id, digits))).limit(RESULTS_PER_TYPE);
     for (const r of rows) results.push({ type: "NCR", id: r.id, label: `NCR #${r.id} — ${r.title}`, path: `/ncr/${r.id}` });
   }
 
   if (digits && await canRead(db, tenantId, user, "capa")) {
-    const rows = await db.select().from(capa).where(and(eq(capa.tenantId, tenantId), idPrefix(capa.id, digits))).limit(RESULTS_PER_TYPE);
+    const rows = await db.select().from(capa).where(and(eq(capa.tenantId, tenantId), eq(capa.siteId, req.siteId ?? -1), idPrefix(capa.id, digits))).limit(RESULTS_PER_TYPE);
     for (const r of rows) results.push({ type: "CAPA", id: r.id, label: `CAPA #${r.id}${r.ncrId ? ` (NCR #${r.ncrId})` : ""}`, path: `/capa/${r.id}` });
   }
 
@@ -94,7 +94,7 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
   }
 
   if (digits && await canRead(db, tenantId, user, "audit")) {
-    const rows = await db.select().from(audits).where(and(eq(audits.tenantId, tenantId), idPrefix(audits.id, digits))).limit(RESULTS_PER_TYPE);
+    const rows = await db.select().from(audits).where(and(eq(audits.tenantId, tenantId), eq(audits.siteId, req.siteId ?? -1), idPrefix(audits.id, digits))).limit(RESULTS_PER_TYPE);
     for (const r of rows) results.push({ type: "Audit", id: r.id, label: `Audit #${r.id} — ${r.name}`, path: `/audits/${r.id}` });
   }
 

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
+import { useSiteStore } from "../store/siteStore";
 
 export type CalendarModule = "ncr" | "capa" | "audit" | "training" | "document" | "crar";
 
@@ -15,8 +16,9 @@ export interface CalendarItem {
 
 /** GET /calendar — always "my own": everything assigned to/owned by the logged-in user, across modules. */
 export function useCalendarItems() {
+  const siteId = useSiteStore((s) => s.currentSiteId);
   const { data = [], isLoading } = useQuery({
-    queryKey: ["calendar"],
+    queryKey: ["calendar", siteId],
     queryFn: async () => (await apiClient.get<CalendarItem[]>("/calendar")).data,
     staleTime: 30_000,
   });

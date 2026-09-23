@@ -25,6 +25,7 @@ import {
   type NavLeaf,
 } from "./navConfig";
 import { PRIMARY_NAV, PRIMARY_NAV_KEYS, navSearchText, plainNav } from "../../lib/opsLanguage";
+import { useSiteStore } from "../../store/siteStore";
 
 type KpiCounts = Partial<Record<(typeof KPI_COUNT_KEYS)[number], number>>;
 type DropdownId = "more";
@@ -53,8 +54,9 @@ const SYSTEM_SECTIONS: { key: "quality" | "admin" | "advanced"; label: string }[
 ];
 
 function useKpiCounts() {
+  const siteId = useSiteStore((s) => s.currentSiteId);
   const { data } = useQuery({
-    queryKey: ["nav-kpi-counts"],
+    queryKey: ["nav-kpi-counts", siteId],
     queryFn: async () => (await apiClient.get<KpiCounts>("/nav/kpi-counts")).data,
     refetchInterval: 60_000,
     staleTime: 30_000,

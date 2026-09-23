@@ -21,6 +21,10 @@ declare global {
       /** Per-request, transaction-scoped Drizzle instance with `app.current_tenant_id` set for RLS. */
       db?: TenantDb;
       tenantId?: number;
+      /** Plant the caller is working in. Set by withSiteContext (modules/sites). */
+      siteId?: number | null;
+      /** Plants this caller may open records in. Admins get every plant in the tenant. */
+      allowedSiteIds?: number[];
     }
   }
 }

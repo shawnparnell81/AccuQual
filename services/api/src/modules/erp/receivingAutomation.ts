@@ -30,7 +30,8 @@ export async function maybeAutoCreateNcr(
   disposition: "rejected" | "quarantined",
   supplierId: number | null,
   defectCategory: string | undefined,
-  performedBy: number | undefined
+  performedBy: number | undefined,
+  siteId?: number | null
 ): Promise<Ncr | null> {
   const tenant = await loadTenantForSettings(db, tenantId);
   const settings = tenant.receivingSettings ?? {};
@@ -57,6 +58,7 @@ export async function maybeAutoCreateNcr(
       supplierId: supplierId ?? undefined,
       receivingLineItemId: line.id,
       createdBy: performedBy,
+      ...(siteId ? { siteId } : {}),
     })
     .returning();
 
@@ -86,7 +88,7 @@ export async function maybeAutoCreateNcr(
  * open" check is what stops every subsequent rejection from spawning a
  * duplicate escalation once the threshold is already met once.
  */
-export async function checkCapaEscalation(db: TenantDb, tenantId: number, supplierId: number, triggeringNcrId: number | undefined, performedBy: number | undefined): Promise<void> {
+export async function checkCapaEscalation(db: TenantDb, tenantId: number, supplierId: number, triggeringNcrId: number | undefined, performedBy: number | undefined, siteId?: number | null): Promise<void> {
   const tenant = await loadTenantForSettings(db, tenantId);
   const settings = tenant.receivingSettings ?? {};
   const threshold = settings.capaEscalationThreshold ?? DEFAULT_CAPA_THRESHOLD;
@@ -129,6 +131,7 @@ export async function checkCapaEscalation(db: TenantDb, tenantId: number, suppli
       status: "open",
       escalationSource: "receiving_recurrence",
       supplierId,
+      ...(siteId ? { siteId } : {}),
     })
     .returning();
 
