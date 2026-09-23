@@ -19,7 +19,7 @@ export function HomeButton({ onNavigate }: { onNavigate?: () => void }) {
       className={({ isActive }) =>
         clsx(
           "flex items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap",
-          isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted"
+          isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-secondary"
         )
       }
     >

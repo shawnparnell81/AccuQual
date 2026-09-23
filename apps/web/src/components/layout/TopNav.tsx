@@ -184,7 +184,7 @@ export function TopNav() {
             className={({ isActive }) =>
               clsx(
                 "flex items-center gap-2 rounded-md px-3 py-2 text-sm",
-                isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted"
+                isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-secondary"
               )
             }
           >
@@ -222,7 +222,7 @@ export function TopNav() {
             className={({ isActive }) =>
               clsx(
                 "flex items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap",
-                isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted"
+                isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-secondary"
               )
             }
           >
@@ -291,7 +291,7 @@ export function TopNav() {
                         to={item.path}
                         title={item.notes ? `${item.label} — ${item.notes}` : item.label}
                         onClick={() => setOpenId(null)}
-                        className="flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+                        className="flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"
                       >
                         <item.icon size={16} className="shrink-0" />
                         <span className="min-w-0 truncate">{item.label}</span>
@@ -322,7 +322,7 @@ export function TopNav() {
                   to={`/documents/folders?dept=${dept.id}`}
                   title={`Open the ${dept.name} folder in the Document Library`}
                   onClick={() => setOpenId(null)}
-                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted whitespace-nowrap"
+                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-secondary whitespace-nowrap"
                 >
                   <Library size={16} />
                   <span>{dept.name}</span>
@@ -343,7 +343,7 @@ export function TopNav() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Find a module…"
-            className="w-full rounded-md border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded-md border border-form-field bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:ring-1 focus:ring-ring"
           />
           {query.trim() && (
             <div className="absolute right-0 top-full z-30 mt-1 w-72 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-card p-1 shadow-lg">
@@ -352,7 +352,7 @@ export function TopNav() {
                   key={r.key}
                   to={r.path}
                   onClick={() => setQuery("")}
-                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"
                 >
                   <r.icon size={16} />
                   <span>{r.label}</span>
@@ -369,7 +369,7 @@ export function TopNav() {
         <button
           type="button"
           onClick={() => openWindow({ type: "ai", title: "AI Insights" })}
-          className="hidden md:flex shrink-0 p-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="hidden md:flex shrink-0 p-2 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
           aria-label="Quick AI Insights"
           title="Quick AI Insights"
         >
@@ -378,7 +378,7 @@ export function TopNav() {
         <button
           type="button"
           onClick={() => openWindow({ type: "digitalTwin", title: "Digital Twin" })}
-          className="hidden md:flex shrink-0 p-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="hidden md:flex shrink-0 p-2 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
           aria-label="Quick Digital Twin"
           title="Quick Digital Twin"
         >
@@ -388,7 +388,7 @@ export function TopNav() {
         {/* General app settings — nav customization is now one tab inside it, not this button's whole purpose. */}
         <Link
           to="/settings"
-          className="hidden md:flex shrink-0 p-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="hidden md:flex shrink-0 p-2 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
           aria-label="Settings"
           title="Settings"
         >
@@ -399,7 +399,7 @@ export function TopNav() {
         <button
           type="button"
           onClick={() => setMobileOpen((v) => !v)}
-          className="md:hidden ml-auto p-2 rounded-md hover:bg-muted"
+          className="md:hidden ml-auto p-2 rounded-md hover:bg-secondary"
           aria-label="Toggle navigation menu"
         >
           {mobileOpen ? <X size={20} /> : <Menu size={20} />}
@@ -415,7 +415,7 @@ export function TopNav() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Find a module…"
-              className="w-full rounded-md border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+              className="w-full rounded-md border border-form-field bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
           {query.trim() ? (
@@ -428,7 +428,7 @@ export function TopNav() {
                     setQuery("");
                     setMobileOpen(false);
                   }}
-                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"
                 >
                   <r.icon size={16} />
                   <span>{r.label}</span>
@@ -457,7 +457,7 @@ export function TopNav() {
                       onClick={() => setMobileExpanded(expanded ? null : "modules")}
                       className={clsx(
                         "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium",
-                        expanded ? "bg-muted text-foreground" : "text-foreground hover:bg-muted"
+                        expanded ? "bg-muted text-foreground" : "text-foreground hover:bg-secondary"
                       )}
                     >
                       <Grid2x2 size={18} />
@@ -474,7 +474,7 @@ export function TopNav() {
                               key={item.key}
                               to={item.path}
                               onClick={() => setMobileOpen(false)}
-                              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
                             >
                               <item.icon size={16} />
                               <span>{item.label}</span>
@@ -489,7 +489,7 @@ export function TopNav() {
               <Link
                 to={DASHBOARD_LEAF.path}
                 onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"
               >
                 <DASHBOARD_LEAF.icon size={18} />
                 <span>{DASHBOARD_LEAF.label}</span>
@@ -508,7 +508,7 @@ export function TopNav() {
                       onClick={() => setMobileExpanded(expanded ? null : group.department!)}
                       className={clsx(
                         "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium",
-                        expanded ? clsx(meta.bgSoft, meta.text) : "text-foreground hover:bg-muted"
+                        expanded ? clsx(meta.bgSoft, meta.text) : "text-foreground hover:bg-secondary"
                       )}
                     >
                       <meta.icon size={18} className={meta.text} />
@@ -541,7 +541,7 @@ export function TopNav() {
                     onClick={() => setMobileExpanded(mobileExpanded === "system" ? null : "system")}
                     className={clsx(
                       "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium",
-                      mobileExpanded === "system" ? "bg-muted" : "text-foreground hover:bg-muted"
+                      mobileExpanded === "system" ? "bg-muted" : "text-foreground hover:bg-secondary"
                     )}
                   >
                     <span className="flex-1 text-left">{SYSTEM_LABEL}</span>
@@ -559,7 +559,7 @@ export function TopNav() {
                                 key={item.key}
                                 to={item.path}
                                 onClick={() => setMobileOpen(false)}
-                                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+                                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"
                               >
                                 <item.icon size={16} />
                                 <span>{item.label}</span>
@@ -579,7 +579,7 @@ export function TopNav() {
                     onClick={() => setMobileExpanded(mobileExpanded === "library" ? null : "library")}
                     className={clsx(
                       "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium",
-                      mobileExpanded === "library" ? "bg-muted" : "text-foreground hover:bg-muted"
+                      mobileExpanded === "library" ? "bg-muted" : "text-foreground hover:bg-secondary"
                     )}
                   >
                     <span className="flex-1 text-left">Document Library</span>
@@ -592,7 +592,7 @@ export function TopNav() {
                           key={dept.id}
                           to={`/documents/folders?dept=${dept.id}`}
                           onClick={() => setMobileOpen(false)}
-                          className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+                          className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"
                         >
                           <Library size={16} />
                           <span>{dept.name}</span>
@@ -606,7 +606,7 @@ export function TopNav() {
               <Link
                 to="/settings"
                 onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted border-t border-border mt-1 pt-3"
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-secondary border-t border-border mt-1 pt-3"
               >
                 <Settings size={16} />
                 <span>Settings</span>
@@ -683,7 +683,7 @@ function ModulesDropdown({
             key={item.key}
             to={item.path}
             onClick={onNavigate}
-            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
           >
             <item.icon size={16} />
             <span>{item.label}</span>
@@ -697,6 +697,7 @@ function ModulesDropdown({
 function BrandMark({ tenant }: { tenant: { name: string } | null }) {
   return (
     <div className="flex items-center gap-2 shrink-0">
+      <span className="h-8 w-1 shrink-0 rounded-full bg-accent" aria-hidden />
       <img src="/branding/logo-mark.png" alt="" className="h-8 w-8 rounded-md object-cover" />
       <div className="flex flex-col items-start justify-center">
         <span className="font-semibold text-foreground leading-tight tracking-wide">ACCUQUAL QMS</span>
@@ -761,7 +762,7 @@ function NavDropdown({
             ? meta
               ? clsx(meta.bgSoft, meta.text, "font-medium")
               : "bg-muted text-foreground font-medium"
-            : "text-muted-foreground hover:bg-muted"
+            : "text-muted-foreground hover:bg-secondary"
         )}
         aria-expanded={isOpen}
       >
@@ -818,16 +819,16 @@ function NavItemRow({
       to={item.path}
       title={item.notes ? `${item.label} — ${item.notes}` : item.label}
       onClick={onNavigate}
-      className="flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+      className="flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"
     >
       <item.icon size={16} className="shrink-0" />
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
       {level === "read" && <Lock size={12} className="shrink-0 text-muted-foreground" aria-label="Read-only for your department" />}
       {item.kpi &&
         (count !== undefined ? (
-          <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary tabular-nums">{count}</span>
+          <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent tabular-nums">{count}</span>
         ) : (
-          <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-label="KPI dashboard item" />
+          <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-label="KPI dashboard item" />
         ))}
     </Link>
   );

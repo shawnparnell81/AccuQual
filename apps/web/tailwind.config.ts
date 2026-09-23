@@ -1,7 +1,9 @@
 import type { Config } from "tailwindcss";
 
 export default {
-  darkMode: "class",
+  // The app stamps light/dark on <html data-theme>, not a `.dark` class.
+  // `dark:` utilities (department nav colors) follow that attribute.
+  darkMode: ["selector", '[data-theme="dark"]'],
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
@@ -32,6 +34,7 @@ export default {
         },
         card: "hsl(var(--card))",
         destructive: "hsl(var(--destructive))",
+        ring: "hsl(var(--ring))",
         // ACCUQUAL QMS Status Color Architecture — compliance/workflow badges.
         success: {
           DEFAULT: "hsl(var(--success))",

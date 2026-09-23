@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { TextField } from "../../components/forms/Field";
-import type { UserThemePreferences } from "../../api/types";
+import { useCurrentUser } from "../../hooks/useAuth";
+import { deriveThemeVars, resolveMode } from "../../lib/theme";
+import type { TenantBranding, UserThemePreferences } from "../../api/types";
 
 const MODES: Array<{ value: NonNullable<UserThemePreferences["mode"]>; label: string }> = [
   { value: "light", label: "Light" },
@@ -27,7 +29,13 @@ function useMyTheme() {
 export function ThemeSettingsSection() {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const user = useCurrentUser();
   const { data: prefs, isLoading } = useMyTheme();
+  const { data: branding } = useQuery<TenantBranding>({
+    queryKey: ["tenant/branding"],
+    queryFn: async () => (await apiClient.get("/tenant/branding")).data,
+    enabled: user?.tenantId != null,
+  });
   const [primaryColor, setPrimaryColor] = useState("");
   const [accentColor, setAccentColor] = useState("");
 
@@ -40,16 +48,27 @@ export function ThemeSettingsSection() {
 
   const save = useMutation({
     mutationFn: async (body: UserThemePreferences) => (await apiClient.patch("/users/me/theme", body)).data,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users/me/theme"] });
+    onSuccess: (data) => {
+      queryClient.setQueryData(["users/me/theme"], data);
       toast.success("Theme preference saved.");
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save your theme preference.")),
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
-
   const currentMode = prefs?.mode ?? "dark";
+  const previewStyle = useMemo(() => {
+    const vars = deriveThemeVars({
+      mode: resolveMode(currentMode),
+      branding,
+      userPrefs: {
+        primaryColor: primaryColor || undefined,
+        accentColor: accentColor || undefined,
+      },
+    });
+    return vars as CSSProperties;
+  }, [accentColor, branding, currentMode, primaryColor]);
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (
     <div className="flex flex-col gap-4">
@@ -80,9 +99,20 @@ export function ThemeSettingsSection() {
       <div className="rounded-lg border border-border bg-card p-4">
         <h3 className="mb-2 text-sm font-medium">Your Color Overrides</h3>
         <p className="mb-3 text-xs text-muted-foreground">
-          Optional — leave blank to use your organization's theme colors. Only you see these; they don't change AccuQual for anyone
-          else.
+          Optional — leave blank to use your organization's theme colors. Only you see these. Primary recolors buttons, selected
+          navigation, focus rings, and the page around them (background, cards, text, borders) for the Light or Dark mode above —
+          changing a color never flips that mode. Accent recolors the wordmark stripe, role badge, secondary links, and chart markers.
+          Each color is adjusted for contrast in the mode you're in.
         </p>
+        <div className="mb-4 rounded-md border border-border bg-background p-3 text-foreground" style={previewStyle}>
+          <p className="text-sm">Page text</p>
+          <p className="text-xs text-muted-foreground">Muted text on the page background</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-primary-foreground">Primary</span>
+            <span className="rounded-full border border-accent/40 bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent">Accent</span>
+            <span className="rounded-md border border-border bg-card px-2 py-1 text-xs">Card</span>
+          </div>
+        </div>
         <div className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium">Primary Color</span>
@@ -101,7 +131,7 @@ export function ThemeSettingsSection() {
             <div className="flex items-center gap-2">
               <input
                 type="color"
-                value={accentColor || "#00f3ff"}
+                value={accentColor || "#a855f7"}
                 onChange={(e) => setAccentColor(e.target.value)}
                 className="h-9 w-14 rounded border border-border bg-background"
               />

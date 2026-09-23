@@ -22,10 +22,12 @@ export const tenants = pgTable("tenants", {
    * rather than a parallel "theme" jsonb — they're all one tenant-branding
    * config a tenant admin edits together, same reasoning as folding
    * assistantName into aiConfig rather than a new column. All hex strings;
-   * the frontend theme engine (styles/theme.ts) converts each to the HSL
-   * triplet globals.css's CSS custom properties expect, then falls back to
-   * the built-in palette for anything unset — so a tenant can override just
-   * primaryColor and leave the rest on defaults.
+   * the frontend theme engine (apps/web/src/lib/theme.ts) converts each to
+   * the HSL triplet globals.css's CSS custom properties expect. A primary
+   * color also derives the unset surface tokens (background, card, text,
+   * border) for the active light or dark mode; explicit background/text/
+   * border fields still win when set, and anything left unset with no
+   * primary falls back to the built-in palette.
    */
   branding: jsonb("branding").$type<{
     logoUrl?: string;

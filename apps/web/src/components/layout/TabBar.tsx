@@ -82,11 +82,12 @@ export function TabBar() {
             title={tab.title}
             className={
               isActive
-                ? "flex max-w-[12rem] shrink-0 items-center gap-1.5 rounded-t-md border border-b-0 border-border bg-background px-3 py-1.5 text-sm text-foreground"
-                : "flex max-w-[12rem] shrink-0 items-center gap-1.5 rounded-t-md border border-b-0 border-transparent px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
+                ? "relative flex max-w-[12rem] shrink-0 items-center gap-1.5 rounded-t-md border border-b-0 border-border bg-background px-3 py-1.5 text-sm text-foreground"
+                : "flex max-w-[12rem] shrink-0 items-center gap-1.5 rounded-t-md border border-b-0 border-transparent px-3 py-1.5 text-sm text-muted-foreground hover:bg-secondary"
             }
           >
-            <Icon size={14} className="shrink-0" />
+            {isActive && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" aria-hidden />}
+            <Icon size={14} className={isActive ? "shrink-0 text-accent" : "shrink-0"} />
             <span className="truncate">{tab.title}</span>
             <span
               role="button"
