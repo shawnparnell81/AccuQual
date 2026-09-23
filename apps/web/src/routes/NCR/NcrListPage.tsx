@@ -12,10 +12,11 @@ import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import { DetailsDisclosure } from "../../components/forms/DetailsDisclosure";
 import { formatDate } from "../../lib/dates";
-import { READ_ONLY_REASON, duePhrase, statusPhrase } from "../../lib/opsLanguage";
+import { duePhrase, statusPhrase } from "../../lib/opsLanguage";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
-import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
+import { usePlantWrite } from "../../hooks/usePlantWrite";
+import { CurrentPlantNote } from "../../components/layout/CurrentPlantNote";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 
 const NCR_STATUSES = ["open", "contained", "investigating", "corrective_action", "closed"] as const;
@@ -31,7 +32,7 @@ interface NcrTriageSuggestion {
 
 /** NCR List: filters (severity, status, date range), export, quick-create. */
 export function NcrListPage() {
-  const canEdit = useCanEditWorkflow("ncr");
+  const { canEdit, reason } = usePlantWrite("ncr");
   const { label, people } = usePersonDirectory();
   const [severityFilter, setSeverityFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -98,6 +99,7 @@ export function NcrListPage() {
         <div>
           <h1 className="text-2xl font-semibold">Issues</h1>
           <p className="text-sm text-muted-foreground">Nonconformances (NCR). Log what went wrong, then contain it.</p>
+          <CurrentPlantNote />
         </div>
         <div className="flex gap-2">
           <button onClick={exportCsv} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
@@ -113,7 +115,7 @@ export function NcrListPage() {
           )}
         </div>
       </div>
-      {!canEdit && <p className="text-sm text-muted-foreground">{READ_ONLY_REASON}</p>}
+      {reason && <p className="text-sm text-muted-foreground">{reason}</p>}
 
       <div className="flex gap-3">
         <select value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} className="rounded-md border border-border px-3 py-2 text-sm">

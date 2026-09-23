@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { asyncHandler } from "./asyncHandler.js";
 import { AppError } from "./appError.js";
@@ -24,6 +24,13 @@ interface CrudOptions {
    */
   afterCreate?: (created: Record<string, unknown>, req: Request) => Promise<void>;
   afterUpdate?: (updated: Record<string, unknown>, req: Request) => Promise<void>;
+  /**
+   * Plant-scoped tables (issues, fixes, audits). Lists and creates use the
+   * current plant (`req.siteId`). Get/update/delete allow any plant the
+   * caller belongs to, so a direct link still opens, but another plant's
+   * records stay out of the default list.
+   */
+  siteScoped?: boolean;
 }
 
 /**
@@ -34,7 +41,7 @@ interface CrudOptions {
  * silently reassign a row's tenant via `.set({...req.body})`. Never trust
  * these fields from the client, validated or not.
  */
-const CLIENT_OWNED_FIELD_BLOCKLIST = ["id", "tenantId", "createdAt", "createdBy"];
+const CLIENT_OWNED_FIELD_BLOCKLIST = ["id", "tenantId", "siteId", "createdAt", "createdBy"];
 
 /**
  * Phase 11 performance pass — this generic `list` had NO limit at all
@@ -81,6 +88,20 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
     };
   const idCol = (table as unknown as Record<string, unknown>)[options.idColumn];
   const tenantCol = (table as unknown as Record<string, unknown>).tenantId;
+  const siteCol = (table as unknown as Record<string, unknown>).siteId;
+
+  function siteListPredicate(req: Request) {
+    if (!options.siteScoped) return undefined;
+    if (!req.siteId || siteCol == null) return null;
+    return eq(siteCol as never, req.siteId);
+  }
+
+  function siteRecordPredicate(req: Request) {
+    if (!options.siteScoped) return undefined;
+    const allowed = req.allowedSiteIds ?? [];
+    if (allowed.length === 0 || siteCol == null) return null;
+    return inArray(siteCol as never, allowed);
+  }
 
   function requireTenantDb(req: Request): { db: ReturnType<typeof untypedDbOf>; tenantId: number } {
     if (!req.db || req.tenantId === undefined) throw AppError.unauthorized("Missing tenant context");
@@ -89,14 +110,25 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
 
   const list = asyncHandler(async (req: Request, res: Response) => {
     const { db, tenantId } = requireTenantDb(req);
-    const rows = await db.select().from(table).where(eq(tenantCol as never, tenantId)).limit(LIST_SAFETY_LIMIT);
+    const sitePredicate = siteListPredicate(req);
+    if (sitePredicate === null) {
+      res.json([]);
+      return;
+    }
+    const where = sitePredicate ? and(eq(tenantCol as never, tenantId), sitePredicate) : eq(tenantCol as never, tenantId);
+    const rows = await db.select().from(table).where(where).limit(LIST_SAFETY_LIMIT);
     res.json(rows);
   });
 
   const getOne = asyncHandler(async (req: Request, res: Response) => {
     const { db, tenantId } = requireTenantDb(req);
     const id = Number(req.params.id);
-    const rows = await db.select().from(table).where(and(eq(idCol as never, id), eq(tenantCol as never, tenantId)));
+    const sitePredicate = siteRecordPredicate(req);
+    if (sitePredicate === null) throw AppError.notFound(options.entityName);
+    const where = sitePredicate
+      ? and(eq(idCol as never, id), eq(tenantCol as never, tenantId), sitePredicate)
+      : and(eq(idCol as never, id), eq(tenantCol as never, tenantId));
+    const rows = await db.select().from(table).where(where);
     const row = rows[0];
     if (!row) throw AppError.notFound(options.entityName);
     res.json(row);
@@ -104,9 +136,10 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
 
   const create = asyncHandler(async (req: Request, res: Response) => {
     const { db, tenantId } = requireTenantDb(req);
+    if (options.siteScoped && !req.siteId) throw AppError.forbidden("You aren't assigned to a plant, so you can't add records here.");
     const [created] = await db
       .insert(table)
-      .values({ ...stripClientOwnedFields(req.body), tenantId, createdBy: req.user?.id })
+      .values({ ...stripClientOwnedFields(req.body), tenantId, createdBy: req.user?.id, ...(options.siteScoped ? { siteId: req.siteId } : {}) })
       .returning();
     const createdId = (created as { id: number }).id;
     await recordAuditTrail(req.db!, {
@@ -133,10 +166,15 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
   const update = asyncHandler(async (req: Request, res: Response) => {
     const { db, tenantId } = requireTenantDb(req);
     const id = Number(req.params.id);
+    const sitePredicate = siteRecordPredicate(req);
+    if (sitePredicate === null) throw AppError.notFound(options.entityName);
+    const where = sitePredicate
+      ? and(eq(idCol as never, id), eq(tenantCol as never, tenantId), sitePredicate)
+      : and(eq(idCol as never, id), eq(tenantCol as never, tenantId));
     const [updated] = await db
       .update(table)
       .set({ ...stripClientOwnedFields(req.body), updatedAt: new Date() })
-      .where(and(eq(idCol as never, id), eq(tenantCol as never, tenantId)))
+      .where(where)
       .returning();
     if (!updated) throw AppError.notFound(options.entityName);
     await recordAuditTrail(req.db!, {
@@ -154,7 +192,11 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
   const remove = asyncHandler(async (req: Request, res: Response) => {
     const { db, tenantId } = requireTenantDb(req);
     const id = Number(req.params.id);
-    const tenantPredicate = and(eq(idCol as never, id), eq(tenantCol as never, tenantId));
+    const sitePredicate = siteRecordPredicate(req);
+    if (sitePredicate === null) throw AppError.notFound(options.entityName);
+    const tenantPredicate = sitePredicate
+      ? and(eq(idCol as never, id), eq(tenantCol as never, tenantId), sitePredicate)
+      : and(eq(idCol as never, id), eq(tenantCol as never, tenantId));
     if (options.softDelete) {
       const [updated] = await db.update(table).set({ isDeleted: true }).where(tenantPredicate).returning();
       if (!updated) throw AppError.notFound(options.entityName);
@@ -195,12 +237,17 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
     const { db, tenantId } = requireTenantDb(req);
     const { ids, patch } = req.body as { ids: number[]; patch: Record<string, unknown> };
     const clean = stripClientOwnedFields(patch);
+    const sitePredicate = siteRecordPredicate(req);
+    if (sitePredicate === null) throw AppError.notFound(options.entityName);
     const updatedRows: unknown[] = [];
     for (const id of ids) {
+      const where = sitePredicate
+        ? and(eq(idCol as never, id), eq(tenantCol as never, tenantId), sitePredicate)
+        : and(eq(idCol as never, id), eq(tenantCol as never, tenantId));
       const [updated] = await db
         .update(table)
         .set({ ...clean, updatedAt: new Date() })
-        .where(and(eq(idCol as never, id), eq(tenantCol as never, tenantId)))
+        .where(where)
         .returning();
       if (!updated) throw AppError.notFound(`${options.entityName} #${id}`);
       await recordAuditTrail(req.db!, {

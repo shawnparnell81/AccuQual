@@ -1,5 +1,6 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { useAuthStore, type AuthUser, type TenantContext } from "../store/authStore";
+import { useSiteStore } from "../store/siteStore";
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "/api",
@@ -19,6 +20,8 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (accessToken) {
     config.headers.set("Authorization", `Bearer ${accessToken}`);
   }
+  const siteId = useSiteStore.getState().currentSiteId;
+  if (siteId) config.headers.set("X-AccuQual-Site", String(siteId));
   return config;
 });
 
@@ -44,6 +47,7 @@ apiClient.interceptors.response.use(
       }
 
       useAuthStore.getState().logout();
+      useSiteStore.getState().setCurrentSiteId(null);
     }
 
     return Promise.reject(error);

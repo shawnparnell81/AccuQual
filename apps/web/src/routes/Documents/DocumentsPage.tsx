@@ -24,7 +24,7 @@ export function DocumentsPage() {
       <div className="flex items-center justify-between rounded-lg border border-border bg-card p-4">
         <div>
           <h2 className="text-sm font-medium">Master index</h2>
-          <p className="text-sm text-muted-foreground">Revision, release date, next review, and state for every controlled document.</p>
+          <p className="text-sm text-muted-foreground">Revision, release date, next review, and state for every controlled document. This catalog is shared by every plant.</p>
         </div>
         <div className="flex items-center gap-2">
           <OpenFormButton formType="document_control_index" entityId={DOCUMENT_CONTROL_INDEX_ENTITY_ID} title="Document Control Master Index" label="Open Master Index" />

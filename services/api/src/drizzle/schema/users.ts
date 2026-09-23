@@ -20,6 +20,12 @@ export const users = pgTable("users", {
   // platform_admin/admin bypass the department matrix entirely, and external
   // supplier/customer portal accounts aren't part of any internal department.
   department: text("department"),
+  // Last plant this user was working in. Switching plants writes this; it is
+  // not a JWT claim, so a switch does not require a new login. Null for
+  // platform admins (no tenant) and for someone who isn't assigned anywhere.
+  // Plain integer — a Drizzle FK back to sites.ts would cycle (sites already
+  // references users). The migration adds the real foreign key.
+  currentSiteId: integer("current_site_id"),
   // Which real supplier company this login belongs to — set ONLY for
   // roleName:"supplier" (Supplier Portal) accounts, the external-login
   // counterpart to `department` above for internal staff. Every

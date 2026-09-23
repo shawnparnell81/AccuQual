@@ -491,6 +491,13 @@
       "when": 1790120518075,
       "tag": "0069_tenant_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1790202000000,
+      "tag": "0070_sites",
+      "breakpoints": true
     }
   ]
 }

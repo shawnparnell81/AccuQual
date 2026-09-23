@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { and, eq, gte, ne, or } from "drizzle-orm";
+import { and, eq, gte, ne, or, sql } from "drizzle-orm";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import type { TenantDb } from "../../lib/tenantScope.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
@@ -40,7 +40,13 @@ function startOfMonth(): Date {
  * `modules/worker/worker.controller.ts`. One aggregation, two access
  * rules layered on top of it, not two copies of the aggregation itself.
  */
-export async function getItemsForUser(db: TenantDb, tenantId: number, userId: number): Promise<CalendarItem[]> {
+function plantLimit(siteId: number | null | undefined, column: unknown) {
+  if (siteId === undefined) return undefined;
+  if (siteId === null) return sql`false`;
+  return eq(column as never, siteId);
+}
+
+export async function getItemsForUser(db: TenantDb, tenantId: number, userId: number, siteId?: number | null): Promise<CalendarItem[]> {
   const monthStart = startOfMonth();
 
   const [myNcrs, myCapas, myAudits, myTraining, myDocuments, myCrars] = await Promise.all([
@@ -50,6 +56,7 @@ export async function getItemsForUser(db: TenantDb, tenantId: number, userId: nu
       .where(
         and(
           eq(ncr.tenantId, tenantId),
+          plantLimit(siteId, ncr.siteId),
           eq(ncr.assignedTo, userId),
           eq(ncr.isDeleted, false),
           or(ne(ncr.status, "closed"), gte(ncr.closedAt, monthStart)),
@@ -61,6 +68,7 @@ export async function getItemsForUser(db: TenantDb, tenantId: number, userId: nu
       .where(
         and(
           eq(capa.tenantId, tenantId),
+          plantLimit(siteId, capa.siteId),
           or(eq(capa.ownerId, userId), eq(capa.verifiedBy, userId)),
           or(ne(capa.status, "closed"), gte(capa.closedAt, monthStart)),
         ),
@@ -71,6 +79,7 @@ export async function getItemsForUser(db: TenantDb, tenantId: number, userId: nu
       .where(
         and(
           eq(audits.tenantId, tenantId),
+          plantLimit(siteId, audits.siteId),
           eq(audits.auditorId, userId),
           or(ne(audits.status, "completed"), gte(audits.completedAt, monthStart)),
         ),
@@ -213,6 +222,6 @@ export async function getItemsForUser(db: TenantDb, tenantId: number, userId: nu
 }
 
 export const getCalendarItems = asyncHandler(async (req: Request, res: Response) => {
-  const items = await getItemsForUser(req.db!, req.tenantId!, req.user!.id);
+  const items = await getItemsForUser(req.db!, req.tenantId!, req.user!.id, req.siteId ?? null);
   res.json(items);
 });

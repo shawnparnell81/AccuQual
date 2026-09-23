@@ -10,6 +10,7 @@ export const baseHandlers = crudFactory(ncr, {
   entityName: "NCR",
   idColumn: "id",
   softDelete: true,
+  siteScoped: true,
   // Phase 2 NCR unified-data-model fix — see ncr.formSync.ts's own comment.
   // A brand-new NCR gets its official document seeded immediately (never
   // starts totally blank again); a direct PATCH to description/severity
@@ -52,7 +53,11 @@ export const listHandler = asyncHandler(async (req: Request, res: Response) => {
   const { receivingLineItemId, supplierId } = req.query as Record<string, string | undefined>;
   if (!receivingLineItemId && !supplierId) return baseHandlers.list(req, res, () => undefined);
 
-  const conditions = [eq(ncr.tenantId, req.tenantId!), eq(ncr.isDeleted, false)];
+  if (!req.siteId) {
+    res.json([]);
+    return;
+  }
+  const conditions = [eq(ncr.tenantId, req.tenantId!), eq(ncr.isDeleted, false), eq(ncr.siteId, req.siteId)];
   if (receivingLineItemId) conditions.push(eq(ncr.receivingLineItemId, Number(receivingLineItemId)));
   if (supplierId) conditions.push(eq(ncr.supplierId, Number(supplierId)));
   const rows = await req.db!.select().from(ncr).where(and(...conditions));
@@ -60,26 +65,26 @@ export const listHandler = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const assignHandler = asyncHandler(async (req: Request, res: Response) => {
-  const updated = await ncrService.assign(req.db!, req.tenantId!, Number(req.params.id), req.body.assignedTo, req.user?.id);
+  const updated = await ncrService.assign(req.db!, req.tenantId!, Number(req.params.id), req.body.assignedTo, req.user?.id, req.allowedSiteIds);
   res.json(updated);
 });
 
 export const containmentHandler = asyncHandler(async (req: Request, res: Response) => {
-  const updated = await ncrService.setContainment(req.db!, req.tenantId!, Number(req.params.id), req.body.containment, req.user?.id);
+  const updated = await ncrService.setContainment(req.db!, req.tenantId!, Number(req.params.id), req.body.containment, req.user?.id, req.allowedSiteIds);
   res.json(updated);
 });
 
 export const rootCauseHandler = asyncHandler(async (req: Request, res: Response) => {
-  const updated = await ncrService.setRootCause(req.db!, req.tenantId!, Number(req.params.id), req.body.rootCause, req.user?.id);
+  const updated = await ncrService.setRootCause(req.db!, req.tenantId!, Number(req.params.id), req.body.rootCause, req.user?.id, req.allowedSiteIds);
   res.json(updated);
 });
 
 export const correctiveActionHandler = asyncHandler(async (req: Request, res: Response) => {
-  const updated = await ncrService.setCorrectiveAction(req.db!, req.tenantId!, Number(req.params.id), req.body.correctiveAction, req.user?.id);
+  const updated = await ncrService.setCorrectiveAction(req.db!, req.tenantId!, Number(req.params.id), req.body.correctiveAction, req.user?.id, req.allowedSiteIds);
   res.json(updated);
 });
 
 export const closeHandler = asyncHandler(async (req: Request, res: Response) => {
-  const updated = await ncrService.close(req.db!, req.tenantId!, Number(req.params.id), req.user?.id);
+  const updated = await ncrService.close(req.db!, req.tenantId!, Number(req.params.id), req.user?.id, req.allowedSiteIds);
   res.json(updated);
 });

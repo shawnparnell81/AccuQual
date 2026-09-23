@@ -1,17 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "./client";
+import { useSiteStore } from "../store/siteStore";
 
 /**
  * Generic React Query hooks bound to one REST resource, mirroring the backend's
  * crudFactory pattern. Module pages compose these with bespoke action hooks
  * (assign/verify/close/...) defined alongside each page.
  */
+const SITE_SCOPED_RESOURCES = new Set(["ncr", "capa", "audits"]);
+
 export function createResourceHooks<T extends { id: number }>(resource: string) {
   const key = [resource];
+  const siteScoped = SITE_SCOPED_RESOURCES.has(resource);
 
   function useList(params?: Record<string, unknown>) {
+    const siteId = useSiteStore((s) => (siteScoped ? s.currentSiteId : null));
     return useQuery({
-      queryKey: [...key, params],
+      queryKey: siteScoped ? [...key, "site", siteId, params] : [...key, params],
       queryFn: async () => (await apiClient.get<T[]>(`/${resource}`, { params })).data,
     });
   }

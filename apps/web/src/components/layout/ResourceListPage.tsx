@@ -25,6 +25,10 @@ interface ResourceListPageProps<T extends { id: number }> {
    * existing caller renders exactly as before.
    */
   searchable?: (row: T) => string;
+  /** When false, the create button stays hidden. Omit it to keep the old always-on create button. */
+  canCreate?: boolean;
+  /** Shown when the viewer can look but not add — department or plant. */
+  accessNote?: string | null;
 }
 
 /**
@@ -41,6 +45,8 @@ export function ResourceListPage<T extends { id: number }>({
   onRowClick,
   onCreated,
   searchable,
+  canCreate,
+  accessNote,
 }: ResourceListPageProps<T>) {
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -60,12 +66,13 @@ export function ResourceListPage<T extends { id: number }>({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">{title}</h1>
-        {createFields && (
+        {createFields && canCreate !== false && (
           <button onClick={() => setCreateOpen(true)} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
             + New
           </button>
         )}
       </div>
+      {accessNote && <p className="text-sm text-muted-foreground">{accessNote}</p>}
 
       {searchable && (
         <div className="flex flex-wrap items-center gap-2">

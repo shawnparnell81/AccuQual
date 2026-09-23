@@ -106,6 +106,7 @@ export const CAPA_LOOP = ["Start", "Do the fix", "Check it"] as const;
 export const DOC_LOOP = ["Draft", "Review", "Release", "Train"] as const;
 
 export const READ_ONLY_REASON = "You can view this. Your department can't change it.";
+export const UNASSIGNED_PLANT_REASON = "You aren't assigned to a plant, so you can't add or change records here.";
 export const DOC_EDIT_REASON = "Editing a draft is limited to quality, engineering, and reviewers.";
 export const TRAINING_MANAGE_REASON = "Assigning training is limited to quality and reviewers.";
 

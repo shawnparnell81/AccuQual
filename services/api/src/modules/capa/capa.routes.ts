@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { withTenantDb } from "../../lib/tenantScope.js";
+import { withSiteContext } from "../sites/siteContext.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createCapaSchema, updateCapaSchema, verifyCapaSchema } from "./capa.validation.js";
@@ -8,7 +9,7 @@ import { baseHandlers, listHandler, startHandler, verifyHandler, closeHandler } 
 
 export const capaRouter = Router();
 // Turns on PERMISSION_MATRIX.capa (quality: edit) — previously unenforced.
-capaRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("capa"));
+capaRouter.use(requireAuth, withTenantDb, withSiteContext, requireDepartmentAccess("capa"));
 
 capaRouter.get("/", listHandler);
 capaRouter.post("/", validate(createCapaSchema), baseHandlers.create);

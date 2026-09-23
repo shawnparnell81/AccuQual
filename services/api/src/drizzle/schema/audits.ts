@@ -1,10 +1,13 @@
 import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 import { tenants } from "./tenants.js";
+import { sites } from "./sites.js";
 
 export const audits = pgTable("audits", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
+  // Same plant rule as ncr.siteId — omitted inserts land on the default plant.
+  siteId: integer("site_id").references(() => sites.id),
   name: text("name").notNull(),
   type: text("type"), // internal, supplier, customer, certification
   auditorId: integer("auditor_id").references(() => users.id),

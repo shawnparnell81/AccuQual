@@ -1,6 +1,7 @@
 export * from "./tenants.js";
 export * from "./roles.js";
 export * from "./users.js";
+export * from "./sites.js";
 export * from "./documents.js";
 export * from "./ncr.js";
 export * from "./capa.js";

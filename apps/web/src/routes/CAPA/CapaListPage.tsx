@@ -7,8 +7,9 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { Modal } from "../../components/modals/Modal";
 import { TextField, TextAreaField } from "../../components/forms/Field";
 import { DetailsDisclosure } from "../../components/forms/DetailsDisclosure";
-import { READ_ONLY_REASON, duePhrase, statusPhrase } from "../../lib/opsLanguage";
-import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
+import { duePhrase, statusPhrase } from "../../lib/opsLanguage";
+import { usePlantWrite } from "../../hooks/usePlantWrite";
+import { CurrentPlantNote } from "../../components/layout/CurrentPlantNote";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
@@ -16,7 +17,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 const capaHooks = createResourceHooks<Capa>("capa");
 
 export function CapaListPage() {
-  const canEdit = useCanEditWorkflow("capa");
+  const { canEdit, reason } = usePlantWrite("capa");
   const { label } = usePersonDirectory();
   const toast = useToast();
   const { data: capas = [], isLoading, isError } = capaHooks.useList();
@@ -39,6 +40,7 @@ export function CapaListPage() {
         <div>
           <h1 className="text-2xl font-semibold">Fixes</h1>
           <p className="text-sm text-muted-foreground">Corrective actions (CAPA). Start from the issue they belong to.</p>
+          <CurrentPlantNote />
         </div>
         {canEdit && (
           <button
@@ -49,7 +51,7 @@ export function CapaListPage() {
           </button>
         )}
       </div>
-      {!canEdit && <p className="text-sm text-muted-foreground">{READ_ONLY_REASON}</p>}
+      {reason && <p className="text-sm text-muted-foreground">{reason}</p>}
 
       <DataTable
         columns={columns}

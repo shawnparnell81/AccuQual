@@ -220,6 +220,7 @@ export const transitionReceivingLineItemHandler = asyncHandler(async (req: Reque
     defectCategory: report?.defectCategory ?? undefined,
     notes,
     performedBy: req.user?.id,
+    siteId: req.siteId,
   });
   res.json(updated);
 });

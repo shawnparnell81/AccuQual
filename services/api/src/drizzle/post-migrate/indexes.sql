@@ -57,7 +57,8 @@ DECLARE
     'erp_connector_presets', 'erp_sync_errors', 'audit_row_changes',
     'sso_connections', 'sso_domains', 'user_identities', 'controlled_versions',
     'document_files', 'quarantine_records', 'quarantine_inventory', 'quarantine_resolutions',
-    'training_sessions', 'training_competencies', 'worker_profiles'
+    'training_sessions', 'training_competencies', 'worker_profiles',
+    'sites', 'user_sites'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP
@@ -67,6 +68,9 @@ END $$;
 
 -- Composite (tenant_id, status) — every list page filters by both together.
 CREATE INDEX IF NOT EXISTS ncr_tenant_status_idx ON ncr (tenant_id, status);
+CREATE INDEX IF NOT EXISTS ncr_tenant_site_idx ON ncr (tenant_id, site_id);
+CREATE INDEX IF NOT EXISTS capa_tenant_site_idx ON capa (tenant_id, site_id);
+CREATE INDEX IF NOT EXISTS audits_tenant_site_idx ON audits (tenant_id, site_id);
 CREATE INDEX IF NOT EXISTS capa_tenant_status_idx ON capa (tenant_id, status);
 CREATE INDEX IF NOT EXISTS audits_tenant_status_idx ON audits (tenant_id, status);
 CREATE INDEX IF NOT EXISTS suppliers_tenant_status_idx ON suppliers (tenant_id, status);
