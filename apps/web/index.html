@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/branding/logo-mark.png" />
+    <!-- vite-plugin-pwa injects <link rel="manifest"> and the service-worker registration itself at build time
+         (see vite.config.ts) — apple-touch-icon and theme-color are the two things it doesn't add for you,
+         since iOS Safari ignores the web manifest's own icons for the home-screen icon. -->
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <meta name="theme-color" content="#05070a" />
     <title>AccuQual</title>
   </head>
   <body>
