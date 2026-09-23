@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint src",
-    "test": "node --experimental-strip-types --test src/lib/theme.test.ts"
+    "test": "tsx --test src/lib/theme.test.ts"
   },
   "dependencies": {
     "@sentry/react": "^10.75.0",
@@ -36,6 +36,7 @@
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.40",
     "tailwindcss": "^3.4.7",
+    "tsx": "^4.16.2",
     "typescript": "^5.5.4",
     "vite": "^5.3.5"
   }
