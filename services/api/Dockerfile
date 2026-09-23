@@ -1,5 +1,5 @@
 # ---- Stage 1: install deps ----
-FROM node:20-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /repo
 COPY package.json ./
 COPY services/api/package.json services/api/package.json
@@ -8,14 +8,14 @@ RUN npm install --workspace services/api --include-workspace-root
 # ---- Stage 1b: production-only dependencies ----
 # What the RUNNING container needs. The full install above (compilers, the test runner, the dev server) is only for
 # the build stage; shipping it made the image larger and dragged known-vulnerable dev tooling into production.
-FROM node:20-alpine AS proddeps
+FROM node:26-alpine AS proddeps
 WORKDIR /repo
 COPY package.json ./
 COPY services/api/package.json services/api/package.json
 RUN npm install --workspace services/api --include-workspace-root --omit=dev
 
 # ---- Stage 2: build TypeScript ----
-FROM node:20-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /repo
 # Only the root node_modules is copied — with just this one workspace's
 # package.json present (no other workspace visible), npm workspaces hoists
@@ -31,7 +31,7 @@ COPY services/api ./services/api
 RUN npm run build --workspace services/api
 
 # ---- Stage 3: run lightweight Node.js server ----
-FROM node:20-alpine AS runtime
+FROM node:26-alpine AS runtime
 # Pick up OS security patches released since the base image was built, and drop npm/yarn: nothing runs a package
 # manager in production, and npm's own bundled libraries were a source of scanner findings.
 RUN apk upgrade --no-cache && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
