@@ -17,10 +17,10 @@ export function NotificationDropdown() {
 
   return (
     <div className="relative">
-      <button onClick={() => setOpen((o) => !o)} title="Notifications" className="relative flex items-center rounded-md p-1.5 text-muted-foreground hover:bg-muted">
+      <button onClick={() => setOpen((o) => !o)} title="Notifications" className="relative flex items-center rounded-md p-1.5 text-muted-foreground hover:bg-secondary">
         <Bell size={16} />
         {unreadCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-medium text-primary-foreground">
+          <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent px-1 text-[9px] font-medium text-accent-foreground">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
@@ -39,10 +39,10 @@ export function NotificationDropdown() {
                   onClick={() => {
                     if (!n.readAt) markRead(n.id);
                   }}
-                  className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
+                  className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-2 text-left text-sm hover:bg-secondary"
                 >
                   <span className="flex w-full items-center gap-1.5">
-                    {!n.readAt && <span className="h-1.5 w-1.5 flex-none rounded-full bg-primary" />}
+                    {!n.readAt && <span className="h-1.5 w-1.5 flex-none rounded-full bg-accent" />}
                     <span className={n.readAt ? "text-muted-foreground" : "font-medium"}>{n.subject}</span>
                   </span>
                   <span className="text-xs text-muted-foreground">{new Date(n.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>

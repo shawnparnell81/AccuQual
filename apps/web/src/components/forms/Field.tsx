@@ -5,7 +5,7 @@ import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTML
 // app-wide instead of needing every module's form touched individually — see styles/globals.css's
 // --form-field token (defaults to the same value as --border until a tenant customizes it).
 const baseInputClass =
-  "w-full rounded-md border border-form-field bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary";
+  "w-full rounded-md border border-form-field bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring";
 
 export function TextField({ label, ...props }: { label: string } & InputHTMLAttributes<HTMLInputElement>) {
   return (

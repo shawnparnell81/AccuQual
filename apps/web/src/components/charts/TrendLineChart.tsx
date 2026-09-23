@@ -14,7 +14,15 @@ export function TrendLineChart({ data, label = "Count" }: { data: TrendDatum[]; 
         <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fill: "hsl(var(--muted-foreground))" }} />
         <YAxis tickLine={false} axisLine={false} allowDecimals={false} tick={{ fill: "hsl(var(--muted-foreground))" }} />
         <Tooltip />
-        <Line type="monotone" dataKey="count" name={label} stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
+        <Line
+          type="monotone"
+          dataKey="count"
+          name={label}
+          stroke="hsl(var(--primary))"
+          strokeWidth={2}
+          dot={{ r: 3, fill: "hsl(var(--accent))", stroke: "hsl(var(--accent))" }}
+          activeDot={{ r: 5, fill: "hsl(var(--accent))", stroke: "hsl(var(--accent))" }}
+        />
       </LineChart>
     </ResponsiveContainer>
   );

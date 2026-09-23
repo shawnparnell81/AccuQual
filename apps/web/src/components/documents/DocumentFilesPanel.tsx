@@ -68,7 +68,7 @@ export function DocumentFilesPanel({ documentId, versionId, files, editable, onC
                   {formatBytes(f.sizeBytes)} · checksum <code title={f.sha256}>{f.sha256.slice(0, 12)}</code>
                 </p>
               </div>
-              <button onClick={() => void openAttachment(documentId, versionId, f.id).catch((err) => toast.error(extractErrorMessage(err, "Couldn't open that file.")))} className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+              <button onClick={() => void openAttachment(documentId, versionId, f.id).catch((err) => toast.error(extractErrorMessage(err, "Couldn't open that file.")))} className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
                 <Download size={13} /> Open
               </button>
               {editable && (

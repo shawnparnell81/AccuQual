@@ -85,7 +85,7 @@ export function ResourceListPage<T extends { id: number }>({
                 if (label?.trim()) saveView({ label: label.trim(), searchText: search });
               }}
               title="Save current search"
-              className="flex items-center gap-1 rounded-md border border-border px-2 py-1.5 text-xs hover:bg-muted"
+              className="flex items-center gap-1 rounded-md border border-border px-2 py-1.5 text-xs hover:bg-secondary"
             >
               <Bookmark size={13} /> Save view
             </button>

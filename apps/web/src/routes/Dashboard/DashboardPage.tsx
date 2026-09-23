@@ -250,7 +250,7 @@ export function DashboardPage() {
         <div className="mt-4 rounded-lg border border-border bg-card p-4">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-medium">Items by State</h3>
-            <Link to="/inventory/alerts" className="text-xs text-primary hover:underline">
+            <Link to="/inventory/alerts" className="text-xs text-accent hover:underline">
               View alerts
             </Link>
           </div>
@@ -322,7 +322,7 @@ export function DashboardPage() {
       <div>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">ERP Overview</h2>
-          <Link to="/erp" className="text-xs text-primary hover:underline">
+          <Link to="/erp" className="text-xs text-accent hover:underline">
             View purchase orders
           </Link>
         </div>
@@ -349,7 +349,7 @@ export function DashboardPage() {
             <ul className="flex flex-col gap-2 text-sm">
               {erpOverview.recent.map((po) => (
                 <li key={po.id} className="flex items-center justify-between border-b border-border pb-1.5 last:border-0">
-                  <Link to={`/erp/${po.id}`} className="text-primary hover:underline">
+                  <Link to={`/erp/${po.id}`} className="text-accent hover:underline">
                     PO #{po.id} — {po.supplierName}
                   </Link>
                   <StatusBadge value={po.status} />

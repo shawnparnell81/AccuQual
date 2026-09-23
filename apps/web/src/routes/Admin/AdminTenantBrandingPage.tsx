@@ -87,9 +87,10 @@ function BrandingForm() {
       <div className="border-t border-border pt-4">
         <h3 className="mb-1 text-sm font-medium">Theme Colors</h3>
         <p className="mb-3 text-xs text-muted-foreground">
-          Applied live across every module, form, and dashboard for everyone in your organization (via CSS variables — see
-          styles/globals.css) — leave any of these blank to keep AccuQual's built-in color for it. A user can still override Primary and
-          Accent for themselves from their own Settings &gt; Theme.
+          Applied live across every module, form, and dashboard for everyone in your organization. Primary tints buttons, focus rings,
+          and — unless you set them below — page background, cards, text, and borders for whichever light or dark mode each person is
+          using. Accent colors highlights, badges, and secondary links. Leave a field blank to keep that derivation, or AccuQual's
+          built-in palette when Primary is blank too. A user can still override Primary and Accent for themselves from Settings → Theme.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <ColorField label="Secondary Color" value={form.secondaryColor} onChange={(v) => setForm({ ...form, secondaryColor: v })} />

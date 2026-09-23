@@ -28,7 +28,7 @@ export function DocumentLinksPanel({ links, editable, onChange }: Props) {
           {links.map((l) => (
             <li key={`${l.type}:${l.id}`} className="flex items-center gap-2 rounded-md border border-border p-2 text-sm">
               <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase">{linkTypeLabel(l.type)}</span>
-              <Link to={routeFor(l)} className="min-w-0 flex-1 truncate text-primary hover:underline">
+              <Link to={routeFor(l)} className="min-w-0 flex-1 truncate text-accent hover:underline">
                 {l.label}
               </Link>
               {editable && (
@@ -86,7 +86,7 @@ export function DocumentLinkHistory({ documentId }: { documentId: number }) {
       {data.links.map((l) => (
         <li key={`${l.type}:${l.id}`} className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2 text-sm">
           <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase">{l.typeLabel}</span>
-          <Link to={routeFor(l)} className="min-w-0 flex-1 truncate text-primary hover:underline">
+          <Link to={routeFor(l)} className="min-w-0 flex-1 truncate text-accent hover:underline">
             {l.label}
           </Link>
           <span className="text-xs text-muted-foreground">{l.firstVersion === l.lastVersion ? `version ${l.firstVersion}` : `versions ${l.firstVersion}–${l.lastVersion}`}</span>

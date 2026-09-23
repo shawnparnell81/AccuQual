@@ -153,7 +153,7 @@ export function WorkflowHistoryItem({ entry, highlighted }: { entry: WorkflowHis
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span>{entry.performedByName ?? "System"}</span>
             {toStatus && <span>→ now {toStatus.replace(/_/g, " ")}</span>}
-            <button onClick={() => setExpanded((e) => !e)} className="ml-auto flex items-center gap-1 text-primary hover:underline">
+            <button onClick={() => setExpanded((e) => !e)} className="ml-auto flex items-center gap-1 text-accent hover:underline">
               Details <ChevronDown size={12} className={clsx("transition-transform", expanded && "rotate-180")} />
             </button>
           </div>

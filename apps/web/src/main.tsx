@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
 import { ToastProvider } from "./components/shared/ToastProvider";
 import "./styles/globals.css";
-import { getStoredMode } from "./lib/theme";
+import { applyStoredThemeVars, getStoredMode } from "./lib/theme";
 import { initErrorTracking } from "./lib/errorTracking";
 import { ErrorBoundary } from "./components/shared/ErrorBoundary";
 
@@ -16,6 +16,7 @@ initErrorTracking();
 // (or vice versa) once useThemeSync's real data loads. AppLayout.tsx's
 // useThemeSync takes over from here with the tenant/user's real theme.
 document.documentElement.setAttribute("data-theme", getStoredMode() ?? "dark");
+applyStoredThemeVars();
 
 const queryClient = new QueryClient({
   defaultOptions: {

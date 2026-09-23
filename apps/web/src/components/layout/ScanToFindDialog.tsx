@@ -59,7 +59,7 @@ export function ScanToFindDialog() {
       <button
         onClick={() => setOpen(true)}
         title="Scan to find (lot #, serial #, or SKU)"
-        className="hidden md:flex shrink-0 p-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="hidden md:flex shrink-0 p-2 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
       >
         <ScanLine size={18} />
       </button>
@@ -74,7 +74,7 @@ export function ScanToFindDialog() {
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 placeholder="Scan or type a lot #, serial #, or SKU"
-                className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+                className="flex-1 rounded-md border border-form-field bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
               />
               <button type="submit" disabled={searching} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
                 Find
@@ -96,7 +96,7 @@ export function ScanToFindDialog() {
                               navigate(`/inventory/lots/${r.id}`);
                               close();
                             }}
-                            className="flex w-full flex-col items-start rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+                            className="flex w-full flex-col items-start rounded-md px-2 py-1.5 text-left text-sm hover:bg-secondary"
                           >
                             <span className="font-medium">{r.lotNumber}</span>
                             <span className="text-xs text-muted-foreground">

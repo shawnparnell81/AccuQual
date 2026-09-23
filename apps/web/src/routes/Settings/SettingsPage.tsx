@@ -69,7 +69,7 @@ export function SettingsPage() {
             </dl>
             <p className="mt-3 text-xs text-muted-foreground">
               Name, role, and department, along with every other organization-wide setting (users &amp; roles, permissions, AI, supplier/quality/receiving settings, tenant profile), are managed in the{" "}
-              <Link to="/admin" className="text-primary hover:underline">
+              <Link to="/admin" className="text-accent hover:underline">
                 Admin Console
               </Link>
               .
@@ -79,7 +79,7 @@ export function SettingsPage() {
             <h3 className="mb-2 text-sm font-medium">Navigation</h3>
             <p className="text-sm text-muted-foreground">
               Which department dropdowns and modules show up in the top nav is its own real setting —{" "}
-              <button onClick={() => setTab("Navigation")} className="text-primary hover:underline">
+              <button onClick={() => setTab("Navigation")} className="text-accent hover:underline">
                 open the Navigation tab
               </button>
               .

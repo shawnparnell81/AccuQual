@@ -29,6 +29,7 @@
   --border: 217 33% 17%; /* #1E293B — Layout Component Micro-Borders */
   --primary: 183 100% 50%; /* #00F3FF — Active Interactive States / Accents (Electric Neon Cyan) */
   --primary-foreground: 216 33% 3%; /* #05070A — dark text for contrast on the bright cyan accent */
+  --ring: var(--primary); /* focus rings track primary unless a derived palette sets its own */
   --muted: 217 33% 17%; /* #1E293B — subtle recessed surface, same tone as border */
   --muted-foreground: 215 20% 65%; /* #94A3B8 — Compliance Sub-text Label (slate silver) */
   --destructive: 341 100% 58%; /* #FF2A6D — Non-Conformance / Rejected Flag (Cyber Magenta) */
@@ -84,6 +85,7 @@
   --border: 195 50% 76%; /* #A3D1E0-ish — a real visible border line, not a hairline */
   --primary: 192 91% 36%; /* #0891B2 — same cyan hue as the dark palette's neon accent, darkened for contrast on white */
   --primary-foreground: 0 0% 100%;
+  --ring: var(--primary);
   --muted: 195 55% 84%; /* #C0E1ED-ish — same cyan tint, a deeper recessed surface (section header bars, etc.) */
   --muted-foreground: 205 25% 35%; /* deepened further to keep reading as muted text against the now-darker muted background */
   --destructive: 347 77% 50%; /* #E11D48 */
@@ -112,6 +114,7 @@
   --border: 217 33% 17%;
   --primary: 183 100% 50%;
   --primary-foreground: 216 33% 3%;
+  --ring: var(--primary);
   --muted: 217 33% 17%;
   --muted-foreground: 215 20% 65%;
   --destructive: 341 100% 58%;
@@ -139,6 +142,7 @@
     --border: 195 50% 76%;
     --primary: 192 91% 36%;
     --primary-foreground: 0 0% 100%;
+    --ring: var(--primary);
     --muted: 195 55% 84%;
     --muted-foreground: 205 25% 35%;
     --destructive: 347 77% 50%;

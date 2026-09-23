@@ -12,24 +12,44 @@ import type { TenantBranding, UserThemePreferences } from "../api/types";
  * not a stale snapshot from login, so a tenant admin's color change or this
  * user's own toggle takes effect for every open tab within staleTime
  * without a re-login. main.tsx's synchronous pre-mount stamp (localStorage)
- * covers the frame before this resolves.
+ * covers the frame before this resolves — this hook waits until those
+ * queries settle so that first paint is not wiped back to the built-in
+ * palette and then painted again.
  */
 export function useThemeSync() {
   const user = useCurrentUser();
+  const enabled = user?.tenantId != null;
 
-  const { data: branding } = useQuery<TenantBranding>({
+  const brandingQuery = useQuery<TenantBranding>({
     queryKey: ["tenant/branding"],
     queryFn: async () => (await apiClient.get("/tenant/branding")).data,
-    enabled: user?.tenantId != null, // platform_admin has no tenant — nothing to fetch, defaults apply
+    enabled,
   });
 
-  const { data: userTheme } = useQuery<UserThemePreferences>({
+  const themeQuery = useQuery<UserThemePreferences>({
     queryKey: ["users/me/theme"],
     queryFn: async () => (await apiClient.get("/users/me/theme")).data,
-    enabled: user?.tenantId != null, // GET /users/me/theme sits behind withTenantDb, same as every other /users/* route
+    enabled,
   });
 
+  const branding = brandingQuery.isError ? undefined : brandingQuery.data;
+  const userTheme = themeQuery.data;
+  const ready = !enabled || (brandingQuery.isFetched && themeQuery.isFetched);
+
   useEffect(() => {
+    if (!ready) return;
+    // Keep the boot snapshot when we could not read this user's overrides.
+    if (enabled && themeQuery.isError) return;
     applyTheme(branding, userTheme);
-  }, [branding, userTheme]);
+  }, [ready, enabled, branding, userTheme, themeQuery.isError]);
+
+  useEffect(() => {
+    if (!ready || themeQuery.isError) return;
+    if (userTheme?.mode === "light" || userTheme?.mode === "dark") return;
+    const mq = window.matchMedia?.("(prefers-color-scheme: light)");
+    if (!mq) return;
+    const onChange = () => applyTheme(branding, userTheme);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [ready, branding, userTheme, themeQuery.isError]);
 }
