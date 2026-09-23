@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -32,7 +32,10 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowDashboard } from "../../components/dashboard/WorkflowDashboard";
 import { RecheckMinMaxButton } from "../../components/dashboard/RecheckMinMaxButton";
 import { useCurrentUser } from "../../hooks/useAuth";
-import { Palette, FileUp, Bot, Cpu } from "lucide-react";
+import { usePersonDirectory } from "../../hooks/usePersonDirectory";
+import { isPastDue } from "../../lib/opsLanguage";
+import { HealthRing, KpiTile, Reveal, SegmentedTabs, AnimatedNumber, type Tone } from "../../components/dashboard/kit";
+import { Palette, FileUp, Bot, Cpu, AlertTriangle, PackageMinus, ClipboardCheck, ShieldAlert, ChevronRight } from "lucide-react";
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
 const capaHooks = createResourceHooks<Capa>("capa");
@@ -46,14 +49,42 @@ const reorderRequestHooks = createResourceHooks<InventoryReorderRequest>("invent
 
 const INVENTORY_STATES = ["in_stock", "below_min", "reorder_pending", "on_order", "overstock", "inactive"] as const;
 
-export function StatCard({ label, value }: { label: string; value: number | string }) {
+export function StatCard({ label, value, tone = "primary" }: { label: string; value: number | string; tone?: Tone }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-semibold">{value}</p>
+    <div className="kpi-tile kpi-hover rounded-xl p-4" style={{ ["--tone" as string]: tone === "danger" ? "var(--destructive)" : `var(--${tone})` }}>
+      <p className="relative text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="relative mt-1 text-2xl font-semibold tabular-nums">
+        <AnimatedNumber value={value} />
+      </p>
     </div>
   );
 }
+
+const TABS = [
+  { key: "quality", label: "Quality" },
+  { key: "inventory", label: "Inventory" },
+  { key: "purchasing", label: "Purchasing" },
+  { key: "workflow", label: "Workflows" },
+] as const;
+type TabKey = (typeof TABS)[number]["key"];
+
+/** Items opened per week over the last `weeks` weeks, oldest first. */
+function weeklyCounts(dates: (string | null | undefined)[], weeks = 8): number[] {
+  const now = Date.now();
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  const buckets = Array.from({ length: weeks }, () => 0);
+  for (const d of dates) {
+    if (!d) continue;
+    const age = Math.floor((now - new Date(d).getTime()) / weekMs);
+    if (age >= 0 && age < weeks) buckets[weeks - 1 - age]! += 1;
+  }
+  return buckets;
+}
+
+const greeting = () => {
+  const h = new Date().getHours();
+  return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+};
 
 /** Dashboard: NCR severity chart, CAPA status overview, audit calendar widget, supplier scorecards, AI insights panel. */
 export function DashboardPage() {
@@ -137,25 +168,139 @@ export function DashboardPage() {
   }, [capas]);
   const capaEffectivenessRate = capas.length === 0 ? null : Math.round((capas.filter((c) => c.status === "closed").length / capas.length) * 100);
 
-  return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
+  const [params, setParams] = useSearchParams();
+  const requestedTab = params.get("tab");
+  const tab: TabKey = TABS.some((t) => t.key === requestedTab) ? (requestedTab as TabKey) : "quality";
+  const { label: personLabel } = usePersonDirectory();
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
-        <StatCard label="Open NCRs" value={ncrs.filter((n) => n.status !== "closed").length} />
-        <StatCard label="Open CAPAs" value={openCapas} />
-        <StatCard label="Scheduled Audits" value={audits.filter((a) => a.status === "scheduled").length} />
-        <StatCard label="At-Risk Suppliers" value={atRiskSuppliers.length} />
-        <StatCard label="CAPA Effectiveness" value={capaEffectivenessRate === null ? "—" : `${capaEffectivenessRate}%`} />
-        <StatCard label="Items Below Min" value={openBelowMinAlerts} />
+  const openNcrs = ncrs.filter((n) => n.status !== "closed");
+  const openFixRows = capas.filter((c) => c.status !== "closed");
+  const lateRows = [
+    ...openNcrs
+      .filter((n) => isPastDue(n.dueDate, false))
+      .map((n) => ({ key: `ncr-${n.id}`, title: `Issue #${n.id} — ${n.title}`, who: personLabel(n.assignedTo), due: n.dueDate!.slice(0, 10), href: `/ncr/${n.id}` })),
+    ...openFixRows
+      .filter((c) => isPastDue(c.dueDate, false))
+      .map((c) => ({ key: `capa-${c.id}`, title: `Fix #${c.id}`, who: personLabel(c.ownerId), due: c.dueDate!.slice(0, 10), href: `/capa/${c.id}` })),
+  ].sort((a, b) => a.due.localeCompare(b.due));
+  const openTotal = openNcrs.length + openFixRows.length;
+  const onTimePct = openTotal === 0 ? 100 : Math.round((1 - lateRows.length / openTotal) * 100);
+  const onTimeTone: Tone = onTimePct >= 90 ? "success" : onTimePct >= 70 ? "warning" : "danger";
+  const criticalOpen = openNcrs.filter((n) => n.severity === "critical").length;
+  const firstName = currentUser?.name?.split(" ")[0];
+
+  const summaryBits = [
+    lateRows.length > 0 ? `${lateRows.length} ${lateRows.length === 1 ? "item is" : "items are"} past due` : "Nothing is past due",
+    openBelowMinAlerts > 0 ? `${openBelowMinAlerts} ${openBelowMinAlerts === 1 ? "item is" : "items are"} below minimum stock` : null,
+    requisitionsPendingApproval > 0 ? `${requisitionsPendingApproval} ${requisitionsPendingApproval === 1 ? "requisition needs" : "requisitions need"} approval` : null,
+  ].filter(Boolean);
+
+  const attention: { key: string; title: string; detail: string; href: string; tone: Tone; icon: "late" | "stock" | "supplier" | "approval" }[] = [
+    ...lateRows.slice(0, 5).map((r) => ({ key: r.key, title: r.title, detail: `${r.who} · due ${r.due}`, href: r.href, tone: "danger" as Tone, icon: "late" as const })),
+    ...(openBelowMinAlerts > 0
+      ? [{ key: "stock", title: `${openBelowMinAlerts} ${openBelowMinAlerts === 1 ? "item" : "items"} below minimum stock`, detail: "Review reorder needs", href: "/inventory/alerts", tone: "warning" as Tone, icon: "stock" as const }]
+      : []),
+    ...(suppliersAtRisk > 0
+      ? [{ key: "supplier", title: `${suppliersAtRisk} ${suppliersAtRisk === 1 ? "supplier" : "suppliers"} at risk`, detail: "Based on delivery and quality history", href: "/suppliers", tone: "warning" as Tone, icon: "supplier" as const }]
+      : []),
+    ...(requisitionsPendingApproval > 0
+      ? [{ key: "reqs", title: `${requisitionsPendingApproval} ${requisitionsPendingApproval === 1 ? "requisition" : "requisitions"} waiting on approval`, detail: "Purchasing", href: "/erp/requisitions", tone: "primary" as Tone, icon: "approval" as const }]
+      : []),
+  ];
+  const attentionIcon = { late: AlertTriangle, stock: PackageMinus, supplier: ShieldAlert, approval: ClipboardCheck } as const;
+  const toneVar = (tone: Tone) => (tone === "danger" ? "destructive" : tone);
+
+  return (
+    <div className="flex flex-col gap-8">
+      <Reveal>
+        <div className="hero-surface rounded-2xl p-6 md:p-8">
+          <div className="relative flex flex-wrap items-center justify-between gap-6">
+            <div>
+              <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-primary">
+                <span className="live-dot h-2 w-2 rounded-full bg-primary" /> Plant pulse
+              </p>
+              <h1 className="mt-2 text-3xl font-semibold md:text-4xl">
+                {greeting()}
+                {firstName ? `, ${firstName}` : ""}
+              </h1>
+              <p className="mt-2 max-w-xl text-muted-foreground">{summaryBits.join(" · ")}.</p>
+            </div>
+            <HealthRing
+              value={onTimePct}
+              label="On-time rate"
+              sub={openTotal === 0 ? "No open issues or fixes" : `${openTotal - lateRows.length} of ${openTotal} open items on schedule`}
+              tone={onTimeTone}
+            />
+          </div>
+        </div>
+      </Reveal>
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <KpiTile
+          index={1}
+          label="Open issues"
+          value={openNcrs.length}
+          trend={weeklyCounts(ncrs.map((n) => n.createdAt))}
+          sub={criticalOpen > 0 ? `${criticalOpen} critical` : "None critical"}
+          tone={criticalOpen > 0 ? "danger" : "primary"}
+          href="/ncr"
+        />
+        <KpiTile index={2} label="Open fixes" value={openCapas} trend={weeklyCounts(capas.map((c) => c.createdAt))} sub="Corrective actions" tone="info" href="/capa" />
+        <KpiTile index={3} label="Past due" value={lateRows.length} sub={lateRows.length === 0 ? "All on schedule" : "Need a nudge"} tone={lateRows.length > 0 ? "danger" : "success"} />
+        <KpiTile index={4} label="Suppliers at risk" value={suppliersAtRisk} sub="Delivery + quality" tone={suppliersAtRisk > 0 ? "warning" : "success"} href="/suppliers" />
+        <KpiTile index={5} label="Below minimum" value={openBelowMinAlerts} sub="Stock alerts" tone={openBelowMinAlerts > 0 ? "warning" : "success"} href="/inventory/alerts" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h2 className="mb-2 text-sm font-medium">NCR Severity</h2>
-          <SeverityChart data={severityData} />
-        </div>
+      <div className="grid gap-4 lg:grid-cols-5">
+        <Reveal index={6} className="lg:col-span-3">
+          <div className="h-full rounded-xl border border-border bg-card p-5">
+            <h2 className="mb-3 text-sm font-semibold">Needs attention</h2>
+            {attention.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-10 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-success/15 text-success">
+                  <ClipboardCheck size={22} />
+                </span>
+                <p className="font-medium">All clear</p>
+                <p className="text-sm text-muted-foreground">Nothing is late and nothing is waiting on you.</p>
+              </div>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {attention.map((row) => {
+                  const Icon = attentionIcon[row.icon];
+                  return (
+                    <li key={row.key}>
+                      <Link to={row.href} className="group flex items-center gap-3 rounded-lg p-2.5 hover:bg-muted/60">
+                        <span
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                          style={{ background: `hsl(var(--${toneVar(row.tone)}) / 0.16)`, color: `hsl(var(--${toneVar(row.tone)}))` }}
+                        >
+                          <Icon size={17} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">{row.title}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{row.detail}</span>
+                        </span>
+                        <ChevronRight size={16} className="text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </Reveal>
+        <Reveal index={7} className="lg:col-span-2">
+          <div className="h-full rounded-xl border border-border bg-card p-5">
+            <h2 className="mb-2 text-sm font-semibold">Issues by severity</h2>
+            <SeverityChart data={severityData} />
+          </div>
+        </Reveal>
+      </div>
 
+      <SegmentedTabs tabs={[...TABS]} value={tab} onChange={(key) => setParams(key === "quality" ? {} : { tab: key }, { replace: true })} />
+
+      {tab === "quality" && (
+      <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-border bg-card p-4">
           <h2 className="mb-2 text-sm font-medium">Audit Calendar</h2>
           <ul className="flex flex-col gap-2 text-sm">
@@ -200,7 +345,10 @@ export function DashboardPage() {
         </div>
 
         <div className="rounded-lg border border-border bg-card p-4">
-          <h2 className="mb-2 text-sm font-medium">Corrective Action Effectiveness</h2>
+          <div className="mb-2 flex items-baseline justify-between">
+            <h2 className="text-sm font-medium">Corrective Action Effectiveness</h2>
+            <span className="text-sm font-semibold tabular-nums text-primary">{capaEffectivenessRate === null ? "—" : `${capaEffectivenessRate}% closed`}</span>
+          </div>
           <CapaEffectivenessChart data={capaStatusData} />
         </div>
 
@@ -215,7 +363,9 @@ export function DashboardPage() {
           </p>
         </div>
       </div>
+      )}
 
+      {tab === "inventory" && (
       <div>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Inventory Overview</h2>
@@ -318,7 +468,9 @@ export function DashboardPage() {
           </div>
         </div>
       </div>
+      )}
 
+      {tab === "purchasing" && (
       <div>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">ERP Overview</h2>
@@ -359,6 +511,7 @@ export function DashboardPage() {
           )}
         </div>
       </div>
+      )}
 
       {currentUser?.roleName === "admin" && (
         <div>
@@ -384,10 +537,12 @@ export function DashboardPage() {
         </div>
       )}
 
+      {tab === "workflow" && (
       <div>
         <h2 className="mb-3 text-lg font-semibold">Workflow Overview</h2>
         <WorkflowDashboard />
       </div>
+      )}
     </div>
   );
 }

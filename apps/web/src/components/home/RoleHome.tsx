@@ -6,7 +6,8 @@ import { AttentionStrip } from "../calibration/EquipmentPanels";
 import { MonthCalendar } from "../calendar/MonthCalendar";
 import { OnboardingChecklist } from "../layout/OnboardingChecklist";
 import { TrainingAttentionStrip } from "../training/TrainingPanels";
-import { StatCard } from "../../routes/Dashboard/DashboardPage";
+import { KpiTile, Reveal } from "../dashboard/kit";
+import { ArrowRight, ChevronRight } from "lucide-react";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useCalendarItems } from "../../hooks/useCalendarItems";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
@@ -102,21 +103,38 @@ export function RoleHome() {
     kind === "lead" ? "What's stuck" : kind === "auditor" ? "Reviews and audits" : "Your work today";
   const sub = [plantName, rolePhrase(user?.roleName), departmentPhrase(user?.department)].filter(Boolean).join(" · ");
 
-  return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold">
-          {heading}
-          {user?.name ? <span className="font-normal text-muted-foreground"> · {user.name}</span> : null}
-        </h1>
-        {sub && <p className="text-sm text-muted-foreground">{sub}</p>}
-      </div>
+  const hour = new Date().getHours();
+  const hello = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const firstName = user?.name?.split(" ")[0];
+  const lateCount = kind === "floor" ? summary.overdueCount : late.length;
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="On your list" value={summary.openCount} />
-        <StatCard label="Late" value={kind === "floor" ? summary.overdueCount : late.length} />
-        <StatCard label={kind === "auditor" ? "In review" : "Waiting"} value={kind === "auditor" ? inReview.length : waiting.length} />
-        <StatCard label="Done this month" value={summary.completedThisMonthCount} />
+  return (
+    <div className="flex flex-col gap-8">
+      <Reveal>
+        <div className="hero-surface rounded-2xl p-6 md:p-8">
+          <div className="relative">
+            <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-primary">
+              <span className="live-dot h-2 w-2 rounded-full bg-primary" /> {heading}
+            </p>
+            <h1 className="mt-2 text-3xl font-semibold md:text-4xl">
+              {hello}
+              {firstName ? `, ${firstName}` : ""}
+            </h1>
+            <p className="mt-2 max-w-xl text-muted-foreground">
+              {summary.openCount === 0
+                ? "Nothing is on your list right now."
+                : `${summary.openCount} ${summary.openCount === 1 ? "thing is" : "things are"} on your list${lateCount > 0 ? `, ${lateCount} late` : ", none late"}.`}
+            </p>
+            {sub && <p className="mt-3 text-xs text-muted-foreground">{sub}</p>}
+          </div>
+        </div>
+      </Reveal>
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <KpiTile index={1} label="On your list" value={summary.openCount} tone="primary" />
+        <KpiTile index={2} label="Late" value={lateCount} tone={lateCount > 0 ? "danger" : "success"} sub={lateCount > 0 ? "Past their due date" : "All on schedule"} />
+        <KpiTile index={3} label={kind === "auditor" ? "In review" : "Waiting"} value={kind === "auditor" ? inReview.length : waiting.length} tone="warning" />
+        <KpiTile index={4} label="Done this month" value={summary.completedThisMonthCount} tone="success" />
       </div>
 
       {kind !== "floor" && <NextCallout kind={kind} issue={nextIssue} hasFix={nextIssue ? fixIds.has(nextIssue.id) : false} audit={nextAudit} doc={nextDoc} who={nextIssue ? label(nextIssue.assignedTo) : ""} />}
@@ -218,32 +236,48 @@ function NextCallout({
 
 function Callout({ kicker, title, detail, href }: { kicker: string; title: string; detail: string; href: string }) {
   return (
-    <Link to={href} className="rounded-lg border border-primary/30 bg-primary/5 p-4 hover:bg-primary/10">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-primary">{kicker}</p>
-      <p className="mt-1 font-medium">{title}</p>
-      <p className="text-sm text-muted-foreground">{detail}</p>
-    </Link>
+    <Reveal index={5}>
+      <Link
+        to={href}
+        className="kpi-tile kpi-hover group flex items-center justify-between gap-4 rounded-xl p-5"
+        style={{ ["--tone" as string]: "var(--primary)" }}
+      >
+        <span className="relative min-w-0">
+          <span className="block text-[10px] font-semibold uppercase tracking-widest text-primary">{kicker}</span>
+          <span className="mt-1 block truncate text-lg font-semibold">{title}</span>
+          <span className="block text-sm text-muted-foreground">{detail}</span>
+        </span>
+        <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform group-hover:translate-x-1">
+          <ArrowRight size={18} />
+        </span>
+      </Link>
+    </Reveal>
   );
 }
 
 function NamedList({ title, empty, rows }: { title: string; empty: string; rows: { key: string; href: string; label: string; detail: string }[] }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <h2 className="mb-3 text-sm font-medium">{title}</h2>
-      {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{empty}</p>
-      ) : (
-        <ul className="flex flex-col gap-2 text-sm">
-          {rows.map((row) => (
-            <li key={row.key} className="border-b border-border pb-2 last:border-0">
-              <Link to={row.href} className="font-medium hover:underline">
-                {row.label}
-              </Link>
-              <p className="text-xs text-muted-foreground">{row.detail}</p>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <Reveal index={6}>
+      <div className="h-full rounded-xl border border-border bg-card p-5">
+        <h2 className="mb-3 text-sm font-semibold">{title}</h2>
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{empty}</p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {rows.map((row) => (
+              <li key={row.key}>
+                <Link to={row.href} className="group flex items-center gap-3 rounded-lg p-2.5 hover:bg-muted/60">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{row.label}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{row.detail}</span>
+                  </span>
+                  <ChevronRight size={16} className="text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Reveal>
   );
 }
