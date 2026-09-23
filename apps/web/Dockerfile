@@ -1,5 +1,5 @@
 # ---- Stage 1: build React app ----
-FROM node:20-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /repo
 COPY package.json ./
 COPY apps/web/package.json apps/web/package.json
