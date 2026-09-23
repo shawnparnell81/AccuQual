@@ -14,8 +14,8 @@ function useFeasibilitySettings() {
 /**
  * Settings → Feasibility Module integration. Read by feasibility.controller.ts
  * on create (defaultRiskLevel seeds every one of the 7 fixed assessment
- * areas, autoAssignOwner) and on finalize (requiredDocuments validation,
- * notificationsEnabled) — see that file's own comments for exactly where.
+ * areas, autoAssignOwner) and on finalize (requiredDocuments — the full
+ * list of controlled-document ids — plus notificationsEnabled).
  * Quality + Engineering + Admin only (see settings.routes.ts).
  */
 export function FeasibilitySettingsPanel() {

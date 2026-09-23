@@ -5,7 +5,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { notifyDepartment } from "../notifications/notification.service.js";
-import { loadTenantForSettings, getFeasibilitySettings } from "../settings/settings.service.js";
+import { loadTenantForSettings, getFeasibilitySettings, requiredDocumentDisplayNames } from "../settings/settings.service.js";
 
 /** Full-record edit — engineering owns this document; same pattern as risk/workOrders/erp/rma.controller.ts's assertDepartment. */
 function assertDepartment(req: Request, allowed: string[]) {
@@ -153,10 +153,11 @@ export const finalizeFeasibilityHandler = asyncHandler(async (req: Request, res:
   const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
   const settings = getFeasibilitySettings(tenant);
   const required = settings.requiredDocuments ?? [];
-  const provided = new Set(record.providedDocuments ?? []);
+  const provided = new Set((record.providedDocuments ?? []).map((doc) => String(doc)));
   const missing = required.filter((doc) => !provided.has(doc));
   if (missing.length > 0) {
-    throw AppError.badRequest(`Cannot finalize — missing required document(s): ${missing.join(", ")}. Mark them provided first.`);
+    const labels = await requiredDocumentDisplayNames(req.db!, req.tenantId!, missing);
+    throw AppError.badRequest(`Cannot finalize — missing required document(s): ${labels.join(", ")}. Mark them provided first.`);
   }
 
   const [updated] = await req.db!.update(feasibilityReviews).set({ status: "final", finalizedAt: new Date(), updatedAt: new Date() }).where(eq(feasibilityReviews.id, record.id)).returning();

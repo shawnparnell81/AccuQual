@@ -4,7 +4,7 @@ import { tenants } from "../../drizzle/schema/tenants.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { encryptSecret, maskSecret, decryptSecret } from "../tenant/crypto.js";
-import { loadTenantForSettings, getFeasibilitySettings, getInventorySettings, getErpSyncSettings, getSupplierRiskSettings, getReceivingSettings } from "./settings.service.js";
+import { loadTenantForSettings, getFeasibilitySettings, assertAccessibleRequiredDocuments, getInventorySettings, getErpSyncSettings, getSupplierRiskSettings, getReceivingSettings } from "./settings.service.js";
 import { triggerErpSync } from "./settings.erpSync.js";
 
 // ============================================================
@@ -18,6 +18,7 @@ export const getFeasibilitySettingsHandler = asyncHandler(async (req: Request, r
 
 export const updateFeasibilitySettingsHandler = asyncHandler(async (req: Request, res: Response) => {
   const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  if (Array.isArray(req.body.requiredDocuments)) await assertAccessibleRequiredDocuments(req.db!, req.tenantId!, req.body.requiredDocuments);
   const merged = { ...getFeasibilitySettings(tenant), ...req.body };
 
   const [updated] = await req.db!.update(tenants).set({ feasibilitySettings: merged }).where(eq(tenants.id, req.tenantId!)).returning();

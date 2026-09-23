@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { REQUIRED_DOCUMENT_ID } from "./requiredDocuments.js";
 
 // Mirrors feasibility.validation.ts's RISK_LEVELS exactly — this seeds each
 // of the 7 fixed assessment rows' own riskLevel on create (see
@@ -8,7 +9,9 @@ export const RISK_LEVELS = ["low", "medium", "high"] as const;
 export const updateFeasibilitySettingsSchema = z.object({
   defaultRiskLevel: z.enum(RISK_LEVELS).optional(),
   autoAssignOwner: z.boolean().optional(),
-  requiredDocuments: z.array(z.string().min(1)).optional(),
+  // Controlled-document ids (documents.id), not free-text names. Existence,
+  // tenant access, and duplicates are checked in the settings controller.
+  requiredDocuments: z.array(z.string().regex(REQUIRED_DOCUMENT_ID, "Must be an existing document id")).optional(),
   notificationsEnabled: z.boolean().optional(),
 });
 

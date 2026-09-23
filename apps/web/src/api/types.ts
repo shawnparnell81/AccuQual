@@ -1154,6 +1154,7 @@ export interface FeasibilityReview {
 
   status: FeasibilityStatus;
   finalizedAt: string | null;
+  /** Controlled-document ids marked attached. Finalize requires every settings.requiredDocuments id. */
   providedDocuments: string[];
   ownerId: number | null;
   createdBy: number | null;
@@ -1168,6 +1169,7 @@ export interface FeasibilityReview {
 export interface FeasibilitySettings {
   defaultRiskLevel?: FeasibilityRiskLevel;
   autoAssignOwner?: boolean;
+  /** Controlled-document ids (`documents.id` as decimal strings) that must be attached before finalize. Default []. */
   requiredDocuments?: string[];
   notificationsEnabled?: boolean;
 }
