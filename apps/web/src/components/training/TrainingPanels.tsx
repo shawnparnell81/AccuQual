@@ -73,7 +73,7 @@ export function TrainingAttentionStrip() {
     <div className="rounded-lg border border-warning/40 bg-warning/10 p-3">
       <div className="flex flex-wrap items-center gap-3">
         <p className="flex items-center gap-2 text-sm font-medium">
-          <AlertTriangle size={15} /> {data.length} {data.length === 1 ? "person-course needs" : "person-courses need"} attention
+          <AlertTriangle size={15} /> {data.length} {data.length === 1 ? "training item needs" : "training items need"} attention
         </p>
         <span className="text-xs text-muted-foreground">
           {(Object.keys(QUALIFICATION_LABEL) as QualificationStatus[])

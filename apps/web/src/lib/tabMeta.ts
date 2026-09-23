@@ -16,11 +16,11 @@ interface RoutePattern {
 }
 
 const ROUTE_PATTERNS: RoutePattern[] = [
-  { test: /^\/ncr\/(\d+)$/, icon: "ncr", title: (m) => `NCR #${m[1]}` },
-  { test: /^\/ncr\/?$/, icon: "ncr", title: () => "NCRs" },
-  { test: /^\/capa\/(\d+)$/, icon: "capa", title: (m) => `CAPA #${m[1]}` },
-  { test: /^\/capa\/?$/, icon: "capa", title: () => "CAPAs" },
-  { test: /^\/8d/, icon: "capa", title: () => "8D Reports" },
+  { test: /^\/ncr\/(\d+)$/, icon: "ncr", title: (m) => `Issue #${m[1]}` },
+  { test: /^\/ncr\/?$/, icon: "ncr", title: () => "Issues" },
+  { test: /^\/capa\/(\d+)$/, icon: "capa", title: (m) => `Fix #${m[1]}` },
+  { test: /^\/capa\/?$/, icon: "capa", title: () => "Fixes" },
+  { test: /^\/8d/, icon: "capa", title: () => "8D reports" },
   { test: /^\/suppliers\/(\d+)$/, icon: "supplier", title: (m) => `Supplier #${m[1]}` },
   { test: /^\/suppliers\/?$/, icon: "supplier", title: () => "Suppliers" },
   { test: /^\/inventory\/(\d+)$/, icon: "inventory", title: (m) => `Item #${m[1]}` },

@@ -11,16 +11,16 @@ import { CalendarItemList } from "../shared/CalendarItemList";
  * Rendered by the shared CalendarItemList — Worker Runtime's per-person
  * activity view renders the exact same aggregated items the same way.
  */
-export function WorkflowInbox() {
+export function WorkflowInbox({ title = "Assigned to you", emptyMessage = "Nothing needs you right now." }: { title?: string; emptyMessage?: string }) {
   const { items, isLoading } = useCalendarItems();
   const pending = items.filter((item) => !item.isTerminal);
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <h3 className="mb-3 flex items-center gap-2 text-sm font-medium">
-        <ListChecks size={15} className="text-primary" /> My Workflow Inbox
+        <ListChecks size={15} className="text-primary" /> {title}
       </h3>
-      {isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : <CalendarItemList items={pending} emptyMessage="You're all caught up — nothing needs your attention right now." />}
+      {isLoading ? <p className="text-sm text-muted-foreground">Loading your list…</p> : <CalendarItemList items={pending} emptyMessage={emptyMessage} />}
     </div>
   );
 }

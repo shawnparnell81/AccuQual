@@ -15,10 +15,9 @@ interface WorkflowActionButtonProps {
    * see the Rules Dictionary): false means this transition doesn't apply to
    * the record's current state, so the button doesn't render at all — same
    * as the existing `{status !== "closed" && <button>}` convention.
-   * Permission, by contrast, renders the button disabled with a tooltip
-   * (see below) rather than hiding it — a user should be able to see a
-   * transition exists even if their department can't perform it.
-   * Default true (always eligible unless the caller says otherwise).
+   * Permission hides the button. The record strip explains why
+   * (READ_ONLY_REASON) so a control the user can't use isn't left looking
+   * broken. Default true (always eligible unless the caller says otherwise).
    */
   visible?: boolean;
   variant?: "primary" | "outline";
@@ -33,13 +32,12 @@ interface WorkflowActionButtonProps {
  */
 export function WorkflowActionButton({ label, navKey, action, onClick, visible = true, variant = "outline" }: WorkflowActionButtonProps) {
   const canEdit = useCanEditWorkflow(navKey);
-  if (!visible) return null;
+  if (!visible || !canEdit) return null;
 
   return (
     <button
       onClick={onClick}
-      disabled={!canEdit || action.isPending}
-      title={canEdit ? undefined : "Your department doesn't have edit access to this module"}
+      disabled={action.isPending}
       className={clsx(
         "rounded-md px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40",
         variant === "primary" ? "bg-button text-button-foreground" : "border border-border hover:bg-muted"

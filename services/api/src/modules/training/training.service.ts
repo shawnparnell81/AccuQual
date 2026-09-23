@@ -20,6 +20,8 @@ import { logger } from "../../utils/logger.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { notifyDepartment, notifyRecipients } from "../notifications/notification.service.js";
+import { env } from "../../config/env.js";
+import { appRecordUrl } from "../../lib/recordLink.js";
 
 /**
  * Training & competency rules, in one place.
@@ -186,7 +188,8 @@ export async function assignCourse(db: TenantDb, tenantId: number, courseId: num
     await recordAuditTrail(db, { tenantId, entityType: AUDIT_ASSIGNMENT, entityId: a.id, action: "create", changes: { action: "assign", courseId, userId, dueAt: opts.dueAt, ...(opts.reason ? { reason: opts.reason } : {}) }, performedBy: actor });
     await publishEvent(WORKFLOW_STREAM, { tenantId, module: "training", event: "assigned", entityId: a.id, courseId });
     const p = people.get(userId)!;
-    await notifyRecipients(db, tenantId, [p.email], `Training assigned: ${course.title}`, `You have been assigned "${course.title}"${opts.dueAt ? `, due ${opts.dueAt.toISOString().slice(0, 10)}` : ""}${opts.reason ? ` (${opts.reason})` : ""}.`, AUDIT_ASSIGNMENT, a.id).catch((err) => logger.error("Training notice failed", { err: String(err) }));
+    const courseUrl = appRecordUrl(env.FRONTEND_URL, `/training/${courseId}`);
+    await notifyRecipients(db, tenantId, [p.email], `Training assigned: ${course.title}`, `You have been assigned "${course.title}"${opts.dueAt ? `, due ${opts.dueAt.toISOString().slice(0, 10)}` : ""}${opts.reason ? ` (${opts.reason})` : ""}.\n\nOpen it: ${courseUrl}`, "training", courseId).catch((err) => logger.error("Training notice failed", { err: String(err) }));
   }
   return created;
 }

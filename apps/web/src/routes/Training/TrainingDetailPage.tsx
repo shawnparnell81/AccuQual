@@ -17,6 +17,9 @@ import type { CourseFull } from "../../api/training";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
+import { useTrainingAccess } from "../../api/training";
+import { RecordGlance } from "../../components/records/RecordStatus";
+import { TRAINING_MANAGE_REASON, duePhrase, isPastDue } from "../../lib/opsLanguage";
 import type { AccuQualDocument, TrainingAssignment, TrainingCourse } from "../../api/types";
 
 const trainingHooks = createResourceHooks<TrainingCourse>("training");
@@ -35,6 +38,7 @@ export function TrainingDetailPage() {
   const { data: course, isLoading, isError } = trainingHooks.useOne(courseId);
   useSetAssistantContext("training", courseId, course ? course.title : `Training Course #${courseId}`);
   const updateCourse = trainingHooks.useUpdate();
+  const { mayManage } = useTrainingAccess();
   const [assignOpen, setAssignOpen] = useState(false);
   const [completingId, setCompletingId] = useState<number | null>(null);
 
@@ -56,16 +60,63 @@ export function TrainingDetailPage() {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !course) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this course. Refresh the page and try again.</p>;
+  if (isLoading || !course) return <p className="text-sm text-muted-foreground">Loading this course…</p>;
+
+  const openAssignments = assignments.filter((row) => row.status !== "completed");
+  const soonest = openAssignments.map((row) => row.dueAt).filter((due): due is string => !!due).sort()[0] ?? null;
+  const overdue = openAssignments.filter((row) => row.status === "overdue" || isPastDue(row.dueAt, false));
+  const next =
+    assignments.length === 0
+      ? "Assign the people who need to learn this."
+      : overdue.length > 0
+        ? `${overdue.length} ${overdue.length === 1 ? "person is" : "people are"} late. Follow up, then record completion${course.requirements?.evaluationRequired ? " and the quiz" : ""}.`
+        : course.requirements?.evaluationRequired
+          ? "When they finish, record the quiz or evaluation."
+          : "Mark people complete as they finish.";
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{course.title}</h1>
-        <button onClick={() => setAssignOpen(true)} className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">
-          Assign Training
-        </button>
+      <RecordGlance
+        crumbs={[{ label: "Training", to: "/training" }, { label: course.title }]}
+        title={course.title}
+        standard="Training course"
+        stateValue={course.active ? "active" : "obsolete"}
+        stateLabel={course.active ? "Active" : "Retired"}
+        owner={assignments.length === 0 ? "Unassigned" : `${assignments.length} assigned`}
+        due={duePhrase(soonest, !course.active)}
+        dueLate={isPastDue(soonest, !course.active)}
+        blocked={overdue.length > 0 ? `${overdue.length} late` : assignments.length === 0 ? "Nobody is assigned" : "People still finishing"}
+        next={next}
+        accessNote={mayManage ? null : TRAINING_MANAGE_REASON}
+        actions={
+          mayManage ? (
+            <button onClick={() => setAssignOpen(true)} className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">
+              Assign people
+            </button>
+          ) : undefined
+        }
+      />
+      <div className="rounded-lg border border-border bg-card p-3 text-sm">
+        {course.documentId && material ? (
+          <p>
+            Teaches{" "}
+            <Link to={`/documents/${material.id}`} className="text-primary hover:underline">
+              {material.title}
+            </Link>
+            . When that document changes, people on this course need to learn the new revision.
+          </p>
+        ) : course.documentId ? (
+          <p className="text-muted-foreground">
+            Linked document #{course.documentId}.{" "}
+            <Link to={`/documents/${course.documentId}`} className="text-primary hover:underline">
+              Open it
+            </Link>
+            .
+          </p>
+        ) : (
+          <p className="text-muted-foreground">No controlled document is linked. Link the document this course teaches so a revision can send people back here.</p>
+        )}
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4">
@@ -136,7 +187,7 @@ export function TrainingDetailPage() {
           />
         </div>
         <ul className="flex flex-col gap-2 text-sm">
-          {assignments.length === 0 && <li className="text-muted-foreground">No employees assigned yet.</li>}
+          {assignments.length === 0 && <li className="text-muted-foreground">Nobody is assigned yet. Assign the people who need to learn this.</li>}
           {assignments.map((a) => {
             return (
               <li key={a.id} className="flex items-center gap-3 border-b border-border pb-2 last:border-0">

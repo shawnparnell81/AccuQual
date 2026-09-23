@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { useNavVisibility } from "./navVisibility";
+import { navSearchText, plainNav } from "../../lib/opsLanguage";
 import { GlobalSearchResults } from "./GlobalSearchResults";
 
 /**
@@ -35,7 +36,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const navMatches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return allVisibleLeaves.filter((l) => l.label.toLowerCase().includes(q)).slice(0, 8);
+    return allVisibleLeaves.filter((l) => navSearchText(l.key, l.label).includes(q)).slice(0, 8);
   }, [allVisibleLeaves, query]);
 
   if (!open) return null;
@@ -50,7 +51,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Jump to a module or search records…"
+            placeholder="Jump to a page or search records…"
             className="flex-1 bg-transparent py-1 text-sm outline-none"
           />
           <kbd className="flex-none rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">Esc</kbd>
@@ -69,13 +70,13 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-secondary"
                 >
                   <leaf.icon size={15} className="flex-none text-muted-foreground" />
-                  {leaf.label}
+                  {plainNav(leaf.key, leaf.label).label}
                 </button>
               ))}
             </div>
           )}
           <GlobalSearchResults query={query} onSelect={onClose} />
-          {!query.trim() && <p className="p-4 text-center text-sm text-muted-foreground">Start typing a module name or a record's number…</p>}
+          {!query.trim() && <p className="p-4 text-center text-sm text-muted-foreground">Start typing a page name or a record number…</p>}
         </div>
       </div>
     </>

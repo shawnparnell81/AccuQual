@@ -6,10 +6,19 @@ import { DataTable, type Column } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { Modal } from "../../components/modals/Modal";
 import { TextField, TextAreaField } from "../../components/forms/Field";
+import { DetailsDisclosure } from "../../components/forms/DetailsDisclosure";
+import { READ_ONLY_REASON, duePhrase, statusPhrase } from "../../lib/opsLanguage";
+import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
+import { usePersonDirectory } from "../../hooks/usePersonDirectory";
+import { useToast } from "../../components/shared/ToastProvider";
+import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 
 const capaHooks = createResourceHooks<Capa>("capa");
 
 export function CapaListPage() {
+  const canEdit = useCanEditWorkflow("capa");
+  const { label } = usePersonDirectory();
+  const toast = useToast();
   const { data: capas = [], isLoading, isError } = capaHooks.useList();
   const createCapa = capaHooks.useCreate();
   const navigate = useNavigate();
@@ -18,26 +27,42 @@ export function CapaListPage() {
 
   const columns: Column<Capa>[] = [
     { header: "ID", accessor: (c) => `#${c.id}` },
-    { header: "Linked NCR", accessor: (c) => (c.ncrId ? `#${c.ncrId}` : "—") },
-    { header: "Root Cause", accessor: (c) => c.rootCause ?? "—" },
-    { header: "Status", accessor: (c) => <StatusBadge value={c.status} /> },
+    { header: "Issue", accessor: (c) => (c.ncrId ? `#${c.ncrId}` : "Not linked") },
+    { header: "State", accessor: (c) => <StatusBadge value={c.status} label={statusPhrase(c.status)} /> },
+    { header: "Owner", accessor: (c) => label(c.ownerId) },
+    { header: "Due", accessor: (c) => duePhrase(c.dueDate, c.status === "closed") },
   ];
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Corrective & Preventive Actions</h1>
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
-        >
-          + New CAPA
-        </button>
+        <div>
+          <h1 className="text-2xl font-semibold">Fixes</h1>
+          <p className="text-sm text-muted-foreground">Corrective actions (CAPA). Start from the issue they belong to.</p>
+        </div>
+        {canEdit && (
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+          >
+            Open a fix
+          </button>
+        )}
       </div>
+      {!canEdit && <p className="text-sm text-muted-foreground">{READ_ONLY_REASON}</p>}
 
-      <DataTable columns={columns} rows={capas} rowKey={(c) => c.id} isLoading={isLoading} isError={isError} onRowClick={(c) => navigate(`/capa/${c.id}`)} />
+      <DataTable
+        columns={columns}
+        rows={capas}
+        rowKey={(c) => c.id}
+        isLoading={isLoading}
+        isError={isError}
+        errorMessage="Couldn't load fixes. Refresh the page and try again."
+        emptyMessage="No fixes yet. Open one from an issue so the corrective action has a home."
+        onRowClick={(c) => navigate(`/capa/${c.id}`)}
+      />
 
-      <Modal title="Create CAPA" isOpen={createOpen} onClose={() => setCreateOpen(false)}>
+      <Modal title="Open a fix" isOpen={createOpen} onClose={() => setCreateOpen(false)}>
         <form
           className="flex flex-col gap-4"
           onSubmit={(e) => {
@@ -49,19 +74,23 @@ export function CapaListPage() {
                   setCreateOpen(false);
                   navigate(`/capa/${created.id}`);
                 },
+                onError: (err) => toast.error(extractErrorMessage(err, "Couldn't open this fix. Check the issue number and try again.")),
               }
             );
           }}
         >
           <TextField
-            label="Linked NCR ID (optional)"
+            label="Issue number"
             type="number"
             value={form.ncrId}
             onChange={(e) => setForm({ ...form, ncrId: e.target.value })}
+            placeholder="The NCR this fix belongs to"
           />
-          <TextAreaField label="Root Cause (optional)" value={form.rootCause} onChange={(e) => setForm({ ...form, rootCause: e.target.value })} />
+          <DetailsDisclosure label="Add the cause now">
+            <TextAreaField label="Cause" value={form.rootCause} onChange={(e) => setForm({ ...form, rootCause: e.target.value })} />
+          </DetailsDisclosure>
           <button type="submit" className="rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground">
-            Create
+            Open fix
           </button>
         </form>
       </Modal>

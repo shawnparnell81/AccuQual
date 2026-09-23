@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
@@ -30,8 +30,8 @@ export function DocumentChangeRequestDetailPage() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't delete this record.")),
   });
 
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !dcr) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this doc change. Refresh the page and try again.</p>;
+  if (isLoading || !dcr) return <p className="text-sm text-muted-foreground">Loading this doc change…</p>;
 
   return (
     <div className="flex flex-col gap-4">
@@ -48,6 +48,15 @@ export function DocumentChangeRequestDetailPage() {
           </button>
         </div>
       </div>
+
+      <p className="rounded-lg border border-border bg-card p-3 text-sm text-muted-foreground">
+        {dcr.status === "draft" && "Add the document you're changing. After it's approved, update the controlled document and assign training."}
+        {dcr.status === "active" && "This change is active. Update the controlled document, then assign training so people learn the new revision."}
+        {dcr.status === "obsolete" && "This change is retired."}{" "}
+        <Link to="/documents" className="text-primary hover:underline">Documents</Link>
+        {" · "}
+        <Link to="/training" className="text-primary hover:underline">Training</Link>
+      </p>
 
       <DocumentChangeRequestForm dcr={dcr} />
 

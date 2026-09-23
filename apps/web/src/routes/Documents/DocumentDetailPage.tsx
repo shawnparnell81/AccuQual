@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { Link, useParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
 import type { AccuQualDocument } from "../../api/types";
@@ -12,24 +12,18 @@ import { DocumentDetailsPanel } from "../../components/documents/DocumentDetails
 import { DocumentFilesPanel } from "../../components/documents/DocumentFilesPanel";
 import { DocumentLinkHistory, DocumentLinksPanel } from "../../components/documents/DocumentLinksPanel";
 import { LifecycleBar, VersionDiffViewer, VersionStatusBadge, VersionTimeline } from "../../components/versioning/VersionParts";
-import { StatusBadge } from "../../components/tables/StatusBadge";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { useToast } from "../../components/shared/ToastProvider";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
+import { DOC_EDIT_REASON, DOC_LOOP, documentLoop, duePhrase, isPastDue, statusPhrase } from "../../lib/opsLanguage";
+import { usePersonDirectory } from "../../hooks/usePersonDirectory";
+import type { TrainingCourse } from "../../api/types";
 
 const documentHooks = createResourceHooks<AccuQualDocument>("documents");
 const BASE = "/documents";
-
-// "Released" is the ISO document-control term for "approved" — kept as a
-// label override on the shared StatusBadge rather than its own color map.
-const STATUS_LABELS: Record<AccuQualDocument["status"], string> = {
-  draft: "Draft",
-  in_review: "In Review",
-  approved: "Released",
-  obsolete: "Obsolete",
-};
 
 type Tab = "details" | "files" | "links" | "versions" | "compliance";
 const TABS: { id: Tab; label: string }[] = [
@@ -58,7 +52,14 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
   const documentId = entityId ?? Number(id);
   const { data: doc, isLoading, isError } = documentHooks.useOne(documentId);
   useSetAssistantContext("sop_generator", documentId, doc ? doc.title : `Document #${documentId}`);
+  const updateDoc = documentHooks.useUpdate();
   const user = useCurrentUser();
+  const { label: personName, people } = usePersonDirectory();
+  const courses = useQuery<TrainingCourse[]>({
+    queryKey: ["training", undefined],
+    queryFn: async () => (await apiClient.get<TrainingCourse[]>("/training")).data,
+    retry: false,
+  });
   const toast = useToast();
   const queryClient = useQueryClient();
   const v = useVersioning<DocumentPayload>(BASE, documentId);
@@ -172,8 +173,24 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
     [v.createDraft, v.discard, v.review, v.publish, editable, shown?.id],
   );
 
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !doc) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this document. Refresh the page and try again.</p>;
+  if (isLoading || !doc) return <p className="text-sm text-muted-foreground">Loading this document…</p>;
+
+  const linkedCourses = (courses.data ?? []).filter((course) => course.documentId === documentId);
+  const loop = documentLoop(doc.status, linkedCourses.length > 0);
+  const reviewerId = typeof current?.open?.metadata?.assignedReviewerId === "number" ? current.open.metadata.assignedReviewerId : null;
+  const blocked =
+    doc.status === "obsolete"
+      ? "Nobody"
+      : doc.status === "in_review"
+        ? reviewerId
+          ? personName(reviewerId)
+          : "A reviewer"
+        : doc.status === "approved"
+          ? linkedCourses.length > 0
+            ? "People who still owe this training"
+            : "Nobody is assigned to learn it"
+          : personName(doc.ownerId);
 
   const versionList = v.versions.data ?? [];
   const canRollback = mayEdit && !current?.open && doc.status !== "obsolete";
@@ -194,28 +211,44 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold">{doc.title}</h1>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <span>{doc.category ?? "Uncategorized"}</span>
-            {doc.currentVersion > 0 ? (
-              <span>
-                — {doc.revisionCode ?? `Rev ${doc.currentVersion}`} (version {doc.currentVersion})
-              </span>
-            ) : (
-              <span>— not released yet</span>
-            )}
-            <StatusBadge value={doc.status} label={STATUS_LABELS[doc.status]} />
+      <RecordGlance
+        crumbs={[{ label: "Documents", to: "/documents" }, { label: doc.title }]}
+        title={doc.title}
+        standard={doc.currentVersion > 0 ? `${doc.revisionCode ?? `Rev ${doc.currentVersion}`} · document control` : "Not released yet · document control"}
+        stateValue={doc.status}
+        stateLabel={statusPhrase(doc.status)}
+        owner={personName(doc.ownerId)}
+        ownerControl={
+          mayEdit && people.length > 0 ? (
+            <select
+              aria-label="Owner"
+              value={doc.ownerId ?? ""}
+              onChange={(e) => updateDoc.mutate({ id: documentId, ownerId: e.target.value ? Number(e.target.value) : null })}
+              className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+            >
+              <option value="">Unassigned</option>
+              {people.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name?.trim() || person.email}
+                </option>
+              ))}
+            </select>
+          ) : undefined
+        }
+        due={duePhrase(doc.expirationDate, doc.status === "obsolete")}
+        dueLate={isPastDue(doc.expirationDate, doc.status === "obsolete")}
+        blocked={blocked}
+        next={loop.next}
+        accessNote={mayEdit ? null : DOC_EDIT_REASON}
+        trail={<LoopTrail steps={DOC_LOOP} current={loop.index} />}
+        actions={
+          <>
             {doc.tags.map((t) => (
-              <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[11px]">
+              <span key={t} className="self-center rounded-full bg-muted px-2 py-0.5 text-[11px]">
                 {t}
               </span>
             ))}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <AiFieldAssistant
+          {mayEdit && <AiFieldAssistant
             module="sop_generator"
             recordId={documentId}
             triggerLabel="Generate SOP"
@@ -225,14 +258,16 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
               " covers, and propose relevant controls and checks. This is a draft for the document owner to refine: paste it into the" +
               " Content field of a draft revision, where it goes through review and publication like any other change."
             }
-          />
+          />}
           {canRetire && (
             <button onClick={() => void retire()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
               Retire document
             </button>
           )}
-        </div>
-      </div>
+          </>
+        }
+      />
+      <DocumentTrainingLoop status={doc.status} courses={linkedCourses} failed={courses.isError} />
 
       {current && (
         <LifecycleBar
@@ -275,7 +310,7 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
 
       {tab === "details" && (
         <div className="rounded-lg border border-border bg-card p-4">
-          {!shown ? <p className="text-sm text-muted-foreground">{v.current.isLoading ? "Loading…" : "Nothing here yet."}</p> : <DocumentDetailsPanel values={shownValues} editable={editable} onChange={change} summary={summary} onSummaryChange={(s) => { dirty.current = true; setSummary(s); }} />}
+          {!shown ? <p className="text-sm text-muted-foreground">{v.current.isLoading ? "Loading…" : "Nothing here yet. Start a draft above to write this document."}</p> : <DocumentDetailsPanel values={shownValues} editable={editable} onChange={change} summary={summary} onSummaryChange={(s) => { dirty.current = true; setSummary(s); }} />}
           {editable && report && report.errors.length > 0 && (
             <ul className="mt-3 list-disc pl-5 text-xs text-destructive">
               {report.errors.map((e) => (
@@ -387,6 +422,45 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
           <DocumentRetentionPanel document={doc} />
           <DocumentHistoryPanel documentId={documentId} />
         </div>
+      )}
+    </div>
+  );
+}
+
+function DocumentTrainingLoop({ status, courses, failed }: { status: AccuQualDocument["status"]; courses: TrainingCourse[]; failed: boolean }) {
+  if (failed) {
+    return <p className="text-sm text-destructive">Couldn't load training for this document. Refresh the page and try again.</p>;
+  }
+  if (status === "draft" || status === "in_review") {
+    return (
+      <p className="rounded-lg border border-border bg-card p-3 text-sm text-muted-foreground">
+        Training comes after this document is released. {status === "in_review" ? "A reviewer has it now." : "Send the draft for review when it's ready."}
+      </p>
+    );
+  }
+  if (status === "obsolete") return null;
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 text-sm">
+      <p className="font-medium">Training on this revision</p>
+      {courses.length === 0 ? (
+        <p className="mt-1 text-muted-foreground">
+          Nobody is assigned to learn this yet.{" "}
+          <Link to="/training" className="text-primary hover:underline">
+            Open training
+          </Link>{" "}
+          and link this document so a quiz or completion can be recorded.
+        </p>
+      ) : (
+        <ul className="mt-2 flex flex-col gap-1">
+          {courses.map((course) => (
+            <li key={course.id}>
+              <Link to={`/training/${course.id}`} className="text-primary hover:underline">
+                {course.title}
+              </Link>
+              <span className="text-muted-foreground"> — assign people, then record the quiz or completion.</span>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

@@ -3,12 +3,12 @@ import { StatusBadge } from "../tables/StatusBadge";
 import type { CalendarItem, CalendarModule } from "../../hooks/useCalendarItems";
 
 const MODULE_LABELS: Record<CalendarModule, string> = {
-  ncr: "NCR",
-  capa: "CAPA",
+  ncr: "Issue",
+  capa: "Fix",
   audit: "Audit",
   training: "Training",
   document: "Document",
-  crar: "CRAR",
+  crar: "Return",
 };
 
 /**

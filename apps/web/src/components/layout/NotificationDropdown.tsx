@@ -1,18 +1,17 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Bell } from "lucide-react";
 import { useNotifications } from "../../hooks/useNotifications";
+import { recordPath } from "../../lib/opsLanguage";
 
 /**
- * The in-app notification bell — read-only surfacing of notification_log
- * (an email-send audit log that had no UI reading it back until now), not
- * a new digest/scheduler. Clicking an entry just marks it read; it doesn't
- * try to deep-link into the record (relatedEntityType/Id don't map to a
- * single consistent URL shape across every module that writes here) —
- * that's a reasonable follow-up, not required for a first, honest read
- * surface over what's already being logged.
+ * The in-app notification bell. A click marks the row read and, when the
+ * logged entity has a stable page (issue, fix, document, training course,
+ * and a few others), opens that record.
  */
 export function NotificationDropdown() {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   const { notifications, unreadCount, markRead } = useNotifications();
 
   return (
@@ -31,13 +30,19 @@ export function NotificationDropdown() {
           <div className="absolute right-0 top-full z-30 mt-1 w-80 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-card p-1 shadow-lg">
             <p className="px-2 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Notifications</p>
             {notifications.length === 0 ? (
-              <p className="px-2 py-3 text-sm text-muted-foreground">Nothing here yet.</p>
+              <p className="px-2 py-3 text-sm text-muted-foreground">No notifications yet.</p>
             ) : (
-              notifications.map((n) => (
+              notifications.map((n) => {
+                const path = recordPath(n.relatedEntityType, n.relatedEntityId);
+                return (
                 <button
                   key={n.id}
                   onClick={() => {
                     if (!n.readAt) markRead(n.id);
+                    if (path) {
+                      navigate(path);
+                      setOpen(false);
+                    }
                   }}
                   className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-2 text-left text-sm hover:bg-secondary"
                 >
@@ -45,9 +50,13 @@ export function NotificationDropdown() {
                     {!n.readAt && <span className="h-1.5 w-1.5 flex-none rounded-full bg-accent" />}
                     <span className={n.readAt ? "text-muted-foreground" : "font-medium"}>{n.subject}</span>
                   </span>
-                  <span className="text-xs text-muted-foreground">{new Date(n.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(n.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                    {path ? " · Open" : ""}
+                  </span>
                 </button>
-              ))
+                );
+              })
             )}
           </div>
         </>
