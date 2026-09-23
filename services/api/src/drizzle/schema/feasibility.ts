@@ -118,9 +118,10 @@ export const feasibilityReviews = pgTable("feasibility_reviews", {
   finalizedAt: timestamp("finalized_at"),
 
   // Settings → Feasibility Module integration (still real, adapted to this
-  // shape — see feasibility.controller.ts): providedDocuments is checked
-  // against feasibilitySettings.requiredDocuments before Finalize is
-  // allowed; ownerId auto-assigns to the creator when autoAssignOwner is on.
+  // shape — see feasibility.controller.ts): providedDocuments is the subset
+  // of feasibilitySettings.requiredDocuments (controlled-document ids) the
+  // reviewer has marked attached. Finalize requires every required id.
+  // ownerId auto-assigns to the creator when autoAssignOwner is on.
   providedDocuments: jsonb("provided_documents").$type<string[]>().default([]),
   ownerId: integer("owner_id").references(() => users.id),
 

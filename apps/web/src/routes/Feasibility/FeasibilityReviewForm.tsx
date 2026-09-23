@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
+import { labelForRequiredDocument, useControlledDocuments } from "../../api/documents";
 import { useAuthStore } from "../../store/authStore";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useToast } from "../../components/shared/ToastProvider";
@@ -51,6 +52,8 @@ export function FeasibilityReviewForm({ review }: { review: FeasibilityReview })
   const logoUrl = useAuthStore((s) => s.tenant?.branding?.logoUrl);
   const user = useCurrentUser();
   const { data: settings } = useFeasibilitySettings();
+  const requiredDocuments = settings?.requiredDocuments ?? [];
+  const { data: catalog = [] } = useControlledDocuments(requiredDocuments.length > 0);
 
   const isAdmin = user?.roleName === "admin" || user?.roleName === "platform_admin";
   const canEditRecord = isAdmin || user?.department === "engineering";
@@ -204,24 +207,25 @@ export function FeasibilityReviewForm({ review }: { review: FeasibilityReview })
         <LabeledTextarea label="Notes / Conditional Requirements Summary" {...field("determinationNotes")} placeholder="Insert notes, assumptions, or specific conditions to include in the formal quote to customer" />
       </div>
 
-      {settings?.requiredDocuments && settings.requiredDocuments.length > 0 && (
+      {requiredDocuments.length > 0 && (
         <>
           <h2 className={sectionHeaderClass}>Required Documents</h2>
           <div className="flex flex-wrap gap-4 print:hidden">
-            {settings.requiredDocuments.map((doc) => {
-              const provided = review.providedDocuments.includes(doc);
+            {requiredDocuments.map((doc) => {
+              const providedIds = (review.providedDocuments ?? []).map(String);
+              const label = labelForRequiredDocument(doc, catalog);
               return (
                 <label key={doc} className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={provided}
+                    checked={providedIds.includes(doc)}
                     disabled={!canEditRecord || isFinal}
                     onChange={(e) => {
-                      const next = e.target.checked ? [...review.providedDocuments, doc] : review.providedDocuments.filter((d) => d !== doc);
+                      const next = e.target.checked ? [...providedIds, doc] : providedIds.filter((d) => d !== doc);
                       patch.mutate({ providedDocuments: next });
                     }}
                   />
-                  {doc}
+                  {label}
                 </label>
               );
             })}

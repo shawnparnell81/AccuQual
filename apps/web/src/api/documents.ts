@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "./client";
+import type { AccuQualDocument } from "./types";
 import type { VersionFull } from "./versioning";
 
 // Client for controlled-document versioning (services/api/src/modules/documents). The lifecycle itself (draft, review,
@@ -102,3 +103,25 @@ export async function openAttachment(documentId: number, versionId: number, atta
 }
 
 export const formatBytes = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+
+/** Controlled-document row as GET /documents returns it, including the soft-delete flag the list type otherwise omits. */
+export type ControlledDocumentOption = AccuQualDocument & { isDeleted?: boolean };
+
+export function controlledDocumentLabel(doc: Pick<ControlledDocumentOption, "title" | "revisionCode">): string {
+  return doc.revisionCode ? `${doc.title} (${doc.revisionCode})` : doc.title;
+}
+
+/** Label for a stored required-document id. Unknown or removed rows stay removable as "Document #id". */
+export function labelForRequiredDocument(id: string, documents: ControlledDocumentOption[] | undefined): string {
+  const doc = documents?.find((d) => String(d.id) === id);
+  return doc ? controlledDocumentLabel(doc) : `Document #${id}`;
+}
+
+/** Same query key as ResourceListPage's documents list (`["documents", undefined]`). */
+export function useControlledDocuments(enabled = true) {
+  return useQuery<ControlledDocumentOption[]>({
+    queryKey: ["documents", undefined],
+    queryFn: async () => (await apiClient.get<ControlledDocumentOption[]>("/documents")).data,
+    enabled,
+  });
+}

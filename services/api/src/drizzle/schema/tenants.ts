@@ -88,8 +88,9 @@ export const tenants = pgTable("tenants", {
    * feasibility.controller.ts on create (defaultRiskLevel seeds all 7 fixed
    * assessment areas, autoAssignOwner) and on finalize (requiredDocuments
    * validation, notificationsEnabled routing) — see that file's own
-   * comments for exactly where each field is consumed. customerRequirement
-   * Mapping (a per-code lookup) was dropped when Feasibility was rebuilt as
+   * comments for exactly where each field is consumed. requiredDocuments
+   * is a list of controlled-document ids (documents.id, decimal strings),
+   * default []. customerRequirement mapping (a per-code lookup) was dropped when Feasibility was rebuilt as
    * a bespoke fixed-structure document — the real form has no per-code
    * customer-requirement field to resolve it against, only a free-text
    * "Special Customer Requirements" field.
@@ -97,6 +98,7 @@ export const tenants = pgTable("tenants", {
   feasibilitySettings: jsonb("feasibility_settings").$type<{
     defaultRiskLevel?: "low" | "medium" | "high";
     autoAssignOwner?: boolean;
+    /** Controlled-document ids (`documents.id` as decimal strings). Default []. */
     requiredDocuments?: string[];
     notificationsEnabled?: boolean;
   }>().default({}),

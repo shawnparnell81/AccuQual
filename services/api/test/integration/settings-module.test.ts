@@ -17,6 +17,7 @@ import { db, pool } from "../../src/db/index.js";
 import { tenants } from "../../src/drizzle/schema/tenants.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { feasibilityReviews } from "../../src/drizzle/schema/feasibility.js";
+import { documents } from "../../src/drizzle/schema/documents.js";
 import { inventoryItems, inventoryMovements, inventoryStock, inventoryAlerts } from "../../src/drizzle/schema/inventory.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { notificationLog } from "../../src/drizzle/schema/notifications.js";
@@ -28,6 +29,10 @@ const app = createApp();
 const suffix = Date.now();
 
 let tenantId: number;
+let otherTenantId: number | undefined;
+let drawingId: number;
+let ppapId: number;
+let deletedDocId: number;
 const userIds: number[] = [];
 const feasibilityIds: number[] = [];
 const itemIds: number[] = [];
@@ -63,6 +68,13 @@ describe("Settings module (real DB + real HTTP path)", () => {
     productionToken = await makeUser("production");
     purchasingToken = await makeUser("purchasing");
     adminToken = await makeUser(null, "admin");
+
+    const [drawing] = await db.insert(documents).values({ tenantId, title: "Customer Drawing", category: "Customer" }).returning();
+    const [ppap] = await db.insert(documents).values({ tenantId, title: "PPAP Package" }).returning();
+    const [deleted] = await db.insert(documents).values({ tenantId, title: "Withdrawn SOP", isDeleted: true }).returning();
+    drawingId = drawing!.id;
+    ppapId = ppap!.id;
+    deletedDocId = deleted!.id;
   });
 
   afterAll(async () => {
@@ -78,6 +90,11 @@ describe("Settings module (real DB + real HTTP path)", () => {
     }
     for (const id of userIds) await db.delete(users).where(eq(users.id, id));
     await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+    await db.delete(documents).where(eq(documents.tenantId, tenantId));
+    if (otherTenantId) {
+      await db.delete(documents).where(eq(documents.tenantId, otherTenantId));
+      await db.delete(tenants).where(eq(tenants.id, otherTenantId));
+    }
 
     await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
@@ -100,14 +117,50 @@ describe("Settings module (real DB + real HTTP path)", () => {
         .send({
           defaultRiskLevel: "high",
           autoAssignOwner: true,
-          requiredDocuments: ["Customer Drawing"],
+          requiredDocuments: [String(drawingId), String(ppapId)],
           notificationsEnabled: true,
         });
       expect(res.status).toBe(200);
       expect(res.body.defaultRiskLevel).toBe("high");
+      expect(res.body.requiredDocuments).toEqual([String(drawingId), String(ppapId)]);
+
+      const again = await request(app).get("/settings/feasibility").set("Authorization", `Bearer ${qualityToken}`);
+      expect(again.status).toBe(200);
+      expect(again.body.requiredDocuments).toEqual([String(drawingId), String(ppapId)]);
 
       const [row] = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "FeasibilitySettings"), eq(auditTrail.tenantId, tenantId)));
       expect(row).toBeTruthy();
+    });
+
+    it("rejects free-text names, duplicates, deleted documents, and other tenants' documents", async () => {
+      const freeText = await request(app).post("/settings/feasibility").set("Authorization", `Bearer ${qualityToken}`).send({ requiredDocuments: ["Customer Drawing"] });
+      expect(freeText.status).toBe(400);
+
+      const duplicate = await request(app)
+        .post("/settings/feasibility")
+        .set("Authorization", `Bearer ${qualityToken}`)
+        .send({ requiredDocuments: [String(drawingId), String(drawingId)] });
+      expect(duplicate.status).toBe(400);
+      expect(duplicate.body.message).toMatch(/Duplicate/);
+
+      const missing = await request(app).post("/settings/feasibility").set("Authorization", `Bearer ${qualityToken}`).send({ requiredDocuments: ["999999999"] });
+      expect(missing.status).toBe(400);
+
+      const deleted = await request(app).post("/settings/feasibility").set("Authorization", `Bearer ${qualityToken}`).send({ requiredDocuments: [String(deletedDocId)] });
+      expect(deleted.status).toBe(400);
+
+      const [other] = await db.insert(tenants).values({ name: `Settings Other Tenant ${suffix}`, code: `settings-other-${suffix}` }).returning();
+      const otherId = other!.id;
+      otherTenantId = otherId;
+      const [foreign] = await db.insert(documents).values({ tenantId: otherId, title: "Foreign SOP" }).returning();
+      const foreignRes = await request(app)
+        .post("/settings/feasibility")
+        .set("Authorization", `Bearer ${qualityToken}`)
+        .send({ requiredDocuments: [String(foreign!.id)] });
+      expect(foreignRes.status).toBe(400);
+
+      const still = await request(app).get("/settings/feasibility").set("Authorization", `Bearer ${qualityToken}`);
+      expect(still.body.requiredDocuments).toEqual([String(drawingId), String(ppapId)]);
     });
 
     it("creating a review with no ownerId picks up autoAssignOwner + defaultRiskLevel seeds every assessment area", async () => {
@@ -119,16 +172,27 @@ describe("Settings module (real DB + real HTTP path)", () => {
       feasibilityIds.push(res.body.id);
     });
 
-    it("finalize is blocked when a required document hasn't been marked provided", async () => {
+    it("finalize is blocked until every required document has been marked provided", async () => {
       const id = feasibilityIds[0]!;
-      const res = await request(app).post(`/feasibility/${id}/finalize`).set("Authorization", `Bearer ${engineeringToken}`);
-      expect(res.status).toBe(400);
-      expect(res.body.message).toMatch(/Customer Drawing/);
+      const blocked = await request(app).post(`/feasibility/${id}/finalize`).set("Authorization", `Bearer ${engineeringToken}`);
+      expect(blocked.status).toBe(400);
+      expect(blocked.body.message).toMatch(/Customer Drawing/);
+      expect(blocked.body.message).toMatch(/PPAP Package/);
+
+      const partial = await request(app).put(`/feasibility/${id}`).set("Authorization", `Bearer ${engineeringToken}`).send({ providedDocuments: [String(drawingId)] });
+      expect(partial.status).toBe(200);
+      const stillBlocked = await request(app).post(`/feasibility/${id}/finalize`).set("Authorization", `Bearer ${engineeringToken}`);
+      expect(stillBlocked.status).toBe(400);
+      expect(stillBlocked.body.message).toMatch(/PPAP Package/);
+      expect(stillBlocked.body.message).not.toMatch(/Customer Drawing/);
     });
 
-    it("marking the document provided unblocks finalize, and (notificationsEnabled) writes a real notification_log row", async () => {
+    it("marking every required document provided unblocks finalize, and (notificationsEnabled) writes a real notification_log row", async () => {
       const id = feasibilityIds[0]!;
-      const update = await request(app).put(`/feasibility/${id}`).set("Authorization", `Bearer ${engineeringToken}`).send({ providedDocuments: ["Customer Drawing"] });
+      const update = await request(app)
+        .put(`/feasibility/${id}`)
+        .set("Authorization", `Bearer ${engineeringToken}`)
+        .send({ providedDocuments: [String(drawingId), String(ppapId)] });
       expect(update.status).toBe(200);
 
       const finalize = await request(app).post(`/feasibility/${id}/finalize`).set("Authorization", `Bearer ${engineeringToken}`);
@@ -137,6 +201,12 @@ describe("Settings module (real DB + real HTTP path)", () => {
 
       const notifications = await db.select().from(notificationLog).where(and(eq(notificationLog.tenantId, tenantId), eq(notificationLog.relatedEntityId, id)));
       expect(notifications.length).toBeGreaterThan(0);
+    });
+
+    it("an empty list clears required documents", async () => {
+      const res = await request(app).post("/settings/feasibility").set("Authorization", `Bearer ${qualityToken}`).send({ requiredDocuments: [] });
+      expect(res.status).toBe(200);
+      expect(res.body.requiredDocuments).toEqual([]);
     });
   });
 
