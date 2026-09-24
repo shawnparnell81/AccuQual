@@ -92,6 +92,8 @@ const envSchema = z.object({
   // then to log-only. Accepts the token with or without the
   // "Zoho-enczapikey " prefix ZeptoMail's dashboard shows.
   ZEPTOMAIL_SEND_TOKEN: z.string().optional(),
+  // Where the public website contact form delivers. Unset = the form answers "not switched on" instead of pretending to send.
+  CONTACT_INBOX_EMAIL: z.string().email().optional(),
 
   // Real deployment monitoring/alerting — optional, same graceful-degrade
   // pattern as SMTP above. Unset means healthMonitor.ts's in-process poller
