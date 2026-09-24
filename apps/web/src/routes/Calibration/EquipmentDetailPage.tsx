@@ -13,6 +13,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
+import { FileDropZone } from "../../components/shared/FileDropZone";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 
@@ -226,7 +227,15 @@ export function EquipmentDetailPage() {
             .slice()
             .sort((a, b) => eventTime(b) - eventTime(a))
             .map((c) => (
-              <li key={c.id} className="flex flex-col gap-1 border-b border-border pb-2">
+              <li key={c.id} className="border-b border-border pb-2">
+                <FileDropZone
+                  className="flex flex-col gap-1"
+                  accept="application/pdf"
+                  multiple={false}
+                  disabled={c.status === "scheduled" || !!c.certificatePath || uploadCertificate.isPending}
+                  label="Drop the certificate (PDF) to attach it"
+                  onFiles={(dropped) => uploadCertificate.mutate({ calibrationId: c.id, file: dropped[0]! })}
+                >
                 <div className="flex items-center gap-3">
                   <span className="w-24 flex-none">{c.performedAt ? new Date(c.performedAt).toLocaleDateString() : c.scheduledAt ? new Date(c.scheduledAt).toLocaleDateString() : "—"}</span>
                   <span className={`w-20 flex-none capitalize ${c.status === "failed" ? "font-semibold text-destructive" : ""}`}>{c.status === "scheduled" ? "Scheduled" : (c.result ?? "—")}</span>
@@ -250,9 +259,13 @@ export function EquipmentDetailPage() {
                 </div>
                 {c.notes && <p className="pl-24 text-xs text-muted-foreground">{c.notes}</p>}
                 {c.results && Object.keys(c.results).length > 0 && <p className="pl-24 text-xs text-muted-foreground">Readings: {JSON.stringify(c.results)}</p>}
+                </FileDropZone>
               </li>
             ))}
         </ul>
+        {calibrations.some((c) => c.status !== "scheduled" && !c.certificatePath) && (
+          <p className="mt-2 text-xs text-muted-foreground">Tip: drag a certificate PDF from your computer onto a calibration row to attach it.</p>
+        )}
       </div>
 
       <LinkedDocumentsPanel equipmentId={equipmentId} />
