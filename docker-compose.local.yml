@@ -1,0 +1,33 @@
+# Local-database override: run the whole stack against the local Postgres
+# container instead of Supabase, so building and testing can never touch live
+# data.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+#
+# (or `npm run local:up`). The first time, load the schema and demo data with
+# `npm run local:db:setup`. Plain `docker compose up` still uses the root
+# .env's DATABASE_URL (Supabase), exactly as before.
+#
+# Uploaded files live in their own volume here so they stay paired with this
+# database and never mix with the Supabase-backed stack's files.
+services:
+  api:
+    environment:
+      DATABASE_URL: postgres://accuqual:accuqual@postgres:5432/accuqual
+    volumes:
+      - accuqual_uploads_local:/app/uploads
+
+  workflow-worker:
+    environment:
+      DATABASE_URL: postgres://accuqual:accuqual@postgres:5432/accuqual
+
+  ai-worker:
+    environment:
+      DATABASE_URL: postgres://accuqual:accuqual@postgres:5432/accuqual
+
+  digital-twin-worker:
+    environment:
+      DATABASE_URL: postgres://accuqual:accuqual@postgres:5432/accuqual
+
+volumes:
+  accuqual_uploads_local:
