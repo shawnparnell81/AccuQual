@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
@@ -36,7 +36,9 @@ import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { isPastDue } from "../../lib/opsLanguage";
 import { HealthRing, KpiTile, Reveal, SegmentedTabs, AnimatedNumber, type Tone } from "../../components/dashboard/kit";
 import { ActivityFeed, StatusBoard, TrendPanel, type FeedEvent, type StatusCell, type TrendPoint } from "../../components/dashboard/CommandCenter";
-import { Palette, FileUp, Bot, Cpu, AlertTriangle, PackageMinus, ClipboardCheck, ShieldAlert, ChevronRight } from "lucide-react";
+import { Palette, FileUp, Bot, Cpu, AlertTriangle, PackageMinus, ClipboardCheck, ShieldAlert, ChevronRight, SlidersHorizontal, RotateCcw, Check } from "lucide-react";
+import { LayoutSection } from "../../components/dashboard/LayoutSection";
+import { DASHBOARD_SECTION_LABELS, useDashboardLayout, type DashboardSectionId } from "../../hooks/useDashboardLayout";
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
 const capaHooks = createResourceHooks<Capa>("capa");
@@ -272,36 +274,17 @@ export function DashboardPage() {
 
   const attentionIcon = { late: AlertTriangle, stock: PackageMinus, supplier: ShieldAlert, approval: ClipboardCheck } as const;
   const toneVar = (tone: Tone) => (tone === "danger" ? "destructive" : tone);
+  const layout = useDashboardLayout();
+  const [draggingSection, setDraggingSection] = useState<DashboardSectionId | null>(null);
 
-  return (
-    <div className="flex flex-col gap-8">
-      <Reveal>
-        <div className="hero-surface rounded-2xl p-6 md:p-8">
-          <div className="cc-grid" aria-hidden />
-          <div className="cc-orbs" aria-hidden />
-          <div className="relative flex flex-wrap items-center justify-between gap-6">
-            <div>
-              <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-primary">
-                <span className="led" /> Live · Plant pulse{updatedAt ? <span className="font-normal normal-case tracking-normal text-muted-foreground"> · updated {updatedAt}</span> : null}
-              </p>
-              <h1 className="glow-text mt-2 text-4xl font-semibold md:text-5xl">
-                {greeting()}
-                {firstName ? `, ${firstName}` : ""}
-              </h1>
-              <p className="mt-2 max-w-xl text-muted-foreground">{summaryBits.join(" · ")}.</p>
-            </div>
-            <HealthRing
-              value={onTimePct}
-              label="On-time rate"
-              sub={openTotal === 0 ? "No open issues or fixes" : `${openTotal - lateRows.length} of ${openTotal} open items on schedule`}
-              tone={onTimeTone}
-            />
-          </div>
-        </div>
-      </Reveal>
-
+  const sectionNodes: Record<DashboardSectionId, ReactNode> = {
+    status: (
+      <>
       <StatusBoard cells={board} />
-
+      </>
+    ),
+    kpis: (
+      <>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <KpiTile
           index={1}
@@ -317,7 +300,10 @@ export function DashboardPage() {
         <KpiTile index={4} label="Suppliers at risk" value={suppliersAtRisk} sub="Delivery + quality" tone={suppliersAtRisk > 0 ? "warning" : "success"} href="/suppliers" />
         <KpiTile index={5} label="Below minimum" value={openBelowMinAlerts} sub="Stock alerts" tone={openBelowMinAlerts > 0 ? "warning" : "success"} href="/inventory/alerts" />
       </div>
-
+      </>
+    ),
+    trend: (
+      <>
       <div className="grid gap-4 lg:grid-cols-3">
         <Reveal index={5} className="lg:col-span-2">
           <TrendPanel data={trend} />
@@ -326,7 +312,10 @@ export function DashboardPage() {
           <ActivityFeed events={feed} />
         </Reveal>
       </div>
-
+      </>
+    ),
+    attention: (
+      <>
       <div className="grid gap-4 lg:grid-cols-5">
         <Reveal index={6} className="lg:col-span-3">
           <div className="h-full rounded-xl border border-border bg-card p-5">
@@ -372,7 +361,10 @@ export function DashboardPage() {
           </div>
         </Reveal>
       </div>
-
+      </>
+    ),
+    detail: (
+      <div className="flex flex-col gap-8">
       <SegmentedTabs tabs={[...TABS]} value={tab} onChange={(key) => setParams(key === "quality" ? {} : { tab: key }, { replace: true })} />
 
       {tab === "quality" && (
@@ -589,6 +581,66 @@ export function DashboardPage() {
       </div>
       )}
 
+      {tab === "workflow" && (
+      <div>
+        <h2 className="mb-3 text-lg font-semibold">Workflow Overview</h2>
+        <WorkflowDashboard />
+      </div>
+      )}
+      </div>
+    ),
+  };
+
+  return (
+    <div className="flex flex-col gap-8">
+      <Reveal>
+        <div className="hero-surface rounded-2xl p-6 md:p-8">
+          <div className="cc-grid" aria-hidden />
+          <div className="cc-orbs" aria-hidden />
+          <div className="absolute right-4 top-4 z-10 flex items-center gap-2">
+            {layout.editing ? (
+              <>
+                <button type="button" onClick={layout.reset} className="flex items-center gap-1.5 rounded-md border border-border bg-card/80 px-2.5 py-1 text-xs hover:bg-muted">
+                  <RotateCcw size={12} /> Reset
+                </button>
+                <button type="button" onClick={() => layout.setEditing(false)} className="flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground">
+                  <Check size={12} /> Done
+                </button>
+              </>
+            ) : (
+              <button type="button" onClick={() => layout.setEditing(true)} className="flex items-center gap-1.5 rounded-md border border-border bg-card/80 px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
+                <SlidersHorizontal size={12} /> Customize
+              </button>
+            )}
+          </div>
+          <div className="relative flex flex-wrap items-center justify-between gap-6">
+            <div>
+              <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-primary">
+                <span className="led" /> Live · Plant pulse{updatedAt ? <span className="font-normal normal-case tracking-normal text-muted-foreground"> · updated {updatedAt}</span> : null}
+              </p>
+              <h1 className="glow-text mt-2 text-4xl font-semibold md:text-5xl">
+                {greeting()}
+                {firstName ? `, ${firstName}` : ""}
+              </h1>
+              <p className="mt-2 max-w-xl text-muted-foreground">{summaryBits.join(" · ")}.</p>
+            </div>
+            <HealthRing
+              value={onTimePct}
+              label="On-time rate"
+              sub={openTotal === 0 ? "No open issues or fixes" : `${openTotal - lateRows.length} of ${openTotal} open items on schedule`}
+              tone={onTimeTone}
+            />
+          </div>
+        </div>
+      </Reveal>
+
+      {layout.editing && <p className="-mb-4 text-sm text-muted-foreground">Drag a section to where you want it. Your arrangement is saved on this browser for your account.</p>}
+      {layout.order.map((id) => (
+        <LayoutSection key={id} id={id} label={DASHBOARD_SECTION_LABELS[id]} editing={layout.editing} onMove={layout.move} dragging={draggingSection} setDragging={setDraggingSection}>
+          {sectionNodes[id]}
+        </LayoutSection>
+      ))}
+
       {currentUser?.roleName === "admin" && (
         <div>
           <h2 className="mb-3 text-lg font-semibold">Tenant Configuration</h2>
@@ -611,13 +663,6 @@ export function DashboardPage() {
             </Link>
           </div>
         </div>
-      )}
-
-      {tab === "workflow" && (
-      <div>
-        <h2 className="mb-3 text-lg font-semibold">Workflow Overview</h2>
-        <WorkflowDashboard />
-      </div>
       )}
     </div>
   );

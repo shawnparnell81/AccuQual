@@ -10,6 +10,7 @@ import {
   updateQualityGatesSchema,
   signTravelerSchema,
   createOperationSchema,
+  reorderOperationsSchema,
   updateOperationSchema,
 } from "./workOrders.validation.js";
 import {
@@ -24,6 +25,7 @@ import {
   signOperatorHandler,
   signInspectorHandler,
   createOperationHandler,
+  reorderOperationsHandler,
   updateOperationHandler,
   deleteOperationHandler,
 } from "./workOrders.controller.js";
@@ -55,5 +57,6 @@ workOrdersRouter.patch("/:id/quality-gates", validate(updateQualityGatesSchema),
 workOrdersRouter.post("/:id/sign-operator", validate(signTravelerSchema), signOperatorHandler);
 workOrdersRouter.post("/:id/sign-inspector", validate(signTravelerSchema), signInspectorHandler);
 workOrdersRouter.post("/:id/operations", validate(createOperationSchema), createOperationHandler);
+workOrdersRouter.post("/:id/operations/reorder", validate(reorderOperationsSchema), reorderOperationsHandler);
 workOrdersRouter.patch("/:id/operations/:opId", validate(updateOperationSchema), updateOperationHandler);
 workOrdersRouter.delete("/:id/operations/:opId", deleteOperationHandler);

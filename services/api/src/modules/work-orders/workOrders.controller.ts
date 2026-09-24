@@ -221,6 +221,46 @@ export const createOperationHandler = asyncHandler(async (req: Request, res: Res
   res.status(201).json(created);
 });
 
+/**
+ * Drag-to-reorder for the routing table. Op numbers are the shop's own scheme (10, 20, 30...), so a reorder hands the
+ * EXISTING numbers to the operations in their new order instead of inventing new ones. An operation that is already
+ * signed off can't change position: its sign-off vouches for that step at that point in the routing.
+ */
+export const reorderOperationsHandler = asyncHandler(async (req: Request, res: Response) => {
+  assertDepartment(req, ["customer_service"]);
+  const record = await loadWorkOrder(req, Number(req.params.id));
+  assertTravelerEditable(record.status);
+  const operations = await req.db!
+    .select()
+    .from(workOrderOperations)
+    .where(and(eq(workOrderOperations.workOrderId, record.id), eq(workOrderOperations.tenantId, req.tenantId!)))
+    .orderBy(asc(workOrderOperations.opNumber), asc(workOrderOperations.id));
+
+  const ids = (req.body as { ids: number[] }).ids;
+  const known = new Set(operations.map((o) => o.id));
+  if (ids.length !== operations.length || new Set(ids).size !== ids.length || ids.some((id) => !known.has(id))) {
+    throw AppError.badRequest("The new order has to list every operation on this traveler exactly once.");
+  }
+
+  const numbers = operations.map((o) => o.opNumber);
+  const newNumber = new Map(ids.map((id, index) => [id, numbers[index]!]));
+  const moved = operations.filter((o) => newNumber.get(o.id) !== o.opNumber);
+  const signed = moved.find((o) => o.signOff);
+  if (signed) throw AppError.badRequest(`Operation ${signed.opNumber} is already signed off and can't be moved.`);
+
+  for (const op of moved) {
+    await req.db!.update(workOrderOperations).set({ opNumber: newNumber.get(op.id)!, updatedAt: new Date() }).where(eq(workOrderOperations.id, op.id));
+  }
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operations_reordered", order: ids }, performedBy: req.user?.id });
+
+  const updated = await req.db!
+    .select()
+    .from(workOrderOperations)
+    .where(and(eq(workOrderOperations.workOrderId, record.id), eq(workOrderOperations.tenantId, req.tenantId!)))
+    .orderBy(asc(workOrderOperations.opNumber), asc(workOrderOperations.id));
+  res.json(updated);
+});
+
 export const updateOperationHandler = asyncHandler(async (req: Request, res: Response) => {
   assertDepartment(req, ["customer_service"]);
   const record = await loadWorkOrder(req, Number(req.params.id));

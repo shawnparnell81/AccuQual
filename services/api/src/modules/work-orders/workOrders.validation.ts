@@ -35,6 +35,11 @@ export const signTravelerSchema = z.object({
   signature: z.string().min(1),
 });
 
+/** The traveler's operations in their new order: every operation exactly once. */
+export const reorderOperationsSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(2).max(200),
+});
+
 export const createOperationSchema = z.object({
   opNumber: z.coerce.number().int(),
   description: z.string().min(1),

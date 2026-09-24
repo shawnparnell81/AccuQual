@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { audits, auditItems } from "../../drizzle/schema/audits.js";
 import { discrepancyInvestigations } from "../../drizzle/schema/quality.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
@@ -21,7 +21,15 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
   if (!audit) throw AppError.notFound("Audit");
   assertRecordOnAllowedSite(audit.siteId, req.allowedSiteIds, "Audit");
 
-  const [item] = await req.db!.insert(auditItems).values({ ...req.body, auditId, tenantId: req.tenantId! }).returning();
+  // Once a checklist has been reordered every question has a position; a question added afterwards goes to the end.
+  const [{ maxPosition } = { maxPosition: null }] = await req.db!
+    .select({ maxPosition: sql<number | null>`max(${auditItems.sortOrder})` })
+    .from(auditItems)
+    .where(and(eq(auditItems.auditId, auditId), eq(auditItems.tenantId, req.tenantId!)));
+  const [item] = await req.db!
+    .insert(auditItems)
+    .values({ ...req.body, auditId, tenantId: req.tenantId!, ...(maxPosition != null ? { sortOrder: Number(maxPosition) + 1 } : {}) })
+    .returning();
   if (!item) throw new Error("Insert did not return the created audit item");
 
   // Full-System Audit finding M2 — this handler previously only ever
@@ -96,7 +104,32 @@ export const listItemsHandler = asyncHandler(async (req: Request, res: Response)
   const items = await req
     .db!.select()
     .from(auditItems)
-    .where(and(eq(auditItems.auditId, Number(req.params.id)), eq(auditItems.tenantId, req.tenantId!)));
+    .where(and(eq(auditItems.auditId, Number(req.params.id)), eq(auditItems.tenantId, req.tenantId!)))
+    // Reordered checklists follow their saved positions; ones never reordered keep creation order.
+    .orderBy(sql`${auditItems.sortOrder} ASC NULLS LAST`, asc(auditItems.id));
+  res.json(items);
+});
+
+/** Drag-to-reorder for the audit checklist. Every question must be listed exactly once; the list's order becomes the checklist's order. */
+export const reorderItemsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const auditId = Number(req.params.id);
+  const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, auditId), eq(audits.tenantId, req.tenantId!)));
+  if (!audit) throw AppError.notFound("Audit");
+  assertRecordOnAllowedSite(audit.siteId, req.allowedSiteIds, "Audit");
+  if (audit.status === "completed") throw AppError.badRequest("A completed audit's checklist can't be reordered.");
+
+  const existing = await req.db!.select({ id: auditItems.id }).from(auditItems).where(and(eq(auditItems.auditId, auditId), eq(auditItems.tenantId, req.tenantId!)));
+  const ids = (req.body as { ids: number[] }).ids;
+  const known = new Set(existing.map((row) => row.id));
+  if (ids.length !== existing.length || new Set(ids).size !== ids.length || ids.some((id) => !known.has(id))) {
+    throw AppError.badRequest("The new order has to list every question on this audit exactly once.");
+  }
+  for (const [index, id] of ids.entries()) {
+    await req.db!.update(auditItems).set({ sortOrder: index + 1 }).where(eq(auditItems.id, id));
+  }
+  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Audit", entityId: auditId, action: "update", changes: { subAction: "items_reordered", order: ids }, performedBy: req.user?.id });
+
+  const items = await req.db!.select().from(auditItems).where(and(eq(auditItems.auditId, auditId), eq(auditItems.tenantId, req.tenantId!))).orderBy(sql`${auditItems.sortOrder} ASC NULLS LAST`, asc(auditItems.id));
   res.json(items);
 });
 

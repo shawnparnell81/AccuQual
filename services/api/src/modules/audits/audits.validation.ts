@@ -18,6 +18,11 @@ export const createAuditSchema = z.object({
 // /start and /complete now.
 export const updateAuditSchema = createAuditSchema.partial();
 
+/** The checklist in its new order: every question exactly once. */
+export const reorderAuditItemsSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(2).max(500),
+});
+
 export const addAuditItemSchema = z.object({
   question: z.string().min(1),
   finding: z.string().optional(),

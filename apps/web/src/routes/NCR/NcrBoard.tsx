@@ -32,7 +32,7 @@ export function NcrBoard({ ncrs, canEdit }: { ncrs: Ncr[]; canEdit: boolean }) {
   const navigate = useNavigate();
   const toast = useToast();
   const qc = useQueryClient();
-  const { label } = usePersonDirectory();
+  const { label, people } = usePersonDirectory();
   const [step, setStep] = useState<StepRequest | null>(null);
 
   async function post(ncr: Ncr, path: string, body?: Record<string, string>, done?: string) {
@@ -73,6 +73,15 @@ export function NcrBoard({ ncrs, canEdit }: { ncrs: Ncr[]; canEdit: boolean }) {
           return next
             ? `Issues move one step at a time. #${n.id} goes from ${statusPhrase(n.status)} to ${statusPhrase(next)} first — drop it there.`
             : `#${n.id} is closed and can't move (${statusPhrase(to)}).`;
+        }}
+        people={people.map((person) => ({ id: person.id, name: person.name?.trim() || person.email }))}
+        assignedTo={(n) => n.assignedTo}
+        onAssign={(n, personId, personName) => {
+          apiClient
+            .post(`/ncr/${n.id}/assign`, { assignedTo: personId })
+            .then(() => qc.invalidateQueries({ queryKey: ["ncr"] }))
+            .then(() => toast.success(`Issue #${n.id} assigned to ${personName}.`))
+            .catch((err) => toast.error(extractErrorMessage(err, "Couldn't assign this issue.")));
         }}
         renderCard={(n) => (
           <div onClick={() => navigate(`/ncr/${n.id}`)} className="cursor-pointer">

@@ -25,6 +25,8 @@ export const auditItems = pgTable("audit_items", {
   finding: text("finding"),
   severity: text("severity"), // minor, major, critical, observation
   evidence: text("evidence"),
+  // Position in the checklist, set by drag-to-reorder. NULL means "never reordered": those sort by creation order, after any positioned items.
+  sortOrder: integer("sort_order"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

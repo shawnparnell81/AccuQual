@@ -8,7 +8,9 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextField, SelectField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
-import { useWorkflowAction } from "../../hooks/useWorkflowAction";
+import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { useToast } from "../../components/shared/ToastProvider";
+import { GripVertical } from "lucide-react";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
@@ -55,6 +57,27 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
 
   const [item, setItem] = useState({ question: "", finding: "", severity: "observation" });
   const [autoOpened, setAutoOpened] = useState<number | null>(null);
+  const toast = useToast();
+  const [dragItemId, setDragItemId] = useState<number | null>(null);
+  const [overItemId, setOverItemId] = useState<number | null>(null);
+
+  async function dropItem(targetId: number) {
+    const movingId = dragItemId;
+    setDragItemId(null);
+    setOverItemId(null);
+    if (movingId === null || movingId === targetId) return;
+    const order = items.map((i) => i.id).filter((id) => id !== movingId);
+    order.splice(order.indexOf(targetId), 0, movingId);
+    // Show the new order immediately; the server's answer replaces it.
+    queryClient.setQueryData<AuditItem[]>(["audits", auditId, "items"], (current = []) => order.map((id) => current.find((i) => i.id === id)!).filter(Boolean));
+    try {
+      await apiClient.post(`/audits/${auditId}/item/reorder`, { ids: order });
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't reorder the checklist."));
+    } finally {
+      void queryClient.invalidateQueries({ queryKey: ["audits", auditId, "items"] });
+    }
+  }
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !audit) return <p className="text-sm text-muted-foreground">Loading…</p>;
@@ -154,9 +177,43 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
         <ul className="mb-4 flex flex-col gap-2 text-sm">
           {items.length === 0 && <li className="text-muted-foreground">No items yet.</li>}
           {items.map((i) => (
-            <li key={i.id} className="border-b border-border pb-2">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{i.question}</span>
+            <li
+              key={i.id}
+              className={`border-b border-border pb-2 transition-colors ${overItemId === i.id && dragItemId !== null && dragItemId !== i.id ? "border-t-2 border-t-primary" : ""} ${dragItemId === i.id ? "opacity-40" : ""}`}
+              onDragOver={(e) => {
+                if (dragItemId === null) return;
+                e.preventDefault();
+                setOverItemId(i.id);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                void dropItem(i.id);
+              }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex min-w-0 items-center gap-1.5 font-medium">
+                  {audit.status !== "completed" && items.length > 1 && (
+                    <span
+                      draggable
+                      title="Drag to reorder"
+                      className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", String(i.id));
+                        const row = (e.currentTarget as HTMLElement).closest("li");
+                        if (row) e.dataTransfer.setDragImage(row, 10, 10);
+                        setDragItemId(i.id);
+                      }}
+                      onDragEnd={() => {
+                        setDragItemId(null);
+                        setOverItemId(null);
+                      }}
+                    >
+                      <GripVertical size={15} />
+                    </span>
+                  )}
+                  <span className="truncate">{i.question}</span>
+                </span>
                 <StatusBadge value={i.severity} />
               </div>
               {i.finding && <p className="mt-1 text-muted-foreground">{i.finding}</p>}

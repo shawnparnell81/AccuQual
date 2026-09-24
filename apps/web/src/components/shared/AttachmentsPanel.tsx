@@ -10,6 +10,8 @@ import { PdfViewer } from "../forms/PdfViewer";
 import type { Attachment } from "../../api/types";
 import { formatDateTime } from "../../lib/dates";
 import { FileDropZone } from "./FileDropZone";
+import { usePageFileDrop } from "../../hooks/usePageFileDrop";
+import { UploadCloud } from "lucide-react";
 
 function formatSize(bytes: number | null): string {
   if (bytes === null) return "";
@@ -53,6 +55,12 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
       toast.success("File uploaded.");
     },
     onError: async (err) => toast.error(await extractErrorMessageAsync(err, "Couldn't upload that file.")),
+  });
+
+  // On a record's own page, a file dropped anywhere on the page attaches to that record.
+  const { dragging: pageDrag } = usePageFileDrop({
+    enabled: !!entityType && !!entityId,
+    onFiles: (dropped) => dropped.forEach((file) => upload.mutate(file)),
   });
 
   const remove = useMutation({
@@ -105,6 +113,15 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
 
   return (
     <FileDropZone className="rounded-lg border border-border bg-card p-4 print:hidden" disabled={upload.isPending} label="Drop to attach" onFiles={(dropped) => dropped.forEach((file) => upload.mutate(file))}>
+      {pageDrag && (
+        <div className="pointer-events-none fixed inset-0 z-[60] flex items-center justify-center bg-primary/10 backdrop-blur-[1px]">
+          <div className="m-6 flex max-w-md flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-primary bg-card/95 px-10 py-8 text-center shadow-2xl">
+            <UploadCloud size={34} className="text-primary" />
+            <p className="text-lg font-semibold">Drop to attach to this record</p>
+            <p className="text-sm text-muted-foreground">The file goes into Evidence / Attachments below.</p>
+          </div>
+        </div>
+      )}
       <div className="mb-3 flex items-center justify-between">
         <h3 className="flex items-center gap-1.5 text-sm font-medium">
           <Paperclip size={14} />
