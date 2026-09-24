@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
 import type {
@@ -35,6 +35,7 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { isPastDue } from "../../lib/opsLanguage";
 import { HealthRing, KpiTile, Reveal, SegmentedTabs, AnimatedNumber, type Tone } from "../../components/dashboard/kit";
+import { ActivityFeed, StatusBoard, TrendPanel, type FeedEvent, type StatusCell, type TrendPoint } from "../../components/dashboard/CommandCenter";
 import { Palette, FileUp, Bot, Cpu, AlertTriangle, PackageMinus, ClipboardCheck, ShieldAlert, ChevronRight } from "lucide-react";
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
@@ -89,7 +90,16 @@ const greeting = () => {
 /** Dashboard: NCR severity chart, CAPA status overview, audit calendar widget, supplier scorecards, AI insights panel. */
 export function DashboardPage() {
   const currentUser = useCurrentUser();
-  const { data: ncrs = [] } = ncrHooks.useList();
+  const { data: ncrs = [], dataUpdatedAt } = ncrHooks.useList();
+  const queryClient = useQueryClient();
+
+  // A live board: the lists behind it refresh every minute while the page is open.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      queryClient.invalidateQueries({ predicate: (q) => ["ncr", "capa", "inventory/alerts", "work-orders", "erp/requisitions"].includes(String(q.queryKey[0])) });
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [queryClient]);
   const { data: capas = [] } = capaHooks.useList();
   const { data: audits = [] } = auditHooks.useList();
   const { data: suppliers = [] } = supplierHooks.useList();
@@ -207,6 +217,59 @@ export function DashboardPage() {
       ? [{ key: "reqs", title: `${requisitionsPendingApproval} ${requisitionsPendingApproval === 1 ? "requisition" : "requisitions"} waiting on approval`, detail: "Purchasing", href: "/erp/requisitions", tone: "primary" as Tone, icon: "approval" as const }]
       : []),
   ];
+  const trend: TrendPoint[] = (() => {
+    const weeks = 12;
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const points = Array.from({ length: weeks }, (_, i) => {
+      const start = new Date(now - (weeks - 1 - i) * weekMs);
+      return { label: start.toLocaleDateString(undefined, { month: "short", day: "numeric" }), opened: 0, closed: 0 };
+    });
+    const bucket = (iso: string | null | undefined, key: "opened" | "closed") => {
+      if (!iso) return;
+      const age = Math.floor((now - new Date(iso).getTime()) / weekMs);
+      if (age >= 0 && age < weeks) points[weeks - 1 - age]![key] += 1;
+    };
+    for (const n of ncrs) {
+      bucket(n.createdAt, "opened");
+      bucket(n.closedAt, "closed");
+    }
+    for (const c of capas) {
+      bucket(c.createdAt, "opened");
+      bucket(c.closedAt, "closed");
+    }
+    return points;
+  })();
+
+  const feed: FeedEvent[] = [
+    ...ncrs.map((n) => ({ key: `n-${n.id}`, at: n.createdAt, title: `Issue #${n.id} opened`, detail: n.title, tone: (n.severity === "critical" ? "danger" : "warning") as Tone, href: `/ncr/${n.id}` })),
+    ...ncrs.filter((n) => n.closedAt).map((n) => ({ key: `nc-${n.id}`, at: n.closedAt!, title: `Issue #${n.id} closed`, detail: n.title, tone: "success" as Tone, href: `/ncr/${n.id}` })),
+    ...capas.map((c) => ({ key: `c-${c.id}`, at: c.createdAt, title: `Fix #${c.id} started`, detail: c.ncrId ? `For issue #${c.ncrId}` : "Corrective action", tone: "info" as Tone, href: `/capa/${c.id}` })),
+    ...capas.filter((c) => c.closedAt).map((c) => ({ key: `cc-${c.id}`, at: c.closedAt!, title: `Fix #${c.id} closed`, detail: c.ncrId ? `For issue #${c.ncrId}` : "Corrective action", tone: "success" as Tone, href: `/capa/${c.id}` })),
+    ...inventoryAlerts.filter((a) => !a.acknowledgedAt).map((a) => ({ key: `a-${a.id}`, at: a.triggeredAt, title: `${a.sku} ${a.alertType === "below_min" ? "is below minimum" : "is overstocked"}`, detail: a.description ?? "Stock alert", tone: "warning" as Tone, href: "/inventory/alerts" })),
+  ]
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .slice(0, 8);
+
+  const stateOf = (tone: Tone) => (tone === "success" ? "Healthy" : tone === "warning" ? "Watch" : tone === "danger" ? "Action needed" : "Active");
+  const boardTones = {
+    quality: (criticalOpen > 0 ? "danger" : lateRows.length > 0 ? "warning" : "success") as Tone,
+    fixes: (openFixRows.some((c) => isPastDue(c.dueDate, false)) ? "warning" : "success") as Tone,
+    stock: (openBelowMinAlerts > 0 ? "warning" : "success") as Tone,
+    suppliers: (suppliersAtRisk > 0 ? "warning" : "success") as Tone,
+    purchasing: (requisitionsPendingApproval > 0 ? "primary" : "success") as Tone,
+    production: "info" as Tone,
+  };
+  const board: StatusCell[] = [
+    { key: "quality", label: "Quality", state: stateOf(boardTones.quality), detail: `${openNcrs.length} open issues`, tone: boardTones.quality, href: "/ncr" },
+    { key: "fixes", label: "Fixes", state: stateOf(boardTones.fixes), detail: `${openCapas} in progress`, tone: boardTones.fixes, href: "/capa" },
+    { key: "stock", label: "Inventory", state: stateOf(boardTones.stock), detail: `${openBelowMinAlerts} below minimum`, tone: boardTones.stock, href: "/inventory/alerts" },
+    { key: "suppliers", label: "Suppliers", state: stateOf(boardTones.suppliers), detail: `${suppliersAtRisk} at risk`, tone: boardTones.suppliers, href: "/suppliers" },
+    { key: "purchasing", label: "Purchasing", state: requisitionsPendingApproval > 0 ? "Awaiting approval" : "Healthy", detail: `${requisitionsPendingApproval} requisitions waiting`, tone: boardTones.purchasing, href: "/erp/requisitions" },
+    { key: "production", label: "Production", state: openWorkOrders > 0 ? "Running" : "Idle", detail: `${openWorkOrders} open work orders`, tone: boardTones.production, href: "/work-orders" },
+  ];
+  const updatedAt = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : null;
+
   const attentionIcon = { late: AlertTriangle, stock: PackageMinus, supplier: ShieldAlert, approval: ClipboardCheck } as const;
   const toneVar = (tone: Tone) => (tone === "danger" ? "destructive" : tone);
 
@@ -214,12 +277,14 @@ export function DashboardPage() {
     <div className="flex flex-col gap-8">
       <Reveal>
         <div className="hero-surface rounded-2xl p-6 md:p-8">
+          <div className="cc-grid" aria-hidden />
+          <div className="cc-orbs" aria-hidden />
           <div className="relative flex flex-wrap items-center justify-between gap-6">
             <div>
               <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-primary">
-                <span className="live-dot h-2 w-2 rounded-full bg-primary" /> Plant pulse
+                <span className="led" /> Live · Plant pulse{updatedAt ? <span className="font-normal normal-case tracking-normal text-muted-foreground"> · updated {updatedAt}</span> : null}
               </p>
-              <h1 className="mt-2 text-3xl font-semibold md:text-4xl">
+              <h1 className="glow-text mt-2 text-4xl font-semibold md:text-5xl">
                 {greeting()}
                 {firstName ? `, ${firstName}` : ""}
               </h1>
@@ -235,6 +300,8 @@ export function DashboardPage() {
         </div>
       </Reveal>
 
+      <StatusBoard cells={board} />
+
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <KpiTile
           index={1}
@@ -249,6 +316,15 @@ export function DashboardPage() {
         <KpiTile index={3} label="Past due" value={lateRows.length} sub={lateRows.length === 0 ? "All on schedule" : "Need a nudge"} tone={lateRows.length > 0 ? "danger" : "success"} />
         <KpiTile index={4} label="Suppliers at risk" value={suppliersAtRisk} sub="Delivery + quality" tone={suppliersAtRisk > 0 ? "warning" : "success"} href="/suppliers" />
         <KpiTile index={5} label="Below minimum" value={openBelowMinAlerts} sub="Stock alerts" tone={openBelowMinAlerts > 0 ? "warning" : "success"} href="/inventory/alerts" />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Reveal index={5} className="lg:col-span-2">
+          <TrendPanel data={trend} />
+        </Reveal>
+        <Reveal index={6}>
+          <ActivityFeed events={feed} />
+        </Reveal>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-5">
