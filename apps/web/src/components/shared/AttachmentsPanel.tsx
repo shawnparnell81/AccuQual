@@ -9,6 +9,7 @@ import { Modal } from "../modals/Modal";
 import { PdfViewer } from "../forms/PdfViewer";
 import type { Attachment } from "../../api/types";
 import { formatDateTime } from "../../lib/dates";
+import { FileDropZone } from "./FileDropZone";
 
 function formatSize(bytes: number | null): string {
   if (bytes === null) return "";
@@ -103,7 +104,7 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 print:hidden">
+    <FileDropZone className="rounded-lg border border-border bg-card p-4 print:hidden" disabled={upload.isPending} label="Drop to attach" onFiles={(dropped) => dropped.forEach((file) => upload.mutate(file))}>
       <div className="mb-3 flex items-center justify-between">
         <h3 className="flex items-center gap-1.5 text-sm font-medium">
           <Paperclip size={14} />
@@ -160,6 +161,6 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
       <Modal title={previewFile?.fileName ?? "Preview"} isOpen={previewFile !== null} onClose={() => setPreviewFile(null)}>
         <PdfViewer data={previewBytes} isLoading={previewLoading} />
       </Modal>
-    </div>
+    </FileDropZone>
   );
 }

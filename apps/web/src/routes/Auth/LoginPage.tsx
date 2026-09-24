@@ -96,10 +96,30 @@ function SsoSignIn() {
   );
 }
 
+const REMEMBERED_EMAIL_KEY = "accuqual-remembered-email";
+
+function readRememberedEmail(): string {
+  try {
+    return localStorage.getItem(REMEMBERED_EMAIL_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function storeRememberedEmail(email: string | null) {
+  try {
+    if (email) localStorage.setItem(REMEMBERED_EMAIL_KEY, email);
+    else localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+  } catch {
+    // Private mode / blocked storage: remembering the email is a convenience, never required.
+  }
+}
+
 export function LoginPage() {
   const [searchParams] = useSearchParams();
   const ssoError = searchParams.get("sso_error");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(readRememberedEmail);
+  const [remember, setRemember] = useState(() => readRememberedEmail() !== "");
   const [password, setPassword] = useState("");
   const [stage, setStage] = useState<Stage>({ kind: "password" });
   const [code, setCode] = useState("");
@@ -133,7 +153,7 @@ export function LoginPage() {
         <MfaEnrollPanel<AuthResponse>
           start={() => mfaApi.enrollStart(mfaToken)}
           confirm={async (c) => {
-            const session = await mfaApi.enrollConfirm(mfaToken, c);
+            const session = await mfaApi.enrollConfirm(mfaToken, c, remember);
             return { recoveryCodes: session.recoveryCodes ?? [], payload: session };
           }}
           onEnrolled={(codes, session) => setStage({ kind: "codes", codes, session })}
@@ -153,7 +173,7 @@ export function LoginPage() {
           setCodeError(null);
           setCodeBusy(true);
           try {
-            startSession(await mfaApi.verify(mfaToken, code));
+            startSession(await mfaApi.verify(mfaToken, code, remember));
           } catch (err) {
             setCodeError(extractErrorMessage(err, "That code didn't work."));
           } finally {
@@ -179,8 +199,9 @@ export function LoginPage() {
       subtitle="Sign in to your quality management workspace"
       onSubmit={(e) => {
         e.preventDefault();
+        storeRememberedEmail(remember ? email : null);
         login.mutate(
-          { email, password },
+          { email, password, rememberMe: remember },
           {
             onSuccess: (data) => {
               if (isSession(data)) return;
@@ -198,6 +219,19 @@ export function LoginPage() {
             Forgot password?
           </Link>
         </div>
+        <label className="flex cursor-pointer items-start gap-2 text-sm">
+          <input
+            id="remember-me"
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-form-field accent-[hsl(var(--primary))]"
+          />
+          <span>
+            Remember me
+            <span className="block text-xs text-muted-foreground">Stay signed in on this device for 30 days. Only use on a computer you trust.</span>
+          </span>
+        </label>
       </div>
 
       {ssoError && <p className="mt-3 text-sm text-destructive">{SSO_ERRORS[ssoError] ?? "Single sign-on didn't complete. Please try again."}</p>}

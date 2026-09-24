@@ -117,6 +117,7 @@ import { AdminTenantSettingsPage } from "./routes/Admin/AdminTenantSettingsPage"
 import { AdminSsoPage } from "./routes/Admin/AdminSsoPage";
 import { AdminDataExportPage } from "./routes/Admin/AdminDataExportPage";
 import { HomePage } from "./routes/Home/HomePage";
+import { homeKind } from "./lib/opsLanguage";
 import { CalendarPage } from "./routes/Calendar/CalendarPage";
 import { useCurrentUser, useAuthBootstrap } from "./hooks/useAuth";
 
@@ -124,7 +125,9 @@ function HomeRoute() {
   // Platform admins have no tenant, so every tenant-data page 401s for them —
   // send them straight to the console that's actually theirs.
   const user = useCurrentUser();
-  return user?.roleName === "platform_admin" ? <PlatformAdminPage /> : <DashboardPage />;
+  if (user?.roleName === "platform_admin") return <PlatformAdminPage />;
+  // Quality leads and admins get the plant-wide pulse; everyone else lands on their own day.
+  return homeKind(user?.roleName) === "lead" ? <DashboardPage /> : <HomePage />;
 }
 
 export function App() {

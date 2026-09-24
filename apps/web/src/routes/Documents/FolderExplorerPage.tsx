@@ -5,6 +5,9 @@ import { Paperclip, FileText, X, Inbox, ArrowUpRight, UploadCloud } from "lucide
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
 import { StatusBadge } from "../../components/tables/StatusBadge";
+import { FileDropZone, isFileDrag } from "../../components/shared/FileDropZone";
+import { useToast } from "../../components/shared/ToastProvider";
+import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 
 interface DocumentFolder {
   id: number;
@@ -109,6 +112,21 @@ export function FolderExplorerPage() {
   const uploadDocument = useUploadDocument();
   const removeTemplate = useRemoveTemplate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const toast = useToast();
+
+  /** Files dropped from the desktop become real controlled documents in the target folder, one request each. */
+  async function uploadFiles(parentId: number, files: File[]) {
+    let uploaded = 0;
+    for (const file of files) {
+      try {
+        await uploadDocument.mutateAsync({ parentId, file });
+        uploaded += 1;
+      } catch (err) {
+        toast.error(`${file.name}: ${await extractErrorMessageAsync(err, "couldn't upload")}`);
+      }
+    }
+    if (uploaded > 0) toast.success(uploaded === 1 ? "Document uploaded." : `${uploaded} documents uploaded.`);
+  }
 
   const [activeDeptId, setActiveDeptId] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
@@ -237,7 +255,7 @@ export function FolderExplorerPage() {
                   });
                 }}
                 onDragOver={(e) => {
-                  if (dragged?.kind === "folder") {
+                  if (dragged?.kind === "folder" || isFileDrag(e)) {
                     e.preventDefault();
                     setDropHoverId(dept.id);
                   }
@@ -246,7 +264,8 @@ export function FolderExplorerPage() {
                 onDrop={(e) => {
                   e.preventDefault();
                   setDropHoverId(null);
-                  if (dragged?.kind === "folder") moveFolder(dragged.id, dept.id);
+                  if (isFileDrag(e)) void uploadFiles(dept.id, Array.from(e.dataTransfer.files));
+                  else if (dragged?.kind === "folder") moveFolder(dragged.id, dept.id);
                   setDragged(null);
                 }}
                 className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
@@ -301,13 +320,25 @@ export function FolderExplorerPage() {
             </button>
           </div>
 
+          <FileDropZone
+            onFiles={(dropped) => void uploadFiles(activeDept.id, dropped)}
+            overlay={false}
+            className="rounded-lg border-2 border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground transition-colors hover:border-primary/50"
+          >
+            <span className="inline-flex items-center gap-2">
+              <UploadCloud size={14} /> Drag files from your computer onto {activeDept.name}, or onto any folder below, to add them as documents
+            </span>
+          </FileDropZone>
+
           {(byParent.get(activeDept.id) ?? []).map((sub) => {
             const docs = (byParent.get(sub.id) ?? []).filter((d) => !query || d.name.toLowerCase().includes(query));
             const isCollapsed = collapsed[sub.id];
             const isDropTarget = dropHoverId === sub.id;
             return (
-              <div
+              <FileDropZone
                 key={sub.id}
+                onFiles={(dropped) => void uploadFiles(sub.id, dropped)}
+                overlay={false}
                 className={`overflow-hidden rounded-lg border bg-card transition-shadow ${isDropTarget ? "border-primary ring-2 ring-primary" : "border-border"}`}
               >
                 <div
@@ -371,7 +402,7 @@ export function FolderExplorerPage() {
                     ))}
                   </div>
                 )}
-              </div>
+              </FileDropZone>
             );
           })}
 

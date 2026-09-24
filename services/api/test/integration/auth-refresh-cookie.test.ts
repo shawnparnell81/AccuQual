@@ -66,6 +66,24 @@ describe("Auth refresh token cookie (real DB + real HTTP path)", () => {
     expect(rtCookie!.toLowerCase()).toContain("path=/;");
   });
 
+  it("\"Remember me\" makes the cookie persistent and survives a refresh; without it the cookie ends with the browser session", async () => {
+    const rtCookieOf = (res: request.Response) => (res.headers["set-cookie"] as unknown as string[]).find((c) => c.startsWith("accuqual_rt="))!.toLowerCase();
+
+    const plain = await request(app).post("/auth/login").send({ email, password: PASSWORD });
+    expect(rtCookieOf(plain)).not.toContain("max-age");
+    expect(rtCookieOf(plain)).not.toContain("expires");
+
+    const agent = request.agent(app);
+    const remembered = await agent.post("/auth/login").send({ email, password: PASSWORD, rememberMe: true });
+    expect(remembered.status).toBe(200);
+    expect(remembered.body.remember).toBeUndefined();
+    expect(rtCookieOf(remembered)).toContain("max-age=2592000");
+
+    const refreshed = await agent.post("/auth/refresh").set(CSRF).send({});
+    expect(refreshed.status).toBe(200);
+    expect(rtCookieOf(refreshed)).toContain("max-age=2592000");
+  });
+
   it("POST /auth/refresh with the real cookie mints a fresh access token, still with no refreshToken field", async () => {
     const agent = request.agent(app);
     await agent.post("/auth/login").send({ email, password: PASSWORD });

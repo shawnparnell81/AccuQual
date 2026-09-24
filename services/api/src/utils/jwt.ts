@@ -29,6 +29,8 @@ export interface RefreshTokenPayload {
   // existed doesn't throw on a missing key — every new token this app
   // issues from here on always sets it.
   jti?: string;
+  // Set when the user ticked "Remember me" — the session lives (and may sit idle) for REMEMBER_ME_TTL instead of the normal limits.
+  rm?: boolean;
 }
 
 export function signAccessToken(payload: AccessTokenPayload): string {
@@ -37,7 +39,7 @@ export function signAccessToken(payload: AccessTokenPayload): string {
 }
 
 export function signRefreshToken(payload: RefreshTokenPayload): string {
-  const options: SignOptions = { expiresIn: env.JWT_REFRESH_TTL as SignOptions["expiresIn"] };
+  const options: SignOptions = { expiresIn: (payload.rm ? env.REMEMBER_ME_TTL : env.JWT_REFRESH_TTL) as SignOptions["expiresIn"] };
   return jwt.sign(payload, env.JWT_REFRESH_SECRET, options);
 }
 
@@ -57,6 +59,7 @@ function parseDurationMs(ttl: string): number {
 }
 
 export const REFRESH_TOKEN_TTL_MS = parseDurationMs(env.JWT_REFRESH_TTL);
+export const REMEMBER_ME_TTL_MS = parseDurationMs(env.REMEMBER_ME_TTL);
 
 export function verifyAccessToken(token: string): AccessTokenPayload {
   return jwt.verify(token, env.JWT_ACCESS_SECRET) as AccessTokenPayload;

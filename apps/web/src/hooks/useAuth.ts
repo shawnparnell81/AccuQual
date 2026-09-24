@@ -38,7 +38,7 @@ export function useStartSession() {
 export function useLogin() {
   const startSession = useStartSession();
   return useMutation({
-    mutationFn: async (input: { email: string; password: string }) =>
+    mutationFn: async (input: { email: string; password: string; rememberMe?: boolean }) =>
       (await apiClient.post<LoginResponse>("/auth/login", input)).data,
     // Cross-user data leakage must be impossible — clear any query cache
     // left over from a previous session (someone logging back in as a
@@ -138,7 +138,7 @@ export function useAuthBootstrap() {
 
 /** Mid-sign-in MFA calls: they authenticate with the short-lived mfaToken from the password step, not a session. */
 export const mfaApi = {
-  verify: async (mfaToken: string, code: string) => (await apiClient.post<AuthResponse>("/auth/mfa/verify", { mfaToken, code })).data,
+  verify: async (mfaToken: string, code: string, rememberMe = false) => (await apiClient.post<AuthResponse>("/auth/mfa/verify", { mfaToken, code, rememberMe })).data,
   enrollStart: async (mfaToken: string) => (await apiClient.post<{ secret: string; otpauthUri: string }>("/auth/mfa/enroll/start", { mfaToken })).data,
-  enrollConfirm: async (mfaToken: string, code: string) => (await apiClient.post<AuthResponse>("/auth/mfa/enroll/confirm", { mfaToken, code })).data,
+  enrollConfirm: async (mfaToken: string, code: string, rememberMe = false) => (await apiClient.post<AuthResponse>("/auth/mfa/enroll/confirm", { mfaToken, code, rememberMe })).data,
 };
