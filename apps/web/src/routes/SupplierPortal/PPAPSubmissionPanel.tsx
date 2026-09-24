@@ -7,6 +7,7 @@ import { TextField, TextAreaField, SelectField } from "../../components/forms/Fi
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { PPAP_DOCUMENT_TYPES } from "../../api/types";
 import type { SupplierPpapSubmission } from "../../api/types";
+import { FileDropZone } from "../../components/shared/FileDropZone";
 
 const LEVELS = [1, 2, 3, 4, 5];
 
@@ -104,7 +105,7 @@ function PpapCard({ submission, isReviewer }: { submission: SupplierPpapSubmissi
   const attachedTypes = Object.keys(submission.documents ?? {});
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
+    <FileDropZone className="rounded-lg border border-border bg-card p-4" multiple={false} disabled={attach.isPending} label={`Drop to attach as ${documentType.replace(/_/g, " ")}`} onFiles={(dropped) => attach.mutate(dropped[0]!)}>
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium">
@@ -166,6 +167,6 @@ function PpapCard({ submission, isReviewer }: { submission: SupplierPpapSubmissi
           </div>
         </div>
       )}
-    </div>
+    </FileDropZone>
   );
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -18,6 +18,10 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { usePlantWrite } from "../../hooks/usePlantWrite";
 import { CurrentPlantNote } from "../../components/layout/CurrentPlantNote";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
+import { PendingFilesField } from "../../components/shared/PendingFilesField";
+import { SegmentedTabs } from "../../components/dashboard/kit";
+import { uploadPendingAttachments } from "../../lib/attachments";
+import { NcrBoard } from "./NcrBoard";
 
 const NCR_STATUSES = ["open", "contained", "investigating", "corrective_action", "closed"] as const;
 
@@ -37,6 +41,9 @@ export function NcrListPage() {
   const [severityFilter, setSeverityFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [params, setParams] = useSearchParams();
+  const view: "list" | "board" = params.get("view") === "board" ? "board" : "list";
   const [form, setForm] = useState<{ title: string; description: string; severity: Ncr["severity"]; dueDate: string; assignedTo: string }>({
     title: "",
     description: "",
@@ -117,6 +124,15 @@ export function NcrListPage() {
       </div>
       {reason && <p className="text-sm text-muted-foreground">{reason}</p>}
 
+      <SegmentedTabs
+        tabs={[
+          { key: "list", label: "List" },
+          { key: "board", label: "Board" },
+        ]}
+        value={view}
+        onChange={(key) => setParams(key === "list" ? {} : { view: key }, { replace: true })}
+      />
+
       <div className="flex gap-3">
         <select value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} className="rounded-md border border-border px-3 py-2 text-sm">
           <option value="">All severities</option>
@@ -126,6 +142,7 @@ export function NcrListPage() {
             </option>
           ))}
         </select>
+        {view === "list" && (
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-md border border-border px-3 py-2 text-sm">
           <option value="">All states</option>
           {["open", "contained", "investigating", "corrective_action", "closed"].map((s) => (
@@ -134,8 +151,16 @@ export function NcrListPage() {
             </option>
           ))}
         </select>
+        )}
       </div>
 
+      {view === "board" ? (
+        <>
+          <p className="text-xs text-muted-foreground">Drag an issue to the next column to move it forward. Each step asks for what it needs first.</p>
+          <NcrBoard ncrs={isLoading ? [] : ncrs.filter((n) => !severityFilter || n.severity === severityFilter)} canEdit={canEdit} />
+        </>
+      ) : (
+      <>
       {canEdit && selectedIds.size > 0 && (
         <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/50 px-3 py-2">
           <span className="text-sm font-medium">{selectedIds.size} selected</span>
@@ -168,8 +193,10 @@ export function NcrListPage() {
         selectedIds={canEdit ? selectedIds : undefined}
         onSelectionChange={canEdit ? setSelectedIds : undefined}
       />
+      </>
+      )}
 
-      <Modal title="Log an issue" isOpen={createOpen} onClose={() => setCreateOpen(false)}>
+      <Modal title="Log an issue" isOpen={createOpen} onClose={() => { setCreateOpen(false); setPendingFiles([]); }}>
         <form
           className="flex flex-col gap-4"
           onSubmit={(e) => {
@@ -183,8 +210,14 @@ export function NcrListPage() {
                 assignedTo: form.assignedTo ? Number(form.assignedTo) : undefined,
               },
               {
-              onSuccess: (created) => {
+              onSuccess: async (created) => {
+                const files = pendingFiles;
+                setPendingFiles([]);
                 setCreateOpen(false);
+                if (files.length > 0) {
+                  const result = await uploadPendingAttachments("ncr", created.id, files);
+                  if (result.failed.length > 0) toast.error(`Issue logged, but these files didn't attach: ${result.failed.join(", ")}. Add them on the issue page.`);
+                }
                 navigate(`/ncr/${created.id}`);
               },
               onError: (err) => toast.error(extractErrorMessage(err, "Couldn't log this issue. Check the title and try again.")),
@@ -207,7 +240,7 @@ export function NcrListPage() {
                 insertLabel="Insert as Description"
               />
             </div>
-            <TextAreaField label="" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Part, lot, and what you saw. Photos can be attached on the next screen." />
+            <TextAreaField label="" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Part, lot, and what you saw." />
           </div>
           <DetailsDisclosure>
           <div className="flex flex-col gap-1">
@@ -261,6 +294,7 @@ export function NcrListPage() {
             </SelectField>
           )}
           </DetailsDisclosure>
+          <PendingFilesField files={pendingFiles} onChange={setPendingFiles} />
           <button type="submit" className="rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground">
             Log issue
           </button>
