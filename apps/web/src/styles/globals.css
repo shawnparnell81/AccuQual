@@ -391,3 +391,157 @@ a.kpi-tile:hover,
     transform: none;
   }
 }
+
+/*
+ * App-wide polish (page headers, card depth, buttons, tables, scrollbars,
+ * skeletons). Selectors target the shared utility classes the whole app
+ * already uses, so every page picks this up without per-page edits.
+ */
+@keyframes page-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes row-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.page-enter {
+  animation: page-in 0.35s ease both;
+}
+.modal-in {
+  animation: page-in 0.2s ease both;
+}
+.row-in {
+  animation: row-in 0.4s ease both;
+}
+
+/* Every page title gets the brand accent bar. */
+main h1.text-2xl {
+  position: relative;
+  padding-left: 0.9rem;
+  letter-spacing: -0.015em;
+}
+main h1.text-2xl::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.2em;
+  bottom: 0.2em;
+  width: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--accent)));
+}
+
+/* Cards read as raised surfaces instead of flat boxes. */
+.border.bg-card:is(.rounded-lg, .rounded-xl, .rounded-2xl) {
+  background-image: linear-gradient(180deg, hsl(var(--foreground) / 0.035), transparent 60%);
+  box-shadow:
+    inset 0 1px 0 hsl(var(--foreground) / 0.05),
+    0 10px 28px -22px hsl(var(--primary) / 0.5);
+}
+
+/* Primary buttons lift and glow a little. */
+button.bg-primary,
+a.bg-primary {
+  box-shadow: 0 8px 20px -10px hsl(var(--primary) / 0.85);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
+}
+button.bg-primary:not(:disabled):hover,
+a.bg-primary:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+button.bg-primary:not(:disabled):active {
+  transform: none;
+}
+button.bg-primary:disabled {
+  box-shadow: none;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.25);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+}
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+.skeleton {
+  background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--muted-foreground) / 0.22) 50%, hsl(var(--muted)) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: 6px;
+}
+
+/* Glow effects are for dark surfaces; on the light theme they just smudge. */
+:root[data-theme="light"] .glow-text {
+  text-shadow: none;
+}
+:root[data-theme="light"] .led {
+  box-shadow: 0 0 0 3px hsl(var(--tone) / 0.2);
+}
+:root[data-theme="light"] .hero-surface {
+  box-shadow: 0 18px 40px -28px hsl(var(--primary) / 0.35);
+}
+:root[data-theme="light"] .cc-orbs::before,
+:root[data-theme="light"] .cc-orbs::after {
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .modal-in,
+  .row-in,
+  .skeleton {
+    animation: none;
+  }
+  button.bg-primary,
+  a.bg-primary {
+    transition: none;
+  }
+}
+
+/* A page's title row (title + action buttons) wraps instead of squeezing the text on a phone. */
+main .flex.justify-between:has(> div > h1.text-2xl) {
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+@media (max-width: 640px) {
+  main h1.text-2xl {
+    font-size: 1.5rem;
+  }
+}

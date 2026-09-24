@@ -66,7 +66,7 @@ export function Modal({ title, isOpen, onClose, children }: ModalProps) {
 
   return (
     <div
-      className={clsx("fixed inset-0 z-50 flex items-center justify-center", moved ? "bg-transparent" : "bg-black/40")}
+      className={clsx("modal-in fixed inset-0 z-50 flex items-center justify-center p-3", moved ? "bg-transparent" : "bg-black/50 backdrop-blur-[2px]")}
       onPointerDown={(e) => {
         pressStartedOnBackdrop.current = e.target === e.currentTarget;
       }}
@@ -76,7 +76,7 @@ export function Modal({ title, isOpen, onClose, children }: ModalProps) {
     >
       <div
         ref={cardRef}
-        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg border border-border bg-card shadow-lg"
+        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl border border-border bg-card shadow-2xl"
         style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
         onClick={(e) => e.stopPropagation()}
       >

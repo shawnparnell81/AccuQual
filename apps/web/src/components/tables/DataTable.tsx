@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AlertTriangle, Inbox } from "lucide-react";
 
 export interface Column<T> {
   header: string;
@@ -52,15 +53,38 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   const selectable = selectedIds !== undefined && onSelectionChange !== undefined;
   if (isLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
+    return (
+      <div className="overflow-hidden rounded-xl border border-border bg-card" aria-busy="true" aria-label="Loading">
+        <div className="skeleton h-9 rounded-none" />
+        {Array.from({ length: 6 }, (_, i) => (
+          <div key={i} className="flex items-center gap-4 border-t border-border/70 px-4 py-3">
+            <div className="skeleton h-3.5 w-10" />
+            <div className="skeleton h-3.5 flex-1" style={{ maxWidth: `${55 + ((i * 13) % 35)}%` }} />
+            <div className="skeleton h-3.5 w-20" />
+          </div>
+        ))}
+      </div>
+    );
   }
 
   if (isError) {
-    return <div className="p-6 text-sm text-destructive">{errorMessage}</div>;
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-5 text-sm text-destructive">
+        <AlertTriangle size={18} className="shrink-0" />
+        {errorMessage}
+      </div>
+    );
   }
 
   if (rows.length === 0) {
-    return <div className="p-6 text-sm text-muted-foreground">{emptyMessage}</div>;
+    return (
+      <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12 text-center">
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <Inbox size={22} />
+        </span>
+        <p className="max-w-md text-sm text-muted-foreground">{emptyMessage}</p>
+      </div>
+    );
   }
 
   const visibleIds = rows.map(rowKey);
@@ -81,9 +105,9 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted text-muted-foreground">
+    <div className="overflow-x-auto rounded-xl border border-border bg-card">
+      <table className="w-full min-w-[36rem] text-sm">
+        <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
           <tr>
             {selectable && (
               <th className="w-8 px-4 py-2">
@@ -91,20 +115,21 @@ export function DataTable<T>({
               </th>
             )}
             {columns.map((col) => (
-              <th key={col.header} className="px-4 py-2 text-left font-medium">
+              <th key={col.header} className="px-4 py-2.5 text-left font-semibold">
                 {col.header}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {rows.map((row, rowIndex) => {
             const id = rowKey(row);
             return (
               <tr
                 key={id}
                 onClick={() => onRowClick?.(row)}
-                className={onRowClick ? "cursor-pointer border-t border-border hover:bg-muted/50" : "border-t border-border"}
+                style={{ animationDelay: `${Math.min(rowIndex, 14) * 22}ms` }}
+                className={`row-in border-t border-border/70 transition-colors ${onRowClick ? "cursor-pointer hover:bg-primary/5" : ""}`}
               >
                 {selectable && (
                   <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
@@ -112,7 +137,7 @@ export function DataTable<T>({
                   </td>
                 )}
                 {columns.map((col) => (
-                  <td key={col.header} className={`px-4 py-2 ${col.className ?? ""}`}>
+                  <td key={col.header} className={`px-4 py-2.5 ${col.className ?? ""}`}>
                     {col.accessor(row)}
                   </td>
                 ))}

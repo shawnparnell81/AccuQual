@@ -49,6 +49,8 @@ const ROUTE_PATTERNS: RoutePattern[] = [
   { test: /^\/admin/, icon: "admin", title: () => "Admin" },
   { test: /^\/platform/, icon: "admin", title: () => "Platform Admin" },
   { test: /^\/$/, icon: "dashboard", title: () => "Dashboard" },
+  { test: /^\/home\/?$/, icon: "dashboard", title: () => "Home" },
+  { test: /^\/calendar\/?$/, icon: "dashboard", title: () => "Calendar" },
 ];
 
 export function deriveTabMeta(pathname: string): { title: string; icon: string } {
