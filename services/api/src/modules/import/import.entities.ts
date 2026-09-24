@@ -276,7 +276,7 @@ const peopleEntity: ImportEntity<PersonValue, { rolesByName: Map<string, number>
     let department: string | undefined;
     const deptText = raw.department?.trim();
     if (deptText) {
-      const key = deptText.toLowerCase().replace(/&/g, "and").replace(/[\s-]+/g, "_").replace(/^sales_and_marketing$/, "sales_and_marketing").replace(/^material_mgmt$/, "material_management");
+      const key = deptText.toLowerCase().replace(/&/g, "and").replace(/[\s-]+/g, "_").replace(/^material_mgmt$/, "material_management");
       const match = DEPARTMENTS.find((d) => d === key) ?? DEPARTMENTS.find((d) => d.replace(/_/g, "") === key.replace(/_/g, ""));
       if (!match) errors.push(`Department "${deptText}" isn't one of the app's departments.`);
       else department = match;
