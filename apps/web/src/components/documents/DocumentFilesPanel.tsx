@@ -3,6 +3,7 @@ import { Download, FileText, Trash2, Upload } from "lucide-react";
 import { ACCEPTED_FILES, formatBytes, openAttachment, removeAttachment, uploadAttachment, type DocumentAttachmentRef, type DocumentVersion } from "../../api/documents";
 import { useToast } from "../shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { FileDropZone } from "../shared/FileDropZone";
 
 interface Props {
   documentId: number;
@@ -21,7 +22,7 @@ export function DocumentFilesPanel({ documentId, versionId, files, editable, onC
   const [busy, setBusy] = useState(false);
   const toast = useToast();
 
-  async function add(list: FileList | null) {
+  async function add(list: FileList | File[] | null) {
     if (!list || list.length === 0) return;
     setBusy(true);
     try {
@@ -54,7 +55,7 @@ export function DocumentFilesPanel({ documentId, versionId, files, editable, onC
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <FileDropZone className="flex flex-col gap-3" disabled={!editable || busy} accept={ACCEPTED_FILES} label="Drop to attach to this revision" onFiles={(dropped) => void add(dropped)}>
       {files.length === 0 ? (
         <p className="text-sm text-muted-foreground">No files attached to this revision.</p>
       ) : (
@@ -89,6 +90,6 @@ export function DocumentFilesPanel({ documentId, versionId, files, editable, onC
           <p className="mt-1 text-xs text-muted-foreground">PDF, Word (.docx), Excel (.xlsx) or an image, up to 15 MB each. Each file's checksum is recorded so the released revision can prove what it held.</p>
         </div>
       )}
-    </div>
+    </FileDropZone>
   );
 }

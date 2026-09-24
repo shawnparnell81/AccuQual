@@ -6,6 +6,7 @@ import { extractErrorMessage, extractErrorMessageAsync } from "../../hooks/useWo
 import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { FormTemplateStatus } from "../../api/types";
+import { FileDropZone } from "../../components/shared/FileDropZone";
 
 // The 9 form types this page is explicitly meant to manage (see the Tenant
 // Template Upload UI review) — a subset of forms.validation.ts's full
@@ -82,7 +83,7 @@ function TemplateRow({ type, label, status }: { type: string; label: string; sta
         )}
       </td>
       <td className="py-2 text-right">
-        <div className="flex justify-end gap-2">
+        <FileDropZone className="flex justify-end gap-2 rounded-md p-1" accept="application/pdf" multiple={false} overlay={false} disabled={upload.isPending} onFiles={(dropped) => upload.mutate(dropped[0]!)}>
           {status?.hasTemplate && (
             <button onClick={preview} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
               Preview
@@ -107,7 +108,7 @@ function TemplateRow({ type, label, status }: { type: string; label: string; sta
               Delete
             </button>
           )}
-        </div>
+        </FileDropZone>
       </td>
     </tr>
   );

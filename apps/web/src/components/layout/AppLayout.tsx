@@ -65,6 +65,22 @@ export function AppLayout() {
     if (!isSupplierPortal) setPaletteOpen(true);
   });
 
+  // A file dropped anywhere that ISN'T an upload area would make the browser
+  // navigate away to open it, throwing the whole session's page state away.
+  // Upload areas (FileDropZone) handle their own drops; this catches the rest.
+  useEffect(() => {
+    const isFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+    const stop = (e: DragEvent) => {
+      if (isFiles(e)) e.preventDefault();
+    };
+    window.addEventListener("dragover", stop);
+    window.addEventListener("drop", stop);
+    return () => {
+      window.removeEventListener("dragover", stop);
+      window.removeEventListener("drop", stop);
+    };
+  }, []);
+
   // Restores only the active tenant's saved windows/tabs, and re-runs
   // (clearing the previous tenant's) if the logged-in tenant ever changes —
   // see the Multi-Tenant Patch Pack §D "Clear windows when tenant changes";

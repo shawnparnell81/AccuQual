@@ -5,6 +5,7 @@ import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
+import { FileDropZone } from "../../components/shared/FileDropZone";
 
 interface DocumentFolder {
   id: number;
@@ -78,7 +79,7 @@ export function GeneralUploadsPage() {
         <p className="text-sm text-muted-foreground">Upload a real controlled document (a policy, a procedure, anything else) straight into the Document Library, or leave it here as a general file if it isn't tied to a folder or a specific record.</p>
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-4">
+      <FileDropZone className="rounded-lg border border-border bg-card p-4" disabled={!folderId || uploadToFolder.isPending} multiple={false} label="Drop to upload to the library" onFiles={(dropped) => uploadToFolder.mutate({ file: dropped[0]!, parentId: Number(folderId) })}>
         <h3 className="mb-3 text-sm font-medium">Upload to Document Library</h3>
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-sm">
@@ -111,7 +112,8 @@ export function GeneralUploadsPage() {
           />
         </div>
         {!folderId && <p className="mt-2 text-xs text-muted-foreground">Pick a folder above first — this is what makes it a real, findable controlled document instead of a loose file.</p>}
-      </div>
+        {folderId && <p className="mt-2 text-xs text-muted-foreground">…or drag a file from your computer and drop it anywhere on this box.</p>}
+      </FileDropZone>
 
       <AttachmentsPanel title="General Files (not filed to a folder)" />
     </div>

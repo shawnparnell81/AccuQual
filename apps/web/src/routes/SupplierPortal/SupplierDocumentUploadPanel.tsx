@@ -5,6 +5,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { TextField } from "../../components/forms/Field";
 import type { SupplierDocument } from "../../api/types";
+import { FileDropZone } from "../../components/shared/FileDropZone";
 
 // Phase 7 task 2 — explicit categories the brief names (certificates,
 // corrective action evidence) alongside the pre-existing free-text
@@ -47,7 +48,7 @@ export function SupplierDocumentUploadPanel({ supplierId }: { supplierId?: numbe
   });
 
   return (
-    <div className="flex flex-col gap-4">
+    <FileDropZone className="flex flex-col gap-4" disabled={upload.isPending} multiple={false} label="Drop to upload" onFiles={(dropped) => upload.mutate(dropped[0]!)}>
       <div className="grid gap-2 rounded-lg border border-border bg-card p-4 sm:grid-cols-3">
         <TextField label="Document Name" value={name} onChange={(e) => setName(e.target.value)} />
         <label className="flex flex-col gap-1 text-sm">
@@ -103,6 +104,6 @@ export function SupplierDocumentUploadPanel({ supplierId }: { supplierId?: numbe
           </table>
         )}
       </div>
-    </div>
+    </FileDropZone>
   );
 }

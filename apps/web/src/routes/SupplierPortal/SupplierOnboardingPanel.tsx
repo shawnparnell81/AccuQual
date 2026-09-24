@@ -7,6 +7,7 @@ import { SelectField, TextAreaField } from "../../components/forms/Field";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { ONBOARDING_DOCUMENT_TYPES } from "../../api/types";
 import type { SupplierOnboardingDocument } from "../../api/types";
+import { FileDropZone } from "../../components/shared/FileDropZone";
 
 /** Supplier onboarding package: W-9, NDA, Quality Manual, Process Flow, Control Plan, FMEA, Org Chart, ISO/IATF/AS9100 certs, Questionnaire, Agreement. Upload is the supplier's own self-service action (or staff on their behalf once a supplier is picked); review (approve/reject) is Quality/Purchasing only. */
 export function SupplierOnboardingPanel({ supplierId, isReviewer }: { supplierId?: number; isReviewer: boolean }) {
@@ -46,7 +47,7 @@ export function SupplierOnboardingPanel({ supplierId, isReviewer }: { supplierId
   });
 
   return (
-    <div className="flex flex-col gap-4">
+    <FileDropZone className="flex flex-col gap-4" disabled={upload.isPending} multiple={false} label="Drop to upload" onFiles={(dropped) => upload.mutate(dropped[0]!)}>
       <div className="flex items-end gap-2 rounded-lg border border-border bg-card p-4">
         <SelectField label="Document Type" value={documentType} onChange={(e) => setDocumentType(e.target.value)}>
           {ONBOARDING_DOCUMENT_TYPES.map((t) => (
@@ -75,7 +76,7 @@ export function SupplierOnboardingPanel({ supplierId, isReviewer }: { supplierId
           </ul>
         )}
       </div>
-    </div>
+    </FileDropZone>
   );
 }
 

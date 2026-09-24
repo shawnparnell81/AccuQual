@@ -5,6 +5,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { SelectField } from "../../components/forms/Field";
+import { FileDropZone } from "../../components/shared/FileDropZone";
 
 /**
  * A category-aware upload (failure photo vs. general document — indexed
@@ -36,7 +37,7 @@ export function WarrantyDocumentsPanel({ claimId }: { claimId: number }) {
   });
 
   return (
-    <div className="flex flex-col gap-3">
+    <FileDropZone className="flex flex-col gap-3" disabled={upload.isPending} label="Drop to add to this claim" onFiles={(dropped) => dropped.forEach((file) => upload.mutate(file))}>
       <div className="flex items-end gap-2">
         <SelectField label="Category" value={category} onChange={(e) => setCategory(e.target.value as typeof category)}>
           <option value="document">Document (repair report, proof of purchase, …)</option>
@@ -48,6 +49,6 @@ export function WarrantyDocumentsPanel({ claimId }: { claimId: number }) {
         </button>
       </div>
       <AttachmentsPanel entityType="warranty_claim" entityId={claimId} title="Claim Documents & Photos" />
-    </div>
+    </FileDropZone>
   );
 }

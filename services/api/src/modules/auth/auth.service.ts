@@ -13,7 +13,7 @@ import { ssoConnections } from "../../drizzle/schema/sso.js";
 import { passwordResetTokens } from "../../drizzle/schema/passwordResetTokens.js";
 import { refreshTokens } from "../../drizzle/schema/refreshTokens.js";
 import { AppError } from "../../utils/appError.js";
-import { signAccessToken, signRefreshToken, verifyRefreshToken, REFRESH_TOKEN_TTL_MS } from "../../utils/jwt.js";
+import { signAccessToken, signRefreshToken, verifyRefreshToken, REFRESH_TOKEN_TTL_MS, REMEMBER_ME_TTL_MS } from "../../utils/jwt.js";
 import { sendEmail } from "../notifications/notification.service.js";
 import { renderTemplate } from "../notifications/templates.js";
 import { logger } from "../../utils/logger.js";
@@ -63,7 +63,7 @@ async function issueTokens(user: {
   department: string | null;
   supplierId?: number | null;
   tokenVersion: number;
-}) {
+}, remember = false) {
   const accessToken = signAccessToken({
     sub: String(user.id),
     tenantId: user.tenantId,
@@ -74,12 +74,12 @@ async function issueTokens(user: {
     tv: user.tokenVersion,
   });
   const jti = randomUUID();
-  const refreshToken = signRefreshToken({ sub: String(user.id), tokenVersion: user.tokenVersion, jti });
-  await db.insert(refreshTokens).values({ userId: user.id, jti, expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS) });
+  const refreshToken = signRefreshToken({ sub: String(user.id), tokenVersion: user.tokenVersion, jti, ...(remember ? { rm: true } : {}) });
+  await db.insert(refreshTokens).values({ userId: user.id, jti, expiresAt: new Date(Date.now() + (remember ? REMEMBER_ME_TTL_MS : REFRESH_TOKEN_TTL_MS)) });
   // refreshJti never reaches a response body — auth.controller.ts's
   // withoutRefreshToken strips it alongside refreshToken itself; it's only
   // for refresh()'s own internal replacedByJti bookkeeping below.
-  return { accessToken, refreshToken, refreshJti: jti };
+  return { accessToken, refreshToken, refreshJti: jti, remember };
 }
 
 export async function register(input: { email: string; password: string; name?: string; tenantCode: string }) {
@@ -105,7 +105,7 @@ export async function register(input: { email: string; password: string; name?: 
   return { user: sanitize(full), tenant: { id: tenant.id, name: tenant.name, code: tenant.code, branding: tenant.branding }, ...tokens };
 }
 
-export async function login(input: { email: string; password: string }) {
+export async function login(input: { email: string; password: string; rememberMe?: boolean }) {
   const [row] = await db
     .select()
     .from(users)
@@ -149,20 +149,20 @@ export async function login(input: { email: string; password: string }) {
   if (mfa.state === "blocked") return { mfaEnrollmentRequired: true as const, mfaToken: signMfaToken(user.id, "enroll", user.tokenVersion) };
   if (mfa.required && !user.mfaRequiredSince) await markMfaRequired(user.id);
 
-  return completeLogin(user, roleName, row.tenants, mfa.state === "grace" ? mfa.graceEndsAt : null);
+  return completeLogin(user, roleName, row.tenants, mfa.state === "grace" ? mfa.graceEndsAt : null, input.rememberMe === true);
 }
 
 type LoginUserRow = typeof users.$inferSelect;
 type LoginTenantRow = typeof tenants.$inferSelect | null;
 
 /** Stamps the successful sign-in, clears the failed-attempt counters (and an expired lock), and issues the session. */
-async function completeLogin(user: LoginUserRow, roleName: string | null, tenant: LoginTenantRow, mfaGraceEndsAt: Date | null = null) {
+async function completeLogin(user: LoginUserRow, roleName: string | null, tenant: LoginTenantRow, mfaGraceEndsAt: Date | null = null, remember = false) {
   // Phase 7 — Supplier Portal health indicators ("last supplier login")
   // read this; best-effort, never blocks a successful login on its own
   // failure.
   await db.update(users).set({ lastLoginAt: new Date(), failedLoginCount: 0, firstFailedLoginAt: null, lockedUntil: null }).where(eq(users.id, user.id)).catch(() => undefined);
 
-  const tokens = await issueTokens({ id: user.id, tenantId: user.tenantId, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion });
+  const tokens = await issueTokens({ id: user.id, tenantId: user.tenantId, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion }, remember);
   return {
     user: sanitize({ ...user, roleName }),
     tenant: tenant ? { id: tenant.id, name: tenant.name, code: tenant.code, branding: tenant.branding } : null,
@@ -187,7 +187,7 @@ async function loginContext(userId: number) {
 }
 
 /** Second step of a sign-in: the authenticator (or recovery) code. Wrong codes count toward the same lockout as wrong passwords. */
-export async function verifyMfaLogin(mfaToken: string, code: string) {
+export async function verifyMfaLogin(mfaToken: string, code: string, rememberMe = false) {
   const userId = await verifyMfaToken(mfaToken, "verify");
   const ctx = await loginContext(userId);
   const kind = await checkSecondFactor(userId, code);
@@ -198,7 +198,7 @@ export async function verifyMfaLogin(mfaToken: string, code: string) {
   if (kind === "recovery" && ctx.user.tenantId) {
     await recordAuditTrail(db, { tenantId: ctx.user.tenantId, entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_recovery_code_used" }, performedBy: userId }).catch((err) => logger.error("Failed to audit a recovery-code sign-in", { userId, err }));
   }
-  return completeLogin(ctx.user, ctx.roleName, ctx.tenant);
+  return completeLogin(ctx.user, ctx.roleName, ctx.tenant, null, rememberMe);
 }
 
 /** Enrollment that is forced at sign-in (tenant policy requires MFA and the grace period is over): the challenge token stands in for a session. */
@@ -208,7 +208,7 @@ export async function startEnrollmentWithToken(mfaToken: string) {
   return startEnrollment(userId, ctx.user.email);
 }
 
-export async function confirmEnrollmentWithToken(mfaToken: string, code: string) {
+export async function confirmEnrollmentWithToken(mfaToken: string, code: string, rememberMe = false) {
   const userId = await verifyMfaToken(mfaToken, "enroll");
   const ctx = await loginContext(userId);
   let recoveryCodes: string[];
@@ -222,7 +222,7 @@ export async function confirmEnrollmentWithToken(mfaToken: string, code: string)
     await recordAuditTrail(db, { tenantId: ctx.user.tenantId, entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_enabled" }, performedBy: userId }).catch((err) => logger.error("Failed to audit MFA enrollment", { userId, err }));
   }
   const [fresh] = await db.select().from(users).where(eq(users.id, userId));
-  return { ...(await completeLogin(fresh ?? ctx.user, ctx.roleName, ctx.tenant)), recoveryCodes };
+  return { ...(await completeLogin(fresh ?? ctx.user, ctx.roleName, ctx.tenant, null, rememberMe)), recoveryCodes };
 }
 
 /**
@@ -313,7 +313,8 @@ export async function refresh(refreshToken: string) {
     // Idle timeout: an active browser renews its access token every
     // JWT_ACCESS_TTL, so a refresh token this old means nobody used the
     // session for that long. Ends the session; the user signs in again.
-    if (tokenRow.createdAt && Date.now() - tokenRow.createdAt.getTime() > env.SESSION_IDLE_TIMEOUT_MINUTES * 60_000) {
+    const idleLimitMs = payload.rm ? REMEMBER_ME_TTL_MS : env.SESSION_IDLE_TIMEOUT_MINUTES * 60_000;
+    if (tokenRow.createdAt && Date.now() - tokenRow.createdAt.getTime() > idleLimitMs) {
       await revokeRefreshTokenRows(full.id);
       throw AppError.unauthorized("Your session ended after a period of inactivity. Please sign in again.");
     }
@@ -326,7 +327,7 @@ export async function refresh(refreshToken: string) {
     await db.update(refreshTokens).set({ usedAt: new Date() }).where(eq(refreshTokens.id, tokenRow.id));
   }
 
-  const tokens = await issueTokens(full);
+  const tokens = await issueTokens(full, payload.rm === true);
   if (payload.jti) {
     await db.update(refreshTokens).set({ replacedByJti: tokens.refreshJti }).where(eq(refreshTokens.jti, payload.jti));
   }

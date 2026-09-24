@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { env } from "../../config/env.js";
-import { REFRESH_TOKEN_TTL_MS } from "../../utils/jwt.js";
+import { REMEMBER_ME_TTL_MS } from "../../utils/jwt.js";
 import * as authService from "./auth.service.js";
 
 // Full-System Audit finding B2: the refresh token used to be a plain field
@@ -25,7 +25,8 @@ import * as authService from "./auth.service.js";
 // exposure (still httpOnly + Secure in production either way).
 export const REFRESH_COOKIE_NAME = "accuqual_rt";
 
-export function setRefreshCookie(res: Response, refreshToken: string) {
+/** `remember` (the "Remember me" tick) makes it a persistent cookie; without it the cookie ends when the browser closes. */
+export function setRefreshCookie(res: Response, refreshToken: string, remember = false) {
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
@@ -37,7 +38,7 @@ export function setRefreshCookie(res: Response, refreshToken: string) {
     // and doesn't require https.
     sameSite: env.NODE_ENV === "production" ? "none" : "lax",
     path: "/",
-    maxAge: REFRESH_TOKEN_TTL_MS,
+    ...(remember ? { maxAge: REMEMBER_ME_TTL_MS } : {}),
   });
 }
 
@@ -57,8 +58,8 @@ function clearRefreshCookie(res: Response) {
  * auth.service.ts's own internal bookkeeping key for the refresh_tokens
  * table; it has no reason to ever reach the client.
  */
-function withoutRefreshToken<T extends { refreshToken: string; refreshJti?: string }>(result: T) {
-  const { refreshToken: _refreshToken, refreshJti: _refreshJti, ...rest } = result;
+function withoutRefreshToken<T extends { refreshToken: string; refreshJti?: string; remember?: boolean }>(result: T) {
+  const { refreshToken: _refreshToken, refreshJti: _refreshJti, remember: _remember, ...rest } = result;
   return rest;
 }
 
@@ -74,7 +75,7 @@ function sendSession(res: Response, result: Awaited<ReturnType<typeof authServic
     res.json(result);
     return;
   }
-  setRefreshCookie(res, result.refreshToken);
+  setRefreshCookie(res, result.refreshToken, result.remember);
   res.json(withoutRefreshToken(result));
 }
 
@@ -83,7 +84,7 @@ export const loginHandler = asyncHandler(async (req: Request, res: Response) => 
 });
 
 export const mfaVerifyHandler = asyncHandler(async (req: Request, res: Response) => {
-  sendSession(res, await authService.verifyMfaLogin(req.body.mfaToken, req.body.code));
+  sendSession(res, await authService.verifyMfaLogin(req.body.mfaToken, req.body.code, req.body.rememberMe === true));
 });
 
 export const mfaEnrollStartHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -91,8 +92,8 @@ export const mfaEnrollStartHandler = asyncHandler(async (req: Request, res: Resp
 });
 
 export const mfaEnrollConfirmHandler = asyncHandler(async (req: Request, res: Response) => {
-  const result = await authService.confirmEnrollmentWithToken(req.body.mfaToken, req.body.code);
-  setRefreshCookie(res, result.refreshToken);
+  const result = await authService.confirmEnrollmentWithToken(req.body.mfaToken, req.body.code, req.body.rememberMe === true);
+  setRefreshCookie(res, result.refreshToken, result.remember);
   res.json(withoutRefreshToken(result));
 });
 
@@ -122,7 +123,7 @@ export const refreshHandler = asyncHandler(async (req: Request, res: Response) =
   if (!token) throw AppError.unauthorized("Missing refresh token");
 
   const result = await authService.refresh(token);
-  setRefreshCookie(res, result.refreshToken);
+  setRefreshCookie(res, result.refreshToken, result.remember);
   res.json(withoutRefreshToken(result));
 });
 

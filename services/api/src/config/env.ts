@@ -19,6 +19,8 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(1),
   JWT_ACCESS_TTL: z.string().default("15m"),
   JWT_REFRESH_TTL: z.string().default("7d"),
+  // "Remember me" sign-ins: how long such a session may last, and stay idle, before the user must sign in again.
+  REMEMBER_ME_TTL: z.string().default("30d"),
 
   // Login hardening. A session ends after this many minutes without the
   // browser needing a new access token (an active user renews every
