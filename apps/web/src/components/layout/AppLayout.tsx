@@ -116,8 +116,10 @@ export function AppLayout() {
         <TabBar />
         <MfaGraceBanner />
       </div>
-      <main className="flex-1 overflow-y-auto p-6 print:overflow-visible print:p-0">
-        <Outlet />
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 print:overflow-visible print:p-0">
+        <div key={location.pathname} className="page-enter h-full">
+          <Outlet />
+        </div>
       </main>
       <div className="border-t border-border bg-card px-4 py-1 text-center print:hidden">
         <StandardsDisclaimer />

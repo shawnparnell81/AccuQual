@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import clsx from "clsx";
+import { Check } from "lucide-react";
 import { StatusBadge } from "../tables/StatusBadge";
 
 export function RecordCrumbs({ items }: { items: { label: string; to?: string }[] }) {
@@ -24,20 +25,25 @@ export function RecordCrumbs({ items }: { items: { label: string; to?: string }[
 
 export function LoopTrail({ steps, current }: { steps: readonly string[]; current: number }) {
   return (
-    <ol className="flex flex-wrap gap-2 text-xs">
+    <ol className="flex flex-wrap items-center gap-y-2 text-xs">
       {steps.map((label, index) => {
         const state = index < current ? "done" : index === current ? "now" : "later";
         return (
-          <li
-            key={label}
-            className={clsx(
-              "rounded-full px-2.5 py-1",
-              state === "now" && "bg-primary/15 font-medium text-primary",
-              state === "done" && "bg-success/15 text-success",
-              state === "later" && "bg-muted text-muted-foreground"
-            )}
-          >
-            {index + 1}. {label}
+          <li key={label} className="flex items-center">
+            {index > 0 && <span aria-hidden className={clsx("mx-2 h-0.5 w-5 rounded-full sm:w-9", index <= current ? "bg-success" : "bg-border")} />}
+            <span className="flex items-center gap-1.5">
+              <span
+                className={clsx(
+                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
+                  state === "done" && "bg-success text-success-foreground",
+                  state === "now" && "bg-primary text-primary-foreground ring-4 ring-primary/25",
+                  state === "later" && "bg-muted text-muted-foreground"
+                )}
+              >
+                {state === "done" ? <Check size={11} strokeWidth={3} /> : index + 1}
+              </span>
+              <span className={clsx(state === "now" ? "font-semibold text-foreground" : state === "done" ? "text-foreground/80" : "text-muted-foreground")}>{label}</span>
+            </span>
           </li>
         );
       })}

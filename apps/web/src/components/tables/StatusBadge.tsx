@@ -141,7 +141,8 @@ export function StatusBadge({ value, label }: { value: string | null | undefined
   if (!value) return <span className="text-muted-foreground">—</span>;
   const bucket = BUCKET_BY_STATUS[value] ?? "muted";
   return (
-    <span className={clsx("rounded-full px-2 py-0.5 text-xs font-medium capitalize", BUCKET_CLASSES[bucket])}>
+    <span className={clsx("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize", BUCKET_CLASSES[bucket])}>
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" aria-hidden />
       {label ?? value.replace(/_/g, " ")}
     </span>
   );
