@@ -7,6 +7,8 @@ interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   children: ReactNode;
+  /** A roomier card for wizards and tables. */
+  wide?: boolean;
 }
 
 /** How much of the title bar must stay on screen so a dragged card can always be grabbed again. */
@@ -29,7 +31,7 @@ interface DragState {
  * readable) and clicking outside no longer closes it, so an errant click
  * while reading the page behind can't throw away half-filled form data.
  */
-export function Modal({ title, isOpen, onClose, children }: ModalProps) {
+export function Modal({ title, isOpen, onClose, children, wide = false }: ModalProps) {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
   const drag = useRef<DragState | null>(null);
@@ -76,7 +78,7 @@ export function Modal({ title, isOpen, onClose, children }: ModalProps) {
     >
       <div
         ref={cardRef}
-        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl border border-border bg-card shadow-2xl"
+        className={clsx("flex max-h-[85vh] w-full flex-col rounded-xl border border-border bg-card shadow-2xl", wide ? "max-w-3xl" : "max-w-lg")}
         style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
         onClick={(e) => e.stopPropagation()}
       >
