@@ -4,6 +4,7 @@ import { STANDARDS_DISCLAIMER } from "../../components/shared/StandardsDisclaime
 import { CaseFile } from "./CaseFile";
 import { ContactForm } from "./ContactForm";
 import { DragDemo } from "./DragDemo";
+import { Scenes } from "./Scenes";
 import { TwinSlider } from "./TwinSlider";
 import "./landing.css";
 
@@ -41,6 +42,7 @@ export function LandingPage() {
           <a href="#top" className="lp-brand"><img src="/branding/logo-mark.png" alt="" />ACCUQUAL</a>
           <nav className="lp-links" aria-label="Sections">
             <a href="#demo">Try it</a>
+            <a href="#floor">On the floor</a>
             <a href="#case">Case file</a>
             <a href="#twin">Digital twin</a>
             <a href="#plans">Plans</a>
@@ -75,6 +77,15 @@ export function LandingPage() {
             <div><b>Tenant-isolated</b><span>Per-company data separation</span></div>
             <div><b>Role-based</b><span>Permissions you control</span></div>
             <div><b>Audit trail</b><span>Who changed what, and when</span></div>
+          </div>
+        </section>
+
+        <section className="lp-sec" id="floor">
+          <div className="lp-wrap">
+            <p className="lp-label">On the floor</p>
+            <h2>From the gauge to the dock</h2>
+            <p className="lp-sec-lede">Quality happens at the bench, the receiving door and the audit walk. AccuQual keeps a record of each one.</p>
+            <Scenes />
           </div>
         </section>
 
