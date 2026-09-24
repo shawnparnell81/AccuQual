@@ -52,6 +52,46 @@ only Session pooler is recommended.
   (revokes the anon/authenticated access Supabase grants by default —
   see `services/api/src/drizzle/post-migrate/supabase-lockdown.sql`).
 
+## Working safely once real customers use it
+
+Two rules keep new work from hurting live data or live customers.
+
+### 1. Build and test on a local database, never on the live one
+
+The root `.env` points `DATABASE_URL` at Supabase, so a plain `docker compose up` runs the whole stack
+against live data. For everyday building and testing use the local-database override instead:
+
+```
+docker compose up -d postgres redis   # once: start the local database
+npm run local:db:setup                # once: schema + demo tenant + demo story on that local database
+npm run local:up                      # run the whole stack against the local database
+npm run local:down                    # stop it
+```
+
+The demo login on the local database is `admin@accuqual.local` / `ChangeMe123!`. `ops/local-db.mjs` refuses
+to run against anything but `localhost`, so the setup commands cannot touch Supabase by accident. Uploaded
+files live in their own volume (`accuqual_uploads_local`) so they stay paired with that database.
+Plain `docker compose up` (no override) still means "run against Supabase", so read the command before
+pressing Enter. `npm test` has always used a separate throwaway `accuqual_test` database.
+
+### 2. Nothing goes live from an unchecked commit
+
+- **Deploys wait for the checks.** Every service in `render.yaml` uses `autoDeployTrigger: checksPass`, so
+  Render deploys only after the GitHub checks (build, tests, security scan) pass on that commit. Work on a
+  branch, open a PR, let CI run, then merge. Merging is what triggers a deploy. (This setting has not yet
+  been exercised against a real Render account; confirm in the Render dashboard that each service shows
+  "After CI checks pass" under Settings > Build & Deploy.)
+- **Database changes go first, by hand.** Render never runs migrations. When a change adds a column or table:
+  1. Run the **Migrate production database** workflow (GitHub > Actions > "Migrate production database",
+     type `MIGRATE`). It applies the migrations with an approval step, using the `PRODUCTION_DATABASE_URL`
+     secret in the `production` environment (set both up once: Settings > Environments).
+  2. Only then merge the PR. Migrations here only ever add things, so the old code keeps working while the
+     new schema is already in place.
+- **Half-finished features stay off.** Build big features (billing, for example) on their own branch and merge
+  when they're ready, or hide them behind a setting until they are.
+- **Roll back** by redeploying the previous deploy from the Render dashboard (Events > Rollback). A migration
+  is not rolled back that way, which is why migrations only add.
+
 ## Steps
 
 ### 1. Get your Supabase Session Pooler connection string

@@ -1,6 +1,8 @@
 services:
   - type: web
     name: accuqual-api
+    # Deploy only after the GitHub checks (build, tests, security scan) pass - never straight from an unchecked commit.
+    autoDeployTrigger: checksPass
     runtime: docker
     dockerfilePath: ./services/api/Dockerfile
     dockerContext: .
@@ -70,6 +72,8 @@ services:
 
   - type: web
     name: accuqual-web
+    # Deploy only after the GitHub checks (build, tests, security scan) pass - never straight from an unchecked commit.
+    autoDeployTrigger: checksPass
     runtime: docker
     dockerfilePath: ./apps/web/Dockerfile
     dockerContext: .
@@ -111,6 +115,8 @@ services:
 
   - type: worker
     name: accuqual-workflow-worker
+    # Deploy only after the GitHub checks (build, tests, security scan) pass - never straight from an unchecked commit.
+    autoDeployTrigger: checksPass
     runtime: docker
     dockerfilePath: ./workers/workflow-worker/Dockerfile
     dockerContext: .
@@ -171,6 +177,8 @@ services:
 
   - type: worker
     name: accuqual-ai-worker
+    # Deploy only after the GitHub checks (build, tests, security scan) pass - never straight from an unchecked commit.
+    autoDeployTrigger: checksPass
     runtime: docker
     dockerfilePath: ./workers/ai-worker/Dockerfile
     dockerContext: .
@@ -200,6 +208,8 @@ services:
 
   - type: worker
     name: accuqual-digital-twin-worker
+    # Deploy only after the GitHub checks (build, tests, security scan) pass - never straight from an unchecked commit.
+    autoDeployTrigger: checksPass
     runtime: docker
     dockerfilePath: ./workers/digital-twin-worker/Dockerfile
     dockerContext: .

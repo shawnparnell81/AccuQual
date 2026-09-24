@@ -17,7 +17,12 @@
     "test": "npm run test --workspaces --if-present",
     "db:generate": "npm run db:generate --workspace services/api",
     "db:migrate": "npm run db:migrate --workspace services/api",
-    "db:seed": "npm run db:seed --workspace services/api"
+    "db:seed": "npm run db:seed --workspace services/api",
+    "local:up": "docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build",
+    "local:down": "docker compose -f docker-compose.yml -f docker-compose.local.yml down",
+    "local:db:setup": "node ops/local-db.mjs setup",
+    "local:db:migrate": "node ops/local-db.mjs migrate",
+    "local:db:status": "node ops/local-db.mjs status"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",

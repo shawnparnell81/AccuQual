@@ -1,0 +1,38 @@
+name: Migrate production database
+
+# Manual only. Run this BEFORE merging code that needs a new database column or
+# table (migrations here are additive, so the old code keeps working while the
+# new schema is already in place). It applies the migrations in
+# services/api/src/drizzle/migrations to the production database, the same
+# `npm run db:migrate` used locally.
+#
+# One-time setup: in the GitHub repo, Settings > Environments > New environment
+# "production" (tick "Required reviewers" so a second click is needed), then add
+# a secret named PRODUCTION_DATABASE_URL to that environment. Use the Supabase
+# Session Pooler connection string (see DEPLOY.md).
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type MIGRATE to apply pending migrations to the production database'
+        required: true
+
+jobs:
+  migrate:
+    if: ${{ github.event.inputs.confirm == 'MIGRATE' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Apply migrations
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          # The migration script loads the app's env validation, which needs these to exist; they are not used to sign anything here.
+          JWT_ACCESS_SECRET: migration-only
+          JWT_REFRESH_SECRET: migration-only
+        run: npm run db:migrate --workspace services/api
