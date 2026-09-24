@@ -2,6 +2,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { InventoryItem } from "../../api/types";
+import { ImportButton } from "../../components/import/ImportDialog";
 
 /** Item roster + quick-create. Stock/movements/alerts live on InventoryDetailPage and InventoryAlertsPage; tenant-wide lot/serial search lives on InventoryLotsPage — same "reached from a link, not its own nav entry" convention InventoryAlertsPage already established. */
 export function InventoryListPage() {
@@ -15,6 +16,7 @@ export function InventoryListPage() {
       </div>
       <ResourceListPage<InventoryItem>
         title="Inventory"
+        headerActions={<ImportButton entity="inventory_items" />}
         resource="inventory/items"
         onRowClick={(i) => navigate(`/inventory/${i.id}`)}
         onCreated={(i) => navigate(`/inventory/${i.id}`)}

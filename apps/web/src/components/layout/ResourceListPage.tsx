@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useToast } from "../shared/ToastProvider";
@@ -29,6 +29,8 @@ interface ResourceListPageProps<T extends { id: number }> {
   canCreate?: boolean;
   /** Shown when the viewer can look but not add — department or plant. */
   accessNote?: string | null;
+  /** Extra buttons next to "+ New" (for example Import from Excel). */
+  headerActions?: ReactNode;
 }
 
 /**
@@ -47,6 +49,7 @@ export function ResourceListPage<T extends { id: number }>({
   searchable,
   canCreate,
   accessNote,
+  headerActions,
 }: ResourceListPageProps<T>) {
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -66,11 +69,14 @@ export function ResourceListPage<T extends { id: number }>({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">{title}</h1>
-        {createFields && canCreate !== false && (
-          <button onClick={() => setCreateOpen(true)} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
-            + New
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {headerActions}
+          {createFields && canCreate !== false && (
+            <button onClick={() => setCreateOpen(true)} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
+              + New
+            </button>
+          )}
+        </div>
       </div>
       {accessNote && <p className="text-sm text-muted-foreground">{accessNote}</p>}
 

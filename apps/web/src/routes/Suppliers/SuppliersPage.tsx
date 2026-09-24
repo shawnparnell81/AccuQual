@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { Supplier } from "../../api/types";
+import { ImportButton } from "../../components/import/ImportDialog";
 
 /**
  * A scorecards summary lives on the Dashboard; this page manages the
@@ -15,6 +16,7 @@ export function SuppliersPage() {
   return (
     <ResourceListPage<Supplier>
       title="Suppliers"
+      headerActions={<ImportButton entity="suppliers" />}
       resource="suppliers"
       onRowClick={(s) => navigate(`/suppliers/${s.id}`)}
       onCreated={(s) => navigate(`/suppliers/${s.id}`)}
