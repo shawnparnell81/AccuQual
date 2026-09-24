@@ -12,6 +12,10 @@ import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { extraGrantedLeaves, useNavVisibility } from "./navVisibility";
 import { useDepartmentPermissionsGrid } from "../../hooks/useDepartmentPermissionsGrid";
 import { GlobalSearchResults } from "./GlobalSearchResults";
+import { NotificationDropdown } from "./NotificationDropdown";
+import { WhatsNewDropdown } from "./WhatsNewDropdown";
+import { SiteSwitcher } from "./SiteSwitcher";
+import { UserMenu } from "./UserMenu";
 import { ScanToFindDialog } from "./ScanToFindDialog";
 import {
   DASHBOARD_LEAF,
@@ -192,38 +196,41 @@ export function TopNav() {
             <Building2 size={18} />
             <span>Platform Admin</span>
           </NavLink>
+          <div className="ml-auto">
+            <UserMenu />
+          </div>
         </div>
       </header>
     );
   }
 
   return (
-    <header className="border-b border-border bg-card relative" ref={navRef}>
-      <div className="min-h-14 flex flex-wrap items-center gap-y-1 gap-x-3 px-4 py-2">
+    <header className="relative border-b border-border bg-card" ref={navRef}>
+      <div className="flex h-14 items-center gap-3 px-4">
         <BrandMark tenant={tenant} />
 
-        {/* Everyday work sits on the bar. Everything else — other departments,
-            admin, and rare tools — is one More menu. */}
-        <nav className="hidden md:flex flex-1 flex-wrap items-center gap-1 min-w-0">
+        {/* Everyday work sits on the bar; everything else is one grouped More menu.
+            Below ~1400px the labels drop to icons (names stay as tooltips) so the
+            bar never wraps onto a second row. */}
+        <nav className="hidden min-w-0 flex-1 items-center gap-0.5 md:flex">
           <BackButton />
           <HomeButton />
-          <CalendarButton />
           {primaryLeaves.map((item) => {
             const plain = plainNav(item.key, item.label);
             return (
               <NavLink
                 key={item.key}
                 to={item.path}
+                title={plain.standard ? `${plain.label} (${plain.standard})` : plain.label}
                 className={({ isActive }) =>
                   clsx(
-                    "flex items-center gap-1.5 rounded-md px-3 py-2 text-sm whitespace-nowrap",
+                    "flex items-center gap-1.5 rounded-md px-2.5 py-2 text-sm whitespace-nowrap",
                     isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-secondary"
                   )
                 }
               >
-                <item.icon size={16} />
-                <span>{plain.label}</span>
-                {plain.standard && <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{plain.standard}</span>}
+                <item.icon size={17} />
+                <span className="hidden min-[1400px]:inline">{plain.label}</span>
               </NavLink>
             );
           })}
@@ -251,58 +258,45 @@ export function TopNav() {
           </NavDropdown>
         </nav>
 
-        {/* Quick-nav search — client-side filter over the modules above, plus
-            the real GET /search results (GlobalSearchResults) for NCR#/CAPA#/
-            PO#/Audit#/Supplier#/Item#/Training#/Calibration# in the same
-            dropdown. Record results open in an internal tab (useOpenTab);
-            module links keep navigating in place as they always have. */}
-        <div className="relative hidden md:block w-52 shrink-0">
-          <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Find a record or page…"
-            className="w-full rounded-md border border-form-field bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-          />
-          {query.trim() && (
-            <div className="absolute right-0 top-full z-30 mt-1 w-72 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-card p-1 shadow-lg">
-              {searchResults.map((r) => (
-                <Link
-                  key={r.key}
-                  to={r.path}
-                  onClick={() => setQuery("")}
-                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-secondary"
-                >
-                  <r.icon size={16} />
-                  <span>{plainNav(r.key, r.label).label}</span>
-                </Link>
-              ))}
-              <GlobalSearchResults query={query} onSelect={() => setQuery("")} />
-            </div>
-          )}
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          {/* Quick-nav search — client-side filter over the modules, plus the real
+              GET /search results in the same dropdown. Ctrl/Cmd+K opens the full palette. */}
+          <div className="relative hidden w-44 md:block lg:w-56">
+            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search…"
+              className="w-full rounded-full border border-form-field bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+            />
+            {query.trim() && (
+              <div className="absolute right-0 top-full z-30 mt-1 max-h-[70vh] w-72 overflow-y-auto rounded-md border border-border bg-card p-1 shadow-lg">
+                {searchResults.map((r) => (
+                  <Link key={r.key} to={r.path} onClick={() => setQuery("")} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-secondary">
+                    <r.icon size={16} />
+                    <span>{plainNav(r.key, r.label).label}</span>
+                  </Link>
+                ))}
+                <GlobalSearchResults query={query} onSelect={() => setQuery("")} />
+              </div>
+            )}
+          </div>
+
+          <ScanToFindDialog />
+          <div className="hidden md:block">
+            <CalendarButton iconOnly />
+          </div>
+          <div className="hidden lg:block">
+            <SiteSwitcher />
+          </div>
+          <NotificationDropdown />
+          <WhatsNewDropdown />
+          <UserMenu />
+
+          <button type="button" onClick={() => setMobileOpen((v) => !v)} className="rounded-md p-2 hover:bg-secondary md:hidden" aria-label="Toggle navigation menu">
+            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
-
-        <ScanToFindDialog />
-
-        {/* General app settings — nav customization is now one tab inside it, not this button's whole purpose. */}
-        <Link
-          to="/settings"
-          className="hidden md:flex shrink-0 p-2 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
-          aria-label="Settings"
-          title="Settings"
-        >
-          <Settings size={18} />
-        </Link>
-
-        {/* Mobile hamburger */}
-        <button
-          type="button"
-          onClick={() => setMobileOpen((v) => !v)}
-          className="md:hidden ml-auto p-2 rounded-md hover:bg-secondary"
-          aria-label="Toggle navigation menu"
-        >
-          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
       </div>
 
       {/* Mobile accordion */}
@@ -406,6 +400,22 @@ export function TopNav() {
   );
 }
 
+/** Departments roll up into a handful of areas so the menu reads as "where do I work", not a folder per department. */
+const AREA_OF: Record<string, string> = {
+  quality: "Quality",
+  engineering: "Engineering",
+  production: "Operations",
+  material_management: "Operations",
+  purchasing: "Supply chain",
+  customer_service: "Customers",
+  sales_and_marketing: "Customers",
+};
+const AREA_ORDER = ["Quality", "Engineering", "Operations", "Supply chain", "Customers"];
+
+function AreaHeading({ children }: { children: React.ReactNode }) {
+  return <div className="col-span-full mt-2 border-t border-border/60 px-3 pt-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70 first:mt-0 first:border-0 first:pt-0">{children}</div>;
+}
+
 function MoreLinks({
   departmentGroups,
   systemGroup,
@@ -427,54 +437,86 @@ function MoreLinks({
   kpiCounts: KpiCounts;
   onNavigate: () => void;
 }) {
+  const [filter, setFilter] = useState("");
+  const needle = filter.trim().toLowerCase();
+  const matches = (item: NavLeaf) => !needle || navSearchText(item.key, item.label).includes(needle);
+
+  // Each module shows once, under the area of the department that natively owns it. An admin's "live-granted extras" would otherwise repeat every module under every department, so extras only fill in modules no department lists itself.
+  const areas = new Map<string, { department: Department; item: NavLeaf; liveLevel?: AccessLevel }[]>();
+  const placed = new Set<string>();
+  const place = (group: NavGroup, items: NavLeaf[]) => {
+    const department = group.department!;
+    const isOwnDept = department === userDept;
+    for (const item of items) {
+      if (PRIMARY_NAV_KEYS.has(item.key) || placed.has(item.key)) continue;
+      const liveLevel = isOwnDept ? myEffective?.[item.key] : departmentPermissionsGrid.get(department)?.get(item.key);
+      if (effectiveAccess(item, department, isAdmin, liveLevel) === "none" || !matches(item)) continue;
+      placed.add(item.key);
+      const area = AREA_OF[department] ?? DEPARTMENTS.find((d) => d.key === department)?.label ?? "Other";
+      const rows = areas.get(area) ?? [];
+      rows.push({ department, item, liveLevel });
+      areas.set(area, rows);
+    }
+  };
+  const namedGroups = departmentGroups.filter((group) => group.department);
+  // A module belongs to the department that can edit it; a department that can only read it doesn't claim it.
+  const owners = new Map<string, Department>();
+  for (const group of namedGroups) {
+    const department = group.department!;
+    for (const item of group.items) {
+      if (item.access[department] === "edit" && !owners.has(item.key)) owners.set(item.key, department);
+    }
+  }
+  for (const group of namedGroups) {
+    place(group, group.items.filter((item) => !owners.has(item.key) || owners.get(item.key) === group.department).sort((x, y) => x.priority - y.priority));
+  }
+  for (const group of namedGroups) {
+    const extra = extraGrantedLeaves(group, group.department === userDept, myEffective, departmentPermissionsGrid);
+    place(group, [...extra].sort((x, y) => x.priority - y.priority));
+  }
+  const orderedAreas = [...areas.keys()].sort((x, y) => (AREA_ORDER.indexOf(x) === -1 ? 99 : AREA_ORDER.indexOf(x)) - (AREA_ORDER.indexOf(y) === -1 ? 99 : AREA_ORDER.indexOf(y)));
+
   return (
     <>
-      <Link to={DASHBOARD_LEAF.path} onClick={onNavigate} className="col-span-2 flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-secondary">
-        <DASHBOARD_LEAF.icon size={16} />
-        <span>Overview</span>
-        <span className="text-[10px] text-muted-foreground">Counts</span>
-      </Link>
-      {departmentGroups.map((group) => {
-        const meta = DEPARTMENTS.find((d) => d.key === group.department);
-        if (!meta || !group.department) return null;
-        const isOwnDept = group.department === userDept;
-        const extra = extraGrantedLeaves(group, isOwnDept, myEffective, departmentPermissionsGrid);
-        const items = [...group.items, ...extra].filter((item) => !PRIMARY_NAV_KEYS.has(item.key)).sort((a, b) => a.priority - b.priority);
-        const visible = items.filter((item) => effectiveAccess(item, group.department!, isAdmin, isOwnDept ? myEffective?.[item.key] : departmentPermissionsGrid.get(group.department!)?.get(item.key)) !== "none");
-        if (visible.length === 0) return null;
-        return (
-          <div key={group.department} className="contents">
-            <div className="col-span-2 mt-2 px-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">{meta.label}</div>
-            {visible.map((item) => (
-              <NavItemRow
-                key={item.key}
-                item={item}
-                department={group.department!}
-                bypass={isAdmin}
-                liveLevel={isOwnDept ? myEffective?.[item.key] : departmentPermissionsGrid.get(group.department!)?.get(item.key)}
-                kpiCounts={kpiCounts}
-                onNavigate={onNavigate}
-              />
-            ))}
-          </div>
-        );
-      })}
+      <div className="col-span-full mb-1 flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter modules…"
+            className="w-full rounded-md border border-form-field bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <Link to={DASHBOARD_LEAF.path} onClick={onNavigate} className="flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-secondary">
+          <DASHBOARD_LEAF.icon size={15} />
+          Overview
+        </Link>
+      </div>
+      {orderedAreas.map((area) => (
+        <div key={area} className="contents">
+          <AreaHeading>{area}</AreaHeading>
+          {areas.get(area)!.map(({ department, item, liveLevel }) => (
+            <NavItemRow key={`${department}-${item.key}`} item={item} department={department} bypass={isAdmin} liveLevel={liveLevel} kpiCounts={kpiCounts} onNavigate={onNavigate} />
+          ))}
+        </div>
+      ))}
       {systemGroup &&
         SYSTEM_SECTIONS.map(({ key, label }) => {
-          const items = systemGroup.items.filter((item) => (item.section ?? "quality") === key && !PRIMARY_NAV_KEYS.has(item.key));
+          const items = systemGroup.items.filter((item) => (item.section ?? "quality") === key && !PRIMARY_NAV_KEYS.has(item.key) && matches(item));
           if (items.length === 0) return null;
           return (
             <div key={key} className="contents">
-              <div className="col-span-2 mt-2 px-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">{label}</div>
+              <AreaHeading>{label}</AreaHeading>
               {items.map((item) => (
                 <PlainLeafLink key={item.key} item={item} onNavigate={onNavigate} />
               ))}
             </div>
           );
         })}
-      {documentLibrary.length > 0 && (
+      {!needle && documentLibrary.length > 0 && (
         <div className="contents">
-          <div className="col-span-2 mt-2 px-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">Folders</div>
+          <AreaHeading>Document folders</AreaHeading>
           {documentLibrary.map((dept) => (
             <Link
               key={dept.id}
@@ -514,9 +556,9 @@ function BrandMark({ tenant }: { tenant: { name: string } | null }) {
     <div className="flex items-center gap-2 shrink-0">
       <span className="h-8 w-1 shrink-0 rounded-full bg-accent" aria-hidden />
       <img src="/branding/logo-mark.png" alt="" className="h-8 w-8 rounded-md object-cover" />
-      <div className="flex flex-col items-start justify-center">
-        <span className="font-semibold text-foreground leading-tight tracking-wide">ACCUQUAL QMS</span>
-        {tenant && <span className="text-xs text-muted-foreground leading-tight truncate max-w-[10rem]">{tenant.name}</span>}
+      <div className="hidden flex-col items-start justify-center sm:flex">
+        <span className="font-semibold leading-tight tracking-wide text-foreground">ACCUQUAL</span>
+        {tenant && <span className="max-w-[9rem] truncate text-[11px] leading-tight text-muted-foreground">{tenant.name}</span>}
       </div>
     </div>
   );
@@ -597,7 +639,7 @@ function NavDropdown({
             // past the column boundary on top of the next column's text. Each
             // NavItemRow also needs min-w-0 + truncate so it can actually shrink
             // to that track width instead of forcing it wider (see below).
-            twoColumn ? "grid grid-cols-2 gap-x-3 w-[32rem] max-w-[90vw]" : "flex flex-col min-w-[16rem]",
+            twoColumn ? "grid grid-cols-3 gap-x-2 w-[52rem] max-w-[94vw]" : "flex flex-col min-w-[16rem]",
             alignRight ? "right-0" : "left-0",
             meta && "ring-1",
             meta?.ring

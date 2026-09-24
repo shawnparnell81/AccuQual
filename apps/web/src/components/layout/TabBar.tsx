@@ -56,7 +56,8 @@ export function TabBar() {
   const activateTab = useTabStore((s) => s.activateTab);
   const closeTab = useTabStore((s) => s.closeTab);
 
-  if (tabs.length === 0) return null;
+  // One tab is just the page you're on — the strip only earns its space once there's something to switch between.
+  if (tabs.length < 2) return null;
 
   function handleActivate(id: string) {
     if (id === activeId) return;
@@ -71,7 +72,7 @@ export function TabBar() {
   }
 
   return (
-    <div className="flex items-center gap-0.5 overflow-x-auto border-b border-border bg-card px-2 pt-1.5">
+    <div className="flex items-center gap-0.5 overflow-x-auto border-b border-border bg-card px-2 pt-1">
       {tabs.map((tab) => {
         const Icon = TAB_ICONS[tab.icon] ?? TAB_ICONS.default!;
         const isActive = tab.id === activeId;
@@ -82,8 +83,8 @@ export function TabBar() {
             title={tab.title}
             className={
               isActive
-                ? "relative flex max-w-[12rem] shrink-0 items-center gap-1.5 rounded-t-md border border-b-0 border-border bg-background px-3 py-1.5 text-sm text-foreground"
-                : "flex max-w-[12rem] shrink-0 items-center gap-1.5 rounded-t-md border border-b-0 border-transparent px-3 py-1.5 text-sm text-muted-foreground hover:bg-secondary"
+                ? "relative flex max-w-[12rem] shrink-0 items-center gap-1.5 rounded-t-md border border-b-0 border-border bg-background px-2.5 py-1 text-xs text-foreground"
+                : "flex max-w-[12rem] shrink-0 items-center gap-1.5 rounded-t-md border border-b-0 border-transparent px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary"
             }
           >
             {isActive && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" aria-hidden />}
