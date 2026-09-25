@@ -17,7 +17,6 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
  * uploadTemplateHandler and document-folders' uploadTemplate.
  */
 export const uploadAttachmentHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const file = req.file;
   if (!file) throw AppError.badRequest("No file uploaded");
 
@@ -27,7 +26,7 @@ export const uploadAttachmentHandler = asyncHandler(async (req: Request, res: Re
     throw AppError.badRequest("entityType and entityId must be provided together, or both omitted for a general upload");
   }
 
-  const dir = `${env.STORAGE_LOCAL_PATH}/tenants/${tenantId}/attachments`;
+  const dir = `${env.STORAGE_LOCAL_PATH}/attachments`;
   await mkdir(dir, { recursive: true });
   const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `${dir}/${Date.now()}-${safeName}`;

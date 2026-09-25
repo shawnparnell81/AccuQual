@@ -265,7 +265,7 @@ export const uploadWarrantyDocumentHandler = asyncHandler(async (req: Request, r
   const category = (req.body.category as string | undefined) === "failure_image" ? "failure_image" : "document";
   const caption = req.body.caption as string | undefined;
 
-  const dir = `${env.STORAGE_LOCAL_PATH}/tenants/${req.tenantId}/warranty`;
+  const dir = `${env.STORAGE_LOCAL_PATH}/warranty`;
   await mkdir(dir, { recursive: true });
   const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `${dir}/${record.id}-${Date.now()}-${safeName}`;

@@ -47,7 +47,6 @@ export function captureError(err: unknown, extra: Record<string, unknown> = {}):
     const ctx = getRequestContext();
     Sentry.withScope((scope) => {
       if (ctx?.requestId) scope.setTag("request_id", ctx.requestId);
-      if (ctx?.tenantId !== undefined) scope.setTag("tenant_id", String(ctx.tenantId));
       if (ctx?.userId !== undefined) scope.setUser({ id: String(ctx.userId) });
       scope.setExtras(extra);
       Sentry.captureException(err);

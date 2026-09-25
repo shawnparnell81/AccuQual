@@ -57,11 +57,11 @@ interface DetectedType {
 export function detectFileType(buf: Buffer, originalName: string): DetectedType | null {
   const ext = path.extname(originalName).toLowerCase();
   const head = buf.subarray(0, 12);
-  if (head.subarray(0, 4).function toString() { [native code] }("latin1") === "%PDF" && ext === ".pdf") return { mime: "application/pdf", ext: ".pdf" };
-  if (head[0] === 0x89 && head.subarray(1, 4).function toString() { [native code] }("latin1") === "PNG" && ext === ".png") return { mime: "image/png", ext: ".png" };
+  if (head.subarray(0, 4).toString("latin1") === "%PDF" && ext === ".pdf") return { mime: "application/pdf", ext: ".pdf" };
+  if (head[0] === 0x89 && head.subarray(1, 4).toString("latin1") === "PNG" && ext === ".png") return { mime: "image/png", ext: ".png" };
   if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff && (ext === ".jpg" || ext === ".jpeg")) return { mime: "image/jpeg", ext };
-  if (head.subarray(0, 4).function toString() { [native code] }("latin1") === "GIF8" && ext === ".gif") return { mime: "image/gif", ext: ".gif" };
-  if (head.subarray(0, 4).function toString() { [native code] }("latin1") === "RIFF" && head.subarray(8, 12).function toString() { [native code] }("latin1") === "WEBP" && ext === ".webp") return { mime: "image/webp", ext: ".webp" };
+  if (head.subarray(0, 4).toString("latin1") === "GIF8" && ext === ".gif") return { mime: "image/gif", ext: ".gif" };
+  if (head.subarray(0, 4).toString("latin1") === "RIFF" && head.subarray(8, 12).toString("latin1") === "WEBP" && ext === ".webp") return { mime: "image/webp", ext: ".webp" };
   if (head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04) {
     if (ext === ".docx" && buf.includes("word/")) return { mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", ext: ".docx" };
     if (ext === ".xlsx" && buf.includes("xl/")) return { mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ext: ".xlsx" };
@@ -318,7 +318,7 @@ export async function addAttachment(db: Db, tenantId: number, documentId: number
   const [row] = await db.insert(documentFiles).values({ documentId, fileName, mimeType: type.mime, sizeBytes: file.buffer.length, sha256, filePath, uploadedBy: actor.id }).returning();
   const ref: DocumentAttachmentRef = { id: row!.id, fileName, mimeType: type.mime, sizeBytes: row!.sizeBytes, sha256 };
 
-  const saved = await engine.saveDraft(db, documentAdapter, tenantId, documentId, versionId, actor, { payload: { ...payload, attachments: [...payload.attachments, ref] } as unknown as Record<string, unknown> });
+  const saved = await engine.saveDraft(db, documentAdapter, documentId, versionId, actor, { payload: { ...payload, attachments: [...payload.attachments, ref] } as unknown as Record<string, unknown> });
   await audit(db, documentId, actor, { event: "attachment_added", version: v.versionNumber, fileId: ref.id, fileName, sizeBytes: ref.sizeBytes, sha256 });
   return { attachment: ref, version: saved };
 }
@@ -330,7 +330,7 @@ export async function removeAttachment(db: Db, tenantId: number, documentId: num
   const payload = normalizeDocumentPayload(v.payload);
   const target = payload.attachments.find((a) => a.id === attachmentId);
   if (!target) throw AppError.notFound("Attachment");
-  const saved = await engine.saveDraft(db, documentAdapter, tenantId, documentId, versionId, actor, { payload: { ...payload, attachments: payload.attachments.filter((a) => a.id !== attachmentId) } as unknown as Record<string, unknown> });
+  const saved = await engine.saveDraft(db, documentAdapter, documentId, versionId, actor, { payload: { ...payload, attachments: payload.attachments.filter((a) => a.id !== attachmentId) } as unknown as Record<string, unknown> });
   await audit(db, documentId, actor, { event: "attachment_removed", version: v.versionNumber, fileId: target.id, fileName: target.fileName, sha256: target.sha256 });
 
   const stillUsed = await db

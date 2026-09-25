@@ -93,7 +93,7 @@ function inferFailedTransitionTarget(req: Request): { entityType: string; entity
  * earlier permission_denied entry already recorded).
  */
 function logFailedTransition(req: Request, err: unknown, statusCode: number): void {
-  if (!STATE_CHANGING_METHODS.has(req.method) || req.tenantId === undefined) return;
+  if (!STATE_CHANGING_METHODS.has(req.method) || !req.user) return;
   const target = inferFailedTransitionTarget(req);
   if (!target) return;
 

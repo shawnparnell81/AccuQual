@@ -204,7 +204,7 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
   return asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
     const role = req.user?.roleName;
     if (role === "platform_admin" || role === "admin") return next();
-    if (!req.user || !req.db || req.tenantId === undefined) return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
+    if (!req.user || !req.db) return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
 
     const level = await getUserAccessLevel(req.db as Db, req.user, resourceKey);
 
@@ -269,7 +269,7 @@ export const requireSupplierPortalAccess = asyncHandler(async (req: Request, _re
     return next();
   }
 
-  if (!req.user || !req.db || req.tenantId === undefined) return next(AppError.forbidden("No access to the Supplier Portal for your department"));
+  if (!req.user || !req.db) return next(AppError.forbidden("No access to the Supplier Portal for your department"));
 
   const level = await getUserAccessLevel(req.db as Db, req.user, "supplier_portal");
   if (level === "none") {

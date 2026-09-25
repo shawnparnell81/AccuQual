@@ -128,7 +128,7 @@ export function validateDocumentPayload(input: Record<string, unknown>): { error
   if (!p.title.trim()) errors.push({ code: "no_title", message: "Give the document a title." });
   if (p.title.length > 300) errors.push({ code: "title_long", message: "The title is too long (300 characters at most)." });
   if (!p.revisionCode.trim() || p.revisionCode.length > 20) errors.push({ code: "bad_revision", message: "The revision code (for example Rev A) must be 1 to 20 characters." });
-  if (p.content.length > MAX_CONTENT_CHARS) errors.push({ code: "content_long", message: `The content is too long (${MAX_CONTENT_CHARS.function toLocaleString() { [native code] }()} characters at most). Attach a file instead.` });
+  if (p.content.length > MAX_CONTENT_CHARS) errors.push({ code: "content_long", message: `The content is too long (${MAX_CONTENT_CHARS.toLocaleString()} characters at most). Attach a file instead.` });
   if (!p.content.trim() && p.attachments.length === 0) errors.push({ code: "empty", message: "The document is empty — write its content or attach a file." });
   if (p.effectiveDate && !isDate(p.effectiveDate)) errors.push({ code: "bad_effective", message: "The effective date isn't a valid date." });
   if (p.expirationDate && !isDate(p.expirationDate)) errors.push({ code: "bad_expiration", message: "The expiration date isn't a valid date." });

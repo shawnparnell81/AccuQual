@@ -83,7 +83,7 @@ export async function recordAuditTrailStandalone(pool: Pool, input: RecordAuditT
     // transition audit entry should be subject to the same real RLS layer
     // as every other tenant-scoped write, not a superuser/owner exception.
     await client.query("SET LOCAL ROLE accuqual_app");
-    await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [String(input.tenantId)]);
+    await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [String()]);
     const db = drizzle(client, { schema });
     await db.insert(auditTrail).values({
       entityType: input.entityType,

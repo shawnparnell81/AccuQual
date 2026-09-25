@@ -101,7 +101,7 @@ async function assertSupplierExists(req: Request, supplierId: number) {
 }
 
 async function storeSupplierFile(req: Request, subdir: string, file: Express.Multer.File): Promise<StoredFile> {
-  const dir = `${env.STORAGE_LOCAL_PATH}/tenants/${req.tenantId}/supplier-portal/${subdir}`;
+  const dir = `${env.STORAGE_LOCAL_PATH}/supplier-portal/${subdir}`;
   await mkdir(dir, { recursive: true });
   const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
   const filePath = `${dir}/${Date.now()}-${safeName}`;

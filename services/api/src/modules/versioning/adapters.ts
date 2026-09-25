@@ -128,7 +128,7 @@ export const diffContextVersions = (before: Record<string, unknown>, after: Reco
 // ---- The named operations the lifecycle exposes for workflows -------------------------------------------------------------------------------------------
 
 /** Publishes an approved, in-review workflow version: validates, writes it live, archives what it replaces, notifies. */
-export const publishWorkflow = (db: Db, tenantId: number, workflowId: number, versionId: number, actor: Actor) => engine.publishVersion(db, workflowAdapter, tenantId, workflowId, versionId, actor);
+export const publishWorkflow = (db: Db, workflowId: number, versionId: number, actor: Actor) => engine.publishVersion(db, workflowAdapter, workflowId, versionId, actor);
 
 /** Rollback: a new draft with an earlier version's content (which then goes through review and publishing). */
-export const rollbackWorkflow = (db: Db, tenantId: number, workflowId: number, versionNumber: number, actor: Actor) => engine.rollbackTo(db, workflowAdapter, tenantId, workflowId, versionNumber, actor);
+export const rollbackWorkflow = (db: Db, workflowId: number, versionNumber: number, actor: Actor) => engine.rollbackTo(db, workflowAdapter, workflowId, versionNumber, actor);

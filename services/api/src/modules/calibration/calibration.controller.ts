@@ -120,7 +120,6 @@ export const listCalibrationsHandler = asyncHandler(async (req: Request, res: Re
  * uploadTemplate, just scoped to calibration certificates instead.
  */
 export const uploadCertificateHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const calibrationId = Number(req.params.calibrationId);
   const file = req.file;
   if (!file) throw AppError.badRequest("No file uploaded");
@@ -129,7 +128,7 @@ export const uploadCertificateHandler = asyncHandler(async (req: Request, res: R
   const [calibration] = await req.db!.select().from(calibrations).where(and(eq(calibrations.id, calibrationId)));
   if (!calibration) throw AppError.notFound("Calibration event");
 
-  const dir = `${env.STORAGE_LOCAL_PATH}/tenants/${tenantId}/forms/custom/calibration-certs`;
+  const dir = `${env.STORAGE_LOCAL_PATH}/forms/custom/calibration-certs`;
   await mkdir(dir, { recursive: true });
   const path = `${dir}/${calibrationId}-${Date.now()}.pdf`;
   await writeFile(path, file.buffer);

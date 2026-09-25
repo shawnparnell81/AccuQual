@@ -33,14 +33,14 @@ export const createHandler = asyncHandler(async (req: Request, res: Response) =>
     .returning();
   if (!created) throw new AppError("Failed to create workflow", 500);
   await recordAuditTrail(req.db!, { entityType: "WorkflowDefinition", entityId: created.id, action: "create", changes: { name, module: module ?? null }, performedBy: req.user?.id });
-  const draft = await createInitialDraft(req.db as Db, workflowAdapter, req.tenantId!, created.id, { id: req.user!.id, roleName: req.user!.roleName }, payload as unknown as Record<string, unknown>);
+  const draft = await createInitialDraft(req.db as Db, workflowAdapter, { id: req.user!.id, roleName: req.user!.roleName }, payload as unknown as Record<string, unknown>);
   res.status(201).json({ ...created, draftVersionId: draft.id });
 });
 
 /** GET /workflow/:id — the workflow, what is in force, and what is being worked on. */
 export const getHandler = asyncHandler(async (req: Request, res: Response) => {
   const workflow = await loadDefinition(req, Number(req.params.id));
-  const current = await getCurrent(req.db as Db, workflowAdapter, req.tenantId!, workflow.id);
+  const current = await getCurrent(req.db as Db, workflowAdapter);
   res.json({ ...workflow, ...current });
 });
 

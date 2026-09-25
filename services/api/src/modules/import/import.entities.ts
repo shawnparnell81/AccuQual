@@ -208,7 +208,7 @@ const itemEntity: ImportEntity<ItemValue, { suppliersByName: Map<string, number>
   async insert(ctx, value) {
     const [created] = await ctx.db
       .insert(inventoryItems)
-      .values({ ...value, minLevel: String(value.minLevel), maxLevel: value.maxLevel?.function toString() { [native code] }(), reorderQuantity: value.reorderQuantity?.function toString() { [native code] }(), unitCost: value.unitCost?.function toString() { [native code] }(), })
+      .values({ ...value, minLevel: String(value.minLevel), maxLevel: value.maxLevel?.toString(), reorderQuantity: value.reorderQuantity?.toString(), unitCost: value.unitCost?.toString(), })
       .returning();
     await recordAuditTrail(ctx.db, { entityType: "InventoryItem", entityId: created!.id, action: "create", changes: { ...value, source: "excel_import" }, performedBy: ctx.userId });
     await recomputeState(ctx.db, created!.id, ctx.userId);

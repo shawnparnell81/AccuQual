@@ -79,8 +79,8 @@ export async function describeExport(tenantId: number): Promise<ExportDescriptio
 
 function cell(value: unknown): unknown {
   if (value instanceof Date) return value.toISOString();
-  if (Buffer.isBuffer(value)) return value.function toString() { [native code] }("base64");
-  if (typeof value === "bigint") return value.function toString() { [native code] }();
+  if (Buffer.isBuffer(value)) return value.toString("base64");
+  if (typeof value === "bigint") return value.toString();
   if (value && typeof value === "object") return scrubJson(value);
   return value;
 }
@@ -194,7 +194,7 @@ export async function writeTenantExport(archive: Archiver, actor: ExportActor, o
   const maxFileBytes = opts.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
   const maxSingleFileBytes = opts.maxSingleFileBytes ?? DEFAULT_MAX_SINGLE_FILE_BYTES;
 
-  return withSnapshot(actor.tenantId, async (client) => {
+  return withSnapshot(async (client) => {
     const plan: ExportPlan = await buildPlan(client);
     const { rows: tenantRows } = await client.query("SELECT name, code FROM tenants WHERE id = $1", [actor.tenantId]);
     const tenantName = (tenantRows[0]?.name as string | undefined) ?? null;
@@ -223,7 +223,7 @@ export async function writeTenantExport(archive: Archiver, actor: ExportActor, o
       const file = `data/${t.table}.${ext}`;
       await appendStreamed(archive, file, async (out) => {
         if (opts.format === "csv") await write(out, `${t.columns.map((c) => csvField(c)).join(",")}\n`);
-        for await (const batch of readTable(client, t, actor.tenantId, rowCap)) {
+        for await (const batch of readTable(client, t, rowCap)) {
           truncated ||= batch.truncated;
           let chunk = "";
           for (const row of batch.rows) {
@@ -241,7 +241,7 @@ export async function writeTenantExport(archive: Archiver, actor: ExportActor, o
     if (opts.includeFiles) {
       let n = 0;
       for (const { table, stored } of fileRefs.values()) {
-        const resolved = resolveTenantFile(actor.tenantId, stored);
+        const resolved = resolveTenantFile(stored);
         if (!resolved) {
           manifest.files.skipped.push({ path: stored, reason: "not one of this organization's uploaded files (built-in template or outside its storage folder)" });
           continue;

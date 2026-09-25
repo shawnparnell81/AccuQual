@@ -8,7 +8,6 @@ const withRequestContext = winston.format((info) => {
   const ctx = getRequestContext();
   if (ctx) {
     info.requestId ??= ctx.requestId;
-    if (ctx.tenantId !== undefined) info.tenantId ??= ctx.tenantId;
     if (ctx.userId !== undefined) info.userId ??= ctx.userId;
   }
   return info;

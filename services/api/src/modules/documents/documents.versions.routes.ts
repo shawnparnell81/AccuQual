@@ -105,7 +105,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     edit,
     validate(saveDraftSchema),
     asyncHandler(async (req: Request, res: Response) => {
-      res.json(await engine.saveDraft(dbOf(req), documentAdapter, req.tenantId!, idParam(req), idParam(req, "versionId"), actorOf(req), req.body as z.infer<typeof saveDraftSchema>));
+      res.json(await engine.saveDraft(dbOf(req), documentAdapter, idParam(req, "versionId"), actorOf(req), req.body as z.infer<typeof saveDraftSchema>));
     }),
   );
 
@@ -115,7 +115,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     validate(requestReviewSchema),
     asyncHandler(async (req: Request, res: Response) => {
       const body = req.body as z.infer<typeof requestReviewSchema>;
-      res.json(await engine.submitForReview(dbOf(req), documentAdapter, req.tenantId!, idParam(req), idParam(req, "versionId"), actorOf(req), body.notes, { reviewerId: body.reviewerId }));
+      res.json(await engine.submitForReview(dbOf(req), documentAdapter, idParam(req, "versionId"), actorOf(req), body.notes, { reviewerId: body.reviewerId }));
     }),
   );
 
@@ -125,7 +125,7 @@ export function registerDocumentVersionRoutes(router: Router) {
       review,
       validate(decisionSchema),
       asyncHandler(async (req: Request, res: Response) => {
-        res.json(await engine.reviewVersion(dbOf(req), documentAdapter, req.tenantId!, idParam(req), idParam(req, "versionId"), actorOf(req), decision === "approve" ? "approved" : "rejected", (req.body as z.infer<typeof decisionSchema>).notes));
+        res.json(await engine.reviewVersion(dbOf(req), documentAdapter, idParam(req, "versionId"), actorOf(req), decision === "approve" ? "approved" : "rejected", (req.body as z.infer<typeof decisionSchema>).notes));
       }),
     );
   }
@@ -134,7 +134,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     "/:id/version/:versionId/publish",
     publish,
     asyncHandler(async (req: Request, res: Response) => {
-      res.json(await engine.publishVersion(dbOf(req), documentAdapter, req.tenantId!, idParam(req), idParam(req, "versionId"), actorOf(req)));
+      res.json(await engine.publishVersion(dbOf(req), documentAdapter, idParam(req, "versionId"), actorOf(req)));
     }),
   );
 
@@ -144,7 +144,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     edit,
     asyncHandler(async (req: Request, res: Response) => {
       const target = await engine.getVersion(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId"));
-      res.status(201).json(await engine.rollbackTo(dbOf(req), documentAdapter, req.tenantId!, idParam(req), target.versionNumber, actorOf(req)));
+      res.status(201).json(await engine.rollbackTo(dbOf(req), documentAdapter, target.versionNumber, actorOf(req)));
     }),
   );
 
@@ -156,7 +156,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     upload.single("file"),
     asyncHandler(async (req: Request, res: Response) => {
       if (!req.file) throw AppError.badRequest("No file uploaded");
-      res.status(201).json(await addAttachment(dbOf(req), req.tenantId!, idParam(req), idParam(req, "versionId"), actorOf(req), req.file));
+      res.status(201).json(await addAttachment(dbOf(req), idParam(req), idParam(req, "versionId"), actorOf(req), req.file));
     }),
   );
 
@@ -164,7 +164,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     "/:id/version/:versionId/attachments/:attachmentId",
     edit,
     asyncHandler(async (req: Request, res: Response) => {
-      await removeAttachment(dbOf(req), req.tenantId!, idParam(req), idParam(req, "versionId"), idParam(req, "attachmentId"), actorOf(req));
+      await removeAttachment(dbOf(req), idParam(req), idParam(req, "versionId"), idParam(req, "attachmentId"), actorOf(req));
       res.status(204).send();
     }),
   );
@@ -177,7 +177,7 @@ export function registerDocumentVersionRoutes(router: Router) {
       const v = await engine.getVersion(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId"));
       const file = normalizeDocumentPayload(v.payload).attachments.find((a) => a.id === idParam(req, "attachmentId"));
       if (!file) throw AppError.notFound("Attachment");
-      res.json({ url: `/documents/files/download?token=${encodeURIComponent(signFileToken(req.tenantId!, file.id, req.user!.id))}`, expiresInSeconds: FILE_LINK_SECONDS, fileName: file.fileName, mimeType: file.mimeType });
+      res.json({ url: `/documents/files/download?token=${encodeURIComponent(signFileToken(file.id, req.user!.id))}`, expiresInSeconds: FILE_LINK_SECONDS, fileName: file.fileName, mimeType: file.mimeType });
     }),
   );
 
@@ -188,7 +188,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     view,
     asyncHandler(async (req: Request, res: Response) => {
       const id = idParam(req);
-      await engine.ensureBootstrapped(dbOf(req), documentAdapter, req.tenantId!, id);
+      await engine.ensureBootstrapped(dbOf(req), documentAdapter);
       const rows = await dbOf(req)
         .select({ n: controlledVersions.versionNumber, status: controlledVersions.status, payload: controlledVersions.payload })
         .from(controlledVersions)

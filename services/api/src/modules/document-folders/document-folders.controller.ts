@@ -342,11 +342,11 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
  * compatibility rather than a column rename. Replacing an existing
  * attachment deletes the old file first.
  */
-async function attachFileToFolder(db: Db, tenantId: number, folderId: number, file: Express.Multer.File, performedBy: number | undefined) {
+async function attachFileToFolder(db: Db, folderId: number, file: Express.Multer.File, performedBy: number | undefined) {
   const [folder] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, folderId)));
   if (!folder) throw AppError.notFound("Document folder");
 
-  const dir = `${env.STORAGE_LOCAL_PATH}/tenants/${tenantId}/forms/custom`;
+  const dir = `${env.STORAGE_LOCAL_PATH}/forms/custom`;
   await mkdir(dir, { recursive: true });
   const ext = file.originalname.includes(".") ? file.originalname.slice(file.originalname.lastIndexOf(".")) : "";
   const path = `${dir}/${folderId}-${Date.now()}${ext}`;
@@ -376,7 +376,7 @@ async function attachFileToFolder(db: Db, tenantId: number, folderId: number, fi
 export const uploadTemplate = asyncHandler(async (req: Request, res: Response) => {
   const file = req.file;
   if (!file) throw AppError.badRequest("No file uploaded");
-  const updated = await attachFileToFolder(req.db!, req.tenantId!, Number(req.params.id), file, req.user?.id);
+  const updated = await attachFileToFolder(req.db!, file, req.user?.id);
   res.status(201).json(updated);
 });
 
@@ -393,7 +393,6 @@ export const uploadTemplate = asyncHandler(async (req: Request, res: Response) =
  */
 export const uploadDocument = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
-  const tenantId = req.tenantId!;
   const file = req.file;
   if (!file) throw AppError.badRequest("No file uploaded");
   const parentId = Number(req.body.parentId);
@@ -409,7 +408,7 @@ export const uploadDocument = asyncHandler(async (req: Request, res: Response) =
   const [created] = await db.insert(documentFolders).values({ name, parentId }).returning();
   await recordAuditTrail(db, { entityType: AUDIT_ENTITY_TYPE, entityId: created!.id, action: "create", changes: { name, parentId }, performedBy: req.user?.id });
 
-  const updated = await attachFileToFolder(db, tenantId, created!.id, file, req.user?.id);
+  const updated = await attachFileToFolder(db, created!.id, file, req.user?.id);
   res.status(201).json(updated);
 });
 

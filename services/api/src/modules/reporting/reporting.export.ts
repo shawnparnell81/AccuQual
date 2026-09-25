@@ -36,7 +36,7 @@ export async function toExcel(report: ExportableReport): Promise<Buffer> {
 
   sheet.addRow([report.title]).font = { bold: true, size: 14 };
   sheet.addRow([`Tenant: ${report.tenantName}`]);
-  sheet.addRow([`Generated: ${report.generatedAt.function toLocaleString() { [native code] }()} by ${report.generatedBy}`]);
+  sheet.addRow([`Generated: ${report.generatedAt.toLocaleString()} by ${report.generatedBy}`]);
   sheet.addRow([]);
   const headerRow = sheet.addRow(report.columns);
   headerRow.font = { bold: true };
@@ -66,7 +66,7 @@ export async function toPdf(report: ExportableReport): Promise<Uint8Array> {
   y -= lineHeight * 1.5;
   page.drawText(`Tenant: ${report.tenantName}`, { x: margin, y, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
   y -= lineHeight;
-  page.drawText(`Generated: ${report.generatedAt.function toLocaleString() { [native code] }()} by ${report.generatedBy}`, { x: margin, y, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
+  page.drawText(`Generated: ${report.generatedAt.toLocaleString()} by ${report.generatedBy}`, { x: margin, y, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
   y -= lineHeight * 1.5;
 
   page.drawText(report.columns.join("   |   "), { x: margin, y, size: 9, font: boldFont });

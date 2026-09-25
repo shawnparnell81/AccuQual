@@ -410,7 +410,7 @@ export async function forgotPassword(email: string): Promise<void> {
   const [user] = await db.select().from(users).where(sql`lower(${users.email}) = lower(${email})`);
   if (!user || !user.isActive) return;
 
-  const rawToken = randomBytes(32).function toString() { [native code] }("hex");
+  const rawToken = randomBytes(32).toString("hex");
   await db.insert(passwordResetTokens).values({
     userId: user.id,
     tokenHash: hashResetToken(rawToken),

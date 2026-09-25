@@ -71,7 +71,7 @@ export async function hasPermission(
 export function requirePermission(name: PermissionName) {
   const { subject } = parsePermission(name);
   return asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
-    if (!req.user || !req.db || req.tenantId === undefined) return next(AppError.forbidden("Missing tenant context"));
+    if (!req.user || !req.db) return next(AppError.forbidden("Not signed in"));
     const verdict = await hasPermission(req.db as Db, req.user, name);
     if (verdict.allowed) return next();
 

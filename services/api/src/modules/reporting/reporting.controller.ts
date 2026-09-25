@@ -21,31 +21,31 @@ function parseRange(req: Request): DateRange {
 }
 
 export const ncrMetricsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getNcrMetrics(req.db! as Db, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getNcrMetrics(req.db! as Db, parseRange(req)));
 });
 
 export const capaMetricsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getCapaMetrics(req.db! as Db, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getCapaMetrics(req.db! as Db, parseRange(req)));
 });
 
 export const supplierPerformanceReportHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getSupplierPerformanceReport(req.db! as Db, req.tenantId!));
+  res.json(await reportingService.getSupplierPerformanceReport(req.db! as Db));
 });
 
 export const warrantyTrendsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getWarrantyTrends(req.db! as Db, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getWarrantyTrends(req.db! as Db, parseRange(req)));
 });
 
 export const receivingTrendsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getReceivingTrends(req.db! as Db, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getReceivingTrends(req.db! as Db, parseRange(req)));
 });
 
 export const inventoryQualityTrendsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getInventoryQualityTrends(req.db! as Db, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getInventoryQualityTrends(req.db! as Db, parseRange(req)));
 });
 
 export const workflowCycleTimeHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getWorkflowCycleTimeMetrics(req.db! as Db, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getWorkflowCycleTimeMetrics(req.db! as Db, parseRange(req)));
 });
 
 // ---------------------------------------------------------------------------

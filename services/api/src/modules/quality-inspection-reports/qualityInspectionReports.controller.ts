@@ -43,7 +43,7 @@ export const updateReportHandler = asyncHandler(async (req: Request, res: Respon
   // doesn't exist in this codebase. Left on the same generic PATCH the real
   // frontend already calls (QualityInspectionReportDetailPage.tsx's radio
   // group) instead of a new, unused dedicated endpoint.
-  if (Object.prototype.function hasOwnProperty() { [native code] }.call(req.body, "finalStatus") && record.finalStatus !== null && req.body.finalStatus !== record.finalStatus) {
+  if (Object.prototype.hasOwnProperty.call(req.body, "finalStatus") && record.finalStatus !== null && req.body.finalStatus !== record.finalStatus) {
     throw AppError.badRequest(`This report's disposition is already "${record.finalStatus}" and cannot be changed once set.`);
   }
 

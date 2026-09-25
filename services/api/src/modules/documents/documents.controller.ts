@@ -21,7 +21,6 @@ export const baseHandlers = crudFactory(documents, { entityName: "Document", idC
  */
 export const createDocumentHandler = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
-  const tenantId = req.tenantId!;
   const { title, category } = req.body as { title: string; category?: string };
   const actor = { id: req.user!.id, roleName: req.user!.roleName };
 
@@ -30,7 +29,7 @@ export const createDocumentHandler = asyncHandler(async (req: Request, res: Resp
     .values({ title: title.trim(), category: category?.trim() || null, status: "draft", currentVersion: 0, ownerId: actor.id })
     .returning();
   if (!doc) throw new AppError("Failed to create the document", 500);
-  const draft = await engine.createInitialDraft(db, documentAdapter, tenantId, doc.id, actor, { ...blankDocumentPayload(), title: doc.title, category: doc.category ?? null } as unknown as Record<string, unknown>);
+  const draft = await engine.createInitialDraft(db, documentAdapter, doc.id, actor, { ...blankDocumentPayload(), title: doc.title, category: doc.category ?? null } as unknown as Record<string, unknown>);
   await recordAuditTrail(db, { entityType: "Document", entityId: doc.id, action: "create", changes: { title: doc.title, category: doc.category }, performedBy: actor.id });
   res.status(201).json({ ...doc, openVersionId: draft.id });
 });

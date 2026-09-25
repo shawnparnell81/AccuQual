@@ -106,7 +106,6 @@ export const completeAssignmentHandler = asyncHandler(async (req: Request, res: 
 });
 
 export const uploadCertificateHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const assignmentId = Number(req.params.assignmentId);
   const file = req.file;
   if (!file) throw AppError.badRequest("No file uploaded");
@@ -115,7 +114,7 @@ export const uploadCertificateHandler = asyncHandler(async (req: Request, res: R
   const [assignment] = await req.db!.select().from(trainingAssignments).where(and(eq(trainingAssignments.id, assignmentId)));
   if (!assignment) throw AppError.notFound("Training assignment");
 
-  const dir = `${env.STORAGE_LOCAL_PATH}/tenants/${tenantId}/forms/custom/training-certs`;
+  const dir = `${env.STORAGE_LOCAL_PATH}/forms/custom/training-certs`;
   await mkdir(dir, { recursive: true });
   const path = `${dir}/${assignmentId}-${Date.now()}.pdf`;
   await writeFile(path, file.buffer);

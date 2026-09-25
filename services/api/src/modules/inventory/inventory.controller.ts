@@ -253,7 +253,7 @@ export const listReorderRequestsHandler = asyncHandler(async (req: Request, res:
   const rows = await req.db!
     .select()
     .from(inventoryReorderRequests)
-    .where(itemId ? and(eq(inventoryReorderRequests.itemId, itemId)) : eq(inventoryReorderRequests.tenantId, req.tenantId!))
+    .where(itemId ? and(eq(inventoryReorderRequests.itemId, itemId)) : eq(inventoryReorderRequests.tenantId))
     .orderBy(desc(inventoryReorderRequests.createdAt));
   res.json(rows);
 });

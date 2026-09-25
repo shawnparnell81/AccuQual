@@ -141,7 +141,7 @@ async function verifyAgainstManifest(file: string): Promise<void> {
       if ((got.get(t) ?? -1) !== n) diffs.push(`${t}: backup ${n}, restored ${got.get(t) ?? "MISSING"}`);
     }
     for (const t of got.keys()) if (!(t in m.tables)) diffs.push(`${t}: only in the restored copy`);
-    line(diffs.length === 0, `row counts for all ${Object.keys(m.tables).length} tables`, diffs.length === 0 ? `${total.function toLocaleString() { [native code] }()} rows` : `${diffs.length} differ`);
+    line(diffs.length === 0, `row counts for all ${Object.keys(m.tables).length} tables`, diffs.length === 0 ? `${total.toLocaleString()} rows` : `${diffs.length} differ`);
     for (const d of diffs) console.log(`        ${d}`);
     problems.push(...diffs);
 
@@ -187,7 +187,7 @@ async function main() {
       if ((cb.get(t) ?? -1) !== n) diffs.push(`${t}: original ${n}, restored ${cb.get(t) ?? "MISSING"}`);
     }
     for (const t of cb.keys()) if (!ca.has(t)) diffs.push(`${t}: only in the restored copy`);
-    line(diffs.length === 0, `row counts for all ${ca.size} tables`, diffs.length === 0 ? `${totalB.function toLocaleString() { [native code] }()} rows` : `${diffs.length} differ`);
+    line(diffs.length === 0, `row counts for all ${ca.size} tables`, diffs.length === 0 ? `${totalB.toLocaleString()} rows` : `${diffs.length} differ`);
     for (const d of diffs) console.log(`        ${d}`);
     problems.push(...diffs);
 

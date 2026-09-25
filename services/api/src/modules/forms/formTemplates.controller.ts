@@ -44,7 +44,6 @@ export const listTemplatesHandler = asyncHandler(async (req: Request, res: Respo
 });
 
 export const uploadTemplateHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const formType = req.params.type!;
   if (!(FORM_TYPES as readonly string[]).includes(formType)) throw AppError.badRequest(`Unknown form type "${formType}"`);
   const file = req.file;
@@ -56,7 +55,7 @@ export const uploadTemplateHandler = asyncHandler(async (req: Request, res: Resp
   // page (see pdf-merger.js); nothing here offers a field-mapping editor.
   const current = await loadTemplate(req.db!, formType).catch(() => null);
 
-  const dir = `${env.STORAGE_LOCAL_PATH}/tenants/${tenantId}/forms/${formType}`;
+  const dir = `${env.STORAGE_LOCAL_PATH}/forms/${formType}`;
   await mkdir(dir, { recursive: true });
   const path = `${dir}/template-${Date.now()}.pdf`;
   await writeFile(path, file.buffer);

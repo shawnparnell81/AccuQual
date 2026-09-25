@@ -167,6 +167,6 @@ export const updateReceivingSettingsHandler = asyncHandler(async (req: Request, 
  */
 export const triggerErpSyncHandler = asyncHandler(async (req: Request, res: Response) => {
   const { event, statusValue } = req.body as { event?: "create" | "update" | "statusChange" | "workflowEvent"; statusValue?: string };
-  const result = await triggerErpSync(req.db!, req.tenantId!, req.user?.id, event ? { on: event, statusValue } : undefined);
+  const result = await triggerErpSync(req.db!, req.user?.id, event ? { on: event, statusValue } : undefined);
   res.status(202).json(result);
 });

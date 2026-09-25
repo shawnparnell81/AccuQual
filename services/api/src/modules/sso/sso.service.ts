@@ -101,7 +101,7 @@ export async function handleCallback(callbackUrl: URL, flow: SsoFlowState): Prom
       if (!role || SSO_FORBIDDEN_ROLES.has(role.name)) throw new SsoDenied("no_account", conn.tenantId, { email });
       const [created] = await db
         .insert(users)
-        .values({ email, name: claims.name, roleId: role.id, passwordHash: await bcrypt.hash(randomBytes(32).function toString() { [native code] }("hex"), 10), passwordChangedAt: new Date() })
+        .values({ email, name: claims.name, roleId: role.id, passwordHash: await bcrypt.hash(randomBytes(32).toString("hex"), 10), passwordChangedAt: new Date() })
         .returning();
       userId = created!.id;
       provisioned = true;

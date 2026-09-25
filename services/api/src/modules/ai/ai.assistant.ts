@@ -397,7 +397,6 @@ async function loadSimilarAuditFindings(db: Db, queryText: string): Promise<stri
  * pipeline — including the honest stub response when neither has a key.
  */
 export const assistantHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const { messages, context } = req.body as { messages: AssistantMessage[]; context?: { module: string; recordId?: number } };
 
   // Was its own inline db.select + decryptSecret call with no try/catch —

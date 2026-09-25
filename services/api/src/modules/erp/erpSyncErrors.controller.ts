@@ -27,5 +27,5 @@ export const resolveErrorHandler = asyncHandler(async (req: Request, res: Respon
 });
 
 export const retryErrorHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await erpSyncErrorsService.retryError(req.db!, req.tenantId!, Number(req.params.id), req.user?.id));
+  res.json(await erpSyncErrorsService.retryError(req.db!, Number(req.params.id), req.user?.id));
 });

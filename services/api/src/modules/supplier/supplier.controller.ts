@@ -114,7 +114,7 @@ export const createPortalAccountHandler = asyncHandler(async (req: Request, res:
 
   const supplierRole = await ensureSupplierRole(req.db!);
 
-  const tempPassword = randomBytes(9).function toString() { [native code] }("base64url");
+  const tempPassword = randomBytes(9).toString("base64url");
   const passwordHash = await bcrypt.hash(tempPassword, 10);
 
   const [created] = await req

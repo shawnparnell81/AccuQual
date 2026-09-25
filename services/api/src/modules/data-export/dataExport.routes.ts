@@ -75,7 +75,7 @@ dataExportRouter.get(
   requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
     if (!req.user!.tenantId) throw AppError.forbidden("Data export is per organization");
-    res.json(await describeExport(req.user!.tenantId));
+    res.json(await describeExport());
   }),
 );
 
@@ -124,9 +124,9 @@ dataExportRouter.get(
       .leftJoin(roles, eq(users.roleId, roles.id))
       .where(and(eq(users.id, Number(payload.sub))));
     if (!row || !row.isActive || (row.roleName !== "admin" && row.roleName !== "platform_admin")) throw AppError.forbidden("This account can no longer export data.");
-    if (running.has(payload.tid)) throw new AppError("An export for this organization is already running.", 409);
+    if (running.has()) throw new AppError("An export for this organization is already running.", 409);
 
-    running.add(payload.tid);
+    running.add();
     const startedAt = Date.now();
     const stamp = new Date().toISOString().slice(0, 10);
     res.setHeader("Content-Type", "application/zip");
@@ -143,7 +143,7 @@ dataExportRouter.get(
       res.destroy(err);
     });
     res.on("close", () => {
-      running.delete(payload.tid);
+      running.delete();
       if (!finished) void audit("data_export_aborted", { afterMs: Date.now() - startedAt });
     });
     archive.pipe(res);
