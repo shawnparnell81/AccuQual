@@ -39,6 +39,9 @@ export default defineConfig({
         // App shell only — see the comment above. No runtime caching entries
         // for /api/* or any other network request.
         globPatterns: ["**/*.{js,css,html,png,svg,ico}"],
+        // The public landing site (public/welcome) is its own static page, not part of the app shell.
+        globIgnores: ["welcome/**"],
+        navigateFallbackDenylist: [/^\/welcome\//],
         // This app ships as one large bundle (see the build's own chunk-size
         // warning — a manualChunks split is a separate, unrelated cleanup,
         // not part of this PR); workbox's 2 MiB default precache limit is

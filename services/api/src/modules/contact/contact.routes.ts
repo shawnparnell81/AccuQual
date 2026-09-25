@@ -24,10 +24,11 @@ const contactLimiter = rateLimit({
 });
 
 const contactSchema = z.object({
-  name: z.string().trim().min(1).max(120),
+  name: z.string().trim().max(120).optional().default(""),
   email: z.string().trim().email().max(200),
   company: z.string().trim().max(160).optional().default(""),
-  message: z.string().trim().min(10).max(4000),
+  // The early-access form on the landing site sends no message; a typed one must still be a real sentence.
+  message: z.string().trim().min(10).max(4000).optional().default("Requested early access from the website."),
   website: z.string().max(200).optional().default(""),
 });
 
@@ -50,8 +51,8 @@ contactRouter.post(
     }
     const status = await sendEmail({
       to,
-      subject: `AccuQual website enquiry — ${oneLine(name)}${company ? ` (${oneLine(company)})` : ""}`,
-      body: [`Name: ${oneLine(name)}`, `Email: ${oneLine(email)}`, company ? `Company: ${oneLine(company)}` : null, "", message, "", "— sent from the AccuQual website contact form"]
+      subject: `AccuQual website enquiry — ${oneLine(name) || oneLine(email)}${company ? ` (${oneLine(company)})` : ""}`,
+      body: [name ? `Name: ${oneLine(name)}` : null, `Email: ${oneLine(email)}`, company ? `Company: ${oneLine(company)}` : null, "", message, "", "— sent from the AccuQual website contact form"]
         .filter((line): line is string => line !== null)
         .join("\n"),
     });

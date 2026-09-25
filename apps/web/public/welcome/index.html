@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AccuQual QMS | Quality management for manufacturers</title>
+<meta name="description" content="AccuQual QMS brings issues (NCRs), fixes (CAPA/8D), controlled documents, training, audits, calibration, and supplier quality into one multi-plant workspace for manufacturers.">
+<meta name="theme-color" content="#05070A">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script>document.documentElement.className="js";</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="scroll-prog" aria-hidden="true"><i id="scrollProg"></i></div>
+<div class="cursor-glow" id="cursorGlow" aria-hidden="true"></div>
+<canvas class="fx" id="fx" aria-hidden="true"></canvas>
+
+<header class="nav" id="nav">
+  <a class="brand" href="#top" aria-label="AccuQual QMS home">
+    <img src="assets/emblem.webp" alt="" width="34" height="40">
+    <span>ACCUQUAL <b>QMS</b></span>
+  </a>
+  <nav aria-label="Primary">
+    <ul class="nav-links">
+      <li><a href="#scan">CMM demo</a></li>
+      <li><a href="#modules">Modules</a></li>
+      <li><a href="#triage">Try it</a></li>
+      <li><a href="#loop">The loop</a></li>
+      <li><a href="#gallery">Gallery</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+    </ul>
+  </nav>
+  <a class="btn btn-sm" href="/login">Sign in</a>
+  <a class="btn btn-primary btn-sm" href="#pricing"><span class="long">Request early access</span><span class="short">Early access</span></a>
+</header>
+
+<main id="main">
+<!-- ============ HERO ============ -->
+<section class="hero" id="top" aria-labelledby="hero-title">
+  <canvas id="stars" aria-hidden="true"></canvas>
+  <div class="hero-grid" aria-hidden="true"><div class="grid-plane"></div></div>
+  <div class="hero-art" aria-hidden="true" data-depth="0.04">
+    <img src="assets/hero.webp" alt="" width="1600" height="1000">
+  </div>
+  <div class="hero-inner" data-depth="-0.015">
+    <p class="eyebrow"><span class="dot"></span> <span>Quality management <span class="long">for manufacturers </span>· Early access</span></p>
+    <h1 id="hero-title"><span class="line"><span>Every measurement.</span></span> <span class="line"><span>Every fix.</span></span> <span class="line"><span class="grad">One source of truth.</span></span></h1>
+    <p class="sub">AccuQual QMS pulls your issues, fixes, documents, training, audits, calibration, and supplier quality out of spreadsheets and inboxes and into one place, across every plant, so nothing sits stuck and nobody has to go hunting.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#pricing">Request early access <span aria-hidden="true">→</span></a>
+      <a class="btn btn-ghost" href="#scan"><span class="play" aria-hidden="true"></span> See it in action</a>
+    </div>
+    <ul class="chips" aria-label="Highlights">
+      <li>NCR → CAPA / 8D</li><li>Multi-plant</li><li>Role-aware home</li><li>Built around ISO 9001 / IATF 16949 practices</li>
+    </ul>
+  </div>
+  <div class="hero-readout mono" aria-hidden="true">
+    <div>X <span id="rx">+000.000</span></div><div>Y <span id="ry">+000.000</span></div><div>Z <span id="rz">−012.500</span></div>
+  </div>
+  <a class="scroll-cue" href="#story" aria-label="Scroll to learn more"><span></span></a>
+</section>
+
+<!-- ============ STORY ============ -->
+<section class="story" id="story">
+  <div class="wrap">
+    <p class="kicker reveal">Why AccuQual exists</p>
+    <h2 class="big reveal">Your parts are measured to the micron.<br><span class="muted">Your quality system shouldn’t live in a spreadsheet.</span></h2>
+    <div class="story-grid">
+      <article class="glass reveal"><h3>The problem</h3><p>Issues get logged in one place, fixes tracked in another, and the latest drawing revision lives on someone’s desktop. When an auditor asks “show me,” the scramble starts.</p></article>
+      <article class="glass reveal"><h3>What AccuQual does</h3><p>One connected workspace: an issue links to its fix, the fix links to the document change, the document change triggers the training. The trail builds itself as people do the work.</p></article>
+      <article class="glass reveal"><h3>Why it’s different</h3><p>Built for the shop floor, not a consultant’s binder. Plain language, fast screens, and a home page that tells each person what’s waiting on them right now.</p></article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CMM SCAN ============ -->
+<section class="scan" id="scan" aria-labelledby="scan-title">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="kicker reveal">Interactive demo</p>
+      <h2 id="scan-title" class="reveal">From probe hit to action, in one motion.</h2>
+      <p class="lead reveal">Watch a simulated CMM routine probe a bracket point by point. Hover or tap any point to see its readout. When a point falls outside tolerance, that’s where an issue starts.</p>
+    </div>
+    <div class="scan-stage reveal">
+      <div class="scan-viz">
+        <span class="badge-illus">Illustrative data. Not a real inspection.</span>
+        <span class="drag-hint" id="dragHint" aria-hidden="true">✋ Drag the probe</span>
+        <svg id="scanSvg" viewBox="0 0 640 420" role="img" aria-labelledby="scanSvgTitle">
+          <title id="scanSvgTitle">Simulated CMM inspection of a machined bracket with probe points</title>
+          <defs>
+            <pattern id="gridp" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="rgba(0,243,255,.07)"/></pattern>
+            <linearGradient id="partFill" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b2533"/><stop offset="1" stop-color="#101620"/></linearGradient>
+            <filter id="sg"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          </defs>
+          <rect width="640" height="420" fill="url(#gridp)"/>
+          <path id="partPath" d="M80 90 H420 Q450 90 470 110 L560 200 Q572 212 572 230 V330 Q572 350 552 350 H100 Q80 350 80 330 Z" fill="url(#partFill)" stroke="#00F3FF" stroke-width="2" filter="url(#sg)"/>
+          <circle cx="190" cy="220" r="46" fill="#0A0E12" stroke="#A855F7" stroke-width="2"/>
+          <circle cx="360" cy="220" r="30" fill="#0A0E12" stroke="#A855F7" stroke-width="2"/>
+          <rect x="440" y="250" width="90" height="60" rx="10" fill="#0A0E12" stroke="#A855F7" stroke-width="2"/>
+          <g stroke="#94A3B8" stroke-width="1" opacity=".5" stroke-dasharray="4 4"><path d="M190 160 V280 M130 220 H250 M360 180 V260 M320 220 H400"/></g>
+          <path id="scanTrail" d="" fill="none" stroke="#00F3FF" stroke-width="1.2" stroke-opacity=".5" stroke-dasharray="3 5"/>
+          <g id="scanPts"></g>
+          <g id="probe" transform="translate(80 40)" tabindex="0" role="slider" aria-label="CMM probe. Drag onto an edge or bore to take a measurement point." aria-valuetext="Probe parked">
+            <circle r="34" fill="transparent" class="probe-hit"/>
+            <line x1="0" y1="-60" x2="0" y2="-12" stroke="#cfd6e0" stroke-width="3"/>
+            <circle r="30" fill="rgba(0,243,255,.12)" class="probe-halo"/>
+            <circle r="8" fill="#ff3b5c" stroke="#ffd6dc" stroke-width="1.5"/>
+          </g>
+        </svg>
+        <div class="tip mono" id="scanTip" role="status" hidden></div>
+      </div>
+      <aside class="scan-panel" aria-label="Scan readout">
+        <div class="panel-head"><span class="mono">ROUTINE · BRKT-A (sample)</span><span class="live" id="scanState">Idle</span></div>
+        <div class="meter">
+          <div><small>Points</small><strong class="mono" id="mPts">0 / 0</strong></div>
+          <div><small>In tolerance</small><strong class="mono ok" id="mOk">0</strong></div>
+          <div><small>Out</small><strong class="mono bad" id="mBad">0</strong></div>
+        </div>
+        <div class="readout mono" id="readout" aria-live="polite">
+          <div class="ro-row ro-head"><span>Feature</span><span>Nominal</span><span>Actual</span><span>Dev</span></div>
+        </div>
+        <div class="ncr-card" id="ncrCard" hidden>
+          <span class="pill bad">Out of tolerance</span>
+          <p id="ncrText">A point is outside tolerance.</p>
+          <a class="btn btn-sm btn-primary" href="#triage">Triage it below →</a>
+        </div>
+        <div class="scan-ctrl">
+          <button class="btn btn-sm btn-primary" id="scanRun" type="button">▶ Run scan</button>
+          <button class="btn btn-sm btn-ghost" id="scanReset" type="button">Reset</button>
+        </div>
+        <p class="fine">Tip: drag the red probe onto any edge or bore to take your own points. Tolerance shown: ±0.020 mm. All values are illustrative samples for this demo only.</p>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MODULES ============ -->
+<section class="modules" id="modules" aria-labelledby="mod-title">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="kicker reveal">What’s inside</p>
+      <h2 id="mod-title" class="reveal">Everything your quality team chases, in one place.</h2>
+      <p class="lead reveal">Plain language, no jargon walls. Each module links to the others, so the paperwork follows the work.</p>
+    </div>
+
+    <div class="mod-grid">
+      <article class="mod reveal" style="--c:#FF2A6D">
+        <div class="mod-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 20h20L12 3Zm0 6v5m0 3v.01"/></svg></div>
+        <h3>Issues <small>(NCR)</small></h3>
+        <p>Log a bad part in seconds, from the floor, with photos. Who found it, where, how many, and what happens to the suspect stock.</p>
+        <ul class="mini"><li><span class="pill bad">Open</span> Burr on bore edge (sample)</li><li><span class="pill amb">Contained</span> Wrong hole depth (sample)</li></ul>
+      </article>
+      <article class="mod reveal" style="--c:#FFB703">
+        <div class="mod-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4 2.5-2.5Z"/></svg></div>
+        <h3>Fixes <small>(CAPA / 8D)</small></h3>
+        <p>Turn an issue into a real fix: team, containment, root cause, corrective action, and a check that it actually worked. 8D steps when the customer asks for them.</p>
+        <div class="d8" aria-label="8D steps"><span class="on">D1</span><span class="on">D2</span><span class="on">D3</span><span class="on">D4</span><span class="cur">D5</span><span>D6</span><span>D7</span><span>D8</span></div>
+      </article>
+      <article class="mod reveal" style="--c:#00F0FF">
+        <div class="mod-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6V2Zm9 0v5h5M9 13h8M9 17h8"/></svg></div>
+        <h3>Controlled documents</h3>
+        <p>One current revision, always. Review and approval routing, change history, and old revisions pulled out of circulation automatically.</p>
+        <ul class="mini"><li><span class="pill cy">Draft</span> Work instruction, Rev C (sample)</li><li><span class="pill ok">Approved</span> Control plan, Rev F (sample)</li></ul>
+      </article>
+      <article class="mod reveal" style="--c:#00FF9D">
+        <div class="mod-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 8l10-5 10 5-10 5L2 8Zm4 2.5V16c3 2.5 9 2.5 12 0v-5.5M22 8v6"/></svg></div>
+        <h3>Training</h3>
+        <p>Know who’s trained on what, and who isn’t yet. When a document changes, the people who use it get assigned the update.</p>
+        <div class="bar-list"><div><span>Assembly WI rev C</span><i style="--w:72%"></i></div><div><span>Torque procedure</span><i style="--w:45%"></i></div><p class="fine">Illustrative progress</p></div>
+      </article>
+      <article class="mod reveal" style="--c:#A855F7">
+        <div class="mod-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l2 2 4-4M4 4h16v16H4z"/></svg></div>
+        <h3>Audits</h3>
+        <p>Plan internal, supplier, and process audits. Run checklists on a tablet, capture findings, and send them straight into fixes.</p>
+        <ul class="mini"><li><span class="pill amb">Scheduled</span> Layered process audit, Line 2 (sample)</li></ul>
+      </article>
+      <article class="mod reveal" style="--c:#00F3FF">
+        <div class="mod-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 13l4-4M12 2v3M5 5l1.5 1.5"/></svg></div>
+        <h3>Calibration</h3>
+        <p>Every gauge, caliper, mic, and CMM with its due date and history. Get warned before something goes overdue, not after.</p>
+        <ul class="mini"><li><span class="pill ok">Current</span> Digital caliper CAL-014 (sample)</li><li><span class="pill amb">Due soon</span> Height gauge CAL-031 (sample)</li></ul>
+      </article>
+      <article class="mod reveal" style="--c:#FFB703">
+        <div class="mod-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7M7 20a2 2 0 1 0 0-.01M17 20a2 2 0 1 0 0-.01"/></svg></div>
+        <h3>Supplier quality</h3>
+        <p>Keep supplier issues, corrective action requests, and approvals together, so you know who’s performing and who needs a call.</p>
+        <ul class="mini"><li><span class="pill bad">SCAR open</span> Supplier B, plating (sample)</li></ul>
+      </article>
+
+      <!-- Multi-plant with switcher -->
+      <article class="mod mod-wide reveal" style="--c:#00F3FF" id="plants">
+        <div class="mod-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21V10l6 3V10l6 3V6l8 4v11H2Z"/></svg></div>
+        <h3>Multi-plant</h3>
+        <p>One company account, many plants. Switch plants in a click, or see them side by side. Each plant keeps its own documents, gauges, and people.</p>
+        <div class="plant-switch" role="tablist" aria-label="Choose a plant (sample)">
+          <button role="tab" aria-selected="true" data-plant="0" type="button">Plant North</button>
+          <button role="tab" aria-selected="false" data-plant="1" type="button">Plant South</button>
+          <button role="tab" aria-selected="false" data-plant="2" type="button">Plant East</button>
+        </div>
+        <div class="plant-stats" id="plantStats" aria-live="polite">
+          <div><small>Open issues</small><strong data-k="i">7</strong></div>
+          <div><small>Fixes in progress</small><strong data-k="f">4</strong></div>
+          <div><small>Gauges due in 30 days</small><strong data-k="g">12</strong></div>
+          <div><small>Docs awaiting approval</small><strong data-k="d">3</strong></div>
+        </div>
+        <p class="fine">Plant names and counts are illustrative samples.</p>
+      </article>
+
+      <!-- Role-aware home -->
+      <article class="mod mod-wide reveal" style="--c:#A855F7" id="roles">
+        <div class="mod-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg></div>
+        <h3>A home page that shows what’s stuck</h3>
+        <p>Everyone lands on what needs them now. The quality manager sees what’s overdue across the plant. A supervisor sees their line. An operator sees their training and open tasks.</p>
+        <div class="plant-switch" role="tablist" aria-label="Choose a role (sample)">
+          <button role="tab" aria-selected="true" data-role="0" type="button">Quality manager</button>
+          <button role="tab" aria-selected="false" data-role="1" type="button">Supervisor</button>
+          <button role="tab" aria-selected="false" data-role="2" type="button">Operator</button>
+        </div>
+        <ul class="stuck" id="stuckList" aria-live="polite"></ul>
+        <p class="fine">Items shown are illustrative samples.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TRIAGE (DRAG & DROP) ============ -->
+<section class="triage" id="triage" aria-labelledby="tri-title">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="kicker reveal">Try it: drag and drop</p>
+      <h2 id="tri-title" class="reveal">Triage the floor. <span class="grad">Close the loop.</span></h2>
+      <p class="lead reveal">A bad part just turned up on Line 2. Drag each card through Open, Contain, Fix, Verify, and Closed and watch the owner, due date, and next step follow it. Get all five to Closed to close the loop.</p>
+    </div>
+    <p id="triHelp" class="sr-only">Keyboard: focus a card, press Space or Enter to pick it up, use the Left and Right arrow keys to move it between stages and Up and Down to reorder, then press Space or Enter to drop. Press Escape to cancel.</p>
+    <div class="tri-shell glass reveal">
+      <div class="tri-top">
+        <span class="badge-illus static">Illustrative sample. Cards, names, and dates are not real.</span>
+        <div class="tri-progress" aria-hidden="true"><span>Loop progress</span><div class="tp-bar"><i id="triBar"></i></div><b class="mono" id="triCount">0 / 5 closed</b></div>
+        <button class="btn btn-sm btn-ghost" type="button" id="triReset">↺ Reset</button>
+      </div>
+      <div class="board" id="board">
+        <div class="col" data-stage="inbox"><div class="col-head"><span class="cdot" style="--c:#94A3B8"></span>Floor inbox<b class="cnt mono">5</b></div><div class="dz" data-stage="inbox" aria-label="Floor inbox"></div></div>
+        <div class="col" data-stage="open"><div class="col-head"><span class="cdot" style="--c:#FF2A6D"></span>Open<b class="cnt mono">0</b></div><div class="dz" data-stage="open" aria-label="Open"></div></div>
+        <div class="col" data-stage="contain"><div class="col-head"><span class="cdot" style="--c:#FFB703"></span>Contain<b class="cnt mono">0</b></div><div class="dz" data-stage="contain" aria-label="Contain"></div></div>
+        <div class="col" data-stage="fix"><div class="col-head"><span class="cdot" style="--c:#A855F7"></span>Fix<b class="cnt mono">0</b></div><div class="dz" data-stage="fix" aria-label="Fix"></div></div>
+        <div class="col" data-stage="verify"><div class="col-head"><span class="cdot" style="--c:#00F0FF"></span>Verify<b class="cnt mono">0</b></div><div class="dz" data-stage="verify" aria-label="Verify"></div></div>
+        <div class="col" data-stage="closed"><div class="col-head"><span class="cdot" style="--c:#00FF9D"></span>Closed<b class="cnt mono">0</b></div><div class="dz" data-stage="closed" aria-label="Closed"></div></div>
+      </div>
+      <div class="status-strip" id="strip" aria-live="polite">
+        <div class="ss-card"><small>Card</small><strong id="ssCard">Pick up a card to start</strong></div>
+        <div><small>Stage</small><strong id="ssStage">–</strong></div>
+        <div><small>Owner</small><strong id="ssOwner">–</strong></div>
+        <div><small>Due</small><strong id="ssDue">–</strong></div>
+        <div class="ss-next"><small>Next action</small><strong id="ssNext">–</strong></div>
+      </div>
+      <div class="loop-done" id="loopDone" hidden>
+        <div class="ld-ring" aria-hidden="true">✓</div>
+        <div><h3>Loop closed.</h3><p>Issue logged, contained, fixed, verified, documented, and trained. In AccuQual, that whole trail is saved as it happens.</p></div>
+        <button class="btn btn-sm btn-primary" type="button" id="triAgain">Run it again</button>
+      </div>
+    </div>
+    <p class="sr-only" id="triLive" aria-live="assertive"></p>
+  </div>
+</section>
+
+<!-- ============ LOOP ============ -->
+<section class="loop" id="loop" aria-labelledby="loop-title">
+  <div class="wrap loop-wrap">
+    <div class="sec-head left">
+      <p class="kicker reveal">The closed loop</p>
+      <h2 id="loop-title" class="reveal">Find it. Fix it. Make sure it stays fixed.</h2>
+      <p class="lead reveal">Every problem travels the same loop in AccuQual, and each step hands off to the next automatically. Click a step to follow it.</p>
+      <div class="loop-detail glass reveal" aria-live="polite">
+        <span class="mono step-no" id="loopNo">01 / 06</span>
+        <h3 id="loopTitle">Issue</h3>
+        <p id="loopText"></p>
+      </div>
+    </div>
+    <div class="loop-ring reveal" id="loopRing">
+      <svg viewBox="0 0 400 400" aria-hidden="true">
+        <defs><linearGradient id="lg" x1="0" x2="1"><stop offset="0" stop-color="#00F3FF"/><stop offset="1" stop-color="#A855F7"/></linearGradient></defs>
+        <circle cx="200" cy="200" r="150" fill="none" stroke="#1E293B" stroke-width="2"/>
+        <circle id="loopArc" cx="200" cy="200" r="150" fill="none" stroke="url(#lg)" stroke-width="4" stroke-linecap="round" transform="rotate(-90 200 200)" stroke-dasharray="942" stroke-dashoffset="785"/>
+        <circle cx="200" cy="200" r="110" fill="none" stroke="rgba(0,243,255,.08)" stroke-dasharray="2 6"/>
+      </svg>
+      <div class="loop-core"><img src="assets/emblem.webp" alt="" width="70" height="83"><span class="mono">AccuQual</span></div>
+      <div class="loop-nodes" id="loopNodes" role="tablist" aria-label="Quality loop steps"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GALLERY ============ -->
+<section class="gallery" id="gallery" aria-labelledby="gal-title">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="kicker reveal">Where quality happens</p>
+      <h2 id="gal-title" class="reveal">Built for the gauge, the plate, and the probe.</h2>
+      <p class="lead reveal">Original concept artwork, now hands-on. Drag, turn, and tap each scene to take a reading. Use the <span aria-hidden="true">⤢</span> button to view the original art. Every value here is an illustrative sample.</p>
+    </div>
+
+    <!-- shared SVG paint for the gallery scenes -->
+    <svg class="gx-defs" aria-hidden="true" focusable="false" width="0" height="0">
+      <defs>
+        <linearGradient id="gxMetalV" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a6473"/><stop offset=".2" stop-color="#cdd5df"/><stop offset=".42" stop-color="#f5f8fc"/><stop offset=".62" stop-color="#a7b1bf"/><stop offset="1" stop-color="#4b5462"/></linearGradient>
+        <linearGradient id="gxMetalH" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5a6473"/><stop offset=".2" stop-color="#cdd5df"/><stop offset=".42" stop-color="#f5f8fc"/><stop offset=".62" stop-color="#a7b1bf"/><stop offset="1" stop-color="#4b5462"/></linearGradient>
+        <linearGradient id="gxMetalTop" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9eef4"/><stop offset="1" stop-color="#9aa5b3"/></linearGradient>
+        <linearGradient id="gxDark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d2531"/><stop offset="1" stop-color="#0c1117"/></linearGradient>
+        <linearGradient id="gxLcd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#021215"/><stop offset="1" stop-color="#07262c"/></linearGradient>
+        <linearGradient id="gxFloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d1219"/><stop offset="1" stop-color="#05070a"/></linearGradient>
+        <radialGradient id="gxGlowC"><stop offset="0" stop-color="#00F3FF" stop-opacity=".28"/><stop offset="1" stop-color="#00F3FF" stop-opacity="0"/></radialGradient>
+        <radialGradient id="gxGlowV"><stop offset="0" stop-color="#A855F7" stop-opacity=".3"/><stop offset="1" stop-color="#A855F7" stop-opacity="0"/></radialGradient>
+        <radialGradient id="gxRuby" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#ffe1e6"/><stop offset=".3" stop-color="#ff3b5c"/><stop offset="1" stop-color="#7d0a22"/></radialGradient>
+        <radialGradient id="gxBall" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#b9c2ce"/><stop offset="1" stop-color="#4b5462"/></radialGradient>
+        <pattern id="gxGrid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="rgba(0,243,255,.05)"/></pattern>
+        <pattern id="gxBrush" width="6" height="3" patternUnits="userSpaceOnUse"><path d="M0 1.5H6" stroke="rgba(255,255,255,.07)" stroke-width=".6"/></pattern>
+        <pattern id="gxSpeck" width="37" height="23" patternUnits="userSpaceOnUse"><circle cx="4" cy="5" r=".8" fill="rgba(255,255,255,.07)"/><circle cx="21" cy="14" r=".6" fill="rgba(255,255,255,.06)"/><circle cx="31" cy="4" r=".5" fill="rgba(168,85,247,.12)"/><circle cx="12" cy="19" r=".5" fill="rgba(0,243,255,.08)"/></pattern>
+        <filter id="gxGlow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="gxSoft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="9"/></filter>
+      </defs>
+    </svg>
+
+    <div class="gx-grid">
+
+      <!-- 1. Bridge CMM -->
+      <figure class="gx tilt reveal gx-wide" id="gxCmm">
+        <div class="gx-card">
+          <div class="gx-stage">
+            <svg class="gx-svg" viewBox="0 0 1000 480" preserveAspectRatio="xMidYMid slice" role="group" aria-label="Interactive bridge CMM. Choose a hotspot on the bracket to probe it. Illustrative values.">
+              <rect width="1000" height="480" fill="#04060a"/>
+              <path d="M150 0H350L560 480H-40Z" fill="rgba(0,243,255,.045)"/>
+              <path d="M650 0H850L1040 480H440Z" fill="rgba(168,85,247,.06)"/>
+              <circle cx="120" cy="120" r="320" fill="url(#gxGlowC)"/>
+              <circle cx="880" cy="120" r="340" fill="url(#gxGlowV)"/>
+              <rect width="1000" height="480" fill="url(#gxGrid)"/>
+              <g class="gx-stars" data-n="34" data-w="1000" data-h="330"></g>
+              <path d="M120 340H880L990 480H10Z" fill="url(#gxFloor)"/>
+              <path d="M120 340H880L990 480H10Z" fill="url(#gxSpeck)"/>
+              <path d="M120 340H880" stroke="rgba(0,243,255,.25)"/>
+              <rect x="150" y="328" width="700" height="12" rx="3" fill="url(#gxMetalV)" opacity=".85"/>
+              <path d="M200 118H236L248 334H188Z" fill="url(#gxMetalH)"/>
+              <path d="M188 334L200 118" stroke="#00F3FF" stroke-width="2" filter="url(#gxGlow)" opacity=".8"/>
+              <path d="M764 118H800L812 334H752Z" fill="url(#gxMetalH)"/>
+              <path d="M812 334L800 118" stroke="#A855F7" stroke-width="2" filter="url(#gxGlow)" opacity=".9"/>
+              <rect x="176" y="86" width="648" height="40" rx="5" fill="url(#gxMetalV)"/>
+              <path d="M176 126H824" stroke="#A855F7" stroke-width="2.5" filter="url(#gxGlow)"/>
+              <!-- bracket -->
+              <ellipse cx="500" cy="440" rx="260" ry="20" fill="#000" opacity=".55" filter="url(#gxSoft)"/>
+              <path d="M282 392H718V436H282Z" fill="url(#gxMetalV)"/>
+              <path d="M282 392H718V436H282Z" fill="url(#gxBrush)"/>
+              <circle cx="306" cy="414" r="6.5" fill="#07090d" stroke="rgba(255,255,255,.25)"/>
+              <circle cx="694" cy="414" r="6.5" fill="#07090d" stroke="rgba(255,255,255,.25)"/>
+              <path d="M320 336H680L718 392H282Z" fill="url(#gxMetalTop)"/>
+              <path d="M320 336H680L718 392H282Z" fill="url(#gxBrush)"/>
+              <path d="M282 392L320 336H680" fill="none" stroke="#00F3FF" stroke-width="2.2" filter="url(#gxGlow)"/>
+              <path d="M680 336L718 392V436" fill="none" stroke="#A855F7" stroke-width="2.2" filter="url(#gxGlow)"/>
+              <path d="M352 346H456L460 380H344Z" fill="#0a0e14" stroke="rgba(0,243,255,.45)"/>
+              <path d="M544 346H648L658 380H540Z" fill="#0a0e14" stroke="rgba(0,243,255,.45)"/>
+              <ellipse cx="500" cy="362" rx="34" ry="11" fill="#05070a" stroke="#A855F7" stroke-width="1.5"/>
+              <g fill="#00F3FF" filter="url(#gxGlow)"><circle cx="372" cy="352" r="2"/><circle cx="392" cy="352" r="2"/><circle cx="412" cy="352" r="2"/><circle cx="600" cy="352" r="2"/><circle cx="620" cy="352" r="2"/></g>
+              <g id="cmmFx"></g>
+              <!-- carriage + ram + probe -->
+              <g id="cmmCar">
+                <rect x="482" y="140" width="36" height="62" fill="url(#gxMetalH)" id="cmmRam"/>
+                <rect x="486" y="202" width="28" height="12" rx="3" fill="#10161e" stroke="#2a3444" id="cmmHead"/>
+                <rect x="490" y="205" width="20" height="2.5" rx="1" fill="#00F3FF" filter="url(#gxGlow)" id="cmmHeadLed"/>
+                <circle cx="500" cy="234" r="9" fill="url(#gxBall)" id="cmmJoint"/>
+                <line x1="500" y1="242" x2="500" y2="262" stroke="#dfe5ec" stroke-width="2.6" id="cmmStylus"/>
+                <circle cx="500" cy="270" r="17" fill="rgba(255,59,92,.18)" id="cmmHalo"/>
+                <circle cx="500" cy="270" r="8" fill="url(#gxRuby)" id="cmmRuby"/>
+                <rect x="440" y="64" width="120" height="86" rx="9" fill="url(#gxDark)" stroke="#2a3444"/>
+                <rect x="452" y="73" width="96" height="4" rx="2" fill="#A855F7" filter="url(#gxGlow)"/>
+                <circle cx="543" cy="136" r="3.5" fill="#00FF9D" filter="url(#gxGlow)"/>
+                <text x="456" y="100" class="gx-svgmono" font-size="10" fill="#94A3B8">CMM-01</text>
+                <text x="456" y="116" class="gx-svgmono" font-size="9" fill="#00F3FF" opacity=".8">SAMPLE</text>
+              </g>
+              <g id="cmmHs"></g>
+              <g id="cmmTags"></g>
+            </svg>
+            <span class="gx-badge">Illustrative</span>
+            <span class="gx-hint" aria-hidden="true">👆 Tap a hotspot</span>
+            <button type="button" class="gx-expand" data-src="assets/cmm.webp" data-alt="Illustration of a bridge coordinate measuring machine lowering a ruby-tipped probe onto a machined aerospace bracket, lit with blue and violet rim light." aria-label="View original artwork: bridge CMM probing a machined part"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+          </div>
+          <div class="gx-bar">
+            <div class="gx-dro mono" aria-hidden="true"><span>X <b id="cmmX">+000.000</b></span><span>Y <b id="cmmY">+000.000</b></span><span>Z <b id="cmmZ">+000.000</b></span></div>
+            <div class="gx-read gx-grow"><small id="cmmSub">Last point · Sample</small><strong class="mono" id="cmmRead">Pick a hotspot to probe</strong></div>
+            <span class="gx-pill" id="cmmPill">Ready</span>
+            <div class="gx-ctrl"><button type="button" class="gx-btn" id="cmmAll">▶ Probe all</button><button type="button" class="gx-btn gx-ghost" id="cmmReset">↺ Reset</button></div>
+            <p class="sr-only" aria-live="polite" id="cmmLive"></p>
+          </div>
+        </div>
+        <figcaption>Bridge CMM probing a machined part · tolerance ±0.020 mm (illustrative)</figcaption>
+      </figure>
+
+      <!-- 2. Calipers -->
+      <figure class="gx tilt reveal" id="gxCal">
+        <div class="gx-card">
+          <div class="gx-stage">
+            <svg class="gx-svg" viewBox="0 0 800 500" role="group" aria-label="Interactive digital calipers on a bushing. Drag the moving jaw. Illustrative values.">
+              <rect width="800" height="500" fill="#04060a"/>
+              <circle cx="140" cy="110" r="280" fill="url(#gxGlowC)"/>
+              <circle cx="700" cy="380" r="300" fill="url(#gxGlowV)"/>
+              <rect width="800" height="500" fill="url(#gxGrid)"/>
+              <g class="gx-stars" data-n="22" data-w="800" data-h="340"></g>
+              <path d="M0 352H800V500H0Z" fill="url(#gxFloor)"/>
+              <path d="M0 352H800" stroke="rgba(0,243,255,.22)"/>
+              <ellipse cx="400" cy="404" rx="120" ry="18" fill="#000" opacity=".6" filter="url(#gxSoft)"/>
+              <g id="calPart">
+                <path d="M324 214V402A76.2 17 0 0 0 476.4 402V214Z" fill="url(#gxMetalH)"/>
+                <path d="M324 214V402A76.2 17 0 0 0 476.4 402V214Z" fill="url(#gxBrush)"/>
+                <path d="M324 300A76.2 17 0 0 0 476.4 300" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="2"/>
+                <path d="M324 302A76.2 17 0 0 0 476.4 302" fill="none" stroke="rgba(255,255,255,.35)"/>
+                <ellipse cx="400.2" cy="214" rx="76.2" ry="17" fill="url(#gxMetalTop)"/>
+                <ellipse cx="400.2" cy="215" rx="48" ry="10" fill="#080b10" stroke="rgba(0,0,0,.6)"/>
+                <path d="M324 216V400" stroke="#00F3FF" stroke-width="1.6" opacity=".7" filter="url(#gxGlow)"/>
+                <path d="M476.4 216V400" stroke="#A855F7" stroke-width="1.6" opacity=".8" filter="url(#gxGlow)"/>
+              </g>
+              <g id="calDim" opacity="0">
+                <path id="calDimLine" d="M324 336H476" stroke="#00F3FF" stroke-width="1.4" stroke-dasharray="5 4" fill="none"/>
+                <rect id="calDimBg" x="360" y="312" width="80" height="18" rx="5" fill="rgba(4,6,10,.8)" stroke="rgba(0,243,255,.4)"/>
+                <text id="calDimTxt" x="400" y="325" text-anchor="middle" class="gx-svgmono" font-size="11" fill="#00F3FF">Ø25.42</text>
+              </g>
+              <rect x="90" y="150" width="672" height="24" rx="3" fill="url(#gxMetalV)"/>
+              <g id="calTicks"></g>
+              <path d="M290 132H324V310L312 306Q300 300 300 288V196H290Q282 196 282 188V140Q282 132 290 132ZM306 132L318 106H324V132Z" fill="url(#gxMetalH)" stroke="rgba(255,255,255,.18)"/>
+              <circle id="calC1" cx="324" cy="262" r="9" fill="#00F3FF" filter="url(#gxGlow)" opacity=".35"/>
+              <g id="calJaw" class="gx-handle" tabindex="0" role="slider" aria-label="Caliper moving jaw. Use arrow keys to open or close." aria-valuemin="0" aria-valuemax="40" aria-valuenow="34" aria-valuetext="34.00 millimeters, open">
+                <rect class="gx-hitbox" x="296" y="96" width="232" height="226" fill="transparent"/>
+                <rect class="gx-focus" x="292" y="92" width="240" height="234" rx="16"/>
+                <path d="M358 132H324V310L336 306Q348 300 348 288V196H358Q366 196 366 188V140Q366 132 358 132ZM342 132L330 106H324V132Z" fill="url(#gxMetalH)" stroke="rgba(255,255,255,.18)"/>
+                <circle id="calC2" cx="324" cy="262" r="9" fill="#00F3FF" filter="url(#gxGlow)" opacity=".35"/>
+                <rect x="366" y="114" width="152" height="94" rx="12" fill="url(#gxDark)" stroke="#2a3444"/>
+                <rect x="378" y="126" width="112" height="42" rx="6" fill="url(#gxLcd)" stroke="rgba(0,243,255,.35)"/>
+                <text id="calLcd" x="484" y="157" text-anchor="end" class="gx-svgmono gx-lcd" font-size="23" fill="#00F3FF">34.00</text>
+                <text id="calLcdU" x="384" y="139" class="gx-svgmono" font-size="8" fill="#00F3FF" opacity=".7">MM</text>
+                <circle cx="504" cy="134" r="4" fill="#A855F7" filter="url(#gxGlow)"/>
+                <circle cx="392" cy="188" r="8" fill="#0d1219" stroke="#334155"/><circle cx="420" cy="188" r="8" fill="#0d1219" stroke="#334155"/>
+                <text x="436" y="191" class="gx-svgmono" font-size="7" fill="#94A3B8">ZERO · UNIT</text>
+                <path d="M336 214v70" stroke="rgba(0,243,255,.0)"/>
+              </g>
+              <text x="780" y="484" text-anchor="end" class="gx-svgmono" font-size="11" fill="#94A3B8" id="calPartLbl">PART 1 / 4 · SAMPLE</text>
+            </svg>
+            <span class="gx-badge">Illustrative</span>
+            <span class="gx-hint" aria-hidden="true">✋ Drag the jaw</span>
+            <button type="button" class="gx-expand" data-src="assets/calipers.webp" data-alt="Illustration of digital calipers clamped across a precision turned bushing, with glowing contact points." aria-label="View original artwork: digital calipers on a precision bushing"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+          </div>
+          <div class="gx-bar">
+            <div class="gx-read"><small>Reading · Sample</small><strong class="mono" id="calRead">34.00 <em>mm</em></strong></div>
+            <span class="gx-pill" id="calPill">Open</span>
+            <div class="gx-meta mono" id="calTol">Nominal Ø25.40 ±0.03 mm</div>
+            <div class="gx-ctrl">
+              <div class="gx-seg" role="group" aria-label="Units"><button type="button" aria-pressed="true" data-u="mm">mm</button><button type="button" aria-pressed="false" data-u="in">in</button></div>
+              <button type="button" class="gx-btn gx-ghost" id="calNext">Next part ↻</button>
+            </div>
+            <p class="sr-only" aria-live="polite" id="calLive"></p>
+          </div>
+        </div>
+        <figcaption>Digital calipers on a precision bushing</figcaption>
+      </figure>
+
+      <!-- 3. Height gauge -->
+      <figure class="gx tilt reveal" id="gxHg">
+        <div class="gx-card">
+          <div class="gx-stage">
+            <svg class="gx-svg" viewBox="0 0 800 500" role="group" aria-label="Interactive height gauge on a granite plate. Drag the scriber up and down. Illustrative values.">
+              <rect width="800" height="500" fill="#04060a"/>
+              <circle cx="120" cy="330" r="260" fill="url(#gxGlowC)"/>
+              <circle cx="640" cy="110" r="320" fill="url(#gxGlowV)"/>
+              <path d="M600 0H800V330H420Z" fill="rgba(168,85,247,.05)"/>
+              <rect width="800" height="500" fill="url(#gxGrid)"/>
+              <g class="gx-stars" data-n="22" data-w="800" data-h="320"></g>
+              <path d="M34 338H766L796 430H4Z" fill="#12161d"/>
+              <path d="M34 338H766L796 430H4Z" fill="url(#gxSpeck)"/>
+              <path d="M4 430H796V474H4Z" fill="#0a0d12"/>
+              <path d="M34 338H766" stroke="rgba(168,85,247,.3)"/>
+              <path d="M4 430H796" stroke="rgba(0,243,255,.18)"/>
+              <!-- part -->
+              <ellipse cx="590" cy="394" rx="130" ry="10" fill="#000" opacity=".6" filter="url(#gxSoft)"/>
+              <path d="M470 224L494 208H634L610 224Z" fill="url(#gxMetalTop)"/>
+              <path d="M610 280L634 264H714L690 280Z" fill="url(#gxMetalTop)"/>
+              <path d="M610 224L634 208V264L610 280Z" fill="#4b5563"/>
+              <path d="M690 280L714 264V376L690 392Z" fill="#3d4553"/>
+              <path d="M470 224H610V280H690V392H470Z" fill="url(#gxMetalH)"/>
+              <path d="M470 224H610V280H690V392H470Z" fill="url(#gxBrush)"/>
+              <circle cx="520" cy="330.4" r="22.4" fill="#07090d" stroke="rgba(168,85,247,.55)" stroke-width="1.5"/>
+              <path d="M470 392V224H610" fill="none" stroke="#00F3FF" stroke-width="2" filter="url(#gxGlow)" opacity=".85"/>
+              <path d="M690 280L714 264V376" fill="none" stroke="#A855F7" stroke-width="2" filter="url(#gxGlow)"/>
+              <g id="hgFeat" fill="none" stroke-width="4" stroke-linecap="round" filter="url(#gxGlow)">
+                <path d="M470 224H610" data-f="0"/>
+                <path d="M610 280H690" data-f="1"/>
+                <path d="M497.6 330.4A22.4 22.4 0 0 1 542.4 330.4" data-f="2"/>
+                <path d="M497.6 330.4A22.4 22.4 0 0 0 542.4 330.4" data-f="3"/>
+              </g>
+              <g id="hgTags" class="gx-svgmono" font-size="11"></g>
+              <!-- gauge -->
+              <rect x="150" y="366" width="190" height="30" rx="10" fill="url(#gxMetalV)"/>
+              <rect x="232" y="34" width="30" height="336" rx="3" fill="url(#gxMetalH)"/>
+              <g id="hgTicks"></g>
+              <g id="hgHead" class="gx-handle" tabindex="0" role="slider" aria-label="Height gauge scriber. Use arrow keys to move up or down, Page Up and Page Down to jump between features." aria-valuemin="0" aria-valuemax="89" aria-valuenow="75" aria-valuetext="75.00 millimeters">
+                <rect class="gx-hitbox" x="170" y="270" width="350" height="136" fill="transparent"/>
+                <rect class="gx-focus" x="166" y="266" width="358" height="144" rx="16"/>
+                <path id="hgLine" d="M505 392H730" stroke="#00F3FF" stroke-width="1.2" stroke-dasharray="4 5" opacity=".55"/>
+                <rect x="336" y="330" width="92" height="11" rx="2" fill="url(#gxMetalV)"/>
+                <path d="M424 331L508 389L503 395L424 342Z" fill="url(#gxMetalV)"/>
+                <path d="M424 331L508 389" stroke="#00F3FF" stroke-width="1.6" filter="url(#gxGlow)"/>
+                <circle id="hgTip" cx="505" cy="392" r="5" fill="#00F3FF" filter="url(#gxGlow)" opacity=".5"/>
+                <rect x="196" y="284" width="142" height="80" rx="11" fill="url(#gxDark)" stroke="#2a3444"/>
+                <circle cx="190" cy="324" r="11" fill="url(#gxBall)"/>
+                <rect x="214" y="296" width="106" height="34" rx="5" fill="url(#gxLcd)" stroke="rgba(0,243,255,.35)"/>
+                <text id="hgLcd" x="314" y="321" text-anchor="end" class="gx-svgmono gx-lcd" font-size="19" fill="#00F3FF">75.00</text>
+                <text x="219" y="307" class="gx-svgmono" font-size="7" fill="#00F3FF" opacity=".7">MM</text>
+                <circle cx="228" cy="347" r="6" fill="#0d1219" stroke="#334155"/>
+                <circle cx="252" cy="347" r="4" fill="#00FF9D" filter="url(#gxGlow)"/>
+              </g>
+            </svg>
+            <span class="gx-badge">Illustrative</span>
+            <span class="gx-hint" aria-hidden="true">✋ Drag the scriber</span>
+            <button type="button" class="gx-expand" data-src="assets/heightgauge.webp" data-alt="Illustration of a digital height gauge on a granite surface plate, its scriber touching the top of a machined block." aria-label="View original artwork: height gauge on a granite surface plate"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+          </div>
+          <div class="gx-bar">
+            <div class="gx-read"><small>Height · Sample</small><strong class="mono" id="hgRead">75.00 <em>mm</em></strong></div>
+            <span class="gx-pill" id="hgPill">Free</span>
+            <div class="gx-chips" id="hgChips" aria-label="Features measured"><span class="gx-chip">No features touched yet</span></div>
+            <p class="sr-only" aria-live="polite" id="hgLive"></p>
+          </div>
+        </div>
+        <figcaption>Height gauge on a granite surface plate · tolerance ±0.05 mm (illustrative)</figcaption>
+      </figure>
+
+      <!-- 4. Micrometer -->
+      <figure class="gx tilt reveal" id="gxMic">
+        <div class="gx-card">
+          <div class="gx-stage">
+            <svg class="gx-svg" viewBox="0 0 800 500" role="group" aria-label="Interactive outside micrometer. Drag, scroll, or use arrow keys on the thimble. Illustrative values.">
+              <defs>
+                <pattern id="micKnurl" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#9aa4b2"/><path d="M0 0L8 8M8 0L0 8" stroke="#39414e" stroke-width="1.3"/></pattern>
+                <pattern id="micRidge" width="40" height="5" patternUnits="userSpaceOnUse"><rect width="40" height="5" fill="#aab4c1"/><path d="M0 1H40" stroke="#4b5462" stroke-width="1.2"/></pattern>
+              </defs>
+              <rect width="800" height="500" fill="#04060a"/>
+              <circle cx="120" cy="380" r="280" fill="url(#gxGlowC)"/>
+              <circle cx="640" cy="110" r="300" fill="url(#gxGlowV)"/>
+              <rect width="800" height="500" fill="url(#gxGrid)"/>
+              <g class="gx-stars" data-n="26" data-w="800" data-h="500"></g>
+              <path d="M104 214C104 452 476 452 476 214L434 214C434 402 146 402 146 214Z" fill="url(#gxDark)" opacity=".95"/>
+              <path d="M104 214C104 452 476 452 476 214" fill="none" stroke="#A855F7" stroke-width="2.6" filter="url(#gxGlow)"/>
+              <path d="M146 214C146 402 434 402 434 214" fill="none" stroke="#00F3FF" stroke-width="1.5" opacity=".8" filter="url(#gxGlow)"/>
+              <ellipse cx="290" cy="380" rx="70" ry="8" fill="rgba(255,255,255,.05)"/>
+              <text x="290" y="380" text-anchor="middle" class="gx-svgmono" font-size="9" fill="#94A3B8" opacity=".75">0–25 mm · 0.01</text>
+              <rect x="92" y="186" width="58" height="28" rx="4" fill="url(#gxMetalV)"/>
+              <g id="micPin">
+                <rect x="150" y="146" width="55" height="104" fill="url(#gxMetalH)"/>
+                <rect x="150" y="146" width="55" height="104" fill="url(#gxBrush)"/>
+                <ellipse cx="177.5" cy="146" rx="27.5" ry="7" fill="url(#gxMetalTop)"/>
+                <path d="M150 250A27.5 7 0 0 0 205 250" fill="#6b7582"/>
+              </g>
+              <circle id="micC1" cx="150" cy="200" r="7" fill="#00F3FF" filter="url(#gxGlow)" opacity=".3"/>
+              <circle id="micC2" cx="205" cy="200" r="7" fill="#00F3FF" filter="url(#gxGlow)" opacity=".3"/>
+              <circle id="micRing" cx="205" cy="200" r="10" fill="none" stroke="#00FF9D" stroke-width="2" opacity="0"/>
+              <rect id="micSpindle" x="220" y="191" width="200" height="18" fill="url(#gxMetalV)"/>
+              <rect x="414" y="178" width="62" height="44" rx="4" fill="url(#gxMetalV)"/>
+              <rect x="470" y="178" width="152" height="44" fill="url(#gxMetalV)"/>
+              <line x1="470" y1="200" x2="622" y2="200" stroke="#1a2230" stroke-width="1.2"/>
+              <g id="micSleeve" stroke="#1a2230" stroke-width="1"></g>
+              <g id="micTurn" class="gx-handle" tabindex="0" role="slider" aria-label="Micrometer thimble. Arrow keys turn it by 0.01 millimeter, Shift for 0.1, Page Up and Page Down for a full turn." aria-valuemin="0" aria-valuemax="25" aria-valuenow="14.2" aria-valuetext="14.200 millimeters">
+                <rect class="gx-hitbox" x="462" y="136" width="310" height="128" fill="transparent"/>
+                <rect class="gx-focus" id="micFocus" x="470" y="160" width="160" height="80" rx="14"/>
+                <g id="micThimble">
+                  <path d="M478 174L492 168V232L478 226Z" fill="url(#gxMetalH)"/>
+                  <rect x="492" y="168" width="44" height="64" fill="url(#gxMetalV)"/>
+                  <rect x="536" y="168" width="40" height="64" fill="url(#micKnurl)" id="micKnurlRect"/>
+                  <rect x="536" y="168" width="40" height="64" fill="url(#gxMetalV)" opacity=".35"/>
+                  <rect x="576" y="172" width="7" height="56" fill="url(#gxMetalV)"/>
+                  <g id="micTG"></g>
+                  <g id="micRatch"><rect x="583" y="184" width="42" height="32" rx="5" fill="url(#micRidge)"/><rect x="583" y="184" width="42" height="32" rx="5" fill="url(#gxMetalV)" opacity=".45"/></g>
+                  <text id="micClick" x="604" y="160" text-anchor="middle" class="gx-svgmono" font-size="11" fill="#00FF9D" opacity="0">click</text>
+                </g>
+              </g>
+              <g transform="translate(606 44)">
+                <rect width="170" height="74" rx="12" fill="rgba(5,7,10,.72)" stroke="rgba(0,243,255,.3)"/>
+                <text x="14" y="22" class="gx-svgmono" font-size="9" fill="#94A3B8">READING · SAMPLE</text>
+                <text id="micHud" x="156" y="54" text-anchor="end" class="gx-svgmono gx-lcd" font-size="24" fill="#00F3FF">14.200</text>
+                <text x="14" y="54" class="gx-svgmono" font-size="10" fill="#00F3FF" opacity=".7">mm</text>
+                <text id="micHudS" x="14" y="67" class="gx-svgmono" font-size="8" fill="#94A3B8">FREE</text>
+              </g>
+            </svg>
+            <span class="gx-badge">Illustrative</span>
+            <span class="gx-hint" aria-hidden="true">↔ Drag or scroll the thimble</span>
+            <button type="button" class="gx-expand" data-src="assets/micrometer.webp" data-alt="Close-up illustration of an outside micrometer measuring a small precision pin, with graduated sleeve and knurled thimble." aria-label="View original artwork: micrometer close-up"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+          </div>
+          <div class="gx-bar">
+            <div class="gx-read"><small>Sleeve + thimble · Sample</small><strong class="mono" id="micRead">14.200 <em>mm</em></strong></div>
+            <span class="gx-pill" id="micPill">Free</span>
+            <div class="gx-meta mono" id="micBreak">14.000 + 0.200 · Nominal Ø10.000 ±0.005</div>
+            <div class="gx-ctrl"><button type="button" class="gx-btn gx-ghost" id="micNext">Next pin ↻</button></div>
+            <p class="sr-only" aria-live="polite" id="micLive"></p>
+          </div>
+        </div>
+        <figcaption>Micrometer close-up</figcaption>
+      </figure>
+
+      <!-- 5. Tablet -->
+      <figure class="gx tilt reveal" id="gxTab">
+        <div class="gx-card">
+          <div class="gx-stage gx-tabstage">
+            <div class="tab-world" id="tabWorld">
+              <img src="assets/tablet.webp" width="1600" height="1000" alt="Illustration of gloved hands holding a tablet on a shop floor, now showing a sample inspection checklist." loading="lazy">
+              <div class="tab-screen" id="tabScreen">
+                <div class="ts-head"><span class="ts-dot" aria-hidden="true"></span><strong>Inspection · Lot 1043</strong><span class="ts-sample">SAMPLE</span></div>
+                <ol class="ts-list" id="tsList" aria-label="Sample inspection checklist">
+                  <li data-i="0"><div class="ts-c"><b>Bore Ø</b><small>12.00 ±0.02 mm</small></div><span class="ts-r">12.01</span><button type="button" class="ts-p" aria-pressed="false" aria-label="Pass: Bore diameter">✓ Pass</button><button type="button" class="ts-f" aria-pressed="false" aria-label="Fail: Bore diameter">✕ Fail</button></li>
+                  <li data-i="1"><div class="ts-c"><b>Face flatness</b><small>0.05 mm max</small></div><span class="ts-r">0.03</span><button type="button" class="ts-p" aria-pressed="false" aria-label="Pass: Face flatness">✓ Pass</button><button type="button" class="ts-f" aria-pressed="false" aria-label="Fail: Face flatness">✕ Fail</button></li>
+                  <li data-i="2"><div class="ts-c"><b>Thread M8</b><small>Go / no-go</small></div><span class="ts-r">Go</span><button type="button" class="ts-p" aria-pressed="false" aria-label="Pass: Thread M8">✓ Pass</button><button type="button" class="ts-f" aria-pressed="false" aria-label="Fail: Thread M8">✕ Fail</button></li>
+                  <li data-i="3"><div class="ts-c"><b>Surface Ra</b><small>1.6 µm max</small></div><span class="ts-r">1.2</span><button type="button" class="ts-p" aria-pressed="false" aria-label="Pass: Surface roughness">✓ Pass</button><button type="button" class="ts-f" aria-pressed="false" aria-label="Fail: Surface roughness">✕ Fail</button></li>
+                </ol>
+                <div class="ts-foot">
+                  <span class="ts-prog" id="tsProg">0 / 4 checked</span>
+                  <button type="button" class="ts-reset" id="tsReset" aria-label="Reset checklist">↺</button>
+                  <button type="button" class="ts-go" id="tsGo" disabled>Sign off</button>
+                </div>
+                <div class="ts-stamp" id="tsStamp" hidden><b>APPROVED</b><span id="tsStampT">–</span><small>Sample record</small></div>
+                <div class="ts-toast" id="tsToast" hidden role="status"><b>NCR-0147 created</b><span id="tsToastT">Sample · linked to Lot 1043</span></div>
+              </div>
+              <img class="tab-thumbs" src="assets/tablet.webp" width="1600" height="1000" alt="" aria-hidden="true" loading="lazy">
+            </div>
+            <span class="gx-badge">Sample</span>
+            <span class="gx-hint" aria-hidden="true">👆 Tap Pass or Fail</span>
+            <button type="button" class="gx-expand" data-src="assets/tablet.webp" data-alt="Illustration of gloved hands holding a tablet on a shop floor showing an abstract quality dashboard with status colors." aria-label="View original artwork: reviewing quality status on the floor"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+          </div>
+          <div class="gx-bar">
+            <div class="gx-read gx-grow"><small>Record · Sample</small><strong class="mono" id="tabRead">Lot 1043 · 0 of 4 checked</strong></div>
+            <span class="gx-pill" id="tabPill">In progress</span>
+            <div class="gx-ctrl"><button type="button" class="gx-btn gx-ghost" id="tabReset">↺ Reset</button></div>
+            <p class="sr-only" aria-live="polite" id="tabLive"></p>
+          </div>
+        </div>
+        <figcaption>Reviewing quality status on the floor</figcaption>
+      </figure>
+
+      <!-- 6. Hero probe -->
+      <figure class="gx reveal gx-wide" id="gxHero">
+        <div class="gx-card">
+          <div class="gx-stage gx-herostage" id="heroStage" tabindex="0" role="application" aria-roledescription="measurement canvas" aria-label="Probe playground. Move to steer the probe. Tap, click, or press Enter to drop a point. Three or more points fit a circle. Arrow keys move the probe, Backspace removes the last point, Escape clears. Illustrative values." aria-describedby="heroLive">
+            <img src="assets/hero.webp" width="1600" height="1000" alt="" loading="lazy">
+            <canvas id="heroCv" aria-hidden="true"></canvas>
+            <span class="gx-badge">Illustrative · sample scale</span>
+            <span class="gx-hint" aria-hidden="true">✨ Move the probe · tap to drop points</span>
+            <button type="button" class="gx-expand" data-src="assets/hero.webp" data-alt="Illustration of a CMM probe with a glowing ruby tip suspended against a starfield and violet nebula above a measurement grid." aria-label="View original artwork: the probe, reimagined"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+          </div>
+          <div class="gx-bar">
+            <div class="gx-read"><small>Points</small><strong class="mono" id="heroN">0</strong></div>
+            <div class="gx-read"><small>Fitted Ø · Sample</small><strong class="mono" id="heroD">–</strong></div>
+            <div class="gx-read gx-grow"><small>Roundness · Sample</small><strong class="mono" id="heroR">Drop 3+ points</strong></div>
+            <div class="gx-ctrl"><button type="button" class="gx-btn" id="heroAuto">✦ Auto circle</button><button type="button" class="gx-btn gx-ghost" id="heroUndo">Undo</button><button type="button" class="gx-btn gx-ghost" id="heroClear">Clear</button></div>
+            <p class="sr-only" aria-live="polite" id="heroLive"></p>
+          </div>
+        </div>
+        <figcaption>The probe, reimagined · least-squares circle fit on your points</figcaption>
+      </figure>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRICING ============ -->
+<section class="pricing" id="pricing" aria-labelledby="price-title">
+  <div class="wrap">
+    <div class="price-card glass reveal">
+      <div class="price-copy">
+        <p class="kicker">Pricing</p>
+        <h2 id="price-title">Pricing coming soon.</h2>
+        <p class="lead">We’re finalizing plans with our first manufacturing partners. Join early access to help shape AccuQual, get first look at pricing, and be first in line when we open the doors.</p>
+        <ul class="checks">
+          <li>First look at plans and pricing</li>
+          <li>Guided walkthrough with the team</li>
+          <li>A say in what we build next</li>
+        </ul>
+      </div>
+      <!-- PRICING TIERS GO HERE LATER: replace or sit beside the early-access form with tier cards once pricing is decided. -->
+      <form class="ea-form" id="eaForm" novalidate>
+        <h3>Request early access</h3>
+        <label for="eaName">Name <span class="opt">(optional)</span></label>
+        <input id="eaName" name="name" type="text" autocomplete="name" placeholder="Your name">
+        <label for="eaEmail">Work email</label>
+        <input id="eaEmail" name="email" type="email" autocomplete="email" required placeholder="you@company.com" aria-describedby="eaErr">
+        <label for="eaCo">Company <span class="opt">(optional)</span></label>
+        <input id="eaCo" name="company" type="text" autocomplete="organization" placeholder="Company name">
+        <div aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden"><label for="eaWebsite">Leave this empty</label><input id="eaWebsite" name="website" type="text" tabindex="-1" autocomplete="off"></div>
+        <p class="err" id="eaErr" role="alert"></p>
+        <button class="btn btn-primary btn-block" type="submit">Request early access →</button>
+        <p class="fine" id="eaStatus" role="status">We only use your details to reply to this request.</p>
+      </form>
+      <div class="ea-thanks" id="eaThanks" hidden tabindex="-1">
+        <div class="check-burst" aria-hidden="true">✓</div>
+        <h3>You’re on the list.</h3>
+        <p>Thanks<span id="eaThanksName"></span>. We’ll be in touch at <strong id="eaThanksEmail"></strong> when early access opens.</p>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="footer">
+  <div class="wrap foot-grid">
+    <div class="foot-brand">
+      <img src="assets/logo-full.webp" alt="AccuQual QMS logo" width="140" height="131">
+    </div>
+    <nav aria-label="Footer">
+      <a href="#scan">CMM demo</a><a href="#modules">Modules</a><a href="#loop">The loop</a><a href="#gallery">Gallery</a><a href="#pricing">Early access</a>
+    </nav>
+  </div>
+  <div class="wrap foot-legal">
+    <p class="disclaimer">AccuQual is designed around ISO 9001 / IATF 16949 practices. AccuQual is not certified, registered, or endorsed by ISO, IATF, or any standards body.</p>
+    <p class="fine">© <span id="yr">2026</span> AccuQual QMS. Imagery is original concept art. Sample data on this page is illustrative.</p>
+  </div>
+</footer>
+
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Enlarged image">
+  <button class="lb-close" type="button" aria-label="Close">×</button>
+  <img alt="">
+</div>
+
+<script src="app.js" defer></script>
+<script src="fx.js" defer></script>
+<script src="gallery.js" defer></script>
+</body>
+</html>
