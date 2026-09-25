@@ -9,6 +9,7 @@ import { sitesRouter } from "../modules/sites/sites.routes.js";
 import { rolesRouter } from "../modules/roles/roles.routes.js";
 import { documentsRouter } from "../modules/documents/documents.routes.js";
 import { documentFilesRouter } from "../modules/documents/documents.versions.routes.js";
+import { onlyOfficePublicRouter, onlyOfficeRouter } from "../modules/onlyoffice/onlyoffice.routes.js";
 import { documentFoldersRouter } from "../modules/document-folders/document-folders.routes.js";
 import { ncrRouter } from "../modules/ncr/ncr.routes.js";
 import { capaRouter } from "../modules/capa/capa.routes.js";
@@ -90,6 +91,9 @@ apiRouter.use("/sites", sitesRouter);
 apiRouter.use("/roles", rolesRouter);
 // Before /documents: a signed file link is its own credential (no bearer header on an <img>/<iframe>), so it must not fall into the authenticated router.
 apiRouter.use("/documents/files", documentFilesRouter);
+// Document Server fetches the file and posts the save callback with a signed token, not a user session, so that router is mounted first.
+apiRouter.use("/onlyoffice", onlyOfficePublicRouter);
+apiRouter.use("/onlyoffice", onlyOfficeRouter);
 apiRouter.use("/documents", documentsRouter);
 apiRouter.use("/document-folders", documentFoldersRouter);
 apiRouter.use("/ncr", ncrRouter);

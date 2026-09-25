@@ -1,9 +1,11 @@
 import { useRef, useState } from "react";
-import { Download, FileText, Trash2, Upload } from "lucide-react";
+import { Download, FileText, Pencil, Trash2, Upload } from "lucide-react";
 import { ACCEPTED_FILES, formatBytes, openAttachment, removeAttachment, uploadAttachment, type DocumentAttachmentRef, type DocumentVersion } from "../../api/documents";
+import { isOfficeFileName } from "../../api/onlyoffice";
 import { useToast } from "../shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { FileDropZone } from "../shared/FileDropZone";
+import { OnlyOfficeEditor } from "./OnlyOfficeEditor";
 
 interface Props {
   documentId: number;
@@ -20,6 +22,7 @@ interface Props {
 export function DocumentFilesPanel({ documentId, versionId, files, editable, onChanged, flush }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [officeFile, setOfficeFile] = useState<DocumentAttachmentRef | null>(null);
   const toast = useToast();
 
   async function add(list: FileList | File[] | null) {
@@ -69,6 +72,19 @@ export function DocumentFilesPanel({ documentId, versionId, files, editable, onC
                   {formatBytes(f.sizeBytes)} · checksum <code title={f.sha256}>{f.sha256.slice(0, 12)}</code>
                 </p>
               </div>
+              {isOfficeFileName(f.fileName) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void Promise.resolve(flush?.())
+                      .then(() => setOfficeFile(f))
+                      .catch((err) => toast.error(extractErrorMessage(err, "Couldn't open that file.")));
+                  }}
+                  className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
+                >
+                  <Pencil size={13} /> {editable ? "Edit" : "View"}
+                </button>
+              )}
               <button onClick={() => void openAttachment(documentId, versionId, f.id).catch((err) => toast.error(extractErrorMessage(err, "Couldn't open that file.")))} className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
                 <Download size={13} /> Open
               </button>
@@ -87,8 +103,20 @@ export function DocumentFilesPanel({ documentId, versionId, files, editable, onC
           <button disabled={busy} onClick={() => input.current?.click()} className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-60">
             <Upload size={14} /> {busy ? "Working…" : "Attach files"}
           </button>
-          <p className="mt-1 text-xs text-muted-foreground">PDF, Word (.docx), Excel (.xlsx) or an image, up to 15 MB each. Each file's checksum is recorded so the released revision can prove what it held.</p>
+          <p className="mt-1 text-xs text-muted-foreground">PDF, Word (.docx), Excel (.xlsx) or an image, up to 15 MB each. Word and Excel files can open in the editor while this server has ONLYOFFICE configured. Each file's checksum is recorded so the released revision can prove what it held.</p>
         </div>
+      )}
+      {officeFile && (
+        <OnlyOfficeEditor
+          documentId={documentId}
+          versionId={versionId}
+          fileId={officeFile.id}
+          fileName={officeFile.fileName}
+          onClose={() => {
+            setOfficeFile(null);
+            onChanged(null);
+          }}
+        />
       )}
     </FileDropZone>
   );
