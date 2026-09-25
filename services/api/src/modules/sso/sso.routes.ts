@@ -12,7 +12,7 @@ ssoPublicRouter.get("/discover", authRateLimiter, ssoDiscover);
 ssoPublicRouter.get("/start", authRateLimiter, ssoStart);
 ssoPublicRouter.get("/callback", authRateLimiter, ssoCallback);
 
-/** A tenant admin's own SSO settings. Mounted at /sso. */
+/** The administrator's SSO settings. Mounted at /sso. */
 export const ssoAdminRouter = Router();
 ssoAdminRouter.use(requireAuth, withDb, requireRole("admin"));
 ssoAdminRouter.get("/", getSsoConfig);

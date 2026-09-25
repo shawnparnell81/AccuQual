@@ -13,7 +13,7 @@ import type { TenantAiConfig } from "../../api/types";
 const PROVIDERS = ["anthropic", "openai"] as const;
 
 function useAiConfig() {
-  return useQuery<TenantAiConfig>({ queryKey: ["tenant/ai-config"], queryFn: async () => (await apiClient.get("/tenant/ai-config")).data });
+  return useQuery<TenantAiConfig>({ queryKey: ["tenant/ai-config"], queryFn: async () => (await apiClient.get("/company/ai-config")).data });
 }
 
 function AiConfigForm() {
@@ -46,7 +46,7 @@ function AiConfigForm() {
   const save = useMutation({
     mutationFn: async () =>
       (
-        await apiClient.patch("/tenant/ai-config", {
+        await apiClient.patch("/company/ai-config", {
           provider,
           apiKey: apiKey || undefined, // blank = leave the stored key untouched
           modelName: modelName || undefined,

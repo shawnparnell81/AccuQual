@@ -86,11 +86,11 @@ workflowRunsRouter.post(
 
     const previous = (run.context ?? {}) as Record<string, unknown>;
     const approvals = [...((previous.approvals as unknown[]) ?? []), { node: pending.nodeId, decision, by: req.user!.id, notes: notes ?? null, at: new Date().toISOString() }];
-    const context = { ...previous, approvals, __db: req.db, __tenantId: req.tenantId, __performedBy: req.user!.id } as Record<string, unknown>;
+    const context = { ...previous, approvals, __db: req.db, __performedBy: req.user!.id } as Record<string, unknown>;
 
     try {
       const execution = await resumeWorkflow(graph, run.runState as WorkflowRunState, context, decision);
-      const { __db: _db, __tenantId: _tenantId, __performedBy: _performedBy, ...persistable } = execution.context;
+      const { __db: _db, __performedBy: _performedBy, ...persistable } = execution.context;
       const waiting = execution.status === "waiting_approval";
       const [updated] = await req
         .db!.update(workflowRuns)

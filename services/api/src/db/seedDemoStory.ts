@@ -38,9 +38,9 @@ import type { Db } from "../lib/requestDb.js";
  * carry the exact same audit trail / form-sync / workflow-event side effects
  * a real user's actions would have produced — and so the CAPA escalation and
  * supplier risk score are the real automation actually firing on real data,
- * not hand-picked numbers. Deliberately does NOT flip any tenant-wide
+ * not hand-picked numbers. Deliberately does NOT flip any company-wide
  * automation toggle (e.g. receivingSettings.autoCreateNcrOnQuarantine) to
- * get there — that would change real automated behavior for this tenant
+ * get there — that would change real automated behavior for this company
  * going forward as a side effect of seeding some sample rows, so the demo
  * NCR is created directly instead of by not relying on that toggle being on.
  *
@@ -56,9 +56,8 @@ const HEALTHY_SUPPLIER_NAME = "Meridian Fasteners LLC";
 async function main() {
   logger.info("Seeding AccuQual demo story data...");
 
-  const [tenant] = await db.select().from(company).where(eq(company.code, "demo"));
-  if (!tenant) throw new Error('Demo tenant not found — run "npm run db:seed" first.');
-  const tenantId = tenant.id;
+  const [demoCompany] = await db.select().from(company);
+  if (!demoCompany) throw new Error('No company yet — run "npm run db:seed" first.');
   const tdb = db as unknown as Db;
 
   const [existing] = await tdb.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.name, DEMO_SUPPLIER_NAME)));
@@ -170,7 +169,7 @@ async function main() {
   await setContainment(tdb, demoNcr!.id, "Lot TC-LOT-75 quarantined in receiving inspection cage; production notified to hold any in-process assemblies using this lot.", performedBy);
   await setRootCause(tdb, demoNcr!.id, "Supplier's stamping die (Die #7) has worn beyond tolerance, producing mounting holes 0.010-0.015in oversized. Confirmed via Titan's own CMM report submitted with their 8D response.", performedBy);
   await setCorrectiveAction(tdb, demoNcr!.id, "Titan Components to replace Die #7 and requalify with a 30-piece first-article inspection before resuming shipment. AccuQual to increase incoming inspection sample size to 100% for the next 3 lots.", performedBy);
-  await closeNcr(tdb, tenantId, demoNcr!.id, performedBy);
+  await closeNcr(tdb, demoNcr!.id, performedBy);
 
   // ---------------------------------------------------------------------
   // CAPA — let the real receiving automation's escalation stand if it

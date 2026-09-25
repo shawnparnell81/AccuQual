@@ -47,7 +47,7 @@ export const updateAiConfigSchema = z.object({
 });
 
 /**
- * PATCH /tenant/profile — Admin Console "Tenant Settings". `name` is the
+ * PATCH /tenant/profile — Admin Console "Company Settings". `name` is the
  * real top-level `tenants.name` column; `logoUrl` merges into the existing
  * `branding` jsonb (same field AdminTenantBrandingPage already edits, not a
  * duplicate); the rest are new `profile` jsonb fields. All optional/patchy,

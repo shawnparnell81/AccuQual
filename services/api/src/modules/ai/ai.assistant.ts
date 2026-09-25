@@ -445,7 +445,7 @@ export const assistantHandler = asyncHandler(async (req: Request, res: Response)
   // both checkUsageLimit and the usage dashboard read back from later.
   await recordAuditTrail(req.db!, {
     entityType: "AiAssistantMessage",
-    entityId: tenantId,
+    entityId: 1,
     action: "create",
     changes: {
       usedModel: result.model,

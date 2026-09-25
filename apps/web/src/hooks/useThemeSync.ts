@@ -22,7 +22,7 @@ export function useThemeSync() {
 
   const brandingQuery = useQuery<TenantBranding>({
     queryKey: ["tenant/branding"],
-    queryFn: async () => (await apiClient.get("/tenant/branding")).data,
+    queryFn: async () => (await apiClient.get("/company/branding")).data,
     enabled,
   });
 

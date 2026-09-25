@@ -10,34 +10,34 @@ import { validateApiKey } from "../ai/llm-gateway.js";
 import { env } from "../../config/env.js";
 
 /**
- * Self-service settings for the CURRENT tenant only, scoped by req.tenantId
- * (set by withDb) — never a foreign tenant id in the URL. Cross-tenant
- * management (any tenant, by a platform_admin) is a different, existing
- * surface: modules/platform. This module is "my own tenant's admin
+ * Self-service settings for the company
+ * (set by withDb) — never a foreign co id in the URL. Cross-co
+ * management (any co, by a platform_admin) is a different, existing
+ * surface: modules/platform. This module is "my own co's admin
  * settings", the same distinction Settings vs. Platform Administration
  * already draws in the frontend.
  */
-async function loadTenant(req: Request) {
-  const [tenant] = await req.db!.select().from(company);
-  if (!tenant) throw AppError.notFound("Tenant");
-  return tenant;
+async function loadCompany(req: Request) {
+  const [co] = await req.db!.select().from(company);
+  if (!co) throw AppError.notFound("Tenant");
+  return co;
 }
 
 export const getBrandingHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenant(req);
-  res.json(tenant.branding ?? {});
+  const co = await loadCompany(req);
+  res.json(co.branding ?? {});
 });
 
 export const updateBrandingHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenant(req);
+  const co = await loadCompany(req);
   const body = req.body as Record<string, string>;
   // "" clears a field back to unset rather than storing an empty string forever.
   const patch = Object.fromEntries(Object.entries(body).map(([k, v]) => [k, v === "" ? undefined : v]));
-  const merged = { ...tenant.branding, ...patch };
+  const merged = { ...co.branding, ...patch };
   const fieldsChanged = Object.keys(body);
 
   const [updated] = await req.db!.update(company).set({ branding: merged }).returning();
-  await recordAuditTrail(req.db!, { entityType: "Tenant", entityId: req.tenantId!, action: "update", changes: { fieldsChanged }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "Company", entityId: 1, action: "update", changes: { fieldsChanged }, performedBy: req.user?.id });
   res.json(updated!.branding);
 });
 
@@ -46,7 +46,7 @@ export const updateBrandingHandler = asyncHandler(async (req: Request, res: Resp
  * at all, same convention as a password field showing dots.
  *
  * `keyStatus` is Phase 4's "prepare for external LLM key" tri-state: "ready"
- * (this tenant, or the platform default, has a key — real calls will be
+ * (this co, or the platform default, has a key — real calls will be
  * made), "missing" (neither does — every AI feature runs in stub mode).
  * There is no third "invalid" value to report here: updateAiConfigHandler
  * below makes a real validation call to the provider before a key is ever
@@ -55,7 +55,7 @@ export const updateBrandingHandler = asyncHandler(async (req: Request, res: Resp
  * lingering stored state to warn about later.
  */
 /**
- * GET/PATCH /tenant/profile — Admin Console "Tenant Settings" (Phase 10):
+ * GET/PATCH /co/profile — Admin Console "Company Settings" (Phase 10):
  * name, logo, timezone, contact info as one consolidated section, per the
  * roadmap's own grouping. Reuses `tenants.name` and `branding.logoUrl`
  * rather than storing the name/logo a second time — this endpoint is a
@@ -63,27 +63,26 @@ export const updateBrandingHandler = asyncHandler(async (req: Request, res: Resp
  * new ones (timezone, contact), not a new source of truth for name/logo.
  */
 export const getProfileHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenant(req);
+  const co = await loadCompany(req);
   res.json({
-    name: tenant.name,
-    code: tenant.code,
-    logoUrl: tenant.branding?.logoUrl ?? null,
-    timezone: tenant.profile?.timezone ?? null,
-    contactName: tenant.profile?.contactName ?? null,
-    contactEmail: tenant.profile?.contactEmail ?? null,
-    contactPhone: tenant.profile?.contactPhone ?? null,
+    name: co.name,
+    logoUrl: co.branding?.logoUrl ?? null,
+    timezone: co.profile?.timezone ?? null,
+    contactName: co.profile?.contactName ?? null,
+    contactEmail: co.profile?.contactEmail ?? null,
+    contactPhone: co.profile?.contactPhone ?? null,
   });
 });
 
 export const updateProfileHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenant(req);
+  const co = await loadCompany(req);
   const { name, logoUrl, ...profileFields } = req.body as { name?: string; logoUrl?: string } & Record<string, string | undefined>;
 
-  const patch: { name?: string; branding?: typeof tenant.branding; profile?: typeof tenant.profile } = {};
+  const patch: { name?: string; branding?: typeof co.branding; profile?: typeof co.profile } = {};
   if (name !== undefined) patch.name = name;
-  if (logoUrl !== undefined) patch.branding = { ...tenant.branding, logoUrl: logoUrl === "" ? undefined : logoUrl };
+  if (logoUrl !== undefined) patch.branding = { ...co.branding, logoUrl: logoUrl === "" ? undefined : logoUrl };
 
-  const mergedProfile = { ...tenant.profile };
+  const mergedProfile = { ...co.profile };
   for (const [key, value] of Object.entries(profileFields)) {
     if (value !== undefined) (mergedProfile as Record<string, string | undefined>)[key] = value === "" ? undefined : value;
   }
@@ -92,7 +91,7 @@ export const updateProfileHandler = asyncHandler(async (req: Request, res: Respo
   const [updated] = await req.db!.update(company).set(patch).returning();
   await recordAuditTrail(req.db!, {
     entityType: "Tenant",
-    entityId: req.tenantId!,
+    entityId: 1,
     action: "update",
     changes: { action: "update_profile", fieldsChanged: Object.keys(req.body) },
     performedBy: req.user?.id,
@@ -100,7 +99,6 @@ export const updateProfileHandler = asyncHandler(async (req: Request, res: Respo
 
   res.json({
     name: updated!.name,
-    code: updated!.code,
     logoUrl: updated!.branding?.logoUrl ?? null,
     timezone: updated!.profile?.timezone ?? null,
     contactName: updated!.profile?.contactName ?? null,
@@ -110,8 +108,8 @@ export const updateProfileHandler = asyncHandler(async (req: Request, res: Respo
 });
 
 export const getAiConfigHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenant(req);
-  const config = tenant.aiConfig ?? {};
+  const co = await loadCompany(req);
+  const config = co.aiConfig ?? {};
   const keyStatus: "ready" | "missing" = config.apiKeyEncrypted || env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY ? "ready" : "missing";
   res.json({
     provider: config.provider ?? null,
@@ -123,13 +121,13 @@ export const getAiConfigHandler = asyncHandler(async (req: Request, res: Respons
     hasApiKey: !!config.apiKeyEncrypted,
     maskedApiKey: config.apiKeyEncrypted ? maskSecret(decryptSecret(config.apiKeyEncrypted)) : null,
     keyStatus,
-    monthlyLimit: tenant.aiMonthlyLimit,
-    limitEnforced: tenant.aiLimitEnforced,
+    monthlyLimit: co.aiMonthlyLimit,
+    limitEnforced: co.aiLimitEnforced,
   });
 });
 
 export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenant(req);
+  const co = await loadCompany(req);
   const { provider, apiKey, modelName, temperature, maxTokens, assistantName, safetyMode, monthlyLimit, limitEnforced } = req.body as {
     provider?: string;
     apiKey?: string;
@@ -142,7 +140,7 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
     limitEnforced?: boolean;
   };
 
-  const merged = { ...tenant.aiConfig };
+  const merged = { ...co.aiConfig };
   if (provider !== undefined) merged.provider = provider as "anthropic" | "openai";
   if (modelName !== undefined) merged.modelName = modelName;
   if (temperature !== undefined) merged.temperature = temperature;
@@ -171,7 +169,7 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
   // Never log apiKey itself, encrypted or not — only what changed and to what non-secret values.
   await recordAuditTrail(req.db!, {
     entityType: "Tenant",
-    entityId: req.tenantId!,
+    entityId: 1,
     action: "update",
     changes: {
       action: "update_ai_config",
@@ -202,7 +200,7 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
 
 /**
  * The BYOK usage dashboard's one data source — admin only (see
- * tenant.routes.ts). totalTokens/totalCost are the all-time cumulative
+ * co.routes.ts). totalTokens/totalCost are the all-time cumulative
  * columns (fast, always available); currentMonthTokens/dailyBreakdown/
  * moduleBreakdown are computed live from real audit_trail rows — every
  * real /ai/assistant call writes one with entityType "AiAssistantMessage"
@@ -212,14 +210,14 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
  * recordAiSuggestion — both carry the same `module`/`tokens` shape in
  * `changes`, so both are counted here. This is also exactly how limit
  * enforcement itself decides "this month's usage" (see ai.usage.ts's
- * checkUsageLimit, which sums every entity type's tokens tenant-wide) —
+ * checkUsageLimit, which sums every entity type's tokens co-wide) —
  * the dashboard and the enforcement it explains read the same real
  * numbers. Previously scoped to "AiAssistantMessage" only, which silently
  * left every other pipeline's real spend invisible here even though it
  * already counted against the limit — see the QA sweep review.
  */
 export const getAiUsageHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenant(req);
+  const co = await loadCompany(req);
 
   const startOfMonth = new Date();
   startOfMonth.setUTCDate(1);
@@ -261,14 +259,14 @@ export const getAiUsageHandler = asyncHandler(async (req: Request, res: Response
     .map(([module, v]) => ({ module, ...v }))
     .sort((a, b) => b.tokens - a.tokens);
 
-  const monthlyLimit = tenant.aiMonthlyLimit;
-  const remainingTokens = tenant.aiLimitEnforced && monthlyLimit !== null ? Math.max(monthlyLimit - currentMonthTokens, 0) : null;
+  const monthlyLimit = co.aiMonthlyLimit;
+  const remainingTokens = co.aiLimitEnforced && monthlyLimit !== null ? Math.max(monthlyLimit - currentMonthTokens, 0) : null;
 
   res.json({
-    totalTokens: tenant.aiUsageTokens,
-    totalCost: Number(tenant.aiUsageCost),
+    totalTokens: co.aiUsageTokens,
+    totalCost: Number(co.aiUsageCost),
     monthlyLimit,
-    limitEnforced: tenant.aiLimitEnforced,
+    limitEnforced: co.aiLimitEnforced,
     currentMonthTokens,
     remainingTokens,
     dailyBreakdown,
@@ -284,40 +282,40 @@ export const getAiUsageHandler = asyncHandler(async (req: Request, res: Response
  * admin-only via getAiConfigHandler above.
  */
 export const getAssistantNameHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenant(req);
-  res.json({ assistantName: tenant.aiConfig?.assistantName ?? null });
+  const co = await loadCompany(req);
+  res.json({ assistantName: co.aiConfig?.assistantName ?? null });
 });
 
 /** Who in this organization must use multi-factor authentication. Readable by any signed-in user (the UI explains the policy); only an admin changes it. */
 export const getSecurityHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenant(req);
-  res.json({ mfaPolicy: tenant.mfaPolicy });
+  const co = await loadCompany(req);
+  res.json({ mfaPolicy: co.mfaPolicy });
 });
 
 export const updateSecurityHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenant(req);
+  const co = await loadCompany(req);
   const { mfaPolicy } = req.body as { mfaPolicy: "optional" | "admins" | "all" };
   await req.db!.update(company).set({ mfaPolicy });
   await recordAuditTrail(req.db!, {
     entityType: "Tenant",
-    entityId: req.tenantId!,
+    entityId: 1,
     action: "update",
-    changes: { setting: "mfaPolicy", from: tenant.mfaPolicy, to: mfaPolicy },
+    changes: { setting: "mfaPolicy", from: co.mfaPolicy, to: mfaPolicy },
     performedBy: req.user?.id,
   });
   res.json({ mfaPolicy });
 });
 
-/** First-run onboarding checklist — open to any signed-in user (the dashboard shows it), same as branding/profile above. Reads back a sane default for a tenant created before this shipped and never backfilled, rather than null. */
+/** First-run onboarding checklist — open to any signed-in user (the dashboard shows it), same as branding/profile above. Reads back a sane default for a co created before this shipped and never backfilled, rather than null. */
 export const getOnboardingHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenant(req);
-  res.json(tenant.onboardingProgress ?? { dismissed: false, completedItems: [] });
+  const co = await loadCompany(req);
+  res.json(co.onboardingProgress ?? { dismissed: false, completedItems: [] });
 });
 
-/** Marks one item complete, and/or dismisses the whole checklist — admin-only, same as every other tenant-settings PATCH here. Merge-patch: a body with only `completedItems` leaves `dismissed` as it was, and vice versa. */
+/** Marks one item complete, and/or dismisses the whole checklist — admin-only, same as every other co-settings PATCH here. Merge-patch: a body with only `completedItems` leaves `dismissed` as it was, and vice versa. */
 export const updateOnboardingHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenant(req);
-  const existing = tenant.onboardingProgress ?? { dismissed: false, completedItems: [] };
+  const co = await loadCompany(req);
+  const existing = co.onboardingProgress ?? { dismissed: false, completedItems: [] };
   const body = req.body as { completedItems?: string[]; dismissed?: boolean };
   const merged = { dismissed: body.dismissed ?? existing.dismissed, completedItems: body.completedItems ?? existing.completedItems };
   await req.db!.update(company).set({ onboardingProgress: merged });

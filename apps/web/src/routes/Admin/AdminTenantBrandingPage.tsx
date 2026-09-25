@@ -8,7 +8,7 @@ import { TextField, TextAreaField } from "../../components/forms/Field";
 import type { TenantBranding } from "../../api/types";
 
 function useBranding() {
-  return useQuery<TenantBranding>({ queryKey: ["tenant/branding"], queryFn: async () => (await apiClient.get("/tenant/branding")).data });
+  return useQuery<TenantBranding>({ queryKey: ["tenant/branding"], queryFn: async () => (await apiClient.get("/company/branding")).data });
 }
 
 const EMPTY_FORM: TenantBranding = {
@@ -62,7 +62,7 @@ function BrandingForm() {
   }, [branding]);
 
   const save = useMutation({
-    mutationFn: async (body: TenantBranding) => (await apiClient.patch("/tenant/branding", body)).data,
+    mutationFn: async (body: TenantBranding) => (await apiClient.patch("/company/branding", body)).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tenant/branding"] });
       toast.success("Branding saved.");

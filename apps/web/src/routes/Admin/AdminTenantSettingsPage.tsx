@@ -9,7 +9,7 @@ import { TextField, SelectField } from "../../components/forms/Field";
 import type { TenantProfile } from "../../api/types";
 
 function useTenantProfile() {
-  return useQuery<TenantProfile>({ queryKey: ["tenant/profile"], queryFn: async () => (await apiClient.get("/tenant/profile")).data });
+  return useQuery<TenantProfile>({ queryKey: ["tenant/profile"], queryFn: async () => (await apiClient.get("/company/profile")).data });
 }
 
 /**
@@ -45,9 +45,9 @@ export function AdminTenantSettingsPage() {
     }
   }, [profile]);
 
-  const { data: security } = useQuery<{ mfaPolicy: "optional" | "admins" | "all" }>({ queryKey: ["tenant/security"], queryFn: async () => (await apiClient.get("/tenant/security")).data });
+  const { data: security } = useQuery<{ mfaPolicy: "optional" | "admins" | "all" }>({ queryKey: ["tenant/security"], queryFn: async () => (await apiClient.get("/company/security")).data });
   const saveSecurity = useMutation({
-    mutationFn: async (mfaPolicy: string) => (await apiClient.patch("/tenant/security", { mfaPolicy })).data,
+    mutationFn: async (mfaPolicy: string) => (await apiClient.patch("/company/security", { mfaPolicy })).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tenant/security"] });
       toast.success("Sign-in security policy saved.");
@@ -56,7 +56,7 @@ export function AdminTenantSettingsPage() {
   });
 
   const save = useMutation({
-    mutationFn: async () => (await apiClient.patch("/tenant/profile", { name, logoUrl, timezone, contactName, contactEmail, contactPhone })).data,
+    mutationFn: async () => (await apiClient.patch("/company/profile", { name, logoUrl, timezone, contactName, contactEmail, contactPhone })).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tenant/profile"] });
       toast.success("Tenant settings saved.");

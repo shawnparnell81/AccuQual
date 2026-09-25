@@ -39,9 +39,9 @@ const DEMO_CUSTOMER_NAME = "Northfield Industries";
 async function main() {
   logger.info("Resetting demo story data...");
 
-  const [tenant] = await db.select().from(company).where(eq(company.code, "demo"));
-  if (!tenant) {
-    logger.info("No demo tenant found — nothing to reset.");
+  const [demoCompany] = await db.select().from(company);
+  if (!demoCompany) {
+    logger.info("No company found — nothing to reset.");
     await pool.end();
     return;
   }

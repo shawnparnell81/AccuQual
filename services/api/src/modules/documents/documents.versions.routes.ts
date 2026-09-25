@@ -19,7 +19,7 @@ import * as engine from "../versioning/versioning.service.js";
 import type { Actor } from "../versioning/versioning.service.js";
 import { registerVersionRoutes, saveDraftSchema } from "../versioning/versioning.routes.js";
 import { decisionSchema, requestReviewSchema } from "./documents.validation.js";
-import { documentsLinkedTo, documentAdapter, addAttachment, DOCUMENT_ENTITY_TYPE, FILE_LINK_SECONDS, isInsideTenantStorage, MAX_FILE_BYTES, removeAttachment, searchTargets, signFileToken, verifyFileToken } from "./documentVersioning.js";
+import { documentsLinkedTo, documentAdapter, addAttachment, DOCUMENT_ENTITY_TYPE, FILE_LINK_SECONDS, isInsideStorage, MAX_FILE_BYTES, removeAttachment, searchTargets, signFileToken, verifyFileToken } from "./documentVersioning.js";
 import { LINK_TYPES, LINK_TYPE_LABEL, normalizeDocumentPayload, type LinkType } from "./documentPayload.js";
 
 const idParam = (req: Request, name = "id") => {
@@ -105,7 +105,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     edit,
     validate(saveDraftSchema),
     asyncHandler(async (req: Request, res: Response) => {
-      res.json(await engine.saveDraft(dbOf(req), documentAdapter, idParam(req, "versionId"), actorOf(req), req.body as z.infer<typeof saveDraftSchema>));
+      res.json(await engine.saveDraft(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId"), actorOf(req), req.body as z.infer<typeof saveDraftSchema>));
     }),
   );
 
@@ -115,7 +115,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     validate(requestReviewSchema),
     asyncHandler(async (req: Request, res: Response) => {
       const body = req.body as z.infer<typeof requestReviewSchema>;
-      res.json(await engine.submitForReview(dbOf(req), documentAdapter, idParam(req, "versionId"), actorOf(req), body.notes, { reviewerId: body.reviewerId }));
+      res.json(await engine.submitForReview(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId"), actorOf(req), body.notes, { reviewerId: body.reviewerId }));
     }),
   );
 
@@ -125,7 +125,7 @@ export function registerDocumentVersionRoutes(router: Router) {
       review,
       validate(decisionSchema),
       asyncHandler(async (req: Request, res: Response) => {
-        res.json(await engine.reviewVersion(dbOf(req), documentAdapter, idParam(req, "versionId"), actorOf(req), decision === "approve" ? "approved" : "rejected", (req.body as z.infer<typeof decisionSchema>).notes));
+        res.json(await engine.reviewVersion(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId"), actorOf(req), decision === "approve" ? "approved" : "rejected", (req.body as z.infer<typeof decisionSchema>).notes));
       }),
     );
   }
@@ -134,7 +134,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     "/:id/version/:versionId/publish",
     publish,
     asyncHandler(async (req: Request, res: Response) => {
-      res.json(await engine.publishVersion(dbOf(req), documentAdapter, idParam(req, "versionId"), actorOf(req)));
+      res.json(await engine.publishVersion(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId"), actorOf(req)));
     }),
   );
 
@@ -144,7 +144,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     edit,
     asyncHandler(async (req: Request, res: Response) => {
       const target = await engine.getVersion(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId"));
-      res.status(201).json(await engine.rollbackTo(dbOf(req), documentAdapter, target.versionNumber, actorOf(req)));
+      res.status(201).json(await engine.rollbackTo(dbOf(req), documentAdapter, idParam(req), target.versionNumber, actorOf(req)));
     }),
   );
 
@@ -188,7 +188,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     view,
     asyncHandler(async (req: Request, res: Response) => {
       const id = idParam(req);
-      await engine.ensureBootstrapped(dbOf(req), documentAdapter);
+      await engine.ensureBootstrapped(dbOf(req), documentAdapter, idParam(req));
       const rows = await dbOf(req)
         .select({ n: controlledVersions.versionNumber, status: controlledVersions.status, payload: controlledVersions.payload })
         .from(controlledVersions)
@@ -225,7 +225,7 @@ documentFilesRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     const t = verifyFileToken(String(req.query.token ?? ""));
     const [file] = await ownerDb.select().from(documentFiles).where(and(eq(documentFiles.id, t.fileId)));
-    if (!file || !isInsideTenantStorage(t.tenantId, file.filePath) || !existsSync(file.filePath)) throw AppError.notFound("File");
+    if (!file || !isInsideStorage(file.filePath) || !existsSync(file.filePath)) throw AppError.notFound("File");
 
     await recordAuditTrailStandalone(pool, { entityType: DOCUMENT_ENTITY_TYPE, entityId: file.documentId, action: "update", changes: { event: "file_downloaded", fileId: file.id, fileName: file.fileName }, performedBy: t.userId });
 

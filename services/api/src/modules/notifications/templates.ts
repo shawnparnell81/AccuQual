@@ -13,7 +13,7 @@
  * engine) makes the same call: build what's actually needed, not what a
  * library would default to.
  */
-export type EmailTemplateName = "tenant_onboarding" | "password_reset" | "account_locked";
+export type EmailTemplateName = "company_onboarding" | "password_reset" | "account_locked";
 
 interface EmailTemplate {
   subject: string;
@@ -21,11 +21,11 @@ interface EmailTemplate {
 }
 
 const TEMPLATES: Record<EmailTemplateName, EmailTemplate> = {
-  tenant_onboarding: {
-    subject: "Welcome to AccuQual — {{tenantName}} is ready",
+  company_onboarding: {
+    subject: "Welcome to AccuQual — {{companyName}} is ready",
     body:
       "Hi {{adminName}},\n\n" +
-      "Your AccuQual workspace for {{tenantName}} has been created.\n\n" +
+      "Your AccuQual workspace for {{companyName}} has been created.\n\n" +
       "Sign in at {{loginUrl}} with:\n" +
       "  Email: {{adminEmail}}\n" +
       "  Temporary password: {{temporaryPassword}}\n\n" +

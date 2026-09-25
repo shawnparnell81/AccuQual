@@ -162,7 +162,7 @@ export const listReceivingDocumentsHandler = asyncHandler(async (req: Request, r
     .where(
       purchaseOrderId
         ? and(eq(erpReceivingDocuments.purchaseOrderId, purchaseOrderId))
-        : eq(erpReceivingDocuments.tenantId)
+        : undefined
     )
     .orderBy(desc(erpReceivingDocuments.createdAt));
   if (rows.length === 0) return res.json([]);

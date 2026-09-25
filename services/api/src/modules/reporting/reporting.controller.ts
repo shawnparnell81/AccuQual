@@ -52,18 +52,17 @@ export const workflowCycleTimeHandler = asyncHandler(async (req: Request, res: R
 // AI-assisted report summaries — always a suggestion over already-real,
 // already-aggregated data; never written back into any stored report.
 // ---------------------------------------------------------------------------
-const SUMMARY_INPUT_LOADERS: Record<string, (db: Db, tenantId: number) => Promise<unknown>> = {
-  quality_trends: (db, tenantId) => reportingService.getNcrMetrics(db, tenantId),
-  supplier_risk_changes: (db, tenantId) => reportingService.getSupplierPerformanceReport(db, tenantId),
-  warranty_patterns: (db, tenantId) => reportingService.getWarrantyTrends(db, tenantId),
-  production_deviations: (db, tenantId) => reportingService.getInventoryQualityTrends(db, tenantId),
+const SUMMARY_INPUT_LOADERS: Record<string, (db: Db) => Promise<unknown>> = {
+  quality_trends: (db) => reportingService.getNcrMetrics(db),
+  supplier_risk_changes: (db) => reportingService.getSupplierPerformanceReport(db),
+  warranty_patterns: (db) => reportingService.getWarrantyTrends(db),
+  production_deviations: (db) => reportingService.getInventoryQualityTrends(db),
 };
 
 export const reportSummaryHandler = asyncHandler(async (req: Request, res: Response) => {
   const { kind } = req.body as { kind: string };
   const db = req.db! as Db;
-  const tenantId = req.tenantId!;
-  const input = await SUMMARY_INPUT_LOADERS[kind]!(db, tenantId);
+  const input = await SUMMARY_INPUT_LOADERS[kind]!(db, );
 
   const { suggestion, output } = await runPipelineAndRecord(db, req.user?.id, "reporting", `report_summary_${kind}`, { kind, input }, "AI-generated report summary", (opts) =>
     pipelines.runReportSummaryPipeline(kind, input, opts)
@@ -131,33 +130,33 @@ export const sendReportScheduleNowHandler = asyncHandler(async (req: Request, re
 // the underlying data (see reporting.routes.ts), and every format carries
 // the same audit-metadata line ("Ensure exports include audit metadata").
 // ---------------------------------------------------------------------------
-const EXPORT_BUILDERS: Record<string, (db: Db, tenantId: number, range: DateRange) => Promise<Omit<ExportableReport, "generatedAt" | "generatedBy" | "tenantName">>> = {
-  "ncr-metrics": async (db, tenantId, range) => {
-    const m = await reportingService.getNcrMetrics(db, tenantId, range);
+const EXPORT_BUILDERS: Record<string, (db: Db, range: DateRange) => Promise<Omit<ExportableReport, "generatedAt" | "generatedBy" | "companyName">>> = {
+  "ncr-metrics": async (db, range) => {
+    const m = await reportingService.getNcrMetrics(db, range);
     return { title: "NCR Summary", columns: ["Status", "Count"], rows: m.byStatus.map((s) => [s.status, s.count]) };
   },
-  "capa-metrics": async (db, tenantId, range) => {
-    const m = await reportingService.getCapaMetrics(db, tenantId, range);
+  "capa-metrics": async (db, range) => {
+    const m = await reportingService.getCapaMetrics(db, range);
     return { title: "CAPA Summary", columns: ["Status", "Count"], rows: m.byStatus.map((s) => [s.status, s.count]) };
   },
-  "supplier-performance": async (db, tenantId) => {
-    const r = await reportingService.getSupplierPerformanceReport(db, tenantId);
+  "supplier-performance": async (db) => {
+    const r = await reportingService.getSupplierPerformanceReport(db);
     return {
       title: "Supplier Scorecard",
       columns: ["Supplier", "Risk", "Avg Delivery (days)", "Accuracy (%)"],
       rows: r.suppliers.map((s) => [s.name, s.riskScore, s.onTimeAvgDays ?? "n/a", s.accuracyAvgPercent ?? "n/a"]),
     };
   },
-  "warranty-trends": async (db, tenantId, range) => {
-    const m = await reportingService.getWarrantyTrends(db, tenantId, range);
+  "warranty-trends": async (db, range) => {
+    const m = await reportingService.getWarrantyTrends(db, range);
     return { title: "Warranty / RMA Summary", columns: ["Status", "Count"], rows: m.byStatus.map((s) => [s.status, s.count]) };
   },
-  "receiving-trends": async (db, tenantId, range) => {
-    const m = await reportingService.getReceivingTrends(db, tenantId, range);
+  "receiving-trends": async (db, range) => {
+    const m = await reportingService.getReceivingTrends(db, range);
     return { title: "Receiving Inspection Summary", columns: ["Final Status", "Count"], rows: m.byFinalStatus.map((s) => [s.status, s.count]) };
   },
-  "inventory-quality-trends": async (db, tenantId, range) => {
-    const m = await reportingService.getInventoryQualityTrends(db, tenantId, range);
+  "inventory-quality-trends": async (db, range) => {
+    const m = await reportingService.getInventoryQualityTrends(db, range);
     const scrapByMonth = new Map(m.scrapByMonth.map((s) => [s.month, s.quantity]));
     const consumptionByMonth = new Map(m.consumptionByMonth.map((s) => [s.month, s.quantity]));
     const months = [...new Set([...scrapByMonth.keys(), ...consumptionByMonth.keys()])].sort();
@@ -176,21 +175,20 @@ export const exportReportHandler = asyncHandler(async (req: Request, res: Respon
   if (!builder) throw AppError.badRequest(`Unknown report "${reportKey}"`);
 
   const db = req.db! as Db;
-  const tenantId = req.tenantId!;
   const [tenant] = await db.select().from(company);
   const [performer] = req.user?.id ? await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, req.user.id)) : [undefined];
 
-  const partial = await builder(db, tenantId, parseRange(req));
+  const partial = await builder(db, parseRange(req));
   const report: ExportableReport = {
     ...partial,
     generatedAt: new Date(),
     generatedBy: performer?.name || performer?.email || `User #${req.user?.id}`,
-    tenantName: tenant?.name ?? `Tenant #${tenantId}`,
+    companyName: tenant?.name ?? "AccuQual",
   };
 
   await recordAuditTrail(db, {
     entityType: "ReportExport",
-    entityId: tenantId,
+    entityId: 1,
     action: "create",
     changes: { reportKey, format, rowCount: report.rows.length },
     performedBy: req.user?.id,

@@ -48,8 +48,8 @@ async function cached<T>(key: string, compute: () => Promise<T>): Promise<T> {
 }
 
 /** Every report-generating action (a dashboard load, a scheduled send, a manual "Send Now") should call this after mutating state that would make a cached report stale — there are none today (reports are read-only rollups of records other modules own), but this is the one place to clear from if that ever changes. */
-export function clearReportingCache(tenantId: number): void {
-  for (const key of cache.keys()) if (key.startsWith(`t${tenantId}:`)) cache.delete(key);
+export function clearReportingCache(): void {
+  cache.clear();
 }
 
 function dateFilter(column: PgColumn, range?: DateRange): SQL[] {
@@ -71,8 +71,8 @@ export interface NcrMetrics {
   avgClosureDays: number | null;
 }
 
-export async function getNcrMetrics(db: Db, tenantId: number, range?: DateRange): Promise<NcrMetrics> {
-  return cached(`t${tenantId}:ncr:${JSON.stringify(range)}`, async () => {
+export async function getNcrMetrics(db: Db, range?: DateRange): Promise<NcrMetrics> {
+  return cached(`ncr:${JSON.stringify(range)}`, async () => {
     const where = and(eq(ncr.isDeleted, false), ...dateFilter(ncr.createdAt, range));
 
     const [openRow] = await db.select({ count: sql<number>`count(*)::int` }).from(ncr).where(and(where, sql`${ncr.status} != 'closed'`));
@@ -125,8 +125,8 @@ export interface CapaMetrics {
   avgClosureDays: number | null;
 }
 
-export async function getCapaMetrics(db: Db, tenantId: number, range?: DateRange): Promise<CapaMetrics> {
-  return cached(`t${tenantId}:capa:${JSON.stringify(range)}`, async () => {
+export async function getCapaMetrics(db: Db, range?: DateRange): Promise<CapaMetrics> {
+  return cached(`capa:${JSON.stringify(range)}`, async () => {
     const where = and(...dateFilter(capa.createdAt, range));
 
     const [totalRow] = await db.select({ count: sql<number>`count(*)::int` }).from(capa).where(where);
@@ -170,8 +170,8 @@ export interface SupplierPerformanceReport {
   riskDistribution: { riskScore: string; count: number }[];
 }
 
-export async function getSupplierPerformanceReport(db: Db, tenantId: number): Promise<SupplierPerformanceReport> {
-  return cached(`t${tenantId}:supplier-performance`, async () => {
+export async function getSupplierPerformanceReport(db: Db): Promise<SupplierPerformanceReport> {
+  return cached(`supplier-performance`, async () => {
     const rows = await db.select({ id: suppliers.id, name: suppliers.name }).from(suppliers);
     const results = await Promise.all(
       rows.map(async (s) => {
@@ -195,8 +195,8 @@ export interface WarrantyTrends {
   totalActualCost: number;
 }
 
-export async function getWarrantyTrends(db: Db, tenantId: number, range?: DateRange): Promise<WarrantyTrends> {
-  return cached(`t${tenantId}:warranty:${JSON.stringify(range)}`, async () => {
+export async function getWarrantyTrends(db: Db, range?: DateRange): Promise<WarrantyTrends> {
+  return cached(`warranty:${JSON.stringify(range)}`, async () => {
     const where = and(...dateFilter(warrantyClaims.createdAt, range));
 
     const [totalRow] = await db.select({ count: sql<number>`count(*)::int` }).from(warrantyClaims).where(where);
@@ -238,8 +238,8 @@ export interface ReceivingTrends {
   bySupplier: { supplierId: number; supplierName: string; count: number }[];
 }
 
-export async function getReceivingTrends(db: Db, tenantId: number, range?: DateRange): Promise<ReceivingTrends> {
-  return cached(`t${tenantId}:receiving:${JSON.stringify(range)}`, async () => {
+export async function getReceivingTrends(db: Db, range?: DateRange): Promise<ReceivingTrends> {
+  return cached(`receiving:${JSON.stringify(range)}`, async () => {
     const where = and(
       eq(qualityInspectionReports.inspectionType, "incoming"), ...dateFilter(qualityInspectionReports.createdAt, range)
     );
@@ -314,8 +314,8 @@ async function movementQuantityByMonth(db: Db, movementType: string, range?: Dat
     .orderBy(sql`date_trunc('month', ${inventoryMovements.performedAt})`);
 }
 
-export async function getInventoryQualityTrends(db: Db, tenantId: number, range?: DateRange): Promise<InventoryQualityTrends> {
-  return cached(`t${tenantId}:inventory-quality:${JSON.stringify(range)}`, async () => {
+export async function getInventoryQualityTrends(db: Db, range?: DateRange): Promise<InventoryQualityTrends> {
+  return cached(`inventory-quality:${JSON.stringify(range)}`, async () => {
     const [belowMinRow] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(inventoryAlerts)
@@ -339,7 +339,7 @@ export interface WorkflowCycleTimeMetrics {
   capaAvgDays: number | null;
 }
 
-export async function getWorkflowCycleTimeMetrics(db: Db, tenantId: number, range?: DateRange): Promise<WorkflowCycleTimeMetrics> {
-  const [ncrMetrics, capaMetrics] = await Promise.all([getNcrMetrics(db, tenantId, range), getCapaMetrics(db, tenantId, range)]);
+export async function getWorkflowCycleTimeMetrics(db: Db, range?: DateRange): Promise<WorkflowCycleTimeMetrics> {
+  const [ncrMetrics, capaMetrics] = await Promise.all([getNcrMetrics(db, range), getCapaMetrics(db, range)]);
   return { ncrAvgDays: ncrMetrics.avgClosureDays, capaAvgDays: capaMetrics.avgClosureDays };
 }

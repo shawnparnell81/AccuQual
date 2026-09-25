@@ -50,7 +50,6 @@ export interface SyncResult {
  */
 export async function triggerErpSync(
   db: Db,
-  tenantId: number,
   performedBy: number | undefined,
   event?: { on: ErpTriggerRule["on"]; statusValue?: string }
 ): Promise<SyncResult> {
@@ -78,7 +77,7 @@ export async function triggerErpSync(
     // already implicit in how buildErpPayload handles a single bad record.
     for (const module of modules) {
       try {
-        const preset = await getActivePresetCached(db, tenantId, module);
+        const preset = await getActivePresetCached(db, module);
         if (!preset) continue;
         if (event && !evaluateTrigger(preset.mappingConfig.triggers, event)) {
           logger.info("ERP preset skipped — no matching trigger rule for this event", { module, presetId: preset.id, event: event.on });
@@ -165,7 +164,7 @@ export async function triggerErpSync(
 
   await recordAuditTrail(db, {
     entityType: "ErpSyncSettings",
-    entityId: tenantId,
+    entityId: 1,
     action: "status_change",
     changes: { subAction: "sync_triggered", status: entry.status, modules, message: entry.message },
     performedBy,

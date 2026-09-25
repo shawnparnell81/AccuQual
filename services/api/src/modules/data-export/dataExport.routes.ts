@@ -16,10 +16,10 @@ import { validate } from "../../middleware/validate.js";
 import { authRateLimiter } from "../../middleware/rateLimit.js";
 import { confirmIdentity } from "../auth/auth.service.js";
 import { recordAuditTrailStandalone } from "../audit-trail/audit-trail.service.js";
-import { describeExport, newArchive, writeTenantExport, type ExportFormat } from "./dataExport.service.js";
+import { describeExport, newArchive, writeCompanyExport, type ExportFormat } from "./dataExport.service.js";
 
 /**
- * Tenant data export. Two steps on purpose:
+ * Company data export. Two steps on purpose:
  *
  *   1. POST /data-export/requests   — an admin re-confirms their password (and two-step code if they use one) and
  *      gets back a short-lived, single-use download link.
@@ -34,6 +34,8 @@ export const dataExportRouter = Router();
 
 const TOKEN_TTL_SECONDS = 120;
 const tokenSecret = `${env.JWT_ACCESS_SECRET}:data-export`;
+/** The company is the only "owner" of an export, so limits are counted against one fixed key. */
+const COMPANY_KEY = 1;
 const MAX_REQUESTS_PER_HOUR = 3;
 
 /** Single-use enforcement and simple throttling. In-process, which is right for the one-API-instance deployment; a second instance would need these moved to Redis. */
@@ -62,7 +64,6 @@ const requestSchema = z.object({
 
 interface TokenPayload {
   sub: string;
-  tid: number;
   fmt: ExportFormat;
   files: boolean;
   jti: string;
@@ -74,7 +75,6 @@ dataExportRouter.get(
   requireAuth,
   requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    if (!req.user!.tenantId) throw AppError.forbidden("Data export is per organization");
     res.json(await describeExport());
   }),
 );
@@ -86,20 +86,18 @@ dataExportRouter.post(
   requireRole("admin"),
   validate(requestSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const tenantId = req.user!.tenantId;
-    if (!tenantId) throw AppError.forbidden("Data export is per organization");
     const body = req.body as z.infer<typeof requestSchema>;
 
     await confirmIdentity(req.user!.id, body.password, body.code);
 
     const now = Date.now();
-    const recent = (requestLog.get(tenantId) ?? []).filter((t) => now - t < 3_600_000);
+    const recent = (requestLog.get(COMPANY_KEY) ?? []).filter((t) => now - t < 3_600_000);
     if (recent.length >= MAX_REQUESTS_PER_HOUR) throw new AppError("Too many exports requested. Try again in a while.", 429);
-    if (running.has(tenantId)) throw new AppError("An export for this organization is already running.", 409);
-    requestLog.set(tenantId, [...recent, now]);
+    if (running.has(COMPANY_KEY)) throw new AppError("An export is already running.", 409);
+    requestLog.set(COMPANY_KEY, [...recent, now]);
 
-    const token = jwt.sign({ sub: String(req.user!.id), tid: tenantId, fmt: body.format, files: body.includeFiles, jti: randomUUID() } satisfies TokenPayload, tokenSecret, { expiresIn: TOKEN_TTL_SECONDS });
-    await recordAuditTrailStandalone(pool, { entityType: "Tenant", entityId: tenantId, action: "status_change", changes: { event: "data_export_requested", format: body.format, includeFiles: body.includeFiles }, performedBy: req.user!.id });
+    const token = jwt.sign({ sub: String(req.user!.id), fmt: body.format, files: body.includeFiles, jti: randomUUID() } satisfies TokenPayload, tokenSecret, { expiresIn: TOKEN_TTL_SECONDS });
+    await recordAuditTrailStandalone(pool, { entityType: "Company", entityId: COMPANY_KEY, action: "status_change", changes: { event: "data_export_requested", format: body.format, includeFiles: body.includeFiles }, performedBy: req.user!.id });
     res.json({ downloadUrl: `/data-export/download?token=${encodeURIComponent(token)}`, expiresInSeconds: TOKEN_TTL_SECONDS });
   }),
 );
@@ -117,16 +115,16 @@ dataExportRouter.get(
     if (usedTokens.has(payload.jti)) throw AppError.unauthorized("This download link was already used. Request the export again.");
     usedTokens.set(payload.jti, Date.now() + TOKEN_TTL_SECONDS * 1000);
 
-    // The link was minted for an admin; make sure they still are one, and still belong to that organization.
+    // The link was minted for an admin; make sure they still are one, still.
     const [row] = await db
       .select({ id: users.id, email: users.email, isActive: users.isActive, roleName: roles.name })
       .from(users)
       .leftJoin(roles, eq(users.roleId, roles.id))
       .where(and(eq(users.id, Number(payload.sub))));
     if (!row || !row.isActive || (row.roleName !== "admin" && row.roleName !== "platform_admin")) throw AppError.forbidden("This account can no longer export data.");
-    if (running.has()) throw new AppError("An export for this organization is already running.", 409);
+    if (running.has(COMPANY_KEY)) throw new AppError("An export is already running.", 409);
 
-    running.add();
+    running.add(COMPANY_KEY);
     const startedAt = Date.now();
     const stamp = new Date().toISOString().slice(0, 10);
     res.setHeader("Content-Type", "application/zip");
@@ -136,20 +134,20 @@ dataExportRouter.get(
     const archive = newArchive();
     let finished = false;
     const audit = (event: string, extra: Record<string, unknown> = {}) =>
-      recordAuditTrailStandalone(pool, { entityType: "Tenant", entityId: payload.tid, action: "status_change", changes: { event, format: payload.fmt, includeFiles: payload.files, ...extra }, performedBy: row.id });
+      recordAuditTrailStandalone(pool, { entityType: "Company", entityId: COMPANY_KEY, action: "status_change", changes: { event, format: payload.fmt, includeFiles: payload.files, ...extra }, performedBy: row.id });
 
     archive.on("error", (err) => {
       logger.error("Data export archive failed", { err: String(err) });
       res.destroy(err);
     });
     res.on("close", () => {
-      running.delete();
+      running.delete(COMPANY_KEY);
       if (!finished) void audit("data_export_aborted", { afterMs: Date.now() - startedAt });
     });
     archive.pipe(res);
 
     try {
-      const manifest = await writeTenantExport(archive, { userId: row.id, email: row.email }, { format: payload.fmt, includeFiles: payload.files });
+      const manifest = await writeCompanyExport(archive, { userId: row.id, email: row.email }, { format: payload.fmt, includeFiles: payload.files });
       await archive.finalize();
       finished = true;
       await audit("data_export_completed", { tables: manifest.tables.length, rows: manifest.totalRows, files: manifest.files.included, filesSkipped: manifest.files.skipped.length, truncatedTables: manifest.tables.filter((t) => t.truncated).map((t) => t.name), ms: Date.now() - startedAt });

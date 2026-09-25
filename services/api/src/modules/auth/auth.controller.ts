@@ -6,7 +6,7 @@ import { REMEMBER_ME_TTL_MS } from "../../utils/jwt.js";
 import * as authService from "./auth.service.js";
 
 // Full-System Audit finding B2: the refresh token used to be a plain field
-// in the login/register/refresh JSON response, which the frontend then had
+// in the login/refresh JSON response, which the frontend then had
 // nowhere safe to keep except localStorage (readable by any script on the
 // page — the exact thing an XSS bug would go looking for). It now never
 // reaches frontend JS at all: httpOnly means document.cookie can't see it
@@ -62,12 +62,6 @@ function withoutRefreshToken<T extends { refreshToken: string; refreshJti?: stri
   const { refreshToken: _refreshToken, refreshJti: _refreshJti, remember: _remember, ...rest } = result;
   return rest;
 }
-
-export const registerHandler = asyncHandler(async (req: Request, res: Response) => {
-  const result = await authService.register(req.body);
-  setRefreshCookie(res, result.refreshToken);
-  res.status(201).json(withoutRefreshToken(result));
-});
 
 /** A finished sign-in sets the refresh cookie; a pending second step (or forced enrollment) issues nothing but its short-lived challenge token. */
 function sendSession(res: Response, result: Awaited<ReturnType<typeof authService.login>>) {

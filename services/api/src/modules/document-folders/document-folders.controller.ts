@@ -376,7 +376,7 @@ async function attachFileToFolder(db: Db, folderId: number, file: Express.Multer
 export const uploadTemplate = asyncHandler(async (req: Request, res: Response) => {
   const file = req.file;
   if (!file) throw AppError.badRequest("No file uploaded");
-  const updated = await attachFileToFolder(req.db!, file, req.user?.id);
+  const updated = await attachFileToFolder(req.db!, Number(req.params.id), file, req.user?.id);
   res.status(201).json(updated);
 });
 

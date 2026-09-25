@@ -341,7 +341,7 @@ export async function exportSupplierScorecard(req: Request, res: Response, suppl
     title: `Supplier Scorecard — ${supplier.name}`,
     generatedAt: new Date(),
     generatedBy: performer[0]?.name || performer[0]?.email || `User #${req.user?.id ?? "unknown"}`,
-    tenantName: tenant?.name ?? "Unknown Tenant",
+    companyName: tenant?.name ?? "Unknown Tenant",
     columns: ["Metric", "Value"],
     rows: [
       ["Quality Risk Score", riskResult.latest.score],

@@ -76,7 +76,7 @@ quarantineRouter.patch(
   manage,
   validate(updateQuarantineSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await service.updateQuarantine(dbOf(req), idParam(req), req.body as Parameters<typeof service.updateQuarantine>[3], req.user?.id));
+    res.json(await service.updateQuarantine(dbOf(req), idParam(req), req.body as Parameters<typeof service.updateQuarantine>[2], req.user?.id));
   }),
 );
 

@@ -24,7 +24,7 @@ export const updateFeasibilitySettingsHandler = asyncHandler(async (req: Request
   const [updated] = await req.db!.update(company).set({ feasibilitySettings: merged }).returning();
   await recordAuditTrail(req.db!, {
     entityType: "FeasibilitySettings",
-    entityId: req.tenantId!,
+    entityId: 1,
     action: "update",
     changes: { fieldsChanged: Object.keys(req.body) },
     performedBy: req.user?.id,
@@ -48,7 +48,7 @@ export const updateInventorySettingsHandler = asyncHandler(async (req: Request, 
   const [updated] = await req.db!.update(company).set({ inventorySettings: merged }).returning();
   await recordAuditTrail(req.db!, {
     entityType: "InventorySettings",
-    entityId: req.tenantId!,
+    entityId: 1,
     action: "update",
     changes: { fieldsChanged: Object.keys(req.body) },
     performedBy: req.user?.id,
@@ -90,7 +90,7 @@ export const updateErpSyncSettingsHandler = asyncHandler(async (req: Request, re
   // Never log the secret itself, encrypted or not — same convention as tenant.controller.ts's updateAiConfigHandler.
   await recordAuditTrail(req.db!, {
     entityType: "ErpSyncSettings",
-    entityId: req.tenantId!,
+    entityId: 1,
     action: "update",
     changes: { fieldsChanged: Object.keys(req.body), webhookSecretChanged: webhookSecret !== undefined },
     performedBy: req.user?.id,
@@ -127,7 +127,7 @@ export const updateSupplierRiskSettingsHandler = asyncHandler(async (req: Reques
   const [updated] = await req.db!.update(company).set({ supplierRiskWeights: merged }).returning();
   await recordAuditTrail(req.db!, {
     entityType: "SupplierRiskSettings",
-    entityId: req.tenantId!,
+    entityId: 1,
     action: "update",
     changes: { fieldsChanged: Object.keys(req.body) },
     performedBy: req.user?.id,
@@ -152,7 +152,7 @@ export const updateReceivingSettingsHandler = asyncHandler(async (req: Request, 
   const [updated] = await req.db!.update(company).set({ receivingSettings: merged }).returning();
   await recordAuditTrail(req.db!, {
     entityType: "ReceivingSettings",
-    entityId: req.tenantId!,
+    entityId: 1,
     action: "update",
     changes: { fieldsChanged: Object.keys(req.body) },
     performedBy: req.user?.id,

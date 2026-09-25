@@ -62,7 +62,7 @@ function recordActionRun(context: Record<string, unknown>, kind: string, detail:
 }
 
 function cleanContext(context: Record<string, unknown>): Record<string, unknown> {
-  const { __db: _db, __tenantId: _tenantId, __performedBy: _performedBy, ...rest } = context;
+  const { __db: _db, __performedBy: _performedBy, ...rest } = context;
   return rest;
 }
 
@@ -89,8 +89,7 @@ registerActionHandler("send_email", async (node, context, dryRun) => {
 
   const status = await sendEmail({ to, subject, body });
   const db = context.__db as Db | undefined;
-  const tenantId = context.__tenantId as number | undefined;
-  if (db && tenantId) await db.insert(notificationLog).values({ channel: "email", recipient: to, subject, body, status, relatedEntityType: "WorkflowRun" });
+  if (db) await db.insert(notificationLog).values({ channel: "email", recipient: to, subject, body, status, relatedEntityType: "WorkflowRun" });
   recordActionRun(context, "send_email", { to, subject, status });
 });
 
@@ -108,9 +107,8 @@ registerActionHandler("notify_department", async (node, context, dryRun) => {
     return;
   }
   const db = context.__db as Db | undefined;
-  const tenantId = context.__tenantId as number | undefined;
-  if (!db || !tenantId) {
-    recordActionRun(context, "notify_department", { skipped: true, reason: "no tenant database context available" });
+  if (!db) {
+    recordActionRun(context, "notify_department", { skipped: true, reason: "no database context available" });
     return;
   }
   const recipientCount = await notifyDepartment(db, { department: config.department, subject, body });
@@ -121,8 +119,7 @@ registerActionHandler("notify_supplier", async (node, context, dryRun) => {
   const config = node.config as { subject?: string; body?: string };
   const supplierId = toNumber(context.supplierId);
   const db = context.__db as Db | undefined;
-  const tenantId = context.__tenantId as number | undefined;
-  if (!supplierId || !db || !tenantId) {
+  if (!supplierId || !db) {
     recordActionRun(context, "notify_supplier", { skipped: true, reason: "no supplierId in this event's context" });
     return;
   }
@@ -155,9 +152,8 @@ registerActionHandler("create_ncr", async (node, context, dryRun) => {
     return;
   }
   const db = context.__db as Db | undefined;
-  const tenantId = context.__tenantId as number | undefined;
-  if (!db || !tenantId) {
-    recordActionRun(context, "create_ncr", { skipped: true, reason: "no tenant database context available" });
+  if (!db) {
+    recordActionRun(context, "create_ncr", { skipped: true, reason: "no database context available" });
     return;
   }
 
@@ -194,9 +190,8 @@ registerActionHandler("escalate_capa", async (node, context, dryRun) => {
     return;
   }
   const db = context.__db as Db | undefined;
-  const tenantId = context.__tenantId as number | undefined;
-  if (!db || !tenantId) {
-    recordActionRun(context, "escalate_capa", { skipped: true, reason: "no tenant database context available" });
+  if (!db) {
+    recordActionRun(context, "escalate_capa", { skipped: true, reason: "no database context available" });
     return;
   }
 
@@ -237,9 +232,8 @@ registerActionHandler("assign_user", async (node, context, dryRun) => {
     return;
   }
   const db = context.__db as Db | undefined;
-  const tenantId = context.__tenantId as number | undefined;
-  if (!db || !tenantId) {
-    recordActionRun(context, "assign_user", { skipped: true, reason: "no tenant database context available" });
+  if (!db) {
+    recordActionRun(context, "assign_user", { skipped: true, reason: "no database context available" });
     return;
   }
 
@@ -261,9 +255,8 @@ registerActionHandler("ai_suggestion", async (node, context, dryRun) => {
     return;
   }
   const db = context.__db as Db | undefined;
-  const tenantId = context.__tenantId as number | undefined;
-  if (!db || !tenantId) {
-    recordActionRun(context, "ai_suggestion", { skipped: true, reason: "no tenant database context available" });
+  if (!db) {
+    recordActionRun(context, "ai_suggestion", { skipped: true, reason: "no database context available" });
     return;
   }
 
@@ -284,11 +277,10 @@ registerActionHandler("erp_sync", async (_node, context, dryRun) => {
     return;
   }
   const db = context.__db as Db | undefined;
-  const tenantId = context.__tenantId as number | undefined;
-  if (!db || !tenantId) {
-    recordActionRun(context, "erp_sync", { skipped: true, reason: "no tenant database context available" });
+  if (!db) {
+    recordActionRun(context, "erp_sync", { skipped: true, reason: "no database context available" });
     return;
   }
-  const result = await triggerErpSync(db, tenantId, context.__performedBy as number | undefined);
+  const result = await triggerErpSync(db, context.__performedBy as number | undefined);
   recordActionRun(context, "erp_sync", { status: result.status, message: result.message });
 });

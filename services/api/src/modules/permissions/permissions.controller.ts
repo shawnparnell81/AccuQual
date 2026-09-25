@@ -78,7 +78,7 @@ export const upsertDepartmentPermissionHandler = asyncHandler(async (req: Reques
     .db!.insert(departmentPermissions)
     .values({ departmentName, moduleName, accessLevel })
     .onConflictDoUpdate({
-      target: [departmentPermissions.tenantId, departmentPermissions.departmentName, departmentPermissions.moduleName],
+      target: [departmentPermissions.departmentName, departmentPermissions.moduleName],
       set: { accessLevel, updatedAt: new Date() },
     })
     .returning();
@@ -181,7 +181,7 @@ export const upsertRoleModuleHandler = asyncHandler(async (req: Request, res: Re
     .db!.insert(permissionRoleModules)
     .values({ roleId: role.id, moduleName, accessLevel })
     .onConflictDoUpdate({
-      target: [permissionRoleModules.tenantId, permissionRoleModules.roleId, permissionRoleModules.moduleName],
+      target: [permissionRoleModules.roleId, permissionRoleModules.moduleName],
       set: { accessLevel, updatedAt: new Date() },
     })
     .returning();

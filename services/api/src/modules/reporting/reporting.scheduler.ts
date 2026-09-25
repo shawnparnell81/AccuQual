@@ -46,10 +46,10 @@ export async function runReportSchedule(scheduleId: number): Promise<void> {
   if (!schedule) return;
 
   const [tenant] = await db.select().from(company);
-  const tenantName = tenant?.name ?? `Tenant #${schedule.tenantId}`;
+  const companyName = tenant?.name ?? "AccuQual";
 
   try {
-    const { subject, body } = await buildReportEmail(db, schedule.tenantId, schedule.reportType as ReportType, tenantName);
+    const { subject, body } = await buildReportEmail(db, schedule.reportType as ReportType, companyName);
 
     const statuses = await Promise.all(schedule.recipients.map((to) => sendEmail({ to, subject, body })));
     for (const [i, status] of statuses.entries()) {

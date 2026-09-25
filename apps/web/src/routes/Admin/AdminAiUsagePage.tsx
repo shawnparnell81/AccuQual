@@ -8,7 +8,7 @@ import { SelectField } from "../../components/forms/Field";
 import type { TenantAiUsage, AiSuggestionHistoryResponse } from "../../api/types";
 
 function useAiUsage() {
-  return useQuery<TenantAiUsage>({ queryKey: ["tenant/ai-usage"], queryFn: async () => (await apiClient.get("/tenant/ai-usage")).data });
+  return useQuery<TenantAiUsage>({ queryKey: ["tenant/ai-usage"], queryFn: async () => (await apiClient.get("/company/ai-usage")).data });
 }
 
 // The real, complete set of `module` values any ai_suggestions row can ever

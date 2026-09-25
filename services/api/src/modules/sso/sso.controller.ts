@@ -13,7 +13,7 @@ import { encryptSecret } from "../company/crypto.js";
 import { setRefreshCookie } from "../auth/auth.controller.js";
 import { VERIFY_RECORD_PREFIX, lookupTxt } from "./dnsVerify.js";
 import { SSO_COOKIE, beginAuthorization, issuerAllowed, loadProviderConfig, readFlowState, signFlowState, ssoRedirectUri } from "./oidc.js";
-import { SSO_FORBIDDEN_ROLES, SsoDenied, auditDenied, findConnectionByTenantCode, handleCallback, isFreeMailDomain } from "./sso.service.js";
+import { SSO_FORBIDDEN_ROLES, SsoDenied, auditDenied, findConnection, handleCallback, isFreeMailDomain } from "./sso.service.js";
 
 // ---- Validation ------------------------------------------------------------------------------------------------------------------------------
 
@@ -39,7 +39,7 @@ export const addDomainSchema = z.object({
     .refine((d) => /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(d), "Enter a domain like acme.com"),
 });
 
-// ---- Tenant admin: configuration -------------------------------------------------------------------------------------------------------------
+// ---- Administrator: configuration -------------------------------------------------------------------------------------------------------------
 
 function publicConnection(c: typeof ssoConnections.$inferSelect | undefined) {
   if (!c) return null;
@@ -53,7 +53,7 @@ function domainView(d: typeof ssoDomains.$inferSelect) {
     domain: d.domain,
     verified: !!d.verifiedAt,
     verifiedAt: d.verifiedAt,
-    // What the tenant's DNS admin must publish to prove ownership.
+    // What the company's DNS admin must publish to prove ownership.
     txtName: `${VERIFY_RECORD_PREFIX}.${d.domain}`,
     txtValue: `accuqual-verify=${d.verificationToken}`,
   };
@@ -139,10 +139,6 @@ export const verifySsoDomain = asyncHandler(async (req: Request, res: Response) 
   if (!row) throw AppError.notFound("Domain");
   if (row.verifiedAt) return res.json(domainView(row));
 
-  // One organization per verified domain: the owner-connection check sees other tenants' rows, which this tenant's session cannot.
-  const claimed = await db.select({ verifiedAt: ssoDomains.verifiedAt }).from(ssoDomains).where(eq(ssoDomains.domain, row.domain));
-  if (claimed.some((c) => c.verifiedAt && c.tenantId !== req.tenantId)) throw AppError.badRequest("That domain is already verified by another organization.");
-
   const records = await lookupTxt(`${VERIFY_RECORD_PREFIX}.${row.domain}`);
   if (!records.includes(`accuqual-verify=${row.verificationToken}`)) {
     throw AppError.badRequest(`We couldn't find the TXT record yet. Add ${VERIFY_RECORD_PREFIX}.${row.domain} = accuqual-verify=${row.verificationToken}, wait for DNS to update (this can take a few minutes), and try again.`);
@@ -166,16 +162,14 @@ function loginUrl(query: Record<string, string>) {
   return `${env.FRONTEND_URL.replace(/\/$/, "")}/login?${new URLSearchParams(query).toString()}`;
 }
 
-/** Lets the login page know whether an organization has SSO before it shows the button. Deliberately says nothing more. */
-export const ssoDiscover = asyncHandler(async (req: Request, res: Response) => {
-  const code = String(req.query.tenant ?? "").trim();
-  const conn = code ? await findConnectionByTenantCode(code) : null;
+/** Lets the login page know whether the company has SSO before it shows the button. Deliberately says nothing more. */
+export const ssoDiscover = asyncHandler(async (_req: Request, res: Response) => {
+  const conn = await findConnection();
   res.json({ enabled: !!conn, displayName: conn?.displayName ?? null });
 });
 
-export const ssoStart = asyncHandler(async (req: Request, res: Response) => {
-  const code = String(req.query.tenant ?? "").trim();
-  const conn = code ? await findConnectionByTenantCode(code) : null;
+export const ssoStart = asyncHandler(async (_req: Request, res: Response) => {
+  const conn = await findConnection();
   if (!conn) return res.redirect(loginUrl({ sso_error: "not_configured" }));
   try {
     const { url, flow } = await beginAuthorization(conn);

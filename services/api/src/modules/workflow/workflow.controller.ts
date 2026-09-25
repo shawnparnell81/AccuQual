@@ -33,14 +33,14 @@ export const createHandler = asyncHandler(async (req: Request, res: Response) =>
     .returning();
   if (!created) throw new AppError("Failed to create workflow", 500);
   await recordAuditTrail(req.db!, { entityType: "WorkflowDefinition", entityId: created.id, action: "create", changes: { name, module: module ?? null }, performedBy: req.user?.id });
-  const draft = await createInitialDraft(req.db as Db, workflowAdapter, { id: req.user!.id, roleName: req.user!.roleName }, payload as unknown as Record<string, unknown>);
+  const draft = await createInitialDraft(req.db as Db, workflowAdapter, created.id, { id: req.user!.id, roleName: req.user!.roleName }, payload as unknown as Record<string, unknown>);
   res.status(201).json({ ...created, draftVersionId: draft.id });
 });
 
 /** GET /workflow/:id — the workflow, what is in force, and what is being worked on. */
 export const getHandler = asyncHandler(async (req: Request, res: Response) => {
   const workflow = await loadDefinition(req, Number(req.params.id));
-  const current = await getCurrent(req.db as Db, workflowAdapter);
+  const current = await getCurrent(req.db as Db, workflowAdapter, workflow.id);
   res.json({ ...workflow, ...current });
 });
 
@@ -122,11 +122,11 @@ export const runHandler = asyncHandler(async (req: Request, res: Response) => {
     .returning();
   if (!run) throw new AppError("Failed to start workflow run", 500);
 
-  const runContext = { ...(inputContext ?? {}), __db: req.db, __tenantId: req.tenantId, __performedBy: req.user?.id };
+  const runContext = { ...(inputContext ?? {}), __db: req.db, __performedBy: req.user?.id };
 
   try {
     const execution = await executeWorkflow(workflow.definition as unknown as WorkflowDefinition, runContext, { dryRun: !!simulate });
-    const { __db: _db, __tenantId: _tenantId, __performedBy: _performedBy, ...persistable } = execution.context;
+    const { __db: _db, __performedBy: _performedBy, ...persistable } = execution.context;
 
     // A run that reached an approval node stays open, with its position saved, until someone decides (POST /workflow/runs/:id/decision).
     const waiting = execution.status === "waiting_approval";

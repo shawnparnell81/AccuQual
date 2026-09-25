@@ -27,13 +27,12 @@ export type SsoDenyReason =
   | "no_email"
   | "email_not_verified"
   | "domain_not_allowed"
-  | "email_in_other_organization"
   | "no_account"
   | "account_disabled"
   | "not_configured";
 
 export class SsoDenied extends Error {
-  constructor(public readonly reason: SsoDenyReason, public readonly tenantId?: number, public readonly detail?: Record<string, unknown>) {
+  constructor(public readonly reason: SsoDenyReason, public readonly detail?: Record<string, unknown>) {
     super(reason);
   }
 }
@@ -42,14 +41,10 @@ async function audit(userId: number, changes: Record<string, unknown>) {
   await recordAuditTrail(db, { entityType: "User", entityId: userId, action: "status_change", changes, performedBy: userId }).catch((err) => logger.error("Failed to audit an SSO event", { userId, err }));
 }
 
-export async function findConnectionByTenantCode(code: string): Promise<SsoConnection | null> {
-  const [row] = await db
-    .select({ conn: ssoConnections, status: company.status, isDeleted: company.isDeleted })
-    .from(ssoConnections)
-    .innerJoin(company, eq(company.id, ssoConnections.tenantId))
-    .where(eq(company.code, code));
-  if (!row || !row.conn.enabled || row.status !== "active" || row.isDeleted) return null;
-  return row.conn;
+/** The company's enabled single-sign-on connection, if it has one. */
+export async function findConnection(): Promise<SsoConnection | null> {
+  const [conn] = await db.select().from(ssoConnections);
+  return conn && conn.enabled ? conn : null;
 }
 
 /**
@@ -57,31 +52,28 @@ export async function findConnectionByTenantCode(code: string): Promise<SsoConne
  * checks, in order: the provider's ID token is valid (done by openid-client);
  * it carries an email that the provider says is verified; that email is on a
  * domain the tenant proved it owns; then the account is found by the stable
- * provider subject, else by email within THIS tenant only, else created if
- * auto-provisioning is on. An email that already belongs to another tenant is
- * never linked, and auto-provisioned users never get an admin role.
+ * provider subject, else by email, else created if auto-provisioning is on.
+ * Auto-provisioned users never get an admin role.
  */
 export async function handleCallback(callbackUrl: URL, flow: SsoFlowState): Promise<{ session: Awaited<ReturnType<typeof startSessionForSsoUser>>; provisioned: boolean }> {
   const [conn] = await db.select().from(ssoConnections).where(eq(ssoConnections.id, flow.cid));
   if (!conn || !conn.enabled) throw new SsoDenied("not_configured");
-  const [tenant] = await db.select().from(company);
-  if (!tenant || tenant.status !== "active" || tenant.isDeleted) throw new SsoDenied("not_configured", conn.tenantId);
 
   let claims;
   try {
     claims = await completeAuthorization(conn, callbackUrl, flow);
   } catch (err) {
     logger.warn("SSO callback failed provider validation", { err: String(err) });
-    throw new SsoDenied("provider_error", conn.tenantId);
+    throw new SsoDenied("provider_error");
   }
 
   const email = claims.email;
-  if (!email) throw new SsoDenied("no_email", conn.tenantId);
-  if (conn.requireVerifiedEmail && !claims.emailVerified) throw new SsoDenied("email_not_verified", conn.tenantId, { email });
+  if (!email) throw new SsoDenied("no_email");
+  if (conn.requireVerifiedEmail && !claims.emailVerified) throw new SsoDenied("email_not_verified", { email });
 
   const domain = email.split("@")[1] ?? "";
   const [verified] = await db.select().from(ssoDomains).where(and(eq(ssoDomains.domain, domain)));
-  if (!verified?.verifiedAt) throw new SsoDenied("domain_not_allowed", conn.tenantId, { email });
+  if (!verified?.verifiedAt) throw new SsoDenied("domain_not_allowed", { email });
 
   // 1. Already linked to this provider identity.
   const [identity] = await db.select().from(userIdentities).where(and(eq(userIdentities.connectionId, conn.id), eq(userIdentities.subject, claims.sub)));
@@ -89,16 +81,15 @@ export async function handleCallback(callbackUrl: URL, flow: SsoFlowState): Prom
   let provisioned = false;
 
   if (userId === null) {
-    // 2. An existing account with this email — only ever inside this tenant.
+    // 2. An existing account with this email.
     const [existing] = await db.select().from(users).where(sql`lower(${users.email}) = lower(${email})`);
     if (existing) {
-      if (existing.tenantId !== conn.tenantId) throw new SsoDenied("email_in_other_organization", conn.tenantId, { email });
       userId = existing.id;
     } else {
-      // 3. Nothing yet: create it, but only when the tenant opted in, and never as an admin.
-      if (!conn.autoProvision || !conn.defaultRoleId) throw new SsoDenied("no_account", conn.tenantId, { email });
+      // 3. Nothing yet: create it, but only when the company opted in, and never as an admin.
+      if (!conn.autoProvision || !conn.defaultRoleId) throw new SsoDenied("no_account", { email });
       const [role] = await db.select().from(roles).where(eq(roles.id, conn.defaultRoleId));
-      if (!role || SSO_FORBIDDEN_ROLES.has(role.name)) throw new SsoDenied("no_account", conn.tenantId, { email });
+      if (!role || SSO_FORBIDDEN_ROLES.has(role.name)) throw new SsoDenied("no_account", { email });
       const [created] = await db
         .insert(users)
         .values({ email, name: claims.name, roleId: role.id, passwordHash: await bcrypt.hash(randomBytes(32).toString("hex"), 10), passwordChangedAt: new Date() })
@@ -113,14 +104,13 @@ export async function handleCallback(callbackUrl: URL, flow: SsoFlowState): Prom
   }
 
   const [target] = await db.select({ isActive: users.isActive, }).from(users).where(eq(users.id, userId));
-  if (!target || !target.isActive || target.tenantId !== conn.tenantId) throw new SsoDenied("account_disabled", conn.tenantId, { email });
+  if (!target || !target.isActive) throw new SsoDenied("account_disabled", { email });
 
   await audit(userId, { action: "sso_login", provider: conn.displayName });
   return { session: await startSessionForSsoUser(userId), provisioned };
 }
 
-/** Records a refused SSO attempt against the tenant's audit trail (there is no user to attribute it to, so it hangs off the tenant). */
+/** Records a refused SSO attempt against the company's audit trail (there is no user to attribute it to, so it hangs off the company). */
 export async function auditDenied(denied: SsoDenied): Promise<void> {
-  if (!denied.tenantId) return;
-  await recordAuditTrail(db, { entityType: "Tenant", entityId: denied.tenantId, action: "status_change", changes: { action: "sso_login_denied", reason: denied.reason, ...denied.detail } }).catch((err) => logger.error("Failed to audit a refused SSO attempt", { err }));
+  await recordAuditTrail(db, { entityType: "Company", entityId: 1, action: "status_change", changes: { action: "sso_login_denied", reason: denied.reason, ...denied.detail } }).catch((err) => logger.error("Failed to audit a refused SSO attempt", { err }));
 }

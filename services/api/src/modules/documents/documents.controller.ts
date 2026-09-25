@@ -10,7 +10,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import * as engine from "../versioning/versioning.service.js";
 import { blankDocumentPayload } from "./documentPayload.js";
-import { documentAdapter, isInsideTenantStorage } from "./documentVersioning.js";
+import { documentAdapter, isInsideStorage } from "./documentVersioning.js";
 
 export const baseHandlers = crudFactory(documents, { entityName: "Document", idColumn: "id", softDelete: true });
 
@@ -93,12 +93,11 @@ export const obsoleteHandler = asyncHandler(async (req: Request, res: Response) 
  * to point where it should.
  */
 export const downloadVersionHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const versionId = Number(req.params.versionId);
 
   const [version] = await req.db!.select().from(documentVersions).where(and(eq(documentVersions.id, versionId)));
   if (!version) throw AppError.notFound("Document version");
-  if (!version.fileUrl || /^https?:\/\//i.test(version.fileUrl) || !isInsideTenantStorage(tenantId, version.fileUrl) || !existsSync(version.fileUrl)) {
+  if (!version.fileUrl || /^https?:\/\//i.test(version.fileUrl) || !isInsideStorage(version.fileUrl) || !existsSync(version.fileUrl)) {
     throw AppError.notFound("Uploaded file for this version");
   }
 

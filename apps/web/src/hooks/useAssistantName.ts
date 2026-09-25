@@ -11,6 +11,6 @@ import type { AssistantNameResponse } from "../api/types";
 export function useAssistantName() {
   return useQuery({
     queryKey: ["tenant/assistant-name"],
-    queryFn: async () => (await apiClient.get<AssistantNameResponse>("/tenant/assistant-name")).data.assistantName,
+    queryFn: async () => (await apiClient.get<AssistantNameResponse>("/company/assistant-name")).data.assistantName,
   });
 }

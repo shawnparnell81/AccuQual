@@ -297,25 +297,15 @@ export async function notifyDue(db: Db, opts: { dedupeHours?: number } = {}): Pr
   return { items: items.length, notified, skipped: false };
 }
 
-/** Runs notifyDue for every organization that has equipment (used by the daily timer). Never throws. */
-export async function sweepDueCalibrations(): Promise<{ company: number; notified: number }> {
-  let tenantsSwept = 0;
-  let notified = 0;
+/** Sends the calibration-due digest (used by the timer). Never throws. */
+export async function sweepDueCalibrations(): Promise<{ notified: number }> {
   try {
-    const ids = await ownerDb.selectDistinct({ }).from(equipment).where(inArray(equipment.status, ["active", "out_of_service"]));
-    for (const { tenantId } of ids) {
-      try {
-        const r = await notifyDue(ownerDb as unknown as Db, { dedupeHours: 20 });
-        tenantsSwept += 1;
-        notified += r.notified;
-      } catch (err) {
-        logger.error("Calibration due sweep failed for a tenant", { err: String(err) });
-      }
-    }
+    const r = await notifyDue(ownerDb as unknown as Db, { dedupeHours: 20 });
+    return { notified: r.notified };
   } catch (err) {
     logger.error("Calibration due sweep failed", { err: String(err) });
+    return { notified: 0 };
   }
-  return { company: tenantsSwept, notified };
 }
 
 let sweepHandle: ReturnType<typeof setInterval> | null = null;

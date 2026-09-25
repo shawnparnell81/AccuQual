@@ -93,7 +93,7 @@ async function attemptWebhookDelivery(webhookUrl: string, webhookSecretEncrypted
  * non-throwing) and leaves the original exactly as it was, so the error
  * history stays an honest log rather than being overwritten in place.
  */
-export async function retryError(db: Db, tenantId: number, id: number, performedBy: number | undefined): Promise<{ resolved: boolean; error: ErpSyncErrorRow }> {
+export async function retryError(db: Db, id: number, performedBy: number | undefined): Promise<{ resolved: boolean; error: ErpSyncErrorRow }> {
   const original = await getError(db, id);
   if (original.resolvedAt) throw AppError.badRequest("This error is already resolved.");
 
@@ -105,7 +105,7 @@ export async function retryError(db: Db, tenantId: number, id: number, performed
       const [fresh] = await db.select().from(erpSyncErrors).orderBy(desc(erpSyncErrors.id)).limit(1);
       return { resolved: false, error: fresh! };
     }
-    const preset = original.presetId ? await getActivePresetCached(db, tenantId, original.module) : null;
+    const preset = original.presetId ? await getActivePresetCached(db, original.module) : null;
     const mappedData = preset ? await buildErpPayload(db, original.module, preset) : null;
     const payload = JSON.stringify({ direction: config.direction ?? "push", modules: [original.module], triggeredAt: new Date().toISOString(), ...(mappedData ? { mappedData: { [original.module]: mappedData } } : {}) });
     const result = await attemptWebhookDelivery(config.webhookUrl, config.webhookSecretEncrypted, payload);
@@ -123,7 +123,7 @@ export async function retryError(db: Db, tenantId: number, id: number, performed
   // re-run mapping for this module against the tenant's CURRENT active preset
   // (may have since been fixed/edited) and see whether the same source
   // record(s) still fail.
-  const preset = await getActivePresetCached(db, tenantId, original.module);
+  const preset = await getActivePresetCached(db, original.module);
   if (!preset) {
     await recordSyncError(db, { module: original.module, stage: undefined, message: `No active preset for module "${original.module}" — nothing to retry.` });
     const [fresh] = await db.select().from(erpSyncErrors).orderBy(desc(erpSyncErrors.id)).limit(1);

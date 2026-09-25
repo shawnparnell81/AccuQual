@@ -33,7 +33,7 @@ export function ThemeSettingsSection() {
   const { data: prefs, isLoading } = useMyTheme();
   const { data: branding } = useQuery<TenantBranding>({
     queryKey: ["tenant/branding"],
-    queryFn: async () => (await apiClient.get("/tenant/branding")).data,
+    queryFn: async () => (await apiClient.get("/company/branding")).data,
     enabled: user?.tenantId != null,
   });
   const [primaryColor, setPrimaryColor] = useState("");

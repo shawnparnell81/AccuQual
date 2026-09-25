@@ -161,7 +161,7 @@ export async function upsertWorkerProfile(db: Db, userId: number, input: UpsertW
     .insert(workerProfiles)
     .values({ userId, ...input, updatedBy })
     .onConflictDoUpdate({
-      target: [workerProfiles.tenantId, workerProfiles.userId],
+      target: workerProfiles.userId,
       set: { ...input, updatedBy, updatedAt: new Date() },
     });
 

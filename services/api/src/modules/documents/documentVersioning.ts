@@ -40,11 +40,11 @@ export const DOCUMENT_ENTITY_TYPE = "DocumentVersion";
 // ---- Where files live, and what may be stored ----------------------------------------------------------------------------------------------------------
 
 export const MAX_FILE_BYTES = 15 * 1024 * 1024;
-const tenantStorageRoot = (tenantId: number) => path.resolve(env.STORAGE_LOCAL_PATH, "tenants", String(tenantId));
+const storageRoot = () => path.resolve(env.STORAGE_LOCAL_PATH);
 
 /** True only for a path inside this organization's own storage folder — the one place a stored file may be read from. */
-export function isInsideTenantStorage(tenantId: number, filePath: string): boolean {
-  const root = tenantStorageRoot(tenantId) + path.sep;
+export function isInsideStorage(filePath: string): boolean {
+  const root = storageRoot() + path.sep;
   return path.resolve(filePath).startsWith(root);
 }
 
@@ -148,9 +148,9 @@ async function loadDocument(db: Db, id: number) {
 }
 
 /** A pre-versioning document's uploaded PDF becomes a registered file, so its first controlled revision can reference it. */
-async function registerLegacyFile(db: Db, tenantId: number, documentId: number, version: { version: number; fileUrl: string | null; createdBy: number | null }): Promise<DocumentAttachmentRef | null> {
+async function registerLegacyFile(db: Db, documentId: number, version: { version: number; fileUrl: string | null; createdBy: number | null }): Promise<DocumentAttachmentRef | null> {
   const p = version.fileUrl;
-  if (!p || /^https?:\/\//i.test(p) || !isInsideTenantStorage(tenantId, p) || !existsSync(p)) return null;
+  if (!p || /^https?:\/\//i.test(p) || !isInsideStorage(p) || !existsSync(p)) return null;
   const [existing] = await db.select().from(documentFiles).where(and(eq(documentFiles.documentId, documentId), eq(documentFiles.filePath, p)));
   if (existing) return { id: existing.id, fileName: existing.fileName, mimeType: existing.mimeType, sizeBytes: existing.sizeBytes, sha256: existing.sha256 };
   const bytes = readFileSync(p);
@@ -169,14 +169,14 @@ export const documentAdapter: SubjectAdapter = {
   notifyReviewLifecycle: true,
   blank: () => ({ ...blankDocumentPayload() }) as unknown as Record<string, unknown>,
 
-  async loadLive(db, tenantId, id) {
+  async loadLive(db, id) {
     const doc = await loadDocument(db, id);
     const number = doc.currentVersion > 0 ? doc.currentVersion : 1;
     const [legacy] = await db
       .select()
       .from(documentVersions)
       .where(and(eq(documentVersions.documentId, doc.id), eq(documentVersions.version, doc.currentVersion)));
-    const file = legacy ? await registerLegacyFile(db, tenantId, doc.id, legacy) : null;
+    const file = legacy ? await registerLegacyFile(db, doc.id, legacy) : null;
     const payload: DocumentPayload = {
       ...blankDocumentPayload(),
       title: doc.title,
@@ -300,7 +300,7 @@ async function audit(db: Db, documentId: number, actor: Actor, changes: Record<s
 }
 
 /** Stores an uploaded file and adds it to the draft. Only a draft can take files; a published revision is frozen. */
-export async function addAttachment(db: Db, tenantId: number, documentId: number, versionId: number, actor: Actor, file: { originalname: string; buffer: Buffer; size: number }) {
+export async function addAttachment(db: Db, documentId: number, versionId: number, actor: Actor, file: { originalname: string; buffer: Buffer; size: number }) {
   const v = await engine.getVersion(db, documentAdapter, documentId, versionId);
   if (v.status !== "draft") throw new AppError("Files can only be added to a draft.", 409);
   const payload = normalizeDocumentPayload(v.payload);
@@ -309,7 +309,7 @@ export async function addAttachment(db: Db, tenantId: number, documentId: number
   const type = detectFileType(file.buffer, file.originalname);
   if (!type) throw AppError.badRequest("Only PDF, Word (.docx), Excel (.xlsx) and image (PNG, JPEG, GIF, WebP) files can be attached, and the file's contents must match its type.");
 
-  const dir = path.join(tenantStorageRoot(tenantId), "documents", String(documentId));
+  const dir = path.join(storageRoot(), "documents", String(documentId));
   await mkdir(dir, { recursive: true });
   const filePath = path.join(dir, `${randomUUID()}${type.ext}`);
   await writeFile(filePath, file.buffer);
@@ -324,7 +324,7 @@ export async function addAttachment(db: Db, tenantId: number, documentId: number
 }
 
 /** Drops a file from the draft. The stored file itself is only deleted when no revision of this document still refers to it. */
-export async function removeAttachment(db: Db, tenantId: number, documentId: number, versionId: number, attachmentId: number, actor: Actor) {
+export async function removeAttachment(db: Db, documentId: number, versionId: number, attachmentId: number, actor: Actor) {
   const v = await engine.getVersion(db, documentAdapter, documentId, versionId);
   if (v.status !== "draft") throw new AppError("Files can only be removed from a draft.", 409);
   const payload = normalizeDocumentPayload(v.payload);
@@ -341,7 +341,7 @@ export async function removeAttachment(db: Db, tenantId: number, documentId: num
   const legacyUse = await db.select({ id: documentVersions.id }).from(documentVersions).innerJoin(documentFiles, eq(documentFiles.filePath, documentVersions.fileUrl)).where(and(eq(documentFiles.id, attachmentId))).limit(1);
   if (stillUsed.length === 0 && legacyUse.length === 0) {
     const [row] = await db.delete(documentFiles).where(and(eq(documentFiles.id, attachmentId), eq(documentFiles.documentId, documentId))).returning();
-    if (row && isInsideTenantStorage(tenantId, row.filePath)) await unlink(row.filePath).catch(() => undefined);
+    if (row && isInsideStorage(row.filePath)) await unlink(row.filePath).catch(() => undefined);
   }
   return saved;
 }
@@ -351,13 +351,13 @@ export async function removeAttachment(db: Db, tenantId: number, documentId: num
 const FILE_TOKEN_SECRET = `${env.JWT_ACCESS_SECRET}:document-file`;
 export const FILE_LINK_SECONDS = 300;
 
-export function signFileToken(tenantId: number, fileId: number, userId: number): string {
-  return jwt.sign({ tid: tenantId, fid: fileId, sub: String(userId), jti: randomUUID() }, FILE_TOKEN_SECRET, { expiresIn: FILE_LINK_SECONDS });
+export function signFileToken(fileId: number, userId: number): string {
+  return jwt.sign({ fid: fileId, sub: String(userId), jti: randomUUID() }, FILE_TOKEN_SECRET, { expiresIn: FILE_LINK_SECONDS });
 }
 
 export function verifyFileToken(token: string): { fileId: number; userId: number } {
   try {
-    const p = jwt.verify(token, FILE_TOKEN_SECRET) as unknown as { tid: number; fid: number; sub: string };
+    const p = jwt.verify(token, FILE_TOKEN_SECRET) as unknown as { fid: number; sub: string };
     return { fileId: p.fid, userId: Number(p.sub) };
   } catch {
     throw AppError.unauthorized("This download link has expired. Open the document again to get a new one.");

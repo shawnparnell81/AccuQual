@@ -98,7 +98,7 @@ trainingRouter.patch(
   manageSessions,
   validate(updateSessionSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await service.updateSession(dbOf(req), idParam(req), req.body as Parameters<typeof service.updateSession>[3], req.user?.id));
+    res.json(await service.updateSession(dbOf(req), idParam(req), req.body as Parameters<typeof service.updateSession>[2], req.user?.id));
   }),
 );
 trainingRouter.post(
@@ -106,7 +106,7 @@ trainingRouter.post(
   manageSessions,
   validate(completeSessionSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await service.completeSession(dbOf(req), idParam(req), req.body as Parameters<typeof service.completeSession>[3], req.user?.id));
+    res.json(await service.completeSession(dbOf(req), idParam(req), req.body as Parameters<typeof service.completeSession>[2], req.user?.id));
   }),
 );
 trainingRouter.post(
@@ -132,7 +132,7 @@ trainingRouter.post(
   evaluate,
   validate(createCompetencySchema),
   asyncHandler(async (req: Request, res: Response) => {
-    res.status(201).json(await service.createCompetency(dbOf(req), req.body as Parameters<typeof service.createCompetency>[2], actorOf(req)));
+    res.status(201).json(await service.createCompetency(dbOf(req), req.body as Parameters<typeof service.createCompetency>[1], actorOf(req)));
   }),
 );
 trainingRouter.post(

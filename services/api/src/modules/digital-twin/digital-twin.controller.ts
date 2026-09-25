@@ -61,7 +61,7 @@ export const ingestIot = asyncHandler(async (req: Request, res: Response) => {
   const { deviceId, timestamp, data } = req.body;
 
   await req.db!.insert(iotDevices).values({ deviceId, lastSeenAt: new Date() }).onConflictDoUpdate({
-    target: [iotDevices.tenantId, iotDevices.deviceId],
+    target: iotDevices.deviceId,
     set: { lastSeenAt: new Date() },
   });
 
@@ -105,7 +105,7 @@ export const registerDeviceHandler = asyncHandler(async (req: Request, res: Resp
     .db!.insert(iotDevices)
     .values({ deviceId, name, type, digitalTwinModelId })
     .onConflictDoUpdate({
-      target: [iotDevices.tenantId, iotDevices.deviceId],
+      target: iotDevices.deviceId,
       set: {
         name: sql`coalesce(excluded.name, ${iotDevices.name})`,
         type: sql`coalesce(excluded.type, ${iotDevices.type})`,

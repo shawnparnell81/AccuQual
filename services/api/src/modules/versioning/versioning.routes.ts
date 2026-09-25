@@ -52,7 +52,7 @@ export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAda
     "/:id/current",
     view,
     asyncHandler(async (req: Request, res: Response) => {
-      res.json(await engine.getCurrent(dbOf(req), adapter));
+      res.json(await engine.getCurrent(dbOf(req), adapter, 1));
     }),
   );
 
@@ -60,7 +60,7 @@ export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAda
     "/:id/versions",
     view,
     asyncHandler(async (req: Request, res: Response) => {
-      res.json(await engine.listVersions(dbOf(req), adapter));
+      res.json(await engine.listVersions(dbOf(req), adapter, idParam(req)));
     }),
   );
 
@@ -78,7 +78,7 @@ export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAda
     asyncHandler(async (req: Request, res: Response) => {
       const against = req.query.against !== undefined ? Number(req.query.against) : undefined;
       if (against !== undefined && !Number.isInteger(against)) throw AppError.badRequest("against must be a version id");
-      res.json(await engine.diffVersions(dbOf(req), adapter, Number(req.params.versionId), against, actorOf(req)));
+      res.json(await engine.diffVersions(dbOf(req), adapter, idParam(req), Number(req.params.versionId), against, actorOf(req)));
     }),
   );
 
@@ -88,7 +88,7 @@ export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAda
     validate(draftSchema),
     asyncHandler(async (req: Request, res: Response) => {
       const body = req.body as z.infer<typeof draftSchema>;
-      res.status(201).json(await engine.createDraft(dbOf(req), adapter, actorOf(req), { payload: body.payload, summary: body.summary }));
+      res.status(201).json(await engine.createDraft(dbOf(req), adapter, idParam(req), actorOf(req), { payload: body.payload, summary: body.summary }));
     }),
   );
 
@@ -98,7 +98,7 @@ export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAda
     validate(saveDraftSchema),
     asyncHandler(async (req: Request, res: Response) => {
       const body = req.body as z.infer<typeof saveDraftSchema>;
-      res.json(await engine.saveDraft(dbOf(req), adapter, Number(req.params.versionId), actorOf(req), body));
+      res.json(await engine.saveDraft(dbOf(req), adapter, idParam(req), Number(req.params.versionId), actorOf(req), body));
     }),
   );
 
@@ -106,7 +106,7 @@ export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAda
     "/:id/versions/:versionId",
     edit,
     asyncHandler(async (req: Request, res: Response) => {
-      await engine.discardDraft(dbOf(req), adapter, Number(req.params.versionId), actorOf(req));
+      await engine.discardDraft(dbOf(req), adapter, idParam(req), Number(req.params.versionId), actorOf(req));
       res.status(204).send();
     }),
   );
@@ -133,8 +133,8 @@ export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAda
       await new Promise<void>((resolve, reject) => gate(req, res, (err?: unknown) => (err ? reject(err) : resolve())));
       const db = dbOf(req);
       const id = idParam(req);
-      if (body.action === "request") res.json(await engine.submitForReview(db, adapter, body.versionId, actorOf(req), body.notes, { reviewerId: body.reviewerId }));
-      else res.json(await engine.reviewVersion(db, adapter, body.versionId, actorOf(req), body.action === "approve" ? "approved" : "rejected", body.notes));
+      if (body.action === "request") res.json(await engine.submitForReview(db, adapter, id, body.versionId, actorOf(req), body.notes, { reviewerId: body.reviewerId }));
+      else res.json(await engine.reviewVersion(db, adapter, id, body.versionId, actorOf(req), body.action === "approve" ? "approved" : "rejected", body.notes));
     }),
   );
 
@@ -143,7 +143,7 @@ export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAda
     publish,
     validate(publishSchema),
     asyncHandler(async (req: Request, res: Response) => {
-      res.json(await engine.publishVersion(dbOf(req), adapter, (req.body as z.infer<typeof publishSchema>).versionId, actorOf(req)));
+      res.json(await engine.publishVersion(dbOf(req), adapter, idParam(req), (req.body as z.infer<typeof publishSchema>).versionId, actorOf(req)));
     }),
   );
 
@@ -152,7 +152,7 @@ export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAda
     edit,
     validate(rollbackSchema),
     asyncHandler(async (req: Request, res: Response) => {
-      res.status(201).json(await engine.rollbackTo(dbOf(req), adapter, (req.body as z.infer<typeof rollbackSchema>).versionNumber, actorOf(req)));
+      res.status(201).json(await engine.rollbackTo(dbOf(req), adapter, idParam(req), (req.body as z.infer<typeof rollbackSchema>).versionNumber, actorOf(req)));
     }),
   );
 }
@@ -171,14 +171,14 @@ function createDocumentRouter(adapter: SubjectAdapter, permission: PermissionSub
     "/",
     requirePermission(`${permission}.edit`),
     asyncHandler(async (req: Request, res: Response) => {
-      res.status(200).json({ id: 1, ...(await engine.getCurrent(dbOf(req), adapter)) });
+      res.status(200).json({ id: 1, ...(await engine.getCurrent(dbOf(req), adapter, 1)) });
     }),
   );
   router.get(
     "/:id",
     requirePermission(`${permission}.view`),
     asyncHandler(async (req: Request, res: Response) => {
-      res.json({ id: 1, ...(await engine.getCurrent(dbOf(req), adapter)) });
+      res.json({ id: 1, ...(await engine.getCurrent(dbOf(req), adapter, 1)) });
     }),
   );
   registerVersionRoutes(router, { adapter, permission });

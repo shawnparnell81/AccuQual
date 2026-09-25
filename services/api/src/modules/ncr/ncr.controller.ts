@@ -32,7 +32,7 @@ export const baseHandlers = crudFactory(ncr, {
   },
   afterUpdate: async (updated, req) => {
     const row = updated as { id: number; description: string | null; severity: string | null };
-    const patch: Parameters<typeof syncNcrFormData>[3] = {};
+    const patch: Parameters<typeof syncNcrFormData>[2] = {};
     if ("description" in req.body) patch.nonconformanceDescription = row.description ?? undefined;
     if ("severity" in req.body) patch.ncrClassification = mapSeverityToClassification(row.severity);
     if (Object.keys(patch).length > 0) await syncNcrFormData(req.db!, row.id, patch, req.user?.id);

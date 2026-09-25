@@ -493,24 +493,14 @@ export async function notifyDue(db: Db, opts: { dedupeHours?: number } = {}): Pr
   return { items: items.length, notified, skipped: false };
 }
 
-export async function sweepTrainingDue(): Promise<{ company: number; notified: number }> {
-  let tenantsSwept = 0;
-  let notified = 0;
+export async function sweepTrainingDue(): Promise<{ notified: number }> {
   try {
-    const ids = await ownerDb.selectDistinct({ }).from(trainingCourses).where(eq(trainingCourses.active, true));
-    for (const { tenantId } of ids) {
-      try {
-        const r = await notifyDue(ownerDb as unknown as Db, { dedupeHours: 20 });
-        tenantsSwept += 1;
-        notified += r.notified;
-      } catch (err) {
-        logger.error("Training due sweep failed for a tenant", { err: String(err) });
-      }
-    }
+    const r = await notifyDue(ownerDb as unknown as Db, { dedupeHours: 20 });
+    return { notified: r.notified };
   } catch (err) {
     logger.error("Training due sweep failed", { err: String(err) });
+    return { notified: 0 };
   }
-  return { company: tenantsSwept, notified };
 }
 
 let sweepHandle: ReturnType<typeof setInterval> | null = null;

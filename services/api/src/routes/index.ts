@@ -47,7 +47,7 @@ import { erpRouter } from "../modules/erp/erp.routes.js";
 import { erpRequisitionsRouter } from "../modules/erp/erpRequisitions.routes.js";
 import { erpPresetsRouter } from "../modules/erp/erpPresets.routes.js";
 import { erpSyncErrorsRouter } from "../modules/erp/erpSyncErrors.routes.js";
-import { tenantRouter } from "../modules/company/tenant.routes.js";
+import { companyRouter } from "../modules/company/company.routes.js";
 import { searchRouter } from "../modules/search/search.routes.js";
 import { rmaRouter } from "../modules/rma/rma.routes.js";
 import { workOrdersRouter } from "../modules/work-orders/workOrders.routes.js";
@@ -135,7 +135,7 @@ apiRouter.use("/erp", erpPresetsRouter);
 // own admin-only gate, not erpRouter's requireDepartmentAccess("erp").
 apiRouter.use("/erp", erpSyncErrorsRouter);
 apiRouter.use("/erp", erpRouter);
-apiRouter.use("/tenant", tenantRouter);
+apiRouter.use("/company", companyRouter);
 apiRouter.use("/search", searchRouter);
 apiRouter.use("/rma", rmaRouter);
 apiRouter.use("/work-orders", workOrdersRouter);
