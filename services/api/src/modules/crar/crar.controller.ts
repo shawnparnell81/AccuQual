@@ -13,7 +13,7 @@ import { recordAuditTrail, recordAuditTrailStandalone } from "../audit-trail/aud
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { pool } from "../../db/index.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 /** Same inline-guard style as rma.controller.ts/warranty.controller.ts's assertDepartment — used for the one thing left that genuinely IS a fixed business rule rather than a tunable access level (which stage of the workflow belongs to whom — see STATUS_TRANSITION_DEPARTMENTS below). */
 function assertDepartment(req: Request, allowed: string[]) {
@@ -50,7 +50,7 @@ async function assertCrarContentWrite(req: Request) {
   if (department && WARRANTY_LINK_ONLY_DEPARTMENTS.includes(department)) {
     throw AppError.forbidden("Your department may only link a CRAR to a warranty claim, not edit its content");
   }
-  const level = await getUserAccessLevel(req.db! as TenantDb, req.user!, "crar");
+  const level = await getUserAccessLevel(req.db! as Db, req.user!, "crar");
   if (level !== "edit") {
     throw AppError.forbidden("This action requires edit access to CRAR (crar.write)");
   }
@@ -256,7 +256,7 @@ export const transitionCrarHandler = asyncHandler(async (req: Request, res: Resp
     // lever (crar_workflow) layered on top — see db/defaultPermissions.ts's
     // own comment on why its seeded default matches today's real behavior
     // exactly (the union of every department in STATUS_TRANSITION_DEPARTMENTS).
-    const workflowLevel = await getUserAccessLevel(req.db! as TenantDb, req.user!, "crar_workflow");
+    const workflowLevel = await getUserAccessLevel(req.db! as Db, req.user!, "crar_workflow");
     if (workflowLevel !== "edit") {
       await recordAuditTrailStandalone(pool, {
         entityType: "Crar",

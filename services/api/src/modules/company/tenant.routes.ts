@@ -1,14 +1,14 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { updateBrandingSchema, updateAiConfigSchema, updateTenantProfileSchema, updateTenantSecuritySchema, updateOnboardingSchema } from "./tenant.validation.js";
 import { getBrandingHandler, updateBrandingHandler, getAiConfigHandler, updateAiConfigHandler, getAssistantNameHandler, getAiUsageHandler, getProfileHandler, updateProfileHandler, getSecurityHandler, updateSecurityHandler, getOnboardingHandler, updateOnboardingHandler } from "./tenant.controller.js";
 
 /** A tenant admin's own settings — scoped to req.tenantId, never a foreign tenant id. Admin-only (requireRole), not department-gated: branding/AI config aren't a department concern. */
 export const tenantRouter = Router();
-tenantRouter.use(requireAuth, withTenantDb);
+tenantRouter.use(requireAuth, withDb);
 
 tenantRouter.get("/branding", getBrandingHandler);
 tenantRouter.patch("/branding", requireRole("admin"), validate(updateBrandingSchema), updateBrandingHandler);

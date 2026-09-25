@@ -1,7 +1,7 @@
 // Real-DB integration test — same real-HTTP-path RLS shape as
 // tenant-isolation.test.ts (Inspection Report R08), extended to a
 // representative sample of modules beyond NCR. That original file only
-// ever proved the RLS role-switch (see src/lib/tenantScope.ts) works for
+// ever proved the RLS role-switch (see src/lib/requestDb.ts) works for
 // one module's controller; a genuine cross-tenant leak in a DIFFERENT
 // controller (a forgotten `req.db!` scope, a raw `db` import bypassing the
 // tenant transaction, a crudFactory misconfiguration) would have gone

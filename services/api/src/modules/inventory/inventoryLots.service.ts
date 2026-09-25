@@ -1,5 +1,5 @@
 import { and, eq, desc } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { inventoryLots, type InventoryLot } from "../../drizzle/schema/inventoryLots.js";
 import { inventoryItems, inventoryMovements } from "../../drizzle/schema/inventory.js";
 import { erpReceivingLineItems, erpPoLineItems, erpPurchaseOrders } from "../../drizzle/schema/erp.js";
@@ -29,7 +29,7 @@ export interface ReceiveLotInput {
  * existing lot's received/remaining quantity rather than creating a
  * confusing second row for the same physical lot.
  */
-export async function receiveIntoLot(db: TenantDb, input: ReceiveLotInput): Promise<InventoryLot> {
+export async function receiveIntoLot(db: Db, input: ReceiveLotInput): Promise<InventoryLot> {
   const [existing] = await db
     .select()
     .from(inventoryLots)
@@ -92,7 +92,7 @@ export async function receiveIntoLot(db: TenantDb, input: ReceiveLotInput): Prom
  * movement — the underlying inventory_stock on-hand check is still the
  * real gate on whether this movement is allowed at all).
  */
-export async function consumeFromLot(db: TenantDb, lotId: number, quantity: number): Promise<void> {
+export async function consumeFromLot(db: Db, lotId: number, quantity: number): Promise<void> {
   const [lot] = await db.select().from(inventoryLots).where(and(eq(inventoryLots.id, lotId)));
   if (!lot) throw AppError.badRequest(`Lot #${lotId} not found`);
   // Second layer behind applyMovement's own check: never draw down units that are on quarantine hold.
@@ -111,11 +111,11 @@ export async function consumeFromLot(db: TenantDb, lotId: number, quantity: numb
   await publishEvent(WORKFLOW_STREAM, { module: "inventory", event: nextStatus === "consumed" ? "lot-exhausted" : "lot-consumed", entityId: lotId });
 }
 
-export async function getItemLots(db: TenantDb, itemId: number): Promise<InventoryLot[]> {
+export async function getItemLots(db: Db, itemId: number): Promise<InventoryLot[]> {
   return db.select().from(inventoryLots).where(and(eq(inventoryLots.itemId, itemId))).orderBy(desc(inventoryLots.createdAt));
 }
 
-async function loadLot(db: TenantDb, lotId: number): Promise<InventoryLot> {
+async function loadLot(db: Db, lotId: number): Promise<InventoryLot> {
   const [lot] = await db.select().from(inventoryLots).where(and(eq(inventoryLots.id, lotId)));
   if (!lot) throw AppError.notFound("InventoryLot");
   return lot;
@@ -133,7 +133,7 @@ async function loadLot(db: TenantDb, lotId: number): Promise<InventoryLot> {
  * to complete the chain, keeping this query from having to know about every
  * downstream module.
  */
-export async function getLotTraceability(db: TenantDb, lotId: number) {
+export async function getLotTraceability(db: Db, lotId: number) {
   const lot = await loadLot(db, lotId);
 
   const [movements, receivingLine, supplier, [item]] = await Promise.all([

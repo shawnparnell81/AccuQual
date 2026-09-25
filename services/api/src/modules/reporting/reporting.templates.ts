@@ -1,5 +1,5 @@
 import * as reportingService from "./reporting.service.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 export const REPORT_TYPES = ["ncr_summary", "capa_summary", "supplier_scorecard", "warranty_summary", "receiving_summary"] as const;
 export type ReportType = (typeof REPORT_TYPES)[number];
@@ -21,7 +21,7 @@ export const REPORT_TYPE_LABELS: Record<ReportType, string> = {
  * Phase 5's AI-drafted supplier email used for not forcing drafted content
  * through that token system either).
  */
-export async function buildReportEmail(db: TenantDb, tenantId: number, reportType: ReportType, tenantName: string): Promise<{ subject: string; body: string }> {
+export async function buildReportEmail(db: Db, tenantId: number, reportType: ReportType, tenantName: string): Promise<{ subject: string; body: string }> {
   const today = new Date().toISOString().slice(0, 10);
 
   switch (reportType) {

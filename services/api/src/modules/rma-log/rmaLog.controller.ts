@@ -9,7 +9,7 @@ import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail, recordAuditTrailStandalone } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { pool } from "../../db/index.js";
 
 /** A fixed, linear lifecycle matching the field list's own natural progression — see rmaLog.validation.ts's own comment. completed (closed) is terminal. */
@@ -130,7 +130,7 @@ export const updateRmaLogHandler = asyncHandler(async (req: Request, res: Respon
 
   const touchesLinkFields = LINK_FIELDS.some((f) => f in req.body);
   if (touchesLinkFields && !isAdmin(req)) {
-    const linkageLevel = await getUserAccessLevel(req.db! as TenantDb, req.user!, "rma_log_linkage");
+    const linkageLevel = await getUserAccessLevel(req.db! as Db, req.user!, "rma_log_linkage");
     if (linkageLevel !== "edit") {
       await recordAuditTrailStandalone(pool, {
         entityType: "RmaLog",
@@ -173,7 +173,7 @@ export const transitionRmaLogHandler = asyncHandler(async (req: Request, res: Re
   }
 
   if (!isAdmin(req)) {
-    const statusLevel = await getUserAccessLevel(req.db! as TenantDb, req.user!, "rma_log_status");
+    const statusLevel = await getUserAccessLevel(req.db! as Db, req.user!, "rma_log_status");
     if (statusLevel !== "edit") {
       await recordAuditTrailStandalone(pool, {
         entityType: "RmaLog",

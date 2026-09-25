@@ -2,7 +2,7 @@
 // Bulk actions pilot (crudFactory.ts's bulkUpdate, wired only on NCR in this PR): the hard constraint carried over
 // from training's old bulk-complete-all removal is that every affected row still gets its own real audit-trail entry
 // — never one summary row for the whole batch — and the whole batch is fail-closed (one bad id rolls everything back,
-// via withTenantDb's existing one-transaction-per-request commit/rollback, not a new transaction of its own).
+// via withDb's existing one-transaction-per-request commit/rollback, not a new transaction of its own).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, and, inArray } from "drizzle-orm";
 import request from "supertest";

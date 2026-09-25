@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { createModelSchema, updateModelSchema, simulateSchema, iotIngestSchema, registerDeviceSchema, updateDeviceSchema } from "./digital-twin.validation.js";
 import { baseHandlers, simulateDigitalTwin, getSimulation, ingestIot, listDevicesHandler, registerDeviceHandler, updateDeviceHandler, deleteDeviceHandler, listAlertsHandler, rotateDeviceKeyHandler, revokeDeviceKeyHandler } from "./digital-twin.controller.js";
 
 export const digitalTwinRouter = Router();
-digitalTwinRouter.use(requireAuth, withTenantDb);
+digitalTwinRouter.use(requireAuth, withDb);
 
 // Model creation/editing and device registration are admin-only (see the
 // Tenant Digital Twin Setup review) — a real tightening, but not a

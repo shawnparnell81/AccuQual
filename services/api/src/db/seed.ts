@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { db, pool } from "./index.js";
 import { roles } from "../drizzle/schema/roles.js";
 import { users } from "../drizzle/schema/users.js";
-import { tenants } from "../drizzle/schema/tenants.js";
+import { company } from "../drizzle/schema/company.js";
 import { formTemplates } from "../drizzle/schema/forms.js";
 import { FORM_TYPES } from "../modules/forms/forms.validation.js";
 import { logger } from "../utils/logger.js";
@@ -47,12 +47,12 @@ async function main() {
     .onConflictDoNothing({ target: users.email });
 
   const [demoTenant] = await db
-    .insert(tenants)
+    .insert(company)
     .values({ name: "Demo Manufacturing Co.", code: "demo" })
-    .onConflictDoNothing({ target: tenants.code })
+    .onConflictDoNothing({ target: company.code })
     .returning();
 
-  const tenant = demoTenant ?? (await db.select().from(tenants).where(eq(tenants.code, "demo")))[0];
+  const tenant = demoTenant ?? (await db.select().from(company).where(eq(company.code, "demo")))[0];
   if (!tenant) throw new Error("Failed to seed demo tenant");
 
   await db

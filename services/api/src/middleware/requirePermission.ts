@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { AppError } from "../utils/appError.js";
 import { pool } from "../db/index.js";
-import type { TenantDb } from "../lib/tenantScope.js";
+import type { Db } from "../lib/requestDb.js";
 import { recordAuditTrailStandalone } from "../modules/audit-trail/audit-trail.service.js";
 import { getUserAccessLevel, type AccessLevel, type ResourceKey } from "./departmentAccess.js";
 
@@ -52,7 +52,7 @@ export function parsePermission(name: string): { subject: PermissionSubject; act
 
 /** The decision itself, separate from Express so it is unit-testable and reusable inside services. */
 export async function hasPermission(
-  db: TenantDb,
+  db: Db,
   user: { id: number; roleName: string | null; department: string | null },
   name: PermissionName,
 ): Promise<{ allowed: boolean; reason?: string }> {
@@ -72,7 +72,7 @@ export function requirePermission(name: PermissionName) {
   const { subject } = parsePermission(name);
   return asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user || !req.db || req.tenantId === undefined) return next(AppError.forbidden("Missing tenant context"));
-    const verdict = await hasPermission(req.db as TenantDb, req.user, name);
+    const verdict = await hasPermission(req.db as Db, req.user, name);
     if (verdict.allowed) return next();
 
     // Standalone connection: the request transaction is rolled back on a 403, which would take the record with it.

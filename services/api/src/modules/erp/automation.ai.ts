@@ -29,8 +29,7 @@ function parseSuggestions(raw: string): unknown {
  * never creates or changes anything but its own ai_suggestions audit row.
  */
 export const erpAutomationSuggestionsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!, tenantId);
+  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!);
   const limitError = await checkUsageLimit(req.db!, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 

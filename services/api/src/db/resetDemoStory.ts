@@ -2,7 +2,7 @@ import "dotenv/config";
 import { eq, and, inArray } from "drizzle-orm";
 import { db, pool } from "./index.js";
 import { logger } from "../utils/logger.js";
-import { tenants } from "../drizzle/schema/tenants.js";
+import { company } from "../drizzle/schema/company.js";
 import { suppliers, supplierScorecards } from "../drizzle/schema/supplier.js";
 import { inventoryItems, inventoryStock, inventoryMovements } from "../drizzle/schema/inventory.js";
 import { inventoryLots } from "../drizzle/schema/inventoryLots.js";
@@ -39,7 +39,7 @@ const DEMO_CUSTOMER_NAME = "Northfield Industries";
 async function main() {
   logger.info("Resetting demo story data...");
 
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.code, "demo"));
+  const [tenant] = await db.select().from(company).where(eq(company.code, "demo"));
   if (!tenant) {
     logger.info("No demo tenant found — nothing to reset.");
     await pool.end();

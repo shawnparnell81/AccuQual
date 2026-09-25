@@ -8,7 +8,7 @@ import { checkSecondFactor, clearMfa, confirmEnrollment, evaluateMfa, markMfaReq
 import { db } from "../../db/index.js";
 import { users } from "../../drizzle/schema/users.js";
 import { roles } from "../../drizzle/schema/roles.js";
-import { tenants } from "../../drizzle/schema/tenants.js";
+import { company } from "../../drizzle/schema/company.js";
 import { ssoConnections } from "../../drizzle/schema/sso.js";
 import { passwordResetTokens } from "../../drizzle/schema/passwordResetTokens.js";
 import { refreshTokens } from "../../drizzle/schema/refreshTokens.js";
@@ -38,11 +38,11 @@ async function userWithRole(userId: number) {
       supplierId: users.supplierId,
       mfaEnabled: users.mfaEnabled,
       mfaRequiredSince: users.mfaRequiredSince,
-      tenantMfaPolicy: tenants.mfaPolicy,
+      tenantMfaPolicy: company.mfaPolicy,
     })
     .from(users)
     .leftJoin(roles, eq(users.roleId, roles.id))
-    .leftJoin(tenants, eq(users.tenantId, tenants.id))
+    .leftJoin(company, eq(users.tenantId, company.id))
     .where(eq(users.id, userId));
   return row;
 }
@@ -80,7 +80,7 @@ async function issueTokens(user: {
 }
 
 export async function register(input: { email: string; password: string; name?: string; tenantCode: string }) {
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.code, input.tenantCode));
+  const [tenant] = await db.select().from(company).where(eq(company.code, input.tenantCode));
   if (!tenant || tenant.status !== "active" || tenant.isDeleted) {
     throw AppError.badRequest("Unknown or inactive tenant code");
   }
@@ -107,14 +107,14 @@ export async function login(input: { email: string; password: string; rememberMe
     .select()
     .from(users)
     .leftJoin(roles, eq(users.roleId, roles.id))
-    .leftJoin(tenants, eq(users.tenantId, tenants.id))
+    .leftJoin(company, eq(users.tenantId, company.id))
     .where(sql`lower(${users.email}) = lower(${input.email})`);
   if (!row) throw AppError.unauthorized("Invalid credentials");
 
   const user = row.users;
   const roleName = row.roles?.name ?? null;
   if (!user.isActive) throw AppError.forbidden("Account is deactivated");
-  if (user.tenantId && (!row.tenants || row.tenants.status !== "active" || row.tenants.isDeleted)) {
+  if (user.tenantId && (!row.company || row.company.status !== "active" || row.company.isDeleted)) {
     throw AppError.forbidden("Tenant is inactive");
   }
 
@@ -141,16 +141,16 @@ export async function login(input: { email: string; password: string; rememberMe
   // when the tenant's policy says it must have one. Nothing is issued (no
   // tokens, no cookie) and the failure counters stay untouched until the
   // second step succeeds.
-  const mfa = evaluateMfa(user, roleName, row.tenants?.mfaPolicy);
+  const mfa = evaluateMfa(user, roleName, row.company?.mfaPolicy);
   if (user.mfaEnabled) return { mfaRequired: true as const, mfaToken: signMfaToken(user.id, "verify", user.tokenVersion) };
   if (mfa.state === "blocked") return { mfaEnrollmentRequired: true as const, mfaToken: signMfaToken(user.id, "enroll", user.tokenVersion) };
   if (mfa.required && !user.mfaRequiredSince) await markMfaRequired(user.id);
 
-  return completeLogin(user, roleName, row.tenants, mfa.state === "grace" ? mfa.graceEndsAt : null, input.rememberMe === true);
+  return completeLogin(user, roleName, row.company, mfa.state === "grace" ? mfa.graceEndsAt : null, input.rememberMe === true);
 }
 
 type LoginUserRow = typeof users.$inferSelect;
-type LoginTenantRow = typeof tenants.$inferSelect | null;
+type LoginTenantRow = typeof company.$inferSelect | null;
 
 /** Stamps the successful sign-in, clears the failed-attempt counters (and an expired lock), and issues the session. */
 async function completeLogin(user: LoginUserRow, roleName: string | null, tenant: LoginTenantRow, mfaGraceEndsAt: Date | null = null, remember = false) {
@@ -173,14 +173,14 @@ async function loginContext(userId: number) {
     .select()
     .from(users)
     .leftJoin(roles, eq(users.roleId, roles.id))
-    .leftJoin(tenants, eq(users.tenantId, tenants.id))
+    .leftJoin(company, eq(users.tenantId, company.id))
     .where(eq(users.id, userId));
   if (!row) throw AppError.unauthorized("Your sign-in expired. Please start again.");
   if (row.users.lockedUntil && row.users.lockedUntil.getTime() > Date.now()) {
     const minutes = Math.max(1, Math.ceil((row.users.lockedUntil.getTime() - Date.now()) / 60_000));
     throw new AppError(`Too many failed sign-in attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}, or reset your password.`, 429);
   }
-  return { user: row.users, roleName: row.roles?.name ?? null, tenant: row.tenants };
+  return { user: row.users, roleName: row.roles?.name ?? null, tenant: row.company };
 }
 
 /** Second step of a sign-in: the authenticator (or recovery) code. Wrong codes count toward the same lockout as wrong passwords. */
@@ -327,7 +327,7 @@ export async function refresh(refreshToken: string) {
   if (payload.jti) {
     await db.update(refreshTokens).set({ replacedByJti: tokens.refreshJti }).where(eq(refreshTokens.jti, payload.jti));
   }
-  const tenant = full.tenantId ? await tenantById(full.tenantId) : null;
+  const tenant = full.tenantId ? await tenantById() : null;
   return { user: sanitize(full), tenant, ...tokens };
 }
 
@@ -355,11 +355,10 @@ async function revokeAllRefreshTokens(userId: number): Promise<void> {
  * `tenant` from the same response, so a bootstrap-refresh is self-
  * sufficient on its own, the way an httpOnly-cookie session is supposed to be.
  */
-async function tenantById(tenantId: number) {
+async function tenantById() {
   const [row] = await db
-    .select({ id: tenants.id, name: tenants.name, code: tenants.code, branding: tenants.branding })
-    .from(tenants)
-    .where(eq(tenants.id, tenantId));
+    .select({ id: company.id, name: company.name, code: company.code, branding: company.branding })
+    .from(company);
   return row ?? null;
 }
 
@@ -411,7 +410,7 @@ export async function forgotPassword(email: string): Promise<void> {
   const [user] = await db.select().from(users).where(sql`lower(${users.email}) = lower(${email})`);
   if (!user || !user.isActive) return;
 
-  const rawToken = randomBytes(32).toString("hex");
+  const rawToken = randomBytes(32).function toString() { [native code] }("hex");
   await db.insert(passwordResetTokens).values({
     userId: user.id,
     tokenHash: hashResetToken(rawToken),
@@ -544,10 +543,10 @@ export async function newRecoveryCodes(userId: number, password: string, code: s
 
 /** Finishes a sign-in the identity provider already vouched for: the provider did the authenticating (including any MFA it enforces), so the local password/lockout/MFA steps do not apply. */
 export async function startSessionForSsoUser(userId: number) {
-  const [row] = await db.select().from(users).leftJoin(roles, eq(users.roleId, roles.id)).leftJoin(tenants, eq(users.tenantId, tenants.id)).where(eq(users.id, userId));
+  const [row] = await db.select().from(users).leftJoin(roles, eq(users.roleId, roles.id)).leftJoin(company, eq(users.tenantId, company.id)).where(eq(users.id, userId));
   if (!row || !row.users.isActive) throw AppError.forbidden("Account is deactivated");
-  if (row.users.tenantId && (!row.tenants || row.tenants.status !== "active" || row.tenants.isDeleted)) throw AppError.forbidden("Tenant is inactive");
-  return completeLogin(row.users, row.roles?.name ?? null, row.tenants);
+  if (row.users.tenantId && (!row.company || row.company.status !== "active" || row.company.isDeleted)) throw AppError.forbidden("Tenant is inactive");
+  return completeLogin(row.users, row.roles?.name ?? null, row.company);
 }
 
 /**

@@ -1,13 +1,13 @@
 import { and, eq } from "drizzle-orm";
 import { complaints, type Complaint } from "../../drizzle/schema/complaints.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { mergeFormData } from "../forms/formDataMerge.js";
 
 export const COMPLAINT_FORM_TYPE = "complaint";
 
 /** Record -> form: the complaint form's two fields (description, resolution) mirror the record. Empty values never blank what a user typed into the form. */
-export async function syncComplaintRecordToForm(db: TenantDb, c: Complaint, createdBy?: number): Promise<void> {
+export async function syncComplaintRecordToForm(db: Db, c: Complaint, createdBy?: number): Promise<void> {
   const patch: Record<string, unknown> = {};
   if (c.description) patch.description = c.description;
   if (c.resolution) patch.resolution = c.resolution;
@@ -16,7 +16,7 @@ export async function syncComplaintRecordToForm(db: TenantDb, c: Complaint, crea
 }
 
 /** Form -> record, after every save of the complaint form. Status never flows this way (guarded endpoints only); a closed complaint ignores late form edits. */
-export async function syncComplaintFormToRecord(db: TenantDb, id: number, data: Record<string, unknown>, performedBy?: number): Promise<void> {
+export async function syncComplaintFormToRecord(db: Db, id: number, data: Record<string, unknown>, performedBy?: number): Promise<void> {
   const [record] = await db.select().from(complaints).where(and(eq(complaints.id, id)));
   if (!record || record.status === "closed") return;
 

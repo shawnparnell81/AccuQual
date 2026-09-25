@@ -90,7 +90,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
 /**
  * A user's own theme override — scoped by req.user!.id alone (no admin
  * check, unlike GET/PATCH /users/:id, since this only ever reads/writes the
- * caller's own row). This router's withTenantDb already requires a
+ * caller's own row). This router's withDb already requires a
  * tenantId to reach here at all, so platform_admin accounts (no tenantId)
  * hit the same "Missing tenant context" 401 every other /users/* route
  * already gives them — not something new this endpoint introduces.

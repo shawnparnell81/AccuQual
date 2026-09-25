@@ -37,7 +37,6 @@ import { digitalTwinRouter } from "../modules/digital-twin/digital-twin.routes.j
 import { deviceIngestRouter } from "../modules/digital-twin/digital-twin.deviceIngest.routes.js";
 import { auditTrailRouter } from "../modules/audit-trail/audit-trail.routes.js";
 import { formsRouter } from "../modules/forms/forms.routes.js";
-import { platformRouter } from "../modules/platform/platform.routes.js";
 import { navRouter } from "../modules/nav/nav.routes.js";
 import { calendarRouter } from "../modules/calendar/calendar.routes.js";
 import { workerRouter } from "../modules/worker/worker.routes.js";
@@ -48,7 +47,7 @@ import { erpRouter } from "../modules/erp/erp.routes.js";
 import { erpRequisitionsRouter } from "../modules/erp/erpRequisitions.routes.js";
 import { erpPresetsRouter } from "../modules/erp/erpPresets.routes.js";
 import { erpSyncErrorsRouter } from "../modules/erp/erpSyncErrors.routes.js";
-import { tenantRouter } from "../modules/tenant/tenant.routes.js";
+import { tenantRouter } from "../modules/company/tenant.routes.js";
 import { searchRouter } from "../modules/search/search.routes.js";
 import { rmaRouter } from "../modules/rma/rma.routes.js";
 import { workOrdersRouter } from "../modules/work-orders/workOrders.routes.js";
@@ -73,7 +72,6 @@ import { permissionsRouter } from "../modules/permissions/permissions.routes.js"
 import { reportingRouter } from "../modules/reporting/reporting.routes.js";
 import { systemHealthRouter } from "../modules/system-health/systemHealth.routes.js";
 import { contactRouter } from "../modules/contact/contact.routes.js";
-import { billingRouter } from "../modules/billing/billing.routes.js";
 import { docsRouter } from "../docs/docs.routes.js";
 
 export const apiRouter = Router();
@@ -81,7 +79,6 @@ export const apiRouter = Router();
 // Before /auth: /auth/sso/* is its own router (no session yet), and authRouter would otherwise never see it as anything but an unknown path.
 apiRouter.use("/auth/sso", ssoPublicRouter);
 apiRouter.use("/contact", contactRouter);
-apiRouter.use("/billing", billingRouter);
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/sso", ssoAdminRouter);
 apiRouter.use("/data-export", dataExportRouter);
@@ -121,7 +118,6 @@ apiRouter.use("/audit-trail", auditTrailRouter);
 apiRouter.use("/notifications", notificationsMeRouter);
 apiRouter.use("/notifications", notificationsRouter);
 apiRouter.use("/forms", formsRouter);
-apiRouter.use("/platform", platformRouter);
 apiRouter.use("/nav", navRouter);
 apiRouter.use("/calendar", calendarRouter);
 apiRouter.use("/workers", workerRouter);

@@ -1,5 +1,5 @@
 import { and, eq, isNull, notInArray, or } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { users } from "../../drizzle/schema/users.js";
 import { roles } from "../../drizzle/schema/roles.js";
 import { workerProfiles, type EmploymentStatus } from "../../drizzle/schema/workerProfiles.js";
@@ -63,7 +63,7 @@ function toView(row: {
 }
 
 /** The roster: every internal user of this tenant, with their profile fields left-joined in (a user who has never been given a profile still appears, with employmentStatus defaulting to "active"). */
-export async function listWorkers(db: TenantDb): Promise<WorkerProfileView[]> {
+export async function listWorkers(db: Db): Promise<WorkerProfileView[]> {
   const rows = await db
     .select({
       userId: users.id,
@@ -87,7 +87,7 @@ export async function listWorkers(db: TenantDb): Promise<WorkerProfileView[]> {
   return rows.map(toView);
 }
 
-async function loadOne(db: TenantDb, userId: number, restrictToInternal: boolean): Promise<WorkerProfileView> {
+async function loadOne(db: Db, userId: number, restrictToInternal: boolean): Promise<WorkerProfileView> {
   const [row] = await db
     .select({
       userId: users.id,
@@ -113,30 +113,30 @@ async function loadOne(db: TenantDb, userId: number, restrictToInternal: boolean
 }
 
 /** Looking up SOMEONE ELSE (the `/workers/:userId` routes) — excludes external supplier/customer accounts; they're never a member of anyone's workforce roster. */
-export async function getWorkerProfile(db: TenantDb, userId: number): Promise<WorkerProfileView> {
+export async function getWorkerProfile(db: Db, userId: number): Promise<WorkerProfileView> {
   return loadOne(db, userId, true);
 }
 
 /** `/workers/me` — always the caller's own row, from their own verified JWT. No external-role exclusion: there's no privacy concern in a person, of any role, seeing their own mostly-empty profile. */
-export async function getOwnWorkerProfile(db: TenantDb, userId: number): Promise<WorkerProfileView> {
+export async function getOwnWorkerProfile(db: Db, userId: number): Promise<WorkerProfileView> {
   return loadOne(db, userId, false);
 }
 
 /** Whether a `worker_profiles` row exists yet — distinct from `getWorkerProfile`, which always returns a view (defaults filled in) as long as the user themselves exists. Used only to label an audit entry "create" vs "update" correctly. */
-export async function profileRowExists(db: TenantDb, userId: number): Promise<boolean> {
+export async function profileRowExists(db: Db, userId: number): Promise<boolean> {
   const [row] = await db.select({ id: workerProfiles.id }).from(workerProfiles).where(and(eq(workerProfiles.userId, userId)));
   return !!row;
 }
 
-export async function getWorkerActivity(db: TenantDb, userId: number): Promise<CalendarItem[]> {
+export async function getWorkerActivity(db: Db, userId: number): Promise<CalendarItem[]> {
   // Confirm the target user is a real, internal member of this tenant before aggregating — the same isolation check
   // getWorkerProfile does, so a permission-holding caller still can't probe another tenant's (or an external) user id.
   await getWorkerProfile(db, userId);
   return getItemsForUser(db, userId);
 }
 
-/** `/workers/me`'s activity half — always the caller's own id, so no existence/role re-check is needed; requireAuth + withTenantDb already guarantee it. */
-export async function getOwnWorkerActivity(db: TenantDb, userId: number): Promise<CalendarItem[]> {
+/** `/workers/me`'s activity half — always the caller's own id, so no existence/role re-check is needed; requireAuth + withDb already guarantee it. */
+export async function getOwnWorkerActivity(db: Db, userId: number): Promise<CalendarItem[]> {
   return getItemsForUser(db, userId);
 }
 
@@ -149,7 +149,7 @@ export interface UpsertWorkerProfileInput {
   notes?: string | null;
 }
 
-export async function upsertWorkerProfile(db: TenantDb, userId: number, input: UpsertWorkerProfileInput, updatedBy: number): Promise<WorkerProfileView> {
+export async function upsertWorkerProfile(db: Db, userId: number, input: UpsertWorkerProfileInput, updatedBy: number): Promise<WorkerProfileView> {
   const [target] = await db
     .select({ id: users.id })
     .from(users)

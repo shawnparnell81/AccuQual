@@ -16,7 +16,7 @@ function readHeaderSiteId(req: Request): number | null {
 }
 
 /**
- * Resolves the plant for this request. Must run after withTenantDb.
+ * Resolves the plant for this request. Must run after withDb.
  * Lists and creates for plant-scoped modules use `req.siteId`. Opening a
  * record by id uses `req.allowedSiteIds` so a person can still follow a
  * link to another plant they belong to.

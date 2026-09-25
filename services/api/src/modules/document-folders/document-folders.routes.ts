@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createDocumentFolderSchema, updateDocumentFolderSchema } from "./document-folders.validation.js";
@@ -12,7 +12,7 @@ export const documentFoldersRouter = Router();
 // authenticated tenant user could create/rename/delete folders and
 // upload/remove templates, bypassing the same "documents" gate its sibling
 // documents.routes.ts already enforces.
-documentFoldersRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("documents"));
+documentFoldersRouter.use(requireAuth, withDb, requireDepartmentAccess("documents"));
 
 // memoryStorage: files are modest-sized real documents (policies,
 // procedures, forms), and uploadTemplate/uploadDocument decide the on-disk

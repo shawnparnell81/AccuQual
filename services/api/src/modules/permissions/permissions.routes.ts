@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import {
   upsertDepartmentPermissionSchema,
@@ -30,7 +30,7 @@ import {
 } from "./permissions.controller.js";
 
 export const permissionsRouter = Router();
-permissionsRouter.use(requireAuth, withTenantDb);
+permissionsRouter.use(requireAuth, withDb);
 
 // Open to any authenticated tenant user — reading your OWN effective access
 // (or the fixed module catalog) isn't a configuration action.

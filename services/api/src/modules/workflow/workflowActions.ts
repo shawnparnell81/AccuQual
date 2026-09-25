@@ -1,4 +1,4 @@
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { registerActionHandler } from "./workflow-engine.js";
 import { sendEmail, notifyDepartment } from "../notifications/notification.service.js";
 import { notificationLog } from "../../drizzle/schema/notifications.js";
@@ -27,10 +27,10 @@ import { triggerErpSync } from "../settings/settings.erpSync.js";
  * keys before calling runWorkflow — a deliberate convention (not a new
  * parameter on runWorkflow itself, which stays a pure, DB-agnostic
  * function) so the SAME engine code works whether it's called from the API
- * process (a real `TenantDb` inside a request transaction) or the
+ * process (a real `Db` inside a request transaction) or the
  * workflow-worker process (its own plain pool connection, tenant-filtered
  * explicitly — see workers/workflow-worker/src/db.ts):
- *   __db: TenantDb-compatible query interface for this tenant
+ *   __db: Db-compatible query interface for this tenant
  *   __tenantId: number
  *   __performedBy: number | undefined — the user who triggered this run,
  *     or undefined for a worker-driven run with no human actor (audit
@@ -88,7 +88,7 @@ registerActionHandler("send_email", async (node, context, dryRun) => {
   }
 
   const status = await sendEmail({ to, subject, body });
-  const db = context.__db as TenantDb | undefined;
+  const db = context.__db as Db | undefined;
   const tenantId = context.__tenantId as number | undefined;
   if (db && tenantId) await db.insert(notificationLog).values({ channel: "email", recipient: to, subject, body, status, relatedEntityType: "WorkflowRun" });
   recordActionRun(context, "send_email", { to, subject, status });
@@ -107,7 +107,7 @@ registerActionHandler("notify_department", async (node, context, dryRun) => {
     recordActionRun(context, "notify_department", { simulated: true, department: config.department, subject });
     return;
   }
-  const db = context.__db as TenantDb | undefined;
+  const db = context.__db as Db | undefined;
   const tenantId = context.__tenantId as number | undefined;
   if (!db || !tenantId) {
     recordActionRun(context, "notify_department", { skipped: true, reason: "no tenant database context available" });
@@ -120,7 +120,7 @@ registerActionHandler("notify_department", async (node, context, dryRun) => {
 registerActionHandler("notify_supplier", async (node, context, dryRun) => {
   const config = node.config as { subject?: string; body?: string };
   const supplierId = toNumber(context.supplierId);
-  const db = context.__db as TenantDb | undefined;
+  const db = context.__db as Db | undefined;
   const tenantId = context.__tenantId as number | undefined;
   if (!supplierId || !db || !tenantId) {
     recordActionRun(context, "notify_supplier", { skipped: true, reason: "no supplierId in this event's context" });
@@ -154,7 +154,7 @@ registerActionHandler("create_ncr", async (node, context, dryRun) => {
     recordActionRun(context, "create_ncr", { simulated: true, title, severity: config.severity ?? null });
     return;
   }
-  const db = context.__db as TenantDb | undefined;
+  const db = context.__db as Db | undefined;
   const tenantId = context.__tenantId as number | undefined;
   if (!db || !tenantId) {
     recordActionRun(context, "create_ncr", { skipped: true, reason: "no tenant database context available" });
@@ -193,7 +193,7 @@ registerActionHandler("escalate_capa", async (node, context, dryRun) => {
     recordActionRun(context, "escalate_capa", { simulated: true, rootCause, ncrId: ncrId ?? null });
     return;
   }
-  const db = context.__db as TenantDb | undefined;
+  const db = context.__db as Db | undefined;
   const tenantId = context.__tenantId as number | undefined;
   if (!db || !tenantId) {
     recordActionRun(context, "escalate_capa", { skipped: true, reason: "no tenant database context available" });
@@ -236,7 +236,7 @@ registerActionHandler("assign_user", async (node, context, dryRun) => {
     recordActionRun(context, "assign_user", { simulated: true, module: config.module, entityId, userId });
     return;
   }
-  const db = context.__db as TenantDb | undefined;
+  const db = context.__db as Db | undefined;
   const tenantId = context.__tenantId as number | undefined;
   if (!db || !tenantId) {
     recordActionRun(context, "assign_user", { skipped: true, reason: "no tenant database context available" });
@@ -260,7 +260,7 @@ registerActionHandler("ai_suggestion", async (node, context, dryRun) => {
     recordActionRun(context, "ai_suggestion", { simulated: true, note: "would call the AI pipeline — skipped in simulation to avoid spending real usage quota" });
     return;
   }
-  const db = context.__db as TenantDb | undefined;
+  const db = context.__db as Db | undefined;
   const tenantId = context.__tenantId as number | undefined;
   if (!db || !tenantId) {
     recordActionRun(context, "ai_suggestion", { skipped: true, reason: "no tenant database context available" });
@@ -268,7 +268,7 @@ registerActionHandler("ai_suggestion", async (node, context, dryRun) => {
   }
 
   const input = cleanContext(context);
-  const { suggestion, output } = await runPipelineAndRecord(db, tenantId, context.__performedBy as number | undefined, "workflow", "workflow_ai_note", input, "AI-generated workflow note", (opts) =>
+  const { suggestion, output } = await runPipelineAndRecord(db, context.__performedBy as number | undefined, "workflow", "workflow_ai_note", input, "AI-generated workflow note", (opts) =>
     runWorkflowAiNotePipeline(input, opts)
   );
   recordActionRun(context, "ai_suggestion", { suggestionId: suggestion.id, output });
@@ -283,7 +283,7 @@ registerActionHandler("erp_sync", async (_node, context, dryRun) => {
     recordActionRun(context, "erp_sync", { simulated: true, note: "would trigger the configured ERP sync" });
     return;
   }
-  const db = context.__db as TenantDb | undefined;
+  const db = context.__db as Db | undefined;
   const tenantId = context.__tenantId as number | undefined;
   if (!db || !tenantId) {
     recordActionRun(context, "erp_sync", { skipped: true, reason: "no tenant database context available" });

@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { and, eq } from "drizzle-orm";
 import { AppError } from "../utils/appError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import type { TenantDb } from "../lib/tenantScope.js";
+import type { Db } from "../lib/requestDb.js";
 import { departmentPermissions, permissionRoleModules, userPermissionRoles } from "../drizzle/schema/permissions.js";
 
 export type AccessLevel = "none" | "read" | "edit";
@@ -140,7 +140,7 @@ function higherLevel(a: AccessLevel, b: AccessLevel): AccessLevel {
  * tenant with no row for this (department, module) pair simply has no
  * access to it — "none" — full stop.
  */
-export async function getDepartmentAccessLevel(db: TenantDb, department: Department | null, moduleName: ResourceKey): Promise<AccessLevel> {
+export async function getDepartmentAccessLevel(db: Db, department: Department | null, moduleName: ResourceKey): Promise<AccessLevel> {
   if (!department) return "none";
   const [row] = await db
     .select({ accessLevel: departmentPermissions.accessLevel })
@@ -150,7 +150,7 @@ export async function getDepartmentAccessLevel(db: TenantDb, department: Departm
 }
 
 /** Isolates source 2 alone (every custom permission-role grant this user holds for this module, at its highest level) — same reasoning as getDepartmentAccessLevel above. */
-export async function getRoleGrantedAccessLevel(db: TenantDb, userId: number, moduleName: ResourceKey): Promise<AccessLevel> {
+export async function getRoleGrantedAccessLevel(db: Db, userId: number, moduleName: ResourceKey): Promise<AccessLevel> {
   const roleRows = await db
     .select({ accessLevel: permissionRoleModules.accessLevel })
     .from(userPermissionRoles)
@@ -179,7 +179,7 @@ export async function getRoleGrantedAccessLevel(db: TenantDb, userId: number, mo
  * on this user's very next request.
  */
 export async function getUserAccessLevel(
-  db: TenantDb,
+  db: Db,
   user: { id: number; roleName: string | null; department: string | null },
   moduleName: ResourceKey
 ): Promise<AccessLevel> {
@@ -206,7 +206,7 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
     if (role === "platform_admin" || role === "admin") return next();
     if (!req.user || !req.db || req.tenantId === undefined) return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
 
-    const level = await getUserAccessLevel(req.db as TenantDb, req.user, resourceKey);
+    const level = await getUserAccessLevel(req.db as Db, req.user, resourceKey);
 
     if (level === "none") {
       return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
@@ -271,7 +271,7 @@ export const requireSupplierPortalAccess = asyncHandler(async (req: Request, _re
 
   if (!req.user || !req.db || req.tenantId === undefined) return next(AppError.forbidden("No access to the Supplier Portal for your department"));
 
-  const level = await getUserAccessLevel(req.db as TenantDb, req.user, "supplier_portal");
+  const level = await getUserAccessLevel(req.db as Db, req.user, "supplier_portal");
   if (level === "none") {
     return next(AppError.forbidden("No access to the Supplier Portal for your department"));
   }

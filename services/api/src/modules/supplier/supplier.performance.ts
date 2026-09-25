@@ -4,7 +4,7 @@ import { suppliers } from "../../drizzle/schema/supplier.js";
 import { inventoryItems, inventoryMovements, inventoryReorderRequests, inventoryAlerts } from "../../drizzle/schema/inventory.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 const DELIVERY_FREQUENCY_WINDOW_DAYS = 90;
 const OVERDUE_PENDING_THRESHOLD_DAYS = 14;
@@ -46,7 +46,7 @@ export interface SupplierPerformance {
  * same item at or after the request was sent, which is the best available
  * real signal without inventing a link that doesn't exist.
  */
-export async function computeSupplierPerformance(db: TenantDb, supplierId: number): Promise<SupplierPerformance> {
+export async function computeSupplierPerformance(db: Db, supplierId: number): Promise<SupplierPerformance> {
   const items = await db.select().from(inventoryItems).where(and(eq(inventoryItems.defaultSupplierId, supplierId)));
   const itemIds = items.map((i) => i.id);
 

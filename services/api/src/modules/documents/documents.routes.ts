@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createDocumentSchema, updateDocumentSchema } from "./documents.validation.js";
@@ -28,7 +28,7 @@ import { registerDocumentVersionRoutes } from "./documents.versions.routes.js";
 // Document versioning: revisions are drafted, reviewed and published through the shared version-control engine
 // (documents.versions.routes.ts), which adds its own per-action permission gate (document.view / edit / review / publish).
 export const documentsRouter = Router();
-documentsRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("documents"));
+documentsRouter.use(requireAuth, withDb, requireDepartmentAccess("documents"));
 
 // Fixed-path routes first — "expiring" and "retention" would otherwise be
 // swallowed by GET/POST "/:id"-shaped routes below.

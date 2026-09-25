@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { baseHandlers } from "./customerCommunications.controller.js";
@@ -9,7 +9,7 @@ import { createCommunicationSchema, updateCommunicationSchema } from "./customer
 export const customerCommunicationsRouter = Router();
 // Customer Service/Quality: edit. Every other department: read. See
 // defaultPermissions.ts's own comment on this module's entry.
-customerCommunicationsRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("customer_communications"));
+customerCommunicationsRouter.use(requireAuth, withDb, requireDepartmentAccess("customer_communications"));
 
 customerCommunicationsRouter.get("/", baseHandlers.list);
 customerCommunicationsRouter.post("/", validate(createCommunicationSchema), baseHandlers.create);

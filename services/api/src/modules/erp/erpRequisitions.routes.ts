@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createRequisitionSchema, updateRequisitionSchema } from "./erp.validation.js";
@@ -27,7 +27,7 @@ import { requisitionAiJustifyHandler } from "./requisition.ai.js";
  * convert-to-po are purchasing-only, enforced inline in erp.controller.ts.
  */
 export const erpRequisitionsRouter = Router();
-erpRequisitionsRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("purchase_requisitions"));
+erpRequisitionsRouter.use(requireAuth, withDb, requireDepartmentAccess("purchase_requisitions"));
 
 erpRequisitionsRouter.get("/", listRequisitionsHandler);
 erpRequisitionsRouter.post("/", validate(createRequisitionSchema), createRequisitionHandler);

@@ -2,7 +2,7 @@
 // test/ (those are pure-logic unit tests with no DB connection; see
 // test/setup.ts's own comment). This is Inspection Report R08: the highest
 // blast-radius category this app has is "did a query forget its own tenantId
-// filter," and the RLS role-switch (see src/lib/tenantScope.ts) is now the
+// filter," and the RLS role-switch (see src/lib/requestDb.ts) is now the
 // real second layer that's supposed to catch it even then — this test
 // exercises the actual HTTP path, not a mock, so it fails the moment either
 // layer regresses.

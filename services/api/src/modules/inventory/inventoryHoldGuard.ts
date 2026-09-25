@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { inventoryLots } from "../../drizzle/schema/inventoryLots.js";
 import { AppError } from "../../utils/appError.js";
@@ -12,7 +12,7 @@ import { AppError } from "../../utils/appError.js";
  */
 
 /** Units of an item currently held (0 when none). */
-export async function heldUnits(db: TenantDb, itemId: number): Promise<number> {
+export async function heldUnits(db: Db, itemId: number): Promise<number> {
   const [item] = await db.select({ held: inventoryItems.heldQty }).from(inventoryItems).where(and(eq(inventoryItems.id, itemId)));
   return Number(item?.held ?? 0);
 }
@@ -21,7 +21,7 @@ export async function heldUnits(db: TenantDb, itemId: number): Promise<number> {
  * Throws 409 when taking `quantity` out of an item that has `totalOnHand` in stock would touch held units. When a lot is named, that
  * lot's own held units are protected too, so releasing one lot's hold never frees another's.
  */
-export async function assertNotHeld(db: TenantDb, itemId: number, quantity: number, totalOnHand: number, lotId?: number): Promise<void> {
+export async function assertNotHeld(db: Db, itemId: number, quantity: number, totalOnHand: number, lotId?: number): Promise<void> {
   const held = await heldUnits(db, itemId);
   if (held > 0 && totalOnHand - quantity < held) {
     const usable = Math.max(totalOnHand - held, 0);

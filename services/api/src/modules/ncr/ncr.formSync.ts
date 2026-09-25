@@ -1,6 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { formData } from "../../drizzle/schema/forms.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 const FORM_TYPE = "ncr";
 const ENTITY_TYPE = "ncr";
@@ -73,7 +73,7 @@ function setFirstRowField(existing: unknown, columnKey: string, value: string, m
  * passed in `patch`, never the RCA method, 5-Why table, closure
  * signatures, or any other section a user has filled in directly.
  */
-export async function syncNcrFormData(db: TenantDb, ncrId: number, patch: NcrFormSyncPatch, createdBy?: number): Promise<void> {
+export async function syncNcrFormData(db: Db, ncrId: number, patch: NcrFormSyncPatch, createdBy?: number): Promise<void> {
   const [existing] = await db
     .select()
     .from(formData)

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createRiskSchema, updateRiskSchema, addFmeaItemSchema, createMitigationSchema, updateMitigationSchema } from "./risk.validation.js";
@@ -27,7 +27,7 @@ export const riskRouter = Router();
 // quality+engineering or quality-only; delete is admin-only) is enforced
 // inline in risk.controller.ts's assertDepartment, same pattern every other
 // bespoke module in this app uses.
-riskRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("risk"));
+riskRouter.use(requireAuth, withDb, requireDepartmentAccess("risk"));
 
 riskRouter.get("/", listRisksHandler);
 riskRouter.post("/", validate(createRiskSchema), createRiskHandler);

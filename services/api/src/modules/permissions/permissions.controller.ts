@@ -21,7 +21,7 @@ import {
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 // ---------------------------------------------------------------------------
 // Read endpoints open to any authenticated tenant user
@@ -34,7 +34,7 @@ export const listModulesHandler = asyncHandler(async (_req: Request, res: Respon
 
 /** GET /permissions/effective — the CURRENT user's own effective access to every module, computed live. This is what the frontend's button/nav gating should read instead of a static config file. */
 export const getMyEffectivePermissionsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const db = req.db! as TenantDb;
+  const db = req.db! as Db;
   const user = { id: req.user!.id, roleName: req.user!.roleName, department: req.user!.department };
 
   const entries = await Promise.all(RESOURCE_KEYS.map(async (key) => [key, await getUserAccessLevel(db, user, key)] as const));
@@ -278,7 +278,7 @@ export const deleteUserRoleHandler = asyncHandler(async (req: Request, res: Resp
 /** GET /permissions/users/:userId/effective — the full per-module breakdown for one user: their real effective level (department baseline, custom-role grants, and the admin bypass, exactly as getUserAccessLevel computes it everywhere else in the app) plus, for transparency, the department-only baseline so an admin can see how much of that level (if any) came from a custom role grant. */
 export const getUserEffectivePermissionsHandler = asyncHandler(async (req: Request, res: Response) => {
   const userId = Number(req.params.userId);
-  const db = req.db! as TenantDb;
+  const db = req.db! as Db;
 
   const [targetUser] = await db
     .select({ id: users.id, email: users.email, department: users.department, roleName: roles.name })

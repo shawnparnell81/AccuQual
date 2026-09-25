@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb, type TenantDb } from "../../lib/tenantScope.js";
+import { withDb, type Db } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { requirePermission } from "../../middleware/requirePermission.js";
 import { validate } from "../../middleware/validate.js";
@@ -14,7 +14,7 @@ const idParam = (req: Request) => {
   if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("Invalid id");
   return id;
 };
-const dbOf = (req: Request) => req.db as TenantDb;
+const dbOf = (req: Request) => req.db as Db;
 const actorOf = (req: Request) => ({ id: req.user!.id, roleName: req.user!.roleName });
 
 /**
@@ -24,7 +24,7 @@ const actorOf = (req: Request) => ({ id: req.user!.id, roleName: req.user!.roleN
  *   quarantine.release  release or destroy a hold (edit access AND a reviewer role: admin or quality manager)
  */
 export const quarantineRouter = Router();
-quarantineRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("quarantine"));
+quarantineRouter.use(requireAuth, withDb, requireDepartmentAccess("quarantine"));
 
 const view = requirePermission("quarantine.view");
 const manage = requirePermission("quarantine.manage");

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createAccountSchema, updateAccountSchema, createActivitySchema, createQuoteSchema, updateQuoteSchema, createContractSchema, updateContractSchema } from "./sales.validation.js";
@@ -34,7 +34,7 @@ export const salesRouter = Router();
 // Per-action gating (delete is admin-only, no department at all) is inline
 // in sales.controller.ts's assertDepartment/assertAdmin, same pattern as
 // risk/feasibility.
-salesRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("sales"));
+salesRouter.use(requireAuth, withDb, requireDepartmentAccess("sales"));
 
 salesRouter.get("/accounts", listAccountsHandler);
 salesRouter.post("/accounts", validate(createAccountSchema), createAccountHandler);

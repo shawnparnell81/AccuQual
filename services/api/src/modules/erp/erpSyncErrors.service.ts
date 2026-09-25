@@ -1,13 +1,13 @@
 import { createHmac } from "node:crypto";
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { erpSyncErrors, type ErpErrorType, type ErpSyncErrorRow } from "../../drizzle/schema/erpSyncErrors.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { logger } from "../../utils/logger.js";
 import { assertSafeWebhookUrl } from "../../utils/ssrfGuard.js";
 import { env } from "../../config/env.js";
-import { decryptSecret } from "../tenant/crypto.js";
+import { decryptSecret } from "../company/crypto.js";
 import { loadTenantForSettings, getErpSyncSettings } from "../settings/settings.service.js";
 import { getActivePresetCached } from "./erpPresets.service.js";
 import { buildErpPayload, recordSyncError } from "./erpMappingEngine.js";
@@ -25,7 +25,7 @@ export interface ListErrorsFilters {
 }
 
 /** Newest-first, filtered + paginated — same limit/offset + count() shape as ai.controller.ts's listSuggestions. */
-export async function listErrors(db: TenantDb, filters: ListErrorsFilters, pagination: { limit?: number; offset?: number }) {
+export async function listErrors(db: Db, filters: ListErrorsFilters, pagination: { limit?: number; offset?: number }) {
   const limit = Math.min(pagination.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
   const offset = Math.max(pagination.offset ?? 0, 0);
 
@@ -45,13 +45,13 @@ export async function listErrors(db: TenantDb, filters: ListErrorsFilters, pagin
   return { rows, total: totalRows[0]?.total ?? 0, limit, offset };
 }
 
-export async function getError(db: TenantDb, id: number): Promise<ErpSyncErrorRow> {
+export async function getError(db: Db, id: number): Promise<ErpSyncErrorRow> {
   const [row] = await db.select().from(erpSyncErrors).where(and(eq(erpSyncErrors.id, id)));
   if (!row) throw AppError.notFound("ERP sync error");
   return row;
 }
 
-export async function resolveError(db: TenantDb, id: number, resolvedBy: number | undefined): Promise<ErpSyncErrorRow> {
+export async function resolveError(db: Db, id: number, resolvedBy: number | undefined): Promise<ErpSyncErrorRow> {
   await getError(db, id); // 404s if missing/not this tenant's
   const [updated] = await db
     .update(erpSyncErrors)
@@ -93,12 +93,12 @@ async function attemptWebhookDelivery(webhookUrl: string, webhookSecretEncrypted
  * non-throwing) and leaves the original exactly as it was, so the error
  * history stays an honest log rather than being overwritten in place.
  */
-export async function retryError(db: TenantDb, tenantId: number, id: number, performedBy: number | undefined): Promise<{ resolved: boolean; error: ErpSyncErrorRow }> {
+export async function retryError(db: Db, tenantId: number, id: number, performedBy: number | undefined): Promise<{ resolved: boolean; error: ErpSyncErrorRow }> {
   const original = await getError(db, id);
   if (original.resolvedAt) throw AppError.badRequest("This error is already resolved.");
 
   if (original.errorType === "erpApiError") {
-    const tenant = await loadTenantForSettings(db, tenantId);
+    const tenant = await loadTenantForSettings(db);
     const config = getErpSyncSettings(tenant);
     if (!config.webhookUrl) {
       await recordSyncError(db, { module: original.module, presetId: original.presetId ?? undefined, presetVersion: original.presetVersion ?? undefined, stage: "erpApi", message: "No webhook URL configured — nothing to retry." });

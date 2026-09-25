@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { eq, and, gte, inArray, sql } from "drizzle-orm";
-import { tenants } from "../../drizzle/schema/tenants.js";
+import { company } from "../../drizzle/schema/company.js";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
@@ -11,14 +11,14 @@ import { env } from "../../config/env.js";
 
 /**
  * Self-service settings for the CURRENT tenant only, scoped by req.tenantId
- * (set by withTenantDb) — never a foreign tenant id in the URL. Cross-tenant
+ * (set by withDb) — never a foreign tenant id in the URL. Cross-tenant
  * management (any tenant, by a platform_admin) is a different, existing
  * surface: modules/platform. This module is "my own tenant's admin
  * settings", the same distinction Settings vs. Platform Administration
  * already draws in the frontend.
  */
 async function loadTenant(req: Request) {
-  const [tenant] = await req.db!.select().from(tenants).where(eq(tenants.id, req.tenantId!));
+  const [tenant] = await req.db!.select().from(company);
   if (!tenant) throw AppError.notFound("Tenant");
   return tenant;
 }
@@ -36,7 +36,7 @@ export const updateBrandingHandler = asyncHandler(async (req: Request, res: Resp
   const merged = { ...tenant.branding, ...patch };
   const fieldsChanged = Object.keys(body);
 
-  const [updated] = await req.db!.update(tenants).set({ branding: merged }).where(eq(tenants.id, req.tenantId!)).returning();
+  const [updated] = await req.db!.update(company).set({ branding: merged }).returning();
   await recordAuditTrail(req.db!, { entityType: "Tenant", entityId: req.tenantId!, action: "update", changes: { fieldsChanged }, performedBy: req.user?.id });
   res.json(updated!.branding);
 });
@@ -89,7 +89,7 @@ export const updateProfileHandler = asyncHandler(async (req: Request, res: Respo
   }
   patch.profile = mergedProfile;
 
-  const [updated] = await req.db!.update(tenants).set(patch).where(eq(tenants.id, req.tenantId!)).returning();
+  const [updated] = await req.db!.update(company).set(patch).returning();
   await recordAuditTrail(req.db!, {
     entityType: "Tenant",
     entityId: req.tenantId!,
@@ -166,7 +166,7 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
   if (monthlyLimit !== undefined) flatPatch.aiMonthlyLimit = monthlyLimit;
   if (limitEnforced !== undefined) flatPatch.aiLimitEnforced = limitEnforced;
 
-  const [updated] = await req.db!.update(tenants).set({ aiConfig: merged, ...flatPatch }).where(eq(tenants.id, req.tenantId!)).returning();
+  const [updated] = await req.db!.update(company).set({ aiConfig: merged, ...flatPatch }).returning();
 
   // Never log apiKey itself, encrypted or not — only what changed and to what non-secret values.
   await recordAuditTrail(req.db!, {
@@ -297,7 +297,7 @@ export const getSecurityHandler = asyncHandler(async (req: Request, res: Respons
 export const updateSecurityHandler = asyncHandler(async (req: Request, res: Response) => {
   const tenant = await loadTenant(req);
   const { mfaPolicy } = req.body as { mfaPolicy: "optional" | "admins" | "all" };
-  await req.db!.update(tenants).set({ mfaPolicy }).where(eq(tenants.id, req.tenantId!));
+  await req.db!.update(company).set({ mfaPolicy });
   await recordAuditTrail(req.db!, {
     entityType: "Tenant",
     entityId: req.tenantId!,
@@ -320,6 +320,6 @@ export const updateOnboardingHandler = asyncHandler(async (req: Request, res: Re
   const existing = tenant.onboardingProgress ?? { dismissed: false, completedItems: [] };
   const body = req.body as { completedItems?: string[]; dismissed?: boolean };
   const merged = { dismissed: body.dismissed ?? existing.dismissed, completedItems: body.completedItems ?? existing.completedItems };
-  await req.db!.update(tenants).set({ onboardingProgress: merged }).where(eq(tenants.id, req.tenantId!));
+  await req.db!.update(company).set({ onboardingProgress: merged });
   res.json(merged);
 });

@@ -36,7 +36,7 @@ export const DEFAULT_MAX_SINGLE_FILE_BYTES = 100 * 1024 * 1024;
  * One consistent, read-only, tenant-scoped snapshot. `REPEATABLE READ` means every table is read as of the same
  * instant (an export taken while people are working is still internally consistent), and the switch into the
  * restricted `accuqual_app` role means Postgres row-level security — not just our WHERE clause — keeps every row to
- * this tenant. Uses its own connection because the request-scoped one (lib/tenantScope.ts) commits on res.json/send,
+ * this tenant. Uses its own connection because the request-scoped one (lib/requestDb.ts) commits on res.json/send,
  * which a streamed download never calls.
  */
 async function withSnapshot<T>(tenantId: number, fn: (client: PoolClient) => Promise<T>): Promise<T> {
@@ -79,8 +79,8 @@ export async function describeExport(tenantId: number): Promise<ExportDescriptio
 
 function cell(value: unknown): unknown {
   if (value instanceof Date) return value.toISOString();
-  if (Buffer.isBuffer(value)) return value.toString("base64");
-  if (typeof value === "bigint") return value.toString();
+  if (Buffer.isBuffer(value)) return value.function toString() { [native code] }("base64");
+  if (typeof value === "bigint") return value.function toString() { [native code] }();
   if (value && typeof value === "object") return scrubJson(value);
   return value;
 }

@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { and, eq, gte, ne, or, sql } from "drizzle-orm";
 import { asyncHandler } from "../../utils/asyncHandler.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { audits } from "../../drizzle/schema/audits.js";
@@ -46,7 +46,7 @@ function plantLimit(siteId: number | null | undefined, column: unknown) {
   return eq(column as never, siteId);
 }
 
-export async function getItemsForUser(db: TenantDb, userId: number, siteId?: number | null): Promise<CalendarItem[]> {
+export async function getItemsForUser(db: Db, userId: number, siteId?: number | null): Promise<CalendarItem[]> {
   const monthStart = startOfMonth();
 
   const [myNcrs, myCapas, myAudits, myTraining, myDocuments, myCrars] = await Promise.all([

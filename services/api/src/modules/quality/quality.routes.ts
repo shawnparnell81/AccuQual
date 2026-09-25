@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createDiscrepancySchema, updateDiscrepancySchema, disposeDiscrepancySchema } from "./quality.validation.js";
@@ -8,7 +8,7 @@ import { baseHandlers, updateHandler, investigateHandler, disposeHandler, closeH
 
 export const qualityRouter = Router();
 // Turns on PERMISSION_MATRIX.di (quality: edit) — previously unenforced.
-qualityRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("di"));
+qualityRouter.use(requireAuth, withDb, requireDepartmentAccess("di"));
 
 qualityRouter.get("/", baseHandlers.list);
 qualityRouter.post("/", validate(createDiscrepancySchema), baseHandlers.create);

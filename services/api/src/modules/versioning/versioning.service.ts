@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, max } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { controlledVersions, type ControlledVersion, type VersionSubject } from "../../drizzle/schema/versioning.js";
 import { users } from "../../drizzle/schema/users.js";
 import { AppError } from "../../utils/appError.js";
@@ -31,13 +31,13 @@ export interface SubjectAdapter {
   /** Human noun for messages, e.g. "workflow". */
   noun: string;
   /** The live record's current state, used to seed version 1 for subjects that pre-date versioning. Throws 404 if the subject does not exist. */
-  loadLive(db: TenantDb, tenantId: number, subjectId: number): Promise<LiveState>;
+  loadLive(db: Db, tenantId: number, subjectId: number): Promise<LiveState>;
   /** Empty starting payload for a subject with no content yet. */
   blank(): Record<string, unknown>;
   /** Errors block submitting/publishing; warnings are shown only. */
   validate(payload: Record<string, unknown>): { errors: Issue[]; warnings: Issue[] };
   /** Writes a version's payload into the live record. Runs inside the publishing transaction. */
-  apply(db: TenantDb, tenantId: number, subjectId: number, payload: Record<string, unknown>, info: { versionNumber: number; actor: number; firstPublish: boolean; previousLive: Record<string, unknown> | null; version: ControlledVersion }): Promise<void>;
+  apply(db: Db, tenantId: number, subjectId: number, payload: Record<string, unknown>, info: { versionNumber: number; actor: number; firstPublish: boolean; previousLive: Record<string, unknown> | null; version: ControlledVersion }): Promise<void>;
   diff(before: Record<string, unknown>, after: Record<string, unknown>): DiffResult;
   /** Departments told when a version is published. */
   notifyDepartments: Department[];
@@ -46,16 +46,16 @@ export interface SubjectAdapter {
   /** Status version 1 starts in for a subject that pre-dates versioning (default "published"). */
   bootstrapStatus?(live: LiveState): "published" | "draft" | "in_review";
   /** Refuses starting a new draft or rollback draft (e.g. a retired document). Throw an AppError. */
-  guardDraft?(db: TenantDb, tenantId: number, subjectId: number): Promise<void>;
+  guardDraft?(db: Db, tenantId: number, subjectId: number): Promise<void>;
   /** The content of a new draft or rollback draft, derived from the payload it starts from (e.g. next revision code). */
   seedDraft?(payload: Record<string, unknown>, ctx: { versionNumber: number; rollbackTo?: number; currentPayload: Record<string, unknown> | null }): Record<string, unknown>;
   /**
    * Checks that need the database: references exist in this organization, no duplicate revision code. "save" runs on
    * every draft save (security-relevant checks only); "submit" and "publish" also run the completeness checks.
    */
-  checkPayload?(db: TenantDb, tenantId: number, subjectId: number, versionNumber: number, payload: Record<string, unknown>, stage: "save" | "submit" | "publish"): Promise<Issue[]>;
+  checkPayload?(db: Db, tenantId: number, subjectId: number, versionNumber: number, payload: Record<string, unknown>, stage: "save" | "submit" | "publish"): Promise<Issue[]>;
   /** Runs inside the request transaction after each lifecycle step, so a mirrored status on the live record stays true. */
-  onTransition?(db: TenantDb, tenantId: number, subjectId: number, event: TransitionEvent): Promise<void>;
+  onTransition?(db: Db, tenantId: number, subjectId: number, event: TransitionEvent): Promise<void>;
   /** When true, sending for review and each review decision also notify the people involved. */
   notifyReviewLifecycle?: boolean;
 }
@@ -80,12 +80,12 @@ export interface Actor {
 
 const conflict = (message: string) => new AppError(message, 409);
 
-async function audit(db: TenantDb, adapter: SubjectAdapter, subjectId: number, action: "create" | "update" | "status_change" | "delete", actor: number | undefined, changes: Record<string, unknown>) {
+async function audit(db: Db, adapter: SubjectAdapter, subjectId: number, action: "create" | "update" | "status_change" | "delete", actor: number | undefined, changes: Record<string, unknown>) {
   await recordAuditTrail(db, { entityType: adapter.entityType, entityId: subjectId, action, changes, performedBy: actor });
 }
 
 /** Gives a subject that pre-dates versioning its version 1 (the live record as it stands), so the timeline starts from truth, not from nothing. */
-export async function ensureBootstrapped(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number): Promise<void> {
+export async function ensureBootstrapped(db: Db, adapter: SubjectAdapter, tenantId: number, subjectId: number): Promise<void> {
   const live = await adapter.loadLive(db, tenantId, subjectId); // 404s for a subject that does not exist
   const [any] = await db
     .select({ id: controlledVersions.id })
@@ -107,7 +107,7 @@ export async function ensureBootstrapped(db: TenantDb, adapter: SubjectAdapter, 
   }).onConflictDoNothing(); // two first requests may race; either one seeds version 1
 }
 
-export async function listVersions(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number) {
+export async function listVersions(db: Db, adapter: SubjectAdapter, tenantId: number, subjectId: number) {
   await ensureBootstrapped(db, adapter, tenantId, subjectId);
   const rows = await db
     .select()
@@ -125,7 +125,7 @@ export async function listVersions(db: TenantDb, adapter: SubjectAdapter, tenant
   }));
 }
 
-async function userNames(db: TenantDb, ids: (number | null)[]): Promise<Map<number, string>> {
+async function userNames(db: Db, ids: (number | null)[]): Promise<Map<number, string>> {
   const unique = [...new Set(ids.filter((i): i is number => typeof i === "number"))];
   if (unique.length === 0) return new Map();
   const rows = await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(inArray(users.id, unique));
@@ -133,7 +133,7 @@ async function userNames(db: TenantDb, ids: (number | null)[]): Promise<Map<numb
 }
 const nameOf = (m: Map<number, string>, id: number | null) => (id === null ? null : (m.get(id) ?? null));
 
-export async function getVersion(db: TenantDb, adapter: SubjectAdapter, subjectId: number, versionId: number): Promise<ControlledVersion> {
+export async function getVersion(db: Db, adapter: SubjectAdapter, subjectId: number, versionId: number): Promise<ControlledVersion> {
   const [row] = await db
     .select()
     .from(controlledVersions)
@@ -143,7 +143,7 @@ export async function getVersion(db: TenantDb, adapter: SubjectAdapter, subjectI
 }
 
 /** The subject's published version and its open (draft or in-review) version, if any. */
-export async function getCurrent(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number) {
+export async function getCurrent(db: Db, adapter: SubjectAdapter, tenantId: number, subjectId: number) {
   await ensureBootstrapped(db, adapter, tenantId, subjectId);
   const rows = await db
     .select()
@@ -159,7 +159,7 @@ export async function getCurrent(db: TenantDb, adapter: SubjectAdapter, tenantId
   };
 }
 
-async function nextNumber(db: TenantDb, adapter: SubjectAdapter, subjectId: number): Promise<number> {
+async function nextNumber(db: Db, adapter: SubjectAdapter, subjectId: number): Promise<number> {
   const [row] = await db
     .select({ n: max(controlledVersions.versionNumber) })
     .from(controlledVersions)
@@ -167,7 +167,7 @@ async function nextNumber(db: TenantDb, adapter: SubjectAdapter, subjectId: numb
   return (row?.n ?? 0) + 1;
 }
 
-async function openVersion(db: TenantDb, adapter: SubjectAdapter, subjectId: number) {
+async function openVersion(db: Db, adapter: SubjectAdapter, subjectId: number) {
   const [row] = await db
     .select()
     .from(controlledVersions)
@@ -175,7 +175,7 @@ async function openVersion(db: TenantDb, adapter: SubjectAdapter, subjectId: num
   return row ?? null;
 }
 
-async function publishedVersion(db: TenantDb, adapter: SubjectAdapter, subjectId: number) {
+async function publishedVersion(db: Db, adapter: SubjectAdapter, subjectId: number) {
   const [row] = await db
     .select()
     .from(controlledVersions)
@@ -185,7 +185,7 @@ async function publishedVersion(db: TenantDb, adapter: SubjectAdapter, subjectId
 
 /** Starts a new draft as a copy of the published version (or of `fromPayload` for a brand-new subject). */
 export async function createDraft(
-  db: TenantDb,
+  db: Db,
   adapter: SubjectAdapter,
   tenantId: number,
   subjectId: number,
@@ -222,7 +222,7 @@ export async function createDraft(
 }
 
 /** Version 1 of a subject created through the versioned flow (a brand-new workflow): a draft with nothing published before it. */
-export async function createInitialDraft(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, actor: Actor, payload: Record<string, unknown>): Promise<ControlledVersion> {
+export async function createInitialDraft(db: Db, adapter: SubjectAdapter, tenantId: number, subjectId: number, actor: Actor, payload: Record<string, unknown>): Promise<ControlledVersion> {
   const [created] = await db
     .insert(controlledVersions)
     .values({ subjectType: adapter.subject, subjectId, versionNumber: 1, status: "draft", payload, metadata: { summary: "Initial version" }, createdBy: actor.id })
@@ -236,7 +236,7 @@ const AUDIT_EDIT_WINDOW_MS = 10 * 60_000;
 
 /** Replaces a draft's content (autosave). Only a draft can be edited; in-review and published versions are locked. */
 export async function saveDraft(
-  db: TenantDb,
+  db: Db,
   adapter: SubjectAdapter,
   tenantId: number,
   subjectId: number,
@@ -266,7 +266,7 @@ export async function saveDraft(
 }
 
 /** Discards an unpublished draft. */
-export async function discardDraft(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, actor: Actor): Promise<void> {
+export async function discardDraft(db: Db, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, actor: Actor): Promise<void> {
   const v = await getVersion(db, adapter, subjectId, versionId);
   if (v.status !== "draft") throw conflict("Only a draft can be discarded.");
   await db.delete(controlledVersions).where(eq(controlledVersions.id, v.id));
@@ -275,7 +275,7 @@ export async function discardDraft(db: TenantDb, adapter: SubjectAdapter, tenant
 }
 
 /** draft -> in_review. The content must pass the subject's validation first. */
-export async function submitForReview(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, actor: Actor, notes?: string, opts: { reviewerId?: number } = {}): Promise<ControlledVersion> {
+export async function submitForReview(db: Db, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, actor: Actor, notes?: string, opts: { reviewerId?: number } = {}): Promise<ControlledVersion> {
   const v = await getVersion(db, adapter, subjectId, versionId);
   if (v.status !== "draft") throw conflict("Only a draft can be sent for review.");
   const report = adapter.validate(v.payload);
@@ -317,7 +317,7 @@ export async function submitForReview(db: TenantDb, adapter: SubjectAdapter, ten
  * back to draft with the reviewer's notes. A reviewer may not review their own submission — except an admin, so a
  * one-person organization is not stuck — and that self-review is recorded as such.
  */
-export async function reviewVersion(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, actor: Actor, decision: "approved" | "rejected", notes?: string): Promise<ControlledVersion> {
+export async function reviewVersion(db: Db, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, actor: Actor, decision: "approved" | "rejected", notes?: string): Promise<ControlledVersion> {
   const v = await getVersion(db, adapter, subjectId, versionId);
   if (v.status !== "in_review") throw conflict("Only a version that is in review can be reviewed.");
   const selfReview = v.submittedBy === actor.id;
@@ -346,7 +346,7 @@ export async function reviewVersion(db: TenantDb, adapter: SubjectAdapter, tenan
  * replaces, and tells the people who need to know. Everything happens in the request's transaction, so a failure
  * anywhere leaves the previous version live.
  */
-export async function publishVersion(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, actor: Actor): Promise<ControlledVersion> {
+export async function publishVersion(db: Db, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, actor: Actor): Promise<ControlledVersion> {
   const v = await getVersion(db, adapter, subjectId, versionId);
   if (v.status !== "in_review") throw conflict("Only a version that is in review can be published.");
   if (v.reviewDecision !== "approved") throw conflict("A reviewer has to approve this version before it can be published.");
@@ -384,7 +384,7 @@ function withRecordLink(body: string, subject: string, subjectId: number): strin
   return link ? `${body}\n\nOpen it: ${link}` : body;
 }
 
-async function notifyPublished(db: TenantDb, adapter: SubjectAdapter, subjectId: number, v: ControlledVersion, actor: Actor) {
+async function notifyPublished(db: Db, adapter: SubjectAdapter, subjectId: number, v: ControlledVersion, actor: Actor) {
   const subject = `${adapter.noun[0]!.toUpperCase()}${adapter.noun.slice(1)} version ${v.versionNumber} was published`;
   const body = withRecordLink(`A new version of the ${adapter.noun} is now in force (version ${v.versionNumber}${v.isRollback ? `, restoring version ${v.basedOnVersion}` : ""}).`, adapter.subject, subjectId);
   for (const department of adapter.notifyDepartments) await notifyDepartment(db, { department, subject, body, relatedEntityType: adapter.entityType, relatedEntityId: subjectId });
@@ -393,7 +393,7 @@ async function notifyPublished(db: TenantDb, adapter: SubjectAdapter, subjectId:
 }
 
 /** Tells the right people about a review step: the named reviewer (or the department if none was named) when it is requested, the author when it is decided. */
-async function notifyReview(db: TenantDb, adapter: SubjectAdapter, subjectId: number, v: ControlledVersion, kind: "requested" | "approved" | "rejected", actor: Actor) {
+async function notifyReview(db: Db, adapter: SubjectAdapter, subjectId: number, v: ControlledVersion, kind: "requested" | "approved" | "rejected", actor: Actor) {
   const noun = `${adapter.noun[0]!.toUpperCase()}${adapter.noun.slice(1)}`;
   const emailsOf = async (ids: number[]) => (ids.length === 0 ? [] : (await db.select({ email: users.email }).from(users).where(and(eq(users.isActive, true), inArray(users.id, ids)))).map((r) => r.email));
   if (kind === "requested") {
@@ -415,7 +415,7 @@ async function notifyReview(db: TenantDb, adapter: SubjectAdapter, subjectId: nu
 }
 
 /** Rollback: a new draft whose content is an earlier version's. It still goes through review and publishing like any other change. */
-export async function rollbackTo(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionNumber: number, actor: Actor): Promise<ControlledVersion> {
+export async function rollbackTo(db: Db, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionNumber: number, actor: Actor): Promise<ControlledVersion> {
   await ensureBootstrapped(db, adapter, tenantId, subjectId);
   const [target] = await db
     .select()
@@ -451,7 +451,7 @@ export async function rollbackTo(db: TenantDb, adapter: SubjectAdapter, tenantId
 }
 
 /** Compares a version with another (by default the one just before it) and records that a comparison was made. */
-export async function diffVersions(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, againstVersionId: number | undefined, actor: Actor) {
+export async function diffVersions(db: Db, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, againstVersionId: number | undefined, actor: Actor) {
   await ensureBootstrapped(db, adapter, tenantId, subjectId);
   const after = await getVersion(db, adapter, subjectId, versionId);
   let before: ControlledVersion | undefined;

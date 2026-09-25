@@ -10,7 +10,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import * as service from "./training.service.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 // Distinct from "Document" and "DocumentFolder" — see those modules' own
 // comments on why each entity keeps its own entityType.
@@ -95,7 +95,7 @@ export interface CompleteAssignmentInput {
 }
 
 /** Used by the dedicated endpoint and the "Training Record" form's save hook (forms.controller.ts); the rules live in training.service.ts. */
-export function completeTrainingAssignment(db: TenantDb, assignmentId: number, input: CompleteAssignmentInput, performedBy?: number): Promise<TrainingAssignment> {
+export function completeTrainingAssignment(db: Db, assignmentId: number, input: CompleteAssignmentInput, performedBy?: number): Promise<TrainingAssignment> {
   return service.completeAssignment(db, assignmentId, input, performedBy);
 }
 

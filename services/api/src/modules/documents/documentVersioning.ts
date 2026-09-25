@@ -4,7 +4,7 @@ import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import jwt from "jsonwebtoken";
 import { and, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { env } from "../../config/env.js";
 import { documents, documentFiles, documentVersions } from "../../drizzle/schema/documents.js";
 import { controlledVersions } from "../../drizzle/schema/versioning.js";
@@ -57,11 +57,11 @@ interface DetectedType {
 export function detectFileType(buf: Buffer, originalName: string): DetectedType | null {
   const ext = path.extname(originalName).toLowerCase();
   const head = buf.subarray(0, 12);
-  if (head.subarray(0, 4).toString("latin1") === "%PDF" && ext === ".pdf") return { mime: "application/pdf", ext: ".pdf" };
-  if (head[0] === 0x89 && head.subarray(1, 4).toString("latin1") === "PNG" && ext === ".png") return { mime: "image/png", ext: ".png" };
+  if (head.subarray(0, 4).function toString() { [native code] }("latin1") === "%PDF" && ext === ".pdf") return { mime: "application/pdf", ext: ".pdf" };
+  if (head[0] === 0x89 && head.subarray(1, 4).function toString() { [native code] }("latin1") === "PNG" && ext === ".png") return { mime: "image/png", ext: ".png" };
   if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff && (ext === ".jpg" || ext === ".jpeg")) return { mime: "image/jpeg", ext };
-  if (head.subarray(0, 4).toString("latin1") === "GIF8" && ext === ".gif") return { mime: "image/gif", ext: ".gif" };
-  if (head.subarray(0, 4).toString("latin1") === "RIFF" && head.subarray(8, 12).toString("latin1") === "WEBP" && ext === ".webp") return { mime: "image/webp", ext: ".webp" };
+  if (head.subarray(0, 4).function toString() { [native code] }("latin1") === "GIF8" && ext === ".gif") return { mime: "image/gif", ext: ".gif" };
+  if (head.subarray(0, 4).function toString() { [native code] }("latin1") === "RIFF" && head.subarray(8, 12).function toString() { [native code] }("latin1") === "WEBP" && ext === ".webp") return { mime: "image/webp", ext: ".webp" };
   if (head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04) {
     if (ext === ".docx" && buf.includes("word/")) return { mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", ext: ".docx" };
     if (ext === ".xlsx" && buf.includes("xl/")) return { mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ext: ".xlsx" };
@@ -74,7 +74,7 @@ const cleanName = (name: string) => [...path.basename(name)].filter((c) => c.cha
 // ---- Link targets --------------------------------------------------------------------------------------------------------------------------------
 
 /** Names for a set of record ids of one kind, restricted to this organization. Ids that don't exist here are simply absent. */
-export async function resolveTargets(db: TenantDb, type: LinkType, ids: number[]): Promise<Map<number, string>> {
+export async function resolveTargets(db: Db, type: LinkType, ids: number[]): Promise<Map<number, string>> {
   if (ids.length === 0) return new Map();
   const out = new Map<number, string>();
   switch (type) {
@@ -104,7 +104,7 @@ export async function resolveTargets(db: TenantDb, type: LinkType, ids: number[]
 }
 
 /** For the link picker: records of one kind whose name matches what was typed. */
-export async function searchTargets(db: TenantDb, type: LinkType, q: string, limit = 15): Promise<{ id: number; label: string }[]> {
+export async function searchTargets(db: Db, type: LinkType, q: string, limit = 15): Promise<{ id: number; label: string }[]> {
   const like = `%${q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
   const n = Math.min(Math.max(limit, 1), 50);
   switch (type) {
@@ -129,7 +129,7 @@ export async function searchTargets(db: TenantDb, type: LinkType, q: string, lim
 }
 
 /** Which published documents link to a given record (the reverse of a document's own links). */
-export async function documentsLinkedTo(db: TenantDb, type: LinkType, id: number) {
+export async function documentsLinkedTo(db: Db, type: LinkType, id: number) {
   const rows = await db
     .select({ id: documents.id, title: documents.title, status: documents.status, revisionCode: documents.revisionCode, currentVersion: documents.currentVersion })
     .from(documents)
@@ -141,14 +141,14 @@ export async function documentsLinkedTo(db: TenantDb, type: LinkType, id: number
 
 // ---- The adapter ---------------------------------------------------------------------------------------------------------------------------------
 
-async function loadDocument(db: TenantDb, id: number) {
+async function loadDocument(db: Db, id: number) {
   const [doc] = await db.select().from(documents).where(and(eq(documents.id, id)));
   if (!doc || doc.isDeleted) throw AppError.notFound("Document");
   return doc;
 }
 
 /** A pre-versioning document's uploaded PDF becomes a registered file, so its first controlled revision can reference it. */
-async function registerLegacyFile(db: TenantDb, tenantId: number, documentId: number, version: { version: number; fileUrl: string | null; createdBy: number | null }): Promise<DocumentAttachmentRef | null> {
+async function registerLegacyFile(db: Db, tenantId: number, documentId: number, version: { version: number; fileUrl: string | null; createdBy: number | null }): Promise<DocumentAttachmentRef | null> {
   const p = version.fileUrl;
   if (!p || /^https?:\/\//i.test(p) || !isInsideTenantStorage(tenantId, p) || !existsSync(p)) return null;
   const [existing] = await db.select().from(documentFiles).where(and(eq(documentFiles.documentId, documentId), eq(documentFiles.filePath, p)));
@@ -295,12 +295,12 @@ export const documentAdapter: SubjectAdapter = {
 
 // ---- Files on a draft ------------------------------------------------------------------------------------------------------------------------------
 
-async function audit(db: TenantDb, documentId: number, actor: Actor, changes: Record<string, unknown>) {
+async function audit(db: Db, documentId: number, actor: Actor, changes: Record<string, unknown>) {
   await recordAuditTrail(db, { entityType: DOCUMENT_ENTITY_TYPE, entityId: documentId, action: "update", changes, performedBy: actor.id });
 }
 
 /** Stores an uploaded file and adds it to the draft. Only a draft can take files; a published revision is frozen. */
-export async function addAttachment(db: TenantDb, tenantId: number, documentId: number, versionId: number, actor: Actor, file: { originalname: string; buffer: Buffer; size: number }) {
+export async function addAttachment(db: Db, tenantId: number, documentId: number, versionId: number, actor: Actor, file: { originalname: string; buffer: Buffer; size: number }) {
   const v = await engine.getVersion(db, documentAdapter, documentId, versionId);
   if (v.status !== "draft") throw new AppError("Files can only be added to a draft.", 409);
   const payload = normalizeDocumentPayload(v.payload);
@@ -324,7 +324,7 @@ export async function addAttachment(db: TenantDb, tenantId: number, documentId: 
 }
 
 /** Drops a file from the draft. The stored file itself is only deleted when no revision of this document still refers to it. */
-export async function removeAttachment(db: TenantDb, tenantId: number, documentId: number, versionId: number, attachmentId: number, actor: Actor) {
+export async function removeAttachment(db: Db, tenantId: number, documentId: number, versionId: number, attachmentId: number, actor: Actor) {
   const v = await engine.getVersion(db, documentAdapter, documentId, versionId);
   if (v.status !== "draft") throw new AppError("Files can only be removed from a draft.", 409);
   const payload = normalizeDocumentPayload(v.payload);

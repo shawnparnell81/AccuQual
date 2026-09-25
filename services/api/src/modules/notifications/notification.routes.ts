@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { retryFailedNotifications } from "./notification.service.js";
 
 export const notificationsRouter = Router();
-notificationsRouter.use(requireAuth, withTenantDb, requireRole("admin"));
+notificationsRouter.use(requireAuth, withDb, requireRole("admin"));
 
 /**
  * POST /notifications/retry-failed — Phase 1 email infrastructure's
@@ -19,7 +19,7 @@ notificationsRouter.use(requireAuth, withTenantDb, requireRole("admin"));
 notificationsRouter.post(
   "/retry-failed",
   asyncHandler(async (req, res) => {
-    const result = await retryFailedNotifications(req.db! as TenantDb);
+    const result = await retryFailedNotifications(req.db! as Db);
     res.json(result);
   })
 );

@@ -77,7 +77,7 @@ export const listItemsHandler = asyncHandler(async (req: Request, res: Response)
   // Settings → Inventory Module expansion: aging + cycle count, computed
   // live for every row rather than stored — see inventory.service.ts's own
   // comments on computeAgingBucket/isCycleCountDue.
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   const settings = getInventorySettings(tenant);
 
   res.json(
@@ -120,7 +120,7 @@ async function loadItem(req: Request, id: number) {
 export const getItemHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const item = await loadItem(req, id);
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   const settings = getInventorySettings(tenant);
 
   // Lazy reservation expiry — see applyReservationAutoRelease's own comment
@@ -150,7 +150,7 @@ export const movementHandler = asyncHandler(async (req: Request, res: Response) 
     throw AppError.badRequest(`Cannot "produce" into a raw_material item — produce is only valid for wip or finished_good items`);
   }
 
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   const { movement } = await applyMovement(req.db!, id, req.body, req.user?.id, getInventorySettings(tenant));
   await recordAuditTrail(req.db!, {
     entityType: "InventoryItem",
@@ -169,7 +169,7 @@ export const reserveHandler = asyncHandler(async (req: Request, res: Response) =
   const id = Number(req.params.id);
   await loadItem(req, id);
   const { quantity, location } = req.body as { quantity: number; location?: string };
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   const stock = await reserveStock(req.db!, id, quantity, location, getInventorySettings(tenant), req.user?.id);
   res.status(201).json({ stock });
 });

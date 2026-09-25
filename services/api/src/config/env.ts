@@ -50,7 +50,7 @@ const envSchema = z.object({
   LLM_MODEL: z.string().default("claude-haiku-4-5-20251001"),
 
   // AES-256-GCM key for encrypting a tenant's own stored AI provider API key
-  // at rest (see modules/tenant/crypto.ts) — real encryption, not a fictional
+  // at rest (see modules/company/crypto.ts) — real encryption, not a fictional
   // "external key management service". Must be exactly 32 bytes; generate
   // with `openssl rand -hex 32`. Defaulted only so a fresh dev checkout
   // doesn't hard-fail before anyone has set one — never rely on the default
@@ -92,16 +92,6 @@ const envSchema = z.object({
   // then to log-only. Accepts the token with or without the
   // "Zoho-enczapikey " prefix ZeptoMail's dashboard shows.
   ZEPTOMAIL_SEND_TOKEN: z.string().optional(),
-
-  // Stripe billing (modules/billing) — all optional. With no STRIPE_SECRET_KEY the Billing page says billing is not set up
-  // instead of pretending; nothing else in the app depends on these. STRIPE_WEBHOOK_SECRET is the signing secret of the
-  // webhook endpoint pointing at <api>/billing/webhook. Each STRIPE_PRICE_* is the Stripe price id for that plan; a plan whose
-  // price id is unset cannot be bought yet (pricing is decided in Stripe, not in code).
-  STRIPE_SECRET_KEY: z.string().optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().optional(),
-  STRIPE_PRICE_FOUNDATION: z.string().optional(),
-  STRIPE_PRICE_OPERATIONS: z.string().optional(),
-  STRIPE_PRICE_ENTERPRISE: z.string().optional(),
   // Where the public website contact form delivers. Unset = the form answers "not switched on" instead of pretending to send.
   CONTACT_INBOX_EMAIL: z.string().email().optional(),
 

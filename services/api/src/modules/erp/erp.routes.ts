@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { withSiteContext } from "../sites/siteContext.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
@@ -27,7 +27,7 @@ export const erpRouter = Router();
 // (send/cancel/edit-line-items: purchasing-only, create receiving
 // document: material_management-only) are inline in the controller, the
 // same way inventory.controller.ts guards its per-action limits.
-erpRouter.use(requireAuth, withTenantDb, withSiteContext, requireDepartmentAccess("erp"));
+erpRouter.use(requireAuth, withDb, withSiteContext, requireDepartmentAccess("erp"));
 
 // Fixed literal path before ":id"-shaped ones, same convention used
 // throughout this app.

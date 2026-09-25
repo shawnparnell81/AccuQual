@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import type { ErpConnectorPreset, ErpFieldMapping, ErpTransformRule, ErpTriggerRule, ErpValidationRule } from "../../drizzle/schema/erpPresets.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { erpPurchaseOrders } from "../../drizzle/schema/erp.js";
@@ -284,12 +284,12 @@ export function applyValidation(record: Record<string, unknown>, validationRules
   return errors;
 }
 
-async function loadSupplierRecords(db: TenantDb): Promise<Record<string, unknown>[]> {
+async function loadSupplierRecords(db: Db): Promise<Record<string, unknown>[]> {
   const rows = await db.select().from(suppliers).limit(MAX_RECORDS_PER_SYNC);
   return rows as unknown as Record<string, unknown>[];
 }
 
-async function loadPurchaseOrderRecords(db: TenantDb): Promise<Record<string, unknown>[]> {
+async function loadPurchaseOrderRecords(db: Db): Promise<Record<string, unknown>[]> {
   const rows = await db.select().from(erpPurchaseOrders).limit(MAX_RECORDS_PER_SYNC);
   return rows as unknown as Record<string, unknown>[];
 }
@@ -313,7 +313,7 @@ export interface RecordSyncErrorInput {
  * "no raw record content" convention every other logger.* call site in
  * this app already follows.
  */
-export async function recordSyncError(db: TenantDb, input: RecordSyncErrorInput): Promise<void> {
+export async function recordSyncError(db: Db, input: RecordSyncErrorInput): Promise<void> {
   const errorType = categorizeError(input.stage);
   try {
     const [row] = await db
@@ -347,7 +347,7 @@ export async function recordSyncError(db: TenantDb, input: RecordSyncErrorInput)
  * own informational `errors` field) AND persisted via recordSyncError — one
  * bad record is skipped, never aborts the whole module's mapping run.
  */
-export async function buildErpPayload(db: TenantDb, module: string, preset: ErpConnectorPreset): Promise<ErpPayloadResult | null> {
+export async function buildErpPayload(db: Db, module: string, preset: ErpConnectorPreset): Promise<ErpPayloadResult | null> {
   let sourceRecords: Record<string, unknown>[];
   if (module === "suppliers") {
     sourceRecords = await loadSupplierRecords(db);

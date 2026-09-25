@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createScarFormSchema, updateScarFormSchema } from "./scarForms.validation.js";
@@ -15,7 +15,7 @@ export const scarFormsRouter = Router();
 // system. SCAR gets the same treatment now, same all-departments-edit
 // default (defaultPermissions.ts) so this is zero-behavior-change from
 // today, just makes it real and configurable.
-scarFormsRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("scar"));
+scarFormsRouter.use(requireAuth, withDb, requireDepartmentAccess("scar"));
 
 scarFormsRouter.get("/", listScarFormsHandler);
 scarFormsRouter.post("/", validate(createScarFormSchema), createScarFormHandler);

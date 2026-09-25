@@ -1,5 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { erpReceivingLineItems, erpReceivingDocuments, erpPoLineItems, erpPurchaseOrders, type ErpReceivingLineItem } from "../../drizzle/schema/erp.js";
 import { ncr, type Ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
@@ -24,8 +24,7 @@ const DEFAULT_CAPA_WINDOW_DAYS = 90;
  * lookup.
  */
 export async function maybeAutoCreateNcr(
-  db: TenantDb,
-  tenantId: number,
+  db: Db,
   line: ErpReceivingLineItem,
   disposition: "rejected" | "quarantined",
   supplierId: number | null,
@@ -33,7 +32,7 @@ export async function maybeAutoCreateNcr(
   performedBy: number | undefined,
   siteId?: number | null
 ): Promise<Ncr | null> {
-  const tenant = await loadTenantForSettings(db, tenantId);
+  const tenant = await loadTenantForSettings(db);
   const settings = tenant.receivingSettings ?? {};
   const enabled = disposition === "rejected" ? settings.autoCreateNcrOnRejection : settings.autoCreateNcrOnQuarantine;
   if (!enabled) return null;
@@ -86,8 +85,8 @@ export async function maybeAutoCreateNcr(
  * open" check is what stops every subsequent rejection from spawning a
  * duplicate escalation once the threshold is already met once.
  */
-export async function checkCapaEscalation(db: TenantDb, tenantId: number, supplierId: number, triggeringNcrId: number | undefined, performedBy: number | undefined, siteId?: number | null): Promise<void> {
-  const tenant = await loadTenantForSettings(db, tenantId);
+export async function checkCapaEscalation(db: Db, supplierId: number, triggeringNcrId: number | undefined, performedBy: number | undefined, siteId?: number | null): Promise<void> {
+  const tenant = await loadTenantForSettings(db);
   const settings = tenant.receivingSettings ?? {};
   const threshold = settings.capaEscalationThreshold ?? DEFAULT_CAPA_THRESHOLD;
   const windowDays = settings.capaEscalationWindowDays ?? DEFAULT_CAPA_WINDOW_DAYS;

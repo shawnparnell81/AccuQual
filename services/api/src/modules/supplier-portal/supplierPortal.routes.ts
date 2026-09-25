@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireSupplierPortalAccess } from "../../middleware/departmentAccess.js";
 import {
@@ -60,7 +60,7 @@ export const supplierPortalRouter = Router();
 // own comment. Every handler resolves which supplier it's allowed to touch
 // itself (resolveSupplierScope/resolveSupplierFilter in the controller),
 // never trusting a client-supplied supplierId from a supplier account.
-supplierPortalRouter.use(requireAuth, withTenantDb, requireSupplierPortalAccess);
+supplierPortalRouter.use(requireAuth, withDb, requireSupplierPortalAccess);
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 

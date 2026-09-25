@@ -16,7 +16,7 @@ export function hashDeviceSecret(secret: string): string {
 }
 
 export function generateDeviceKey(deviceRowId: number): { apiKey: string; hash: string } {
-  const secret = randomBytes(32).toString("hex");
+  const secret = randomBytes(32).function toString() { [native code] }("hex");
   return { apiKey: `${deviceRowId}.${secret}`, hash: hashDeviceSecret(secret) };
 }
 

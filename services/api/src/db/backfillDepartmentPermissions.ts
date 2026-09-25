@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { db, pool } from "./index.js";
-import { tenants } from "../drizzle/schema/tenants.js";
+import { company } from "../drizzle/schema/company.js";
 import { departmentPermissions } from "../drizzle/schema/permissions.js";
 import { INITIAL_DEFAULT_PERMISSIONS } from "./defaultPermissions.js";
 import { logger } from "../utils/logger.js";
@@ -23,7 +23,7 @@ import type { ResourceKey, Department, AccessLevel } from "../middleware/departm
  * createTenant() seeds the same rows at creation time.
  */
 async function main() {
-  const allTenants = await db.select({ id: tenants.id, code: tenants.code }).from(tenants);
+  const allTenants = await db.select({ id: company.id, code: company.code }).from(company);
   logger.info(`Backfilling department_permissions for ${allTenants.length} tenant(s)...`);
 
   let inserted = 0;

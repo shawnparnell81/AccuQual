@@ -7,7 +7,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { validate } from "../../middleware/validate.js";
 import { requirePermission } from "../../middleware/requirePermission.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { db as ownerDb, pool } from "../../db/index.js";
 import { documentFiles } from "../../drizzle/schema/documents.js";
 import { users } from "../../drizzle/schema/users.js";
@@ -28,7 +28,7 @@ const idParam = (req: Request, name = "id") => {
   return id;
 };
 const actorOf = (req: Request): Actor => ({ id: req.user!.id, roleName: req.user!.roleName });
-const dbOf = (req: Request) => req.db as TenantDb;
+const dbOf = (req: Request) => req.db as Db;
 const linkType = (raw: unknown): LinkType => {
   if (typeof raw !== "string" || !LINK_TYPES.includes(raw as LinkType)) throw AppError.badRequest(`type must be one of: ${LINK_TYPES.join(", ")}`);
   return raw as LinkType;
@@ -38,7 +38,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX
 
 /**
  * Everything version-related for controlled documents, added to the documents router (which already applies
- * requireAuth + withTenantDb + the Document Control department gate). The lifecycle rules themselves live once, in the
+ * requireAuth + withDb + the Document Control department gate). The lifecycle rules themselves live once, in the
  * shared engine; this file is the HTTP shape: the engine's standard endpoints, the URL shapes the document-versioning
  * specification names as aliases onto the same functions, attachments, and the link tools.
  */

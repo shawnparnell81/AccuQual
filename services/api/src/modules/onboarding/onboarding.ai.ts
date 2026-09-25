@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { getUserAccessLevel, RESOURCE_KEYS, type ResourceKey } from "../../middleware/departmentAccess.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { onboardingPrompt } from "../ai/prompts.js";
 import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
@@ -43,8 +43,7 @@ const MODULE_DESCRIPTIONS: Partial<Record<ResourceKey, { label: string; descript
  * the user mark items via PATCH /onboarding/progress/:moduleKey.
  */
 export const onboardingAiGenerateHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
-  const db = req.db! as TenantDb;
+  const db = req.db! as Db;
   const user = { id: req.user!.id, roleName: req.user?.roleName ?? null, department: req.user?.department ?? null };
 
   const moduleKeys = RESOURCE_KEYS;
@@ -57,7 +56,7 @@ export const onboardingAiGenerateHandler = asyncHandler(async (req: Request, res
     throw AppError.badRequest("No department is set on your account yet — an admin needs to assign one before onboarding can suggest anything.");
   }
 
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!, tenantId);
+  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!);
   const limitError = await checkUsageLimit(req.db!, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 

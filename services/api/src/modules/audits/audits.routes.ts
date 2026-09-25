@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { withSiteContext } from "../sites/siteContext.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
@@ -9,7 +9,7 @@ import { baseHandlers, addItemHandler, listItemsHandler, reorderItemsHandler, st
 
 export const auditsRouter = Router();
 // Turns on PERMISSION_MATRIX.audit (quality: edit) — previously unenforced.
-auditsRouter.use(requireAuth, withTenantDb, withSiteContext, requireDepartmentAccess("audit"));
+auditsRouter.use(requireAuth, withDb, withSiteContext, requireDepartmentAccess("audit"));
 
 auditsRouter.get("/", baseHandlers.list);
 auditsRouter.post("/", validate(createAuditSchema), baseHandlers.create);

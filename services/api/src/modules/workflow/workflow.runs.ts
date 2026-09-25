@@ -5,7 +5,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
-import { withTenantDb, type TenantDb } from "../../lib/tenantScope.js";
+import { withDb, type Db } from "../../lib/requestDb.js";
 import { workflowDefinitions, workflowRuns, type WorkflowRun } from "../../drizzle/schema/workflow.js";
 import { controlledVersions } from "../../drizzle/schema/versioning.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -18,7 +18,7 @@ import { resumeWorkflow, WorkflowNodeError, type WorkflowDefinition, type Workfl
  * here; admins can always decide.
  */
 export const workflowRunsRouter = Router();
-workflowRunsRouter.use(requireAuth, withTenantDb);
+workflowRunsRouter.use(requireAuth, withDb);
 
 interface PendingApproval {
   nodeId: string;
@@ -97,7 +97,7 @@ workflowRunsRouter.post(
         .set({ status: waiting ? "waiting_approval" : "completed", context: persistable, currentNodeId: execution.currentNodeId, runState: waiting ? execution.state : null, finishedAt: waiting ? null : new Date() })
         .where(eq(workflowRuns.id, run.id))
         .returning();
-      await recordAuditTrail(req.db as TenantDb, {
+      await recordAuditTrail(req.db as Db, {
         entityType: "WorkflowRun",
         entityId: run.id,
         action: "status_change",

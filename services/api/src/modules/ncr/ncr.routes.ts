@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { withSiteContext } from "../sites/siteContext.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
@@ -25,7 +25,7 @@ import {
 
 export const ncrRouter = Router();
 // Turns on PERMISSION_MATRIX.ncr (quality: edit) — previously unenforced.
-ncrRouter.use(requireAuth, withTenantDb, withSiteContext, requireDepartmentAccess("ncr"));
+ncrRouter.use(requireAuth, withDb, withSiteContext, requireDepartmentAccess("ncr"));
 
 ncrRouter.get("/", listHandler);
 ncrRouter.post("/", validate(createNcrSchema), baseHandlers.create);

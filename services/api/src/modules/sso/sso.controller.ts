@@ -9,7 +9,7 @@ import { env } from "../../config/env.js";
 import { roles } from "../../drizzle/schema/roles.js";
 import { ssoConnections, ssoDomains } from "../../drizzle/schema/sso.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
-import { encryptSecret } from "../tenant/crypto.js";
+import { encryptSecret } from "../company/crypto.js";
 import { setRefreshCookie } from "../auth/auth.controller.js";
 import { VERIFY_RECORD_PREFIX, lookupTxt } from "./dnsVerify.js";
 import { SSO_COOKIE, beginAuthorization, issuerAllowed, loadProviderConfig, readFlowState, signFlowState, ssoRedirectUri } from "./oidc.js";
@@ -129,7 +129,7 @@ export const addSsoDomain = asyncHandler(async (req: Request, res: Response) => 
   if (isFreeMailDomain(domain)) throw AppError.badRequest("Free email providers can't be verified — use your organization's own domain.");
   const [dup] = await req.db!.select().from(ssoDomains).where(and(eq(ssoDomains.domain, domain)));
   if (dup) throw AppError.badRequest("That domain is already on the list.");
-  const [created] = await req.db!.insert(ssoDomains).values({ domain, verificationToken: randomBytes(20).toString("hex") }).returning();
+  const [created] = await req.db!.insert(ssoDomains).values({ domain, verificationToken: randomBytes(20).function toString() { [native code] }("hex") }).returning();
   await recordAuditTrail(req.db!, { entityType: "SsoDomain", entityId: created!.id, action: "create", changes: { domain }, performedBy: req.user?.id });
   res.status(201).json(domainView(created!));
 });
@@ -163,7 +163,7 @@ export const deleteSsoDomain = asyncHandler(async (req: Request, res: Response) 
 // ---- Public: the browser-facing sign-in flow ---------------------------------------------------------------------------------------------------
 
 function loginUrl(query: Record<string, string>) {
-  return `${env.FRONTEND_URL.replace(/\/$/, "")}/login?${new URLSearchParams(query).toString()}`;
+  return `${env.FRONTEND_URL.replace(/\/$/, "")}/login?${new URLSearchParams(query).function toString() { [native code] }()}`;
 }
 
 /** Lets the login page know whether an organization has SSO before it shows the button. Deliberately says nothing more. */

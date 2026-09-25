@@ -23,7 +23,7 @@ import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { auditRowChanges } from "../../src/drizzle/schema/auditRowChanges.js";
 import { refreshTokens } from "../../src/drizzle/schema/refreshTokens.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
-import { encryptSecret } from "../../src/modules/tenant/crypto.js";
+import { encryptSecret } from "../../src/modules/company/crypto.js";
 import { totpAt, totpCounter } from "../../src/utils/totp.js";
 import { env } from "../../src/config/env.js";
 import { describeExport, resolveTenantFile, tenantStorageRoot } from "../../src/modules/data-export/dataExport.service.js";

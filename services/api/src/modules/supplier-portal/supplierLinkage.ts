@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { rma } from "../../drizzle/schema/rma.js";
 import { warrantyClaims } from "../../drizzle/schema/warranty.js";
 import { supplierCorrectiveActions, supplier8dResponses } from "../../drizzle/schema/supplierPortal.js";
@@ -20,7 +20,7 @@ import { capa } from "../../drizzle/schema/capa.js";
  * erp/receivingAutomation.ts) — included here too, or a supplier-triggered
  * receiving NCR would be invisible in their own Supplier Portal.
  */
-export async function getSupplierNcrIds(db: TenantDb, supplierId: number): Promise<number[]> {
+export async function getSupplierNcrIds(db: Db, supplierId: number): Promise<number[]> {
   const [rmaRows, warrantyRows, carRows, eightDRows, directRows] = await Promise.all([
     db.select({ ncrId: rma.linkedNcrId }).from(rma).where(and(eq(rma.supplierId, supplierId))),
     db.select({ ncrId: warrantyClaims.linkedNcrId }).from(warrantyClaims).where(and(eq(warrantyClaims.supplierId, supplierId))),
@@ -32,7 +32,7 @@ export async function getSupplierNcrIds(db: TenantDb, supplierId: number): Promi
 }
 
 /** Phase 8 adds direct `capa.supplierId` (set by receivingAutomation.ts's checkCapaEscalation) — same reasoning as getSupplierNcrIds above. */
-export async function getSupplierCapaIds(db: TenantDb, supplierId: number): Promise<number[]> {
+export async function getSupplierCapaIds(db: Db, supplierId: number): Promise<number[]> {
   const [rmaRows, carRows, directRows] = await Promise.all([
     db.select({ capaId: rma.linkedCapaId }).from(rma).where(and(eq(rma.supplierId, supplierId))),
     db.select({ capaId: supplierCorrectiveActions.linkedCapaId }).from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.supplierId, supplierId))),

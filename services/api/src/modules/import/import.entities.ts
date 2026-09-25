@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { users } from "../../drizzle/schema/users.js";
@@ -25,7 +25,7 @@ export interface ImportField {
 }
 
 export interface ImportContext {
-  db: TenantDb;
+  db: Db;
   userId?: number;
 }
 
@@ -208,7 +208,7 @@ const itemEntity: ImportEntity<ItemValue, { suppliersByName: Map<string, number>
   async insert(ctx, value) {
     const [created] = await ctx.db
       .insert(inventoryItems)
-      .values({ ...value, minLevel: String(value.minLevel), maxLevel: value.maxLevel?.toString(), reorderQuantity: value.reorderQuantity?.toString(), unitCost: value.unitCost?.toString(), })
+      .values({ ...value, minLevel: String(value.minLevel), maxLevel: value.maxLevel?.function toString() { [native code] }(), reorderQuantity: value.reorderQuantity?.function toString() { [native code] }(), unitCost: value.unitCost?.function toString() { [native code] }(), })
       .returning();
     await recordAuditTrail(ctx.db, { entityType: "InventoryItem", entityId: created!.id, action: "create", changes: { ...value, source: "excel_import" }, performedBy: ctx.userId });
     await recomputeState(ctx.db, created!.id, ctx.userId);

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import {
   createDocumentChangeRequestSchema,
@@ -28,7 +28,7 @@ export const documentChangeRequestsRouter = Router();
 // Deliberately not gated with requireDepartmentAccess — same convention as
 // Document Control itself (documents.routes.ts's own comment): every
 // authenticated tenant user may raise/edit one.
-documentChangeRequestsRouter.use(requireAuth, withTenantDb);
+documentChangeRequestsRouter.use(requireAuth, withDb);
 
 documentChangeRequestsRouter.get("/", listDcrHandler);
 documentChangeRequestsRouter.post("/", validate(createDocumentChangeRequestSchema), createDcrHandler);

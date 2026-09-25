@@ -21,12 +21,11 @@ import { computeSupplierPerformance } from "../supplier/supplier.performance.js"
  * every other AI pipeline in this app.
  */
 export const requisitionAiJustifyHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const id = Number(req.params.id);
   const [requisition] = await req.db!.select().from(erpPurchaseRequisitions).where(and(eq(erpPurchaseRequisitions.id, id)));
   if (!requisition) throw AppError.notFound("PurchaseRequisition");
 
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!, tenantId);
+  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!);
   const limitError = await checkUsageLimit(req.db!, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 

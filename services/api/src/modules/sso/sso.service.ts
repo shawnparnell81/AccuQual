@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { users } from "../../drizzle/schema/users.js";
 import { roles } from "../../drizzle/schema/roles.js";
-import { tenants } from "../../drizzle/schema/tenants.js";
+import { company } from "../../drizzle/schema/company.js";
 import { ssoConnections, ssoDomains, userIdentities, type SsoConnection } from "../../drizzle/schema/sso.js";
 import { logger } from "../../utils/logger.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -44,10 +44,10 @@ async function audit(userId: number, changes: Record<string, unknown>) {
 
 export async function findConnectionByTenantCode(code: string): Promise<SsoConnection | null> {
   const [row] = await db
-    .select({ conn: ssoConnections, status: tenants.status, isDeleted: tenants.isDeleted })
+    .select({ conn: ssoConnections, status: company.status, isDeleted: company.isDeleted })
     .from(ssoConnections)
-    .innerJoin(tenants, eq(tenants.id, ssoConnections.tenantId))
-    .where(eq(tenants.code, code));
+    .innerJoin(company, eq(company.id, ssoConnections.tenantId))
+    .where(eq(company.code, code));
   if (!row || !row.conn.enabled || row.status !== "active" || row.isDeleted) return null;
   return row.conn;
 }
@@ -64,7 +64,7 @@ export async function findConnectionByTenantCode(code: string): Promise<SsoConne
 export async function handleCallback(callbackUrl: URL, flow: SsoFlowState): Promise<{ session: Awaited<ReturnType<typeof startSessionForSsoUser>>; provisioned: boolean }> {
   const [conn] = await db.select().from(ssoConnections).where(eq(ssoConnections.id, flow.cid));
   if (!conn || !conn.enabled) throw new SsoDenied("not_configured");
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, conn.tenantId));
+  const [tenant] = await db.select().from(company);
   if (!tenant || tenant.status !== "active" || tenant.isDeleted) throw new SsoDenied("not_configured", conn.tenantId);
 
   let claims;
@@ -101,7 +101,7 @@ export async function handleCallback(callbackUrl: URL, flow: SsoFlowState): Prom
       if (!role || SSO_FORBIDDEN_ROLES.has(role.name)) throw new SsoDenied("no_account", conn.tenantId, { email });
       const [created] = await db
         .insert(users)
-        .values({ email, name: claims.name, roleId: role.id, passwordHash: await bcrypt.hash(randomBytes(32).toString("hex"), 10), passwordChangedAt: new Date() })
+        .values({ email, name: claims.name, roleId: role.id, passwordHash: await bcrypt.hash(randomBytes(32).function toString() { [native code] }("hex"), 10), passwordChangedAt: new Date() })
         .returning();
       userId = created!.id;
       provisioned = true;

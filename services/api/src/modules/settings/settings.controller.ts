@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
 import { eq } from "drizzle-orm";
-import { tenants } from "../../drizzle/schema/tenants.js";
+import { company } from "../../drizzle/schema/company.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
-import { encryptSecret, maskSecret, decryptSecret } from "../tenant/crypto.js";
+import { encryptSecret, maskSecret, decryptSecret } from "../company/crypto.js";
 import { loadTenantForSettings, getFeasibilitySettings, assertAccessibleRequiredDocuments, getInventorySettings, getErpSyncSettings, getSupplierRiskSettings, getReceivingSettings } from "./settings.service.js";
 import { triggerErpSync } from "./settings.erpSync.js";
 
@@ -12,16 +12,16 @@ import { triggerErpSync } from "./settings.erpSync.js";
 // ============================================================
 
 export const getFeasibilitySettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   res.json(getFeasibilitySettings(tenant));
 });
 
 export const updateFeasibilitySettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   if (Array.isArray(req.body.requiredDocuments)) await assertAccessibleRequiredDocuments(req.db!, req.body.requiredDocuments);
   const merged = { ...getFeasibilitySettings(tenant), ...req.body };
 
-  const [updated] = await req.db!.update(tenants).set({ feasibilitySettings: merged }).where(eq(tenants.id, req.tenantId!)).returning();
+  const [updated] = await req.db!.update(company).set({ feasibilitySettings: merged }).returning();
   await recordAuditTrail(req.db!, {
     entityType: "FeasibilitySettings",
     entityId: req.tenantId!,
@@ -37,15 +37,15 @@ export const updateFeasibilitySettingsHandler = asyncHandler(async (req: Request
 // ============================================================
 
 export const getInventorySettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   res.json(getInventorySettings(tenant));
 });
 
 export const updateInventorySettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   const merged = { ...getInventorySettings(tenant), ...req.body };
 
-  const [updated] = await req.db!.update(tenants).set({ inventorySettings: merged }).where(eq(tenants.id, req.tenantId!)).returning();
+  const [updated] = await req.db!.update(company).set({ inventorySettings: merged }).returning();
   await recordAuditTrail(req.db!, {
     entityType: "InventorySettings",
     entityId: req.tenantId!,
@@ -62,7 +62,7 @@ export const updateInventorySettingsHandler = asyncHandler(async (req: Request, 
 
 /** Never returns the real secret — a masked display string + whether one is set, same convention as tenant.controller.ts's getAiConfigHandler. */
 export const getErpSyncSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   const config = getErpSyncSettings(tenant);
   res.json({
     schedule: config.schedule ?? null,
@@ -78,14 +78,14 @@ export const getErpSyncSettingsHandler = asyncHandler(async (req: Request, res: 
 });
 
 export const updateErpSyncSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   const { webhookSecret, webhookUrl, ...rest } = req.body as { webhookSecret?: string; webhookUrl?: string } & Record<string, unknown>;
 
   const merged = { ...getErpSyncSettings(tenant), ...rest };
   if (webhookUrl !== undefined) merged.webhookUrl = webhookUrl === "" ? undefined : webhookUrl;
   if (webhookSecret !== undefined) merged.webhookSecretEncrypted = encryptSecret(webhookSecret);
 
-  const [updated] = await req.db!.update(tenants).set({ erpSyncSettings: merged }).where(eq(tenants.id, req.tenantId!)).returning();
+  const [updated] = await req.db!.update(company).set({ erpSyncSettings: merged }).returning();
 
   // Never log the secret itself, encrypted or not — same convention as tenant.controller.ts's updateAiConfigHandler.
   await recordAuditTrail(req.db!, {
@@ -116,15 +116,15 @@ export const updateErpSyncSettingsHandler = asyncHandler(async (req: Request, re
 // ============================================================
 
 export const getSupplierRiskSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   res.json(getSupplierRiskSettings(tenant));
 });
 
 export const updateSupplierRiskSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   const merged = { ...getSupplierRiskSettings(tenant), ...req.body };
 
-  const [updated] = await req.db!.update(tenants).set({ supplierRiskWeights: merged }).where(eq(tenants.id, req.tenantId!)).returning();
+  const [updated] = await req.db!.update(company).set({ supplierRiskWeights: merged }).returning();
   await recordAuditTrail(req.db!, {
     entityType: "SupplierRiskSettings",
     entityId: req.tenantId!,
@@ -141,15 +141,15 @@ export const updateSupplierRiskSettingsHandler = asyncHandler(async (req: Reques
 // ============================================================
 
 export const getReceivingSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   res.json(getReceivingSettings(tenant));
 });
 
 export const updateReceivingSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   const merged = { ...getReceivingSettings(tenant), ...req.body };
 
-  const [updated] = await req.db!.update(tenants).set({ receivingSettings: merged }).where(eq(tenants.id, req.tenantId!)).returning();
+  const [updated] = await req.db!.update(company).set({ receivingSettings: merged }).returning();
   await recordAuditTrail(req.db!, {
     entityType: "ReceivingSettings",
     entityId: req.tenantId!,

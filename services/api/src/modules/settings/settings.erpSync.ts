@@ -1,8 +1,8 @@
 import { createHmac } from "node:crypto";
 import { eq } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
-import { tenants } from "../../drizzle/schema/tenants.js";
-import { decryptSecret } from "../tenant/crypto.js";
+import type { Db } from "../../lib/requestDb.js";
+import { company } from "../../drizzle/schema/company.js";
+import { decryptSecret } from "../company/crypto.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { logger } from "../../utils/logger.js";
 import { assertSafeWebhookUrl } from "../../utils/ssrfGuard.js";
@@ -49,12 +49,12 @@ export interface SyncResult {
  * preset is mapped unconditionally, exactly as before trigger rules existed.
  */
 export async function triggerErpSync(
-  db: TenantDb,
+  db: Db,
   tenantId: number,
   performedBy: number | undefined,
   event?: { on: ErpTriggerRule["on"]; statusValue?: string }
 ): Promise<SyncResult> {
-  const tenant = await loadTenantForSettings(db, tenantId);
+  const tenant = await loadTenantForSettings(db);
   const config = getErpSyncSettings(tenant);
   const modules = config.modulesEnabled ?? [];
 
@@ -161,7 +161,7 @@ export async function triggerErpSync(
 
   const history = [entry, ...(config.statusHistory ?? [])].slice(0, MAX_HISTORY_ENTRIES);
   const merged: ErpSyncSettings = { ...config, statusHistory: history };
-  await db.update(tenants).set({ erpSyncSettings: merged }).where(eq(tenants.id, tenantId));
+  await db.update(company).set({ erpSyncSettings: merged });
 
   await recordAuditTrail(db, {
     entityType: "ErpSyncSettings",

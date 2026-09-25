@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { and, eq, gte, desc, inArray } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
-import { tenants } from "../../drizzle/schema/tenants.js";
+import type { Db } from "../../lib/requestDb.js";
+import { company } from "../../drizzle/schema/company.js";
 import { type Supplier } from "../../drizzle/schema/supplier.js";
 import { rma } from "../../drizzle/schema/rma.js";
 import { warrantyClaims } from "../../drizzle/schema/warranty.js";
@@ -89,7 +89,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * normalization threshold used to turn it into a 0-1 risk contribution in
  * scoreSupplierQualityRisk below.
  */
-export async function getSupplierQualityFactors(db: TenantDb, supplierId: number): Promise<SupplierQualityFactors> {
+export async function getSupplierQualityFactors(db: Db, supplierId: number): Promise<SupplierQualityFactors> {
   const [ncrIds, capaIds, performance, rmaRows, warrantyRows, scarRows, carRows, eightDRows, messages] = await Promise.all([
     getSupplierNcrIds(db, supplierId),
     getSupplierCapaIds(db, supplierId),
@@ -217,8 +217,8 @@ export function scoreSupplierQualityRisk(factors: SupplierQualityFactors, weight
   };
 }
 
-async function loadRiskWeights(db: TenantDb, tenantId: number): Promise<Partial<SupplierRiskWeights>> {
-  const [tenant] = await db.select({ supplierRiskWeights: tenants.supplierRiskWeights }).from(tenants).where(eq(tenants.id, tenantId));
+async function loadRiskWeights(db: Db): Promise<Partial<SupplierRiskWeights>> {
+  const [tenant] = await db.select({ supplierRiskWeights: company.supplierRiskWeights }).from(company);
   return tenant?.supplierRiskWeights ?? {};
 }
 
@@ -229,8 +229,8 @@ async function loadRiskWeights(db: TenantDb, tenantId: number): Promise<Partial<
  * inserting unboundedly, and records the exact audit-trail entry the brief
  * asks for.
  */
-export async function recomputeSupplierRiskScore(db: TenantDb, tenantId: number, supplierId: number, performedBy: number | undefined): Promise<SupplierQualityRiskScoreRow> {
-  const [factors, weights] = await Promise.all([getSupplierQualityFactors(db, supplierId), loadRiskWeights(db, tenantId)]);
+export async function recomputeSupplierRiskScore(db: Db, supplierId: number, performedBy: number | undefined): Promise<SupplierQualityRiskScoreRow> {
+  const [factors, weights] = await Promise.all([getSupplierQualityFactors(db, supplierId), loadRiskWeights(db)]);
   const result = scoreSupplierQualityRisk(factors, weights);
   const scoreDate = new Date().toISOString().slice(0, 10);
 
@@ -265,7 +265,7 @@ const TREND_WINDOW_DAYS = 90;
  * audit-logging — a lazy read should never look like an explicit "someone
  * recomputed this" action in the audit trail.
  */
-export async function getSupplierRiskScoreWithTrend(db: TenantDb, tenantId: number, supplierId: number) {
+export async function getSupplierRiskScoreWithTrend(db: Db, supplierId: number) {
   const since = new Date(Date.now() - TREND_WINDOW_DAYS * DAY_MS).toISOString().slice(0, 10);
   const trend = await db
     .select()
@@ -275,7 +275,7 @@ export async function getSupplierRiskScoreWithTrend(db: TenantDb, tenantId: numb
 
   if (trend.length > 0) return { latest: trend[trend.length - 1]!, trend };
 
-  const [factors, weights] = await Promise.all([getSupplierQualityFactors(db, supplierId), loadRiskWeights(db, tenantId)]);
+  const [factors, weights] = await Promise.all([getSupplierQualityFactors(db, supplierId), loadRiskWeights(db)]);
   const result = scoreSupplierQualityRisk(factors, weights);
   const latest = { id: -1, supplierId, scoreDate: new Date().toISOString().slice(0, 10), score: String(result.score), band: result.band, formulaVersion: "v1", breakdown: result.breakdown, computedByUserId: null, createdAt: new Date(), unsaved: true };
   return { latest, trend: [latest] };
@@ -292,7 +292,7 @@ export interface SupplierHealth {
   openActionCount: number;
 }
 
-export async function getSupplierHealth(db: TenantDb, supplierId: number): Promise<SupplierHealth> {
+export async function getSupplierHealth(db: Db, supplierId: number): Promise<SupplierHealth> {
   const [loginRows, docDates, ppapDates, carDates, eightDDates, onboardingDates, lastMessage, carOpen, eightDOpen] = await Promise.all([
     // Plain fetch-and-max in JS, not ORDER BY ... DESC LIMIT 1 — Postgres's
     // default DESC ordering puts NULLs FIRST, so a portal login that never
@@ -330,13 +330,12 @@ export async function getSupplierHealth(db: TenantDb, supplierId: number): Promi
 
 export async function exportSupplierScorecard(req: Request, res: Response, supplier: Supplier, format: string): Promise<void> {
   const db = req.db!;
-  const tenantId = req.tenantId!;
   const [factors, riskResult, performer] = await Promise.all([
     getSupplierQualityFactors(db, supplier.id),
-    getSupplierRiskScoreWithTrend(db, tenantId, supplier.id),
+    getSupplierRiskScoreWithTrend(db, supplier.id),
     req.user?.id ? db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, req.user.id)) : Promise.resolve([]),
   ]);
-  const [tenant] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, tenantId));
+  const [tenant] = await db.select({ name: company.name }).from(company);
 
   const report: ExportableReport = {
     title: `Supplier Scorecard — ${supplier.name}`,

@@ -11,7 +11,7 @@ import { toWorkflowPayload, workflowAdapter } from "../versioning/adapters.js";
 import { recordAuditTrail, withResolvedActors, attachFieldChanges } from "../audit-trail/audit-trail.service.js";
 import { RESOURCE_KEYS } from "../../middleware/departmentAccess.js";
 import { WORKFLOW_TEMPLATES } from "./workflow.templates.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 const VERSION_HISTORY_CAP = 20;
 
@@ -33,14 +33,14 @@ export const createHandler = asyncHandler(async (req: Request, res: Response) =>
     .returning();
   if (!created) throw new AppError("Failed to create workflow", 500);
   await recordAuditTrail(req.db!, { entityType: "WorkflowDefinition", entityId: created.id, action: "create", changes: { name, module: module ?? null }, performedBy: req.user?.id });
-  const draft = await createInitialDraft(req.db as TenantDb, workflowAdapter, req.tenantId!, created.id, { id: req.user!.id, roleName: req.user!.roleName }, payload as unknown as Record<string, unknown>);
+  const draft = await createInitialDraft(req.db as Db, workflowAdapter, req.tenantId!, created.id, { id: req.user!.id, roleName: req.user!.roleName }, payload as unknown as Record<string, unknown>);
   res.status(201).json({ ...created, draftVersionId: draft.id });
 });
 
 /** GET /workflow/:id — the workflow, what is in force, and what is being worked on. */
 export const getHandler = asyncHandler(async (req: Request, res: Response) => {
   const workflow = await loadDefinition(req, Number(req.params.id));
-  const current = await getCurrent(req.db as TenantDb, workflowAdapter, req.tenantId!, workflow.id);
+  const current = await getCurrent(req.db as Db, workflowAdapter, req.tenantId!, workflow.id);
   res.json({ ...workflow, ...current });
 });
 
@@ -202,8 +202,8 @@ export const historyHandler = asyncHandler(async (req: Request, res: Response) =
     .where(and(eq(auditTrail.entityId, Number(recordId)), eq(auditTrail.entityType, entityType)));
 
   const sorted = [...rows].sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
-  const withActors = await withResolvedActors(req.db! as TenantDb, sorted);
-  res.json(await attachFieldChanges(req.db! as TenantDb, withActors));
+  const withActors = await withResolvedActors(req.db! as Db, sorted);
+  res.json(await attachFieldChanges(req.db! as Db, withActors));
 });
 
 /** GET /workflow/templates — Phase 9 task 6's starter templates (real, static graphs mirroring each module's own real states/events — see workflow.templates.ts). Loading one into the builder still requires an explicit Save; nothing here has any side effect. */
@@ -246,7 +246,7 @@ interface DefinitionHealth {
  * one real implementation instead of the system-health summary silently
  * drifting from what this page itself reports.
  */
-export async function buildWorkflowHealthReport(db: TenantDb) {
+export async function buildWorkflowHealthReport(db: Db) {
   const definitions = await db.select().from(workflowDefinitions);
   const registeredKinds = new Set(getRegisteredActionKinds());
   const knownModules = new Set(RESOURCE_KEYS as string[]);
@@ -290,5 +290,5 @@ export async function buildWorkflowHealthReport(db: TenantDb) {
 }
 
 export const healthHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await buildWorkflowHealthReport(req.db! as TenantDb));
+  res.json(await buildWorkflowHealthReport(req.db! as Db));
 });

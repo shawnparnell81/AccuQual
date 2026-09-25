@@ -1,11 +1,11 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { requirePermission } from "../../middleware/requirePermission.js";
 import { getMyWorkerHandler, getWorkerHandler, listWorkersHandler, upsertWorkerHandler } from "./worker.controller.js";
 
 export const workerRouter = Router();
-workerRouter.use(requireAuth, withTenantDb);
+workerRouter.use(requireAuth, withDb);
 
 const view = requirePermission("workerProfile.view");
 const manage = requirePermission("workerProfile.manage");

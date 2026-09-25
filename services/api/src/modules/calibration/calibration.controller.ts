@@ -10,7 +10,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { hasPermission } from "../../middleware/requirePermission.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import * as service from "./calibration.service.js";
 
 export const baseHandlers = crudFactory(equipment, { entityName: "Equipment", idColumn: "id" });
@@ -64,7 +64,7 @@ export interface CalibrationEventInput {
  * Completes the equipment's scheduled calibration when there is one; a failed result takes the equipment out of service and a
  * passing one returns it (see calibration.service.ts).
  */
-export async function createCalibrationEvent(db: TenantDb, equipmentId: number, input: CalibrationEventInput, performedBy?: number): Promise<Calibration> {
+export async function createCalibrationEvent(db: Db, equipmentId: number, input: CalibrationEventInput, performedBy?: number): Promise<Calibration> {
   return service.recordCompletedCalibration(db, equipmentId, input, performedBy);
 }
 

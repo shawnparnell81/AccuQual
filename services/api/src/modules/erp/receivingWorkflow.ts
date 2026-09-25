@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { erpReceivingLineItems, erpPoLineItems, erpPurchaseOrders, type ErpReceivingLineItem } from "../../drizzle/schema/erp.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -28,14 +28,14 @@ export const RECEIVING_TRANSITIONS: Record<string, string[]> = {
 
 const QUALITY_OWNED_TARGETS = new Set(["inspected", "accepted", "rejected", "quarantined", "disposition_required"]);
 
-async function loadReceivingLineItem(db: TenantDb, id: number): Promise<ErpReceivingLineItem> {
+async function loadReceivingLineItem(db: Db, id: number): Promise<ErpReceivingLineItem> {
   const [row] = await db.select().from(erpReceivingLineItems).where(and(eq(erpReceivingLineItems.id, id)));
   if (!row) throw AppError.notFound("ReceivingLineItem");
   return row;
 }
 
 /** Resolves the real supplier behind a receiving line item — line → PO line → PO.supplierId — the one join every automation/reporting query in this phase needs. */
-export async function getSupplierIdForReceivingLineItem(db: TenantDb, lineItemId: number): Promise<number | null> {
+export async function getSupplierIdForReceivingLineItem(db: Db, lineItemId: number): Promise<number | null> {
   const [row] = await db
     .select({ supplierId: erpPurchaseOrders.supplierId })
     .from(erpReceivingLineItems)
@@ -63,7 +63,7 @@ export interface TransitionOptions {
  * receivingAutomation.ts for exactly what each does and why they're kept
  * as separate, individually-audited steps rather than one combined action.
  */
-export async function transitionReceivingLineItem(db: TenantDb, tenantId: number, lineItemId: number, targetStatus: string, options: TransitionOptions) {
+export async function transitionReceivingLineItem(db: Db, lineItemId: number, targetStatus: string, options: TransitionOptions) {
   const line = await loadReceivingLineItem(db, lineItemId);
   const allowed = RECEIVING_TRANSITIONS[line.status] ?? [];
   if (!allowed.includes(targetStatus)) {
@@ -97,9 +97,9 @@ export async function transitionReceivingLineItem(db: TenantDb, tenantId: number
 
   if (targetStatus === "rejected" || targetStatus === "quarantined") {
     const supplierId = await getSupplierIdForReceivingLineItem(db, lineItemId);
-    const ncr = await maybeAutoCreateNcr(db, tenantId, updated!, targetStatus, supplierId, options.defectCategory, options.performedBy, options.siteId);
+    const ncr = await maybeAutoCreateNcr(db, updated!, targetStatus, supplierId, options.defectCategory, options.performedBy, options.siteId);
     if (hold && ncr) await linkNcrFromReceiving(db, hold.id, ncr.id);
-    if (supplierId) await checkCapaEscalation(db, tenantId, supplierId, ncr?.id, options.performedBy, ncr?.siteId);
+    if (supplierId) await checkCapaEscalation(db, supplierId, ncr?.id, options.performedBy, ncr?.siteId);
   }
 
   return updated!;

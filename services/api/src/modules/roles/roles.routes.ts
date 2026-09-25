@@ -7,7 +7,7 @@ import { listRoles, getRole, createRole, updateRole } from "./roles.controller.j
 
 export const rolesRouter = Router();
 
-// Note: no withTenantDb here — roles are platform-wide, see roles.controller.ts.
+// Note: no withDb here — roles are platform-wide, see roles.controller.ts.
 rolesRouter.use(requireAuth);
 
 rolesRouter.get("/", listRoles);

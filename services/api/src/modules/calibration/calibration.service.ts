@@ -1,5 +1,5 @@
 import { and, eq, inArray, gte, like } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { db as ownerDb } from "../../db/index.js";
 import { equipment, calibrations, type Calibration, type Equipment, type EquipmentStatus } from "../../drizzle/schema/calibration.js";
 import { notificationLog } from "../../drizzle/schema/notifications.js";
@@ -70,7 +70,7 @@ export function summarize(items: Equipment[], cals: Calibration[], now: Date = n
   return out;
 }
 
-async function loadEquipment(db: TenantDb, id: number): Promise<Equipment> {
+async function loadEquipment(db: Db, id: number): Promise<Equipment> {
   const [item] = await db.select().from(equipment).where(and(eq(equipment.id, id)));
   if (!item) throw AppError.notFound("Equipment");
   return item;
@@ -80,14 +80,14 @@ async function emit(event: string, equipmentId: number, extra: Record<string, un
   await publishEvent(WORKFLOW_STREAM, { module: "calibration", event, entityId: equipmentId, ...extra });
 }
 
-export async function listEquipmentWithSummary(db: TenantDb) {
+export async function listEquipmentWithSummary(db: Db) {
   const items = await db.select().from(equipment);
   const cals = await db.select().from(calibrations);
   const summaries = summarize(items, cals);
   return items.map((item) => ({ ...item, ...summaries.get(item.id)! }));
 }
 
-export async function getEquipmentWithSummary(db: TenantDb, id: number) {
+export async function getEquipmentWithSummary(db: Db, id: number) {
   const item = await loadEquipment(db, id);
   const cals = await db.select().from(calibrations).where(and(eq(calibrations.equipmentId, id)));
   return { ...item, ...summarize([item], cals).get(id)! };
@@ -110,7 +110,7 @@ const MIN_REASON = 5;
  *  - Returning equipment that a FAILED calibration took out of service (without a passing calibration since) is an override:
  *    it needs the override permission, and is recorded as one.
  */
-export async function changeEquipmentStatus(db: TenantDb, id: number, target: EquipmentStatus, opts: StatusChangeOptions, actor?: number): Promise<Equipment> {
+export async function changeEquipmentStatus(db: Db, id: number, target: EquipmentStatus, opts: StatusChangeOptions, actor?: number): Promise<Equipment> {
   const item = await loadEquipment(db, id);
   if (item.status === target) throw AppError.badRequest(`This equipment is already ${target.replace("_", " ")}.`);
   const reason = opts.reason?.trim() ?? "";
@@ -148,7 +148,7 @@ export async function changeEquipmentStatus(db: TenantDb, id: number, target: Eq
 }
 
 /** Equipment whose latest calibration FAILED can't simply be set active by anyone. */
-async function assertNoUnresolvedFailure(db: TenantDb, id: number, canOverride: boolean) {
+async function assertNoUnresolvedFailure(db: Db, id: number, canOverride: boolean) {
   if (canOverride) return;
   const cals = await db.select().from(calibrations).where(and(eq(calibrations.equipmentId, id)));
   const done = cals.filter((c) => c.status !== "scheduled" && c.performedAt).sort((a, b) => b.performedAt!.getTime() - a.performedAt!.getTime() || b.id - a.id);
@@ -157,7 +157,7 @@ async function assertNoUnresolvedFailure(db: TenantDb, id: number, canOverride: 
 
 // ---- Scheduling and completing ---------------------------------------------------------------------------------------------------------
 
-export async function scheduleCalibration(db: TenantDb, equipmentId: number, input: { scheduledAt: Date; notes?: string }, actor?: number): Promise<Calibration> {
+export async function scheduleCalibration(db: Db, equipmentId: number, input: { scheduledAt: Date; notes?: string }, actor?: number): Promise<Calibration> {
   const item = await loadEquipment(db, equipmentId);
   if (item.status === "inactive") throw AppError.badRequest("This equipment is inactive. Make it active before scheduling a calibration.");
   const [open] = await db.select().from(calibrations).where(and(eq(calibrations.equipmentId, equipmentId), eq(calibrations.status, "scheduled")));
@@ -169,7 +169,7 @@ export async function scheduleCalibration(db: TenantDb, equipmentId: number, inp
   return created!;
 }
 
-export async function cancelScheduledCalibration(db: TenantDb, calibrationId: number, actor?: number): Promise<void> {
+export async function cancelScheduledCalibration(db: Db, calibrationId: number, actor?: number): Promise<void> {
   const [cal] = await db.select().from(calibrations).where(and(eq(calibrations.id, calibrationId)));
   if (!cal) throw AppError.notFound("Calibration");
   if (cal.status !== "scheduled") throw new AppError("Only a scheduled calibration can be cancelled — a completed one is part of the record.", 409);
@@ -186,7 +186,7 @@ export interface CompletionInput {
 }
 
 /** What follows any finished calibration: the due date, the failure hold or return to service, the audit entry, the event, the notice. */
-async function applyOutcome(db: TenantDb, item: Equipment, cal: Calibration, actor?: number) {
+async function applyOutcome(db: Db, item: Equipment, cal: Calibration, actor?: number) {
   const failed = cal.status === "failed";
   await recordAuditTrail(db, {
     entityType: "Equipment",
@@ -227,7 +227,7 @@ function outcomeFields(item: Equipment, input: CompletionInput) {
 }
 
 /** Completes a scheduled calibration. */
-export async function completeCalibration(db: TenantDb, calibrationId: number, input: CompletionInput, actor?: number): Promise<Calibration> {
+export async function completeCalibration(db: Db, calibrationId: number, input: CompletionInput, actor?: number): Promise<Calibration> {
   const [cal] = await db.select().from(calibrations).where(and(eq(calibrations.id, calibrationId)));
   if (!cal) throw AppError.notFound("Calibration");
   if (cal.status !== "scheduled") throw new AppError("This calibration is already finished.", 409);
@@ -242,7 +242,7 @@ export async function completeCalibration(db: TenantDb, calibrationId: number, i
  * performed date). If a calibration was scheduled for this equipment, that one is completed rather than a second row created, so a
  * schedule never lingers after the work is logged.
  */
-export async function recordCompletedCalibration(db: TenantDb, equipmentId: number, input: CompletionInput, actor?: number): Promise<Calibration> {
+export async function recordCompletedCalibration(db: Db, equipmentId: number, input: CompletionInput, actor?: number): Promise<Calibration> {
   const item = await loadEquipment(db, equipmentId);
   const [open] = await db.select().from(calibrations).where(and(eq(calibrations.equipmentId, equipmentId), eq(calibrations.status, "scheduled")));
   if (open) return completeCalibration(db, open.id, input, actor);
@@ -267,7 +267,7 @@ export interface AttentionItem {
 }
 
 /** Equipment a person should look at: out of service, failed, overdue, due within 30 days, or with a calibration that should have happened by now. */
-export async function attention(db: TenantDb): Promise<AttentionItem[]> {
+export async function attention(db: Db): Promise<AttentionItem[]> {
   const rows = await listEquipmentWithSummary(db);
   const out: AttentionItem[] = [];
   for (const r of rows) {
@@ -282,7 +282,7 @@ export async function attention(db: TenantDb): Promise<AttentionItem[]> {
 const DIGEST_SUBJECT = "Calibration due";
 
 /** One digest to the Quality department listing what is overdue / due soon / out of service. Returns how many items it covered. */
-export async function notifyDue(db: TenantDb, opts: { dedupeHours?: number } = {}): Promise<{ items: number; notified: number; skipped: boolean }> {
+export async function notifyDue(db: Db, opts: { dedupeHours?: number } = {}): Promise<{ items: number; notified: number; skipped: boolean }> {
   const items = await attention(db);
   if (items.length === 0) return { items: 0, notified: 0, skipped: false };
   if (opts.dedupeHours) {
@@ -298,14 +298,14 @@ export async function notifyDue(db: TenantDb, opts: { dedupeHours?: number } = {
 }
 
 /** Runs notifyDue for every organization that has equipment (used by the daily timer). Never throws. */
-export async function sweepDueCalibrations(): Promise<{ tenants: number; notified: number }> {
+export async function sweepDueCalibrations(): Promise<{ company: number; notified: number }> {
   let tenantsSwept = 0;
   let notified = 0;
   try {
     const ids = await ownerDb.selectDistinct({ }).from(equipment).where(inArray(equipment.status, ["active", "out_of_service"]));
     for (const { tenantId } of ids) {
       try {
-        const r = await notifyDue(ownerDb as unknown as TenantDb, { dedupeHours: 20 });
+        const r = await notifyDue(ownerDb as unknown as Db, { dedupeHours: 20 });
         tenantsSwept += 1;
         notified += r.notified;
       } catch (err) {
@@ -315,7 +315,7 @@ export async function sweepDueCalibrations(): Promise<{ tenants: number; notifie
   } catch (err) {
     logger.error("Calibration due sweep failed", { err: String(err) });
   }
-  return { tenants: tenantsSwept, notified };
+  return { company: tenantsSwept, notified };
 }
 
 let sweepHandle: ReturnType<typeof setInterval> | null = null;

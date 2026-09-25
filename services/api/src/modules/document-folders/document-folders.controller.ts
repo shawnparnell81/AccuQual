@@ -8,7 +8,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { DEFAULT_DOCUMENT_FOLDERS, type DefaultFolderSeed } from "./defaultDocumentFolders.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { expirationStatus } from "../documents/documents.controller.js";
@@ -24,7 +24,7 @@ const AUDIT_ENTITY_TYPE = "DocumentFolder";
  * previous level's real auto-increment ids as `parentId`, so this can't be a
  * single bulk insert). Only ever runs once per tenant — see `list` below.
  */
-async function seedDefaults(db: TenantDb): Promise<void> {
+async function seedDefaults(db: Db): Promise<void> {
   async function insertLevel(nodes: DefaultFolderSeed[], parentId: number | null): Promise<void> {
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i]!;
@@ -46,7 +46,7 @@ async function seedDefaults(db: TenantDb): Promise<void> {
  * tenants that already existed before this feature shipped, and even
  * recreates it if a user ever deletes it.
  */
-async function ensureLibraryPool(db: TenantDb, topLevel: (typeof documentFolders.$inferSelect)[]): Promise<typeof documentFolders.$inferSelect> {
+async function ensureLibraryPool(db: Db, topLevel: (typeof documentFolders.$inferSelect)[]): Promise<typeof documentFolders.$inferSelect> {
   const existingPool = topLevel.find((f) => f.name === LIBRARY_POOL_NAME);
   if (existingPool) return existingPool;
   const siblingCount = topLevel.length;
@@ -135,7 +135,7 @@ const ADDITIONAL_SUBFOLDERS: { department: string; folder: string; subfolder: st
   { department: "Purchasing", folder: "Compliance & Documentation", subfolder: "PO Quality Requirements" },
 ];
 
-async function ensureAdditionalSubfolders(db: TenantDb, all: (typeof documentFolders.$inferSelect)[]): Promise<(typeof documentFolders.$inferSelect)[]> {
+async function ensureAdditionalSubfolders(db: Db, all: (typeof documentFolders.$inferSelect)[]): Promise<(typeof documentFolders.$inferSelect)[]> {
   let list = all;
   for (const { department, folder, subfolder } of ADDITIONAL_SUBFOLDERS) {
     const dept = list.find((f) => f.parentId === null && f.name === department);
@@ -157,7 +157,7 @@ async function ensureAdditionalSubfolders(db: TenantDb, all: (typeof documentFol
  * without a one-off migration script. Skips anything naming a *procedure*
  * (a reference document about the process, not the live record type).
  */
-async function linkKnownForms(db: TenantDb, all: (typeof documentFolders.$inferSelect)[]): Promise<void> {
+async function linkKnownForms(db: Db, all: (typeof documentFolders.$inferSelect)[]): Promise<void> {
   const hasChildren = new Set(all.map((f) => f.parentId).filter((id): id is number => id !== null));
   const toLink = all.filter((f) => !hasChildren.has(f.id) && !f.linkedPath && !/procedure/i.test(f.name));
 
@@ -175,7 +175,7 @@ async function linkKnownForms(db: TenantDb, all: (typeof documentFolders.$inferS
  * Folder Explorer can show "Draft" / "Expiring Soon" / "Expired" without a
  * per-leaf round trip. Leaves without a linked document are untouched.
  */
-async function withLinkedDocumentInfo(db: TenantDb, all: (typeof documentFolders.$inferSelect)[]) {
+async function withLinkedDocumentInfo(db: Db, all: (typeof documentFolders.$inferSelect)[]) {
   const documentIds = [...new Set(all.map((f) => f.documentId).filter((id): id is number => id !== null))];
   if (documentIds.length === 0) return all;
 
@@ -244,7 +244,7 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /** Would setting `candidateParentId` as this folder's parent make it its own ancestor? */
-async function wouldCreateCycle(db: TenantDb, folderId: number, candidateParentId: number): Promise<boolean> {
+async function wouldCreateCycle(db: Db, folderId: number, candidateParentId: number): Promise<boolean> {
   let cursor: number | null = candidateParentId;
   const seen = new Set<number>();
   while (cursor !== null) {
@@ -342,7 +342,7 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
  * compatibility rather than a column rename. Replacing an existing
  * attachment deletes the old file first.
  */
-async function attachFileToFolder(db: TenantDb, tenantId: number, folderId: number, file: Express.Multer.File, performedBy: number | undefined) {
+async function attachFileToFolder(db: Db, tenantId: number, folderId: number, file: Express.Multer.File, performedBy: number | undefined) {
   const [folder] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, folderId)));
   if (!folder) throw AppError.notFound("Document folder");
 

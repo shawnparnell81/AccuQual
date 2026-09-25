@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gte, inArray, like } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { db as ownerDb } from "../../db/index.js";
 import {
   trainingCourses,
@@ -108,7 +108,7 @@ export interface StatusFilters {
 }
 
 /** Everyone a course applies to (by requirement, or by having taken it), and where each of them stands. */
-export async function trainingStatus(db: TenantDb, filters: StatusFilters = {}, now: Date = new Date()): Promise<StatusRow[]> {
+export async function trainingStatus(db: Db, filters: StatusFilters = {}, now: Date = new Date()): Promise<StatusRow[]> {
   const courses = (await db.select().from(trainingCourses).where(and(eq(trainingCourses.active, true)))).filter((c) => !filters.courseId || c.id === filters.courseId);
   if (courses.length === 0) return [];
   const people = (await db.select({ id: users.id, name: users.name, email: users.email, department: users.department, roleId: users.roleId }).from(users).where(and(eq(users.isActive, true)))).filter((u) => (!filters.userId || u.id === filters.userId) && (!filters.department || u.department === filters.department));
@@ -152,28 +152,28 @@ export async function trainingStatus(db: TenantDb, filters: StatusFilters = {}, 
 
 const AUDIT_ASSIGNMENT = "TrainingAssignment";
 
-async function loadCourse(db: TenantDb, id: number): Promise<TrainingCourse> {
+async function loadCourse(db: Db, id: number): Promise<TrainingCourse> {
   const [course] = await db.select().from(trainingCourses).where(and(eq(trainingCourses.id, id)));
   if (!course) throw AppError.notFound("Training course");
   return course;
 }
 
 /** Ids that are active people in this organization; anything else is refused (an id from another organization must not get through). */
-export async function assertTenantUsers(db: TenantDb, userIds: number[]): Promise<Map<number, { id: number; name: string | null; email: string }>> {
+export async function assertTenantUsers(db: Db, userIds: number[]): Promise<Map<number, { id: number; name: string | null; email: string }>> {
   const unique = [...new Set(userIds)];
   const found = unique.length ? await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(and(eq(users.isActive, true), inArray(users.id, unique))) : [];
   if (found.length !== unique.length) throw AppError.badRequest("One or more of those people aren't active users in this organization.");
   return new Map(found.map((u) => [u.id, u]));
 }
 
-async function documentVersionNow(db: TenantDb, documentId: number | null): Promise<number | null> {
+async function documentVersionNow(db: Db, documentId: number | null): Promise<number | null> {
   if (documentId === null) return null;
   const [d] = await db.select({ v: documents.currentVersion, status: documents.status }).from(documents).where(and(eq(documents.id, documentId)));
   return d && d.status === "approved" && d.v > 0 ? d.v : null;
 }
 
 /** Assigns a course to people, skipping anyone who already has it open, and tells each of them. Returns the assignments created. */
-export async function assignCourse(db: TenantDb, courseId: number, userIds: number[], opts: { dueAt?: Date; reason?: string }, actor?: number): Promise<TrainingAssignment[]> {
+export async function assignCourse(db: Db, courseId: number, userIds: number[], opts: { dueAt?: Date; reason?: string }, actor?: number): Promise<TrainingAssignment[]> {
   const course = await loadCourse(db, courseId);
   if (!course.active) throw AppError.badRequest("This course is retired and can't be assigned.");
   const people = await assertTenantUsers(db, userIds);
@@ -195,7 +195,7 @@ export async function assignCourse(db: TenantDb, courseId: number, userIds: numb
 }
 
 /** Assigns the course to everyone it is required of who isn't currently qualified (never trained, expired, out of date with the document, or failed) and has nothing open. */
-export async function assignRequired(db: TenantDb, courseId: number, opts: { dueAt?: Date }, actor?: number): Promise<{ assigned: TrainingAssignment[]; considered: number }> {
+export async function assignRequired(db: Db, courseId: number, opts: { dueAt?: Date }, actor?: number): Promise<{ assigned: TrainingAssignment[]; considered: number }> {
   const rows = await trainingStatus(db, { courseId });
   const due = rows.filter((r) => r.required && ["not_trained", "expired", "revision_changed", "failed"].includes(r.status) && r.openAssignmentId === null);
   const assigned = due.length ? await assignCourse(db, courseId, due.map((r) => r.userId), { dueAt: opts.dueAt, reason: "required for your role" }, actor) : [];
@@ -214,7 +214,7 @@ export interface CompleteInput {
  * (forms.controller.ts) and session attendance, so they can't diverge. Fixes the expiry date and which version of the linked document
  * the person was trained on.
  */
-export async function completeAssignment(db: TenantDb, assignmentId: number, input: CompleteInput, performedBy?: number): Promise<TrainingAssignment> {
+export async function completeAssignment(db: Db, assignmentId: number, input: CompleteInput, performedBy?: number): Promise<TrainingAssignment> {
   const [assignment] = await db.select().from(trainingAssignments).where(and(eq(trainingAssignments.id, assignmentId)));
   if (!assignment) throw AppError.notFound("Training assignment");
   if (assignment.status === "completed") throw new AppError("This training is already recorded as completed.", 409);
@@ -255,14 +255,14 @@ export interface SessionInput {
   attendance?: AttendanceEntry[];
 }
 
-async function checkRoster(db: TenantDb, attendance: AttendanceEntry[], capacity: number | null | undefined) {
+async function checkRoster(db: Db, attendance: AttendanceEntry[], capacity: number | null | undefined) {
   const ids = attendance.map((a) => a.userId);
   if (new Set(ids).size !== ids.length) throw AppError.badRequest("Someone is on the attendance list twice.");
   await assertTenantUsers(db, ids);
   if (capacity && attendance.length > capacity) throw AppError.badRequest(`The session holds ${capacity} people and ${attendance.length} are listed.`);
 }
 
-export async function scheduleSession(db: TenantDb, input: SessionInput, actor?: number): Promise<TrainingSession> {
+export async function scheduleSession(db: Db, input: SessionInput, actor?: number): Promise<TrainingSession> {
   const course = await loadCourse(db, input.courseId);
   if (!course.active) throw AppError.badRequest("This course is retired and can't be scheduled.");
   let instructorName = input.instructorName?.trim() || null;
@@ -278,13 +278,13 @@ export async function scheduleSession(db: TenantDb, input: SessionInput, actor?:
   return session!;
 }
 
-async function loadSession(db: TenantDb, id: number): Promise<TrainingSession> {
+async function loadSession(db: Db, id: number): Promise<TrainingSession> {
   const [s] = await db.select().from(trainingSessions).where(and(eq(trainingSessions.id, id)));
   if (!s) throw AppError.notFound("Training session");
   return s;
 }
 
-export async function updateSession(db: TenantDb, id: number, patch: Partial<Omit<SessionInput, "courseId">>, actor?: number): Promise<TrainingSession> {
+export async function updateSession(db: Db, id: number, patch: Partial<Omit<SessionInput, "courseId">>, actor?: number): Promise<TrainingSession> {
   const s = await loadSession(db, id);
   if (s.status !== "scheduled") throw new AppError(`A ${s.status} session can't be changed.`, 409);
   const capacity = patch.capacity ?? s.capacity;
@@ -313,7 +313,7 @@ export async function updateSession(db: TenantDb, id: number, patch: Partial<Omi
   return updated!;
 }
 
-export async function cancelSession(db: TenantDb, id: number, reason: string, actor?: number): Promise<TrainingSession> {
+export async function cancelSession(db: Db, id: number, reason: string, actor?: number): Promise<TrainingSession> {
   const s = await loadSession(db, id);
   if (s.status !== "scheduled") throw new AppError(`A ${s.status} session can't be cancelled.`, 409);
   if (reason.trim().length < 5) throw AppError.badRequest("Say why it is cancelled (at least 5 characters).");
@@ -327,7 +327,7 @@ export async function cancelSession(db: TenantDb, id: number, reason: string, ac
  * Completes a session. Everyone marked present has their training recorded (their open assignment is completed, or one is created and
  * completed), and, when the course needs an evaluation, gets a pending competency evaluation so the evaluator has it to do.
  */
-export async function completeSession(db: TenantDb, id: number, input: { attendance?: AttendanceEntry[]; notes?: string; completedAt?: Date }, actor?: number): Promise<{ session: TrainingSession; recorded: number }> {
+export async function completeSession(db: Db, id: number, input: { attendance?: AttendanceEntry[]; notes?: string; completedAt?: Date }, actor?: number): Promise<{ session: TrainingSession; recorded: number }> {
   const s = await loadSession(db, id);
   if (s.status !== "scheduled") throw new AppError(`This session is already ${s.status}.`, 409);
   const attendance = input.attendance ?? s.attendance;
@@ -355,7 +355,7 @@ export async function completeSession(db: TenantDb, id: number, input: { attenda
   return { session: session!, recorded };
 }
 
-export async function listSessions(db: TenantDb, filters: { courseId?: number; status?: string } = {}) {
+export async function listSessions(db: Db, filters: { courseId?: number; status?: string } = {}) {
   const conditions = [];
   if (filters.courseId) conditions.push(eq(trainingSessions.courseId, filters.courseId));
   if (filters.status) conditions.push(eq(trainingSessions.status, filters.status as TrainingSession["status"]));
@@ -363,7 +363,7 @@ export async function listSessions(db: TenantDb, filters: { courseId?: number; s
   return rows.map((r) => ({ ...r.session, courseTitle: r.courseTitle, enrolled: r.session.attendance.length, attended: r.session.attendance.filter((a) => a.status === "present").length }));
 }
 
-export async function getSession(db: TenantDb, id: number) {
+export async function getSession(db: Db, id: number) {
   const s = await loadSession(db, id);
   const course = await loadCourse(db, s.courseId);
   const ids = s.attendance.map((a) => a.userId);
@@ -410,7 +410,7 @@ function checkDecision(course: TrainingCourse, subjectUserId: number, input: Dec
   return { score: score ?? null, evaluation: { ...(score !== undefined ? { score } : {}), ...(criteria.length ? { criteria } : {}), ...(input.evaluation?.notes ? { notes: input.evaluation.notes } : {}) } as Record<string, unknown> };
 }
 
-export async function createCompetency(db: TenantDb, input: { userId: number; courseId: number; sessionId?: number; status?: "pending" | "pass" | "fail"; evaluation?: EvaluationInput; score?: number; notes?: string }, actor: EvaluatorActor): Promise<TrainingCompetency> {
+export async function createCompetency(db: Db, input: { userId: number; courseId: number; sessionId?: number; status?: "pending" | "pass" | "fail"; evaluation?: EvaluationInput; score?: number; notes?: string }, actor: EvaluatorActor): Promise<TrainingCompetency> {
   const course = await loadCourse(db, input.courseId);
   await assertTenantUsers(db, [input.userId]);
   if (input.sessionId !== undefined) await loadSession(db, input.sessionId);
@@ -439,7 +439,7 @@ export async function createCompetency(db: TenantDb, input: { userId: number; co
 }
 
 /** Fills in a pending evaluation. A decided one can't be changed: a re-evaluation is a new record. */
-export async function decideCompetency(db: TenantDb, id: number, input: DecideInput, actor: EvaluatorActor): Promise<TrainingCompetency> {
+export async function decideCompetency(db: Db, id: number, input: DecideInput, actor: EvaluatorActor): Promise<TrainingCompetency> {
   const [row] = await db.select().from(trainingCompetencies).where(and(eq(trainingCompetencies.id, id)));
   if (!row) throw AppError.notFound("Competency evaluation");
   if (row.status !== "pending") throw new AppError("This evaluation has already been decided. Start a new evaluation to reassess.", 409);
@@ -455,12 +455,12 @@ export async function decideCompetency(db: TenantDb, id: number, input: DecideIn
   return updated!;
 }
 
-async function afterDecision(db: TenantDb, row: TrainingCompetency, actor: EvaluatorActor) {
+async function afterDecision(db: Db, row: TrainingCompetency, actor: EvaluatorActor) {
   await recordAuditTrail(db, { entityType: AUDIT_COMPETENCY, entityId: row.id, action: "status_change", changes: { event: row.status === "pass" ? "competency_passed" : "competency_failed", userId: row.userId, courseId: row.courseId, score: row.score, expiresAt: row.expiresAt, ...(row.userId === actor.id ? { selfEvaluated: true } : {}) }, performedBy: actor.id });
   await publishEvent(WORKFLOW_STREAM, { module: "training", event: row.status === "pass" ? "competency_passed" : "competency_failed", entityId: row.id, courseId: row.courseId });
 }
 
-export async function listCompetencies(db: TenantDb, filters: { userId?: number; courseId?: number; status?: string } = {}) {
+export async function listCompetencies(db: Db, filters: { userId?: number; courseId?: number; status?: string } = {}) {
   const conditions = [];
   if (filters.userId) conditions.push(eq(trainingCompetencies.userId, filters.userId));
   if (filters.courseId) conditions.push(eq(trainingCompetencies.courseId, filters.courseId));
@@ -471,7 +471,7 @@ export async function listCompetencies(db: TenantDb, filters: { userId?: number;
 
 // ---- What needs attention, and telling people ------------------------------------------------------------------------------------------------------
 
-export async function attention(db: TenantDb) {
+export async function attention(db: Db) {
   const rows = await trainingStatus(db);
   const rank: Record<string, number> = { failed: 0, expired: 1, overdue: 2, revision_changed: 3, awaiting_evaluation: 4, not_trained: 5, expiring_soon: 6 };
   return rows.filter((r) => (r.required || r.status !== "not_trained") && NEEDS_ACTION.includes(r.status)).sort((a, b) => rank[a.status]! - rank[b.status]! || (a.userName ?? a.email).localeCompare(b.userName ?? b.email));
@@ -480,7 +480,7 @@ export async function attention(db: TenantDb) {
 const DIGEST_SUBJECT = "Training due";
 const STATUS_LABEL: Record<string, string> = { failed: "FAILED evaluation", expired: "EXPIRED", overdue: "OVERDUE", revision_changed: "document revised, retraining needed", awaiting_evaluation: "awaiting evaluation", not_trained: "not trained", expiring_soon: "expires within 30 days" };
 
-export async function notifyDue(db: TenantDb, opts: { dedupeHours?: number } = {}): Promise<{ items: number; notified: number; skipped: boolean }> {
+export async function notifyDue(db: Db, opts: { dedupeHours?: number } = {}): Promise<{ items: number; notified: number; skipped: boolean }> {
   const items = await attention(db);
   if (items.length === 0) return { items: 0, notified: 0, skipped: false };
   if (opts.dedupeHours) {
@@ -493,14 +493,14 @@ export async function notifyDue(db: TenantDb, opts: { dedupeHours?: number } = {
   return { items: items.length, notified, skipped: false };
 }
 
-export async function sweepTrainingDue(): Promise<{ tenants: number; notified: number }> {
+export async function sweepTrainingDue(): Promise<{ company: number; notified: number }> {
   let tenantsSwept = 0;
   let notified = 0;
   try {
     const ids = await ownerDb.selectDistinct({ }).from(trainingCourses).where(eq(trainingCourses.active, true));
     for (const { tenantId } of ids) {
       try {
-        const r = await notifyDue(ownerDb as unknown as TenantDb, { dedupeHours: 20 });
+        const r = await notifyDue(ownerDb as unknown as Db, { dedupeHours: 20 });
         tenantsSwept += 1;
         notified += r.notified;
       } catch (err) {
@@ -510,7 +510,7 @@ export async function sweepTrainingDue(): Promise<{ tenants: number; notified: n
   } catch (err) {
     logger.error("Training due sweep failed", { err: String(err) });
   }
-  return { tenants: tenantsSwept, notified };
+  return { company: tenantsSwept, notified };
 }
 
 let sweepHandle: ReturnType<typeof setInterval> | null = null;

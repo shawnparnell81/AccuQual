@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
-import { tenants, type Tenant } from "../../drizzle/schema/tenants.js";
+import type { Db } from "../../lib/requestDb.js";
+import { company, type Company } from "../../drizzle/schema/company.js";
 import { documents } from "../../drizzle/schema/documents.js";
 import { AppError } from "../../utils/appError.js";
 import { normalizeRequiredDocumentIds } from "./requiredDocuments.js";
@@ -8,24 +8,24 @@ import { normalizeRequiredDocumentIds } from "./requiredDocuments.js";
 /**
  * Shared load for every settings domain below (Feasibility/Inventory/ERP
  * Sync) — same "self-service settings for the CURRENT tenant only, scoped
- * by req.tenantId" reasoning as modules/tenant/tenant.controller.ts's own
+ * by req.tenantId" reasoning as modules/company/tenant.controller.ts's own
  * loadTenant, factored out here since three modules (settings.controller.ts,
  * feasibility.controller.ts, inventory.service.ts/inventory.costing.ts) all
  * need to read this same row without duplicating the query.
  */
-export async function loadTenantForSettings(db: TenantDb, tenantId: number): Promise<Tenant> {
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+export async function loadTenantForSettings(db: Db): Promise<Company> {
+  const [tenant] = await db.select().from(company);
   if (!tenant) throw AppError.notFound("Tenant");
   return tenant;
 }
 
-export type FeasibilitySettings = NonNullable<Tenant["feasibilitySettings"]>;
-export type InventorySettings = NonNullable<Tenant["inventorySettings"]>;
-export type ErpSyncSettings = NonNullable<Tenant["erpSyncSettings"]>;
-export type SupplierRiskSettings = NonNullable<Tenant["supplierRiskWeights"]>;
-export type ReceivingSettings = NonNullable<Tenant["receivingSettings"]>;
+export type FeasibilitySettings = NonNullable<Company["feasibilitySettings"]>;
+export type InventorySettings = NonNullable<Company["inventorySettings"]>;
+export type ErpSyncSettings = NonNullable<Company["erpSyncSettings"]>;
+export type SupplierRiskSettings = NonNullable<Company["supplierRiskWeights"]>;
+export type ReceivingSettings = NonNullable<Company["receivingSettings"]>;
 
-export function getFeasibilitySettings(tenant: Tenant): FeasibilitySettings {
+export function getFeasibilitySettings(tenant: Company): FeasibilitySettings {
   const stored = tenant.feasibilitySettings ?? {};
   return { ...stored, requiredDocuments: normalizeRequiredDocumentIds(stored.requiredDocuments) };
 }
@@ -35,7 +35,7 @@ export function getFeasibilitySettings(tenant: Tenant): FeasibilitySettings {
  * this tenant can still use. Duplicate ids are rejected. A soft-deleted
  * row or another tenant's id is inaccessible.
  */
-export async function assertAccessibleRequiredDocuments(db: TenantDb, ids: string[]): Promise<void> {
+export async function assertAccessibleRequiredDocuments(db: Db, ids: string[]): Promise<void> {
   const seen = new Set<string>();
   const duplicates = ids.filter((id) => {
     if (seen.has(id)) return true;
@@ -55,7 +55,7 @@ export async function assertAccessibleRequiredDocuments(db: TenantDb, ids: strin
 }
 
 /** Titles for finalize's missing-document error. Falls back to "Document #id" when the row is gone. */
-export async function requiredDocumentDisplayNames(db: TenantDb, ids: string[]): Promise<string[]> {
+export async function requiredDocumentDisplayNames(db: Db, ids: string[]): Promise<string[]> {
   const numericIds = [...new Set(ids.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
   if (numericIds.length === 0) return ids.map((id) => `Document #${id}`);
   const rows = await db
@@ -66,18 +66,18 @@ export async function requiredDocumentDisplayNames(db: TenantDb, ids: string[]):
   return ids.map((id) => titles.get(id) || `Document #${id}`);
 }
 
-export function getInventorySettings(tenant: Tenant): InventorySettings {
+export function getInventorySettings(tenant: Company): InventorySettings {
   return tenant.inventorySettings ?? {};
 }
 
-export function getErpSyncSettings(tenant: Tenant): ErpSyncSettings {
+export function getErpSyncSettings(tenant: Company): ErpSyncSettings {
   return tenant.erpSyncSettings ?? {};
 }
 
-export function getSupplierRiskSettings(tenant: Tenant): SupplierRiskSettings {
+export function getSupplierRiskSettings(tenant: Company): SupplierRiskSettings {
   return tenant.supplierRiskWeights ?? {};
 }
 
-export function getReceivingSettings(tenant: Tenant): ReceivingSettings {
+export function getReceivingSettings(tenant: Company): ReceivingSettings {
   return tenant.receivingSettings ?? {};
 }

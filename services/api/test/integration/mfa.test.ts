@@ -17,7 +17,7 @@ import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { auditRowChanges } from "../../src/drizzle/schema/auditRowChanges.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { totpAt, totpCounter } from "../../src/utils/totp.js";
-import { decryptSecret } from "../../src/modules/tenant/crypto.js";
+import { decryptSecret } from "../../src/modules/company/crypto.js";
 import { env } from "../../src/config/env.js";
 
 const app = createApp();

@@ -2,7 +2,7 @@ import "dotenv/config";
 import { eq, and } from "drizzle-orm";
 import { db, pool } from "./index.js";
 import { logger } from "../utils/logger.js";
-import { tenants } from "../drizzle/schema/tenants.js";
+import { company } from "../drizzle/schema/company.js";
 import { users } from "../drizzle/schema/users.js";
 import { suppliers } from "../drizzle/schema/supplier.js";
 import { inventoryItems, inventoryStock, inventoryMovements } from "../drizzle/schema/inventory.js";
@@ -23,7 +23,7 @@ import { transitionReceivingLineItem } from "../modules/erp/receivingWorkflow.js
 import { receiveIntoLot } from "../modules/inventory/inventoryLots.service.js";
 import { recomputeSupplierRiskScore } from "../modules/supplier/supplier.qualityRisk.js";
 import { closeEventBusClient } from "../lib/eventBus.js";
-import type { TenantDb } from "../lib/tenantScope.js";
+import type { Db } from "../lib/requestDb.js";
 
 /**
  * Phase 11 task 3/13 — demo-friendly seed data telling ONE coherent story
@@ -56,10 +56,10 @@ const HEALTHY_SUPPLIER_NAME = "Meridian Fasteners LLC";
 async function main() {
   logger.info("Seeding AccuQual demo story data...");
 
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.code, "demo"));
+  const [tenant] = await db.select().from(company).where(eq(company.code, "demo"));
   if (!tenant) throw new Error('Demo tenant not found — run "npm run db:seed" first.');
   const tenantId = tenant.id;
-  const tdb = db as unknown as TenantDb;
+  const tdb = db as unknown as Db;
 
   const [existing] = await tdb.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.name, DEMO_SUPPLIER_NAME)));
   if (existing) {
@@ -124,9 +124,9 @@ async function main() {
     await tdb.insert(inventoryMovements).values({ itemId: bracket!.id, movementType: "receive", quantity: String(outcome.qty), lotNumber: `TC-LOT-${outcome.daysAgo}`, referenceType: "receiving", referenceId: String(doc!.id), performedBy, performedAt: daysAgo(outcome.daysAgo) });
 
     const transitionOpts = { department: "quality", isAdminOrPlatformAdmin: true, performedBy, notes: "Dimensional check failed — bracket mounting holes out of tolerance" };
-    await transitionReceivingLineItem(tdb, tenantId, line!.id, "pending_inspection", transitionOpts);
-    await transitionReceivingLineItem(tdb, tenantId, line!.id, "inspected", transitionOpts);
-    await transitionReceivingLineItem(tdb, tenantId, line!.id, outcome.disposition, transitionOpts);
+    await transitionReceivingLineItem(tdb, line!.id, "pending_inspection", transitionOpts);
+    await transitionReceivingLineItem(tdb, line!.id, "inspected", transitionOpts);
+    await transitionReceivingLineItem(tdb, line!.id, outcome.disposition, transitionOpts);
 
     if (outcome.disposition === "quarantined" && firstQuarantinedLineId === null) firstQuarantinedLineId = line!.id;
   }
@@ -140,9 +140,9 @@ async function main() {
     await receiveIntoLot(tdb, { itemId: gasket!.id, lotNumber: "MF-LOT-20", supplierId: meridian!.id, purchaseOrderId: po!.id, receivingLineItemId: line!.id, quantity: 500 });
     await tdb.insert(inventoryMovements).values({ itemId: gasket!.id, movementType: "receive", quantity: "500", lotNumber: "MF-LOT-20", referenceType: "receiving", referenceId: String(doc!.id), performedBy, performedAt: daysAgo(20) });
     const cleanOpts = { department: "quality", isAdminOrPlatformAdmin: true, performedBy };
-    await transitionReceivingLineItem(tdb, tenantId, line!.id, "pending_inspection", cleanOpts);
-    await transitionReceivingLineItem(tdb, tenantId, line!.id, "inspected", cleanOpts);
-    await transitionReceivingLineItem(tdb, tenantId, line!.id, "accepted", cleanOpts);
+    await transitionReceivingLineItem(tdb, line!.id, "pending_inspection", cleanOpts);
+    await transitionReceivingLineItem(tdb, line!.id, "inspected", cleanOpts);
+    await transitionReceivingLineItem(tdb, line!.id, "accepted", cleanOpts);
   }
 
   await tdb.insert(inventoryStock).values({ itemId: bracket!.id, onHand: "530", lastAdjustedAt: daysAgo(10), lastAdjustedBy: performedBy });
@@ -351,8 +351,8 @@ async function main() {
   // ---------------------------------------------------------------------
   // Real, computed supplier quality risk scores — not hand-picked numbers.
   // ---------------------------------------------------------------------
-  const titanScore = await recomputeSupplierRiskScore(tdb, tenantId, titan!.id, performedBy);
-  const meridianScore = await recomputeSupplierRiskScore(tdb, tenantId, meridian!.id, performedBy);
+  const titanScore = await recomputeSupplierRiskScore(tdb, titan!.id, performedBy);
+  const meridianScore = await recomputeSupplierRiskScore(tdb, meridian!.id, performedBy);
 
   // ---------------------------------------------------------------------
   // Workflow Inbox demo data — a handful of currently-OPEN items assigned

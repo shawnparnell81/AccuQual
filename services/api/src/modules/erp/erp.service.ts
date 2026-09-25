@@ -1,5 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import {
   erpPurchaseOrders,
   erpPoLineItems,
@@ -22,9 +22,9 @@ export interface LineItemInput {
   notes?: string;
 }
 
-/** Every request here already runs inside one Postgres transaction (see tenantScope.ts's withTenantDb) — no separate db.transaction() needed for these multi-insert operations to be atomic. */
+/** Every request here already runs inside one Postgres transaction (see tenantScope.ts's withDb) — no separate db.transaction() needed for these multi-insert operations to be atomic. */
 export async function createPurchaseOrder(
-  db: TenantDb,
+  db: Db,
   supplierId: number,
   lineItems: LineItemInput[],
   notes: string | undefined,
@@ -40,7 +40,7 @@ export async function createPurchaseOrder(
   return po!;
 }
 
-async function insertLineItems(db: TenantDb, purchaseOrderId: number, lineItems: LineItemInput[]) {
+async function insertLineItems(db: Db, purchaseOrderId: number, lineItems: LineItemInput[]) {
   await db.insert(erpPoLineItems).values(
     lineItems.map((li) => ({
       purchaseOrderId,
@@ -52,19 +52,19 @@ async function insertLineItems(db: TenantDb, purchaseOrderId: number, lineItems:
   );
 }
 
-export async function replaceLineItems(db: TenantDb, po: ErpPurchaseOrder, lineItems: LineItemInput[], performedBy: number | undefined) {
+export async function replaceLineItems(db: Db, po: ErpPurchaseOrder, lineItems: LineItemInput[], performedBy: number | undefined) {
   if (po.status !== "draft") throw AppError.badRequest(`Cannot edit line items — purchase order is "${po.status}", not "draft"`);
   await db.delete(erpPoLineItems).where(and(eq(erpPoLineItems.purchaseOrderId, po.id)));
   await insertLineItems(db, po.id, lineItems);
   await recordAuditTrail(db, { entityType: "PurchaseOrder", entityId: po.id, action: "update", changes: { lineItemCount: lineItems.length }, performedBy });
 }
 
-export async function getLineItems(db: TenantDb, purchaseOrderId: number) {
+export async function getLineItems(db: Db, purchaseOrderId: number) {
   return db.select().from(erpPoLineItems).where(and(eq(erpPoLineItems.purchaseOrderId, purchaseOrderId)));
 }
 
 /** Sum of quantityReceived per PO line item, across every receiving document filed against this PO — real received totals, not the PO's own guess. */
-export async function getReceivedQuantities(db: TenantDb, poLineItemIds: number[]): Promise<Map<number, number>> {
+export async function getReceivedQuantities(db: Db, poLineItemIds: number[]): Promise<Map<number, number>> {
   if (poLineItemIds.length === 0) return new Map();
   const rows = await db.select().from(erpReceivingLineItems).where(and(inArray(erpReceivingLineItems.poLineItemId, poLineItemIds)));
   const totals = new Map<number, number>();
@@ -72,7 +72,7 @@ export async function getReceivedQuantities(db: TenantDb, poLineItemIds: number[
   return totals;
 }
 
-export async function sendPurchaseOrder(db: TenantDb, po: ErpPurchaseOrder, performedBy: number | undefined) {
+export async function sendPurchaseOrder(db: Db, po: ErpPurchaseOrder, performedBy: number | undefined) {
   if (po.status !== "draft") throw AppError.badRequest(`Cannot send — purchase order is "${po.status}", not "draft"`);
   const lineItems = await getLineItems(db, po.id);
   if (lineItems.length === 0) throw AppError.badRequest("Cannot send a purchase order with no line items");
@@ -82,7 +82,7 @@ export async function sendPurchaseOrder(db: TenantDb, po: ErpPurchaseOrder, perf
   return updated!;
 }
 
-export async function cancelPurchaseOrder(db: TenantDb, po: ErpPurchaseOrder, performedBy: number | undefined) {
+export async function cancelPurchaseOrder(db: Db, po: ErpPurchaseOrder, performedBy: number | undefined) {
   if (po.status === "received" || po.status === "cancelled") {
     throw AppError.badRequest(`Cannot cancel — purchase order is already "${po.status}"`);
   }
@@ -113,8 +113,7 @@ export async function cancelPurchaseOrder(db: TenantDb, po: ErpPurchaseOrder, pe
  * not something this create step decides on its own.
  */
 export async function createReceivingDocument(
-  db: TenantDb,
-  tenantId: number,
+  db: Db,
   po: ErpPurchaseOrder,
   lineItems: { poLineItemId: number; quantityReceived: number; notes?: string; lotNumber?: string; serialNumber?: string; revisionLevel?: string; expirationDate?: string }[],
   notes: string | undefined,
@@ -152,7 +151,7 @@ export async function createReceivingDocument(
     performedBy: createdBy,
   });
 
-  const tenant = await loadTenantForSettings(db, tenantId);
+  const tenant = await loadTenantForSettings(db);
   const inventorySettings = getInventorySettings(tenant);
   for (const created of createdLines) {
     const poLine = poLineItemById.get(created.poLineItemId)!;
@@ -219,7 +218,7 @@ const REQUISITION_ALLOWED_NEXT: Record<string, string[]> = {
   converted_to_po: [],
 };
 
-async function transitionRequisition(db: TenantDb, req: ErpPurchaseRequisition, newStatus: string, performedBy: number | undefined, patch: Record<string, unknown> = {}) {
+async function transitionRequisition(db: Db, req: ErpPurchaseRequisition, newStatus: string, performedBy: number | undefined, patch: Record<string, unknown> = {}) {
   if (!REQUISITION_ALLOWED_NEXT[req.status]?.includes(newStatus)) {
     throw AppError.badRequest(`Cannot move a requisition from "${req.status}" to "${newStatus}"`);
   }
@@ -238,15 +237,15 @@ async function transitionRequisition(db: TenantDb, req: ErpPurchaseRequisition, 
   return updated!;
 }
 
-export async function submitRequisition(db: TenantDb, req: ErpPurchaseRequisition, performedBy: number | undefined) {
+export async function submitRequisition(db: Db, req: ErpPurchaseRequisition, performedBy: number | undefined) {
   return transitionRequisition(db, req, "pending_approval", performedBy);
 }
 
-export async function approveRequisition(db: TenantDb, req: ErpPurchaseRequisition, performedBy: number | undefined) {
+export async function approveRequisition(db: Db, req: ErpPurchaseRequisition, performedBy: number | undefined) {
   return transitionRequisition(db, req, "approved", performedBy, { approvedBy: performedBy, approvedAt: new Date() });
 }
 
-export async function rejectRequisition(db: TenantDb, req: ErpPurchaseRequisition, performedBy: number | undefined) {
+export async function rejectRequisition(db: Db, req: ErpPurchaseRequisition, performedBy: number | undefined) {
   return transitionRequisition(db, req, "rejected", performedBy);
 }
 
@@ -261,7 +260,7 @@ export async function rejectRequisition(db: TenantDb, req: ErpPurchaseRequisitio
  * requisition may legitimately be created without one and have it filled
  * in during approval.
  */
-export async function convertRequisitionToPo(db: TenantDb, requisition: ErpPurchaseRequisition, performedBy: number | undefined) {
+export async function convertRequisitionToPo(db: Db, requisition: ErpPurchaseRequisition, performedBy: number | undefined) {
   if (requisition.status !== "approved") {
     throw AppError.badRequest(`Cannot convert — requisition is "${requisition.status}", not "approved"`);
   }

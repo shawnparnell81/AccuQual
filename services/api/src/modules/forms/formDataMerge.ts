@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { formData } from "../../drizzle/schema/forms.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 /**
  * Targeted merge into one record's form_data row — used to keep a record's
@@ -15,7 +15,7 @@ import type { TenantDb } from "../../lib/tenantScope.js";
  * A no-op merge (nothing would change) writes nothing.
  */
 export async function mergeFormData(
-  db: TenantDb,
+  db: Db,
   opts: { formType: string; entityType: string; entityId: number; patch?: Record<string, unknown>; defaults?: Record<string, unknown>; createdBy?: number }
 ): Promise<void> {
   const [existing] = await db

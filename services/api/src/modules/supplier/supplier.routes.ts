@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createSupplierSchema, addScorecardSchema, createPortalAccountSchema } from "./supplier.validation.js";
@@ -28,7 +28,7 @@ export const supplierRouter = Router();
 // Dictionary). Production was added purely for the read-only Performance
 // Analytics endpoints below (see the Supplier Performance Analytics review)
 // — it has no write access to anything here.
-supplierRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("suppliers"));
+supplierRouter.use(requireAuth, withDb, requireDepartmentAccess("suppliers"));
 
 // Fixed literal path before ":id"-shaped ones, same convention used
 // throughout this app (workflow.routes.ts's "/history/...", etc.).

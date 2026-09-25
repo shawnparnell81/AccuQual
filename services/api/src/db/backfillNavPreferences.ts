@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { db, pool } from "./index.js";
-import { tenants } from "../drizzle/schema/tenants.js";
+import { company } from "../drizzle/schema/company.js";
 import { navHiddenItems } from "../drizzle/schema/navPreferences.js";
 import { defaultHiddenNavScopes } from "./defaultNavPreferences.js";
 import { logger } from "../utils/logger.js";
@@ -18,7 +18,7 @@ import { logger } from "../utils/logger.js";
  * skipped).
  */
 async function main() {
-  const allTenants = await db.select({ id: tenants.id, code: tenants.code }).from(tenants);
+  const allTenants = await db.select({ id: company.id, code: company.code }).from(company);
   const scopes = defaultHiddenNavScopes();
   logger.info(`Backfilling ${scopes.length} default-hidden nav scope(s) for ${allTenants.length} tenant(s)...`);
 

@@ -26,12 +26,11 @@ import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai
  * per-record AI actions.
  */
 export const riskAiAnalysisHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const id = Number(req.params.id);
   const [risk] = await req.db!.select().from(riskAssessments).where(and(eq(riskAssessments.id, id)));
   if (!risk) throw AppError.notFound("Risk assessment");
 
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!, tenantId);
+  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!);
   const limitError = await checkUsageLimit(req.db!, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 

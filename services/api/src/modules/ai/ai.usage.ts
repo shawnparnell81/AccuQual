@@ -1,13 +1,13 @@
 import { and, eq, gte, sql } from "drizzle-orm";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
-import { tenants } from "../../drizzle/schema/tenants.js";
+import { company } from "../../drizzle/schema/company.js";
 import { aiSuggestions } from "../../drizzle/schema/ai.js";
-import { decryptSecret } from "../tenant/crypto.js";
+import { decryptSecret } from "../company/crypto.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { estimateCost } from "./pricing.js";
 import { logger } from "../../utils/logger.js";
 import { AppError } from "../../utils/appError.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import type { LlmCallOptions, LlmCallResult } from "./llm-gateway.js";
 import type { AiOutputStatus } from "./ai.guardrails.js";
 import type { PipelineRun } from "./ai.pipelines.js";
@@ -57,7 +57,7 @@ export function describeAiState(status: AiOutputStatus, okVerb = "AI-suggested")
  * Returns null when under limit (or no limit set), or an error message to
  * return to the caller.
  */
-export async function checkUsageLimit(db: TenantDb, monthlyLimit: number | null, limitEnforced: boolean): Promise<string | null> {
+export async function checkUsageLimit(db: Db, monthlyLimit: number | null, limitEnforced: boolean): Promise<string | null> {
   if (!limitEnforced || monthlyLimit === null) return null;
 
   const startOfMonth = new Date();
@@ -81,8 +81,8 @@ export async function checkUsageLimit(db: TenantDb, monthlyLimit: number | null,
  * uses the tenant's own configured key when set, falling back to the
  * platform's global env config exactly like every existing pipeline.
  */
-export async function loadTenantLlmOptions(db: TenantDb, tenantId: number): Promise<{ tenant: typeof tenants.$inferSelect | undefined; llmOptions: LlmCallOptions }> {
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+export async function loadTenantLlmOptions(db: Db): Promise<{ tenant: typeof company.$inferSelect | undefined; llmOptions: LlmCallOptions }> {
+  const [tenant] = await db.select().from(company);
   const aiConfig = tenant?.aiConfig ?? {};
 
   // A real, live-reproduced bug (found testing the rebuilt AI Insights
@@ -129,7 +129,7 @@ export async function loadTenantLlmOptions(db: TenantDb, tenantId: number): Prom
  * into `aiSuggestions` by hand.
  */
 export async function recordAiSuggestion(
-  db: TenantDb,
+  db: Db,
   params: {
     module: string;
     pipeline: string;
@@ -191,8 +191,7 @@ export async function recordAiSuggestion(
  * response; this only changes what gets recorded, not the request's outcome.
  */
 export async function runPipelineAndRecord(
-  db: TenantDb,
-  tenantId: number,
+  db: Db,
   performedBy: number | undefined,
   module: string,
   pipeline: string,
@@ -200,11 +199,11 @@ export async function runPipelineAndRecord(
   okVerb: string,
   runner: (llmOptions: LlmCallOptions) => Promise<PipelineRun>
 ): Promise<{ suggestion: typeof aiSuggestions.$inferSelect; output: Record<string, unknown> }> {
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+  const [tenant] = await db.select().from(company);
   const limitError = await checkUsageLimit(db, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
-  const { llmOptions } = await loadTenantLlmOptions(db, tenantId);
+  const { llmOptions } = await loadTenantLlmOptions(db);
 
   try {
     const { classified, result } = await runner(llmOptions);

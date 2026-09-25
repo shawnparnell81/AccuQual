@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { formTemplates, formData, formVersions } from "../../drizzle/schema/forms.js";
 import { AppError } from "../../utils/appError.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { mergePdfFields } from "./pdf-merger.js";
 
 /**
@@ -20,7 +20,7 @@ import { mergePdfFields } from "./pdf-merger.js";
  * without needing a one-off backfill script per tenant or a second list to
  * keep in sync with platform.service.ts's own.
  */
-export async function loadTemplate(db: TenantDb, formType: string) {
+export async function loadTemplate(db: Db, formType: string) {
   const [template] = await db
     .select()
     .from(formTemplates)
@@ -33,7 +33,7 @@ export async function loadTemplate(db: TenantDb, formType: string) {
 }
 
 /** Loads the current (highest-version) form_data row for an entity, or null if none exists yet. */
-export async function loadData(db: TenantDb, formType: string, entityId?: number) {
+export async function loadData(db: Db, formType: string, entityId?: number) {
   const conditions = [eq(formData.formType, formType)];
   if (entityId !== undefined) conditions.push(eq(formData.entityId, entityId));
 
@@ -50,7 +50,7 @@ interface SaveInput {
 }
 
 /** Auto-save path: updates the current row in place without snapshotting a version. */
-export async function saveData(db: TenantDb, input: SaveInput) {
+export async function saveData(db: Db, input: SaveInput) {
   const existing = await loadData(db, input.formType, input.entityId);
 
   if (existing) {
@@ -77,7 +77,7 @@ export async function saveData(db: TenantDb, input: SaveInput) {
 }
 
 /** Deliberate snapshot: bumps `version` and writes an immutable form_versions row. */
-export async function createVersion(db: TenantDb, formId: number, userId?: number) {
+export async function createVersion(db: Db, formId: number, userId?: number) {
   const [current] = await db.select().from(formData).where(and(eq(formData.id, formId)));
   if (!current) throw AppError.notFound("Form");
 
@@ -99,7 +99,7 @@ export async function createVersion(db: TenantDb, formId: number, userId?: numbe
  * and bump the version counter. Not built here — this finding is
  * documentation-only per its own scope.
  */
-export async function listVersions(db: TenantDb, formId: number) {
+export async function listVersions(db: Db, formId: number) {
   return db
     .select()
     .from(formVersions)
@@ -107,7 +107,7 @@ export async function listVersions(db: TenantDb, formId: number) {
     .orderBy(desc(formVersions.version));
 }
 
-export async function exportPdf(db: TenantDb, formType: string, entityId?: number) {
+export async function exportPdf(db: Db, formType: string, entityId?: number) {
   const template = await loadTemplate(db, formType);
   const current = await loadData(db, formType, entityId);
   if (!current) throw AppError.notFound("Form data");

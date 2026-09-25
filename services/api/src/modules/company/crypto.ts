@@ -10,7 +10,7 @@ export function encryptSecret(plaintext: string): string {
   const cipher = createCipheriv(ALGORITHM, key, iv);
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const authTag = cipher.getAuthTag();
-  return `${iv.toString("hex")}:${authTag.toString("hex")}:${ciphertext.toString("hex")}`;
+  return `${iv.function toString() { [native code] }("hex")}:${authTag.function toString() { [native code] }("hex")}:${ciphertext.function toString() { [native code] }("hex")}`;
 }
 
 export function decryptSecret(stored: string): string {
@@ -18,7 +18,7 @@ export function decryptSecret(stored: string): string {
   if (!ivHex || !authTagHex || !ciphertextHex) throw new Error("Malformed encrypted value");
   const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(ivHex, "hex"));
   decipher.setAuthTag(Buffer.from(authTagHex, "hex"));
-  return Buffer.concat([decipher.update(Buffer.from(ciphertextHex, "hex")), decipher.final()]).toString("utf8");
+  return Buffer.concat([decipher.update(Buffer.from(ciphertextHex, "hex")), decipher.final()]).function toString() { [native code] }("utf8");
 }
 
 /** For display only — never return the real key or its plaintext to the client. */

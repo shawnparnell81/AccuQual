@@ -5,7 +5,7 @@ import { asyncHandler } from "./asyncHandler.js";
 import { AppError } from "./appError.js";
 import { recordAuditTrail } from "../modules/audit-trail/audit-trail.service.js";
 import { publishEvent, AI_STREAM } from "../lib/eventBus.js";
-import type { TenantDb } from "../lib/tenantScope.js";
+import type { Db } from "../lib/requestDb.js";
 
 interface CrudOptions {
   entityName: string;
@@ -66,7 +66,7 @@ export function stripClientOwnedFields(body: Record<string, unknown>): Record<st
 
 /**
  * Generates standard list/get/create/update/remove handlers bound to a Drizzle table.
- * Every operation is scoped to `req.tenantId` (set by lib/tenantScope.ts, which must
+ * Every operation is scoped to `req.tenantId` (set by lib/requestDb.ts, which must
  * run before these handlers) — this is AccuQual's primary, always-active tenant
  * isolation guarantee; RLS (rls-policies.sql) is the second, DB-level layer.
  * Bespoke per-module actions (assign, close, approve, ...) live in that module's
@@ -79,7 +79,7 @@ export function stripClientOwnedFields(body: Record<string, unknown>): Record<st
  * Callers get full typing back from `table.$inferSelect` / `$inferInsert` at rest/rest.
  */
 export function crudFactory(table: PgTable, options: CrudOptions) {
-  const untypedDbOf = (db: TenantDb) =>
+  const untypedDbOf = (db: Db) =>
     db as unknown as {
       select: () => { from: (t: unknown) => { where: (w: unknown) => { limit: (n: number) => Promise<unknown[]> } & Promise<unknown[]> } & Promise<unknown[]> };
       insert: (t: unknown) => { values: (v: unknown) => { returning: () => Promise<unknown[]> } };
@@ -223,7 +223,7 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
    *
    * Fail-closed, not partial-apply: the first id that doesn't exist (wrong
    * tenant, already deleted, typo) throws before `res.json` is ever
-   * called — and since `withTenantDb` already wraps the whole request in
+   * called — and since `withDb` already wraps the whole request in
    * one Postgres transaction (commit only on a < 400 response), every
    * update and every audit row written so far in this same request rolls
    * back with it. No new transaction handling needed here; it's already

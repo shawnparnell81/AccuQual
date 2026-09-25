@@ -1,5 +1,5 @@
 import { and, eq, ne } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { sites, userSites } from "../../drizzle/schema/sites.js";
 import { users } from "../../drizzle/schema/users.js";
 import { AppError } from "../../utils/appError.js";
@@ -20,13 +20,13 @@ export interface SiteContextView {
   sites: SiteView[];
 }
 
-async function loadSites(db: TenantDb): Promise<SiteView[]> {
+async function loadSites(db: Db): Promise<SiteView[]> {
   return db
     .select({ id: sites.id, name: sites.name, code: sites.code, status: sites.status, isDefault: sites.isDefault })
     .from(sites);
 }
 
-async function membershipIds(db: TenantDb, userId: number): Promise<number[]> {
+async function membershipIds(db: Db, userId: number): Promise<number[]> {
   const rows = await db
     .select({ siteId: userSites.siteId })
     .from(userSites)
@@ -34,7 +34,7 @@ async function membershipIds(db: TenantDb, userId: number): Promise<number[]> {
   return rows.map((row) => row.siteId);
 }
 
-export async function getSiteContext(db: TenantDb, userId: number, roleName: string | null): Promise<SiteContextView> {
+export async function getSiteContext(db: Db, userId: number, roleName: string | null): Promise<SiteContextView> {
   const [all, [user]] = await Promise.all([
     loadSites(db),
     db.select({ currentSiteId: users.currentSiteId }).from(users).where(and(eq(users.id, userId))),
@@ -47,7 +47,7 @@ export async function getSiteContext(db: TenantDb, userId: number, roleName: str
   return { currentSiteId, canManage, sites: visible };
 }
 
-async function uniqueCode(db: TenantDb, base: string): Promise<string> {
+async function uniqueCode(db: Db, base: string): Promise<string> {
   let code = base.slice(0, 40);
   for (let n = 2; n < 50; n++) {
     const [hit] = await db.select({ id: sites.id }).from(sites).where(and(eq(sites.code, code)));
@@ -57,7 +57,7 @@ async function uniqueCode(db: TenantDb, base: string): Promise<string> {
   throw AppError.badRequest("Couldn't make a short code for that plant name.");
 }
 
-export async function createSite(db: TenantDb, actorId: number, input: { name: string; code?: string }) {
+export async function createSite(db: Db, actorId: number, input: { name: string; code?: string }) {
   const code = await uniqueCode(db, input.code ? slugifyPlantCode(input.code) : slugifyPlantCode(input.name));
   const [created] = await db
     .insert(sites)
@@ -68,7 +68,7 @@ export async function createSite(db: TenantDb, actorId: number, input: { name: s
   return created;
 }
 
-export async function updateSite(db: TenantDb, actorId: number, siteId: number, patch: { name?: string; code?: string; status?: "active" | "inactive" }) {
+export async function updateSite(db: Db, actorId: number, siteId: number, patch: { name?: string; code?: string; status?: "active" | "inactive" }) {
   const [current] = await db.select().from(sites).where(and(eq(sites.id, siteId)));
   if (!current) throw AppError.notFound("Plant");
   if (patch.status === "inactive" && current.isDefault) {
@@ -89,7 +89,7 @@ export async function updateSite(db: TenantDb, actorId: number, siteId: number, 
   return updated;
 }
 
-export async function switchSite(db: TenantDb, userId: number, roleName: string | null, siteId: number) {
+export async function switchSite(db: Db, userId: number, roleName: string | null, siteId: number) {
   const context = await getSiteContext(db, userId, roleName);
   if (!context.sites.some((site) => site.id === siteId)) throw AppError.forbidden("You aren't assigned to that plant.");
   const target = context.sites.find((site) => site.id === siteId);
@@ -98,14 +98,14 @@ export async function switchSite(db: TenantDb, userId: number, roleName: string 
   return { ...context, currentSiteId: siteId };
 }
 
-export async function listMemberIds(db: TenantDb, siteId: number): Promise<number[]> {
+export async function listMemberIds(db: Db, siteId: number): Promise<number[]> {
   const [site] = await db.select({ id: sites.id }).from(sites).where(and(eq(sites.id, siteId)));
   if (!site) throw AppError.notFound("Plant");
   const rows = await db.select({ userId: userSites.userId }).from(userSites).where(and(eq(userSites.siteId, siteId)));
   return rows.map((row) => row.userId);
 }
 
-export async function replaceMembers(db: TenantDb, actorId: number, siteId: number, userIds: number[]) {
+export async function replaceMembers(db: Db, actorId: number, siteId: number, userIds: number[]) {
   const [site] = await db.select().from(sites).where(and(eq(sites.id, siteId)));
   if (!site) throw AppError.notFound("Plant");
 

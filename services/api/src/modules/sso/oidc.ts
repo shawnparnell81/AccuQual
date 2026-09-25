@@ -3,7 +3,7 @@ import * as oidc from "openid-client";
 import { env } from "../../config/env.js";
 import { AppError } from "../../utils/appError.js";
 import type { SsoConnection } from "../../drizzle/schema/sso.js";
-import { decryptSecret } from "../tenant/crypto.js";
+import { decryptSecret } from "../company/crypto.js";
 
 // A thin layer over the vetted `openid-client` library: discovery, PKCE
 // authorization-code flow, and ID-token validation (signature, issuer,

@@ -22,7 +22,7 @@ const suffix = Date.now();
 let tenantAId: number;
 let tenantBId: number;
 
-/** Runs `fn` on a transaction that behaves exactly like a tenant-scoped request (see lib/tenantScope.ts's withTenantDb): SET LOCAL ROLE accuqual_app + the tenant id setting. Always rolled back. */
+/** Runs `fn` on a transaction that behaves exactly like a tenant-scoped request (see lib/requestDb.ts's withDb): SET LOCAL ROLE accuqual_app + the tenant id setting. Always rolled back. */
 async function asTenant<T>(tenantId: number, fn: (q: (sql: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[]; rowCount: number | null }>) => Promise<T>): Promise<T> {
   const client = await pool.connect();
   try {

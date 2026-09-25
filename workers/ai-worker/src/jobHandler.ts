@@ -17,7 +17,7 @@ const logger = winston.createLogger({
  * This worker's own `db` connects as the pool's default (typically owner) role,
  * not through a per-request tenant transaction — every embedding write still
  * carries an explicit `tenantId`, matching the app-level isolation guarantee
- * used everywhere else (see lib/tenantScope.ts).
+ * used everywhere else (see lib/requestDb.ts).
  *
  * Full-System Audit finding H6 — moved out of index.ts (unchanged logic, same
  * function) so it can be imported by test/handle-job.test.ts without also

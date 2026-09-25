@@ -22,7 +22,7 @@ const ASSISTANT_MODULE_AI_STATE: Record<string, string> = {
   capa_effectiveness: "AI-drafted CAPA content",
   supplier_risk: "AI-assisted risk score",
 };
-import { tenants } from "../../drizzle/schema/tenants.js";
+import { company } from "../../drizzle/schema/company.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { inventoryItems, inventoryStock, inventoryMovements } from "../../drizzle/schema/inventory.js";
@@ -40,7 +40,7 @@ import { computeSupplierPerformance } from "../supplier/supplier.performance.js"
 import { computeCostingSummary } from "../inventory/inventory.costing.js";
 import { findSimilar } from "./embedding-engine.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 /**
  * The one hard safety guarantee here is structural, not the system prompt:
@@ -66,7 +66,7 @@ const SAFETY_PREAMBLE =
  * assistance round). Any other module name still gets passed through as a
  * plain label, honestly, rather than silently dropped or faked.
  */
-async function loadContextSummary(db: TenantDb, module: string, recordId?: number): Promise<string | null> {
+async function loadContextSummary(db: Db, module: string, recordId?: number): Promise<string | null> {
   if (recordId === undefined) return `The user is currently viewing the ${module} module (no specific record selected).`;
 
   if (module === "ncr") {
@@ -366,7 +366,7 @@ function flattenConversation(messages: AssistantMessage[]): string {
  * a DB row lookup like loadContextSummary's other cases. Best-effort: a
  * failed/slow embedding lookup should never block the assistant response.
  */
-async function loadSimilarAuditFindings(db: TenantDb, queryText: string): Promise<string | null> {
+async function loadSimilarAuditFindings(db: Db, queryText: string): Promise<string | null> {
   if (!queryText.trim()) return null;
   try {
     const matches = await findSimilar(db, "audit_finding", queryText, 3);
@@ -390,7 +390,7 @@ async function loadSimilarAuditFindings(db: TenantDb, queryText: string): Promis
 
 /**
  * POST /ai/assistant — the one endpoint with no department gate at all
- * (just requireAuth + withTenantDb), per "the assistant must work for ANY
+ * (just requireAuth + withDb), per "the assistant must work for ANY
  * user in ANY department". Uses the tenant's own configured provider/key
  * when set (see tenant.controller.ts's updateAiConfigHandler), falling
  * back to the platform's global env config exactly like every other AI
@@ -406,7 +406,7 @@ export const assistantHandler = asyncHandler(async (req: Request, res: Response)
   // (e.g. after a TENANT_AI_CONFIG_ENCRYPTION_KEY rotation) must degrade to
   // the stub like every other "no key configured" path, never crash the
   // request (Full-System Audit finding C4).
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db! as TenantDb, tenantId);
+  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db! as Db);
 
   const limitError = await checkUsageLimit(req.db!, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
@@ -434,9 +434,8 @@ export const assistantHandler = asyncHandler(async (req: Request, res: Response)
     // aiConfig jsonb: two concurrent AI calls must never lose one's count
     // to the other's write.
     await req
-      .db!.update(tenants)
-      .set({ aiUsageTokens: sql`${tenants.aiUsageTokens} + ${totalTokens}`, aiUsageCost: sql`${tenants.aiUsageCost} + ${cost}` })
-      .where(eq(tenants.id, tenantId));
+      .db!.update(company)
+      .set({ aiUsageTokens: sql`${company.aiUsageTokens} + ${totalTokens}`, aiUsageCost: sql`${company.aiUsageCost} + ${cost}` });
   }
 
   // No dedicated chat-message table exists (no persistence, per this

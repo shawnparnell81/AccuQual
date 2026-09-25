@@ -7,7 +7,7 @@ import { mfaRecoveryCodes } from "../../drizzle/schema/mfaRecoveryCodes.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../utils/appError.js";
 import { base32Encode, generateTotpSecret, otpauthUri, totpCounter, verifyTotp } from "../../utils/totp.js";
-import { decryptSecret, encryptSecret } from "../tenant/crypto.js";
+import { decryptSecret, encryptSecret } from "../company/crypto.js";
 
 export type MfaPolicy = "optional" | "admins" | "all";
 export const MFA_POLICIES: readonly MfaPolicy[] = ["optional", "admins", "all"];

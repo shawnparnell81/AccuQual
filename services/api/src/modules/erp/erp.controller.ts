@@ -185,7 +185,7 @@ export const createReceivingDocumentHandler = asyncHandler(async (req: Request, 
     lineItems: { poLineItemId: number; quantityReceived: number; notes?: string; lotNumber?: string; serialNumber?: string; revisionLevel?: string; expirationDate?: string }[];
   };
   const po = await loadPo(req, purchaseOrderId);
-  const doc = await createReceivingDocument(req.db!, req.tenantId!, po, lineItems, notes, req.user?.id);
+  const doc = await createReceivingDocument(req.db!, po, lineItems, notes, req.user?.id);
   res.status(201).json(doc);
 });
 
@@ -213,7 +213,7 @@ export const transitionReceivingLineItemHandler = asyncHandler(async (req: Reque
 
   const [report] = await req.db!.select({ defectCategory: qualityInspectionReports.defectCategory }).from(qualityInspectionReports).where(and(eq(qualityInspectionReports.receivingLineItemId, id)));
 
-  const updated = await transitionReceivingLineItem(req.db!, req.tenantId!, id, status, {
+  const updated = await transitionReceivingLineItem(req.db!, id, status, {
     department: req.user?.department ?? null,
     isAdminOrPlatformAdmin: req.user?.roleName === "admin" || req.user?.roleName === "platform_admin",
     defectCategory: report?.defectCategory ?? undefined,

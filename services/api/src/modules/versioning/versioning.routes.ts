@@ -4,9 +4,9 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { requirePermission, type PermissionSubject } from "../../middleware/requirePermission.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import * as engine from "./versioning.service.js";
 import type { Actor, SubjectAdapter } from "./versioning.service.js";
 import { contextAdapter, managementReviewAdapter } from "./adapters.js";
@@ -17,7 +17,7 @@ const idParam = (req: Request) => {
   return id;
 };
 const actorOf = (req: Request): Actor => ({ id: req.user!.id, roleName: req.user!.roleName });
-const dbOf = (req: Request) => req.db as TenantDb;
+const dbOf = (req: Request) => req.db as Db;
 
 export const draftSchema = z.object({ payload: z.record(z.string(), z.unknown()).optional(), summary: z.string().max(500).optional() });
 export const saveDraftSchema = z.object({ payload: z.record(z.string(), z.unknown()).optional(), summary: z.string().max(500).optional() });
@@ -34,7 +34,7 @@ export const validateSchema = z.object({ payload: z.record(z.string(), z.unknown
 
 /**
  * Adds the shared version-control endpoints for one subject to a router. The router already applies
- * requireAuth + withTenantDb; every route here adds its own permission gate:
+ * requireAuth + withDb; every route here adds its own permission gate:
  *   view    read-only endpoints
  *   edit    starting, editing, discarding a draft; asking for review; rolling back
  *   review  approving or rejecting
@@ -164,7 +164,7 @@ export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAda
  */
 function createDocumentRouter(adapter: SubjectAdapter, permission: PermissionSubject): Router {
   const router = Router();
-  router.use(requireAuth, withTenantDb);
+  router.use(requireAuth, withDb);
   router.param("id", (req, _res, next, value) => (Number(value) === 1 ? next() : next(AppError.notFound(adapter.noun))));
 
   router.post(

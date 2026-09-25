@@ -2,7 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { aiEmbeddings } from "../../drizzle/schema/ai.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 /**
  * Generates a text embedding and upserts it into the pgvector-backed
@@ -12,12 +12,12 @@ import type { TenantDb } from "../../lib/tenantScope.js";
  * per the Multi-Tenant Patch Pack, embeddings and retrieval must never mix
  * data across tenants.
  */
-export async function embedAndStore(db: TenantDb, entityType: string, entityId: number, content: string): Promise<void> {
+export async function embedAndStore(db: Db, entityType: string, entityId: number, content: string): Promise<void> {
   const embedding = await generateEmbedding(content);
   await db.insert(aiEmbeddings).values({ entityType, entityId, content, embedding });
 }
 
-export async function findSimilar(db: TenantDb, entityType: string, content: string, limit = 5) {
+export async function findSimilar(db: Db, entityType: string, content: string, limit = 5) {
   const embedding = await generateEmbedding(content);
   return db
     .select()

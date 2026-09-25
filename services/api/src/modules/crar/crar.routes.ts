@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createCrarSchema, updateCrarSchema, transitionCrarSchema } from "./crar.validation.js";
@@ -11,7 +11,7 @@ export const crarRouter = Router();
 // narrowed-to-the-warrantyId-link-field-only — see departmentAccess.ts's
 // PERMISSION_MATRIX.crar and crar.controller.ts's own assertDepartment
 // calls for the real per-action split this binary matrix can't express.
-crarRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("crar"));
+crarRouter.use(requireAuth, withDb, requireDepartmentAccess("crar"));
 
 crarRouter.get("/", listCrarHandler);
 crarRouter.post("/", validate(createCrarSchema), createCrarHandler);

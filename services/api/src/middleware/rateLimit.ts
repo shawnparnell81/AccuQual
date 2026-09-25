@@ -40,11 +40,3 @@ export const deviceIngestIpRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-
-/** Stripe's webhook: not a person, so no per-user budget, but the route is public (its signature is the only credential), so it gets a generous ceiling against floods. */
-export const webhookRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: env.NODE_ENV === "test" ? 100_000 : 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-});

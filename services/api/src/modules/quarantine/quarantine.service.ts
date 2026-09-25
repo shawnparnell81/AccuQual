@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, ilike, or, gt } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import {
   quarantineRecords,
   quarantineInventory,
@@ -58,7 +58,7 @@ interface Resolved {
 }
 
 /** Works out what is being held: its name, and (for inventory) what the inventory system must protect. */
-async function resolveTarget(db: TenantDb, input: CreateInput): Promise<Resolved> {
+async function resolveTarget(db: Db, input: CreateInput): Promise<Resolved> {
   if (input.itemType === "inventory_lot") {
     if (!input.itemId) throw AppError.badRequest("Choose the lot to put on hold.");
     const [lot] = await db.select().from(inventoryLots).where(and(eq(inventoryLots.id, input.itemId)));
@@ -88,7 +88,7 @@ const ageDays = (r: QuarantineRecord, now = new Date()) => (r.createdAt ? Math.f
 
 // ---- Create ---------------------------------------------------------------------------------------------------------------------------------------
 
-export async function createQuarantine(db: TenantDb, input: CreateInput, actor?: number): Promise<QuarantineRecord> {
+export async function createQuarantine(db: Db, input: CreateInput, actor?: number): Promise<QuarantineRecord> {
   if (!(input.quantity > 0)) throw AppError.badRequest("The quantity on hold must be more than zero.");
   if (input.reason.trim().length < MIN_TEXT) throw AppError.badRequest(`Say why it is on hold (at least ${MIN_TEXT} characters).`);
   const resolved = await resolveTarget(db, input);
@@ -135,7 +135,7 @@ export async function createQuarantine(db: TenantDb, input: CreateInput, actor?:
 
 // ---- Read -----------------------------------------------------------------------------------------------------------------------------------------
 
-export async function getQuarantine(db: TenantDb, id: number) {
+export async function getQuarantine(db: Db, id: number) {
   const [record] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.id, id)));
   if (!record) throw AppError.notFound("Quarantine record");
   const inventory = await db.select().from(quarantineInventory).where(and(eq(quarantineInventory.quarantineId, id))).orderBy(asc(quarantineInventory.id));
@@ -150,7 +150,7 @@ export interface ListFilters {
   olderThanDays?: number;
 }
 
-export async function listQuarantine(db: TenantDb, filters: ListFilters = {}) {
+export async function listQuarantine(db: Db, filters: ListFilters = {}) {
   const conditions = [];
   if (filters.status) conditions.push(eq(quarantineRecords.status, filters.status as QuarantineRecord["status"]));
   if (filters.itemType) conditions.push(eq(quarantineRecords.itemType, filters.itemType as QuarantineItemType));
@@ -165,7 +165,7 @@ export async function listQuarantine(db: TenantDb, filters: ListFilters = {}) {
 }
 
 /** The dashboard numbers: what is on hold, how long it has been there, and how much of it the system actually enforces. */
-export async function summary(db: TenantDb) {
+export async function summary(db: Db) {
   const open = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.status, "quarantined")));
   const now = new Date();
   const byReason: Record<string, number> = {};
@@ -183,7 +183,7 @@ export async function summary(db: TenantDb) {
 }
 
 /** GET /quarantine/inventory — what is physically where: every location with held quantity, and totals per location. */
-export async function listInventory(db: TenantDb, location?: string) {
+export async function listInventory(db: Db, location?: string) {
   const conditions = [eq(quarantineRecords.status, "quarantined"), gt(quarantineInventory.quantity, "0")];
   if (location) conditions.push(eq(quarantineInventory.location, location));
   const rows = await db
@@ -215,7 +215,7 @@ export async function listInventory(db: TenantDb, location?: string) {
 
 // ---- Change ---------------------------------------------------------------------------------------------------------------------------------------
 
-export async function updateQuarantine(db: TenantDb, id: number, patch: { reason?: string; reasonCategory?: QuarantineReasonCategory; ncrId?: number | null; metadata?: Record<string, unknown> }, actor?: number): Promise<QuarantineRecord> {
+export async function updateQuarantine(db: Db, id: number, patch: { reason?: string; reasonCategory?: QuarantineReasonCategory; ncrId?: number | null; metadata?: Record<string, unknown> }, actor?: number): Promise<QuarantineRecord> {
   const [record] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.id, id)));
   if (!record) throw AppError.notFound("Quarantine record");
   if (record.status !== "quarantined") throw new AppError("A closed quarantine record can't be changed — it is part of the history.", 409);
@@ -241,7 +241,7 @@ export async function updateQuarantine(db: TenantDb, id: number, patch: { reason
 }
 
 /** Moves held quantity between locations (a bin to the quarantine cage). The total on hold does not change. */
-export async function relocate(db: TenantDb, id: number, input: { fromLocation: string; toLocation: string; quantity: number }, actor?: number) {
+export async function relocate(db: Db, id: number, input: { fromLocation: string; toLocation: string; quantity: number }, actor?: number) {
   const [record] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.id, id)));
   if (!record) throw AppError.notFound("Quarantine record");
   if (record.status !== "quarantined") throw new AppError("Only held material can be moved.", 409);
@@ -275,7 +275,7 @@ export interface ResolveActor {
   skipFourEyes?: boolean;
 }
 
-async function reduceInventoryRows(db: TenantDb, id: number, quantity: number) {
+async function reduceInventoryRows(db: Db, id: number, quantity: number) {
   const rows = await db.select().from(quarantineInventory).where(and(eq(quarantineInventory.quarantineId, id))).orderBy(asc(quarantineInventory.id));
   let remaining = quantity;
   for (const row of rows) {
@@ -289,7 +289,7 @@ async function reduceInventoryRows(db: TenantDb, id: number, quantity: number) {
 }
 
 /** Release (back into use) or destroy (removed from stock) some or all of what is on hold. */
-export async function resolveQuarantine(db: TenantDb, id: number, action: "release" | "destroy", input: ResolveInput, actor: ResolveActor): Promise<QuarantineRecord> {
+export async function resolveQuarantine(db: Db, id: number, action: "release" | "destroy", input: ResolveInput, actor: ResolveActor): Promise<QuarantineRecord> {
   const [record] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.id, id)));
   if (!record) throw AppError.notFound("Quarantine record");
   if (record.status !== "quarantined") throw new AppError("This hold is already closed.", 409);
@@ -343,7 +343,7 @@ export async function resolveQuarantine(db: TenantDb, id: number, action: "relea
  * Holds what is actually still in stock; if some was already used the shortfall is recorded, and if none is left the hold is a
  * record only.
  */
-export async function openFromReceivingLine(db: TenantDb, lineItemId: number, actor?: number): Promise<QuarantineRecord | null> {
+export async function openFromReceivingLine(db: Db, lineItemId: number, actor?: number): Promise<QuarantineRecord | null> {
   const [existing] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.sourceType, "receiving_line_item"), eq(quarantineRecords.sourceId, lineItemId), eq(quarantineRecords.status, "quarantined")));
   if (existing) return existing;
   const [line] = await db.select().from(erpReceivingLineItems).where(and(eq(erpReceivingLineItems.id, lineItemId)));
@@ -365,7 +365,7 @@ export async function openFromReceivingLine(db: TenantDb, lineItemId: number, ac
 }
 
 /** A receiving line left "quarantined": accepted releases the hold as use-as-is; rejected leaves it held for a disposition (return or scrap). */
-export async function resolveFromReceivingLine(db: TenantDb, lineItemId: number, outcome: "accepted" | "rejected", actor: ResolveActor): Promise<void> {
+export async function resolveFromReceivingLine(db: Db, lineItemId: number, outcome: "accepted" | "rejected", actor: ResolveActor): Promise<void> {
   const [record] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.sourceType, "receiving_line_item"), eq(quarantineRecords.sourceId, lineItemId), eq(quarantineRecords.status, "quarantined")));
   if (!record) return;
   if (outcome === "accepted") {
@@ -375,6 +375,6 @@ export async function resolveFromReceivingLine(db: TenantDb, lineItemId: number,
   await recordAuditTrail(db, { entityType: "Quarantine", entityId: record.id, action: "update", changes: { event: "receiving_rejected", note: "Rejected at receiving inspection; still on hold until it is returned to the supplier or scrapped." }, performedBy: actor.id > 0 ? actor.id : undefined });
 }
 
-export async function linkNcrFromReceiving(db: TenantDb, quarantineId: number, ncrId: number) {
+export async function linkNcrFromReceiving(db: Db, quarantineId: number, ncrId: number) {
   await db.update(quarantineRecords).set({ ncrId, updatedAt: new Date() }).where(and(eq(quarantineRecords.id, quarantineId)));
 }

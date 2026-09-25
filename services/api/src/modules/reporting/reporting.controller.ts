@@ -6,12 +6,12 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { runPipelineAndRecord } from "../ai/ai.usage.js";
 import * as pipelines from "../ai/ai.pipelines.js";
 import { reportSchedules } from "../../drizzle/schema/reporting.js";
-import { tenants } from "../../drizzle/schema/tenants.js";
+import { company } from "../../drizzle/schema/company.js";
 import { users } from "../../drizzle/schema/users.js";
 import * as reportingService from "./reporting.service.js";
 import { computeNextRunAt, runReportSchedule } from "./reporting.scheduler.js";
 import { toCsv, toExcel, toPdf, type ExportableReport } from "./reporting.export.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import type { DateRange } from "./reporting.service.js";
 
 function parseRange(req: Request): DateRange {
@@ -21,38 +21,38 @@ function parseRange(req: Request): DateRange {
 }
 
 export const ncrMetricsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getNcrMetrics(req.db! as TenantDb, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getNcrMetrics(req.db! as Db, req.tenantId!, parseRange(req)));
 });
 
 export const capaMetricsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getCapaMetrics(req.db! as TenantDb, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getCapaMetrics(req.db! as Db, req.tenantId!, parseRange(req)));
 });
 
 export const supplierPerformanceReportHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getSupplierPerformanceReport(req.db! as TenantDb, req.tenantId!));
+  res.json(await reportingService.getSupplierPerformanceReport(req.db! as Db, req.tenantId!));
 });
 
 export const warrantyTrendsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getWarrantyTrends(req.db! as TenantDb, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getWarrantyTrends(req.db! as Db, req.tenantId!, parseRange(req)));
 });
 
 export const receivingTrendsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getReceivingTrends(req.db! as TenantDb, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getReceivingTrends(req.db! as Db, req.tenantId!, parseRange(req)));
 });
 
 export const inventoryQualityTrendsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getInventoryQualityTrends(req.db! as TenantDb, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getInventoryQualityTrends(req.db! as Db, req.tenantId!, parseRange(req)));
 });
 
 export const workflowCycleTimeHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getWorkflowCycleTimeMetrics(req.db! as TenantDb, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getWorkflowCycleTimeMetrics(req.db! as Db, req.tenantId!, parseRange(req)));
 });
 
 // ---------------------------------------------------------------------------
 // AI-assisted report summaries — always a suggestion over already-real,
 // already-aggregated data; never written back into any stored report.
 // ---------------------------------------------------------------------------
-const SUMMARY_INPUT_LOADERS: Record<string, (db: TenantDb, tenantId: number) => Promise<unknown>> = {
+const SUMMARY_INPUT_LOADERS: Record<string, (db: Db, tenantId: number) => Promise<unknown>> = {
   quality_trends: (db, tenantId) => reportingService.getNcrMetrics(db, tenantId),
   supplier_risk_changes: (db, tenantId) => reportingService.getSupplierPerformanceReport(db, tenantId),
   warranty_patterns: (db, tenantId) => reportingService.getWarrantyTrends(db, tenantId),
@@ -61,11 +61,11 @@ const SUMMARY_INPUT_LOADERS: Record<string, (db: TenantDb, tenantId: number) => 
 
 export const reportSummaryHandler = asyncHandler(async (req: Request, res: Response) => {
   const { kind } = req.body as { kind: string };
-  const db = req.db! as TenantDb;
+  const db = req.db! as Db;
   const tenantId = req.tenantId!;
   const input = await SUMMARY_INPUT_LOADERS[kind]!(db, tenantId);
 
-  const { suggestion, output } = await runPipelineAndRecord(db, tenantId, req.user?.id, "reporting", `report_summary_${kind}`, { kind, input }, "AI-generated report summary", (opts) =>
+  const { suggestion, output } = await runPipelineAndRecord(db, req.user?.id, "reporting", `report_summary_${kind}`, { kind, input }, "AI-generated report summary", (opts) =>
     pipelines.runReportSummaryPipeline(kind, input, opts)
   );
   res.json({ ...suggestion, output });
@@ -131,7 +131,7 @@ export const sendReportScheduleNowHandler = asyncHandler(async (req: Request, re
 // the underlying data (see reporting.routes.ts), and every format carries
 // the same audit-metadata line ("Ensure exports include audit metadata").
 // ---------------------------------------------------------------------------
-const EXPORT_BUILDERS: Record<string, (db: TenantDb, tenantId: number, range: DateRange) => Promise<Omit<ExportableReport, "generatedAt" | "generatedBy" | "tenantName">>> = {
+const EXPORT_BUILDERS: Record<string, (db: Db, tenantId: number, range: DateRange) => Promise<Omit<ExportableReport, "generatedAt" | "generatedBy" | "tenantName">>> = {
   "ncr-metrics": async (db, tenantId, range) => {
     const m = await reportingService.getNcrMetrics(db, tenantId, range);
     return { title: "NCR Summary", columns: ["Status", "Count"], rows: m.byStatus.map((s) => [s.status, s.count]) };
@@ -175,9 +175,9 @@ export const exportReportHandler = asyncHandler(async (req: Request, res: Respon
   const builder = EXPORT_BUILDERS[reportKey];
   if (!builder) throw AppError.badRequest(`Unknown report "${reportKey}"`);
 
-  const db = req.db! as TenantDb;
+  const db = req.db! as Db;
   const tenantId = req.tenantId!;
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+  const [tenant] = await db.select().from(company);
   const [performer] = req.user?.id ? await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, req.user.id)) : [undefined];
 
   const partial = await builder(db, tenantId, parseRange(req));

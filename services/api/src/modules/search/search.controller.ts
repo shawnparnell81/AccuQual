@@ -17,7 +17,7 @@ import { riskAssessments } from "../../drizzle/schema/risk.js";
 import { ppapPackages } from "../../drizzle/schema/ppap.js";
 import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmentAccess.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 const RESULTS_PER_TYPE = 5;
 
@@ -38,7 +38,7 @@ export interface SearchResult {
  * own comment: read-by-everyone) — always searchable.
  */
 async function canRead(
-  db: TenantDb,
+  db: Db,
   user: { id: number; roleName: string | null; department: string | null },
   resourceKey: ResourceKey
 ): Promise<boolean> {
@@ -57,7 +57,7 @@ function idPrefix(column: SQLWrapper, digits: string) {
  * Item/Training/Calibration/RMA/8D/Complaint/Change/Risk/PPAP.
  */
 export const searchHandler = asyncHandler(async (req: Request, res: Response) => {
-  const db = req.db! as TenantDb;
+  const db = req.db! as Db;
   const user = { id: req.user!.id, roleName: req.user?.roleName ?? null, department: req.user?.department ?? null };
   const q = String(req.query.q ?? "").trim();
 

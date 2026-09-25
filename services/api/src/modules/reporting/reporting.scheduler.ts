@@ -1,7 +1,7 @@
 import { and, eq, lte } from "drizzle-orm";
 import { db, pool } from "../../db/index.js";
 import { reportSchedules } from "../../drizzle/schema/reporting.js";
-import { tenants } from "../../drizzle/schema/tenants.js";
+import { company } from "../../drizzle/schema/company.js";
 import { notificationLog } from "../../drizzle/schema/notifications.js";
 import { sendEmail } from "../notifications/notification.service.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -45,7 +45,7 @@ export async function runReportSchedule(scheduleId: number): Promise<void> {
   const [schedule] = await db.select().from(reportSchedules).where(eq(reportSchedules.id, scheduleId));
   if (!schedule) return;
 
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, schedule.tenantId));
+  const [tenant] = await db.select().from(company);
   const tenantName = tenant?.name ?? `Tenant #${schedule.tenantId}`;
 
   try {

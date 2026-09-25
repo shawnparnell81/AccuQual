@@ -602,7 +602,7 @@ export const supplierKpisHandler = asyncHandler(async (req: Request, res: Respon
 
 export const supplierRiskScoreHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
-  res.json(await getSupplierRiskScoreWithTrend(req.db!, req.tenantId!, supplierId));
+  res.json(await getSupplierRiskScoreWithTrend(req.db!, supplierId));
 });
 
 export const supplierScorecardExportHandler = asyncHandler(async (req: Request, res: Response) => {

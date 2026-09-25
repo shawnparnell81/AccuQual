@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { isNull } from "drizzle-orm";
 import { db, pool } from "./index.js";
-import { tenants } from "../drizzle/schema/tenants.js";
+import { company } from "../drizzle/schema/company.js";
 import { ONBOARDING_CHECKLIST_ITEMS } from "./defaultOnboardingChecklist.js";
 import { logger } from "../utils/logger.js";
 
@@ -19,10 +19,10 @@ import { logger } from "../utils/logger.js";
 async function main() {
   const allKeys = ONBOARDING_CHECKLIST_ITEMS.map((i) => i.key);
   const updated = await db
-    .update(tenants)
+    .update(company)
     .set({ onboardingProgress: { dismissed: true, completedItems: [...allKeys] } })
-    .where(isNull(tenants.onboardingProgress))
-    .returning({ id: tenants.id, code: tenants.code });
+    .where(isNull(company.onboardingProgress))
+    .returning({ id: company.id, code: company.code });
 
   logger.info(`Onboarding checklist backfill: ${updated.length} existing tenant(s) marked dismissed.`);
   for (const t of updated) logger.info(`  Tenant "${t.code}" (#${t.id}): marked dismissed.`);

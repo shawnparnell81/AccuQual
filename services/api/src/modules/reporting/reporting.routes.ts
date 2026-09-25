@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createReportScheduleSchema, updateReportScheduleSchema, reportSummarySchema } from "./reporting.validation.js";
@@ -43,7 +43,7 @@ import {
  * not a gap this phase introduced.
  */
 export const reportingRouter = Router();
-reportingRouter.use(requireAuth, withTenantDb);
+reportingRouter.use(requireAuth, withDb);
 
 reportingRouter.get("/ncr-metrics", requireDepartmentAccess("ncr"), ncrMetricsHandler);
 reportingRouter.get("/capa-metrics", requireDepartmentAccess("capa"), capaMetricsHandler);

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { requirePermission } from "../../middleware/requirePermission.js";
 import { validate } from "../../middleware/validate.js";
@@ -27,7 +27,7 @@ export const calibrationRouter = Router();
 // unenforced, see the Permissions Dictionary. Each route below also names the
 // action it needs (equipment.view / manage / calibrate / override), which resolves onto that same
 // department access plus, for the override, a reviewer role — and writes a refusal to the audit trail.
-calibrationRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("calibration"));
+calibrationRouter.use(requireAuth, withDb, requireDepartmentAccess("calibration"));
 
 const view = requirePermission("equipment.view");
 const manage = requirePermission("equipment.manage");

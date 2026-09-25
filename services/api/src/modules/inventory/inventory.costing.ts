@@ -4,7 +4,7 @@ import { inventoryItems, inventoryStock, inventoryMovements } from "../../drizzl
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import type { InventoryItem } from "../../drizzle/schema/inventory.js";
 import { loadTenantForSettings, getInventorySettings, type InventorySettings } from "../settings/settings.service.js";
 
@@ -60,7 +60,7 @@ export interface ItemCosting {
  * scrap/consumption would cost at today's price," not the actual cost paid
  * at the time, exactly as the reviewed prompt specified.
  */
-export async function computeItemCosting(db: TenantDb, item: InventoryItem, days: number = DEFAULT_WINDOW_DAYS, settings?: InventorySettings): Promise<ItemCosting> {
+export async function computeItemCosting(db: Db, item: InventoryItem, days: number = DEFAULT_WINDOW_DAYS, settings?: InventorySettings): Promise<ItemCosting> {
   const stockRows = await db.select().from(inventoryStock).where(and(eq(inventoryStock.itemId, item.id)));
   const onHand = stockRows.reduce((sum, r) => sum + Number(r.onHand), 0);
 
@@ -108,7 +108,7 @@ export interface CostingSummary {
   days: number;
 }
 
-export async function computeCostingSummary(db: TenantDb, days: number = DEFAULT_WINDOW_DAYS, settings?: InventorySettings): Promise<CostingSummary> {
+export async function computeCostingSummary(db: Db, days: number = DEFAULT_WINDOW_DAYS, settings?: InventorySettings): Promise<CostingSummary> {
   const items = await db.select().from(inventoryItems);
   const costings = await Promise.all(items.map((item) => computeItemCosting(db, item, days, settings)));
 
@@ -164,12 +164,12 @@ function parseDays(req: Request): number {
 export const getItemCostingHandler = asyncHandler(async (req: Request, res: Response) => {
   const itemId = Number(req.params.itemId);
   const item = await loadItem(req, itemId);
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   res.json(await computeItemCosting(req.db!, item, parseDays(req), getInventorySettings(tenant)));
 });
 
 /** GET /inventory/costing/summary?days=30 */
 export const costingSummaryHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   res.json(await computeCostingSummary(req.db!, parseDays(req), getInventorySettings(tenant)));
 });

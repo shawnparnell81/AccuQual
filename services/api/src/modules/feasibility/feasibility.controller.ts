@@ -68,7 +68,7 @@ export const listFeasibilityHandler = asyncHandler(async (req: Request, res: Res
 export const createFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
   assertDepartment(req, ["engineering", "sales_and_marketing"]);
 
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   const settings = getFeasibilitySettings(tenant);
   const ownerId = req.body.ownerId ?? (settings.autoAssignOwner ? req.user?.id : undefined);
 
@@ -150,7 +150,7 @@ export const finalizeFeasibilityHandler = asyncHandler(async (req: Request, res:
   const record = await loadFeasibility(req, Number(req.params.id));
   if (record.status === "final") throw AppError.badRequest("Already finalized.");
 
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
+  const tenant = await loadTenantForSettings(req.db!);
   const settings = getFeasibilitySettings(tenant);
   const required = settings.requiredDocuments ?? [];
   const provided = new Set((record.providedDocuments ?? []).map((doc) => String(doc)));

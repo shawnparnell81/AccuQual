@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import {
   rootCauseSchema,
@@ -36,7 +36,7 @@ import { assistantSchema } from "./ai.validation.js";
 import { assistantHandler } from "./ai.assistant.js";
 
 export const aiRouter = Router();
-aiRouter.use(requireAuth, withTenantDb);
+aiRouter.use(requireAuth, withDb);
 
 // No department gate — same as every other route on this router already
 // (root-cause/capa/8d/... have never been department-restricted), and

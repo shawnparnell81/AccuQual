@@ -14,7 +14,7 @@ import { env } from "../../config/env.js";
 import { recordAuditTrail, resolveUserNames } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 /** Same inline-guard style as rma.controller.ts/inventory.controller.ts's assertDepartment — used for the one thing left that's a real fixed business rule (which stage of the workflow belongs to whom) rather than a tunable access level. */
 function assertDepartment(req: Request, allowed: string[]) {
@@ -47,7 +47,7 @@ async function assertWarrantyContentWrite(req: Request) {
   if (req.user?.department === "purchasing") {
     throw AppError.forbidden("Purchasing may only record cost entries on a warranty claim, not create or edit its content");
   }
-  const level = await getUserAccessLevel(req.db! as TenantDb, req.user!, "warranty");
+  const level = await getUserAccessLevel(req.db! as Db, req.user!, "warranty");
   if (level !== "edit") {
     throw AppError.forbidden("This action requires edit access to Warranty (warranty.write)");
   }
@@ -191,7 +191,7 @@ export const getWarrantyClaimHandler = asyncHandler(async (req: Request, res: Re
   // Phase 0 audit-trail fix: performedByUserId was always captured here but
   // never resolved to a name — the claim detail page's History list showed
   // no actor at all. Same resolver every other module's history view uses.
-  const actorNames = await resolveUserNames(req.db! as TenantDb, workflowRows.map((w) => w.performedByUserId));
+  const actorNames = await resolveUserNames(req.db! as Db, workflowRows.map((w) => w.performedByUserId));
   const workflow = workflowRows.map((w) => ({ ...w, performedByName: w.performedByUserId === null ? null : (actorNames.get(w.performedByUserId) ?? null) }));
 
   res.json({

@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { workflowDefinitions } from "../../drizzle/schema/workflow.js";
 import { formData, formVersions } from "../../drizzle/schema/forms.js";
 import { AppError } from "../../utils/appError.js";
@@ -32,7 +32,7 @@ export const workflowAdapter: SubjectAdapter = {
   notifyDepartments: ["quality"],
   blank: () => ({ ...EMPTY_WORKFLOW }) as unknown as Record<string, unknown>,
 
-  async loadLive(db: TenantDb, id: number) {
+  async loadLive(db: Db, id: number) {
     const [row] = await db.select().from(workflowDefinitions).where(and(eq(workflowDefinitions.id, id)));
     if (!row) throw AppError.notFound("Workflow");
     const def = row.definition as { nodes?: WorkflowNode[]; edges?: WorkflowEdge[]; metadata?: Record<string, unknown> };
@@ -85,7 +85,7 @@ export function createFormAdapter(config: { subject: "management_review" | "cont
     notifyDepartments: ["quality"],
     blank: () => ({}),
 
-    async loadLive(db: TenantDb, subjectId: number) {
+    async loadLive(db: Db, subjectId: number) {
       const [row] = await db
         .select()
         .from(formData)
@@ -128,7 +128,7 @@ export const diffContextVersions = (before: Record<string, unknown>, after: Reco
 // ---- The named operations the lifecycle exposes for workflows -------------------------------------------------------------------------------------------
 
 /** Publishes an approved, in-review workflow version: validates, writes it live, archives what it replaces, notifies. */
-export const publishWorkflow = (db: TenantDb, tenantId: number, workflowId: number, versionId: number, actor: Actor) => engine.publishVersion(db, workflowAdapter, tenantId, workflowId, versionId, actor);
+export const publishWorkflow = (db: Db, tenantId: number, workflowId: number, versionId: number, actor: Actor) => engine.publishVersion(db, workflowAdapter, tenantId, workflowId, versionId, actor);
 
 /** Rollback: a new draft with an earlier version's content (which then goes through review and publishing). */
-export const rollbackWorkflow = (db: TenantDb, tenantId: number, workflowId: number, versionNumber: number, actor: Actor) => engine.rollbackTo(db, workflowAdapter, tenantId, workflowId, versionNumber, actor);
+export const rollbackWorkflow = (db: Db, tenantId: number, workflowId: number, versionNumber: number, actor: Actor) => engine.rollbackTo(db, workflowAdapter, tenantId, workflowId, versionNumber, actor);

@@ -10,7 +10,7 @@ import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { getSupplierQualityFactors, getSupplierHealth, getSupplierRiskScoreWithTrend, recomputeSupplierRiskScore, exportSupplierScorecard } from "./supplier.qualityRisk.js";
 
 export const baseHandlers = crudFactory(suppliers, { entityName: "Supplier", idColumn: "id" });
@@ -23,7 +23,7 @@ export const baseHandlers = crudFactory(suppliers, { entityName: "Supplier", idC
  * (Supabase turns RLS on for it, and the policy is deliberately SELECT-only).
  * CI's fresh database runs migrations, so the row exists there too.
  */
-export async function ensureSupplierRole(db: TenantDb): Promise<Role> {
+export async function ensureSupplierRole(db: Db): Promise<Role> {
   const [role] = await db.select().from(roles).where(eq(roles.name, "supplier"));
   if (!role) throw new AppError("The 'supplier' role is missing — run `npm run db:migrate` to create it", 500);
   return role;
@@ -114,7 +114,7 @@ export const createPortalAccountHandler = asyncHandler(async (req: Request, res:
 
   const supplierRole = await ensureSupplierRole(req.db!);
 
-  const tempPassword = randomBytes(9).toString("base64url");
+  const tempPassword = randomBytes(9).function toString() { [native code] }("base64url");
   const passwordHash = await bcrypt.hash(tempPassword, 10);
 
   const [created] = await req
@@ -146,14 +146,14 @@ async function loadSupplierOrThrow(req: Request, id: number) {
 export const getSupplierRiskScoreHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   await loadSupplierOrThrow(req, id);
-  res.json(await getSupplierRiskScoreWithTrend(req.db!, req.tenantId!, id));
+  res.json(await getSupplierRiskScoreWithTrend(req.db!, id));
 });
 
 /** POST /suppliers/:id/risk-score/recompute — the one write path for this score; records "Risk score updated (v1 formula)" to the audit trail (see supplier.qualityRisk.ts's own comment). */
 export const recomputeSupplierRiskScoreHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   await loadSupplierOrThrow(req, id);
-  const row = await recomputeSupplierRiskScore(req.db!, req.tenantId!, id, req.user?.id);
+  const row = await recomputeSupplierRiskScore(req.db!, id, req.user?.id);
   res.status(201).json(row);
 });
 

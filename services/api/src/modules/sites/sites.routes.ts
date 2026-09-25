@@ -2,13 +2,13 @@ import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
 import { validate } from "../../middleware/validate.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { createSiteSchema, replaceMembersSchema, switchSiteSchema, updateSiteSchema } from "./sites.validation.js";
 import { createHandler, getContextHandler, listMembersHandler, replaceMembersHandler, switchHandler, updateHandler } from "./sites.controller.js";
 
 export const sitesRouter = Router();
 
-sitesRouter.use(requireAuth, withTenantDb);
+sitesRouter.use(requireAuth, withDb);
 
 sitesRouter.get("/", getContextHandler);
 sitesRouter.post("/current", validate(switchSiteSchema), switchHandler);

@@ -4,7 +4,7 @@ import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { syncNcrFormData, ncrIsoDate } from "./ncr.formSync.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 
 /**
@@ -14,7 +14,7 @@ import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
  * from, instead of silently overwriting whatever state it was actually in.
  */
 async function patchNcr(
-  db: TenantDb,
+  db: Db,
   id: number,
   patch: Partial<typeof ncr.$inferInsert>,
   action: string,
@@ -47,32 +47,32 @@ async function patchNcr(
 }
 
 // Assigning ownership isn't a lifecycle step — allowed from any status.
-export const assign = (db: TenantDb, id: number, assignedTo: number, performedBy?: number, allowedSiteIds?: number[]) =>
+export const assign = (db: Db, id: number, assignedTo: number, performedBy?: number, allowedSiteIds?: number[]) =>
   patchNcr(db, id, { assignedTo }, "assigned", performedBy, undefined, allowedSiteIds);
 
 // Phase 2 NCR unified-data-model fix: each workflow step also syncs the
 // matching field on the official document (see ncr.formSync.ts) — the same
 // left-pane text a quality engineer just saved now shows up in the
 // PDF-style form/preview immediately, not just in the bare workflow field.
-export const setContainment = async (db: TenantDb, id: number, containment: string, performedBy?: number, allowedSiteIds?: number[]) => {
+export const setContainment = async (db: Db, id: number, containment: string, performedBy?: number, allowedSiteIds?: number[]) => {
   const updated = await patchNcr(db, id, { containment, status: "contained" }, "containment", performedBy, ["open"], allowedSiteIds);
   await syncNcrFormData(db, id, { containmentActionText: containment }, performedBy);
   return updated;
 };
 
-export const setRootCause = async (db: TenantDb, id: number, rootCause: string, performedBy?: number, allowedSiteIds?: number[]) => {
+export const setRootCause = async (db: Db, id: number, rootCause: string, performedBy?: number, allowedSiteIds?: number[]) => {
   const updated = await patchNcr(db, id, { rootCause, status: "investigating" }, "root_cause", performedBy, ["contained"], allowedSiteIds);
   await syncNcrFormData(db, id, { identifiedRootCauseSummary: rootCause }, performedBy);
   return updated;
 };
 
-export const setCorrectiveAction = async (db: TenantDb, id: number, correctiveAction: string, performedBy?: number, allowedSiteIds?: number[]) => {
+export const setCorrectiveAction = async (db: Db, id: number, correctiveAction: string, performedBy?: number, allowedSiteIds?: number[]) => {
   const updated = await patchNcr(db, id, { correctiveAction, status: "corrective_action" }, "corrective_action", performedBy, ["investigating"], allowedSiteIds);
   await syncNcrFormData(db, id, { correctiveActionText: correctiveAction }, performedBy);
   return updated;
 };
 
-export const close = async (db: TenantDb, id: number, performedBy?: number, allowedSiteIds?: number[]) => {
+export const close = async (db: Db, id: number, performedBy?: number, allowedSiteIds?: number[]) => {
   const updated = await patchNcr(db, id, { status: "closed", closedAt: new Date() }, "closed", performedBy, ["corrective_action"], allowedSiteIds);
   await syncNcrFormData(db, id, { documentStatus: "Closed", ncrClosureDate: ncrIsoDate(updated.closedAt ?? new Date()), finalDispositionConfirmed: "Yes" }, performedBy);
   return updated;

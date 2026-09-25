@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Pool } from "pg";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { auditRowChanges } from "../../drizzle/schema/auditRowChanges.js";
 import { users } from "../../drizzle/schema/users.js";
@@ -42,13 +42,13 @@ interface RecordAuditTrailInput {
  * ROLLBACK without erroring) while the caller had already sent a 200/201
  * response as if the write had succeeded. Letting this throw lets
  * `asyncHandler` catch it, `errorHandler` produce a real error response,
- * and `withTenantDb`'s `finalize()` issue the ROLLBACK the transaction
+ * and `withDb`'s `finalize()` issue the ROLLBACK the transaction
  * needs anyway — an honest 500 instead of a false success. Use
  * `recordAuditTrailStandalone` (below) for the one real case that still
  * needs "never throws": logging a failed transition from *outside* any
  * request transaction, in the global error handler.
  */
-export async function recordAuditTrail(db: TenantDb, input: RecordAuditTrailInput): Promise<void> {
+export async function recordAuditTrail(db: Db, input: RecordAuditTrailInput): Promise<void> {
   await db.insert(auditTrail).values({
     entityType: input.entityType,
     entityId: input.entityId,
@@ -60,13 +60,13 @@ export async function recordAuditTrail(db: TenantDb, input: RecordAuditTrailInpu
 
 /**
  * Same as recordAuditTrail(), but for the one case it can't cover: logging a
- * FAILED transition from the global error handler. withTenantDb (see
- * lib/tenantScope.ts) runs every request in its own transaction and rolls it
+ * FAILED transition from the global error handler. withDb (see
+ * lib/requestDb.ts) runs every request in its own transaction and rolls it
  * back whenever the response is an error — reusing req.db here would insert
  * the failure record into the very transaction that's about to be discarded,
  * silently losing it. This opens a short-lived, independent connection off
  * the shared pool instead, sets the same `app.current_tenant_id` RLS setting
- * withTenantDb would have set, and commits on its own — so the record
+ * withDb would have set, and commits on its own — so the record
  * survives regardless of what happens to the request's own transaction.
  * Never throws, same as recordAuditTrail().
  */
@@ -79,7 +79,7 @@ export async function recordAuditTrailStandalone(pool: Pool, input: RecordAuditT
 
   try {
     await client.query("BEGIN");
-    // Same role switch withTenantDb uses (see tenantScope.ts) — a failed-
+    // Same role switch withDb uses (see tenantScope.ts) — a failed-
     // transition audit entry should be subject to the same real RLS layer
     // as every other tenant-scoped write, not a superuser/owner exception.
     await client.query("SET LOCAL ROLE accuqual_app");
@@ -113,7 +113,7 @@ export async function recordAuditTrailStandalone(pool: Pool, input: RecordAuditT
  * rather than a case this app currently produces, but a null result here
  * should never silently become "User #undefined" if that ever changes.
  */
-export async function resolveUserNames(db: TenantDb, userIds: (number | null | undefined)[]): Promise<Map<number, string>> {
+export async function resolveUserNames(db: Db, userIds: (number | null | undefined)[]): Promise<Map<number, string>> {
   const ids = [...new Set(userIds.filter((id): id is number => id !== null && id !== undefined))];
   if (ids.length === 0) return new Map();
 
@@ -130,7 +130,7 @@ export async function resolveUserNames(db: TenantDb, userIds: (number | null | u
  * CAPA stub-data repair script), rendered as "System" by every caller,
  * matching the convention the frontend already used for a missing actor.
  */
-export async function withResolvedActors<T extends { performedBy: number | null }>(db: TenantDb, rows: T[]): Promise<(T & { performedByName: string | null })[]> {
+export async function withResolvedActors<T extends { performedBy: number | null }>(db: Db, rows: T[]): Promise<(T & { performedByName: string | null })[]> {
   const names = await resolveUserNames(db, rows.map((r) => r.performedBy));
   return rows.map((r) => ({ ...r, performedByName: r.performedBy === null ? null : (names.get(r.performedBy) ?? null) }));
 }
@@ -158,7 +158,7 @@ const ENTITY_TABLE: Record<string, string> = {
   Crar: "crar",
   Customer: "customers",
   User: "users",
-  Tenant: "tenants",
+  Company: "tenants",
   FeasibilityReview: "feasibility_reviews",
   QmsForm: "qms_forms",
   ScarForm: "scar_forms",
@@ -179,7 +179,7 @@ export interface FieldChange {
  * get an empty list.
  */
 export async function attachFieldChanges<T extends { txid: number | null; entityType: string; entityId: number }>(
-  db: TenantDb,
+  db: Db,
   rows: T[]
 ): Promise<(T & { fieldChanges: FieldChange[] })[]> {
   const txids = [...new Set(rows.map((r) => r.txid).filter((x): x is number => x !== null && x !== undefined))];

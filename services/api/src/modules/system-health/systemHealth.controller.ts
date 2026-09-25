@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { and, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { pool } from "../../db/index.js";
-import { tenants } from "../../drizzle/schema/tenants.js";
+import { company } from "../../drizzle/schema/company.js";
 import { aiSuggestions } from "../../drizzle/schema/ai.js";
 import { inventoryAlerts } from "../../drizzle/schema/inventory.js";
 import { reportSchedules } from "../../drizzle/schema/reporting.js";
@@ -13,7 +13,7 @@ import { buildWorkflowHealthReport } from "../workflow/workflow.controller.js";
 import { currentAlerts } from "../monitoring/alerts.js";
 import { metrics } from "../monitoring/metrics.js";
 import { sentryEnabled } from "../monitoring/sentry.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 type Status = "ok" | "warning" | "critical";
 
@@ -37,8 +37,8 @@ async function checkDatabase(): Promise<HealthCheck> {
 }
 
 /** Mode mirrors tenant.controller.ts's getAiConfigHandler keyStatus logic exactly — "live" here is that function's "ready". */
-async function checkAi(db: TenantDb, tenantId: number): Promise<HealthCheck> {
-  const [tenant] = await db.select({ aiConfig: tenants.aiConfig }).from(tenants).where(eq(tenants.id, tenantId));
+async function checkAi(db: Db): Promise<HealthCheck> {
+  const [tenant] = await db.select({ aiConfig: company.aiConfig }).from(company);
   const mode: "live" | "stub" = tenant?.aiConfig?.apiKeyEncrypted || env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY ? "live" : "stub";
 
   const since = SEVEN_DAYS_AGO();
@@ -60,13 +60,13 @@ async function checkAi(db: TenantDb, tenantId: number): Promise<HealthCheck> {
   };
 }
 
-async function checkWorkflow(db: TenantDb): Promise<HealthCheck> {
+async function checkWorkflow(db: Db): Promise<HealthCheck> {
   const { summary } = await buildWorkflowHealthReport(db);
   const status: Status = summary.withIssues > 0 ? "warning" : "ok";
   return { status, ...summary, detail: `${summary.active}/${summary.total} workflow definitions active, ${summary.withIssues} with structural issues` };
 }
 
-async function checkEmail(db: TenantDb): Promise<HealthCheck> {
+async function checkEmail(db: Db): Promise<HealthCheck> {
   const since = SEVEN_DAYS_AGO();
   const rows = await db
     .select({ status: notificationLog.status, count: sql<number>`count(*)::int` })
@@ -90,7 +90,7 @@ async function checkEmail(db: TenantDb): Promise<HealthCheck> {
   };
 }
 
-async function checkReporting(db: TenantDb): Promise<HealthCheck> {
+async function checkReporting(db: Db): Promise<HealthCheck> {
   const rows = await db.select().from(reportSchedules);
   const enabled = rows.filter((r) => r.enabled);
   const failedLastRun = enabled.filter((r) => r.lastRunStatus === "failed" || r.lastRunStatus === "error");
@@ -107,7 +107,7 @@ async function checkReporting(db: TenantDb): Promise<HealthCheck> {
   };
 }
 
-async function checkReceivingInventory(db: TenantDb): Promise<HealthCheck> {
+async function checkReceivingInventory(db: Db): Promise<HealthCheck> {
   const rows = await db
     .select({ id: inventoryAlerts.id })
     .from(inventoryAlerts)
@@ -117,7 +117,7 @@ async function checkReceivingInventory(db: TenantDb): Promise<HealthCheck> {
   return { status, itemsBelowMin: rows.length, detail: `${rows.length} item(s) below minimum stock level, unacknowledged` };
 }
 
-async function checkSupplierPortal(db: TenantDb): Promise<HealthCheck> {
+async function checkSupplierPortal(db: Db): Promise<HealthCheck> {
   const supplierUsers = await db
     .select({ id: users.id, lastLoginAt: users.lastLoginAt })
     .from(users)
@@ -166,12 +166,11 @@ function checkMonitoring(): HealthCheck {
  * detailed diagnostics page.
  */
 export const getSystemHealthHandler = asyncHandler(async (req: Request, res: Response) => {
-  const db = req.db! as TenantDb;
-  const tenantId = req.tenantId!;
+  const db = req.db! as Db;
 
   const [database, ai, workflow, email, reporting, receivingInventory, supplierPortal] = await Promise.all([
     checkDatabase(),
-    checkAi(db, tenantId),
+    checkAi(db),
     checkWorkflow(db),
     checkEmail(db),
     checkReporting(db),

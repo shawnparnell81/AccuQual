@@ -1,5 +1,5 @@
 import { and, eq, isNull, isNotNull } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { inventoryItems, inventoryStock, inventoryMovements, inventoryAlerts, inventoryReorderRequests, type InventoryItem } from "../../drizzle/schema/inventory.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -11,12 +11,12 @@ import { assertNotHeld, heldUnits } from "./inventoryHoldGuard.js";
 
 const DEFAULT_LOCATION = "default";
 
-export async function getStockRows(db: TenantDb, itemId: number) {
+export async function getStockRows(db: Db, itemId: number) {
   return db.select().from(inventoryStock).where(and(eq(inventoryStock.itemId, itemId)));
 }
 
 /** Finds (or lazily creates) the one stock row for an item at a location — items start with no stock rows until their first movement. */
-async function getOrCreateStockRow(db: TenantDb, itemId: number, location: string) {
+async function getOrCreateStockRow(db: Db, itemId: number, location: string) {
   const [existing] = await db
     .select()
     .from(inventoryStock)
@@ -27,7 +27,7 @@ async function getOrCreateStockRow(db: TenantDb, itemId: number, location: strin
   return created!;
 }
 
-async function setOnHand(db: TenantDb, itemId: number, location: string, newOnHand: number, performedBy?: number) {
+async function setOnHand(db: Db, itemId: number, location: string, newOnHand: number, performedBy?: number) {
   if (newOnHand < 0) throw AppError.badRequest(`Insufficient stock at location "${location}"`);
   await getOrCreateStockRow(db, itemId, location);
   await db
@@ -74,7 +74,7 @@ export function generateTrackingNumber(format: string, sku: string, seq: number)
 }
 
 /** Applies one movement's stock effect, inserts the ledger row, then recomputes state. Runs inside the caller's per-request transaction (req.db) — atomic with the rest of the request. */
-export async function applyMovement(db: TenantDb, itemId: number, input: MovementInput, performedBy: number | undefined, inventorySettings?: InventorySettings) {
+export async function applyMovement(db: Db, itemId: number, input: MovementInput, performedBy: number | undefined, inventorySettings?: InventorySettings) {
   const stockRows = await getStockRows(db, itemId);
   const totalBefore = stockRows.reduce((sum, r) => sum + Number(r.onHand), 0);
 
@@ -174,7 +174,7 @@ export async function applyMovement(db: TenantDb, itemId: number, input: Movemen
  * undo a purchasing decision already in flight. Replenishing above min via
  * a real movement still clears reorder_pending/on_order back to in_stock.
  */
-export async function recomputeState(db: TenantDb, itemId: number, performedBy?: number): Promise<InventoryItem> {
+export async function recomputeState(db: Db, itemId: number, performedBy?: number): Promise<InventoryItem> {
   const [item] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, itemId)));
   if (!item) throw AppError.notFound("InventoryItem");
 
@@ -226,7 +226,7 @@ export async function recomputeState(db: TenantDb, itemId: number, performedBy?:
   return updated!;
 }
 
-async function acknowledgeOpenAlerts(db: TenantDb, itemId: number, alertType: "below_min" | "overstock", performedBy: number | undefined) {
+async function acknowledgeOpenAlerts(db: Db, itemId: number, alertType: "below_min" | "overstock", performedBy: number | undefined) {
   const openAlerts = await db
     .select({ id: inventoryAlerts.id })
     .from(inventoryAlerts)
@@ -259,7 +259,7 @@ async function acknowledgeOpenAlerts(db: TenantDb, itemId: number, alertType: "b
  * (only meaningful when maxLevel is set) and finally min_level, so a
  * request never has to be a null/zero quantity.
  */
-export async function createReorderRequest(db: TenantDb, item: InventoryItem, onHand: number, createdBy: number | undefined) {
+export async function createReorderRequest(db: Db, item: InventoryItem, onHand: number, createdBy: number | undefined) {
   const maxLevel = item.maxLevel === null ? null : Number(item.maxLevel);
   const target = item.reorderQuantity !== null ? Number(item.reorderQuantity) : maxLevel !== null ? Math.max(maxLevel - onHand, 0) : Number(item.minLevel);
   const requestedQty = Math.max(Math.round(target), 1);
@@ -275,7 +275,7 @@ export async function createReorderRequest(db: TenantDb, item: InventoryItem, on
   return request!;
 }
 
-async function raiseAlertIfNeeded(db: TenantDb, item: InventoryItem, alertType: "below_min" | "overstock", onHand: number, minLevel: number) {
+async function raiseAlertIfNeeded(db: Db, item: InventoryItem, alertType: "below_min" | "overstock", onHand: number, minLevel: number) {
   const [openAlert] = await db
     .select()
     .from(inventoryAlerts)
@@ -301,7 +301,7 @@ async function raiseAlertIfNeeded(db: TenantDb, item: InventoryItem, alertType: 
  * inventorySettings.reservationRules.allowNegativeAllocation is on (a real
  * backorder-style allowance some tenants want, off by default).
  */
-export async function reserveStock(db: TenantDb, itemId: number, quantity: number, location: string | undefined, settings: InventorySettings | undefined, performedBy: number | undefined) {
+export async function reserveStock(db: Db, itemId: number, quantity: number, location: string | undefined, settings: InventorySettings | undefined, performedBy: number | undefined) {
   const loc = location ?? DEFAULT_LOCATION;
   const row = await getOrCreateStockRow(db, itemId, loc);
   const nextAllocated = Number(row.allocated) + quantity;
@@ -324,7 +324,7 @@ export async function reserveStock(db: TenantDb, itemId: number, quantity: numbe
 }
 
 /** POST /inventory/items/:id/release — the inverse of reserveStock; never goes negative. */
-export async function releaseStock(db: TenantDb, itemId: number, quantity: number, location: string | undefined, performedBy: number | undefined) {
+export async function releaseStock(db: Db, itemId: number, quantity: number, location: string | undefined, performedBy: number | undefined) {
   const loc = location ?? DEFAULT_LOCATION;
   const row = await getOrCreateStockRow(db, itemId, loc);
   const nextAllocated = Math.max(Number(row.allocated) - quantity, 0);
@@ -343,7 +343,7 @@ export async function releaseStock(db: TenantDb, itemId: number, quantity: numbe
  * by a timer. Only called from getItemHandler, not every getStockRows caller
  * — see that handler's own comment.
  */
-export async function applyReservationAutoRelease(db: TenantDb, itemId: number, settings: InventorySettings | undefined) {
+export async function applyReservationAutoRelease(db: Db, itemId: number, settings: InventorySettings | undefined) {
   const days = settings?.reservationRules?.autoReleaseAfterDays;
   if (!days) return;
 

@@ -3,7 +3,7 @@ import multer from "multer";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb, type TenantDb } from "../../lib/tenantScope.js";
+import { withDb, type Db } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { requirePermission } from "../../middleware/requirePermission.js";
 import { validate } from "../../middleware/validate.js";
@@ -41,7 +41,7 @@ const idParam = (req: Request, name = "id") => {
   if (!Number.isInteger(id) || id < 1) throw AppError.badRequest(`Invalid ${name}`);
   return id;
 };
-const dbOf = (req: Request) => req.db as TenantDb;
+const dbOf = (req: Request) => req.db as Db;
 const actorOf = (req: Request) => ({ id: req.user!.id, roleName: req.user!.roleName });
 const optNum = (v: unknown) => (typeof v === "string" && v !== "" && Number.isFinite(Number(v)) ? Number(v) : undefined);
 
@@ -52,7 +52,7 @@ export const trainingRouter = Router();
 // defaultPermissions.ts's own comment on this module's entry. Each route below also names the action it needs
 // (training.view / manageCourses / manageSessions / evaluate), which resolves onto that same department access and writes a
 // refusal to the audit trail.
-trainingRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("training"));
+trainingRouter.use(requireAuth, withDb, requireDepartmentAccess("training"));
 
 const view = requirePermission("training.view");
 const manageCourses = requirePermission("training.manageCourses");
