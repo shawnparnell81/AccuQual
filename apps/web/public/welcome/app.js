@@ -324,13 +324,8 @@
   }
 
   /* ---------- early access form: posts to the AccuQual API's public /contact endpoint ---------- */
-  /* The app passes its API address as ?api= when it sends visitors here (the API can live on another origin). */
-  var API="/api";
-  try {
-    var qp=new URLSearchParams(location.search).get("api");
-    if(qp&&/^(\/|https?:\/\/)/.test(qp)) sessionStorage.setItem("aq_api",qp);
-    API=sessionStorage.getItem("aq_api")||API;
-  } catch(e){}
+  /* config.js (generated at build time from the app's VITE_API_BASE_URL) says where the API lives. */
+  var API=typeof window.AQ_API==="string"?window.AQ_API:"/api";
   var form=$("#eaForm");
   if(form) form.addEventListener("submit",function(e){
     e.preventDefault();

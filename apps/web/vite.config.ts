@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import path from "node:path";
@@ -6,9 +6,32 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig({
+/**
+ * The public landing site (public/welcome) is plain static HTML, so it can't read Vite's env. This tells it where the API
+ * lives (the same VITE_API_BASE_URL the app is built with) as /welcome/config.js: a build-time constant, never a URL
+ * parameter a visitor could tamper with.
+ */
+function welcomeConfig(apiBase: string) {
+  const body = `window.AQ_API=${JSON.stringify(apiBase)};
+`;
+  return {
+    name: "welcome-config",
+    configureServer(server: { middlewares: { use: (path: string, fn: (req: unknown, res: { setHeader: (k: string, v: string) => void; end: (b: string) => void }) => void) => void } }) {
+      server.middlewares.use("/welcome/config.js", (_req, res) => {
+        res.setHeader("Content-Type", "application/javascript");
+        res.end(body);
+      });
+    },
+    generateBundle(this: { emitFile: (f: { type: "asset"; fileName: string; source: string }) => void }) {
+      this.emitFile({ type: "asset", fileName: "welcome/config.js", source: body });
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
+    welcomeConfig(loadEnv(mode, __dirname, "").VITE_API_BASE_URL ?? "/api"),
     // Installable-shell only (confirmed scope, UI/UX roadmap #11) — no
     // offline data promise anywhere in this app. `globPatterns` only ever
     // matches the built JS/CSS/HTML/icon assets under dist/, never an API
@@ -69,4 +92,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
