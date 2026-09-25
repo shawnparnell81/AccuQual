@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 import { warrantyClaims } from "./warranty.js";
 import { ncr } from "./ncr.js";
@@ -39,7 +38,6 @@ import { customers } from "./customers.js";
  */
 export const crarClaims = pgTable("crar", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   status: text("status").notNull().default("new"),
 
   // Real relational integration — NOT part of the original PDF's own field

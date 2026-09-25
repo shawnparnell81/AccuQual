@@ -9,7 +9,6 @@ import type { Department } from "../../middleware/departmentAccess.js";
 import { metrics } from "../monitoring/metrics.js";
 
 interface NotifyDepartmentInput {
-  tenantId: number;
   department: Department;
   subject: string;
   body: string;
@@ -211,14 +210,14 @@ export async function sendEmail(message: { to: string; subject: string; body: st
 }
 
 /** Writes one notification_log row per recipient and returns how many were notified. */
-export async function notifyRecipients(db: TenantDb, tenantId: number, recipients: string[], subject: string, body: string, relatedEntityType?: string, relatedEntityId?: number): Promise<number> {
-  return notify(db, tenantId, recipients, subject, body, relatedEntityType, relatedEntityId);
+export async function notifyRecipients(db: TenantDb, recipients: string[], subject: string, body: string, relatedEntityType?: string, relatedEntityId?: number): Promise<number> {
+  return notify(db, recipients, subject, body, relatedEntityType, relatedEntityId);
 }
 
-async function notify(db: TenantDb, tenantId: number, recipients: string[], subject: string, body: string, relatedEntityType?: string, relatedEntityId?: number): Promise<number> {
+async function notify(db: TenantDb, recipients: string[], subject: string, body: string, relatedEntityType?: string, relatedEntityId?: number): Promise<number> {
   for (const recipient of recipients) {
     const status = activeTransport ? await deliver(activeTransport, { to: recipient, subject, body }) : "logged_only";
-    await db.insert(notificationLog).values({ tenantId, channel: "email", recipient, subject, body, status, relatedEntityType, relatedEntityId });
+    await db.insert(notificationLog).values({ channel: "email", recipient, subject, body, status, relatedEntityType, relatedEntityId });
   }
   return recipients.length;
 }
@@ -232,13 +231,12 @@ export async function notifyDepartment(db: TenantDb, input: NotifyDepartmentInpu
   const recipients = await db
     .select({ email: users.email })
     .from(users)
-    .where(and(eq(users.tenantId, input.tenantId), eq(users.department, input.department), eq(users.isActive, true)));
+    .where(and(eq(users.department, input.department), eq(users.isActive, true)));
 
   if (recipients.length === 0) return 0;
 
   return notify(
     db,
-    input.tenantId,
     recipients.map((r) => r.email),
     input.subject,
     input.body,
@@ -261,8 +259,8 @@ export async function notifyDepartment(db: TenantDb, input: NotifyDepartmentInpu
  * a new log row, so notification_log stays one row per real send attempt's
  * current outcome, not a growing chain of retries for the same message.
  */
-export async function retryFailedNotifications(db: TenantDb, tenantId: number): Promise<{ retried: number; sent: number }> {
-  const failed = await db.select().from(notificationLog).where(and(eq(notificationLog.tenantId, tenantId), eq(notificationLog.status, "failed")));
+export async function retryFailedNotifications(db: TenantDb): Promise<{ retried: number; sent: number }> {
+  const failed = await db.select().from(notificationLog).where(and(eq(notificationLog.status, "failed")));
   if (failed.length === 0 || !activeTransport) return { retried: 0, sent: 0 };
 
   let sent = 0;
@@ -275,8 +273,8 @@ export async function retryFailedNotifications(db: TenantDb, tenantId: number): 
 }
 
 /** The caller's own email — req.user carries no email claim (see AuthenticatedUser), only id/tenantId/role/department, so every self-service notification query resolves it fresh from `users` rather than trusting anything client-supplied. */
-async function ownEmail(db: TenantDb, tenantId: number, userId: number): Promise<string | null> {
-  const [row] = await db.select({ email: users.email }).from(users).where(and(eq(users.id, userId), eq(users.tenantId, tenantId)));
+async function ownEmail(db: TenantDb, userId: number): Promise<string | null> {
+  const [row] = await db.select({ email: users.email }).from(users).where(and(eq(users.id, userId)));
   return row?.email ?? null;
 }
 
@@ -286,13 +284,13 @@ async function ownEmail(db: TenantDb, tenantId: number, userId: number): Promise
  * even within the same tenant) on top of the usual tenant scoping. Newest first, capped, with an unread count computed
  * from the same rows rather than a second query.
  */
-export async function listMyNotifications(db: TenantDb, tenantId: number, userId: number, limit = 30) {
-  const email = await ownEmail(db, tenantId, userId);
+export async function listMyNotifications(db: TenantDb, userId: number, limit = 30) {
+  const email = await ownEmail(db, userId);
   if (!email) return { rows: [], unreadCount: 0 };
   const rows = await db
     .select()
     .from(notificationLog)
-    .where(and(eq(notificationLog.tenantId, tenantId), eq(notificationLog.recipient, email)))
+    .where(and(eq(notificationLog.recipient, email)))
     .orderBy(desc(notificationLog.createdAt))
     .limit(limit);
   const unreadCount = rows.filter((r) => r.readAt === null).length;
@@ -300,13 +298,13 @@ export async function listMyNotifications(db: TenantDb, tenantId: number, userId
 }
 
 /** Marks one notification read — ownership is `recipient = the caller's own email`, not just a matching id, so a guessed id can never mark someone else's notification read (or reveal whether it exists). */
-export async function markNotificationRead(db: TenantDb, tenantId: number, id: number, userId: number): Promise<boolean> {
-  const email = await ownEmail(db, tenantId, userId);
+export async function markNotificationRead(db: TenantDb, id: number, userId: number): Promise<boolean> {
+  const email = await ownEmail(db, userId);
   if (!email) return false;
   const [updated] = await db
     .update(notificationLog)
     .set({ readAt: new Date() })
-    .where(and(eq(notificationLog.id, id), eq(notificationLog.tenantId, tenantId), eq(notificationLog.recipient, email)))
+    .where(and(eq(notificationLog.id, id), eq(notificationLog.recipient, email)))
     .returning({ id: notificationLog.id });
   return !!updated;
 }

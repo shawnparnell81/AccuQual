@@ -140,22 +140,22 @@ function higherLevel(a: AccessLevel, b: AccessLevel): AccessLevel {
  * tenant with no row for this (department, module) pair simply has no
  * access to it — "none" — full stop.
  */
-export async function getDepartmentAccessLevel(db: TenantDb, tenantId: number, department: Department | null, moduleName: ResourceKey): Promise<AccessLevel> {
+export async function getDepartmentAccessLevel(db: TenantDb, department: Department | null, moduleName: ResourceKey): Promise<AccessLevel> {
   if (!department) return "none";
   const [row] = await db
     .select({ accessLevel: departmentPermissions.accessLevel })
     .from(departmentPermissions)
-    .where(and(eq(departmentPermissions.tenantId, tenantId), eq(departmentPermissions.departmentName, department), eq(departmentPermissions.moduleName, moduleName)));
+    .where(and(eq(departmentPermissions.departmentName, department), eq(departmentPermissions.moduleName, moduleName)));
   return row ? (row.accessLevel as AccessLevel) : "none";
 }
 
 /** Isolates source 2 alone (every custom permission-role grant this user holds for this module, at its highest level) — same reasoning as getDepartmentAccessLevel above. */
-export async function getRoleGrantedAccessLevel(db: TenantDb, tenantId: number, userId: number, moduleName: ResourceKey): Promise<AccessLevel> {
+export async function getRoleGrantedAccessLevel(db: TenantDb, userId: number, moduleName: ResourceKey): Promise<AccessLevel> {
   const roleRows = await db
     .select({ accessLevel: permissionRoleModules.accessLevel })
     .from(userPermissionRoles)
     .innerJoin(permissionRoleModules, and(eq(permissionRoleModules.roleId, userPermissionRoles.roleId), eq(permissionRoleModules.moduleName, moduleName)))
-    .where(and(eq(userPermissionRoles.tenantId, tenantId), eq(userPermissionRoles.userId, userId)));
+    .where(and(eq(userPermissionRoles.userId, userId)));
   return roleRows.reduce<AccessLevel>((best, r) => higherLevel(best, r.accessLevel as AccessLevel), "none");
 }
 
@@ -180,15 +180,14 @@ export async function getRoleGrantedAccessLevel(db: TenantDb, tenantId: number, 
  */
 export async function getUserAccessLevel(
   db: TenantDb,
-  tenantId: number,
   user: { id: number; roleName: string | null; department: string | null },
   moduleName: ResourceKey
 ): Promise<AccessLevel> {
   if (user.roleName === "admin" || user.roleName === "platform_admin") return "edit";
 
   const [deptLevel, roleLevel] = await Promise.all([
-    getDepartmentAccessLevel(db, tenantId, user.department as Department | null, moduleName),
-    getRoleGrantedAccessLevel(db, tenantId, user.id, moduleName),
+    getDepartmentAccessLevel(db, user.department as Department | null, moduleName),
+    getRoleGrantedAccessLevel(db, user.id, moduleName),
   ]);
 
   return higherLevel(deptLevel, roleLevel);
@@ -207,7 +206,7 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
     if (role === "platform_admin" || role === "admin") return next();
     if (!req.user || !req.db || req.tenantId === undefined) return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
 
-    const level = await getUserAccessLevel(req.db as TenantDb, req.tenantId, req.user, resourceKey);
+    const level = await getUserAccessLevel(req.db as TenantDb, req.user, resourceKey);
 
     if (level === "none") {
       return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
@@ -272,7 +271,7 @@ export const requireSupplierPortalAccess = asyncHandler(async (req: Request, _re
 
   if (!req.user || !req.db || req.tenantId === undefined) return next(AppError.forbidden("No access to the Supplier Portal for your department"));
 
-  const level = await getUserAccessLevel(req.db as TenantDb, req.tenantId, req.user, "supplier_portal");
+  const level = await getUserAccessLevel(req.db as TenantDb, req.user, "supplier_portal");
   if (level === "none") {
     return next(AppError.forbidden("No access to the Supplier Portal for your department"));
   }

@@ -58,17 +58,17 @@ interface Resolved {
 }
 
 /** Works out what is being held: its name, and (for inventory) what the inventory system must protect. */
-async function resolveTarget(db: TenantDb, tenantId: number, input: CreateInput): Promise<Resolved> {
+async function resolveTarget(db: TenantDb, input: CreateInput): Promise<Resolved> {
   if (input.itemType === "inventory_lot") {
     if (!input.itemId) throw AppError.badRequest("Choose the lot to put on hold.");
-    const [lot] = await db.select().from(inventoryLots).where(and(eq(inventoryLots.id, input.itemId), eq(inventoryLots.tenantId, tenantId)));
+    const [lot] = await db.select().from(inventoryLots).where(and(eq(inventoryLots.id, input.itemId)));
     if (!lot) throw AppError.notFound("Inventory lot");
-    const [item] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, lot.itemId), eq(inventoryItems.tenantId, tenantId)));
+    const [item] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, lot.itemId)));
     return { label: `${item?.sku ?? `Item #${lot.itemId}`} — lot ${lot.lotNumber}${lot.serialNumber ? ` / serial ${lot.serialNumber}` : ""}`, unit: item?.unitOfMeasure ?? null, lotNumber: lot.lotNumber, target: { itemId: lot.itemId, lotId: lot.id }, itemId: lot.id };
   }
   if (input.itemType === "inventory_item") {
     if (!input.itemId) throw AppError.badRequest("Choose the inventory item to put on hold.");
-    const [item] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, input.itemId), eq(inventoryItems.tenantId, tenantId)));
+    const [item] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, input.itemId)));
     if (!item) throw AppError.notFound("Inventory item");
     return { label: `${item.sku}${item.description ? ` — ${item.description}` : ""}`, unit: item.unitOfMeasure ?? null, lotNumber: null, target: { itemId: item.id }, itemId: item.id };
   }
@@ -80,33 +80,32 @@ function targetOf(record: QuarantineRecord): HoldTarget | null {
   return record.enforced ? ((record.metadata as { target?: HoldTarget }).target ?? null) : null;
 }
 
-async function emit(tenantId: number, event: string, id: number, extra: Record<string, unknown> = {}) {
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "quarantine", event, entityId: id, ...extra });
+async function emit(event: string, id: number, extra: Record<string, unknown> = {}) {
+  await publishEvent(WORKFLOW_STREAM, { module: "quarantine", event, entityId: id, ...extra });
 }
 
 const ageDays = (r: QuarantineRecord, now = new Date()) => (r.createdAt ? Math.floor((now.getTime() - r.createdAt.getTime()) / DAY_MS) : 0);
 
 // ---- Create ---------------------------------------------------------------------------------------------------------------------------------------
 
-export async function createQuarantine(db: TenantDb, tenantId: number, input: CreateInput, actor?: number): Promise<QuarantineRecord> {
+export async function createQuarantine(db: TenantDb, input: CreateInput, actor?: number): Promise<QuarantineRecord> {
   if (!(input.quantity > 0)) throw AppError.badRequest("The quantity on hold must be more than zero.");
   if (input.reason.trim().length < MIN_TEXT) throw AppError.badRequest(`Say why it is on hold (at least ${MIN_TEXT} characters).`);
-  const resolved = await resolveTarget(db, tenantId, input);
+  const resolved = await resolveTarget(db, input);
   const enforced = ENFORCED_ITEM_TYPES.includes(input.itemType) && resolved.target !== null;
 
   if (input.ncrId !== undefined) {
-    const [n] = await db.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, input.ncrId), eq(ncr.tenantId, tenantId), eq(ncr.isDeleted, false)));
+    const [n] = await db.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, input.ncrId), eq(ncr.isDeleted, false)));
     if (!n) throw AppError.badRequest("That NCR doesn't exist in this organization.");
   }
   if (enforced) {
-    const available = await holdableUnits(db, tenantId, resolved.target!);
+    const available = await holdableUnits(db, resolved.target!);
     if (input.quantity > available) throw AppError.badRequest(`Only ${available} unit(s) can be put on hold${input.itemType === "inventory_lot" ? " from that lot" : ""}: the rest are already held or used.`);
   }
 
   const [record] = await db
     .insert(quarantineRecords)
     .values({
-      tenantId,
       itemType: input.itemType,
       itemId: resolved.itemId,
       itemLabel: resolved.label,
@@ -126,21 +125,21 @@ export async function createQuarantine(db: TenantDb, tenantId: number, input: Cr
     .returning();
   if (!record) throw new AppError("Failed to create the quarantine record", 500);
 
-  if (enforced) await placeHold(db, tenantId, resolved.target!, input.quantity, { quarantineId: record.id }, actor);
-  await db.insert(quarantineInventory).values({ tenantId, quarantineId: record.id, location: input.location?.trim() || DEFAULT_LOCATION, quantity: String(input.quantity) });
-  await recordAuditTrail(db, { tenantId, entityType: "Quarantine", entityId: record.id, action: "create", changes: { event: "quarantine_created", itemType: input.itemType, item: resolved.label, quantity: input.quantity, reasonCategory: record.reasonCategory, reason: record.reason, enforced, sourceType: record.sourceType, ncrId: input.ncrId }, performedBy: actor });
-  await emit(tenantId, "created", record.id, { itemType: input.itemType, enforced });
-  await notifyDepartment(db, { tenantId, department: "quality", subject: `Quarantine hold: ${resolved.label}`, body: `${input.quantity}${resolved.unit ? ` ${resolved.unit}` : ""} of ${resolved.label} put on hold (${record.reasonCategory.replace(/_/g, " ")}): ${record.reason}${enforced ? "" : " (this hold is a record only — the system cannot stop this item being used)"}`, relatedEntityType: "Quarantine", relatedEntityId: record.id }).catch((err) => logger.error("Quarantine notice failed", { err: String(err) }));
+  if (enforced) await placeHold(db, resolved.target!, input.quantity, { quarantineId: record.id }, actor);
+  await db.insert(quarantineInventory).values({ quarantineId: record.id, location: input.location?.trim() || DEFAULT_LOCATION, quantity: String(input.quantity) });
+  await recordAuditTrail(db, { entityType: "Quarantine", entityId: record.id, action: "create", changes: { event: "quarantine_created", itemType: input.itemType, item: resolved.label, quantity: input.quantity, reasonCategory: record.reasonCategory, reason: record.reason, enforced, sourceType: record.sourceType, ncrId: input.ncrId }, performedBy: actor });
+  await emit("created", record.id, { itemType: input.itemType, enforced });
+  await notifyDepartment(db, { department: "quality", subject: `Quarantine hold: ${resolved.label}`, body: `${input.quantity}${resolved.unit ? ` ${resolved.unit}` : ""} of ${resolved.label} put on hold (${record.reasonCategory.replace(/_/g, " ")}): ${record.reason}${enforced ? "" : " (this hold is a record only — the system cannot stop this item being used)"}`, relatedEntityType: "Quarantine", relatedEntityId: record.id }).catch((err) => logger.error("Quarantine notice failed", { err: String(err) }));
   return record;
 }
 
 // ---- Read -----------------------------------------------------------------------------------------------------------------------------------------
 
-export async function getQuarantine(db: TenantDb, tenantId: number, id: number) {
-  const [record] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.id, id), eq(quarantineRecords.tenantId, tenantId)));
+export async function getQuarantine(db: TenantDb, id: number) {
+  const [record] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.id, id)));
   if (!record) throw AppError.notFound("Quarantine record");
-  const inventory = await db.select().from(quarantineInventory).where(and(eq(quarantineInventory.quarantineId, id), eq(quarantineInventory.tenantId, tenantId))).orderBy(asc(quarantineInventory.id));
-  const resolutions = await db.select().from(quarantineResolutions).where(and(eq(quarantineResolutions.quarantineId, id), eq(quarantineResolutions.tenantId, tenantId))).orderBy(asc(quarantineResolutions.id));
+  const inventory = await db.select().from(quarantineInventory).where(and(eq(quarantineInventory.quarantineId, id))).orderBy(asc(quarantineInventory.id));
+  const resolutions = await db.select().from(quarantineResolutions).where(and(eq(quarantineResolutions.quarantineId, id))).orderBy(asc(quarantineResolutions.id));
   return { ...record, ageDays: ageDays(record), inventory, resolutions };
 }
 
@@ -151,8 +150,8 @@ export interface ListFilters {
   olderThanDays?: number;
 }
 
-export async function listQuarantine(db: TenantDb, tenantId: number, filters: ListFilters = {}) {
-  const conditions = [eq(quarantineRecords.tenantId, tenantId)];
+export async function listQuarantine(db: TenantDb, filters: ListFilters = {}) {
+  const conditions = [];
   if (filters.status) conditions.push(eq(quarantineRecords.status, filters.status as QuarantineRecord["status"]));
   if (filters.itemType) conditions.push(eq(quarantineRecords.itemType, filters.itemType as QuarantineItemType));
   if (filters.q) {
@@ -166,8 +165,8 @@ export async function listQuarantine(db: TenantDb, tenantId: number, filters: Li
 }
 
 /** The dashboard numbers: what is on hold, how long it has been there, and how much of it the system actually enforces. */
-export async function summary(db: TenantDb, tenantId: number) {
-  const open = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.tenantId, tenantId), eq(quarantineRecords.status, "quarantined")));
+export async function summary(db: TenantDb) {
+  const open = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.status, "quarantined")));
   const now = new Date();
   const byReason: Record<string, number> = {};
   for (const r of open) byReason[r.reasonCategory] = (byReason[r.reasonCategory] ?? 0) + 1;
@@ -184,8 +183,8 @@ export async function summary(db: TenantDb, tenantId: number) {
 }
 
 /** GET /quarantine/inventory — what is physically where: every location with held quantity, and totals per location. */
-export async function listInventory(db: TenantDb, tenantId: number, location?: string) {
-  const conditions = [eq(quarantineInventory.tenantId, tenantId), eq(quarantineRecords.status, "quarantined"), gt(quarantineInventory.quantity, "0")];
+export async function listInventory(db: TenantDb, location?: string) {
+  const conditions = [eq(quarantineRecords.status, "quarantined"), gt(quarantineInventory.quantity, "0")];
   if (location) conditions.push(eq(quarantineInventory.location, location));
   const rows = await db
     .select({
@@ -216,13 +215,13 @@ export async function listInventory(db: TenantDb, tenantId: number, location?: s
 
 // ---- Change ---------------------------------------------------------------------------------------------------------------------------------------
 
-export async function updateQuarantine(db: TenantDb, tenantId: number, id: number, patch: { reason?: string; reasonCategory?: QuarantineReasonCategory; ncrId?: number | null; metadata?: Record<string, unknown> }, actor?: number): Promise<QuarantineRecord> {
-  const [record] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.id, id), eq(quarantineRecords.tenantId, tenantId)));
+export async function updateQuarantine(db: TenantDb, id: number, patch: { reason?: string; reasonCategory?: QuarantineReasonCategory; ncrId?: number | null; metadata?: Record<string, unknown> }, actor?: number): Promise<QuarantineRecord> {
+  const [record] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.id, id)));
   if (!record) throw AppError.notFound("Quarantine record");
   if (record.status !== "quarantined") throw new AppError("A closed quarantine record can't be changed — it is part of the history.", 409);
   if (patch.reason !== undefined && patch.reason.trim().length < MIN_TEXT) throw AppError.badRequest(`The reason needs at least ${MIN_TEXT} characters.`);
   if (patch.ncrId) {
-    const [n] = await db.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, patch.ncrId), eq(ncr.tenantId, tenantId), eq(ncr.isDeleted, false)));
+    const [n] = await db.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, patch.ncrId), eq(ncr.isDeleted, false)));
     if (!n) throw AppError.badRequest("That NCR doesn't exist in this organization.");
   }
   const [updated] = await db
@@ -235,21 +234,21 @@ export async function updateQuarantine(db: TenantDb, tenantId: number, id: numbe
       ...(patch.metadata !== undefined ? { metadata: { ...patch.metadata, ...((record.metadata as { target?: HoldTarget }).target ? { target: (record.metadata as { target?: HoldTarget }).target } : {}) } } : {}),
       updatedAt: new Date(),
     })
-    .where(and(eq(quarantineRecords.id, id), eq(quarantineRecords.tenantId, tenantId)))
+    .where(and(eq(quarantineRecords.id, id)))
     .returning();
-  await recordAuditTrail(db, { tenantId, entityType: "Quarantine", entityId: id, action: "update", changes: { event: "quarantine_updated", ...patch }, performedBy: actor });
+  await recordAuditTrail(db, { entityType: "Quarantine", entityId: id, action: "update", changes: { event: "quarantine_updated", ...patch }, performedBy: actor });
   return updated!;
 }
 
 /** Moves held quantity between locations (a bin to the quarantine cage). The total on hold does not change. */
-export async function relocate(db: TenantDb, tenantId: number, id: number, input: { fromLocation: string; toLocation: string; quantity: number }, actor?: number) {
-  const [record] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.id, id), eq(quarantineRecords.tenantId, tenantId)));
+export async function relocate(db: TenantDb, id: number, input: { fromLocation: string; toLocation: string; quantity: number }, actor?: number) {
+  const [record] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.id, id)));
   if (!record) throw AppError.notFound("Quarantine record");
   if (record.status !== "quarantined") throw new AppError("Only held material can be moved.", 409);
   const from = input.fromLocation.trim();
   const to = input.toLocation.trim();
   if (!to || from === to) throw AppError.badRequest("Choose a different place to move it to.");
-  const rows = await db.select().from(quarantineInventory).where(and(eq(quarantineInventory.quarantineId, id), eq(quarantineInventory.tenantId, tenantId)));
+  const rows = await db.select().from(quarantineInventory).where(and(eq(quarantineInventory.quarantineId, id)));
   const source = rows.find((r) => r.location === from);
   if (!source || Number(source.quantity) < input.quantity) throw AppError.badRequest(`There aren't ${input.quantity} unit(s) at "${from}" to move.`);
   const left = Number(source.quantity) - input.quantity;
@@ -257,8 +256,8 @@ export async function relocate(db: TenantDb, tenantId: number, id: number, input
   else await db.update(quarantineInventory).set({ quantity: String(left), updatedAt: new Date() }).where(eq(quarantineInventory.id, source.id));
   const dest = rows.find((r) => r.location === to);
   if (dest) await db.update(quarantineInventory).set({ quantity: String(Number(dest.quantity) + input.quantity), updatedAt: new Date() }).where(eq(quarantineInventory.id, dest.id));
-  else await db.insert(quarantineInventory).values({ tenantId, quarantineId: id, location: to, quantity: String(input.quantity) });
-  await recordAuditTrail(db, { tenantId, entityType: "Quarantine", entityId: id, action: "update", changes: { event: "quarantine_moved", from, to, quantity: input.quantity }, performedBy: actor });
+  else await db.insert(quarantineInventory).values({ quarantineId: id, location: to, quantity: String(input.quantity) });
+  await recordAuditTrail(db, { entityType: "Quarantine", entityId: id, action: "update", changes: { event: "quarantine_moved", from, to, quantity: input.quantity }, performedBy: actor });
 }
 
 // ---- Decide ---------------------------------------------------------------------------------------------------------------------------------------
@@ -276,8 +275,8 @@ export interface ResolveActor {
   skipFourEyes?: boolean;
 }
 
-async function reduceInventoryRows(db: TenantDb, tenantId: number, id: number, quantity: number) {
-  const rows = await db.select().from(quarantineInventory).where(and(eq(quarantineInventory.quarantineId, id), eq(quarantineInventory.tenantId, tenantId))).orderBy(asc(quarantineInventory.id));
+async function reduceInventoryRows(db: TenantDb, id: number, quantity: number) {
+  const rows = await db.select().from(quarantineInventory).where(and(eq(quarantineInventory.quarantineId, id))).orderBy(asc(quarantineInventory.id));
   let remaining = quantity;
   for (const row of rows) {
     if (remaining <= 0) break;
@@ -290,8 +289,8 @@ async function reduceInventoryRows(db: TenantDb, tenantId: number, id: number, q
 }
 
 /** Release (back into use) or destroy (removed from stock) some or all of what is on hold. */
-export async function resolveQuarantine(db: TenantDb, tenantId: number, id: number, action: "release" | "destroy", input: ResolveInput, actor: ResolveActor): Promise<QuarantineRecord> {
-  const [record] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.id, id), eq(quarantineRecords.tenantId, tenantId)));
+export async function resolveQuarantine(db: TenantDb, id: number, action: "release" | "destroy", input: ResolveInput, actor: ResolveActor): Promise<QuarantineRecord> {
+  const [record] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.id, id)));
   if (!record) throw AppError.notFound("Quarantine record");
   if (record.status !== "quarantined") throw new AppError("This hold is already closed.", 409);
 
@@ -311,30 +310,29 @@ export async function resolveQuarantine(db: TenantDb, tenantId: number, id: numb
   const actorId = actor.id > 0 ? actor.id : undefined;
   const target = targetOf(record);
   if (target) {
-    if (action === "release") await liftHold(db, tenantId, target, quantity, { quarantineId: id, reason: `Released: ${input.disposition}` }, actorId);
-    else await removeHeldStock(db, tenantId, target, quantity, { movementType: input.disposition === "returned_to_supplier" ? "return" : "scrap", reason: `Quarantine #${id} ${input.disposition.replace(/_/g, " ")}`, quarantineId: id }, actorId);
+    if (action === "release") await liftHold(db, target, quantity, { quarantineId: id, reason: `Released: ${input.disposition}` }, actorId);
+    else await removeHeldStock(db, target, quantity, { movementType: input.disposition === "returned_to_supplier" ? "return" : "scrap", reason: `Quarantine #${id} ${input.disposition.replace(/_/g, " ")}`, quarantineId: id }, actorId);
   }
-  await reduceInventoryRows(db, tenantId, id, quantity);
-  await db.insert(quarantineResolutions).values({ tenantId, quarantineId: id, action, disposition: input.disposition, quantity: String(quantity), notes: input.notes.trim(), resolvedBy: actorId });
+  await reduceInventoryRows(db, id, quantity);
+  await db.insert(quarantineResolutions).values({ quarantineId: id, action, disposition: input.disposition, quantity: String(quantity), notes: input.notes.trim(), resolvedBy: actorId });
 
   const remaining = held - quantity;
-  const past = await db.select().from(quarantineResolutions).where(and(eq(quarantineResolutions.quarantineId, id), eq(quarantineResolutions.tenantId, tenantId), eq(quarantineResolutions.action, "release")));
+  const past = await db.select().from(quarantineResolutions).where(and(eq(quarantineResolutions.quarantineId, id), eq(quarantineResolutions.action, "release")));
   const closed = remaining === 0;
   const finalStatus = closed ? (past.length > 0 ? "released" : "destroyed") : "quarantined";
   const [updated] = await db
     .update(quarantineRecords)
     .set({ quantity: String(remaining), status: finalStatus, updatedAt: new Date(), ...(closed ? { closedBy: actorId, ...(finalStatus === "released" ? { releasedAt: new Date() } : { destroyedAt: new Date() }) } : {}) })
-    .where(and(eq(quarantineRecords.id, id), eq(quarantineRecords.tenantId, tenantId)))
+    .where(and(eq(quarantineRecords.id, id)))
     .returning();
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "Quarantine",
     entityId: id,
     action: "status_change",
     changes: { event: action === "release" ? "quarantine_released" : "quarantine_destroyed", disposition: input.disposition, quantity, remaining, closed, finalStatus, notes: input.notes.trim(), ...(selfDecision ? { selfDecided: true } : {}) },
     performedBy: actorId,
   });
-  await emit(tenantId, action === "release" ? "released" : "destroyed", id, { quantity, closed });
+  await emit(action === "release" ? "released" : "destroyed", id, { quantity, closed });
   return updated!;
 }
 
@@ -345,38 +343,38 @@ export async function resolveQuarantine(db: TenantDb, tenantId: number, id: numb
  * Holds what is actually still in stock; if some was already used the shortfall is recorded, and if none is left the hold is a
  * record only.
  */
-export async function openFromReceivingLine(db: TenantDb, tenantId: number, lineItemId: number, actor?: number): Promise<QuarantineRecord | null> {
-  const [existing] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.tenantId, tenantId), eq(quarantineRecords.sourceType, "receiving_line_item"), eq(quarantineRecords.sourceId, lineItemId), eq(quarantineRecords.status, "quarantined")));
+export async function openFromReceivingLine(db: TenantDb, lineItemId: number, actor?: number): Promise<QuarantineRecord | null> {
+  const [existing] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.sourceType, "receiving_line_item"), eq(quarantineRecords.sourceId, lineItemId), eq(quarantineRecords.status, "quarantined")));
   if (existing) return existing;
-  const [line] = await db.select().from(erpReceivingLineItems).where(and(eq(erpReceivingLineItems.id, lineItemId), eq(erpReceivingLineItems.tenantId, tenantId)));
+  const [line] = await db.select().from(erpReceivingLineItems).where(and(eq(erpReceivingLineItems.id, lineItemId)));
   if (!line) return null;
-  const [poLine] = await db.select().from(erpPoLineItems).where(and(eq(erpPoLineItems.id, line.poLineItemId), eq(erpPoLineItems.tenantId, tenantId)));
-  const [lot] = await db.select().from(inventoryLots).where(and(eq(inventoryLots.tenantId, tenantId), eq(inventoryLots.receivingLineItemId, lineItemId)));
+  const [poLine] = await db.select().from(erpPoLineItems).where(and(eq(erpPoLineItems.id, line.poLineItemId)));
+  const [lot] = await db.select().from(inventoryLots).where(and(eq(inventoryLots.receivingLineItemId, lineItemId)));
 
   const base = { reasonCategory: "nonconforming_material" as const, reason: "Quarantined at receiving inspection.", sourceType: "receiving_line_item", sourceId: lineItemId, metadata: { receivingLineItemId: lineItemId } };
   const wanted = line.quantityReceived;
   const target: HoldTarget | null = lot ? { itemId: lot.itemId, lotId: lot.id } : poLine ? { itemId: poLine.itemId } : null;
   if (target) {
-    const available = await holdableUnits(db, tenantId, target);
+    const available = await holdableUnits(db, target);
     const qty = Math.min(wanted, available);
     if (qty > 0) {
-      return createQuarantine(db, tenantId, { ...base, itemType: lot ? "inventory_lot" : "inventory_item", itemId: lot ? lot.id : poLine!.itemId, quantity: qty, metadata: { ...base.metadata, ...(qty < wanted ? { shortfall: wanted - qty, note: `${wanted - qty} of the ${wanted} received unit(s) were no longer in stock and could not be held.` } : {}) } }, actor);
+      return createQuarantine(db, { ...base, itemType: lot ? "inventory_lot" : "inventory_item", itemId: lot ? lot.id : poLine!.itemId, quantity: qty, metadata: { ...base.metadata, ...(qty < wanted ? { shortfall: wanted - qty, note: `${wanted - qty} of the ${wanted} received unit(s) were no longer in stock and could not be held.` } : {}) } }, actor);
     }
   }
-  return createQuarantine(db, tenantId, { ...base, itemType: "other", itemLabel: `Receiving line #${lineItemId}${line.lotNumber ? ` — lot ${line.lotNumber}` : ""}`, quantity: wanted, metadata: { ...base.metadata, note: "No stock was available to hold, so this is a record only." } }, actor);
+  return createQuarantine(db, { ...base, itemType: "other", itemLabel: `Receiving line #${lineItemId}${line.lotNumber ? ` — lot ${line.lotNumber}` : ""}`, quantity: wanted, metadata: { ...base.metadata, note: "No stock was available to hold, so this is a record only." } }, actor);
 }
 
 /** A receiving line left "quarantined": accepted releases the hold as use-as-is; rejected leaves it held for a disposition (return or scrap). */
-export async function resolveFromReceivingLine(db: TenantDb, tenantId: number, lineItemId: number, outcome: "accepted" | "rejected", actor: ResolveActor): Promise<void> {
-  const [record] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.tenantId, tenantId), eq(quarantineRecords.sourceType, "receiving_line_item"), eq(quarantineRecords.sourceId, lineItemId), eq(quarantineRecords.status, "quarantined")));
+export async function resolveFromReceivingLine(db: TenantDb, lineItemId: number, outcome: "accepted" | "rejected", actor: ResolveActor): Promise<void> {
+  const [record] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.sourceType, "receiving_line_item"), eq(quarantineRecords.sourceId, lineItemId), eq(quarantineRecords.status, "quarantined")));
   if (!record) return;
   if (outcome === "accepted") {
-    await resolveQuarantine(db, tenantId, record.id, "release", { disposition: "use_as_is", notes: "Accepted at receiving inspection." }, { ...actor, skipFourEyes: true });
+    await resolveQuarantine(db, record.id, "release", { disposition: "use_as_is", notes: "Accepted at receiving inspection." }, { ...actor, skipFourEyes: true });
     return;
   }
-  await recordAuditTrail(db, { tenantId, entityType: "Quarantine", entityId: record.id, action: "update", changes: { event: "receiving_rejected", note: "Rejected at receiving inspection; still on hold until it is returned to the supplier or scrapped." }, performedBy: actor.id > 0 ? actor.id : undefined });
+  await recordAuditTrail(db, { entityType: "Quarantine", entityId: record.id, action: "update", changes: { event: "receiving_rejected", note: "Rejected at receiving inspection; still on hold until it is returned to the supplier or scrapped." }, performedBy: actor.id > 0 ? actor.id : undefined });
 }
 
-export async function linkNcrFromReceiving(db: TenantDb, tenantId: number, quarantineId: number, ncrId: number) {
-  await db.update(quarantineRecords).set({ ncrId, updatedAt: new Date() }).where(and(eq(quarantineRecords.id, quarantineId), eq(quarantineRecords.tenantId, tenantId)));
+export async function linkNcrFromReceiving(db: TenantDb, quarantineId: number, ncrId: number) {
+  await db.update(quarantineRecords).set({ ncrId, updatedAt: new Date() }).where(and(eq(quarantineRecords.id, quarantineId)));
 }

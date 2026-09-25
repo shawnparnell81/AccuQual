@@ -19,7 +19,7 @@ notificationsRouter.use(requireAuth, withTenantDb, requireRole("admin"));
 notificationsRouter.post(
   "/retry-failed",
   asyncHandler(async (req, res) => {
-    const result = await retryFailedNotifications(req.db! as TenantDb, req.tenantId!);
+    const result = await retryFailedNotifications(req.db! as TenantDb);
     res.json(result);
   })
 );

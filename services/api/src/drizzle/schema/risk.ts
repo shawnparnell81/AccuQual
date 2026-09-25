@@ -1,6 +1,5 @@
 import { pgTable, serial, text, integer, timestamp, numeric } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
-import { tenants } from "./tenants.js";
 
 /**
  * The Risk Register — general risk tracking (severity x probability), distinct
@@ -20,7 +19,6 @@ import { tenants } from "./tenants.js";
  */
 export const riskAssessments = pgTable("risk_assessments", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   title: text("title").notNull(),
   description: text("description"),
   category: text("category"), // supplier | process | product | safety | regulatory | other
@@ -43,7 +41,6 @@ export const riskAssessments = pgTable("risk_assessments", {
 /** FMEA line items: Severity x Occurrence x Detection = RPN */
 export const fmeaItems = pgTable("fmea_items", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   riskAssessmentId: integer("risk_assessment_id").references(() => riskAssessments.id).notNull(),
   failureMode: text("failure_mode").notNull(),
   effect: text("effect"),
@@ -63,7 +60,6 @@ export const fmeaItems = pgTable("fmea_items", {
  */
 export const riskMitigations = pgTable("risk_mitigations", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   riskAssessmentId: integer("risk_assessment_id").references(() => riskAssessments.id).notNull(),
   action: text("action").notNull(),
   dueDate: timestamp("due_date"),

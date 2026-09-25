@@ -1,6 +1,5 @@
 import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
-import { tenants } from "./tenants.js";
 import { customers } from "./customers.js";
 
 /**
@@ -27,7 +26,6 @@ import { customers } from "./customers.js";
  */
 export const feasibilityReviews = pgTable("feasibility_reviews", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
 
   // Launched from the Customer Onboarding packet — the one real link this
   // form keeps (see this file's own top comment on the other 8 being

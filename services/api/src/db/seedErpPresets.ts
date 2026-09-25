@@ -95,7 +95,7 @@ async function main() {
       logger.info(`Already seeded: ${preset.vendor} / ${preset.module} / "${preset.name}"`);
       continue;
     }
-    await db.insert(erpConnectorPresets).values({ tenantId: null, ...preset, version: 1, versionHistory: [] });
+    await db.insert(erpConnectorPresets).values({ ...preset, version: 1, versionHistory: [] });
     logger.info(`Seeded: ${preset.vendor} / ${preset.module} / "${preset.name}"`);
   }
   logger.info("ERP Connector Presets seed complete.");

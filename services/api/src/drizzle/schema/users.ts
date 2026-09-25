@@ -1,13 +1,11 @@
 import { pgTable, serial, text, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { roles } from "./roles.js";
-import { tenants } from "./tenants.js";
 import { suppliers } from "./supplier.js";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   // Nullable: platform admins (see modules/platform) manage tenants and are not
   // themselves scoped to one. Every regular application user has a tenantId.
-  tenantId: integer("tenant_id").references(() => tenants.id),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: text("name"),

@@ -25,11 +25,11 @@ export interface ListErrorsFilters {
 }
 
 /** Newest-first, filtered + paginated — same limit/offset + count() shape as ai.controller.ts's listSuggestions. */
-export async function listErrors(db: TenantDb, tenantId: number, filters: ListErrorsFilters, pagination: { limit?: number; offset?: number }) {
+export async function listErrors(db: TenantDb, filters: ListErrorsFilters, pagination: { limit?: number; offset?: number }) {
   const limit = Math.min(pagination.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
   const offset = Math.max(pagination.offset ?? 0, 0);
 
-  const conditions = [eq(erpSyncErrors.tenantId, tenantId)];
+  const conditions = [];
   if (filters.module) conditions.push(eq(erpSyncErrors.module, filters.module));
   if (filters.errorType) conditions.push(eq(erpSyncErrors.errorType, filters.errorType));
   if (filters.presetVersion !== undefined) conditions.push(eq(erpSyncErrors.presetVersion, filters.presetVersion));
@@ -45,20 +45,20 @@ export async function listErrors(db: TenantDb, tenantId: number, filters: ListEr
   return { rows, total: totalRows[0]?.total ?? 0, limit, offset };
 }
 
-export async function getError(db: TenantDb, tenantId: number, id: number): Promise<ErpSyncErrorRow> {
-  const [row] = await db.select().from(erpSyncErrors).where(and(eq(erpSyncErrors.id, id), eq(erpSyncErrors.tenantId, tenantId)));
+export async function getError(db: TenantDb, id: number): Promise<ErpSyncErrorRow> {
+  const [row] = await db.select().from(erpSyncErrors).where(and(eq(erpSyncErrors.id, id)));
   if (!row) throw AppError.notFound("ERP sync error");
   return row;
 }
 
-export async function resolveError(db: TenantDb, tenantId: number, id: number, resolvedBy: number | undefined): Promise<ErpSyncErrorRow> {
-  await getError(db, tenantId, id); // 404s if missing/not this tenant's
+export async function resolveError(db: TenantDb, id: number, resolvedBy: number | undefined): Promise<ErpSyncErrorRow> {
+  await getError(db, id); // 404s if missing/not this tenant's
   const [updated] = await db
     .update(erpSyncErrors)
     .set({ resolvedAt: new Date(), resolvedBy })
-    .where(and(eq(erpSyncErrors.id, id), eq(erpSyncErrors.tenantId, tenantId)))
+    .where(and(eq(erpSyncErrors.id, id)))
     .returning();
-  await recordAuditTrail(db, { tenantId, entityType: "ErpSyncError", entityId: id, action: "status_change", changes: { subAction: "resolved" }, performedBy: resolvedBy });
+  await recordAuditTrail(db, { entityType: "ErpSyncError", entityId: id, action: "status_change", changes: { subAction: "resolved" }, performedBy: resolvedBy });
   return updated!;
 }
 
@@ -94,28 +94,28 @@ async function attemptWebhookDelivery(webhookUrl: string, webhookSecretEncrypted
  * history stays an honest log rather than being overwritten in place.
  */
 export async function retryError(db: TenantDb, tenantId: number, id: number, performedBy: number | undefined): Promise<{ resolved: boolean; error: ErpSyncErrorRow }> {
-  const original = await getError(db, tenantId, id);
+  const original = await getError(db, id);
   if (original.resolvedAt) throw AppError.badRequest("This error is already resolved.");
 
   if (original.errorType === "erpApiError") {
     const tenant = await loadTenantForSettings(db, tenantId);
     const config = getErpSyncSettings(tenant);
     if (!config.webhookUrl) {
-      await recordSyncError(db, { tenantId, module: original.module, presetId: original.presetId ?? undefined, presetVersion: original.presetVersion ?? undefined, stage: "erpApi", message: "No webhook URL configured — nothing to retry." });
-      const [fresh] = await db.select().from(erpSyncErrors).where(eq(erpSyncErrors.tenantId, tenantId)).orderBy(desc(erpSyncErrors.id)).limit(1);
+      await recordSyncError(db, { module: original.module, presetId: original.presetId ?? undefined, presetVersion: original.presetVersion ?? undefined, stage: "erpApi", message: "No webhook URL configured — nothing to retry." });
+      const [fresh] = await db.select().from(erpSyncErrors).orderBy(desc(erpSyncErrors.id)).limit(1);
       return { resolved: false, error: fresh! };
     }
     const preset = original.presetId ? await getActivePresetCached(db, tenantId, original.module) : null;
-    const mappedData = preset ? await buildErpPayload(db, tenantId, original.module, preset) : null;
-    const payload = JSON.stringify({ tenantId, direction: config.direction ?? "push", modules: [original.module], triggeredAt: new Date().toISOString(), ...(mappedData ? { mappedData: { [original.module]: mappedData } } : {}) });
+    const mappedData = preset ? await buildErpPayload(db, original.module, preset) : null;
+    const payload = JSON.stringify({ direction: config.direction ?? "push", modules: [original.module], triggeredAt: new Date().toISOString(), ...(mappedData ? { mappedData: { [original.module]: mappedData } } : {}) });
     const result = await attemptWebhookDelivery(config.webhookUrl, config.webhookSecretEncrypted, payload);
     if (result.delivered) {
-      logger.info("ERP sync error retry succeeded", { tenantId, module: original.module, errorId: id });
-      const resolved = await resolveError(db, tenantId, id, performedBy);
+      logger.info("ERP sync error retry succeeded", { module: original.module, errorId: id });
+      const resolved = await resolveError(db, id, performedBy);
       return { resolved: true, error: resolved };
     }
-    await recordSyncError(db, { tenantId, module: original.module, presetId: original.presetId ?? undefined, presetVersion: original.presetVersion ?? undefined, stage: "erpApi", message: result.error ?? "Webhook delivery failed.", details: { retryOf: id } });
-    const [fresh] = await db.select().from(erpSyncErrors).where(eq(erpSyncErrors.tenantId, tenantId)).orderBy(desc(erpSyncErrors.id)).limit(1);
+    await recordSyncError(db, { module: original.module, presetId: original.presetId ?? undefined, presetVersion: original.presetVersion ?? undefined, stage: "erpApi", message: result.error ?? "Webhook delivery failed.", details: { retryOf: id } });
+    const [fresh] = await db.select().from(erpSyncErrors).orderBy(desc(erpSyncErrors.id)).limit(1);
     return { resolved: false, error: fresh! };
   }
 
@@ -125,15 +125,15 @@ export async function retryError(db: TenantDb, tenantId: number, id: number, per
   // record(s) still fail.
   const preset = await getActivePresetCached(db, tenantId, original.module);
   if (!preset) {
-    await recordSyncError(db, { tenantId, module: original.module, stage: undefined, message: `No active preset for module "${original.module}" — nothing to retry.` });
-    const [fresh] = await db.select().from(erpSyncErrors).where(eq(erpSyncErrors.tenantId, tenantId)).orderBy(desc(erpSyncErrors.id)).limit(1);
+    await recordSyncError(db, { module: original.module, stage: undefined, message: `No active preset for module "${original.module}" — nothing to retry.` });
+    const [fresh] = await db.select().from(erpSyncErrors).orderBy(desc(erpSyncErrors.id)).limit(1);
     return { resolved: false, error: fresh! };
   }
-  const result = await buildErpPayload(db, tenantId, original.module, preset);
+  const result = await buildErpPayload(db, original.module, preset);
   const stillFailing = result && result.errors.length > 0;
   if (!stillFailing) {
-    logger.info("ERP sync error retry succeeded", { tenantId, module: original.module, errorId: id });
-    const resolved = await resolveError(db, tenantId, id, performedBy);
+    logger.info("ERP sync error retry succeeded", { module: original.module, errorId: id });
+    const resolved = await resolveError(db, id, performedBy);
     return { resolved: true, error: resolved };
   }
   // buildErpPayload already called recordSyncError internally for any
@@ -141,7 +141,7 @@ export async function retryError(db: TenantDb, tenantId: number, id: number, per
   const [fresh] = await db
     .select()
     .from(erpSyncErrors)
-    .where(and(eq(erpSyncErrors.tenantId, tenantId), eq(erpSyncErrors.module, original.module)))
+    .where(and(eq(erpSyncErrors.module, original.module)))
     .orderBy(desc(erpSyncErrors.id))
     .limit(1);
   return { resolved: false, error: fresh ?? original };

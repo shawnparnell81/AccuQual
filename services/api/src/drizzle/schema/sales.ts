@@ -1,6 +1,5 @@
 import { pgTable, serial, text, integer, timestamp, date } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
-import { tenants } from "./tenants.js";
 import { documents } from "./documents.js";
 
 /**
@@ -16,7 +15,6 @@ import { documents } from "./documents.js";
  */
 export const salesAccounts = pgTable("sales_accounts", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   customerName: text("customer_name").notNull(),
   industry: text("industry"),
   primaryContactName: text("primary_contact_name"),
@@ -38,7 +36,6 @@ export const salesAccounts = pgTable("sales_accounts", {
  */
 export const salesActivities = pgTable("sales_activities", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   accountId: integer("account_id").references(() => salesAccounts.id).notNull(),
   activityType: text("activity_type").notNull(), // call | meeting | email | demo | follow_up | note
   notes: text("notes"),
@@ -54,7 +51,6 @@ export const salesActivities = pgTable("sales_activities", {
 
 export const salesQuotes = pgTable("sales_quotes", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   accountId: integer("account_id").references(() => salesAccounts.id).notNull(),
   quoteNumber: text("quote_number").notNull(),
   revision: integer("revision").notNull().default(1),
@@ -70,7 +66,6 @@ export const salesQuotes = pgTable("sales_quotes", {
 
 export const salesContracts = pgTable("sales_contracts", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   accountId: integer("account_id").references(() => salesAccounts.id).notNull(),
   contractType: text("contract_type").notNull(), // customer | service | pricing | renewal
   effectiveDate: date("effective_date"),

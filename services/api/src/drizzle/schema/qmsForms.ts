@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
 /**
@@ -38,7 +37,6 @@ import { users } from "./users.js";
  */
 export const qmsForms = pgTable("qms_forms", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   formType: text("form_type").notNull(),
   formNo: text("form_no"),
   revision: text("revision"),
@@ -55,7 +53,6 @@ export const qmsForms = pgTable("qms_forms", {
 /** One row in one named table section of one qms_forms record — sectionKey matches a key in that formType's qmsFormDefinitions.ts entry. */
 export const qmsFormRows = pgTable("qms_form_rows", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   formId: integer("form_id").references(() => qmsForms.id).notNull(),
   sectionKey: text("section_key").notNull(),
   data: jsonb("data").$type<Record<string, string>>().notNull(),

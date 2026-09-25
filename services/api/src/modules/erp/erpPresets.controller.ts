@@ -14,7 +14,7 @@ export const getPresetHandler = asyncHandler(async (req: Request, res: Response)
 });
 
 export const createPresetHandler = asyncHandler(async (req: Request, res: Response) => {
-  const created = await erpPresets.createPreset(req.db!, req.tenantId!, req.body, req.user?.id);
+  const created = await erpPresets.createPreset(req.db!, req.body, req.user?.id);
   res.status(201).json(created);
 });
 
@@ -42,6 +42,6 @@ export const getActivePresetHandler = asyncHandler(async (req: Request, res: Res
   if (!ERP_PRESET_MODULES.includes(module as (typeof ERP_PRESET_MODULES)[number])) {
     throw AppError.badRequest(`Unknown module "${module}"`);
   }
-  const active = await erpPresets.getActivePreset(req.db!, req.tenantId!, module);
+  const active = await erpPresets.getActivePreset(req.db!, module);
   res.json(active);
 });

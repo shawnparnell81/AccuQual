@@ -41,7 +41,7 @@ async function handleEvent(fields: Record<string, string>) {
   const definitions = await db
     .select()
     .from(workflowDefinitions)
-    .where(and(eq(workflowDefinitions.module, module), eq(workflowDefinitions.tenantId, Number(tenantId)), eq(workflowDefinitions.isActive, "true")));
+    .where(and(eq(workflowDefinitions.module, module), eq(workflowDefinitions.isActive, "true")));
 
   for (const definition of definitions) {
     // Real, previously-latent bug found live: node-redis v4's xReadGroup
@@ -53,7 +53,7 @@ async function handleEvent(fields: Record<string, string>) {
     // Spreading into a plain object (same as runContext below) fixes it.
     const [run] = await db
       .insert(workflowRuns)
-      .values({ workflowId: definition.id, tenantId: Number(tenantId), context: { ...fields }, status: "running", simulated: false, definitionVersion: definition.version })
+      .values({ workflowId: definition.id, context: { ...fields }, status: "running", simulated: false, definitionVersion: definition.version })
       .returning();
     if (!run) continue;
 

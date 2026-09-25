@@ -42,7 +42,6 @@ async function main() {
       email: "platform-admin@accuqual.local",
       passwordHash,
       name: "AccuQual Platform Admin",
-      tenantId: null,
       roleId: platformAdminRole?.id ?? null,
     })
     .onConflictDoNothing({ target: users.email });
@@ -62,16 +61,14 @@ async function main() {
       email: "admin@accuqual.local",
       passwordHash,
       name: "Demo Tenant Admin",
-      tenantId: tenant.id,
       roleId: adminRole?.id ?? null,
     })
     .onConflictDoNothing({ target: users.email });
 
-  const existingTemplates = await db.select().from(formTemplates).where(eq(formTemplates.tenantId, tenant.id));
+  const existingTemplates = await db.select().from(formTemplates);
   if (existingTemplates.length === 0) {
     for (const formType of FORM_TYPES) {
       await db.insert(formTemplates).values({
-        tenantId: tenant.id,
         formType,
         pdfPath: `/templates/defaults/${formType}.pdf`,
         fieldMap: {},

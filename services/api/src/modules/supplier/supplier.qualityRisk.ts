@@ -89,25 +89,25 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * normalization threshold used to turn it into a 0-1 risk contribution in
  * scoreSupplierQualityRisk below.
  */
-export async function getSupplierQualityFactors(db: TenantDb, tenantId: number, supplierId: number): Promise<SupplierQualityFactors> {
+export async function getSupplierQualityFactors(db: TenantDb, supplierId: number): Promise<SupplierQualityFactors> {
   const [ncrIds, capaIds, performance, rmaRows, warrantyRows, scarRows, carRows, eightDRows, messages] = await Promise.all([
-    getSupplierNcrIds(db, tenantId, supplierId),
-    getSupplierCapaIds(db, tenantId, supplierId),
-    computeSupplierPerformance(db, tenantId, supplierId),
-    db.select({ id: rma.id }).from(rma).where(and(eq(rma.tenantId, tenantId), eq(rma.supplierId, supplierId))),
-    db.select({ id: warrantyClaims.id }).from(warrantyClaims).where(and(eq(warrantyClaims.tenantId, tenantId), eq(warrantyClaims.supplierId, supplierId))),
-    db.select({ id: scarForms.id }).from(scarForms).where(and(eq(scarForms.tenantId, tenantId), eq(scarForms.supplierId, supplierId))),
-    db.select().from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.tenantId, tenantId), eq(supplierCorrectiveActions.supplierId, supplierId))),
-    db.select().from(supplier8dResponses).where(and(eq(supplier8dResponses.tenantId, tenantId), eq(supplier8dResponses.supplierId, supplierId))),
-    db.select({ senderRole: supplierMessages.senderRole, createdAt: supplierMessages.createdAt }).from(supplierMessages).where(and(eq(supplierMessages.tenantId, tenantId), eq(supplierMessages.supplierId, supplierId))).orderBy(supplierMessages.createdAt),
+    getSupplierNcrIds(db, supplierId),
+    getSupplierCapaIds(db, supplierId),
+    computeSupplierPerformance(db, supplierId),
+    db.select({ id: rma.id }).from(rma).where(and(eq(rma.supplierId, supplierId))),
+    db.select({ id: warrantyClaims.id }).from(warrantyClaims).where(and(eq(warrantyClaims.supplierId, supplierId))),
+    db.select({ id: scarForms.id }).from(scarForms).where(and(eq(scarForms.supplierId, supplierId))),
+    db.select().from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.supplierId, supplierId))),
+    db.select().from(supplier8dResponses).where(and(eq(supplier8dResponses.supplierId, supplierId))),
+    db.select({ senderRole: supplierMessages.senderRole, createdAt: supplierMessages.createdAt }).from(supplierMessages).where(and(eq(supplierMessages.supplierId, supplierId))).orderBy(supplierMessages.createdAt),
   ]);
 
   // NCRs/CAPAs from this supplier's own derived set — small volumes at this
   // app's scale, so a plain JS pull-and-compare is the same convention
   // supplier.performance.ts's own comment already uses, not raw SQL
   // aggregation.
-  const ncrRows = ncrIds.length > 0 ? await db.select({ id: ncr.id, createdAt: ncr.createdAt }).from(ncr).where(and(eq(ncr.tenantId, tenantId), inArray(ncr.id, ncrIds))) : [];
-  const capaRows = capaIds.length > 0 ? await db.select({ id: capa.id, status: capa.status, closedAt: capa.closedAt, ncrId: capa.ncrId }).from(capa).where(and(eq(capa.tenantId, tenantId), inArray(capa.id, capaIds))) : [];
+  const ncrRows = ncrIds.length > 0 ? await db.select({ id: ncr.id, createdAt: ncr.createdAt }).from(ncr).where(and(inArray(ncr.id, ncrIds))) : [];
+  const capaRows = capaIds.length > 0 ? await db.select({ id: capa.id, status: capa.status, closedAt: capa.closedAt, ncrId: capa.ncrId }).from(capa).where(and(inArray(capa.id, capaIds))) : [];
 
   // CAPA recurrence: a CAPA closed for this supplier, after which ANOTHER
   // of this supplier's NCRs was opened — a real "the corrective action
@@ -230,13 +230,13 @@ async function loadRiskWeights(db: TenantDb, tenantId: number): Promise<Partial<
  * asks for.
  */
 export async function recomputeSupplierRiskScore(db: TenantDb, tenantId: number, supplierId: number, performedBy: number | undefined): Promise<SupplierQualityRiskScoreRow> {
-  const [factors, weights] = await Promise.all([getSupplierQualityFactors(db, tenantId, supplierId), loadRiskWeights(db, tenantId)]);
+  const [factors, weights] = await Promise.all([getSupplierQualityFactors(db, supplierId), loadRiskWeights(db, tenantId)]);
   const result = scoreSupplierQualityRisk(factors, weights);
   const scoreDate = new Date().toISOString().slice(0, 10);
 
   const [row] = await db
     .insert(supplierQualityRiskScores)
-    .values({ tenantId, supplierId, scoreDate, score: String(result.score), band: result.band, breakdown: result.breakdown, computedByUserId: performedBy })
+    .values({ supplierId, scoreDate, score: String(result.score), band: result.band, breakdown: result.breakdown, computedByUserId: performedBy })
     .onConflictDoUpdate({
       target: [supplierQualityRiskScores.supplierId, supplierQualityRiskScores.scoreDate],
       set: { score: String(result.score), band: result.band, breakdown: result.breakdown, computedByUserId: performedBy, createdAt: new Date() },
@@ -244,7 +244,6 @@ export async function recomputeSupplierRiskScore(db: TenantDb, tenantId: number,
     .returning();
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "Supplier",
     entityId: supplierId,
     action: "update",
@@ -271,14 +270,14 @@ export async function getSupplierRiskScoreWithTrend(db: TenantDb, tenantId: numb
   const trend = await db
     .select()
     .from(supplierQualityRiskScores)
-    .where(and(eq(supplierQualityRiskScores.tenantId, tenantId), eq(supplierQualityRiskScores.supplierId, supplierId), gte(supplierQualityRiskScores.scoreDate, since)))
+    .where(and(eq(supplierQualityRiskScores.supplierId, supplierId), gte(supplierQualityRiskScores.scoreDate, since)))
     .orderBy(supplierQualityRiskScores.scoreDate);
 
   if (trend.length > 0) return { latest: trend[trend.length - 1]!, trend };
 
-  const [factors, weights] = await Promise.all([getSupplierQualityFactors(db, tenantId, supplierId), loadRiskWeights(db, tenantId)]);
+  const [factors, weights] = await Promise.all([getSupplierQualityFactors(db, supplierId), loadRiskWeights(db, tenantId)]);
   const result = scoreSupplierQualityRisk(factors, weights);
-  const latest = { id: -1, tenantId, supplierId, scoreDate: new Date().toISOString().slice(0, 10), score: String(result.score), band: result.band, formulaVersion: "v1", breakdown: result.breakdown, computedByUserId: null, createdAt: new Date(), unsaved: true };
+  const latest = { id: -1, supplierId, scoreDate: new Date().toISOString().slice(0, 10), score: String(result.score), band: result.band, formulaVersion: "v1", breakdown: result.breakdown, computedByUserId: null, createdAt: new Date(), unsaved: true };
   return { latest, trend: [latest] };
 }
 
@@ -293,20 +292,20 @@ export interface SupplierHealth {
   openActionCount: number;
 }
 
-export async function getSupplierHealth(db: TenantDb, tenantId: number, supplierId: number): Promise<SupplierHealth> {
+export async function getSupplierHealth(db: TenantDb, supplierId: number): Promise<SupplierHealth> {
   const [loginRows, docDates, ppapDates, carDates, eightDDates, onboardingDates, lastMessage, carOpen, eightDOpen] = await Promise.all([
     // Plain fetch-and-max in JS, not ORDER BY ... DESC LIMIT 1 — Postgres's
     // default DESC ordering puts NULLs FIRST, so a portal login that never
     // logged in would silently outrank one that logged in yesterday.
-    db.select({ lastLoginAt: users.lastLoginAt }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.supplierId, supplierId))),
-    db.select({ createdAt: supplierDocuments.createdAt }).from(supplierDocuments).where(and(eq(supplierDocuments.tenantId, tenantId), eq(supplierDocuments.supplierId, supplierId))).orderBy(desc(supplierDocuments.createdAt)).limit(1),
-    db.select({ createdAt: supplierPpapSubmissions.createdAt }).from(supplierPpapSubmissions).where(and(eq(supplierPpapSubmissions.tenantId, tenantId), eq(supplierPpapSubmissions.supplierId, supplierId))).orderBy(desc(supplierPpapSubmissions.createdAt)).limit(1),
-    db.select({ createdAt: supplierCorrectiveActions.createdAt }).from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.tenantId, tenantId), eq(supplierCorrectiveActions.supplierId, supplierId))).orderBy(desc(supplierCorrectiveActions.createdAt)).limit(1),
-    db.select({ createdAt: supplier8dResponses.createdAt }).from(supplier8dResponses).where(and(eq(supplier8dResponses.tenantId, tenantId), eq(supplier8dResponses.supplierId, supplierId))).orderBy(desc(supplier8dResponses.createdAt)).limit(1),
-    db.select({ createdAt: supplierOnboardingDocuments.createdAt }).from(supplierOnboardingDocuments).where(and(eq(supplierOnboardingDocuments.tenantId, tenantId), eq(supplierOnboardingDocuments.supplierId, supplierId))).orderBy(desc(supplierOnboardingDocuments.createdAt)).limit(1),
-    db.select({ createdAt: supplierMessages.createdAt }).from(supplierMessages).where(and(eq(supplierMessages.tenantId, tenantId), eq(supplierMessages.supplierId, supplierId))).orderBy(desc(supplierMessages.createdAt)).limit(1),
-    db.select({ status: supplierCorrectiveActions.status }).from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.tenantId, tenantId), eq(supplierCorrectiveActions.supplierId, supplierId))),
-    db.select({ status: supplier8dResponses.status }).from(supplier8dResponses).where(and(eq(supplier8dResponses.tenantId, tenantId), eq(supplier8dResponses.supplierId, supplierId))),
+    db.select({ lastLoginAt: users.lastLoginAt }).from(users).where(and(eq(users.supplierId, supplierId))),
+    db.select({ createdAt: supplierDocuments.createdAt }).from(supplierDocuments).where(and(eq(supplierDocuments.supplierId, supplierId))).orderBy(desc(supplierDocuments.createdAt)).limit(1),
+    db.select({ createdAt: supplierPpapSubmissions.createdAt }).from(supplierPpapSubmissions).where(and(eq(supplierPpapSubmissions.supplierId, supplierId))).orderBy(desc(supplierPpapSubmissions.createdAt)).limit(1),
+    db.select({ createdAt: supplierCorrectiveActions.createdAt }).from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.supplierId, supplierId))).orderBy(desc(supplierCorrectiveActions.createdAt)).limit(1),
+    db.select({ createdAt: supplier8dResponses.createdAt }).from(supplier8dResponses).where(and(eq(supplier8dResponses.supplierId, supplierId))).orderBy(desc(supplier8dResponses.createdAt)).limit(1),
+    db.select({ createdAt: supplierOnboardingDocuments.createdAt }).from(supplierOnboardingDocuments).where(and(eq(supplierOnboardingDocuments.supplierId, supplierId))).orderBy(desc(supplierOnboardingDocuments.createdAt)).limit(1),
+    db.select({ createdAt: supplierMessages.createdAt }).from(supplierMessages).where(and(eq(supplierMessages.supplierId, supplierId))).orderBy(desc(supplierMessages.createdAt)).limit(1),
+    db.select({ status: supplierCorrectiveActions.status }).from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.supplierId, supplierId))),
+    db.select({ status: supplier8dResponses.status }).from(supplier8dResponses).where(and(eq(supplier8dResponses.supplierId, supplierId))),
   ]);
 
   const uploadDates = [docDates[0]?.createdAt, ppapDates[0]?.createdAt, carDates[0]?.createdAt, eightDDates[0]?.createdAt, onboardingDates[0]?.createdAt].filter((d): d is Date => !!d);
@@ -333,7 +332,7 @@ export async function exportSupplierScorecard(req: Request, res: Response, suppl
   const db = req.db!;
   const tenantId = req.tenantId!;
   const [factors, riskResult, performer] = await Promise.all([
-    getSupplierQualityFactors(db, tenantId, supplier.id),
+    getSupplierQualityFactors(db, supplier.id),
     getSupplierRiskScoreWithTrend(db, tenantId, supplier.id),
     req.user?.id ? db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, req.user.id)) : Promise.resolve([]),
   ]);
@@ -362,7 +361,7 @@ export async function exportSupplierScorecard(req: Request, res: Response, suppl
     ],
   };
 
-  await recordAuditTrail(db, { tenantId, entityType: "ReportExport", entityId: supplier.id, action: "create", changes: { reportKey: "supplier-scorecard", format }, performedBy: req.user?.id });
+  await recordAuditTrail(db, { entityType: "ReportExport", entityId: supplier.id, action: "create", changes: { reportKey: "supplier-scorecard", format }, performedBy: req.user?.id });
 
   if (format === "pdf") {
     const bytes = await toPdf(report);

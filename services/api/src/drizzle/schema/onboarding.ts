@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
 /**
@@ -15,7 +14,6 @@ import { users } from "./users.js";
  */
 export const onboardingProgress = pgTable("onboarding_progress", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   userId: integer("user_id").references(() => users.id).notNull(),
   moduleKey: text("module_key").notNull(),
   status: text("status").notNull().default("not_started"),

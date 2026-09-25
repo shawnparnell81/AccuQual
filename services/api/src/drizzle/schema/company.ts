@@ -1,18 +1,12 @@
 import { pgTable, serial, text, jsonb, timestamp, boolean, integer, numeric } from "drizzle-orm/pg-core";
 
 /**
- * A tenant is a company/plant/division/customer (see Tenant Onboarding Flow Spec).
- * Every tenant-owned table carries a `tenantId` FK to this table and is
- * RLS-protected (see drizzle/post-migrate/rls-policies.sql) plus explicitly
- * filtered by `tenantId` in every query (see lib/tenantScope.ts) — the two
- * layers are intentionally redundant (defense in depth for a compliance-oriented
- * QMS), not either/or.
+ * The one company this installation belongs to: a single row (id 1). It holds the company's name and every company-wide
+ * setting (theme, AI, plants and module rules) that used to live per organization.
  */
-export const tenants = pgTable("tenants", {
+export const company = pgTable("company", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  code: text("code").notNull().unique(),
-  status: text("status").notNull().default("active"), // active, inactive (soft-deleted)
   // Who must use multi-factor authentication: "optional" (nobody is forced),
   // "admins" (default), or "all" users of the tenant. platform_admin accounts
   // always need it regardless of this value.
@@ -196,14 +190,13 @@ export const tenants = pgTable("tenants", {
     contactEmail?: string;
     contactPhone?: string;
   }>().default({}),
-  // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for a brand-new tenant's first admin.
+  // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for the company's first admin.
   // `dismissed: true` for every tenant that existed before this shipped (backfillOnboardingChecklist.ts) — an
   // established company must never see a "new tenant" checklist; a genuinely new tenant starts with this unset,
   // reads back as { dismissed: false, completedItems: [] } (see getOnboardingHandler).
   onboardingProgress: jsonb("onboarding_progress").$type<{ dismissed: boolean; completedItems: string[] }>(),
-  isDeleted: boolean("is_deleted").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export type Tenant = typeof tenants.$inferSelect;
-export type NewTenant = typeof tenants.$inferInsert;
+export type Company = typeof company.$inferSelect;
+export type NewCompany = typeof company.$inferInsert;

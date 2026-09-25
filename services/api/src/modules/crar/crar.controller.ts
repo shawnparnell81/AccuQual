@@ -50,7 +50,7 @@ async function assertCrarContentWrite(req: Request) {
   if (department && WARRANTY_LINK_ONLY_DEPARTMENTS.includes(department)) {
     throw AppError.forbidden("Your department may only link a CRAR to a warranty claim, not edit its content");
   }
-  const level = await getUserAccessLevel(req.db! as TenantDb, req.tenantId!, req.user!, "crar");
+  const level = await getUserAccessLevel(req.db! as TenantDb, req.user!, "crar");
   if (level !== "edit") {
     throw AppError.forbidden("This action requires edit access to CRAR (crar.write)");
   }
@@ -90,14 +90,14 @@ const WARRANTY_LINK_ONLY_DEPARTMENTS = ["engineering", "purchasing"];
 const WARRANTY_LINK_FIELDS = ["warrantyId"];
 
 async function loadCrar(req: Request, id: number) {
-  const [row] = await req.db!.select().from(crarClaims).where(and(eq(crarClaims.id, id), eq(crarClaims.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(crarClaims).where(and(eq(crarClaims.id, id)));
   if (!row) throw AppError.notFound("Crar");
   return row;
 }
 
 export const listCrarHandler = asyncHandler(async (req: Request, res: Response) => {
   const { status, warrantyId, q } = req.query as Record<string, string | undefined>;
-  const conditions: SQL[] = [eq(crarClaims.tenantId, req.tenantId!)];
+  const conditions: SQL[] = [];
   if (status) conditions.push(eq(crarClaims.status, status));
   if (warrantyId) conditions.push(eq(crarClaims.warrantyId, Number(warrantyId)));
   if (q) conditions.push(ilike(crarClaims.customerClaim, `%${q}%`));
@@ -130,29 +130,29 @@ export const createCrarHandler = asyncHandler(async (req: Request, res: Response
   const body = req.body as Record<string, unknown>;
 
   if (body.warrantyId !== undefined && body.warrantyId !== null) {
-    const [w] = await req.db!.select({ id: warrantyClaims.id }).from(warrantyClaims).where(and(eq(warrantyClaims.id, body.warrantyId as number), eq(warrantyClaims.tenantId, req.tenantId!)));
+    const [w] = await req.db!.select({ id: warrantyClaims.id }).from(warrantyClaims).where(and(eq(warrantyClaims.id, body.warrantyId as number)));
     if (!w) throw AppError.badRequest(`Warranty claim #${body.warrantyId} not found`);
   }
   if (body.qualityId !== undefined && body.qualityId !== null) {
-    const [n] = await req.db!.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, body.qualityId as number), eq(ncr.tenantId, req.tenantId!)));
+    const [n] = await req.db!.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, body.qualityId as number)));
     if (!n) throw AppError.badRequest(`NCR #${body.qualityId} not found`);
   }
   if (body.supplierRmaRequestId !== undefined && body.supplierRmaRequestId !== null) {
-    const [s] = await req.db!.select({ id: supplierRmaRequests.id }).from(supplierRmaRequests).where(and(eq(supplierRmaRequests.id, body.supplierRmaRequestId as number), eq(supplierRmaRequests.tenantId, req.tenantId!)));
+    const [s] = await req.db!.select({ id: supplierRmaRequests.id }).from(supplierRmaRequests).where(and(eq(supplierRmaRequests.id, body.supplierRmaRequestId as number)));
     if (!s) throw AppError.badRequest(`Supplier RMA Request #${body.supplierRmaRequestId} not found`);
   }
   if (body.linkedRmaId !== undefined && body.linkedRmaId !== null) {
-    const [r] = await req.db!.select({ id: rma.id }).from(rma).where(and(eq(rma.id, body.linkedRmaId as number), eq(rma.tenantId, req.tenantId!)));
+    const [r] = await req.db!.select({ id: rma.id }).from(rma).where(and(eq(rma.id, body.linkedRmaId as number)));
     if (!r) throw AppError.badRequest(`RMA #${body.linkedRmaId} not found`);
   }
   // Phase 2 fix: RMA Log link, previously entirely missing (see crar.ts's
   // own schema comment) — same existence-check style as every other link.
   if (body.rmaLogId !== undefined && body.rmaLogId !== null) {
-    const [rl] = await req.db!.select({ id: rmaLogRecords.id }).from(rmaLogRecords).where(and(eq(rmaLogRecords.id, body.rmaLogId as number), eq(rmaLogRecords.tenantId, req.tenantId!)));
+    const [rl] = await req.db!.select({ id: rmaLogRecords.id }).from(rmaLogRecords).where(and(eq(rmaLogRecords.id, body.rmaLogId as number)));
     if (!rl) throw AppError.badRequest(`RMA Log #${body.rmaLogId} not found`);
   }
   if (body.customerId !== undefined && body.customerId !== null) {
-    const [c] = await req.db!.select({ id: customers.id }).from(customers).where(and(eq(customers.id, body.customerId as number), eq(customers.tenantId, req.tenantId!)));
+    const [c] = await req.db!.select({ id: customers.id }).from(customers).where(and(eq(customers.id, body.customerId as number)));
     if (!c) throw AppError.badRequest(`Customer #${body.customerId} not found`);
   }
 
@@ -168,10 +168,10 @@ export const createCrarHandler = asyncHandler(async (req: Request, res: Response
 
   const [created] = await req
     .db!.insert(crarClaims)
-    .values({ tenantId: req.tenantId!, ...body, customerId, createdByUserId: req.user?.id })
+    .values({ ...body, customerId, createdByUserId: req.user?.id })
     .returning();
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Crar", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "Crar", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
@@ -208,7 +208,6 @@ export const updateCrarHandler = asyncHandler(async (req: Request, res: Response
     const disallowed = Object.keys(req.body).filter((k) => !WARRANTY_LINK_FIELDS.includes(k));
     if (disallowed.length > 0) {
       await recordAuditTrailStandalone(pool, {
-        tenantId: req.tenantId!,
         entityType: "Crar",
         entityId: record.id,
         action: "permission_denied",
@@ -223,7 +222,7 @@ export const updateCrarHandler = asyncHandler(async (req: Request, res: Response
 
   const patch: Record<string, unknown> = { ...req.body };
   if (patch.warrantyId !== undefined && patch.warrantyId !== null) {
-    const [w] = await req.db!.select({ id: warrantyClaims.id, customerId: warrantyClaims.customerId }).from(warrantyClaims).where(and(eq(warrantyClaims.id, patch.warrantyId as number), eq(warrantyClaims.tenantId, req.tenantId!)));
+    const [w] = await req.db!.select({ id: warrantyClaims.id, customerId: warrantyClaims.customerId }).from(warrantyClaims).where(and(eq(warrantyClaims.id, patch.warrantyId as number)));
     if (!w) throw AppError.badRequest(`Warranty claim #${patch.warrantyId} not found`);
     // Phase 2 fix: linking (or re-linking) a warranty claim later also backs
     // a customer in, same as createCrarHandler does at creation time — only
@@ -238,7 +237,7 @@ export const updateCrarHandler = asyncHandler(async (req: Request, res: Response
     .set({ ...patch, updatedAt: new Date() })
     .where(eq(crarClaims.id, record.id))
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Crar", entityId: record.id, action: "update", changes: patch, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "Crar", entityId: record.id, action: "update", changes: patch, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -257,10 +256,9 @@ export const transitionCrarHandler = asyncHandler(async (req: Request, res: Resp
     // lever (crar_workflow) layered on top — see db/defaultPermissions.ts's
     // own comment on why its seeded default matches today's real behavior
     // exactly (the union of every department in STATUS_TRANSITION_DEPARTMENTS).
-    const workflowLevel = await getUserAccessLevel(req.db! as TenantDb, req.tenantId!, req.user!, "crar_workflow");
+    const workflowLevel = await getUserAccessLevel(req.db! as TenantDb, req.user!, "crar_workflow");
     if (workflowLevel !== "edit") {
       await recordAuditTrailStandalone(pool, {
-        tenantId: req.tenantId!,
         entityType: "Crar",
         entityId: record.id,
         action: "permission_denied",
@@ -279,14 +277,13 @@ export const transitionCrarHandler = asyncHandler(async (req: Request, res: Resp
   // every other module's transitions log under (see e.g.
   // warranty.controller.ts's own transition handler).
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "Crar",
     entityId: record.id,
     action: "status_change",
     changes: { oldStatus: record.status, newStatus, userId: req.user?.id },
     performedBy: req.user?.id,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "crar", event: newStatus, entityId: record.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "crar", event: newStatus, entityId: record.id });
 
   res.json(updated);
 });

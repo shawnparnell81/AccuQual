@@ -20,20 +20,19 @@ import { complaints } from "../../drizzle/schema/complaints.js";
  */
 export const getKpiCounts = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
-  const tenantId = req.tenantId!;
 
   const ncrSite = req.siteId == null ? sql`false` : eq(ncr.siteId, req.siteId);
   const capaSite = req.siteId == null ? sql`false` : eq(capa.siteId, req.siteId);
   const [ncrOpen, capaOpen, eightDOpen, diOpen, complaintsOpen] = await Promise.all([
-    db.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.tenantId, tenantId), ncrSite, ne(ncr.status, "closed"))),
-    db.select({ id: capa.id }).from(capa).where(and(eq(capa.tenantId, tenantId), capaSite, ne(capa.status, "closed"))),
+    db.select({ id: ncr.id }).from(ncr).where(and(ncrSite, ne(ncr.status, "closed"))),
+    db.select({ id: capa.id }).from(capa).where(and(capaSite, ne(capa.status, "closed"))),
     // No status column on 8D — "open" means not yet past D8 (closure).
-    db.select({ id: eightD.id }).from(eightD).where(and(eq(eightD.tenantId, tenantId), lt(eightD.currentStep, 8))),
+    db.select({ id: eightD.id }).from(eightD).where(and(lt(eightD.currentStep, 8))),
     db
       .select({ id: discrepancyInvestigations.id })
       .from(discrepancyInvestigations)
-      .where(and(eq(discrepancyInvestigations.tenantId, tenantId), ne(discrepancyInvestigations.status, "closed"))),
-    db.select({ id: complaints.id }).from(complaints).where(and(eq(complaints.tenantId, tenantId), ne(complaints.status, "closed"))),
+      .where(and(ne(discrepancyInvestigations.status, "closed"))),
+    db.select({ id: complaints.id }).from(complaints).where(and(ne(complaints.status, "closed"))),
   ]);
 
   res.json({

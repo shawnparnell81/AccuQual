@@ -57,7 +57,7 @@ export function describeAiState(status: AiOutputStatus, okVerb = "AI-suggested")
  * Returns null when under limit (or no limit set), or an error message to
  * return to the caller.
  */
-export async function checkUsageLimit(db: TenantDb, tenantId: number, monthlyLimit: number | null, limitEnforced: boolean): Promise<string | null> {
+export async function checkUsageLimit(db: TenantDb, monthlyLimit: number | null, limitEnforced: boolean): Promise<string | null> {
   if (!limitEnforced || monthlyLimit === null) return null;
 
   const startOfMonth = new Date();
@@ -67,7 +67,7 @@ export async function checkUsageLimit(db: TenantDb, tenantId: number, monthlyLim
   const [row] = await db
     .select({ total: sql<number>`COALESCE(SUM((${auditTrail.changes}->>'tokens')::int), 0)` })
     .from(auditTrail)
-    .where(and(eq(auditTrail.tenantId, tenantId), gte(auditTrail.createdAt, startOfMonth)));
+    .where(and(gte(auditTrail.createdAt, startOfMonth)));
 
   const usedThisMonth = row?.total ?? 0;
   if (usedThisMonth >= monthlyLimit) return "AI usage limit reached for this tenant.";
@@ -99,7 +99,7 @@ export async function loadTenantLlmOptions(db: TenantDb, tenantId: number): Prom
     try {
       apiKey = decryptSecret(aiConfig.apiKeyEncrypted);
     } catch (err) {
-      logger.warn("Tenant AI config key failed to decrypt — falling back to stub mode for this call", { tenantId, err: err instanceof Error ? err.message : err });
+      logger.warn("Tenant AI config key failed to decrypt — falling back to stub mode for this call", { err: err instanceof Error ? err.message : err });
     }
   }
 
@@ -131,7 +131,6 @@ export async function loadTenantLlmOptions(db: TenantDb, tenantId: number): Prom
 export async function recordAiSuggestion(
   db: TenantDb,
   params: {
-    tenantId: number;
     module: string;
     pipeline: string;
     input: Record<string, unknown>;
@@ -145,7 +144,7 @@ export async function recordAiSuggestion(
     okVerb?: string;
   }
 ): Promise<typeof aiSuggestions.$inferSelect> {
-  const { tenantId, module, pipeline, input, output, result, performedBy, status = "ok", errorMessage = null, okVerb } = params;
+  const { module, pipeline, input, output, result, performedBy, status = "ok", errorMessage = null, okVerb } = params;
   const totalTokens = result.usage ? result.usage.inputTokens + result.usage.outputTokens : null;
   // Only a real provider response has real usage to bill/track — the
   // honest no-key stub (result.usage === null) never touches cost, same
@@ -154,11 +153,10 @@ export async function recordAiSuggestion(
 
   const [saved] = await db
     .insert(aiSuggestions)
-    .values({ tenantId, module, pipeline, input, output, status, errorMessage, createdBy: performedBy })
+    .values({ module, pipeline, input, output, status, errorMessage, createdBy: performedBy })
     .returning();
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "AiSuggestion",
     entityId: saved!.id,
     action: "create",
@@ -203,7 +201,7 @@ export async function runPipelineAndRecord(
   runner: (llmOptions: LlmCallOptions) => Promise<PipelineRun>
 ): Promise<{ suggestion: typeof aiSuggestions.$inferSelect; output: Record<string, unknown> }> {
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
-  const limitError = await checkUsageLimit(db, tenantId, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const limitError = await checkUsageLimit(db, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
   const { llmOptions } = await loadTenantLlmOptions(db, tenantId);
@@ -217,12 +215,11 @@ export async function runPipelineAndRecord(
     // error instead of returning a 200 the caller might render as if it
     // were a real (if flagged) suggestion.
     if (classified.status === "malformed" && tenant?.aiConfig?.safetyMode === "strict") {
-      await recordAiSuggestion(db, { tenantId, module, pipeline, input, output: classified.data, result, performedBy, status: classified.status, errorMessage: classified.errorMessage, okVerb });
+      await recordAiSuggestion(db, { module, pipeline, input, output: classified.data, result, performedBy, status: classified.status, errorMessage: classified.errorMessage, okVerb });
       throw new AppError(classified.errorMessage ?? "The AI response didn't match the expected shape and was refused under this tenant's strict safety mode.", 502);
     }
 
     const suggestion = await recordAiSuggestion(db, {
-      tenantId,
       module,
       pipeline,
       input,
@@ -237,13 +234,12 @@ export async function runPipelineAndRecord(
   } catch (err) {
     if (err && typeof err === "object" && "statusCode" in err) throw err; // AppError from checkUsageLimit or an already-classified case above — pass through unchanged
     const message = err instanceof Error ? err.message : "The AI provider request failed.";
-    logger.error("AI pipeline call failed", { module, pipeline, tenantId, err });
+    logger.error("AI pipeline call failed", { module, pipeline, err });
     const [saved] = await db
       .insert(aiSuggestions)
-      .values({ tenantId, module, pipeline, input, output: {}, status: "error", errorMessage: message, createdBy: performedBy })
+      .values({ module, pipeline, input, output: {}, status: "error", errorMessage: message, createdBy: performedBy })
       .returning();
     await recordAuditTrail(db, {
-      tenantId,
       entityType: "AiSuggestion",
       entityId: saved!.id,
       action: "create",

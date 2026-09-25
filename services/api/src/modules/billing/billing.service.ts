@@ -41,14 +41,14 @@ export function mapStripeStatus(status: string): "incomplete" | "trialing" | "ac
   }
 }
 
-export async function getSubscription(tenantId: number): Promise<TenantSubscription | null> {
-  const [row] = await db.select().from(tenantSubscriptions).where(eq(tenantSubscriptions.tenantId, tenantId));
+export async function getSubscription(): Promise<TenantSubscription | null> {
+  const [row] = await db.select().from(tenantSubscriptions);
   return row ?? null;
 }
 
 /** What the Billing page shows: the company's plan and status, plus which plans can be bought right now. */
-export async function describeBilling(tenantId: number) {
-  const row = await getSubscription(tenantId);
+export async function describeBilling() {
+  const row = await getSubscription();
   return {
     billingEnabled: !!getStripe(),
     subscription: row
@@ -74,18 +74,18 @@ export async function createCheckoutSession(tenantId: number, adminEmail: string
   const stripe = requireStripe();
   const priceId = priceIdFor(plan);
   if (!priceId) throw AppError.badRequest("That plan can't be bought yet: its price hasn't been set up.");
-  const existing = await getSubscription(tenantId);
+  const existing = await getSubscription();
   if (existing?.status === "complimentary") throw AppError.badRequest("This company has a complimentary plan and isn't billed.");
   if (hasLiveSubscription(existing)) throw AppError.badRequest("This company already has a subscription. Use Manage billing to change it.");
 
   const [tenant] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, tenantId));
   let customerId = existing?.stripeCustomerId ?? null;
   if (!customerId) {
-    const customer = await stripe.customers.create({ name: tenant?.name, email: adminEmail, metadata: { tenantId: String(tenantId) } });
+    const customer = await stripe.customers.create({ name: tenant?.name, email: adminEmail, metadata: { } });
     customerId = customer.id;
     await db
       .insert(tenantSubscriptions)
-      .values({ tenantId, plan, status: "incomplete", stripeCustomerId: customerId })
+      .values({ plan, status: "incomplete", stripeCustomerId: customerId })
       .onConflictDoUpdate({ target: tenantSubscriptions.tenantId, set: { stripeCustomerId: customerId, updatedAt: new Date() } });
   }
   const session = await stripe.checkout.sessions.create({
@@ -93,7 +93,7 @@ export async function createCheckoutSession(tenantId: number, adminEmail: string
     customer: customerId,
     client_reference_id: String(tenantId),
     line_items: [{ price: priceId, quantity: 1 }],
-    subscription_data: { metadata: { tenantId: String(tenantId), plan } },
+    subscription_data: { metadata: { plan } },
     success_url: `${env.FRONTEND_URL}/admin/billing?checkout=success`,
     cancel_url: `${env.FRONTEND_URL}/admin/billing?checkout=canceled`,
   });
@@ -101,9 +101,9 @@ export async function createCheckoutSession(tenantId: number, adminEmail: string
   return session.url;
 }
 
-export async function createPortalSession(tenantId: number): Promise<string> {
+export async function createPortalSession(): Promise<string> {
   const stripe = requireStripe();
-  const existing = await getSubscription(tenantId);
+  const existing = await getSubscription();
   if (!existing?.stripeCustomerId) throw AppError.badRequest("There's no billing account to manage yet. Choose a plan first.");
   const session = await stripe.billingPortal.sessions.create({ customer: existing.stripeCustomerId, return_url: `${env.FRONTEND_URL}/admin/billing` });
   return session.url;
@@ -130,7 +130,7 @@ async function tenantIdForSubscription(sub: Stripe.Subscription): Promise<number
   const stamped = Number(sub.metadata?.tenantId);
   if (Number.isInteger(stamped) && stamped > 0) return stamped;
   const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
-  const [row] = await db.select({ tenantId: tenantSubscriptions.tenantId }).from(tenantSubscriptions).where(eq(tenantSubscriptions.stripeCustomerId, customerId));
+  const [row] = await db.select({ }).from(tenantSubscriptions).where(eq(tenantSubscriptions.stripeCustomerId, customerId));
   return row?.tenantId ?? null;
 }
 
@@ -148,7 +148,7 @@ export async function applySubscription(sub: Stripe.Subscription): Promise<numbe
     return null;
   }
   const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
-  const [current] = await db.select().from(tenantSubscriptions).where(eq(tenantSubscriptions.tenantId, tenantId));
+  const [current] = await db.select().from(tenantSubscriptions);
   // A complimentary company is never billed or overwritten by Stripe.
   if (current?.status === "complimentary") return tenantId;
 
@@ -169,12 +169,11 @@ export async function applySubscription(sub: Stripe.Subscription): Promise<numbe
   };
   const [saved] = await db
     .insert(tenantSubscriptions)
-    .values({ tenantId, ...values })
+    .values({ ...values })
     .onConflictDoUpdate({ target: tenantSubscriptions.tenantId, set: values })
     .returning();
   if (!current || current.plan !== values.plan || current.status !== values.status) {
     await recordAuditTrailStandalone(pool, {
-      tenantId,
       entityType: "Billing",
       entityId: saved!.id,
       action: "update",
@@ -212,7 +211,7 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<{ handled:
           if (row && row.status !== "complimentary") {
             await db.update(tenantSubscriptions).set({ status: "past_due", updatedAt: new Date() }).where(eq(tenantSubscriptions.id, row.id));
             tenantId = row.tenantId;
-            await recordAuditTrailStandalone(pool, { tenantId: row.tenantId, entityType: "Billing", entityId: row.id, action: "update", changes: { status: { from: row.status, to: "past_due" }, source: "stripe" } });
+            await recordAuditTrailStandalone(pool, { entityType: "Billing", entityId: row.id, action: "update", changes: { status: { from: row.status, to: "past_due" }, source: "stripe" } });
           }
         }
         break;
@@ -225,6 +224,6 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<{ handled:
     await db.delete(billingEvents).where(eq(billingEvents.stripeEventId, event.id));
     throw err;
   }
-  if (tenantId) await db.update(billingEvents).set({ tenantId }).where(eq(billingEvents.stripeEventId, event.id));
+  if (tenantId) await db.update(billingEvents).set({ }).where(eq(billingEvents.stripeEventId, event.id));
   return { handled, duplicate: false };
 }

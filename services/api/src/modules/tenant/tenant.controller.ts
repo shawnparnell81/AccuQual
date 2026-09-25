@@ -37,7 +37,7 @@ export const updateBrandingHandler = asyncHandler(async (req: Request, res: Resp
   const fieldsChanged = Object.keys(body);
 
   const [updated] = await req.db!.update(tenants).set({ branding: merged }).where(eq(tenants.id, req.tenantId!)).returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Tenant", entityId: req.tenantId!, action: "update", changes: { fieldsChanged }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "Tenant", entityId: req.tenantId!, action: "update", changes: { fieldsChanged }, performedBy: req.user?.id });
   res.json(updated!.branding);
 });
 
@@ -91,7 +91,6 @@ export const updateProfileHandler = asyncHandler(async (req: Request, res: Respo
 
   const [updated] = await req.db!.update(tenants).set(patch).where(eq(tenants.id, req.tenantId!)).returning();
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "Tenant",
     entityId: req.tenantId!,
     action: "update",
@@ -171,7 +170,6 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
 
   // Never log apiKey itself, encrypted or not — only what changed and to what non-secret values.
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "Tenant",
     entityId: req.tenantId!,
     action: "update",
@@ -222,7 +220,6 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
  */
 export const getAiUsageHandler = asyncHandler(async (req: Request, res: Response) => {
   const tenant = await loadTenant(req);
-  const tenantId = req.tenantId!;
 
   const startOfMonth = new Date();
   startOfMonth.setUTCDate(1);
@@ -237,7 +234,7 @@ export const getAiUsageHandler = asyncHandler(async (req: Request, res: Response
       tokens: sql<number>`COALESCE((${auditTrail.changes}->>'tokens')::int, 0)`,
     })
     .from(auditTrail)
-    .where(and(eq(auditTrail.tenantId, tenantId), inArray(auditTrail.entityType, ["AiAssistantMessage", "AiSuggestion"]), gte(auditTrail.createdAt, windowStart)));
+    .where(and(inArray(auditTrail.entityType, ["AiAssistantMessage", "AiSuggestion"]), gte(auditTrail.createdAt, windowStart)));
 
   const currentMonthTokens = rows.filter((r) => (r.createdAt ?? new Date(0)) >= startOfMonth).reduce((sum, r) => sum + r.tokens, 0);
 
@@ -302,7 +299,6 @@ export const updateSecurityHandler = asyncHandler(async (req: Request, res: Resp
   const { mfaPolicy } = req.body as { mfaPolicy: "optional" | "admins" | "all" };
   await req.db!.update(tenants).set({ mfaPolicy }).where(eq(tenants.id, req.tenantId!));
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "Tenant",
     entityId: req.tenantId!,
     action: "update",

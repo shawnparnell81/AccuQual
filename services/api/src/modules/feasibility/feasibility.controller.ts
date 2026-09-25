@@ -49,14 +49,14 @@ function assertSignoffFieldsAllowed(req: Request, body: Record<string, unknown>)
 }
 
 async function loadFeasibility(req: Request, id: number) {
-  const [row] = await req.db!.select().from(feasibilityReviews).where(and(eq(feasibilityReviews.id, id), eq(feasibilityReviews.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(feasibilityReviews).where(and(eq(feasibilityReviews.id, id)));
   if (!row) throw AppError.notFound("Feasibility review");
   return row;
 }
 
 export const listFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
   const { status, customerId } = req.query as Record<string, string | undefined>;
-  const conditions = [eq(feasibilityReviews.tenantId, req.tenantId!)];
+  const conditions = [];
   if (status) conditions.push(eq(feasibilityReviews.status, status));
   if (customerId) conditions.push(eq(feasibilityReviews.customerId, Number(customerId)));
 
@@ -85,9 +85,9 @@ export const createFeasibilityHandler = asyncHandler(async (req: Request, res: R
 
   const [created] = await req
     .db!.insert(feasibilityReviews)
-    .values({ ...areaDefaults, ...req.body, ownerId, tenantId: req.tenantId!, createdBy: req.user?.id })
+    .values({ ...areaDefaults, ...req.body, ownerId, createdBy: req.user?.id })
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
@@ -107,7 +107,7 @@ export const updateFeasibilityHandler = asyncHandler(async (req: Request, res: R
     .where(eq(feasibilityReviews.id, record.id))
     .returning();
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: record.id, action: "update", changes: { fieldsChanged: Object.keys(req.body) }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: record.id, action: "update", changes: { fieldsChanged: Object.keys(req.body) }, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -135,7 +135,7 @@ export const updateSignoffHandler = asyncHandler(async (req: Request, res: Respo
   }
 
   const [updated] = await req.db!.update(feasibilityReviews).set(patch).where(eq(feasibilityReviews.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: record.id, action: "update", changes: { subAction: "signoff", fieldsChanged: Object.keys(req.body) }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: record.id, action: "update", changes: { subAction: "signoff", fieldsChanged: Object.keys(req.body) }, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -156,16 +156,15 @@ export const finalizeFeasibilityHandler = asyncHandler(async (req: Request, res:
   const provided = new Set((record.providedDocuments ?? []).map((doc) => String(doc)));
   const missing = required.filter((doc) => !provided.has(doc));
   if (missing.length > 0) {
-    const labels = await requiredDocumentDisplayNames(req.db!, req.tenantId!, missing);
+    const labels = await requiredDocumentDisplayNames(req.db!, missing);
     throw AppError.badRequest(`Cannot finalize — missing required document(s): ${labels.join(", ")}. Mark them provided first.`);
   }
 
   const [updated] = await req.db!.update(feasibilityReviews).set({ status: "final", finalizedAt: new Date(), updatedAt: new Date() }).where(eq(feasibilityReviews.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: record.id, action: "status_change", changes: { oldStatus: record.status, newStatus: "final" }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: record.id, action: "status_change", changes: { oldStatus: record.status, newStatus: "final" }, performedBy: req.user?.id });
 
   if (settings.notificationsEnabled) {
     await notifyDepartment(req.db!, {
-      tenantId: req.tenantId!,
       department: "quality",
       subject: `Feasibility Review #${record.id} finalized`,
       body: `"${record.partProjectName ?? record.customerName ?? "Untitled"}" has been finalized.`,
@@ -182,7 +181,7 @@ export const deleteFeasibilityHandler = asyncHandler(async (req: Request, res: R
   assertDepartment(req, ["engineering"]);
   const record = await loadFeasibility(req, Number(req.params.id));
 
-  await req.db!.delete(feasibilityReviews).where(and(eq(feasibilityReviews.id, record.id), eq(feasibilityReviews.tenantId, req.tenantId!)));
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: record.id, action: "delete", changes: { partProjectName: record.partProjectName, status: record.status }, performedBy: req.user?.id });
+  await req.db!.delete(feasibilityReviews).where(and(eq(feasibilityReviews.id, record.id)));
+  await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: record.id, action: "delete", changes: { partProjectName: record.partProjectName, status: record.status }, performedBy: req.user?.id });
   res.status(204).send();
 });

@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, type AnyPgColumn } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { documents } from "./documents.js";
 
 /**
@@ -20,7 +19,6 @@ import { documents } from "./documents.js";
  */
 export const documentFolders = pgTable("document_folders", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   name: text("name").notNull(),
   parentId: integer("parent_id").references((): AnyPgColumn => documentFolders.id),
   sortOrder: integer("sort_order").notNull().default(0),

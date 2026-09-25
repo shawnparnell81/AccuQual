@@ -75,7 +75,7 @@ trainingRouter.get(
   view,
   asyncHandler(async (req: Request, res: Response) => {
     const q = req.query as Record<string, string | undefined>;
-    res.json(await service.listSessions(dbOf(req), req.tenantId!, { courseId: optNum(q.courseId), status: q.status }));
+    res.json(await service.listSessions(dbOf(req), { courseId: optNum(q.courseId), status: q.status }));
   }),
 );
 trainingRouter.post(
@@ -83,14 +83,14 @@ trainingRouter.post(
   manageSessions,
   validate(createSessionSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    res.status(201).json(await service.scheduleSession(dbOf(req), req.tenantId!, req.body as service.SessionInput, req.user?.id));
+    res.status(201).json(await service.scheduleSession(dbOf(req), req.body as service.SessionInput, req.user?.id));
   }),
 );
 trainingRouter.get(
   "/session/:id",
   view,
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await service.getSession(dbOf(req), req.tenantId!, idParam(req)));
+    res.json(await service.getSession(dbOf(req), idParam(req)));
   }),
 );
 trainingRouter.patch(
@@ -98,7 +98,7 @@ trainingRouter.patch(
   manageSessions,
   validate(updateSessionSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await service.updateSession(dbOf(req), req.tenantId!, idParam(req), req.body as Parameters<typeof service.updateSession>[3], req.user?.id));
+    res.json(await service.updateSession(dbOf(req), idParam(req), req.body as Parameters<typeof service.updateSession>[3], req.user?.id));
   }),
 );
 trainingRouter.post(
@@ -106,7 +106,7 @@ trainingRouter.post(
   manageSessions,
   validate(completeSessionSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await service.completeSession(dbOf(req), req.tenantId!, idParam(req), req.body as Parameters<typeof service.completeSession>[3], req.user?.id));
+    res.json(await service.completeSession(dbOf(req), idParam(req), req.body as Parameters<typeof service.completeSession>[3], req.user?.id));
   }),
 );
 trainingRouter.post(
@@ -114,7 +114,7 @@ trainingRouter.post(
   manageSessions,
   validate(cancelSessionSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await service.cancelSession(dbOf(req), req.tenantId!, idParam(req), (req.body as { reason: string }).reason, req.user?.id));
+    res.json(await service.cancelSession(dbOf(req), idParam(req), (req.body as { reason: string }).reason, req.user?.id));
   }),
 );
 
@@ -124,7 +124,7 @@ trainingRouter.get(
   view,
   asyncHandler(async (req: Request, res: Response) => {
     const q = req.query as Record<string, string | undefined>;
-    res.json(await service.listCompetencies(dbOf(req), req.tenantId!, { userId: optNum(q.userId), courseId: optNum(q.courseId), status: q.status }));
+    res.json(await service.listCompetencies(dbOf(req), { userId: optNum(q.userId), courseId: optNum(q.courseId), status: q.status }));
   }),
 );
 trainingRouter.post(
@@ -132,7 +132,7 @@ trainingRouter.post(
   evaluate,
   validate(createCompetencySchema),
   asyncHandler(async (req: Request, res: Response) => {
-    res.status(201).json(await service.createCompetency(dbOf(req), req.tenantId!, req.body as Parameters<typeof service.createCompetency>[2], actorOf(req)));
+    res.status(201).json(await service.createCompetency(dbOf(req), req.body as Parameters<typeof service.createCompetency>[2], actorOf(req)));
   }),
 );
 trainingRouter.post(
@@ -140,7 +140,7 @@ trainingRouter.post(
   evaluate,
   validate(decideCompetencySchema),
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await service.decideCompetency(dbOf(req), req.tenantId!, idParam(req), req.body as service.DecideInput, actorOf(req)));
+    res.json(await service.decideCompetency(dbOf(req), idParam(req), req.body as service.DecideInput, actorOf(req)));
   }),
 );
 
@@ -150,21 +150,21 @@ trainingRouter.get(
   view,
   asyncHandler(async (req: Request, res: Response) => {
     const q = req.query as Record<string, string | undefined>;
-    res.json(await service.trainingStatus(dbOf(req), req.tenantId!, { courseId: optNum(q.courseId), userId: optNum(q.userId), department: q.department, status: q.status }));
+    res.json(await service.trainingStatus(dbOf(req), { courseId: optNum(q.courseId), userId: optNum(q.userId), department: q.department, status: q.status }));
   }),
 );
 trainingRouter.get(
   "/attention",
   view,
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await service.attention(dbOf(req), req.tenantId!));
+    res.json(await service.attention(dbOf(req)));
   }),
 );
 trainingRouter.post(
   "/notify-due",
   manageSessions,
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await service.notifyDue(dbOf(req), req.tenantId!));
+    res.json(await service.notifyDue(dbOf(req)));
   }),
 );
 
@@ -181,7 +181,7 @@ trainingRouter.post(
   manageSessions,
   validate(assignRequiredSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    res.status(201).json(await service.assignRequired(dbOf(req), req.tenantId!, idParam(req), { dueAt: (req.body as { dueAt?: Date }).dueAt }, req.user?.id));
+    res.status(201).json(await service.assignRequired(dbOf(req), idParam(req), { dueAt: (req.body as { dueAt?: Date }).dueAt }, req.user?.id));
   }),
 );
 trainingRouter.post("/:id/complete", manageSessions, completeHandler); // retired: answers 410 with the replacement

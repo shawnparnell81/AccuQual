@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 import { audits, auditItems } from "./audits.js";
 
@@ -14,7 +13,6 @@ import { audits, auditItems } from "./audits.js";
  */
 export const discrepancyInvestigations = pgTable("discrepancy_investigations", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   title: text("title").notNull(),
   description: text("description"),
   severity: text("severity"), // minor, major, critical

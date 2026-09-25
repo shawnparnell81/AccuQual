@@ -46,7 +46,7 @@ function plantLimit(siteId: number | null | undefined, column: unknown) {
   return eq(column as never, siteId);
 }
 
-export async function getItemsForUser(db: TenantDb, tenantId: number, userId: number, siteId?: number | null): Promise<CalendarItem[]> {
+export async function getItemsForUser(db: TenantDb, userId: number, siteId?: number | null): Promise<CalendarItem[]> {
   const monthStart = startOfMonth();
 
   const [myNcrs, myCapas, myAudits, myTraining, myDocuments, myCrars] = await Promise.all([
@@ -55,11 +55,7 @@ export async function getItemsForUser(db: TenantDb, tenantId: number, userId: nu
       .from(ncr)
       .where(
         and(
-          eq(ncr.tenantId, tenantId),
-          plantLimit(siteId, ncr.siteId),
-          eq(ncr.assignedTo, userId),
-          eq(ncr.isDeleted, false),
-          or(ne(ncr.status, "closed"), gte(ncr.closedAt, monthStart)),
+          plantLimit(siteId, ncr.siteId), eq(ncr.assignedTo, userId), eq(ncr.isDeleted, false), or(ne(ncr.status, "closed"), gte(ncr.closedAt, monthStart)),
         ),
       ),
     db
@@ -67,10 +63,7 @@ export async function getItemsForUser(db: TenantDb, tenantId: number, userId: nu
       .from(capa)
       .where(
         and(
-          eq(capa.tenantId, tenantId),
-          plantLimit(siteId, capa.siteId),
-          or(eq(capa.ownerId, userId), eq(capa.verifiedBy, userId)),
-          or(ne(capa.status, "closed"), gte(capa.closedAt, monthStart)),
+          plantLimit(siteId, capa.siteId), or(eq(capa.ownerId, userId), eq(capa.verifiedBy, userId)), or(ne(capa.status, "closed"), gte(capa.closedAt, monthStart)),
         ),
       ),
     db
@@ -78,10 +71,7 @@ export async function getItemsForUser(db: TenantDb, tenantId: number, userId: nu
       .from(audits)
       .where(
         and(
-          eq(audits.tenantId, tenantId),
-          plantLimit(siteId, audits.siteId),
-          eq(audits.auditorId, userId),
-          or(ne(audits.status, "completed"), gte(audits.completedAt, monthStart)),
+          plantLimit(siteId, audits.siteId), eq(audits.auditorId, userId), or(ne(audits.status, "completed"), gte(audits.completedAt, monthStart)),
         ),
       ),
     db
@@ -96,9 +86,7 @@ export async function getItemsForUser(db: TenantDb, tenantId: number, userId: nu
       .innerJoin(trainingCourses, eq(trainingAssignments.courseId, trainingCourses.id))
       .where(
         and(
-          eq(trainingAssignments.tenantId, tenantId),
-          eq(trainingAssignments.userId, userId),
-          or(ne(trainingAssignments.status, "completed"), gte(trainingAssignments.completedAt, monthStart)),
+          eq(trainingAssignments.userId, userId), or(ne(trainingAssignments.status, "completed"), gte(trainingAssignments.completedAt, monthStart)),
         ),
       ),
     db
@@ -111,7 +99,7 @@ export async function getItemsForUser(db: TenantDb, tenantId: number, userId: nu
         updatedAt: documents.updatedAt,
       })
       .from(documents)
-      .where(and(eq(documents.tenantId, tenantId), eq(documents.ownerId, userId), eq(documents.isDeleted, false))),
+      .where(and(eq(documents.ownerId, userId), eq(documents.isDeleted, false))),
     db
       .select({
         id: crarClaims.id,
@@ -123,9 +111,7 @@ export async function getItemsForUser(db: TenantDb, tenantId: number, userId: nu
       .from(crarClaims)
       .where(
         and(
-          eq(crarClaims.tenantId, tenantId),
-          eq(crarClaims.createdByUserId, userId),
-          or(ne(crarClaims.status, "completed"), gte(crarClaims.updatedAt, monthStart)),
+          eq(crarClaims.createdByUserId, userId), or(ne(crarClaims.status, "completed"), gte(crarClaims.updatedAt, monthStart)),
         ),
       ),
   ]);
@@ -222,6 +208,6 @@ export async function getItemsForUser(db: TenantDb, tenantId: number, userId: nu
 }
 
 export const getCalendarItems = asyncHandler(async (req: Request, res: Response) => {
-  const items = await getItemsForUser(req.db!, req.tenantId!, req.user!.id, req.siteId ?? null);
+  const items = await getItemsForUser(req.db!, req.user!.id, req.siteId ?? null);
   res.json(items);
 });

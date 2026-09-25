@@ -20,21 +20,21 @@ import { mergePdfFields } from "./pdf-merger.js";
  * without needing a one-off backfill script per tenant or a second list to
  * keep in sync with platform.service.ts's own.
  */
-export async function loadTemplate(db: TenantDb, tenantId: number, formType: string) {
+export async function loadTemplate(db: TenantDb, formType: string) {
   const [template] = await db
     .select()
     .from(formTemplates)
-    .where(and(eq(formTemplates.tenantId, tenantId), eq(formTemplates.formType, formType)))
+    .where(and(eq(formTemplates.formType, formType)))
     .orderBy(desc(formTemplates.id)); // prefer a tenant-uploaded custom template over the seeded default if both exist
   if (template) return template;
 
-  const [created] = await db.insert(formTemplates).values({ tenantId, formType, pdfPath: `/templates/defaults/${formType}.pdf`, fieldMap: {}, isDefault: "true" }).returning();
+  const [created] = await db.insert(formTemplates).values({ formType, pdfPath: `/templates/defaults/${formType}.pdf`, fieldMap: {}, isDefault: "true" }).returning();
   return created!;
 }
 
 /** Loads the current (highest-version) form_data row for an entity, or null if none exists yet. */
-export async function loadData(db: TenantDb, tenantId: number, formType: string, entityId?: number) {
-  const conditions = [eq(formData.tenantId, tenantId), eq(formData.formType, formType)];
+export async function loadData(db: TenantDb, formType: string, entityId?: number) {
+  const conditions = [eq(formData.formType, formType)];
   if (entityId !== undefined) conditions.push(eq(formData.entityId, entityId));
 
   const [row] = await db.select().from(formData).where(and(...conditions)).orderBy(desc(formData.id));
@@ -50,14 +50,14 @@ interface SaveInput {
 }
 
 /** Auto-save path: updates the current row in place without snapshotting a version. */
-export async function saveData(db: TenantDb, tenantId: number, input: SaveInput) {
-  const existing = await loadData(db, tenantId, input.formType, input.entityId);
+export async function saveData(db: TenantDb, input: SaveInput) {
+  const existing = await loadData(db, input.formType, input.entityId);
 
   if (existing) {
     const [updated] = await db
       .update(formData)
       .set({ data: input.data, updatedAt: new Date() })
-      .where(and(eq(formData.id, existing.id), eq(formData.tenantId, tenantId)))
+      .where(and(eq(formData.id, existing.id)))
       .returning();
     return updated;
   }
@@ -65,7 +65,6 @@ export async function saveData(db: TenantDb, tenantId: number, input: SaveInput)
   const [created] = await db
     .insert(formData)
     .values({
-      tenantId,
       formType: input.formType,
       entityType: input.entityType,
       entityId: input.entityId,
@@ -78,12 +77,12 @@ export async function saveData(db: TenantDb, tenantId: number, input: SaveInput)
 }
 
 /** Deliberate snapshot: bumps `version` and writes an immutable form_versions row. */
-export async function createVersion(db: TenantDb, tenantId: number, formId: number, userId?: number) {
-  const [current] = await db.select().from(formData).where(and(eq(formData.id, formId), eq(formData.tenantId, tenantId)));
+export async function createVersion(db: TenantDb, formId: number, userId?: number) {
+  const [current] = await db.select().from(formData).where(and(eq(formData.id, formId)));
   if (!current) throw AppError.notFound("Form");
 
   const nextVersion = current.version + 1;
-  await db.insert(formVersions).values({ tenantId, formId, version: current.version, data: current.data, createdBy: userId });
+  await db.insert(formVersions).values({ formId, version: current.version, data: current.data, createdBy: userId });
   const [updated] = await db.update(formData).set({ version: nextVersion, updatedAt: new Date() }).where(eq(formData.id, formId)).returning();
   return updated;
 }
@@ -100,17 +99,17 @@ export async function createVersion(db: TenantDb, tenantId: number, formId: numb
  * and bump the version counter. Not built here — this finding is
  * documentation-only per its own scope.
  */
-export async function listVersions(db: TenantDb, tenantId: number, formId: number) {
+export async function listVersions(db: TenantDb, formId: number) {
   return db
     .select()
     .from(formVersions)
-    .where(and(eq(formVersions.formId, formId), eq(formVersions.tenantId, tenantId)))
+    .where(and(eq(formVersions.formId, formId)))
     .orderBy(desc(formVersions.version));
 }
 
-export async function exportPdf(db: TenantDb, tenantId: number, formType: string, entityId?: number) {
-  const template = await loadTemplate(db, tenantId, formType);
-  const current = await loadData(db, tenantId, formType, entityId);
+export async function exportPdf(db: TenantDb, formType: string, entityId?: number) {
+  const template = await loadTemplate(db, formType);
+  const current = await loadData(db, formType, entityId);
   if (!current) throw AppError.notFound("Form data");
 
   const pdfBytes = await mergePdfFields(template, current.data);

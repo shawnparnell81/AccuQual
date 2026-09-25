@@ -26,7 +26,7 @@ const logger = winston.createLogger({
  */
 export async function handleJob(fields: Record<string, string>) {
   if (fields.job === "embed" && fields.tenantId && fields.entityType && fields.entityId && fields.content) {
-    await embedAndStore(db, Number(fields.tenantId), fields.entityType, Number(fields.entityId), fields.content);
+    await embedAndStore(db, fields.entityType, Number(fields.entityId), fields.content);
     logger.info(`Embedded ${fields.entityType}#${fields.entityId} (tenant ${fields.tenantId})`);
     return;
   }

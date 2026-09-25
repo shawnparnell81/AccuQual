@@ -1,4 +1,4 @@
-export * from "./tenants.js";
+export * from "./company.js";
 export * from "./roles.js";
 export * from "./users.js";
 export * from "./sites.js";
@@ -57,4 +57,3 @@ export * from "./auditRowChanges.js";
 export * from "./mfaRecoveryCodes.js";
 export * from "./sso.js";
 export * from "./versioning.js";
-export * from "./billing.js";

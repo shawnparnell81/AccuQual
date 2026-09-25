@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, numeric, jsonb } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 import { customers } from "./customers.js";
 import { inventoryItems } from "./inventory.js";
@@ -33,7 +32,6 @@ import { workOrders } from "./workOrders.js";
  */
 export const warrantyClaims = pgTable("warranty_claims", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   claimNumber: text("claim_number").notNull().unique(),
   status: text("status").notNull().default("new"),
   customerId: integer("customer_id").references(() => customers.id),
@@ -75,7 +73,6 @@ export const warrantyClaims = pgTable("warranty_claims", {
 /** One row per cost entry (parts/labor/shipping/replacement unit/etc.) — warrantyActualCost on the claim is the running sum, kept in sync by warranty.controller.ts, not computed on read. */
 export const warrantyClaimCosts = pgTable("warranty_claim_costs", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   claimId: integer("claim_id").references(() => warrantyClaims.id).notNull(),
   costType: text("cost_type").notNull(), // parts | labor | shipping | replacement_unit | other
   amount: numeric("amount").notNull(),
@@ -96,7 +93,6 @@ export const warrantyClaimCosts = pgTable("warranty_claim_costs", {
  */
 export const warrantyClaimWorkflow = pgTable("warranty_claim_workflow", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   claimId: integer("claim_id").references(() => warrantyClaims.id).notNull(),
   fromStatus: text("from_status"),
   toStatus: text("to_status").notNull(),

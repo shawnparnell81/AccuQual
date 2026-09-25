@@ -22,8 +22,7 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
       lockedUntil: users.lockedUntil,
       createdAt: users.createdAt,
     })
-    .from(users)
-    .where(eq(users.tenantId, req.tenantId!));
+    .from(users);
   res.json(rows);
 });
 
@@ -39,7 +38,7 @@ export const getUser = asyncHandler(async (req: Request, res: Response) => {
       createdAt: users.createdAt,
     })
     .from(users)
-    .where(and(eq(users.id, Number(req.params.id)), eq(users.tenantId, req.tenantId!)));
+    .where(and(eq(users.id, Number(req.params.id))));
   if (!row) throw AppError.notFound("User");
   res.json(row);
 });
@@ -48,14 +47,14 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   const { email, password, name, roleId, department } = req.body;
   await assertPasswordAcceptable(password, { email, name });
   const passwordHash = await bcrypt.hash(password, 10);
-  const [created] = await req.db!.insert(users).values({ email, passwordHash, name, roleId, department, tenantId: req.tenantId!, passwordChangedAt: new Date() }).returning();
+  const [created] = await req.db!.insert(users).values({ email, passwordHash, name, roleId, department, passwordChangedAt: new Date() }).returning();
   if (!created) throw new AppError("Failed to create user", 500);
   const { passwordHash: _omit, ...safe } = created;
   res.status(201).json(safe);
 });
 
 export const updateUser = asyncHandler(async (req: Request, res: Response) => {
-  const [before] = await req.db!.select({ roleId: users.roleId, department: users.department, isActive: users.isActive }).from(users).where(and(eq(users.id, Number(req.params.id)), eq(users.tenantId, req.tenantId!)));
+  const [before] = await req.db!.select({ roleId: users.roleId, department: users.department, isActive: users.isActive }).from(users).where(and(eq(users.id, Number(req.params.id))));
   if (!before) throw AppError.notFound("User");
   // Disabling a user, or changing what they may do, ends their current sessions: bumping token_version makes requireAuth refuse their access token on the very next request and blocks every refresh token. They sign in again and get the new permissions.
   const body = req.body as { roleId?: number | null; department?: string | null; isActive?: boolean };
@@ -67,7 +66,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const [updated] = await req
     .db!.update(users)
     .set({ ...req.body, ...(revokeSessions ? { tokenVersion: sql`${users.tokenVersion} + 1` } : {}), updatedAt: new Date() })
-    .where(and(eq(users.id, Number(req.params.id)), eq(users.tenantId, req.tenantId!)))
+    .where(and(eq(users.id, Number(req.params.id))))
     .returning();
   if (!updated) throw AppError.notFound("User");
 
@@ -76,7 +75,6 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   // a Role Change's roleId path, so this one change closes both gaps at
   // once (see accuqual-workflow-architecture.md's audit-gap finding).
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "User",
     entityId: updated.id,
     action: "update",
@@ -114,7 +112,6 @@ export const updateMyTheme = asyncHandler(async (req: Request, res: Response) =>
   if (!updated) throw AppError.notFound("User");
 
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "User",
     entityId: req.user!.id,
     action: "update",
@@ -155,7 +152,6 @@ export const updateMySavedViews = asyncHandler(async (req: Request, res: Respons
   if (!updated) throw AppError.notFound("User");
 
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "User",
     entityId: req.user!.id,
     action: "update",
@@ -169,11 +165,11 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   const [updated] = await req
     .db!.update(users)
     .set({ isActive: false, tokenVersion: sql`${users.tokenVersion} + 1` })
-    .where(and(eq(users.id, Number(req.params.id)), eq(users.tenantId, req.tenantId!)))
+    .where(and(eq(users.id, Number(req.params.id))))
     .returning();
   if (!updated) throw AppError.notFound("User");
   // Deactivation is an access-removal event an auditor asks about — it used to leave no entry at all.
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "User", entityId: updated.id, action: "status_change", changes: { action: "deactivate", sessionsRevoked: true }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "User", entityId: updated.id, action: "status_change", changes: { action: "deactivate", sessionsRevoked: true }, performedBy: req.user?.id });
   await revokeRefreshTokenRows(updated.id);
   res.status(204).send();
 });
@@ -183,20 +179,20 @@ export const unlockUser = asyncHandler(async (req: Request, res: Response) => {
   const [updated] = await req
     .db!.update(users)
     .set({ lockedUntil: null, failedLoginCount: 0, firstFailedLoginAt: null })
-    .where(and(eq(users.id, Number(req.params.id)), eq(users.tenantId, req.tenantId!)))
+    .where(and(eq(users.id, Number(req.params.id))))
     .returning({ id: users.id });
   if (!updated) throw AppError.notFound("User");
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "User", entityId: updated.id, action: "status_change", changes: { action: "account_unlocked" }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "User", entityId: updated.id, action: "status_change", changes: { action: "account_unlocked" }, performedBy: req.user?.id });
   res.status(204).send();
 });
 
 /** Lost phone and no recovery codes: an admin clears the user's second factor. Their sessions end, and they re-enroll at next sign-in if policy requires it. */
 export const resetUserMfa = asyncHandler(async (req: Request, res: Response) => {
-  const [target] = await req.db!.select({ id: users.id, mfaEnabled: users.mfaEnabled }).from(users).where(and(eq(users.id, Number(req.params.id)), eq(users.tenantId, req.tenantId!)));
+  const [target] = await req.db!.select({ id: users.id, mfaEnabled: users.mfaEnabled }).from(users).where(and(eq(users.id, Number(req.params.id))));
   if (!target) throw AppError.notFound("User");
   await clearMfa(target.id);
   await req.db!.update(users).set({ tokenVersion: sql`${users.tokenVersion} + 1` }).where(eq(users.id, target.id));
   await revokeRefreshTokenRows(target.id);
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "User", entityId: target.id, action: "status_change", changes: { action: "mfa_reset_by_admin", hadMfa: target.mfaEnabled }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "User", entityId: target.id, action: "status_change", changes: { action: "mfa_reset_by_admin", hadMfa: target.mfaEnabled }, performedBy: req.user?.id });
   res.status(204).send();
 });

@@ -47,22 +47,20 @@ export async function getPreset(db: TenantDb, tenantId: number, id: number): Pro
 }
 
 /** Only a real, tenant-owned row — used before any mutation (global presets are never edited/deleted/activated directly, only cloned). */
-async function getOwnedPreset(db: TenantDb, tenantId: number, id: number): Promise<ErpConnectorPreset> {
-  const [row] = await db.select().from(erpConnectorPresets).where(and(eq(erpConnectorPresets.id, id), eq(erpConnectorPresets.tenantId, tenantId), eq(erpConnectorPresets.isDeleted, false)));
+async function getOwnedPreset(db: TenantDb, id: number): Promise<ErpConnectorPreset> {
+  const [row] = await db.select().from(erpConnectorPresets).where(and(eq(erpConnectorPresets.id, id), eq(erpConnectorPresets.isDeleted, false)));
   if (!row) throw AppError.notFound("ERP preset");
   return row;
 }
 
 export async function createPreset(
   db: TenantDb,
-  tenantId: number,
   input: { vendor: string; module: string; name: string; description?: string; direction: string; mappingConfig?: ErpPresetMappingConfig },
   createdBy: number | undefined
 ): Promise<ErpConnectorPreset> {
   const [created] = await db
     .insert(erpConnectorPresets)
     .values({
-      tenantId,
       vendor: input.vendor,
       module: input.module,
       name: input.name,
@@ -74,7 +72,7 @@ export async function createPreset(
       createdBy,
     })
     .returning();
-  await recordAuditTrail(db, { tenantId, entityType: "ErpConnectorPreset", entityId: created!.id, action: "create", performedBy: createdBy });
+  await recordAuditTrail(db, { entityType: "ErpConnectorPreset", entityId: created!.id, action: "create", performedBy: createdBy });
   return created!;
 }
 
@@ -88,7 +86,6 @@ export async function clonePreset(db: TenantDb, tenantId: number, sourceId: numb
   const source = await getPreset(db, tenantId, sourceId);
   return createPreset(
     db,
-    tenantId,
     { vendor: source.vendor, module: source.module, name: `${source.name} (Custom)`, description: source.description ?? undefined, direction: source.direction, mappingConfig: source.mappingConfig },
     createdBy
   );
@@ -107,7 +104,7 @@ export async function updatePreset(
   patch: { name?: string; description?: string; direction?: string; mappingConfig?: ErpPresetMappingConfig },
   updatedBy: number | undefined
 ): Promise<ErpConnectorPreset> {
-  const existing = await getOwnedPreset(db, tenantId, id);
+  const existing = await getOwnedPreset(db, id);
   const mappingChanged = patch.mappingConfig !== undefined && JSON.stringify(patch.mappingConfig) !== JSON.stringify(existing.mappingConfig);
 
   const values: Record<string, unknown> = { ...patch, updatedAt: new Date() };
@@ -117,9 +114,8 @@ export async function updatePreset(
     values.versionHistory = [...(existing.versionHistory ?? []), historyEntry].slice(-VERSION_HISTORY_CAP);
   }
 
-  const [updated] = await db.update(erpConnectorPresets).set(values).where(and(eq(erpConnectorPresets.id, id), eq(erpConnectorPresets.tenantId, tenantId))).returning();
+  const [updated] = await db.update(erpConnectorPresets).set(values).where(and(eq(erpConnectorPresets.id, id))).returning();
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "ErpConnectorPreset",
     entityId: id,
     action: "update",
@@ -131,9 +127,9 @@ export async function updatePreset(
 }
 
 export async function softDeletePreset(db: TenantDb, tenantId: number, id: number, performedBy: number | undefined): Promise<void> {
-  const existing = await getOwnedPreset(db, tenantId, id);
-  await db.update(erpConnectorPresets).set({ isDeleted: true, isActive: false, updatedAt: new Date() }).where(and(eq(erpConnectorPresets.id, id), eq(erpConnectorPresets.tenantId, tenantId)));
-  await recordAuditTrail(db, { tenantId, entityType: "ErpConnectorPreset", entityId: id, action: "delete", performedBy });
+  const existing = await getOwnedPreset(db, id);
+  await db.update(erpConnectorPresets).set({ isDeleted: true, isActive: false, updatedAt: new Date() }).where(and(eq(erpConnectorPresets.id, id)));
+  await recordAuditTrail(db, { entityType: "ErpConnectorPreset", entityId: id, action: "delete", performedBy });
   invalidatePresetCache(tenantId, existing.module);
 }
 
@@ -152,20 +148,20 @@ export async function softDeletePreset(db: TenantDb, tenantId: number, id: numbe
  * no matching definition to trigger — not a no-op by design.
  */
 export async function activatePreset(db: TenantDb, tenantId: number, id: number, performedBy: number | undefined): Promise<ErpConnectorPreset> {
-  const target = await getOwnedPreset(db, tenantId, id);
+  const target = await getOwnedPreset(db, id);
   await db
     .update(erpConnectorPresets)
     .set({ isActive: false })
-    .where(and(eq(erpConnectorPresets.tenantId, tenantId), eq(erpConnectorPresets.module, target.module), eq(erpConnectorPresets.isActive, true)));
-  await db.update(erpConnectorPresets).set({ isActive: true }).where(and(eq(erpConnectorPresets.id, id), eq(erpConnectorPresets.tenantId, tenantId)));
-  await recordAuditTrail(db, { tenantId, entityType: "ErpConnectorPreset", entityId: id, action: "status_change", changes: { subAction: "activated", module: target.module }, performedBy });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: target.module, event: "erp_preset_activated", entityId: id });
+    .where(and(eq(erpConnectorPresets.module, target.module), eq(erpConnectorPresets.isActive, true)));
+  await db.update(erpConnectorPresets).set({ isActive: true }).where(and(eq(erpConnectorPresets.id, id)));
+  await recordAuditTrail(db, { entityType: "ErpConnectorPreset", entityId: id, action: "status_change", changes: { subAction: "activated", module: target.module }, performedBy });
+  await publishEvent(WORKFLOW_STREAM, { module: target.module, event: "erp_preset_activated", entityId: id });
   invalidatePresetCache(tenantId, target.module);
   return { ...target, isActive: true };
 }
 
-export async function getActivePreset(db: TenantDb, tenantId: number, module: string): Promise<ErpConnectorPreset | null> {
-  const [row] = await db.select().from(erpConnectorPresets).where(and(eq(erpConnectorPresets.tenantId, tenantId), eq(erpConnectorPresets.module, module), eq(erpConnectorPresets.isActive, true), eq(erpConnectorPresets.isDeleted, false)));
+export async function getActivePreset(db: TenantDb, module: string): Promise<ErpConnectorPreset | null> {
+  const [row] = await db.select().from(erpConnectorPresets).where(and(eq(erpConnectorPresets.module, module), eq(erpConnectorPresets.isActive, true), eq(erpConnectorPresets.isDeleted, false)));
   return row ?? null;
 }
 
@@ -176,7 +172,7 @@ export async function getActivePresetCached(db: TenantDb, tenantId: number, modu
   if (cached && Date.now() - cached.cachedAt < ACTIVE_PRESET_CACHE_TTL_MS) {
     return cached.preset;
   }
-  const preset = await getActivePreset(db, tenantId, module);
+  const preset = await getActivePreset(db, module);
   activePresetCache.set(key, { preset, cachedAt: Date.now() });
   return preset;
 }

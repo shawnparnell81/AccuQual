@@ -23,7 +23,6 @@ export interface ExportOptions {
 }
 
 export interface ExportActor {
-  tenantId: number;
   userId: number;
   email: string;
 }

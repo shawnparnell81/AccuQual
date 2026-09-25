@@ -51,7 +51,6 @@ export async function maybeAutoCreateNcr(
   const [created] = await db
     .insert(ncr)
     .values({
-      tenantId,
       title,
       description,
       severity: disposition === "rejected" ? "high" : "medium",
@@ -63,14 +62,13 @@ export async function maybeAutoCreateNcr(
     .returning();
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "NCR",
     entityId: created!.id,
     action: "create",
     changes: { message: "NCR auto-created from Receiving", receivingLineItemId: line.id, disposition, supplierId },
     performedBy,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "ncr", event: "auto_created_from_receiving", entityId: created!.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "ncr", event: "auto_created_from_receiving", entityId: created!.id });
 
   return created!;
 }
@@ -98,10 +96,10 @@ export async function checkCapaEscalation(db: TenantDb, tenantId: number, suppli
   const existingOpenEscalation = await db
     .select({ id: capa.id })
     .from(capa)
-    .where(and(eq(capa.tenantId, tenantId), eq(capa.supplierId, supplierId), eq(capa.escalationSource, "receiving_recurrence"), inArray(capa.status, ["open", "in_progress", "verifying"])));
+    .where(and(eq(capa.supplierId, supplierId), eq(capa.escalationSource, "receiving_recurrence"), inArray(capa.status, ["open", "in_progress", "verifying"])));
   if (existingOpenEscalation.length > 0) return;
 
-  const supplierPoIds = await db.select({ id: erpPurchaseOrders.id }).from(erpPurchaseOrders).where(and(eq(erpPurchaseOrders.tenantId, tenantId), eq(erpPurchaseOrders.supplierId, supplierId)));
+  const supplierPoIds = await db.select({ id: erpPurchaseOrders.id }).from(erpPurchaseOrders).where(and(eq(erpPurchaseOrders.supplierId, supplierId)));
   if (supplierPoIds.length === 0) return;
   const poLineIds = await db
     .select({ id: erpPoLineItems.id })
@@ -125,7 +123,6 @@ export async function checkCapaEscalation(db: TenantDb, tenantId: number, suppli
   const [created] = await db
     .insert(capa)
     .values({
-      tenantId,
       ncrId: triggeringNcrId,
       rootCause: `Recurring receiving rejections/quarantines from this supplier — ${withinWindow} qualifying event(s) in the last ${windowDays} days (threshold: ${threshold}).`,
       status: "open",
@@ -136,12 +133,11 @@ export async function checkCapaEscalation(db: TenantDb, tenantId: number, suppli
     .returning();
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "CAPA",
     entityId: created!.id,
     action: "create",
     changes: { message: "CAPA escalation triggered from Receiving", supplierId, occurrences: withinWindow, threshold, windowDays },
     performedBy,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "capa", event: "escalated_from_receiving", entityId: created!.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "capa", event: "escalated_from_receiving", entityId: created!.id });
 }

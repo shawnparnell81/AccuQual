@@ -126,7 +126,7 @@ auditTrailRouter.get(
       }
       const resourceKey = ENTITY_TYPE_TO_RESOURCE[entityType];
       if (resourceKey) {
-        const level = await getUserAccessLevel(req.db! as TenantDb, req.tenantId!, req.user!, resourceKey);
+        const level = await getUserAccessLevel(req.db! as TenantDb, req.user!, resourceKey);
         if (level === "none") throw AppError.forbidden(`No access to '${entityType}' history for your department`);
       }
       // No map entry at all: this entityType's own module has no
@@ -137,9 +137,9 @@ auditTrailRouter.get(
     const rows = await req
       .db!.select()
       .from(auditTrail)
-      .where(and(eq(auditTrail.entityId, Number(req.params.entityId)), eq(auditTrail.tenantId, req.tenantId!)));
+      .where(and(eq(auditTrail.entityId, Number(req.params.entityId))));
     const filtered = rows.filter((r) => r.entityType === entityType);
     const withActors = await withResolvedActors(req.db! as TenantDb, filtered);
-    res.json(await attachFieldChanges(req.db! as TenantDb, req.tenantId!, withActors));
+    res.json(await attachFieldChanges(req.db! as TenantDb, withActors));
   })
 );

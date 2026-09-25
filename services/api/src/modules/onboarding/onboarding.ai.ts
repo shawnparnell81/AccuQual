@@ -48,7 +48,7 @@ export const onboardingAiGenerateHandler = asyncHandler(async (req: Request, res
   const user = { id: req.user!.id, roleName: req.user?.roleName ?? null, department: req.user?.department ?? null };
 
   const moduleKeys = RESOURCE_KEYS;
-  const levels = await Promise.all(moduleKeys.map((key) => getUserAccessLevel(db, tenantId, user, key)));
+  const levels = await Promise.all(moduleKeys.map((key) => getUserAccessLevel(db, user, key)));
   const accessibleModules = moduleKeys
     .filter((_key, i) => levels[i] !== "none")
     .map((key) => ({ moduleKey: key, ...(MODULE_DESCRIPTIONS[key] ?? { label: key, description: "" }) }));
@@ -58,7 +58,7 @@ export const onboardingAiGenerateHandler = asyncHandler(async (req: Request, res
   }
 
   const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!, tenantId);
-  const limitError = await checkUsageLimit(req.db!, tenantId, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const limitError = await checkUsageLimit(req.db!, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
   const isAdmin = user.roleName === "admin" || user.roleName === "platform_admin";
@@ -73,7 +73,6 @@ export const onboardingAiGenerateHandler = asyncHandler(async (req: Request, res
   }
 
   const saved = await recordAiSuggestion(req.db!, {
-    tenantId,
     module: "onboarding",
     pipeline: "onboarding",
     input: inputData,

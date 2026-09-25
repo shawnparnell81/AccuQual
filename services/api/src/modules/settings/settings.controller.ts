@@ -18,12 +18,11 @@ export const getFeasibilitySettingsHandler = asyncHandler(async (req: Request, r
 
 export const updateFeasibilitySettingsHandler = asyncHandler(async (req: Request, res: Response) => {
   const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
-  if (Array.isArray(req.body.requiredDocuments)) await assertAccessibleRequiredDocuments(req.db!, req.tenantId!, req.body.requiredDocuments);
+  if (Array.isArray(req.body.requiredDocuments)) await assertAccessibleRequiredDocuments(req.db!, req.body.requiredDocuments);
   const merged = { ...getFeasibilitySettings(tenant), ...req.body };
 
   const [updated] = await req.db!.update(tenants).set({ feasibilitySettings: merged }).where(eq(tenants.id, req.tenantId!)).returning();
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "FeasibilitySettings",
     entityId: req.tenantId!,
     action: "update",
@@ -48,7 +47,6 @@ export const updateInventorySettingsHandler = asyncHandler(async (req: Request, 
 
   const [updated] = await req.db!.update(tenants).set({ inventorySettings: merged }).where(eq(tenants.id, req.tenantId!)).returning();
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "InventorySettings",
     entityId: req.tenantId!,
     action: "update",
@@ -91,7 +89,6 @@ export const updateErpSyncSettingsHandler = asyncHandler(async (req: Request, re
 
   // Never log the secret itself, encrypted or not — same convention as tenant.controller.ts's updateAiConfigHandler.
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "ErpSyncSettings",
     entityId: req.tenantId!,
     action: "update",
@@ -129,7 +126,6 @@ export const updateSupplierRiskSettingsHandler = asyncHandler(async (req: Reques
 
   const [updated] = await req.db!.update(tenants).set({ supplierRiskWeights: merged }).where(eq(tenants.id, req.tenantId!)).returning();
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "SupplierRiskSettings",
     entityId: req.tenantId!,
     action: "update",
@@ -155,7 +151,6 @@ export const updateReceivingSettingsHandler = asyncHandler(async (req: Request, 
 
   const [updated] = await req.db!.update(tenants).set({ receivingSettings: merged }).where(eq(tenants.id, req.tenantId!)).returning();
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "ReceivingSettings",
     entityId: req.tenantId!,
     action: "update",

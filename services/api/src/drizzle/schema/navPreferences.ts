@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 
 /**
  * Which of the app's built-in nav items a tenant has hidden. Unlike
@@ -17,12 +16,11 @@ export const navHiddenItems = pgTable(
   "nav_hidden_items",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     scope: text("scope").notNull(),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => ({
-    tenantScopeUnique: uniqueIndex("nav_hidden_items_tenant_scope_idx").on(table.tenantId, table.scope),
+    scopeUnique: uniqueIndex("nav_hidden_items_scope_idx").on(table.scope),
   })
 );
 

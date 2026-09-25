@@ -31,23 +31,22 @@ function parseSuggestions(raw: string): unknown {
 export const erpAutomationSuggestionsHandler = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = req.tenantId!;
   const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!, tenantId);
-  const limitError = await checkUsageLimit(req.db!, tenantId, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const limitError = await checkUsageLimit(req.db!, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
   const belowMinItems = await req
     .db!.select({ id: inventoryItems.id, sku: inventoryItems.sku, description: inventoryItems.description, minLevel: inventoryItems.minLevel, defaultSupplierId: inventoryItems.defaultSupplierId })
     .from(inventoryItems)
-    .where(and(eq(inventoryItems.tenantId, tenantId), eq(inventoryItems.state, "below_min")));
+    .where(and(eq(inventoryItems.state, "below_min")));
 
   const riskySuppliers = await req
     .db!.select({ id: suppliers.id, name: suppliers.name, status: suppliers.status, riskLevel: suppliers.riskLevel })
     .from(suppliers)
-    .where(and(eq(suppliers.tenantId, tenantId), inArray(suppliers.status, ["probation", "disqualified", "active"])));
+    .where(and(inArray(suppliers.status, ["probation", "disqualified", "active"])));
 
   const recentAudits = await req
     .db!.select({ id: audits.id, name: audits.name, type: audits.type, status: audits.status })
     .from(audits)
-    .where(eq(audits.tenantId, tenantId))
     .orderBy(desc(audits.id))
     .limit(20);
 
@@ -56,7 +55,6 @@ export const erpAutomationSuggestionsHandler = asyncHandler(async (req: Request,
   const output = parseSuggestions(result.text);
 
   const saved = await recordAiSuggestion(req.db!, {
-    tenantId,
     module: "erp",
     pipeline: "erp_automation",
     input: inputData,

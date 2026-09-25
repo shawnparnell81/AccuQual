@@ -35,11 +35,10 @@ export const uploadAttachmentHandler = asyncHandler(async (req: Request, res: Re
 
   const [created] = await req
     .db!.insert(attachments)
-    .values({ tenantId, entityType, entityId, fileName: file.originalname, filePath: path, mimeType: file.mimetype, fileSize: file.size, uploadedBy: req.user?.id })
+    .values({ entityType, entityId, fileName: file.originalname, filePath: path, mimeType: file.mimetype, fileSize: file.size, uploadedBy: req.user?.id })
     .returning();
 
   await recordAuditTrail(req.db!, {
-    tenantId,
     entityType: "Attachment",
     entityId: created!.id,
     action: "create",
@@ -56,10 +55,9 @@ export const uploadAttachmentHandler = asyncHandler(async (req: Request, res: Re
  * records, not personal silos" spirit as the rest of the app.
  */
 export const listAttachmentsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const { entityType, entityId } = req.query as Record<string, string | undefined>;
 
-  const conditions = [eq(attachments.tenantId, tenantId)];
+  const conditions = [];
   if (entityType && entityId) {
     conditions.push(eq(attachments.entityType, entityType), eq(attachments.entityId, Number(entityId)));
   } else {
@@ -72,7 +70,7 @@ export const listAttachmentsHandler = asyncHandler(async (req: Request, res: Res
 
 export const downloadAttachmentHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const [row] = await req.db!.select().from(attachments).where(and(eq(attachments.id, id), eq(attachments.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(attachments).where(and(eq(attachments.id, id)));
   if (!row) throw AppError.notFound("Attachment");
   if (!existsSync(row.filePath)) throw AppError.notFound("Attachment file");
 
@@ -84,7 +82,7 @@ export const downloadAttachmentHandler = asyncHandler(async (req: Request, res: 
 /** Uploader or admin only — same "you own what you uploaded, or you're an admin" rule as most delete actions in this app. */
 export const deleteAttachmentHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const [row] = await req.db!.select().from(attachments).where(and(eq(attachments.id, id), eq(attachments.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(attachments).where(and(eq(attachments.id, id)));
   if (!row) throw AppError.notFound("Attachment");
 
   const role = req.user?.roleName;
@@ -93,6 +91,6 @@ export const deleteAttachmentHandler = asyncHandler(async (req: Request, res: Re
 
   await req.db!.delete(attachments).where(eq(attachments.id, id));
   await unlink(row.filePath).catch(() => {}); // best-effort — the DB row is the source of truth, a missing file on disk shouldn't block the delete
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Attachment", entityId: id, action: "delete", changes: { fileName: row.fileName }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "Attachment", entityId: id, action: "delete", changes: { fileName: row.fileName }, performedBy: req.user?.id });
   res.status(204).send();
 });

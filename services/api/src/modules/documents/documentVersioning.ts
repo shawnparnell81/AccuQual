@@ -74,75 +74,75 @@ const cleanName = (name: string) => [...path.basename(name)].filter((c) => c.cha
 // ---- Link targets --------------------------------------------------------------------------------------------------------------------------------
 
 /** Names for a set of record ids of one kind, restricted to this organization. Ids that don't exist here are simply absent. */
-export async function resolveTargets(db: TenantDb, tenantId: number, type: LinkType, ids: number[]): Promise<Map<number, string>> {
+export async function resolveTargets(db: TenantDb, type: LinkType, ids: number[]): Promise<Map<number, string>> {
   if (ids.length === 0) return new Map();
   const out = new Map<number, string>();
   switch (type) {
     case "workflow":
-      for (const r of await db.select({ id: workflowDefinitions.id, name: workflowDefinitions.name }).from(workflowDefinitions).where(and(eq(workflowDefinitions.tenantId, tenantId), inArray(workflowDefinitions.id, ids)))) out.set(r.id, r.name);
+      for (const r of await db.select({ id: workflowDefinitions.id, name: workflowDefinitions.name }).from(workflowDefinitions).where(and(inArray(workflowDefinitions.id, ids)))) out.set(r.id, r.name);
       break;
     case "equipment":
-      for (const r of await db.select({ id: equipment.id, name: equipment.name, sn: equipment.serialNumber }).from(equipment).where(and(eq(equipment.tenantId, tenantId), inArray(equipment.id, ids)))) out.set(r.id, r.sn ? `${r.name} (${r.sn})` : r.name);
+      for (const r of await db.select({ id: equipment.id, name: equipment.name, sn: equipment.serialNumber }).from(equipment).where(and(inArray(equipment.id, ids)))) out.set(r.id, r.sn ? `${r.name} (${r.sn})` : r.name);
       break;
     case "supplier":
-      for (const r of await db.select({ id: suppliers.id, name: suppliers.name }).from(suppliers).where(and(eq(suppliers.tenantId, tenantId), inArray(suppliers.id, ids)))) out.set(r.id, r.name);
+      for (const r of await db.select({ id: suppliers.id, name: suppliers.name }).from(suppliers).where(and(inArray(suppliers.id, ids)))) out.set(r.id, r.name);
       break;
     case "ncr":
-      for (const r of await db.select({ id: ncr.id, title: ncr.title }).from(ncr).where(and(eq(ncr.tenantId, tenantId), eq(ncr.isDeleted, false), inArray(ncr.id, ids)))) out.set(r.id, `NCR #${r.id}: ${r.title}`);
+      for (const r of await db.select({ id: ncr.id, title: ncr.title }).from(ncr).where(and(eq(ncr.isDeleted, false), inArray(ncr.id, ids)))) out.set(r.id, `NCR #${r.id}: ${r.title}`);
       break;
     case "capa":
-      for (const r of await db.select({ id: capa.id, ncrId: capa.ncrId }).from(capa).where(and(eq(capa.tenantId, tenantId), inArray(capa.id, ids)))) out.set(r.id, r.ncrId ? `CAPA #${r.id} (NCR #${r.ncrId})` : `CAPA #${r.id}`);
+      for (const r of await db.select({ id: capa.id, ncrId: capa.ncrId }).from(capa).where(and(inArray(capa.id, ids)))) out.set(r.id, r.ncrId ? `CAPA #${r.id} (NCR #${r.ncrId})` : `CAPA #${r.id}`);
       break;
     case "audit":
-      for (const r of await db.select({ id: audits.id, name: audits.name }).from(audits).where(and(eq(audits.tenantId, tenantId), inArray(audits.id, ids)))) out.set(r.id, r.name);
+      for (const r of await db.select({ id: audits.id, name: audits.name }).from(audits).where(and(inArray(audits.id, ids)))) out.set(r.id, r.name);
       break;
     case "training":
-      for (const r of await db.select({ id: trainingCourses.id, title: trainingCourses.title }).from(trainingCourses).where(and(eq(trainingCourses.tenantId, tenantId), inArray(trainingCourses.id, ids)))) out.set(r.id, r.title);
+      for (const r of await db.select({ id: trainingCourses.id, title: trainingCourses.title }).from(trainingCourses).where(and(inArray(trainingCourses.id, ids)))) out.set(r.id, r.title);
       break;
   }
   return out;
 }
 
 /** For the link picker: records of one kind whose name matches what was typed. */
-export async function searchTargets(db: TenantDb, tenantId: number, type: LinkType, q: string, limit = 15): Promise<{ id: number; label: string }[]> {
+export async function searchTargets(db: TenantDb, type: LinkType, q: string, limit = 15): Promise<{ id: number; label: string }[]> {
   const like = `%${q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
   const n = Math.min(Math.max(limit, 1), 50);
   switch (type) {
     case "workflow":
-      return (await db.select({ id: workflowDefinitions.id, l: workflowDefinitions.name }).from(workflowDefinitions).where(and(eq(workflowDefinitions.tenantId, tenantId), ilike(workflowDefinitions.name, like))).orderBy(workflowDefinitions.name).limit(n)).map((r) => ({ id: r.id, label: r.l }));
+      return (await db.select({ id: workflowDefinitions.id, l: workflowDefinitions.name }).from(workflowDefinitions).where(and(ilike(workflowDefinitions.name, like))).orderBy(workflowDefinitions.name).limit(n)).map((r) => ({ id: r.id, label: r.l }));
     case "equipment":
-      return (await db.select({ id: equipment.id, l: equipment.name, sn: equipment.serialNumber }).from(equipment).where(and(eq(equipment.tenantId, tenantId), or(ilike(equipment.name, like), ilike(equipment.serialNumber, like)))).orderBy(equipment.name).limit(n)).map((r) => ({ id: r.id, label: r.sn ? `${r.l} (${r.sn})` : r.l }));
+      return (await db.select({ id: equipment.id, l: equipment.name, sn: equipment.serialNumber }).from(equipment).where(and(or(ilike(equipment.name, like), ilike(equipment.serialNumber, like)))).orderBy(equipment.name).limit(n)).map((r) => ({ id: r.id, label: r.sn ? `${r.l} (${r.sn})` : r.l }));
     case "supplier":
-      return (await db.select({ id: suppliers.id, l: suppliers.name }).from(suppliers).where(and(eq(suppliers.tenantId, tenantId), ilike(suppliers.name, like))).orderBy(suppliers.name).limit(n)).map((r) => ({ id: r.id, label: r.l }));
+      return (await db.select({ id: suppliers.id, l: suppliers.name }).from(suppliers).where(and(ilike(suppliers.name, like))).orderBy(suppliers.name).limit(n)).map((r) => ({ id: r.id, label: r.l }));
     case "ncr":
-      return (await db.select({ id: ncr.id, l: ncr.title }).from(ncr).where(and(eq(ncr.tenantId, tenantId), eq(ncr.isDeleted, false), ilike(ncr.title, like))).orderBy(desc(ncr.id)).limit(n)).map((r) => ({ id: r.id, label: `NCR #${r.id}: ${r.l}` }));
+      return (await db.select({ id: ncr.id, l: ncr.title }).from(ncr).where(and(eq(ncr.isDeleted, false), ilike(ncr.title, like))).orderBy(desc(ncr.id)).limit(n)).map((r) => ({ id: r.id, label: `NCR #${r.id}: ${r.l}` }));
     case "capa": {
       const idMatch = /^#?(\d+)$/.exec(q.trim());
-      const rows = await db.select({ id: capa.id, ncrId: capa.ncrId }).from(capa).where(and(eq(capa.tenantId, tenantId), idMatch ? eq(capa.id, Number(idMatch[1])) : sql`true`)).orderBy(desc(capa.id)).limit(n);
+      const rows = await db.select({ id: capa.id, ncrId: capa.ncrId }).from(capa).where(and(idMatch ? eq(capa.id, Number(idMatch[1])) : sql`true`)).orderBy(desc(capa.id)).limit(n);
       return rows.map((r) => ({ id: r.id, label: r.ncrId ? `CAPA #${r.id} (NCR #${r.ncrId})` : `CAPA #${r.id}` }));
     }
     case "audit":
-      return (await db.select({ id: audits.id, l: audits.name }).from(audits).where(and(eq(audits.tenantId, tenantId), ilike(audits.name, like))).orderBy(desc(audits.id)).limit(n)).map((r) => ({ id: r.id, label: r.l }));
+      return (await db.select({ id: audits.id, l: audits.name }).from(audits).where(and(ilike(audits.name, like))).orderBy(desc(audits.id)).limit(n)).map((r) => ({ id: r.id, label: r.l }));
     case "training":
-      return (await db.select({ id: trainingCourses.id, l: trainingCourses.title }).from(trainingCourses).where(and(eq(trainingCourses.tenantId, tenantId), ilike(trainingCourses.title, like))).orderBy(trainingCourses.title).limit(n)).map((r) => ({ id: r.id, label: r.l }));
+      return (await db.select({ id: trainingCourses.id, l: trainingCourses.title }).from(trainingCourses).where(and(ilike(trainingCourses.title, like))).orderBy(trainingCourses.title).limit(n)).map((r) => ({ id: r.id, label: r.l }));
   }
 }
 
 /** Which published documents link to a given record (the reverse of a document's own links). */
-export async function documentsLinkedTo(db: TenantDb, tenantId: number, type: LinkType, id: number) {
+export async function documentsLinkedTo(db: TenantDb, type: LinkType, id: number) {
   const rows = await db
     .select({ id: documents.id, title: documents.title, status: documents.status, revisionCode: documents.revisionCode, currentVersion: documents.currentVersion })
     .from(documents)
     .innerJoin(controlledVersions, eq(controlledVersions.id, documents.currentVersionId))
-    .where(and(eq(documents.tenantId, tenantId), eq(documents.isDeleted, false), sql`${controlledVersions.payload} @> ${JSON.stringify({ links: [{ type, id }] })}::jsonb`))
+    .where(and(eq(documents.isDeleted, false), sql`${controlledVersions.payload} @> ${JSON.stringify({ links: [{ type, id }] })}::jsonb`))
     .orderBy(documents.title);
   return rows;
 }
 
 // ---- The adapter ---------------------------------------------------------------------------------------------------------------------------------
 
-async function loadDocument(db: TenantDb, tenantId: number, id: number) {
-  const [doc] = await db.select().from(documents).where(and(eq(documents.id, id), eq(documents.tenantId, tenantId)));
+async function loadDocument(db: TenantDb, id: number) {
+  const [doc] = await db.select().from(documents).where(and(eq(documents.id, id)));
   if (!doc || doc.isDeleted) throw AppError.notFound("Document");
   return doc;
 }
@@ -151,12 +151,12 @@ async function loadDocument(db: TenantDb, tenantId: number, id: number) {
 async function registerLegacyFile(db: TenantDb, tenantId: number, documentId: number, version: { version: number; fileUrl: string | null; createdBy: number | null }): Promise<DocumentAttachmentRef | null> {
   const p = version.fileUrl;
   if (!p || /^https?:\/\//i.test(p) || !isInsideTenantStorage(tenantId, p) || !existsSync(p)) return null;
-  const [existing] = await db.select().from(documentFiles).where(and(eq(documentFiles.tenantId, tenantId), eq(documentFiles.documentId, documentId), eq(documentFiles.filePath, p)));
+  const [existing] = await db.select().from(documentFiles).where(and(eq(documentFiles.documentId, documentId), eq(documentFiles.filePath, p)));
   if (existing) return { id: existing.id, fileName: existing.fileName, mimeType: existing.mimeType, sizeBytes: existing.sizeBytes, sha256: existing.sha256 };
   const bytes = readFileSync(p);
   const [row] = await db
     .insert(documentFiles)
-    .values({ tenantId, documentId, fileName: `document-${documentId}-rev${version.version}.pdf`, mimeType: "application/pdf", sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), filePath: p, uploadedBy: version.createdBy })
+    .values({ documentId, fileName: `document-${documentId}-rev${version.version}.pdf`, mimeType: "application/pdf", sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex"), filePath: p, uploadedBy: version.createdBy })
     .returning();
   return { id: row!.id, fileName: row!.fileName, mimeType: row!.mimeType, sizeBytes: row!.sizeBytes, sha256: row!.sha256 };
 }
@@ -170,12 +170,12 @@ export const documentAdapter: SubjectAdapter = {
   blank: () => ({ ...blankDocumentPayload() }) as unknown as Record<string, unknown>,
 
   async loadLive(db, tenantId, id) {
-    const doc = await loadDocument(db, tenantId, id);
+    const doc = await loadDocument(db, id);
     const number = doc.currentVersion > 0 ? doc.currentVersion : 1;
     const [legacy] = await db
       .select()
       .from(documentVersions)
-      .where(and(eq(documentVersions.documentId, doc.id), eq(documentVersions.tenantId, tenantId), eq(documentVersions.version, doc.currentVersion)));
+      .where(and(eq(documentVersions.documentId, doc.id), eq(documentVersions.version, doc.currentVersion)));
     const file = legacy ? await registerLegacyFile(db, tenantId, doc.id, legacy) : null;
     const payload: DocumentPayload = {
       ...blankDocumentPayload(),
@@ -192,8 +192,8 @@ export const documentAdapter: SubjectAdapter = {
 
   bootstrapStatus: (live) => (live.legacyStatus === "in_review" ? "in_review" : live.legacyStatus === "draft" ? "draft" : "published"),
 
-  async guardDraft(db, tenantId, id) {
-    const doc = await loadDocument(db, tenantId, id);
+  async guardDraft(db, id) {
+    const doc = await loadDocument(db, id);
     if (doc.status === "obsolete") throw new AppError("This document is obsolete and can't be revised.", 409);
     if (doc.retentionState === "archived") throw new AppError("This document is archived and can't be revised.", 409);
   },
@@ -206,14 +206,14 @@ export const documentAdapter: SubjectAdapter = {
 
   validate: (payload) => validateDocumentPayload(payload),
 
-  async checkPayload(db, tenantId, id, versionNumber, payload, stage) {
+  async checkPayload(db, id, versionNumber, payload, stage) {
     const p = normalizeDocumentPayload(payload);
     const issues: Issue[] = [];
 
     // Every attached file must be a stored file of THIS document in THIS organization, exactly as recorded.
     if (p.attachments.length > 0) {
       const ids = p.attachments.map((a) => a.id).filter((n) => Number.isInteger(n));
-      const rows = ids.length === 0 ? [] : await db.select().from(documentFiles).where(and(eq(documentFiles.tenantId, tenantId), eq(documentFiles.documentId, id), inArray(documentFiles.id, ids)));
+      const rows = ids.length === 0 ? [] : await db.select().from(documentFiles).where(and(eq(documentFiles.documentId, id), inArray(documentFiles.id, ids)));
       const byId = new Map(rows.map((r) => [r.id, r]));
       for (const a of p.attachments) {
         const row = byId.get(a.id);
@@ -226,7 +226,7 @@ export const documentAdapter: SubjectAdapter = {
     const byType = new Map<LinkType, number[]>();
     for (const l of p.links) if (LINK_TYPES.includes(l.type) && Number.isInteger(l.id)) byType.set(l.type, [...(byType.get(l.type) ?? []), l.id]);
     for (const [type, ids] of byType) {
-      const found = await resolveTargets(db, tenantId, type, ids);
+      const found = await resolveTargets(db, type, ids);
       for (const linkId of ids) if (!found.has(linkId)) issues.push({ code: "link_unknown", message: `${type} #${linkId} doesn't exist in this organization.` });
     }
 
@@ -235,21 +235,21 @@ export const documentAdapter: SubjectAdapter = {
       const others = await db
         .select({ n: controlledVersions.versionNumber, code: sql<string | null>`${controlledVersions.payload}->>'revisionCode'` })
         .from(controlledVersions)
-        .where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, "document"), eq(controlledVersions.subjectId, id), ne(controlledVersions.versionNumber, versionNumber)));
+        .where(and(eq(controlledVersions.subjectType, "document"), eq(controlledVersions.subjectId, id), ne(controlledVersions.versionNumber, versionNumber)));
       const clash = others.find((o) => (o.code ?? "").trim().toLowerCase() === p.revisionCode.trim().toLowerCase());
       if (clash) issues.push({ code: "revision_taken", message: `${p.revisionCode} is already used by version ${clash.n} of this document. Choose the next revision code.` });
     }
     return issues;
   },
 
-  async onTransition(db, tenantId, id, event) {
+  async onTransition(db, id, event) {
     // While nothing has been released yet the document mirrors its open revision; once released, the released revision stays in force.
     if (event.hasPublished) return;
     const status = event.type === "submitted" || event.type === "approved" ? "in_review" : "draft";
-    await db.update(documents).set({ status, updatedAt: new Date() }).where(and(eq(documents.id, id), eq(documents.tenantId, tenantId)));
+    await db.update(documents).set({ status, updatedAt: new Date() }).where(and(eq(documents.id, id)));
   },
 
-  async apply(db, tenantId, id, payload, info) {
+  async apply(db, id, payload, info) {
     const p = normalizeDocumentPayload(payload);
     const v = info.version;
     const effective = p.effectiveDate ? new Date(p.effectiveDate) : new Date();
@@ -268,15 +268,14 @@ export const documentAdapter: SubjectAdapter = {
         status: "approved",
         updatedAt: new Date(),
       })
-      .where(and(eq(documents.id, id), eq(documents.tenantId, tenantId)));
+      .where(and(eq(documents.id, id)));
 
     // Keep the long-standing revision ledger (history, retention age-out, legacy file download) true for every release.
-    const [already] = await db.select({ id: documentVersions.id }).from(documentVersions).where(and(eq(documentVersions.tenantId, tenantId), eq(documentVersions.documentId, id), eq(documentVersions.version, info.versionNumber)));
+    const [already] = await db.select({ id: documentVersions.id }).from(documentVersions).where(and(eq(documentVersions.documentId, id), eq(documentVersions.version, info.versionNumber)));
     if (!already) {
       const primary = p.attachments.find((a) => a.mimeType === "application/pdf") ?? p.attachments[0];
-      const [file] = primary ? await db.select({ filePath: documentFiles.filePath }).from(documentFiles).where(and(eq(documentFiles.id, primary.id), eq(documentFiles.tenantId, tenantId))) : [];
+      const [file] = primary ? await db.select({ filePath: documentFiles.filePath }).from(documentFiles).where(and(eq(documentFiles.id, primary.id))) : [];
       await db.insert(documentVersions).values({
-        tenantId,
         documentId: id,
         version: info.versionNumber,
         fileUrl: file?.filePath ?? null,
@@ -288,7 +287,7 @@ export const documentAdapter: SubjectAdapter = {
       });
     }
     // Same signal the old one-step approval sent, so workflows keyed on "document approved" keep firing.
-    await publishEvent(WORKFLOW_STREAM, { tenantId, module: "documents", event: "approved", entityId: id });
+    await publishEvent(WORKFLOW_STREAM, { module: "documents", event: "approved", entityId: id });
   },
 
   diff: (a, b) => diffDocumentVersions(a, b),
@@ -296,13 +295,13 @@ export const documentAdapter: SubjectAdapter = {
 
 // ---- Files on a draft ------------------------------------------------------------------------------------------------------------------------------
 
-async function audit(db: TenantDb, tenantId: number, documentId: number, actor: Actor, changes: Record<string, unknown>) {
-  await recordAuditTrail(db, { tenantId, entityType: DOCUMENT_ENTITY_TYPE, entityId: documentId, action: "update", changes, performedBy: actor.id });
+async function audit(db: TenantDb, documentId: number, actor: Actor, changes: Record<string, unknown>) {
+  await recordAuditTrail(db, { entityType: DOCUMENT_ENTITY_TYPE, entityId: documentId, action: "update", changes, performedBy: actor.id });
 }
 
 /** Stores an uploaded file and adds it to the draft. Only a draft can take files; a published revision is frozen. */
 export async function addAttachment(db: TenantDb, tenantId: number, documentId: number, versionId: number, actor: Actor, file: { originalname: string; buffer: Buffer; size: number }) {
-  const v = await engine.getVersion(db, documentAdapter, tenantId, documentId, versionId);
+  const v = await engine.getVersion(db, documentAdapter, documentId, versionId);
   if (v.status !== "draft") throw new AppError("Files can only be added to a draft.", 409);
   const payload = normalizeDocumentPayload(v.payload);
   if (payload.attachments.length >= MAX_ATTACHMENTS) throw AppError.badRequest(`A revision can carry at most ${MAX_ATTACHMENTS} files.`);
@@ -316,32 +315,32 @@ export async function addAttachment(db: TenantDb, tenantId: number, documentId: 
   await writeFile(filePath, file.buffer);
   const sha256 = createHash("sha256").update(file.buffer).digest("hex");
   const fileName = cleanName(file.originalname);
-  const [row] = await db.insert(documentFiles).values({ tenantId, documentId, fileName, mimeType: type.mime, sizeBytes: file.buffer.length, sha256, filePath, uploadedBy: actor.id }).returning();
+  const [row] = await db.insert(documentFiles).values({ documentId, fileName, mimeType: type.mime, sizeBytes: file.buffer.length, sha256, filePath, uploadedBy: actor.id }).returning();
   const ref: DocumentAttachmentRef = { id: row!.id, fileName, mimeType: type.mime, sizeBytes: row!.sizeBytes, sha256 };
 
   const saved = await engine.saveDraft(db, documentAdapter, tenantId, documentId, versionId, actor, { payload: { ...payload, attachments: [...payload.attachments, ref] } as unknown as Record<string, unknown> });
-  await audit(db, tenantId, documentId, actor, { event: "attachment_added", version: v.versionNumber, fileId: ref.id, fileName, sizeBytes: ref.sizeBytes, sha256 });
+  await audit(db, documentId, actor, { event: "attachment_added", version: v.versionNumber, fileId: ref.id, fileName, sizeBytes: ref.sizeBytes, sha256 });
   return { attachment: ref, version: saved };
 }
 
 /** Drops a file from the draft. The stored file itself is only deleted when no revision of this document still refers to it. */
 export async function removeAttachment(db: TenantDb, tenantId: number, documentId: number, versionId: number, attachmentId: number, actor: Actor) {
-  const v = await engine.getVersion(db, documentAdapter, tenantId, documentId, versionId);
+  const v = await engine.getVersion(db, documentAdapter, documentId, versionId);
   if (v.status !== "draft") throw new AppError("Files can only be removed from a draft.", 409);
   const payload = normalizeDocumentPayload(v.payload);
   const target = payload.attachments.find((a) => a.id === attachmentId);
   if (!target) throw AppError.notFound("Attachment");
   const saved = await engine.saveDraft(db, documentAdapter, tenantId, documentId, versionId, actor, { payload: { ...payload, attachments: payload.attachments.filter((a) => a.id !== attachmentId) } as unknown as Record<string, unknown> });
-  await audit(db, tenantId, documentId, actor, { event: "attachment_removed", version: v.versionNumber, fileId: target.id, fileName: target.fileName, sha256: target.sha256 });
+  await audit(db, documentId, actor, { event: "attachment_removed", version: v.versionNumber, fileId: target.id, fileName: target.fileName, sha256: target.sha256 });
 
   const stillUsed = await db
     .select({ id: controlledVersions.id })
     .from(controlledVersions)
-    .where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, "document"), eq(controlledVersions.subjectId, documentId), ne(controlledVersions.id, v.id), sql`${controlledVersions.payload} @> ${JSON.stringify({ attachments: [{ id: attachmentId }] })}::jsonb`))
+    .where(and(eq(controlledVersions.subjectType, "document"), eq(controlledVersions.subjectId, documentId), ne(controlledVersions.id, v.id), sql`${controlledVersions.payload} @> ${JSON.stringify({ attachments: [{ id: attachmentId }] })}::jsonb`))
     .limit(1);
-  const legacyUse = await db.select({ id: documentVersions.id }).from(documentVersions).innerJoin(documentFiles, eq(documentFiles.filePath, documentVersions.fileUrl)).where(and(eq(documentFiles.id, attachmentId), eq(documentVersions.tenantId, tenantId))).limit(1);
+  const legacyUse = await db.select({ id: documentVersions.id }).from(documentVersions).innerJoin(documentFiles, eq(documentFiles.filePath, documentVersions.fileUrl)).where(and(eq(documentFiles.id, attachmentId))).limit(1);
   if (stillUsed.length === 0 && legacyUse.length === 0) {
-    const [row] = await db.delete(documentFiles).where(and(eq(documentFiles.id, attachmentId), eq(documentFiles.tenantId, tenantId), eq(documentFiles.documentId, documentId))).returning();
+    const [row] = await db.delete(documentFiles).where(and(eq(documentFiles.id, attachmentId), eq(documentFiles.documentId, documentId))).returning();
     if (row && isInsideTenantStorage(tenantId, row.filePath)) await unlink(row.filePath).catch(() => undefined);
   }
   return saved;
@@ -356,10 +355,10 @@ export function signFileToken(tenantId: number, fileId: number, userId: number):
   return jwt.sign({ tid: tenantId, fid: fileId, sub: String(userId), jti: randomUUID() }, FILE_TOKEN_SECRET, { expiresIn: FILE_LINK_SECONDS });
 }
 
-export function verifyFileToken(token: string): { tenantId: number; fileId: number; userId: number } {
+export function verifyFileToken(token: string): { fileId: number; userId: number } {
   try {
     const p = jwt.verify(token, FILE_TOKEN_SECRET) as unknown as { tid: number; fid: number; sub: string };
-    return { tenantId: p.tid, fileId: p.fid, userId: Number(p.sub) };
+    return { fileId: p.fid, userId: Number(p.sub) };
   } catch {
     throw AppError.unauthorized("This download link has expired. Open the document again to get a new one.");
   }

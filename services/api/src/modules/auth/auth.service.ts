@@ -32,7 +32,6 @@ async function userWithRole(userId: number) {
       passwordHash: users.passwordHash,
       tokenVersion: users.tokenVersion,
       isActive: users.isActive,
-      tenantId: users.tenantId,
       roleId: users.roleId,
       roleName: roles.name,
       department: users.department,
@@ -57,7 +56,6 @@ async function userWithRole(userId: number) {
  */
 async function issueTokens(user: {
   id: number;
-  tenantId: number | null;
   roleId: number | null;
   roleName: string | null;
   department: string | null;
@@ -66,7 +64,6 @@ async function issueTokens(user: {
 }, remember = false) {
   const accessToken = signAccessToken({
     sub: String(user.id),
-    tenantId: user.tenantId,
     roleId: user.roleId,
     roleName: user.roleName,
     department: user.department,
@@ -95,7 +92,7 @@ export async function register(input: { email: string; password: string; name?: 
   const passwordHash = await bcrypt.hash(input.password, 10);
   const [created] = await db
     .insert(users)
-    .values({ email: input.email, passwordHash, name: input.name, tenantId: tenant.id, passwordChangedAt: new Date() })
+    .values({ email: input.email, passwordHash, name: input.name, passwordChangedAt: new Date() })
     .returning();
   if (!created) throw new AppError("Failed to create user", 500);
 
@@ -136,7 +133,7 @@ export async function login(input: { email: string; password: string; rememberMe
 
   // When the tenant has made single sign-on mandatory, passwords no longer work — except for admins, who keep a break-glass way in if the identity provider is down or misconfigured.
   if (user.tenantId && roleName !== "admin" && roleName !== "platform_admin") {
-    const [sso] = await db.select({ enabled: ssoConnections.enabled, enforce: ssoConnections.enforceSso }).from(ssoConnections).where(eq(ssoConnections.tenantId, user.tenantId));
+    const [sso] = await db.select({ enabled: ssoConnections.enabled, enforce: ssoConnections.enforceSso }).from(ssoConnections);
     if (sso?.enabled && sso.enforce) throw AppError.forbidden("Your organization requires single sign-on. Use the Single sign-on option on the sign-in page.");
   }
 
@@ -162,7 +159,7 @@ async function completeLogin(user: LoginUserRow, roleName: string | null, tenant
   // failure.
   await db.update(users).set({ lastLoginAt: new Date(), failedLoginCount: 0, firstFailedLoginAt: null, lockedUntil: null }).where(eq(users.id, user.id)).catch(() => undefined);
 
-  const tokens = await issueTokens({ id: user.id, tenantId: user.tenantId, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion }, remember);
+  const tokens = await issueTokens({ id: user.id, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion }, remember);
   return {
     user: sanitize({ ...user, roleName }),
     tenant: tenant ? { id: tenant.id, name: tenant.name, code: tenant.code, branding: tenant.branding } : null,
@@ -196,7 +193,7 @@ export async function verifyMfaLogin(mfaToken: string, code: string, rememberMe 
     throw AppError.unauthorized("That code didn't work. Try the newest code from your authenticator app, or a recovery code.");
   }
   if (kind === "recovery" && ctx.user.tenantId) {
-    await recordAuditTrail(db, { tenantId: ctx.user.tenantId, entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_recovery_code_used" }, performedBy: userId }).catch((err) => logger.error("Failed to audit a recovery-code sign-in", { userId, err }));
+    await recordAuditTrail(db, { entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_recovery_code_used" }, performedBy: userId }).catch((err) => logger.error("Failed to audit a recovery-code sign-in", { userId, err }));
   }
   return completeLogin(ctx.user, ctx.roleName, ctx.tenant, null, rememberMe);
 }
@@ -219,7 +216,7 @@ export async function confirmEnrollmentWithToken(mfaToken: string, code: string,
     throw err;
   }
   if (ctx.user.tenantId) {
-    await recordAuditTrail(db, { tenantId: ctx.user.tenantId, entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_enabled" }, performedBy: userId }).catch((err) => logger.error("Failed to audit MFA enrollment", { userId, err }));
+    await recordAuditTrail(db, { entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_enabled" }, performedBy: userId }).catch((err) => logger.error("Failed to audit MFA enrollment", { userId, err }));
   }
   const [fresh] = await db.select().from(users).where(eq(users.id, userId));
   return { ...(await completeLogin(fresh ?? ctx.user, ctx.roleName, ctx.tenant, null, rememberMe)), recoveryCodes };
@@ -232,7 +229,7 @@ export async function confirmEnrollmentWithToken(mfaToken: string, code: string,
  * atomic SQL statement, so parallel guesses can't undercount; only the request
  * that actually flips the account to locked writes the audit entry and email.
  */
-async function recordFailedLogin(user: { id: number; email: string; tenantId: number | null; firstFailedLoginAt: Date | null }): Promise<void> {
+async function recordFailedLogin(user: { id: number; email: string; firstFailedLoginAt: Date | null }): Promise<void> {
   metrics.loginFailures.add(); // feeds the "sign-in attacks" alert
   const windowMs = env.LOGIN_FAILURE_WINDOW_MINUTES * 60_000;
   const windowExpired = !user.firstFailedLoginAt || user.firstFailedLoginAt.getTime() < Date.now() - windowMs;
@@ -255,7 +252,6 @@ async function recordFailedLogin(user: { id: number; email: string; tenantId: nu
 
   if (user.tenantId) {
     await recordAuditTrail(db, {
-      tenantId: user.tenantId,
       entityType: "User",
       entityId: user.id,
       action: "status_change",
@@ -435,7 +431,7 @@ export async function resetPassword(rawToken: string, newPassword: string): Prom
     throw AppError.badRequest("This reset link is invalid or has expired.");
   }
 
-  const [owner] = await db.select({ email: users.email, name: users.name, tenantId: users.tenantId, lockedUntil: users.lockedUntil }).from(users).where(eq(users.id, tokenRow.userId));
+  const [owner] = await db.select({ email: users.email, name: users.name, lockedUntil: users.lockedUntil }).from(users).where(eq(users.id, tokenRow.userId));
   await assertPasswordAcceptable(newPassword, { email: owner?.email, name: owner?.name ?? undefined });
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
@@ -447,7 +443,6 @@ export async function resetPassword(rawToken: string, newPassword: string): Prom
     .where(eq(users.id, tokenRow.userId));
   if (owner?.tenantId) {
     await recordAuditTrail(db, {
-      tenantId: owner.tenantId,
       entityType: "User",
       entityId: tokenRow.userId,
       action: "status_change",
@@ -507,7 +502,7 @@ export async function enableMfa(userId: number, code: string) {
   if (!full) throw AppError.notFound("User");
   const recoveryCodes = await confirmEnrollment(userId, code);
   if (full.tenantId) {
-    await recordAuditTrail(db, { tenantId: full.tenantId, entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_enabled" }, performedBy: userId }).catch((err) => logger.error("Failed to audit MFA enrollment", { userId, err }));
+    await recordAuditTrail(db, { entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_enabled" }, performedBy: userId }).catch((err) => logger.error("Failed to audit MFA enrollment", { userId, err }));
   }
   return { recoveryCodes };
 }
@@ -534,7 +529,7 @@ export async function disableMfa(userId: number, password: string, code: string)
   }
   await clearMfa(userId);
   if (user.tenantId) {
-    await recordAuditTrail(db, { tenantId: user.tenantId, entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_disabled" }, performedBy: userId }).catch((err) => logger.error("Failed to audit MFA being turned off", { userId, err }));
+    await recordAuditTrail(db, { entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_disabled" }, performedBy: userId }).catch((err) => logger.error("Failed to audit MFA being turned off", { userId, err }));
   }
 }
 
@@ -542,7 +537,7 @@ export async function newRecoveryCodes(userId: number, password: string, code: s
   const user = await reverify(userId, password, code);
   const recoveryCodes = await regenerateRecoveryCodes(userId);
   if (user.tenantId) {
-    await recordAuditTrail(db, { tenantId: user.tenantId, entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_recovery_codes_regenerated" }, performedBy: userId }).catch((err) => logger.error("Failed to audit recovery-code regeneration", { userId, err }));
+    await recordAuditTrail(db, { entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_recovery_codes_regenerated" }, performedBy: userId }).catch((err) => logger.error("Failed to audit recovery-code regeneration", { userId, err }));
   }
   return { recoveryCodes };
 }

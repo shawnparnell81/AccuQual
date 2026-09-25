@@ -38,7 +38,7 @@ async function fetchMovements(req: Request, since: Date) {
   return req.db!
     .select()
     .from(inventoryMovements)
-    .where(and(eq(inventoryMovements.tenantId, req.tenantId!), gte(inventoryMovements.performedAt, since)));
+    .where(and(gte(inventoryMovements.performedAt, since)));
 }
 
 /** GET /inventory/analytics/movements — total quantity per movement type, bucketed by day or week. */
@@ -96,7 +96,7 @@ export const scrapAnalyticsHandler = asyncHandler(async (req: Request, res: Resp
     })
     .from(inventoryMovements)
     .innerJoin(inventoryItems, eq(inventoryMovements.itemId, inventoryItems.id))
-    .where(and(eq(inventoryMovements.tenantId, req.tenantId!), eq(inventoryMovements.movementType, "scrap")));
+    .where(and(eq(inventoryMovements.movementType, "scrap")));
 
   const byItem = new Map<number, { itemId: number; sku: string; quantity: number }>();
   const byReferenceType = new Map<string, number>();
@@ -117,7 +117,7 @@ export const scrapAnalyticsHandler = asyncHandler(async (req: Request, res: Resp
 
 /** GET /inventory/analytics/reference-summary — every movement (any type) grouped by referenceType, with count + total quantity. */
 export const referenceSummaryHandler = asyncHandler(async (req: Request, res: Response) => {
-  const rows = await req.db!.select().from(inventoryMovements).where(eq(inventoryMovements.tenantId, req.tenantId!));
+  const rows = await req.db!.select().from(inventoryMovements);
 
   const groups = new Map<string, { referenceType: string | null; count: number; quantity: number }>();
   for (const r of rows) {

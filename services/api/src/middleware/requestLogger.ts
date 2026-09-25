@@ -21,7 +21,6 @@ export function requestLogger(req: Request, res: Response, next: NextFunction) {
       path: req.path,
       status: res.statusCode,
       durationMs: Date.now() - startedAt,
-      tenantId: req.tenantId ?? null,
       userId: req.user?.id ?? null,
     });
   });

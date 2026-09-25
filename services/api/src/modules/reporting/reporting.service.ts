@@ -73,7 +73,7 @@ export interface NcrMetrics {
 
 export async function getNcrMetrics(db: TenantDb, tenantId: number, range?: DateRange): Promise<NcrMetrics> {
   return cached(`t${tenantId}:ncr:${JSON.stringify(range)}`, async () => {
-    const where = and(eq(ncr.tenantId, tenantId), eq(ncr.isDeleted, false), ...dateFilter(ncr.createdAt, range));
+    const where = and(eq(ncr.isDeleted, false), ...dateFilter(ncr.createdAt, range));
 
     const [openRow] = await db.select({ count: sql<number>`count(*)::int` }).from(ncr).where(and(where, sql`${ncr.status} != 'closed'`));
     const [closedRow] = await db.select({ count: sql<number>`count(*)::int` }).from(ncr).where(and(where, eq(ncr.status, "closed")));
@@ -127,7 +127,7 @@ export interface CapaMetrics {
 
 export async function getCapaMetrics(db: TenantDb, tenantId: number, range?: DateRange): Promise<CapaMetrics> {
   return cached(`t${tenantId}:capa:${JSON.stringify(range)}`, async () => {
-    const where = and(eq(capa.tenantId, tenantId), ...dateFilter(capa.createdAt, range));
+    const where = and(...dateFilter(capa.createdAt, range));
 
     const [totalRow] = await db.select({ count: sql<number>`count(*)::int` }).from(capa).where(where);
     const [closedRow] = await db.select({ count: sql<number>`count(*)::int` }).from(capa).where(and(where, eq(capa.status, "closed")));
@@ -172,10 +172,10 @@ export interface SupplierPerformanceReport {
 
 export async function getSupplierPerformanceReport(db: TenantDb, tenantId: number): Promise<SupplierPerformanceReport> {
   return cached(`t${tenantId}:supplier-performance`, async () => {
-    const rows = await db.select({ id: suppliers.id, name: suppliers.name }).from(suppliers).where(eq(suppliers.tenantId, tenantId));
+    const rows = await db.select({ id: suppliers.id, name: suppliers.name }).from(suppliers);
     const results = await Promise.all(
       rows.map(async (s) => {
-        const perf = await computeSupplierPerformance(db, tenantId, s.id);
+        const perf = await computeSupplierPerformance(db, s.id);
         return { id: s.id, name: s.name, riskScore: perf.riskScore, onTimeAvgDays: perf.deliveryTimeliness.avgDays, accuracyAvgPercent: perf.deliveryAccuracy.avgPercent };
       })
     );
@@ -197,7 +197,7 @@ export interface WarrantyTrends {
 
 export async function getWarrantyTrends(db: TenantDb, tenantId: number, range?: DateRange): Promise<WarrantyTrends> {
   return cached(`t${tenantId}:warranty:${JSON.stringify(range)}`, async () => {
-    const where = and(eq(warrantyClaims.tenantId, tenantId), ...dateFilter(warrantyClaims.createdAt, range));
+    const where = and(...dateFilter(warrantyClaims.createdAt, range));
 
     const [totalRow] = await db.select({ count: sql<number>`count(*)::int` }).from(warrantyClaims).where(where);
     const byStatus = await db.select({ status: warrantyClaims.status, count: sql<number>`count(*)::int` }).from(warrantyClaims).where(where).groupBy(warrantyClaims.status);
@@ -241,9 +241,7 @@ export interface ReceivingTrends {
 export async function getReceivingTrends(db: TenantDb, tenantId: number, range?: DateRange): Promise<ReceivingTrends> {
   return cached(`t${tenantId}:receiving:${JSON.stringify(range)}`, async () => {
     const where = and(
-      eq(qualityInspectionReports.tenantId, tenantId),
-      eq(qualityInspectionReports.inspectionType, "incoming"),
-      ...dateFilter(qualityInspectionReports.createdAt, range)
+      eq(qualityInspectionReports.inspectionType, "incoming"), ...dateFilter(qualityInspectionReports.createdAt, range)
     );
 
     const [totalRow] = await db.select({ count: sql<number>`count(*)::int` }).from(qualityInspectionReports).where(where);
@@ -276,7 +274,7 @@ export async function getReceivingTrends(db: TenantDb, tenantId: number, range?:
     const [quarantineRow] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(erpReceivingLineItems)
-      .where(and(eq(erpReceivingLineItems.tenantId, tenantId), eq(erpReceivingLineItems.status, "quarantined")));
+      .where(and(eq(erpReceivingLineItems.status, "quarantined")));
 
     const total = totalRow?.count ?? 0;
     return {
@@ -306,8 +304,8 @@ export interface InventoryQualityTrends {
   consumptionByMonth: { month: string; quantity: number }[];
 }
 
-async function movementQuantityByMonth(db: TenantDb, tenantId: number, movementType: string, range?: DateRange) {
-  const where = and(eq(inventoryMovements.tenantId, tenantId), eq(inventoryMovements.movementType, movementType), ...dateFilter(inventoryMovements.performedAt, range));
+async function movementQuantityByMonth(db: TenantDb, movementType: string, range?: DateRange) {
+  const where = and(eq(inventoryMovements.movementType, movementType), ...dateFilter(inventoryMovements.performedAt, range));
   return db
     .select({ month: sql<string>`to_char(date_trunc('month', ${inventoryMovements.performedAt}), 'YYYY-MM')`, quantity: sql<number>`coalesce(sum(${inventoryMovements.quantity}), 0)::float` })
     .from(inventoryMovements)
@@ -321,9 +319,9 @@ export async function getInventoryQualityTrends(db: TenantDb, tenantId: number, 
     const [belowMinRow] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(inventoryAlerts)
-      .where(and(eq(inventoryAlerts.tenantId, tenantId), eq(inventoryAlerts.alertType, "below_min"), sql`${inventoryAlerts.acknowledgedAt} is null`));
+      .where(and(eq(inventoryAlerts.alertType, "below_min"), sql`${inventoryAlerts.acknowledgedAt} is null`));
 
-    const [scrapByMonth, consumptionByMonth] = await Promise.all([movementQuantityByMonth(db, tenantId, "scrap", range), movementQuantityByMonth(db, tenantId, "consume", range)]);
+    const [scrapByMonth, consumptionByMonth] = await Promise.all([movementQuantityByMonth(db, "scrap", range), movementQuantityByMonth(db, "consume", range)]);
 
     return { currentBelowMinCount: belowMinRow?.count ?? 0, scrapByMonth, consumptionByMonth };
   });

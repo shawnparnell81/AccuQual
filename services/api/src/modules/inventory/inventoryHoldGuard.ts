@@ -12,8 +12,8 @@ import { AppError } from "../../utils/appError.js";
  */
 
 /** Units of an item currently held (0 when none). */
-export async function heldUnits(db: TenantDb, tenantId: number, itemId: number): Promise<number> {
-  const [item] = await db.select({ held: inventoryItems.heldQty }).from(inventoryItems).where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.tenantId, tenantId)));
+export async function heldUnits(db: TenantDb, itemId: number): Promise<number> {
+  const [item] = await db.select({ held: inventoryItems.heldQty }).from(inventoryItems).where(and(eq(inventoryItems.id, itemId)));
   return Number(item?.held ?? 0);
 }
 
@@ -21,14 +21,14 @@ export async function heldUnits(db: TenantDb, tenantId: number, itemId: number):
  * Throws 409 when taking `quantity` out of an item that has `totalOnHand` in stock would touch held units. When a lot is named, that
  * lot's own held units are protected too, so releasing one lot's hold never frees another's.
  */
-export async function assertNotHeld(db: TenantDb, tenantId: number, itemId: number, quantity: number, totalOnHand: number, lotId?: number): Promise<void> {
-  const held = await heldUnits(db, tenantId, itemId);
+export async function assertNotHeld(db: TenantDb, itemId: number, quantity: number, totalOnHand: number, lotId?: number): Promise<void> {
+  const held = await heldUnits(db, itemId);
   if (held > 0 && totalOnHand - quantity < held) {
     const usable = Math.max(totalOnHand - held, 0);
     throw new AppError(`Only ${usable} of the ${totalOnHand} unit(s) on hand can be used: ${held} ${held === 1 ? "is" : "are"} on quarantine hold. Release or destroy the hold in Quarantine first.`, 409);
   }
   if (lotId !== undefined) {
-    const [lot] = await db.select({ lotNumber: inventoryLots.lotNumber, remaining: inventoryLots.remainingQty, held: inventoryLots.heldQty }).from(inventoryLots).where(and(eq(inventoryLots.id, lotId), eq(inventoryLots.tenantId, tenantId)));
+    const [lot] = await db.select({ lotNumber: inventoryLots.lotNumber, remaining: inventoryLots.remainingQty, held: inventoryLots.heldQty }).from(inventoryLots).where(and(eq(inventoryLots.id, lotId)));
     if (lot && Number(lot.held) > 0 && Number(lot.remaining) - Number(lot.held) < quantity) {
       throw new AppError(`Lot ${lot.lotNumber} has ${Number(lot.held)} unit(s) on quarantine hold; only ${Math.max(Number(lot.remaining) - Number(lot.held), 0)} can be used. Release or destroy the hold in Quarantine first.`, 409);
     }

@@ -44,11 +44,11 @@ export const createItemHandler = asyncHandler(async (req: Request, res: Response
 
   const [created] = await req.db!
     .insert(inventoryItems)
-    .values({ ...req.body, tenantId: req.tenantId! })
+    .values({ ...req.body, })
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "InventoryItem", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "InventoryItem", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
 
-  const settled = await recomputeState(req.db!, req.tenantId!, created!.id, req.user?.id);
+  const settled = await recomputeState(req.db!, created!.id, req.user?.id);
   res.status(201).json(settled);
 });
 
@@ -61,8 +61,8 @@ export const createItemHandler = asyncHandler(async (req: Request, res: Response
  * selects instead of a raw SQL escape hatch.
  */
 export const listItemsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const items = await req.db!.select().from(inventoryItems).where(eq(inventoryItems.tenantId, req.tenantId!));
-  const stockRows = await req.db!.select().from(inventoryStock).where(eq(inventoryStock.tenantId, req.tenantId!));
+  const items = await req.db!.select().from(inventoryItems);
+  const stockRows = await req.db!.select().from(inventoryStock);
 
   const onHandByItem = new Map<number, number>();
   const lastAdjustedByItem = new Map<number, Date>();
@@ -111,7 +111,7 @@ function assertDepartment(req: Request, allowed: string[]) {
 }
 
 async function loadItem(req: Request, id: number) {
-  const [item] = await req.db!.select().from(inventoryItems).where(and(eq(inventoryItems.id, id), eq(inventoryItems.tenantId, req.tenantId!)));
+  const [item] = await req.db!.select().from(inventoryItems).where(and(eq(inventoryItems.id, id)));
   if (!item) throw AppError.notFound("InventoryItem");
   return item;
 }
@@ -126,8 +126,8 @@ export const getItemHandler = asyncHandler(async (req: Request, res: Response) =
   // Lazy reservation expiry — see applyReservationAutoRelease's own comment
   // on why this runs here (the one place a human actually looks at this
   // item's stock) rather than on every internal getStockRows call.
-  await applyReservationAutoRelease(req.db!, req.tenantId!, id, settings);
-  const stock = await getStockRows(req.db!, req.tenantId!, id);
+  await applyReservationAutoRelease(req.db!, id, settings);
+  const stock = await getStockRows(req.db!, id);
 
   const lastActivity = stock.reduce<Date | null>((latest, row) => (row.lastAdjustedAt && (!latest || row.lastAdjustedAt > latest) ? row.lastAdjustedAt : latest), null) ?? item.createdAt ?? null;
   const daysSinceActivity = lastActivity ? Math.floor((Date.now() - lastActivity.getTime()) / (24 * 60 * 60 * 1000)) : null;
@@ -151,9 +151,8 @@ export const movementHandler = asyncHandler(async (req: Request, res: Response) 
   }
 
   const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
-  const { movement } = await applyMovement(req.db!, req.tenantId!, id, req.body, req.user?.id, getInventorySettings(tenant));
+  const { movement } = await applyMovement(req.db!, id, req.body, req.user?.id, getInventorySettings(tenant));
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "InventoryItem",
     entityId: id,
     action: "update",
@@ -161,7 +160,7 @@ export const movementHandler = asyncHandler(async (req: Request, res: Response) 
     performedBy: req.user?.id,
   });
 
-  const stock = await getStockRows(req.db!, req.tenantId!, id);
+  const stock = await getStockRows(req.db!, id);
   res.status(201).json({ movement, stock });
 });
 
@@ -171,7 +170,7 @@ export const reserveHandler = asyncHandler(async (req: Request, res: Response) =
   await loadItem(req, id);
   const { quantity, location } = req.body as { quantity: number; location?: string };
   const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
-  const stock = await reserveStock(req.db!, req.tenantId!, id, quantity, location, getInventorySettings(tenant), req.user?.id);
+  const stock = await reserveStock(req.db!, id, quantity, location, getInventorySettings(tenant), req.user?.id);
   res.status(201).json({ stock });
 });
 
@@ -180,7 +179,7 @@ export const releaseHandler = asyncHandler(async (req: Request, res: Response) =
   const id = Number(req.params.id);
   await loadItem(req, id);
   const { quantity, location } = req.body as { quantity: number; location?: string };
-  const stock = await releaseStock(req.db!, req.tenantId!, id, quantity, location, req.user?.id);
+  const stock = await releaseStock(req.db!, id, quantity, location, req.user?.id);
   res.status(201).json({ stock });
 });
 
@@ -197,7 +196,7 @@ export const recordCycleCountHandler = asyncHandler(async (req: Request, res: Re
   const { notes } = req.body as { notes?: string };
 
   const [updated] = await req.db!.update(inventoryItems).set({ lastCountedAt: new Date(), updatedAt: new Date() }).where(eq(inventoryItems.id, id)).returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "InventoryItem", entityId: id, action: "update", changes: { cycleCounted: true, notes }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "InventoryItem", entityId: id, action: "update", changes: { cycleCounted: true, notes }, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -208,9 +207,8 @@ export const adjustHandler = asyncHandler(async (req: Request, res: Response) =>
   assertDepartment(req, ["material_management"]);
 
   const { quantity, location, reason, referenceType, referenceId } = req.body as { quantity: number; location?: string; reason: string; referenceType?: string; referenceId?: string };
-  const { movement } = await applyMovement(req.db!, req.tenantId!, id, { movementType: "adjust", quantity, fromLocation: location, reason, referenceType, referenceId }, req.user?.id);
+  const { movement } = await applyMovement(req.db!, id, { movementType: "adjust", quantity, fromLocation: location, reason, referenceType, referenceId }, req.user?.id);
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "InventoryItem",
     entityId: id,
     action: "update",
@@ -218,7 +216,7 @@ export const adjustHandler = asyncHandler(async (req: Request, res: Response) =>
     performedBy: req.user?.id,
   });
 
-  const stock = await getStockRows(req.db!, req.tenantId!, id);
+  const stock = await getStockRows(req.db!, id);
   res.status(201).json({ movement, stock });
 });
 
@@ -231,17 +229,17 @@ async function setStatus(req: Request, res: Response, action: string, fromState:
   }
 
   const [updated] = await req.db!.update(inventoryItems).set({ state: toState, updatedAt: new Date() }).where(eq(inventoryItems.id, id)).returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "InventoryItem", entityId: id, action: "status_change", changes: { action, from: fromState, to: toState }, performedBy: req.user?.id });
-  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "inventory", event: action, entityId: id });
+  await recordAuditTrail(req.db!, { entityType: "InventoryItem", entityId: id, action: "status_change", changes: { action, from: fromState, to: toState }, performedBy: req.user?.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "inventory", event: action, entityId: id });
   return updated!;
 }
 
 /** The real trigger for the ERP reorder stub: reorder_pending is only ever reached here, never by min/max evaluation (see recomputeState). */
 export const markReorderPendingHandler = asyncHandler(async (req: Request, res: Response) => {
   const updated = await setStatus(req, res, "mark-reorder-pending", "below_min", "reorder_pending");
-  const stock = await getStockRows(req.db!, req.tenantId!, updated.id);
+  const stock = await getStockRows(req.db!, updated.id);
   const onHand = stock.reduce((sum, s) => sum + Number(s.onHand), 0);
-  await createReorderRequest(req.db!, req.tenantId!, updated, onHand, req.user?.id);
+  await createReorderRequest(req.db!, updated, onHand, req.user?.id);
   res.json(updated);
 });
 export const markOnOrderHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -255,7 +253,7 @@ export const listReorderRequestsHandler = asyncHandler(async (req: Request, res:
   const rows = await req.db!
     .select()
     .from(inventoryReorderRequests)
-    .where(itemId ? and(eq(inventoryReorderRequests.tenantId, req.tenantId!), eq(inventoryReorderRequests.itemId, itemId)) : eq(inventoryReorderRequests.tenantId, req.tenantId!))
+    .where(itemId ? and(eq(inventoryReorderRequests.itemId, itemId)) : eq(inventoryReorderRequests.tenantId, req.tenantId!))
     .orderBy(desc(inventoryReorderRequests.createdAt));
   res.json(rows);
 });
@@ -264,7 +262,7 @@ async function loadReorderRequest(req: Request, id: number) {
   const [request] = await req.db!
     .select()
     .from(inventoryReorderRequests)
-    .where(and(eq(inventoryReorderRequests.id, id), eq(inventoryReorderRequests.tenantId, req.tenantId!)));
+    .where(and(eq(inventoryReorderRequests.id, id)));
   if (!request) throw AppError.notFound("InventoryReorderRequest");
   return request;
 }
@@ -284,14 +282,13 @@ export const sendReorderRequestHandler = asyncHandler(async (req: Request, res: 
   const [updatedRequest] = await req.db!.update(inventoryReorderRequests).set({ status: "sent", updatedAt: new Date() }).where(eq(inventoryReorderRequests.id, id)).returning();
   await req.db!.update(inventoryItems).set({ state: "on_order", updatedAt: new Date() }).where(eq(inventoryItems.id, item.id));
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "InventoryItem",
     entityId: item.id,
     action: "status_change",
     changes: { reorderRequestId: id, newStatus: "sent", from: "reorder_pending", to: "on_order" },
     performedBy: req.user?.id,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "inventory", event: "reorder-sent", entityId: item.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "inventory", event: "reorder-sent", entityId: item.id });
   res.json(updatedRequest);
 });
 
@@ -313,10 +310,9 @@ export const ignoreReorderRequestHandler = asyncHandler(async (req: Request, res
   // downgrades reorder_pending/on_order on its own — see its own comment),
   // then let a real recompute decide the honest resulting state.
   await req.db!.update(inventoryItems).set({ state: "below_min", updatedAt: new Date() }).where(eq(inventoryItems.id, request.itemId));
-  const settled = await recomputeState(req.db!, req.tenantId!, request.itemId, req.user?.id);
+  const settled = await recomputeState(req.db!, request.itemId, req.user?.id);
 
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "InventoryItem",
     entityId: request.itemId,
     action: "status_change",
@@ -335,7 +331,6 @@ export const notesReorderRequestHandler = asyncHandler(async (req: Request, res:
 
   const [updated] = await req.db!.update(inventoryReorderRequests).set({ notes, updatedAt: new Date() }).where(eq(inventoryReorderRequests.id, id)).returning();
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "InventoryItem",
     entityId: request.itemId,
     action: "update",
@@ -359,7 +354,7 @@ export const notesReorderRequestHandler = asyncHandler(async (req: Request, res:
  */
 export const searchLotsHandler = asyncHandler(async (req: Request, res: Response) => {
   const { q, status } = req.query as Record<string, string | undefined>;
-  const conditions: SQL[] = [eq(inventoryLots.tenantId, req.tenantId!)];
+  const conditions: SQL[] = [];
   if (status) conditions.push(eq(inventoryLots.status, status));
   if (q) {
     const match = or(ilike(inventoryLots.lotNumber, `%${q}%`), ilike(inventoryLots.serialNumber, `%${q}%`), ilike(inventoryItems.sku, `%${q}%`));
@@ -369,7 +364,6 @@ export const searchLotsHandler = asyncHandler(async (req: Request, res: Response
   const rows = await req.db!
     .select({
       id: inventoryLots.id,
-      tenantId: inventoryLots.tenantId,
       itemId: inventoryLots.itemId,
       sku: inventoryItems.sku,
       description: inventoryItems.description,
@@ -398,13 +392,13 @@ export const searchLotsHandler = asyncHandler(async (req: Request, res: Response
 export const listItemLotsHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   await loadItem(req, id);
-  res.json(await getItemLots(req.db!, req.tenantId!, id));
+  res.json(await getItemLots(req.db!, id));
 });
 
 /** GET /inventory/lots/:id/trace — the full receiving → inventory chain for one lot; see inventoryLots.service.ts's own comment. */
 export const traceLotHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  res.json(await getLotTraceability(req.db!, req.tenantId!, id));
+  res.json(await getLotTraceability(req.db!, id));
 });
 
 /** GET /inventory/items/:id/history — the raw movement ledger, separate from the generic audit trail (which only records state changes and edits, not every stock movement's own row). */
@@ -414,7 +408,7 @@ export const historyHandler = asyncHandler(async (req: Request, res: Response) =
   const rows = await req.db!
     .select()
     .from(inventoryMovements)
-    .where(and(eq(inventoryMovements.itemId, id), eq(inventoryMovements.tenantId, req.tenantId!)))
+    .where(and(eq(inventoryMovements.itemId, id)))
     .orderBy(desc(inventoryMovements.performedAt));
   res.json(rows);
 });
@@ -442,10 +436,9 @@ export const listAlertsHandler = asyncHandler(async (req: Request, res: Response
     })
     .from(inventoryAlerts)
     .innerJoin(inventoryItems, eq(inventoryAlerts.itemId, inventoryItems.id))
-    .where(eq(inventoryAlerts.tenantId, req.tenantId!))
     .orderBy(desc(inventoryAlerts.triggeredAt));
 
-  const stockRows = await req.db!.select().from(inventoryStock).where(eq(inventoryStock.tenantId, req.tenantId!));
+  const stockRows = await req.db!.select().from(inventoryStock);
   const onHandByItem = new Map<number, number>();
   for (const row of stockRows) onHandByItem.set(row.itemId, (onHandByItem.get(row.itemId) ?? 0) + Number(row.onHand));
 
@@ -463,7 +456,7 @@ export const alertRoutingHandler = asyncHandler(async (req: Request, res: Respon
   const recipients = await req.db!
     .select({ department: users.department })
     .from(users)
-    .where(and(eq(users.tenantId, req.tenantId!), eq(users.isActive, true)));
+    .where(and(eq(users.isActive, true)));
 
   res.json({
     material_management: recipients.filter((u) => u.department === "material_management").length,
@@ -473,7 +466,7 @@ export const alertRoutingHandler = asyncHandler(async (req: Request, res: Respon
 
 export const acknowledgeAlertHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const [alert] = await req.db!.select().from(inventoryAlerts).where(and(eq(inventoryAlerts.id, id), eq(inventoryAlerts.tenantId, req.tenantId!)));
+  const [alert] = await req.db!.select().from(inventoryAlerts).where(and(eq(inventoryAlerts.id, id)));
   if (!alert) throw AppError.notFound("InventoryAlert");
 
   const [updated] = await req.db!
@@ -481,7 +474,7 @@ export const acknowledgeAlertHandler = asyncHandler(async (req: Request, res: Re
     .set({ acknowledgedAt: new Date(), acknowledgedBy: req.user?.id })
     .where(eq(inventoryAlerts.id, id))
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "InventoryAlert", entityId: id, action: "update", changes: { acknowledged: true }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "InventoryAlert", entityId: id, action: "update", changes: { acknowledged: true }, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -496,14 +489,14 @@ export const acknowledgeAlertHandler = asyncHandler(async (req: Request, res: Re
 export const checkMinMaxHandler = asyncHandler(async (req: Request, res: Response) => {
   const { itemId } = req.body as { itemId?: number };
   const targets = itemId
-    ? await req.db!.select().from(inventoryItems).where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.tenantId, req.tenantId!)))
-    : await req.db!.select().from(inventoryItems).where(eq(inventoryItems.tenantId, req.tenantId!));
+    ? await req.db!.select().from(inventoryItems).where(and(eq(inventoryItems.id, itemId)))
+    : await req.db!.select().from(inventoryItems);
   if (itemId && targets.length === 0) throw AppError.notFound("InventoryItem");
 
   const results = [];
   let changed = 0;
   for (const item of targets) {
-    const updated = await recomputeState(req.db!, req.tenantId!, item.id, req.user?.id);
+    const updated = await recomputeState(req.db!, item.id, req.user?.id);
     if (updated.state !== item.state) changed++;
     results.push(updated);
   }
@@ -527,11 +520,11 @@ export const updateItemHandler = asyncHandler(async (req: Request, res: Response
   const [updated] = await req.db!
     .update(inventoryItems)
     .set({ ...req.body, updatedAt: new Date() })
-    .where(and(eq(inventoryItems.id, id), eq(inventoryItems.tenantId, req.tenantId!)))
+    .where(and(eq(inventoryItems.id, id)))
     .returning();
   if (!updated) throw AppError.notFound("InventoryItem");
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "InventoryItem", entityId: id, action: "update", changes: req.body, performedBy: req.user?.id });
-  const settled = await recomputeState(req.db!, req.tenantId!, id, req.user?.id);
+  await recordAuditTrail(req.db!, { entityType: "InventoryItem", entityId: id, action: "update", changes: req.body, performedBy: req.user?.id });
+  const settled = await recomputeState(req.db!, id, req.user?.id);
   res.json(settled);
 });

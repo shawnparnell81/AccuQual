@@ -26,7 +26,7 @@ async function main() {
   for (const tenant of allTenants) {
     const result = await db
       .insert(navHiddenItems)
-      .values(scopes.map((scope) => ({ tenantId: tenant.id, scope })))
+      .values(scopes.map((scope) => ({ scope })))
       .onConflictDoNothing()
       .returning({ id: navHiddenItems.id });
     inserted += result.length;

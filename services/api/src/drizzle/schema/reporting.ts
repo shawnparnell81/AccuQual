@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
 /**
@@ -14,7 +13,6 @@ import { users } from "./users.js";
  */
 export const reportSchedules = pgTable("report_schedules", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   reportType: text("report_type").notNull(), // ncr_summary, capa_summary, supplier_scorecard, warranty_summary, receiving_summary
   frequency: text("frequency").notNull(), // daily, weekly, monthly
   recipients: jsonb("recipients").$type<string[]>().notNull(),

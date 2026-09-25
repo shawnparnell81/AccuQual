@@ -45,7 +45,7 @@ workflowRunsRouter.get(
       .db!.select({ run: workflowRuns, workflowName: workflowDefinitions.name })
       .from(workflowRuns)
       .innerJoin(workflowDefinitions, eq(workflowDefinitions.id, workflowRuns.workflowId))
-      .where(and(eq(workflowRuns.tenantId, req.tenantId!), eq(workflowRuns.status, "waiting_approval")))
+      .where(and(eq(workflowRuns.status, "waiting_approval")))
       .orderBy(desc(workflowRuns.startedAt));
     res.json(
       rows
@@ -66,7 +66,7 @@ workflowRunsRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const runId = Number(req.params.runId);
     const { decision, notes } = req.body as z.infer<typeof decisionSchema>;
-    const [run] = await req.db!.select().from(workflowRuns).where(and(eq(workflowRuns.id, runId), eq(workflowRuns.tenantId, req.tenantId!)));
+    const [run] = await req.db!.select().from(workflowRuns).where(and(eq(workflowRuns.id, runId)));
     if (!run) throw AppError.notFound("Workflow run");
     if (run.status !== "waiting_approval" || !run.runState) throw new AppError("This run isn't waiting for an approval.", 409);
 
@@ -78,9 +78,9 @@ workflowRunsRouter.post(
       ? await req
           .db!.select({ payload: controlledVersions.payload })
           .from(controlledVersions)
-          .where(and(eq(controlledVersions.tenantId, req.tenantId!), eq(controlledVersions.subjectType, "workflow"), eq(controlledVersions.subjectId, run.workflowId), eq(controlledVersions.versionNumber, run.definitionVersion)))
+          .where(and(eq(controlledVersions.subjectType, "workflow"), eq(controlledVersions.subjectId, run.workflowId), eq(controlledVersions.versionNumber, run.definitionVersion)))
       : [];
-    const [workflow] = await req.db!.select().from(workflowDefinitions).where(and(eq(workflowDefinitions.id, run.workflowId), eq(workflowDefinitions.tenantId, req.tenantId!)));
+    const [workflow] = await req.db!.select().from(workflowDefinitions).where(and(eq(workflowDefinitions.id, run.workflowId)));
     if (!workflow) throw AppError.notFound("Workflow");
     const graph = (pinned?.payload ?? workflow.definition) as unknown as WorkflowDefinition;
 
@@ -98,7 +98,6 @@ workflowRunsRouter.post(
         .where(eq(workflowRuns.id, run.id))
         .returning();
       await recordAuditTrail(req.db as TenantDb, {
-        tenantId: req.tenantId!,
         entityType: "WorkflowRun",
         entityId: run.id,
         action: "status_change",
@@ -120,7 +119,7 @@ workflowRunsRouter.post(
 workflowRunsRouter.get(
   "/:runId",
   asyncHandler(async (req: Request, res: Response) => {
-    const [run] = await req.db!.select().from(workflowRuns).where(and(eq(workflowRuns.id, Number(req.params.runId)), eq(workflowRuns.tenantId, req.tenantId!)));
+    const [run] = await req.db!.select().from(workflowRuns).where(and(eq(workflowRuns.id, Number(req.params.runId))));
     if (!run) throw AppError.notFound("Workflow run");
     res.json(run);
   }),

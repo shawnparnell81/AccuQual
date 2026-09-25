@@ -9,7 +9,6 @@ import * as schema from "../../drizzle/schema/index.js";
 import { logger } from "../../utils/logger.js";
 
 interface RecordAuditTrailInput {
-  tenantId: number;
   entityType: string;
   entityId: number;
   // "permission_denied" — module-specific RBAC build (2026-09-16): logged
@@ -51,7 +50,6 @@ interface RecordAuditTrailInput {
  */
 export async function recordAuditTrail(db: TenantDb, input: RecordAuditTrailInput): Promise<void> {
   await db.insert(auditTrail).values({
-    tenantId: input.tenantId,
     entityType: input.entityType,
     entityId: input.entityId,
     action: input.action,
@@ -88,7 +86,6 @@ export async function recordAuditTrailStandalone(pool: Pool, input: RecordAuditT
     await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [String(input.tenantId)]);
     const db = drizzle(client, { schema });
     await db.insert(auditTrail).values({
-      tenantId: input.tenantId,
       entityType: input.entityType,
       entityId: input.entityId,
       action: input.action,
@@ -183,7 +180,6 @@ export interface FieldChange {
  */
 export async function attachFieldChanges<T extends { txid: number | null; entityType: string; entityId: number }>(
   db: TenantDb,
-  tenantId: number,
   rows: T[]
 ): Promise<(T & { fieldChanges: FieldChange[] })[]> {
   const txids = [...new Set(rows.map((r) => r.txid).filter((x): x is number => x !== null && x !== undefined))];
@@ -192,7 +188,7 @@ export async function attachFieldChanges<T extends { txid: number | null; entity
   const changes = await db
     .select()
     .from(auditRowChanges)
-    .where(and(eq(auditRowChanges.tenantId, tenantId), inArray(auditRowChanges.txid, txids)));
+    .where(and(inArray(auditRowChanges.txid, txids)));
 
   return rows.map((r) => {
     const table = ENTITY_TABLE[r.entityType];

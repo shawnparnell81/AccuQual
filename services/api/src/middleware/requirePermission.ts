@@ -53,14 +53,13 @@ export function parsePermission(name: string): { subject: PermissionSubject; act
 /** The decision itself, separate from Express so it is unit-testable and reusable inside services. */
 export async function hasPermission(
   db: TenantDb,
-  tenantId: number,
   user: { id: number; roleName: string | null; department: string | null },
   name: PermissionName,
 ): Promise<{ allowed: boolean; reason?: string }> {
   const { subject, action } = parsePermission(name);
   if (user.roleName && EXTERNAL_ROLES.has(user.roleName)) return { allowed: false, reason: "External accounts cannot use this feature" };
 
-  const level = await getUserAccessLevel(db, tenantId, user, PERMISSION_SUBJECTS[subject].resource);
+  const level = await getUserAccessLevel(db, user, PERMISSION_SUBJECTS[subject].resource);
   if (RANK[level] < RANK[NEEDED_LEVEL[action]]) return { allowed: false, reason: `Requires ${NEEDED_LEVEL[action]} access to ${PERMISSION_SUBJECTS[subject].resource}` };
   if ((action === "review" || action === "publish" || action === "override" || action === "release") && !(user.roleName && REVIEWER_ROLES.has(user.roleName))) {
     return { allowed: false, reason: action === "override" ? "Overriding a failed calibration requires an admin or quality manager" : action === "release" ? "Releasing or destroying quarantined material requires an admin or quality manager" : "Reviewing and publishing require an admin or quality manager" };
@@ -73,13 +72,12 @@ export function requirePermission(name: PermissionName) {
   const { subject } = parsePermission(name);
   return asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user || !req.db || req.tenantId === undefined) return next(AppError.forbidden("Missing tenant context"));
-    const verdict = await hasPermission(req.db as TenantDb, req.tenantId, req.user, name);
+    const verdict = await hasPermission(req.db as TenantDb, req.user, name);
     if (verdict.allowed) return next();
 
     // Standalone connection: the request transaction is rolled back on a 403, which would take the record with it.
     const idFromPath = Number(req.params.id);
     await recordAuditTrailStandalone(pool, {
-      tenantId: req.tenantId,
       entityType: PERMISSION_SUBJECTS[subject].entityType,
       entityId: Number.isFinite(idFromPath) && idFromPath > 0 ? idFromPath : 0,
       action: "permission_denied",

@@ -1,10 +1,8 @@
 import { pgTable, serial, text, integer, timestamp, jsonb, numeric, vector } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
-import { tenants } from "./tenants.js";
 
 export const aiSuggestions = pgTable("ai_suggestions", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   module: text("module"), // ncr, capa, 8d, audit, document, supplier, warranty, erp, analysis
   pipeline: text("pipeline"), // root_cause, capa_generator, eight_d_generator, risk_scoring, audit_prep, doc_summary, predictive_quality, ncr_triage, supplier_message_draft, warranty_triage, erp_automation, pr_justification, risk_analysis
   input: jsonb("input").$type<Record<string, unknown>>(),
@@ -26,7 +24,6 @@ export const aiSuggestions = pgTable("ai_suggestions", {
 
 export const aiRiskScores = pgTable("ai_risk_scores", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   entityType: text("entity_type"), // supplier, process, product, ncr
   entityId: integer("entity_id"),
   score: numeric("score"), // 0-100
@@ -42,7 +39,6 @@ export const aiRiskScores = pgTable("ai_risk_scores", {
  */
 export const aiEmbeddings = pgTable("ai_embeddings", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   entityType: text("entity_type").notNull(), // ncr, capa, audit_finding, supplier_issue, training_material, document
   entityId: integer("entity_id").notNull(),
   content: text("content").notNull(),

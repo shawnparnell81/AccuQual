@@ -45,7 +45,7 @@ async function checkAi(db: TenantDb, tenantId: number): Promise<HealthCheck> {
   const recent = await db
     .select({ status: aiSuggestions.status })
     .from(aiSuggestions)
-    .where(and(eq(aiSuggestions.tenantId, tenantId), gte(aiSuggestions.createdAt, since)));
+    .where(and(gte(aiSuggestions.createdAt, since)));
   const errorCount = recent.filter((r) => r.status === "error").length;
   const total = recent.length;
   const errorRate = total > 0 ? errorCount / total : 0;
@@ -60,18 +60,18 @@ async function checkAi(db: TenantDb, tenantId: number): Promise<HealthCheck> {
   };
 }
 
-async function checkWorkflow(db: TenantDb, tenantId: number): Promise<HealthCheck> {
-  const { summary } = await buildWorkflowHealthReport(db, tenantId);
+async function checkWorkflow(db: TenantDb): Promise<HealthCheck> {
+  const { summary } = await buildWorkflowHealthReport(db);
   const status: Status = summary.withIssues > 0 ? "warning" : "ok";
   return { status, ...summary, detail: `${summary.active}/${summary.total} workflow definitions active, ${summary.withIssues} with structural issues` };
 }
 
-async function checkEmail(db: TenantDb, tenantId: number): Promise<HealthCheck> {
+async function checkEmail(db: TenantDb): Promise<HealthCheck> {
   const since = SEVEN_DAYS_AGO();
   const rows = await db
     .select({ status: notificationLog.status, count: sql<number>`count(*)::int` })
     .from(notificationLog)
-    .where(and(eq(notificationLog.tenantId, tenantId), gte(notificationLog.createdAt, since)))
+    .where(and(gte(notificationLog.createdAt, since)))
     .groupBy(notificationLog.status);
 
   const byStatus = Object.fromEntries(rows.map((r) => [r.status, r.count]));
@@ -90,8 +90,8 @@ async function checkEmail(db: TenantDb, tenantId: number): Promise<HealthCheck> 
   };
 }
 
-async function checkReporting(db: TenantDb, tenantId: number): Promise<HealthCheck> {
-  const rows = await db.select().from(reportSchedules).where(eq(reportSchedules.tenantId, tenantId));
+async function checkReporting(db: TenantDb): Promise<HealthCheck> {
+  const rows = await db.select().from(reportSchedules);
   const enabled = rows.filter((r) => r.enabled);
   const failedLastRun = enabled.filter((r) => r.lastRunStatus === "failed" || r.lastRunStatus === "error");
   const overdue = enabled.filter((r) => r.nextRunAt && new Date(r.nextRunAt) < new Date());
@@ -107,21 +107,21 @@ async function checkReporting(db: TenantDb, tenantId: number): Promise<HealthChe
   };
 }
 
-async function checkReceivingInventory(db: TenantDb, tenantId: number): Promise<HealthCheck> {
+async function checkReceivingInventory(db: TenantDb): Promise<HealthCheck> {
   const rows = await db
     .select({ id: inventoryAlerts.id })
     .from(inventoryAlerts)
-    .where(and(eq(inventoryAlerts.tenantId, tenantId), eq(inventoryAlerts.alertType, "below_min"), isNull(inventoryAlerts.acknowledgedAt)));
+    .where(and(eq(inventoryAlerts.alertType, "below_min"), isNull(inventoryAlerts.acknowledgedAt)));
 
   const status: Status = rows.length > 5 ? "warning" : "ok";
   return { status, itemsBelowMin: rows.length, detail: `${rows.length} item(s) below minimum stock level, unacknowledged` };
 }
 
-async function checkSupplierPortal(db: TenantDb, tenantId: number): Promise<HealthCheck> {
+async function checkSupplierPortal(db: TenantDb): Promise<HealthCheck> {
   const supplierUsers = await db
     .select({ id: users.id, lastLoginAt: users.lastLoginAt })
     .from(users)
-    .where(and(eq(users.tenantId, tenantId), isNotNull(users.supplierId), eq(users.isActive, true)));
+    .where(and(isNotNull(users.supplierId), eq(users.isActive, true)));
 
   const since = SEVEN_DAYS_AGO();
   const recentlyActive = supplierUsers.filter((u) => u.lastLoginAt && new Date(u.lastLoginAt) >= since).length;
@@ -172,11 +172,11 @@ export const getSystemHealthHandler = asyncHandler(async (req: Request, res: Res
   const [database, ai, workflow, email, reporting, receivingInventory, supplierPortal] = await Promise.all([
     checkDatabase(),
     checkAi(db, tenantId),
-    checkWorkflow(db, tenantId),
-    checkEmail(db, tenantId),
-    checkReporting(db, tenantId),
-    checkReceivingInventory(db, tenantId),
-    checkSupplierPortal(db, tenantId),
+    checkWorkflow(db),
+    checkEmail(db),
+    checkReporting(db),
+    checkReceivingInventory(db),
+    checkSupplierPortal(db),
   ]);
 
   const checks = { database, monitoring: checkMonitoring(), ai, workflow, email, reporting, receivingInventory, supplierPortal };

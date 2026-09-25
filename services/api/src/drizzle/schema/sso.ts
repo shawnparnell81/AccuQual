@@ -1,5 +1,4 @@
 import { pgTable, serial, integer, text, boolean, timestamp, unique } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 import { roles } from "./roles.js";
 
@@ -9,7 +8,6 @@ import { roles } from "./roles.js";
  */
 export const ssoConnections = pgTable("sso_connections", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull().unique(),
   displayName: text("display_name").notNull().default("Single sign-on"),
   issuer: text("issuer").notNull(),
   clientId: text("client_id").notNull(),
@@ -36,13 +34,12 @@ export const ssoDomains = pgTable(
   "sso_domains",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     domain: text("domain").notNull(),
     verificationToken: text("verification_token").notNull(),
     verifiedAt: timestamp("verified_at"),
     createdAt: timestamp("created_at").defaultNow(),
   },
-  (t) => ({ uniqueDomainPerTenant: unique("sso_domains_tenant_domain_uq").on(t.tenantId, t.domain) }),
+  (t) => ({ uniqueDomainPerTenant: unique("sso_domains_domain_uq").on(t.domain) }),
 );
 
 /** Links a local user to their identity at the provider (the stable `sub`, not the mutable email). */
@@ -50,7 +47,6 @@ export const userIdentities = pgTable(
   "user_identities",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     userId: integer("user_id").references(() => users.id).notNull(),
     connectionId: integer("connection_id").references(() => ssoConnections.id, { onDelete: "cascade" }).notNull(),
     subject: text("subject").notNull(),

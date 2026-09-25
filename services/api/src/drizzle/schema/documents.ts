@@ -1,11 +1,9 @@
 import { pgTable, serial, text, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
-import { tenants } from "./tenants.js";
 import { controlledVersions } from "./versioning.js";
 
 export const documents = pgTable("documents", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   title: text("title").notNull(),
   category: text("category"),
   currentVersion: integer("current_version").notNull().default(1),
@@ -37,7 +35,6 @@ export const documents = pgTable("documents", {
 
 export const documentVersions = pgTable("document_versions", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   documentId: integer("document_id").references(() => documents.id).notNull(),
   version: integer("version").notNull(),
   fileUrl: text("file_url"),
@@ -60,7 +57,6 @@ export const documentVersions = pgTable("document_versions", {
  */
 export const documentFiles = pgTable("document_files", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   documentId: integer("document_id").references(() => documents.id).notNull(),
   fileName: text("file_name").notNull(),
   mimeType: text("mime_type").notNull(),

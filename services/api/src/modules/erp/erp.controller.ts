@@ -35,18 +35,18 @@ function assertDepartment(req: Request, allowed: string[]) {
 }
 
 async function loadPo(req: Request, id: number) {
-  const [po] = await req.db!.select().from(erpPurchaseOrders).where(and(eq(erpPurchaseOrders.id, id), eq(erpPurchaseOrders.tenantId, req.tenantId!)));
+  const [po] = await req.db!.select().from(erpPurchaseOrders).where(and(eq(erpPurchaseOrders.id, id)));
   if (!po) throw AppError.notFound("PurchaseOrder");
   return po;
 }
 
 /** Joins line items with the item's sku/description (real, live inventory data — never denormalized onto the line item row) plus real received-to-date totals per line. */
 async function lineItemsWithContext(req: Request, purchaseOrderId: number) {
-  const lineItems = await getLineItems(req.db!, req.tenantId!, purchaseOrderId);
+  const lineItems = await getLineItems(req.db!, purchaseOrderId);
   const itemIds = lineItems.map((li) => li.itemId);
-  const items = itemIds.length ? await req.db!.select().from(inventoryItems).where(and(eq(inventoryItems.tenantId, req.tenantId!))) : [];
+  const items = itemIds.length ? await req.db!.select().from(inventoryItems) : [];
   const itemsById = new Map(items.map((i) => [i.id, i]));
-  const receivedTotals = await getReceivedQuantities(req.db!, req.tenantId!, lineItems.map((li) => li.id));
+  const receivedTotals = await getReceivedQuantities(req.db!, lineItems.map((li) => li.id));
 
   return lineItems.map((li) => ({
     ...li,
@@ -77,10 +77,9 @@ export const listPurchaseOrdersHandler = asyncHandler(async (req: Request, res: 
     })
     .from(erpPurchaseOrders)
     .innerJoin(suppliers, eq(erpPurchaseOrders.supplierId, suppliers.id))
-    .where(eq(erpPurchaseOrders.tenantId, req.tenantId!))
     .orderBy(desc(erpPurchaseOrders.createdAt));
 
-  const lineItems = await req.db!.select().from(erpPoLineItems).where(eq(erpPoLineItems.tenantId, req.tenantId!));
+  const lineItems = await req.db!.select().from(erpPoLineItems);
   const totalByPo = new Map<number, number>();
   for (const li of lineItems) {
     const lineTotal = li.quantity * Number(li.unitCost ?? 0);
@@ -93,7 +92,7 @@ export const listPurchaseOrdersHandler = asyncHandler(async (req: Request, res: 
 export const createPurchaseOrderHandler = asyncHandler(async (req: Request, res: Response) => {
   assertDepartment(req, ["purchasing"]);
   const { supplierId, notes, lineItems, expectedDeliveryDate } = req.body as { supplierId: number; notes?: string; lineItems: LineItemInput[]; expectedDeliveryDate?: string };
-  const po = await createPurchaseOrder(req.db!, req.tenantId!, supplierId, lineItems, notes, req.user?.id, expectedDeliveryDate);
+  const po = await createPurchaseOrder(req.db!, supplierId, lineItems, notes, req.user?.id, expectedDeliveryDate);
   res.status(201).json(po);
 });
 
@@ -122,7 +121,7 @@ export const updatePurchaseOrderHandler = asyncHandler(async (req: Request, res:
     })
     .where(eq(erpPurchaseOrders.id, po.id))
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "PurchaseOrder", entityId: po.id, action: "update", changes: { supplierId, notes }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "PurchaseOrder", entityId: po.id, action: "update", changes: { supplierId, notes }, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -130,7 +129,7 @@ export const replaceLineItemsHandler = asyncHandler(async (req: Request, res: Re
   const po = await loadPo(req, Number(req.params.id));
   assertDepartment(req, ["purchasing"]);
   const { lineItems } = req.body as { lineItems: LineItemInput[] };
-  await replaceLineItems(req.db!, req.tenantId!, po, lineItems, req.user?.id);
+  await replaceLineItems(req.db!, po, lineItems, req.user?.id);
   const withContext = await lineItemsWithContext(req, po.id);
   res.json(withContext);
 });
@@ -138,13 +137,13 @@ export const replaceLineItemsHandler = asyncHandler(async (req: Request, res: Re
 export const sendPurchaseOrderHandler = asyncHandler(async (req: Request, res: Response) => {
   const po = await loadPo(req, Number(req.params.id));
   assertDepartment(req, ["purchasing"]);
-  res.json(await sendPurchaseOrder(req.db!, req.tenantId!, po, req.user?.id));
+  res.json(await sendPurchaseOrder(req.db!, po, req.user?.id));
 });
 
 export const cancelPurchaseOrderHandler = asyncHandler(async (req: Request, res: Response) => {
   const po = await loadPo(req, Number(req.params.id));
   assertDepartment(req, ["purchasing"]);
-  res.json(await cancelPurchaseOrder(req.db!, req.tenantId!, po, req.user?.id));
+  res.json(await cancelPurchaseOrder(req.db!, po, req.user?.id));
 });
 
 /**
@@ -162,7 +161,7 @@ export const listReceivingDocumentsHandler = asyncHandler(async (req: Request, r
     .from(erpReceivingDocuments)
     .where(
       purchaseOrderId
-        ? and(eq(erpReceivingDocuments.tenantId, req.tenantId!), eq(erpReceivingDocuments.purchaseOrderId, purchaseOrderId))
+        ? and(eq(erpReceivingDocuments.purchaseOrderId, purchaseOrderId))
         : eq(erpReceivingDocuments.tenantId, req.tenantId!)
     )
     .orderBy(desc(erpReceivingDocuments.createdAt));
@@ -171,7 +170,7 @@ export const listReceivingDocumentsHandler = asyncHandler(async (req: Request, r
   const lineItems = await req.db!
     .select()
     .from(erpReceivingLineItems)
-    .where(and(eq(erpReceivingLineItems.tenantId, req.tenantId!), inArray(erpReceivingLineItems.receivingDocumentId, rows.map((r) => r.id))));
+    .where(and(inArray(erpReceivingLineItems.receivingDocumentId, rows.map((r) => r.id))));
   const byDoc = new Map<number, typeof lineItems>();
   for (const li of lineItems) byDoc.set(li.receivingDocumentId, [...(byDoc.get(li.receivingDocumentId) ?? []), li]);
 
@@ -192,9 +191,9 @@ export const createReceivingDocumentHandler = asyncHandler(async (req: Request, 
 
 export const getReceivingDocumentHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const [doc] = await req.db!.select().from(erpReceivingDocuments).where(and(eq(erpReceivingDocuments.id, id), eq(erpReceivingDocuments.tenantId, req.tenantId!)));
+  const [doc] = await req.db!.select().from(erpReceivingDocuments).where(and(eq(erpReceivingDocuments.id, id)));
   if (!doc) throw AppError.notFound("ReceivingDocument");
-  const lineItems = await req.db!.select().from(erpReceivingLineItems).where(and(eq(erpReceivingLineItems.receivingDocumentId, id), eq(erpReceivingLineItems.tenantId, req.tenantId!)));
+  const lineItems = await req.db!.select().from(erpReceivingLineItems).where(and(eq(erpReceivingLineItems.receivingDocumentId, id)));
   res.json({ ...doc, lineItems });
 });
 
@@ -212,7 +211,7 @@ export const transitionReceivingLineItemHandler = asyncHandler(async (req: Reque
   const id = Number(req.params.id);
   const { status, notes } = req.body as { status: string; notes?: string };
 
-  const [report] = await req.db!.select({ defectCategory: qualityInspectionReports.defectCategory }).from(qualityInspectionReports).where(and(eq(qualityInspectionReports.receivingLineItemId, id), eq(qualityInspectionReports.tenantId, req.tenantId!)));
+  const [report] = await req.db!.select({ defectCategory: qualityInspectionReports.defectCategory }).from(qualityInspectionReports).where(and(eq(qualityInspectionReports.receivingLineItemId, id)));
 
   const updated = await transitionReceivingLineItem(req.db!, req.tenantId!, id, status, {
     department: req.user?.department ?? null,
@@ -231,7 +230,6 @@ export const erpOverviewHandler = asyncHandler(async (req: Request, res: Respons
     .select({ id: erpPurchaseOrders.id, status: erpPurchaseOrders.status, supplierName: suppliers.name, createdAt: erpPurchaseOrders.createdAt })
     .from(erpPurchaseOrders)
     .innerJoin(suppliers, eq(erpPurchaseOrders.supplierId, suppliers.id))
-    .where(eq(erpPurchaseOrders.tenantId, req.tenantId!))
     .orderBy(desc(erpPurchaseOrders.createdAt));
 
   const countByStatus: Record<string, number> = { draft: 0, sent: 0, partially_received: 0, received: 0, cancelled: 0 };
@@ -241,7 +239,7 @@ export const erpOverviewHandler = asyncHandler(async (req: Request, res: Respons
 });
 
 async function loadRequisition(req: Request, id: number) {
-  const [row] = await req.db!.select().from(erpPurchaseRequisitions).where(and(eq(erpPurchaseRequisitions.id, id), eq(erpPurchaseRequisitions.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(erpPurchaseRequisitions).where(and(eq(erpPurchaseRequisitions.id, id)));
   if (!row) throw AppError.notFound("PurchaseRequisition");
   return row;
 }
@@ -249,7 +247,7 @@ async function loadRequisition(req: Request, id: number) {
 /** Any requesting department may raise a requisition — this matrix entry grants "edit" to all of them (see departmentAccess.ts's purchase_requisitions), so there's no assertDepartment call here; approve/reject/convert below are purchasing-only. */
 export const listRequisitionsHandler = asyncHandler(async (req: Request, res: Response) => {
   const { status } = req.query as Record<string, string | undefined>;
-  const conditions = [eq(erpPurchaseRequisitions.tenantId, req.tenantId!)];
+  const conditions = [];
   if (status) conditions.push(eq(erpPurchaseRequisitions.status, status));
 
   const rows = await req
@@ -280,17 +278,16 @@ export const createRequisitionHandler = asyncHandler(async (req: Request, res: R
     justification?: string;
   };
 
-  const [item] = await req.db!.select({ id: inventoryItems.id, defaultSupplierId: inventoryItems.defaultSupplierId }).from(inventoryItems).where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.tenantId, req.tenantId!)));
+  const [item] = await req.db!.select({ id: inventoryItems.id, defaultSupplierId: inventoryItems.defaultSupplierId }).from(inventoryItems).where(and(eq(inventoryItems.id, itemId)));
   if (!item) throw AppError.badRequest(`Inventory item #${itemId} not found`);
   if (linkedNcrId !== undefined) {
-    const [linked] = await req.db!.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, linkedNcrId), eq(ncr.tenantId, req.tenantId!)));
+    const [linked] = await req.db!.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, linkedNcrId)));
     if (!linked) throw AppError.badRequest(`NCR #${linkedNcrId} not found`);
   }
 
   const [created] = await req
     .db!.insert(erpPurchaseRequisitions)
     .values({
-      tenantId: req.tenantId!,
       requestedBy: req.user?.id,
       department: req.user?.department ?? null,
       itemId,
@@ -300,7 +297,7 @@ export const createRequisitionHandler = asyncHandler(async (req: Request, res: R
       justification,
     })
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "PurchaseRequisition", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "PurchaseRequisition", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
@@ -322,29 +319,29 @@ export const updateRequisitionHandler = asyncHandler(async (req: Request, res: R
     .set({ ...req.body, updatedAt: new Date() })
     .where(eq(erpPurchaseRequisitions.id, record.id))
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "PurchaseRequisition", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "PurchaseRequisition", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
   res.json(updated);
 });
 
 export const submitRequisitionHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadRequisition(req, Number(req.params.id));
-  res.json(await submitRequisition(req.db!, req.tenantId!, record, req.user?.id));
+  res.json(await submitRequisition(req.db!, record, req.user?.id));
 });
 
 export const approveRequisitionHandler = asyncHandler(async (req: Request, res: Response) => {
   assertDepartment(req, ["purchasing"]);
   const record = await loadRequisition(req, Number(req.params.id));
-  res.json(await approveRequisition(req.db!, req.tenantId!, record, req.user?.id));
+  res.json(await approveRequisition(req.db!, record, req.user?.id));
 });
 
 export const rejectRequisitionHandler = asyncHandler(async (req: Request, res: Response) => {
   assertDepartment(req, ["purchasing"]);
   const record = await loadRequisition(req, Number(req.params.id));
-  res.json(await rejectRequisition(req.db!, req.tenantId!, record, req.user?.id));
+  res.json(await rejectRequisition(req.db!, record, req.user?.id));
 });
 
 export const convertRequisitionToPoHandler = asyncHandler(async (req: Request, res: Response) => {
   assertDepartment(req, ["purchasing"]);
   const record = await loadRequisition(req, Number(req.params.id));
-  res.json(await convertRequisitionToPo(req.db!, req.tenantId!, record, req.user?.id));
+  res.json(await convertRequisitionToPo(req.db!, record, req.user?.id));
 });

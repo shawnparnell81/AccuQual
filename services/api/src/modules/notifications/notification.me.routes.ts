@@ -21,7 +21,7 @@ notificationsMeRouter.use(requireAuth, withTenantDb);
 notificationsMeRouter.get(
   "/me",
   asyncHandler(async (req, res) => {
-    const { rows, unreadCount } = await listMyNotifications(req.db! as TenantDb, req.tenantId!, req.user!.id);
+    const { rows, unreadCount } = await listMyNotifications(req.db! as TenantDb, req.user!.id);
     res.json({ notifications: rows, unreadCount });
   })
 );
@@ -32,7 +32,7 @@ notificationsMeRouter.patch(
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("Invalid notification id");
-    const ok = await markNotificationRead(req.db! as TenantDb, req.tenantId!, id, req.user!.id);
+    const ok = await markNotificationRead(req.db! as TenantDb, id, req.user!.id);
     if (!ok) throw AppError.notFound("Notification");
     res.status(204).send();
   })

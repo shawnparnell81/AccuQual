@@ -23,7 +23,6 @@ export const auditRowChanges = pgTable(
   "audit_row_changes",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").notNull(),
     tableName: text("table_name").notNull(),
     rowId: integer("row_id"),
     op: text("op").notNull(), // INSERT | UPDATE | DELETE
@@ -32,7 +31,7 @@ export const auditRowChanges = pgTable(
     txid: bigint("txid", { mode: "number" }).default(sql`txid_current()`),
     createdAt: timestamp("created_at").defaultNow(),
   },
-  (table) => [index("audit_row_changes_row_idx").on(table.tenantId, table.tableName, table.rowId), index("audit_row_changes_tx_idx").on(table.tenantId, table.txid)]
+  (table) => [index("audit_row_changes_row_idx").on(table.tableName, table.rowId), index("audit_row_changes_tx_idx").on(table.txid)]
 );
 
 export type AuditRowChange = typeof auditRowChanges.$inferSelect;

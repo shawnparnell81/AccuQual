@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, numeric } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
 import { inventoryItems } from "./inventory.js";
@@ -16,7 +15,6 @@ import { ncr } from "./ncr.js";
  */
 export const erpPurchaseOrders = pgTable("erp_purchase_orders", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
   createdBy: integer("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
@@ -29,7 +27,6 @@ export const erpPurchaseOrders = pgTable("erp_purchase_orders", {
 
 export const erpPoLineItems = pgTable("erp_po_line_items", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   purchaseOrderId: integer("purchase_order_id").references(() => erpPurchaseOrders.id).notNull(),
   itemId: integer("item_id").references(() => inventoryItems.id).notNull(),
   quantity: integer("quantity").notNull(),
@@ -39,7 +36,6 @@ export const erpPoLineItems = pgTable("erp_po_line_items", {
 
 export const erpReceivingDocuments = pgTable("erp_receiving_documents", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   purchaseOrderId: integer("purchase_order_id").references(() => erpPurchaseOrders.id).notNull(),
   createdBy: integer("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
@@ -62,7 +58,6 @@ export const erpReceivingDocuments = pgTable("erp_receiving_documents", {
  */
 export const erpReceivingLineItems = pgTable("erp_receiving_line_items", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   receivingDocumentId: integer("receiving_document_id").references(() => erpReceivingDocuments.id).notNull(),
   poLineItemId: integer("po_line_item_id").references(() => erpPoLineItems.id).notNull(),
   quantityReceived: integer("quantity_received").notNull(),
@@ -89,7 +84,6 @@ export const erpReceivingLineItems = pgTable("erp_receiving_line_items", {
  */
 export const erpPurchaseRequisitions = pgTable("erp_purchase_requisitions", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   requestedBy: integer("requested_by").references(() => users.id),
   department: text("department"),
   itemId: integer("item_id").references(() => inventoryItems.id).notNull(),

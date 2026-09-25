@@ -32,8 +32,8 @@ export const workflowAdapter: SubjectAdapter = {
   notifyDepartments: ["quality"],
   blank: () => ({ ...EMPTY_WORKFLOW }) as unknown as Record<string, unknown>,
 
-  async loadLive(db: TenantDb, tenantId: number, id: number) {
-    const [row] = await db.select().from(workflowDefinitions).where(and(eq(workflowDefinitions.id, id), eq(workflowDefinitions.tenantId, tenantId)));
+  async loadLive(db: TenantDb, id: number) {
+    const [row] = await db.select().from(workflowDefinitions).where(and(eq(workflowDefinitions.id, id)));
     if (!row) throw AppError.notFound("Workflow");
     const def = row.definition as { nodes?: WorkflowNode[]; edges?: WorkflowEdge[]; metadata?: Record<string, unknown> };
     const payload = toWorkflowPayload({ nodes: def.nodes, edges: def.edges, metadata: { ...(def.metadata ?? {}), name: row.name, ...(row.module ? { module: row.module } : {}) } });
@@ -48,9 +48,9 @@ export const workflowAdapter: SubjectAdapter = {
     return { errors, warnings: report.warnings };
   },
 
-  async apply(db, tenantId, id, payload, info) {
+  async apply(db, id, payload, info) {
     const p = payload as unknown as WorkflowPayload;
-    const [existing] = await db.select().from(workflowDefinitions).where(and(eq(workflowDefinitions.id, id), eq(workflowDefinitions.tenantId, tenantId)));
+    const [existing] = await db.select().from(workflowDefinitions).where(and(eq(workflowDefinitions.id, id)));
     if (!existing) throw AppError.notFound("Workflow");
     // The placeholder a brand-new workflow starts with is not a version anyone ran, so it isn't added to the legacy history.
     const history = info.firstPublish ? (existing.versionHistory ?? []) : [...(existing.versionHistory ?? []), { version: existing.version, definition: existing.definition, updatedAt: new Date().toISOString(), updatedBy: info.actor }].slice(-VERSION_HISTORY_CAP);
@@ -85,11 +85,11 @@ export function createFormAdapter(config: { subject: "management_review" | "cont
     notifyDepartments: ["quality"],
     blank: () => ({}),
 
-    async loadLive(db: TenantDb, tenantId: number, subjectId: number) {
+    async loadLive(db: TenantDb, subjectId: number) {
       const [row] = await db
         .select()
         .from(formData)
-        .where(and(eq(formData.tenantId, tenantId), eq(formData.formType, config.formType), eq(formData.entityId, subjectId)));
+        .where(and(eq(formData.formType, config.formType), eq(formData.entityId, subjectId)));
       // version stays null: the record's own edit counter is not a version number in this scheme.
       return { payload: row?.data ?? {}, version: null, author: row?.createdBy ?? null, exists: !!row };
     },
@@ -99,17 +99,17 @@ export function createFormAdapter(config: { subject: "management_review" | "cont
       return filled ? { errors: [], warnings: [] } : { errors: [{ code: "empty", message: `The ${config.noun} is empty — fill in at least one section.` }], warnings: [] };
     },
 
-    async apply(db, tenantId, subjectId, payload, info) {
+    async apply(db, subjectId, payload, info) {
       const [existing] = await db
         .select()
         .from(formData)
-        .where(and(eq(formData.tenantId, tenantId), eq(formData.formType, config.formType), eq(formData.entityId, subjectId)));
+        .where(and(eq(formData.formType, config.formType), eq(formData.entityId, subjectId)));
       if (existing) {
         // The live form_data keeps its own snapshot trail too, so the forms module's history still tells the truth.
-        await db.insert(formVersions).values({ tenantId, formId: existing.id, version: existing.version, data: existing.data, createdBy: info.actor });
+        await db.insert(formVersions).values({ formId: existing.id, version: existing.version, data: existing.data, createdBy: info.actor });
         await db.update(formData).set({ data: payload, version: existing.version + 1, updatedAt: new Date() }).where(eq(formData.id, existing.id));
       } else {
-        await db.insert(formData).values({ tenantId, formType: config.formType, entityId: subjectId, data: payload, version: 1, createdBy: info.actor });
+        await db.insert(formData).values({ formType: config.formType, entityId: subjectId, data: payload, version: 1, createdBy: info.actor });
       }
     },
 

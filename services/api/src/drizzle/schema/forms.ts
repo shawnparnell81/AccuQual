@@ -1,11 +1,9 @@
 import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
 /** Tenant-scoped registry of fillable PDF templates per form type (NCR, CAPA, 8D, ...). */
 export const formTemplates = pgTable("form_templates", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   formType: text("form_type").notNull(), // ncr, capa, eight_d, five_why, audit_checklist, audit_plan, di, supplier, training, change, calibration, complaint
   pdfPath: text("pdf_path").notNull(), // /tenants/<tenantId>/forms/<formType>/template.pdf
   fieldMap: jsonb("field_map").$type<Record<string, string>>().notNull(),
@@ -16,7 +14,6 @@ export const formTemplates = pgTable("form_templates", {
 /** A filled-in form instance, attached to a QMS record (NCR, CAPA, ...) via entityType+entityId. */
 export const formData = pgTable("form_data", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   formType: text("form_type").notNull(),
   entityType: text("entity_type"), // ncr, capa, eight_d, audits, ...
   entityId: integer("entity_id"),
@@ -30,7 +27,6 @@ export const formData = pgTable("form_data", {
 /** Immutable version history for a form_data row — one row per save. */
 export const formVersions = pgTable("form_versions", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   formId: integer("form_id").references(() => formData.id).notNull(),
   version: integer("version").notNull(),
   data: jsonb("data").$type<Record<string, unknown>>().notNull(),

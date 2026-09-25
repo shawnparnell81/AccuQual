@@ -12,17 +12,17 @@ import type { TenantDb } from "../../lib/tenantScope.js";
  * per the Multi-Tenant Patch Pack, embeddings and retrieval must never mix
  * data across tenants.
  */
-export async function embedAndStore(db: TenantDb, tenantId: number, entityType: string, entityId: number, content: string): Promise<void> {
+export async function embedAndStore(db: TenantDb, entityType: string, entityId: number, content: string): Promise<void> {
   const embedding = await generateEmbedding(content);
-  await db.insert(aiEmbeddings).values({ tenantId, entityType, entityId, content, embedding });
+  await db.insert(aiEmbeddings).values({ entityType, entityId, content, embedding });
 }
 
-export async function findSimilar(db: TenantDb, tenantId: number, entityType: string, content: string, limit = 5) {
+export async function findSimilar(db: TenantDb, entityType: string, content: string, limit = 5) {
   const embedding = await generateEmbedding(content);
   return db
     .select()
     .from(aiEmbeddings)
-    .where(and(eq(aiEmbeddings.tenantId, tenantId), sql`${aiEmbeddings.entityType} = ${entityType}`))
+    .where(and(sql`${aiEmbeddings.entityType} = ${entityType}`))
     .orderBy(sql`${aiEmbeddings.embedding} <-> ${JSON.stringify(embedding)}`)
     .limit(limit);
 }

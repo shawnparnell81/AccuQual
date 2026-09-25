@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
 
@@ -24,7 +23,6 @@ import { suppliers } from "./supplier.js";
  */
 export const scarForms = pgTable("scar_forms", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   scarNumber: text("scar_number"),
   dateIssued: timestamp("date_issued"),
   supplierName: text("supplier_name"),

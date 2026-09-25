@@ -84,7 +84,7 @@ export const riskScore = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = req.tenantId!;
 
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
-  const limitError = await checkUsageLimit(db, tenantId, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const limitError = await checkUsageLimit(db, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
   const { llmOptions } = await loadTenantLlmOptions(db, tenantId);
 
@@ -93,11 +93,10 @@ export const riskScore = asyncHandler(async (req: Request, res: Response) => {
 
   const [saved] = await db
     .insert(aiRiskScores)
-    .values({ tenantId, entityType, entityId, score: String(output.score ?? 0), details: output, status: classified.status, errorMessage: classified.errorMessage })
+    .values({ entityType, entityId, score: String(output.score ?? 0), details: output, status: classified.status, errorMessage: classified.errorMessage })
     .returning();
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "AiRiskScore",
     entityId: saved!.id,
     action: "create",
@@ -249,12 +248,11 @@ export const inspectionNotes = asyncHandler(async (req: Request, res: Response) 
  */
 export const listSuggestions = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db! as TenantDb;
-  const tenantId = req.tenantId!;
   const { module, status } = req.query as { module?: string; status?: string };
   const limit = Math.min(Number(req.query.limit) || 50, 200);
   const offset = Math.max(Number(req.query.offset) || 0, 0);
 
-  const conditions = [eq(aiSuggestions.tenantId, tenantId)];
+  const conditions = [];
   if (module) conditions.push(eq(aiSuggestions.module, module));
   if (status) conditions.push(eq(aiSuggestions.status, status));
 
@@ -269,7 +267,7 @@ export const listSuggestions = asyncHandler(async (req: Request, res: Response) 
     ? await db
         .select({ entityId: auditTrail.entityId, changes: auditTrail.changes, createdAt: auditTrail.createdAt })
         .from(auditTrail)
-        .where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "AiSuggestion"), eq(auditTrail.action, "decision"), inArray(auditTrail.entityId, suggestionIds)))
+        .where(and(eq(auditTrail.entityType, "AiSuggestion"), eq(auditTrail.action, "decision"), inArray(auditTrail.entityId, suggestionIds)))
     : [];
   // Keep the most recent decision per suggestion id — normally there's
   // exactly one, but a user re-opening and re-deciding an old suggestion
@@ -304,14 +302,12 @@ export const listSuggestions = asyncHandler(async (req: Request, res: Response) 
 export const recordSuggestionDecision = asyncHandler(async (req: Request, res: Response) => {
   const suggestionId = Number(req.params.id);
   const { decision } = req.body as { decision: "accepted" | "rejected" };
-  const tenantId = req.tenantId!;
   const db = req.db! as TenantDb;
 
-  const [existing] = await db.select().from(aiSuggestions).where(and(eq(aiSuggestions.id, suggestionId), eq(aiSuggestions.tenantId, tenantId)));
+  const [existing] = await db.select().from(aiSuggestions).where(and(eq(aiSuggestions.id, suggestionId)));
   if (!existing) throw AppError.notFound("AiSuggestion");
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "AiSuggestion",
     entityId: suggestionId,
     action: "decision",

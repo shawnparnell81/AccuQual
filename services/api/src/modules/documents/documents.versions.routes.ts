@@ -54,7 +54,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     view,
     asyncHandler(async (req: Request, res: Response) => {
       const type = linkType(req.query.type);
-      res.json(await searchTargets(dbOf(req), req.tenantId!, type, typeof req.query.q === "string" ? req.query.q : ""));
+      res.json(await searchTargets(dbOf(req), type, typeof req.query.q === "string" ? req.query.q : ""));
     }),
   );
 
@@ -68,7 +68,7 @@ export function registerDocumentVersionRoutes(router: Router) {
         .select({ id: users.id, name: users.name, email: users.email, role: roles.name })
         .from(users)
         .innerJoin(roles, eq(users.roleId, roles.id))
-        .where(and(eq(users.tenantId, req.tenantId!), eq(users.isActive, true), inArray(roles.name, [...REVIEWER_ROLES])))
+        .where(and(eq(users.isActive, true), inArray(roles.name, [...REVIEWER_ROLES])))
         .orderBy(asc(users.name), asc(users.email));
       res.json(rows.filter((r) => r.id !== req.user!.id));
     }),
@@ -82,7 +82,7 @@ export function registerDocumentVersionRoutes(router: Router) {
       const type = linkType(req.query.type);
       const id = Number(req.query.id);
       if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("id must be a record id");
-      res.json(await documentsLinkedTo(dbOf(req), req.tenantId!, type, id));
+      res.json(await documentsLinkedTo(dbOf(req), type, id));
     }),
   );
 
@@ -96,7 +96,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     "/:id/version/:versionId",
     view,
     asyncHandler(async (req: Request, res: Response) => {
-      res.json(await engine.getVersion(dbOf(req), documentAdapter, req.tenantId!, idParam(req), idParam(req, "versionId")));
+      res.json(await engine.getVersion(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId")));
     }),
   );
 
@@ -143,7 +143,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     "/:id/version/:versionId/rollback",
     edit,
     asyncHandler(async (req: Request, res: Response) => {
-      const target = await engine.getVersion(dbOf(req), documentAdapter, req.tenantId!, idParam(req), idParam(req, "versionId"));
+      const target = await engine.getVersion(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId"));
       res.status(201).json(await engine.rollbackTo(dbOf(req), documentAdapter, req.tenantId!, idParam(req), target.versionNumber, actorOf(req)));
     }),
   );
@@ -174,7 +174,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     "/:id/version/:versionId/attachments/:attachmentId/url",
     view,
     asyncHandler(async (req: Request, res: Response) => {
-      const v = await engine.getVersion(dbOf(req), documentAdapter, req.tenantId!, idParam(req), idParam(req, "versionId"));
+      const v = await engine.getVersion(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId"));
       const file = normalizeDocumentPayload(v.payload).attachments.find((a) => a.id === idParam(req, "attachmentId"));
       if (!file) throw AppError.notFound("Attachment");
       res.json({ url: `/documents/files/download?token=${encodeURIComponent(signFileToken(req.tenantId!, file.id, req.user!.id))}`, expiresInSeconds: FILE_LINK_SECONDS, fileName: file.fileName, mimeType: file.mimeType });
@@ -192,7 +192,7 @@ export function registerDocumentVersionRoutes(router: Router) {
       const rows = await dbOf(req)
         .select({ n: controlledVersions.versionNumber, status: controlledVersions.status, payload: controlledVersions.payload })
         .from(controlledVersions)
-        .where(and(eq(controlledVersions.tenantId, req.tenantId!), eq(controlledVersions.subjectType, "document"), eq(controlledVersions.subjectId, id)))
+        .where(and(eq(controlledVersions.subjectType, "document"), eq(controlledVersions.subjectId, id)))
         .orderBy(asc(controlledVersions.versionNumber));
       const history = new Map<string, { type: LinkType; id: number; label: string; typeLabel: string; firstVersion: number; lastVersion: number; inForce: boolean; versions: number[] }>();
       let newest = 0;
@@ -224,10 +224,10 @@ documentFilesRouter.get(
   "/download",
   asyncHandler(async (req: Request, res: Response) => {
     const t = verifyFileToken(String(req.query.token ?? ""));
-    const [file] = await ownerDb.select().from(documentFiles).where(and(eq(documentFiles.id, t.fileId), eq(documentFiles.tenantId, t.tenantId)));
+    const [file] = await ownerDb.select().from(documentFiles).where(and(eq(documentFiles.id, t.fileId)));
     if (!file || !isInsideTenantStorage(t.tenantId, file.filePath) || !existsSync(file.filePath)) throw AppError.notFound("File");
 
-    await recordAuditTrailStandalone(pool, { tenantId: t.tenantId, entityType: DOCUMENT_ENTITY_TYPE, entityId: file.documentId, action: "update", changes: { event: "file_downloaded", fileId: file.id, fileName: file.fileName }, performedBy: t.userId });
+    await recordAuditTrailStandalone(pool, { entityType: DOCUMENT_ENTITY_TYPE, entityId: file.documentId, action: "update", changes: { event: "file_downloaded", fileId: file.id, fileName: file.fileName }, performedBy: t.userId });
 
     const inline = file.mimeType === "application/pdf" || file.mimeType.startsWith("image/");
     res.setHeader("Content-Type", file.mimeType);

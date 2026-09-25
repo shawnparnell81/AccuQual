@@ -1,6 +1,5 @@
 import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
-import { tenants } from "./tenants.js";
 import { erpConnectorPresets } from "./erpPresets.js";
 
 export const ERP_ERROR_TYPES = ["mappingError", "validationError", "transformError", "triggerError", "erpApiError", "unexpectedError"] as const;
@@ -34,7 +33,6 @@ export interface ErpSyncErrorPayloadSnapshot {
  */
 export const erpSyncErrors = pgTable("erp_sync_errors", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   module: text("module").notNull(),
   presetId: integer("preset_id").references(() => erpConnectorPresets.id),
   presetVersion: integer("preset_version"),

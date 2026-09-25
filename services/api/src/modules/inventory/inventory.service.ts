@@ -11,29 +11,29 @@ import { assertNotHeld, heldUnits } from "./inventoryHoldGuard.js";
 
 const DEFAULT_LOCATION = "default";
 
-export async function getStockRows(db: TenantDb, tenantId: number, itemId: number) {
-  return db.select().from(inventoryStock).where(and(eq(inventoryStock.itemId, itemId), eq(inventoryStock.tenantId, tenantId)));
+export async function getStockRows(db: TenantDb, itemId: number) {
+  return db.select().from(inventoryStock).where(and(eq(inventoryStock.itemId, itemId)));
 }
 
 /** Finds (or lazily creates) the one stock row for an item at a location — items start with no stock rows until their first movement. */
-async function getOrCreateStockRow(db: TenantDb, tenantId: number, itemId: number, location: string) {
+async function getOrCreateStockRow(db: TenantDb, itemId: number, location: string) {
   const [existing] = await db
     .select()
     .from(inventoryStock)
-    .where(and(eq(inventoryStock.itemId, itemId), eq(inventoryStock.tenantId, tenantId), eq(inventoryStock.location, location)));
+    .where(and(eq(inventoryStock.itemId, itemId), eq(inventoryStock.location, location)));
   if (existing) return existing;
 
-  const [created] = await db.insert(inventoryStock).values({ tenantId, itemId, location, onHand: "0", allocated: "0", onOrder: "0" }).returning();
+  const [created] = await db.insert(inventoryStock).values({ itemId, location, onHand: "0", allocated: "0", onOrder: "0" }).returning();
   return created!;
 }
 
-async function setOnHand(db: TenantDb, tenantId: number, itemId: number, location: string, newOnHand: number, performedBy?: number) {
+async function setOnHand(db: TenantDb, itemId: number, location: string, newOnHand: number, performedBy?: number) {
   if (newOnHand < 0) throw AppError.badRequest(`Insufficient stock at location "${location}"`);
-  await getOrCreateStockRow(db, tenantId, itemId, location);
+  await getOrCreateStockRow(db, itemId, location);
   await db
     .update(inventoryStock)
     .set({ onHand: String(newOnHand), lastAdjustedAt: new Date(), lastAdjustedBy: performedBy })
-    .where(and(eq(inventoryStock.itemId, itemId), eq(inventoryStock.tenantId, tenantId), eq(inventoryStock.location, location)));
+    .where(and(eq(inventoryStock.itemId, itemId), eq(inventoryStock.location, location)));
 }
 
 export interface MovementInput {
@@ -74,45 +74,45 @@ export function generateTrackingNumber(format: string, sku: string, seq: number)
 }
 
 /** Applies one movement's stock effect, inserts the ledger row, then recomputes state. Runs inside the caller's per-request transaction (req.db) — atomic with the rest of the request. */
-export async function applyMovement(db: TenantDb, tenantId: number, itemId: number, input: MovementInput, performedBy: number | undefined, inventorySettings?: InventorySettings) {
-  const stockRows = await getStockRows(db, tenantId, itemId);
+export async function applyMovement(db: TenantDb, itemId: number, input: MovementInput, performedBy: number | undefined, inventorySettings?: InventorySettings) {
+  const stockRows = await getStockRows(db, itemId);
   const totalBefore = stockRows.reduce((sum, r) => sum + Number(r.onHand), 0);
 
   // Units on quarantine hold can't leave through any outbound movement; they leave only through a Quarantine decision
   // (inventoryHolds.service.ts lifts the hold first, then calls this).
   if (input.movementType === "consume" || input.movementType === "scrap" || input.movementType === "return") {
-    await assertNotHeld(db, tenantId, itemId, input.quantity, totalBefore, input.lotId);
+    await assertNotHeld(db, itemId, input.quantity, totalBefore, input.lotId);
   }
 
   switch (input.movementType) {
     case "receive":
     case "produce": {
       const loc = input.toLocation ?? DEFAULT_LOCATION;
-      const row = await getOrCreateStockRow(db, tenantId, itemId, loc);
-      await setOnHand(db, tenantId, itemId, loc, Number(row.onHand) + input.quantity, performedBy);
+      const row = await getOrCreateStockRow(db, itemId, loc);
+      await setOnHand(db, itemId, loc, Number(row.onHand) + input.quantity, performedBy);
       break;
     }
     case "consume":
     case "scrap":
     case "return": {
       const loc = input.fromLocation ?? DEFAULT_LOCATION;
-      const row = await getOrCreateStockRow(db, tenantId, itemId, loc);
-      await setOnHand(db, tenantId, itemId, loc, Number(row.onHand) - input.quantity, performedBy);
+      const row = await getOrCreateStockRow(db, itemId, loc);
+      await setOnHand(db, itemId, loc, Number(row.onHand) - input.quantity, performedBy);
       break;
     }
     case "transfer": {
       const from = input.fromLocation!;
       const to = input.toLocation!;
-      const fromRow = await getOrCreateStockRow(db, tenantId, itemId, from);
-      await setOnHand(db, tenantId, itemId, from, Number(fromRow.onHand) - input.quantity, performedBy);
-      const toRow = await getOrCreateStockRow(db, tenantId, itemId, to);
-      await setOnHand(db, tenantId, itemId, to, Number(toRow.onHand) + input.quantity, performedBy);
+      const fromRow = await getOrCreateStockRow(db, itemId, from);
+      await setOnHand(db, itemId, from, Number(fromRow.onHand) - input.quantity, performedBy);
+      const toRow = await getOrCreateStockRow(db, itemId, to);
+      await setOnHand(db, itemId, to, Number(toRow.onHand) + input.quantity, performedBy);
       break;
     }
     case "adjust": {
       const loc = input.fromLocation ?? input.toLocation ?? DEFAULT_LOCATION;
-      const row = await getOrCreateStockRow(db, tenantId, itemId, loc);
-      await setOnHand(db, tenantId, itemId, loc, Number(row.onHand) + input.quantity, performedBy); // signed delta
+      const row = await getOrCreateStockRow(db, itemId, loc);
+      await setOnHand(db, itemId, loc, Number(row.onHand) + input.quantity, performedBy); // signed delta
       break;
     }
   }
@@ -124,14 +124,14 @@ export async function applyMovement(db: TenantDb, tenantId: number, itemId: numb
   let lotNumber = input.lotNumber;
   let serialNumber = input.serialNumber;
   if (input.movementType === "receive" || input.movementType === "produce") {
-    const [item] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.tenantId, tenantId)));
+    const [item] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, itemId)));
     const sku = item?.sku ?? "ITEM";
     if (!lotNumber && inventorySettings?.autoGenerateLotNumbers && inventorySettings.lotNumberFormat) {
-      const priorCount = (await db.select().from(inventoryMovements).where(and(eq(inventoryMovements.tenantId, tenantId), eq(inventoryMovements.itemId, itemId), isNotNull(inventoryMovements.lotNumber)))).length;
+      const priorCount = (await db.select().from(inventoryMovements).where(and(eq(inventoryMovements.itemId, itemId), isNotNull(inventoryMovements.lotNumber)))).length;
       lotNumber = generateTrackingNumber(inventorySettings.lotNumberFormat, sku, priorCount + 1);
     }
     if (!serialNumber && inventorySettings?.autoGenerateSerialNumbers && inventorySettings.serialNumberFormat) {
-      const priorCount = (await db.select().from(inventoryMovements).where(and(eq(inventoryMovements.tenantId, tenantId), eq(inventoryMovements.itemId, itemId), isNotNull(inventoryMovements.serialNumber)))).length;
+      const priorCount = (await db.select().from(inventoryMovements).where(and(eq(inventoryMovements.itemId, itemId), isNotNull(inventoryMovements.serialNumber)))).length;
       serialNumber = generateTrackingNumber(inventorySettings.serialNumberFormat, sku, priorCount + 1);
     }
   }
@@ -139,7 +139,6 @@ export async function applyMovement(db: TenantDb, tenantId: number, itemId: numb
   const [movement] = await db
     .insert(inventoryMovements)
     .values({
-      tenantId,
       itemId,
       movementType: input.movementType,
       quantity: String(Math.abs(input.quantity)),
@@ -160,10 +159,10 @@ export async function applyMovement(db: TenantDb, tenantId: number, itemId: numb
   // inventory at all, so it's excluded — see inventoryLots.service.ts's
   // own comment on why this never goes negative on its own).
   if (input.lotId && (input.movementType === "consume" || input.movementType === "scrap" || input.movementType === "return")) {
-    await consumeFromLot(db, tenantId, input.lotId, input.quantity);
+    await consumeFromLot(db, input.lotId, input.quantity);
   }
 
-  await recomputeState(db, tenantId, itemId, performedBy);
+  await recomputeState(db, itemId, performedBy);
   return { movement, totalBefore };
 }
 
@@ -175,11 +174,11 @@ export async function applyMovement(db: TenantDb, tenantId: number, itemId: numb
  * undo a purchasing decision already in flight. Replenishing above min via
  * a real movement still clears reorder_pending/on_order back to in_stock.
  */
-export async function recomputeState(db: TenantDb, tenantId: number, itemId: number, performedBy?: number): Promise<InventoryItem> {
-  const [item] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.tenantId, tenantId)));
+export async function recomputeState(db: TenantDb, itemId: number, performedBy?: number): Promise<InventoryItem> {
+  const [item] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, itemId)));
   if (!item) throw AppError.notFound("InventoryItem");
 
-  const stockRows = await getStockRows(db, tenantId, itemId);
+  const stockRows = await getStockRows(db, itemId);
   const onHand = stockRows.reduce((sum, r) => sum + Number(r.onHand), 0);
   const minLevel = Number(item.minLevel);
   const maxLevel = item.maxLevel === null ? null : Number(item.maxLevel);
@@ -201,17 +200,16 @@ export async function recomputeState(db: TenantDb, tenantId: number, itemId: num
   const [updated] = await db.update(inventoryItems).set({ state: newState, updatedAt: new Date() }).where(eq(inventoryItems.id, itemId)).returning();
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "InventoryItem",
     entityId: itemId,
     action: "status_change",
     changes: { from: item.state, to: newState, onHand },
     performedBy,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "inventory", event: newState, entityId: itemId });
+  await publishEvent(WORKFLOW_STREAM, { module: "inventory", event: newState, entityId: itemId });
 
   if (newState === "below_min" || newState === "overstock") {
-    await raiseAlertIfNeeded(db, tenantId, item, newState, onHand, minLevel);
+    await raiseAlertIfNeeded(db, item, newState, onHand, minLevel);
   } else {
     // Auto-acknowledge whichever alert type this transition actually
     // resolved. Deliberately does NOT fire for reorder_pending/on_order —
@@ -221,28 +219,27 @@ export async function recomputeState(db: TenantDb, tenantId: number, itemId: num
     // real stock recovered, until a human clicked Acknowledge by hand —
     // a deliberate product decision, not a bug fix reverted lightly. See
     // the QA sweep review.
-    if (item.state === "below_min") await acknowledgeOpenAlerts(db, tenantId, itemId, "below_min", performedBy);
-    if (item.state === "overstock") await acknowledgeOpenAlerts(db, tenantId, itemId, "overstock", performedBy);
+    if (item.state === "below_min") await acknowledgeOpenAlerts(db, itemId, "below_min", performedBy);
+    if (item.state === "overstock") await acknowledgeOpenAlerts(db, itemId, "overstock", performedBy);
   }
 
   return updated!;
 }
 
-async function acknowledgeOpenAlerts(db: TenantDb, tenantId: number, itemId: number, alertType: "below_min" | "overstock", performedBy: number | undefined) {
+async function acknowledgeOpenAlerts(db: TenantDb, itemId: number, alertType: "below_min" | "overstock", performedBy: number | undefined) {
   const openAlerts = await db
     .select({ id: inventoryAlerts.id })
     .from(inventoryAlerts)
-    .where(and(eq(inventoryAlerts.itemId, itemId), eq(inventoryAlerts.tenantId, tenantId), eq(inventoryAlerts.alertType, alertType), isNull(inventoryAlerts.acknowledgedAt)));
+    .where(and(eq(inventoryAlerts.itemId, itemId), eq(inventoryAlerts.alertType, alertType), isNull(inventoryAlerts.acknowledgedAt)));
   if (openAlerts.length === 0) return;
 
   await db
     .update(inventoryAlerts)
     .set({ acknowledgedAt: new Date(), acknowledgedBy: performedBy })
-    .where(and(eq(inventoryAlerts.itemId, itemId), eq(inventoryAlerts.tenantId, tenantId), eq(inventoryAlerts.alertType, alertType), isNull(inventoryAlerts.acknowledgedAt)));
+    .where(and(eq(inventoryAlerts.itemId, itemId), eq(inventoryAlerts.alertType, alertType), isNull(inventoryAlerts.acknowledgedAt)));
 
   for (const alert of openAlerts) {
     await recordAuditTrail(db, {
-      tenantId,
       entityType: "InventoryAlert",
       entityId: alert.id,
       action: "update",
@@ -262,14 +259,13 @@ async function acknowledgeOpenAlerts(db: TenantDb, tenantId: number, itemId: num
  * (only meaningful when maxLevel is set) and finally min_level, so a
  * request never has to be a null/zero quantity.
  */
-export async function createReorderRequest(db: TenantDb, tenantId: number, item: InventoryItem, onHand: number, createdBy: number | undefined) {
+export async function createReorderRequest(db: TenantDb, item: InventoryItem, onHand: number, createdBy: number | undefined) {
   const maxLevel = item.maxLevel === null ? null : Number(item.maxLevel);
   const target = item.reorderQuantity !== null ? Number(item.reorderQuantity) : maxLevel !== null ? Math.max(maxLevel - onHand, 0) : Number(item.minLevel);
   const requestedQty = Math.max(Math.round(target), 1);
 
-  const [request] = await db.insert(inventoryReorderRequests).values({ tenantId, itemId: item.id, requestedQty, status: "pending", createdBy }).returning();
+  const [request] = await db.insert(inventoryReorderRequests).values({ itemId: item.id, requestedQty, status: "pending", createdBy }).returning();
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "InventoryItem",
     entityId: item.id,
     action: "create",
@@ -279,20 +275,20 @@ export async function createReorderRequest(db: TenantDb, tenantId: number, item:
   return request!;
 }
 
-async function raiseAlertIfNeeded(db: TenantDb, tenantId: number, item: InventoryItem, alertType: "below_min" | "overstock", onHand: number, minLevel: number) {
+async function raiseAlertIfNeeded(db: TenantDb, item: InventoryItem, alertType: "below_min" | "overstock", onHand: number, minLevel: number) {
   const [openAlert] = await db
     .select()
     .from(inventoryAlerts)
-    .where(and(eq(inventoryAlerts.itemId, item.id), eq(inventoryAlerts.tenantId, tenantId), eq(inventoryAlerts.alertType, alertType), isNull(inventoryAlerts.acknowledgedAt)));
+    .where(and(eq(inventoryAlerts.itemId, item.id), eq(inventoryAlerts.alertType, alertType), isNull(inventoryAlerts.acknowledgedAt)));
   if (openAlert) return; // already an open, unacknowledged alert of this type — don't spam a second one
 
-  await db.insert(inventoryAlerts).values({ tenantId, itemId: item.id, alertType, metadata: { onHand, minLevel } });
+  await db.insert(inventoryAlerts).values({ itemId: item.id, alertType, metadata: { onHand, minLevel } });
 
   if (alertType === "below_min") {
     const subject = `Inventory below minimum: ${item.sku}`;
     const body = `${item.sku} (${item.description ?? "no description"}) is at ${onHand} ${item.unitOfMeasure ?? "units"}, at or below its minimum of ${minLevel}. Suggested reorder quantity: ${item.reorderQuantity ?? "not set"}.`;
-    await notifyDepartment(db, { tenantId, department: "material_management", subject, body, relatedEntityType: "InventoryItem", relatedEntityId: item.id });
-    await notifyDepartment(db, { tenantId, department: "purchasing", subject, body, relatedEntityType: "InventoryItem", relatedEntityId: item.id });
+    await notifyDepartment(db, { department: "material_management", subject, body, relatedEntityType: "InventoryItem", relatedEntityId: item.id });
+    await notifyDepartment(db, { department: "purchasing", subject, body, relatedEntityType: "InventoryItem", relatedEntityId: item.id });
   }
 }
 
@@ -305,9 +301,9 @@ async function raiseAlertIfNeeded(db: TenantDb, tenantId: number, item: Inventor
  * inventorySettings.reservationRules.allowNegativeAllocation is on (a real
  * backorder-style allowance some tenants want, off by default).
  */
-export async function reserveStock(db: TenantDb, tenantId: number, itemId: number, quantity: number, location: string | undefined, settings: InventorySettings | undefined, performedBy: number | undefined) {
+export async function reserveStock(db: TenantDb, itemId: number, quantity: number, location: string | undefined, settings: InventorySettings | undefined, performedBy: number | undefined) {
   const loc = location ?? DEFAULT_LOCATION;
-  const row = await getOrCreateStockRow(db, tenantId, itemId, loc);
+  const row = await getOrCreateStockRow(db, itemId, loc);
   const nextAllocated = Number(row.allocated) + quantity;
   const unallocated = Number(row.onHand) - Number(row.allocated);
 
@@ -315,27 +311,27 @@ export async function reserveStock(db: TenantDb, tenantId: number, itemId: numbe
     throw AppError.badRequest(`Cannot reserve ${quantity} — only ${unallocated} unallocated unit(s) at "${loc}" (reservationRules.allowNegativeAllocation is off).`);
   }
   // Held units are never available to promise, whatever the negative-allocation setting says.
-  const held = await heldUnits(db, tenantId, itemId);
+  const held = await heldUnits(db, itemId);
   if (held > 0) {
-    const rows = await getStockRows(db, tenantId, itemId);
+    const rows = await getStockRows(db, itemId);
     const usable = rows.reduce((s, r) => s + Number(r.onHand) - Number(r.allocated), 0) - held;
     if (quantity > usable) throw new AppError(`Cannot reserve ${quantity} — ${held} unit(s) of this item are on quarantine hold, leaving ${Math.max(usable, 0)} available to reserve.`, 409);
   }
 
-  await db.update(inventoryStock).set({ allocated: String(nextAllocated), allocatedAt: new Date() }).where(and(eq(inventoryStock.itemId, itemId), eq(inventoryStock.tenantId, tenantId), eq(inventoryStock.location, loc)));
-  await recordAuditTrail(db, { tenantId, entityType: "InventoryItem", entityId: itemId, action: "update", changes: { reserve: quantity, location: loc, newAllocated: nextAllocated }, performedBy });
-  return getStockRows(db, tenantId, itemId);
+  await db.update(inventoryStock).set({ allocated: String(nextAllocated), allocatedAt: new Date() }).where(and(eq(inventoryStock.itemId, itemId), eq(inventoryStock.location, loc)));
+  await recordAuditTrail(db, { entityType: "InventoryItem", entityId: itemId, action: "update", changes: { reserve: quantity, location: loc, newAllocated: nextAllocated }, performedBy });
+  return getStockRows(db, itemId);
 }
 
 /** POST /inventory/items/:id/release — the inverse of reserveStock; never goes negative. */
-export async function releaseStock(db: TenantDb, tenantId: number, itemId: number, quantity: number, location: string | undefined, performedBy: number | undefined) {
+export async function releaseStock(db: TenantDb, itemId: number, quantity: number, location: string | undefined, performedBy: number | undefined) {
   const loc = location ?? DEFAULT_LOCATION;
-  const row = await getOrCreateStockRow(db, tenantId, itemId, loc);
+  const row = await getOrCreateStockRow(db, itemId, loc);
   const nextAllocated = Math.max(Number(row.allocated) - quantity, 0);
 
-  await db.update(inventoryStock).set({ allocated: String(nextAllocated), allocatedAt: nextAllocated > 0 ? new Date() : null }).where(and(eq(inventoryStock.itemId, itemId), eq(inventoryStock.tenantId, tenantId), eq(inventoryStock.location, loc)));
-  await recordAuditTrail(db, { tenantId, entityType: "InventoryItem", entityId: itemId, action: "update", changes: { release: quantity, location: loc, newAllocated: nextAllocated }, performedBy });
-  return getStockRows(db, tenantId, itemId);
+  await db.update(inventoryStock).set({ allocated: String(nextAllocated), allocatedAt: nextAllocated > 0 ? new Date() : null }).where(and(eq(inventoryStock.itemId, itemId), eq(inventoryStock.location, loc)));
+  await recordAuditTrail(db, { entityType: "InventoryItem", entityId: itemId, action: "update", changes: { release: quantity, location: loc, newAllocated: nextAllocated }, performedBy });
+  return getStockRows(db, itemId);
 }
 
 /**
@@ -347,17 +343,16 @@ export async function releaseStock(db: TenantDb, tenantId: number, itemId: numbe
  * by a timer. Only called from getItemHandler, not every getStockRows caller
  * — see that handler's own comment.
  */
-export async function applyReservationAutoRelease(db: TenantDb, tenantId: number, itemId: number, settings: InventorySettings | undefined) {
+export async function applyReservationAutoRelease(db: TenantDb, itemId: number, settings: InventorySettings | undefined) {
   const days = settings?.reservationRules?.autoReleaseAfterDays;
   if (!days) return;
 
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-  const rows = await getStockRows(db, tenantId, itemId);
+  const rows = await getStockRows(db, itemId);
   for (const row of rows) {
     if (Number(row.allocated) > 0 && row.allocatedAt && row.allocatedAt.getTime() < cutoff) {
       await db.update(inventoryStock).set({ allocated: "0", allocatedAt: null }).where(eq(inventoryStock.id, row.id));
       await recordAuditTrail(db, {
-        tenantId,
         entityType: "InventoryItem",
         entityId: itemId,
         action: "update",

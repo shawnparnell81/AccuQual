@@ -27,7 +27,7 @@ const ALLOWED_NEXT: Record<string, string[]> = {
 };
 
 async function loadWorkOrder(req: Request, id: number) {
-  const [row] = await req.db!.select().from(workOrders).where(and(eq(workOrders.id, id), eq(workOrders.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(workOrders).where(and(eq(workOrders.id, id)));
   if (!row) throw AppError.notFound("WorkOrder");
   return row;
 }
@@ -43,20 +43,19 @@ async function transition(req: Request, id: number, newStatus: string, patch: Re
     .where(eq(workOrders.id, record.id))
     .returning();
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "WorkOrder",
     entityId: record.id,
     action: "status_change",
     changes: { oldStatus: record.status, newStatus },
     performedBy: req.user?.id,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "work_orders", event: newStatus, entityId: record.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "work_orders", event: newStatus, entityId: record.id });
   return { record, updated };
 }
 
 export const listWorkOrdersHandler = asyncHandler(async (req: Request, res: Response) => {
   const { status } = req.query as Record<string, string | undefined>;
-  const conditions = [eq(workOrders.tenantId, req.tenantId!)];
+  const conditions = [];
   if (status) conditions.push(eq(workOrders.status, status));
 
   const rows = await req
@@ -91,18 +90,18 @@ export const createWorkOrderHandler = asyncHandler(async (req: Request, res: Res
 
   // Real lookups before insert, not a raw FK violation surfacing as a 500 —
   // same fix already applied to RMA's createRmaHandler.
-  const [item] = await req.db!.select({ id: inventoryItems.id }).from(inventoryItems).where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.tenantId, req.tenantId!)));
+  const [item] = await req.db!.select({ id: inventoryItems.id }).from(inventoryItems).where(and(eq(inventoryItems.id, itemId)));
   if (!item) throw AppError.badRequest(`Inventory item #${itemId} not found`);
   if (linkedNcrId !== undefined) {
-    const [linked] = await req.db!.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, linkedNcrId), eq(ncr.tenantId, req.tenantId!)));
+    const [linked] = await req.db!.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, linkedNcrId)));
     if (!linked) throw AppError.badRequest(`NCR #${linkedNcrId} not found`);
   }
 
   const [created] = await req
     .db!.insert(workOrders)
-    .values({ tenantId: req.tenantId!, itemId, quantityPlanned: String(quantityPlanned), linkedNcrId, dueDate, notes, createdBy: req.user?.id })
+    .values({ itemId, quantityPlanned: String(quantityPlanned), linkedNcrId, dueDate, notes, createdBy: req.user?.id })
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkOrder", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
@@ -110,7 +109,7 @@ export const getWorkOrderHandler = asyncHandler(async (req: Request, res: Respon
   const record = await loadWorkOrder(req, Number(req.params.id));
   const [item] = await req.db!.select().from(inventoryItems).where(eq(inventoryItems.id, record.itemId));
   const linkedNcr = record.linkedNcrId ? (await req.db!.select().from(ncr).where(eq(ncr.id, record.linkedNcrId)))[0] : null;
-  const operations = await req.db!.select().from(workOrderOperations).where(and(eq(workOrderOperations.workOrderId, record.id), eq(workOrderOperations.tenantId, req.tenantId!))).orderBy(asc(workOrderOperations.opNumber));
+  const operations = await req.db!.select().from(workOrderOperations).where(and(eq(workOrderOperations.workOrderId, record.id))).orderBy(asc(workOrderOperations.opNumber));
   res.json({
     ...record,
     item: item ? { id: item.id, sku: item.sku, description: item.description, state: item.state } : null,
@@ -130,7 +129,7 @@ export const updateWorkOrderHandler = asyncHandler(async (req: Request, res: Res
     .set({ ...req.body, updatedAt: new Date() })
     .where(eq(workOrders.id, record.id))
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkOrder", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -161,7 +160,6 @@ export const completeWorkOrderHandler = asyncHandler(async (req: Request, res: R
 
   await applyMovement(
     req.db!,
-    req.tenantId!,
     record.itemId,
     { movementType: "produce", quantity: quantityCompleted, referenceType: "work_order", referenceId: String(record.id) },
     req.user?.id
@@ -182,7 +180,7 @@ export const updateQualityGatesHandler = asyncHandler(async (req: Request, res: 
   const record = await loadWorkOrder(req, Number(req.params.id));
   assertTravelerEditable(record.status);
   const [updated] = await req.db!.update(workOrders).set({ ...req.body, updatedAt: new Date() }).where(eq(workOrders.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "quality_gate_updated", ...req.body }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "quality_gate_updated", ...req.body }, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -192,7 +190,7 @@ export const signOperatorHandler = asyncHandler(async (req: Request, res: Respon
   assertTravelerEditable(record.status);
   const { signature } = req.body as { signature: string };
   const [updated] = await req.db!.update(workOrders).set({ operatorSignature: signature, operatorSignedAt: new Date(), updatedAt: new Date() }).where(eq(workOrders.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operator_signed", signature }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operator_signed", signature }, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -202,12 +200,12 @@ export const signInspectorHandler = asyncHandler(async (req: Request, res: Respo
   assertTravelerEditable(record.status);
   const { signature } = req.body as { signature: string };
   const [updated] = await req.db!.update(workOrders).set({ inspectorSignature: signature, inspectorSignedAt: new Date(), updatedAt: new Date() }).where(eq(workOrders.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "inspector_signed", signature }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "inspector_signed", signature }, performedBy: req.user?.id });
   res.json(updated);
 });
 
 async function loadOperation(req: Request, workOrderId: number, opId: number) {
-  const [row] = await req.db!.select().from(workOrderOperations).where(and(eq(workOrderOperations.id, opId), eq(workOrderOperations.workOrderId, workOrderId), eq(workOrderOperations.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(workOrderOperations).where(and(eq(workOrderOperations.id, opId), eq(workOrderOperations.workOrderId, workOrderId)));
   if (!row) throw AppError.notFound("Operation");
   return row;
 }
@@ -216,8 +214,8 @@ export const createOperationHandler = asyncHandler(async (req: Request, res: Res
   assertDepartment(req, ["customer_service"]);
   const record = await loadWorkOrder(req, Number(req.params.id));
   assertTravelerEditable(record.status);
-  const [created] = await req.db!.insert(workOrderOperations).values({ ...req.body, workOrderId: record.id, tenantId: req.tenantId! }).returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operation_added", ...req.body }, performedBy: req.user?.id });
+  const [created] = await req.db!.insert(workOrderOperations).values({ ...req.body, workOrderId: record.id, }).returning();
+  await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operation_added", ...req.body }, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
@@ -233,7 +231,7 @@ export const reorderOperationsHandler = asyncHandler(async (req: Request, res: R
   const operations = await req.db!
     .select()
     .from(workOrderOperations)
-    .where(and(eq(workOrderOperations.workOrderId, record.id), eq(workOrderOperations.tenantId, req.tenantId!)))
+    .where(and(eq(workOrderOperations.workOrderId, record.id)))
     .orderBy(asc(workOrderOperations.opNumber), asc(workOrderOperations.id));
 
   const ids = (req.body as { ids: number[] }).ids;
@@ -251,12 +249,12 @@ export const reorderOperationsHandler = asyncHandler(async (req: Request, res: R
   for (const op of moved) {
     await req.db!.update(workOrderOperations).set({ opNumber: newNumber.get(op.id)!, updatedAt: new Date() }).where(eq(workOrderOperations.id, op.id));
   }
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operations_reordered", order: ids }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operations_reordered", order: ids }, performedBy: req.user?.id });
 
   const updated = await req.db!
     .select()
     .from(workOrderOperations)
-    .where(and(eq(workOrderOperations.workOrderId, record.id), eq(workOrderOperations.tenantId, req.tenantId!)))
+    .where(and(eq(workOrderOperations.workOrderId, record.id)))
     .orderBy(asc(workOrderOperations.opNumber), asc(workOrderOperations.id));
   res.json(updated);
 });
@@ -274,7 +272,7 @@ export const updateOperationHandler = asyncHandler(async (req: Request, res: Res
     patch.signOffDate = signOff && !operation.signOff ? new Date() : signOff ? operation.signOffDate : null;
   }
   const [updated] = await req.db!.update(workOrderOperations).set(patch).where(eq(workOrderOperations.id, operation.id)).returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operation_updated", operationId: operation.id, ...req.body }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operation_updated", operationId: operation.id, ...req.body }, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -284,6 +282,6 @@ export const deleteOperationHandler = asyncHandler(async (req: Request, res: Res
   assertTravelerEditable(record.status);
   const operation = await loadOperation(req, record.id, Number(req.params.opId));
   await req.db!.delete(workOrderOperations).where(eq(workOrderOperations.id, operation.id));
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operation_removed", operationId: operation.id }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operation_removed", operationId: operation.id }, performedBy: req.user?.id });
   res.status(204).send();
 });

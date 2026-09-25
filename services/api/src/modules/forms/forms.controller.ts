@@ -9,19 +9,19 @@ import { DI_FORM_TYPE, syncDiFormToRecord } from "../quality/quality.formSync.js
 import { COMPLAINT_FORM_TYPE, syncComplaintFormToRecord } from "../complaints/complaints.formSync.js";
 
 export const getTemplate = asyncHandler(async (req: Request, res: Response) => {
-  const template = await formsService.loadTemplate(req.db!, req.tenantId!, req.params.type!);
+  const template = await formsService.loadTemplate(req.db!, req.params.type!);
   res.json(template);
 });
 
 export const getForm = asyncHandler(async (req: Request, res: Response) => {
   const entityId = req.params.id ? Number(req.params.id) : undefined;
-  const form = await formsService.loadData(req.db!, req.tenantId!, req.params.type!, entityId);
+  const form = await formsService.loadData(req.db!, req.params.type!, entityId);
   res.json(form);
 });
 
 export const saveForm = asyncHandler(async (req: Request, res: Response) => {
   const entityId = req.params.id ? Number(req.params.id) : undefined;
-  const saved = await formsService.saveData(req.db!, req.tenantId!, {
+  const saved = await formsService.saveData(req.db!, {
     formType: req.params.type!,
     entityType: req.body.entityType,
     entityId: req.body.entityId ?? entityId,
@@ -34,10 +34,10 @@ export const saveForm = asyncHandler(async (req: Request, res: Response) => {
   // never does). See quality.formSync.ts.
   const savedEntityId = req.body.entityId ?? entityId;
   if (req.params.type === DI_FORM_TYPE && savedEntityId != null && req.body.data && typeof req.body.data === "object") {
-    await syncDiFormToRecord(req.db!, req.tenantId!, Number(savedEntityId), req.body.data as Record<string, unknown>, req.user?.id);
+    await syncDiFormToRecord(req.db!, Number(savedEntityId), req.body.data as Record<string, unknown>, req.user?.id);
   }
   if (req.params.type === COMPLAINT_FORM_TYPE && savedEntityId != null && req.body.data && typeof req.body.data === "object") {
-    await syncComplaintFormToRecord(req.db!, req.tenantId!, Number(savedEntityId), req.body.data as Record<string, unknown>, req.user?.id);
+    await syncComplaintFormToRecord(req.db!, Number(savedEntityId), req.body.data as Record<string, unknown>, req.user?.id);
   }
 
   res.json(saved);
@@ -48,9 +48,9 @@ export const saveForm = asyncHandler(async (req: Request, res: Response) => {
 // on hand — not form_data's own internal id. These two resolve it first.
 
 export const createVersion = asyncHandler(async (req: Request, res: Response) => {
-  const current = await formsService.loadData(req.db!, req.tenantId!, req.params.type!, Number(req.params.id));
+  const current = await formsService.loadData(req.db!, req.params.type!, Number(req.params.id));
   if (!current) throw AppError.notFound("Form");
-  const updated = await formsService.createVersion(req.db!, req.tenantId!, current.id, req.user?.id);
+  const updated = await formsService.createVersion(req.db!, current.id, req.user?.id);
 
   // The "Calibration Record" form is the single source of truth for a
   // calibration event, but its form_data row is a continuously-autosaving
@@ -86,7 +86,6 @@ async function maybeLogCalibrationEvent(req: Request, equipmentId: number, data:
   }
   await createCalibrationEvent(
     req.db!,
-    req.tenantId!,
     equipmentId,
     {
       performedAt,
@@ -106,7 +105,6 @@ async function maybeCompleteTrainingAssignment(req: Request, assignmentId: numbe
   }
   await completeTrainingAssignment(
     req.db!,
-    req.tenantId!,
     assignmentId,
     {
       completedAt: completionDate,
@@ -118,14 +116,14 @@ async function maybeCompleteTrainingAssignment(req: Request, assignmentId: numbe
 }
 
 export const getHistory = asyncHandler(async (req: Request, res: Response) => {
-  const current = await formsService.loadData(req.db!, req.tenantId!, req.params.type!, Number(req.params.id));
+  const current = await formsService.loadData(req.db!, req.params.type!, Number(req.params.id));
   if (!current) throw AppError.notFound("Form");
-  res.json(await formsService.listVersions(req.db!, req.tenantId!, current.id));
+  res.json(await formsService.listVersions(req.db!, current.id));
 });
 
 export const exportForm = asyncHandler(async (req: Request, res: Response) => {
   const entityId = req.params.id ? Number(req.params.id) : undefined;
-  const pdfBytes = await formsService.exportPdf(req.db!, req.tenantId!, req.params.type!, entityId);
+  const pdfBytes = await formsService.exportPdf(req.db!, req.params.type!, entityId);
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="${req.params.type}-${entityId ?? "form"}.pdf"`);
   res.send(Buffer.from(pdfBytes));

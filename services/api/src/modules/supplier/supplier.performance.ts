@@ -46,8 +46,8 @@ export interface SupplierPerformance {
  * same item at or after the request was sent, which is the best available
  * real signal without inventing a link that doesn't exist.
  */
-export async function computeSupplierPerformance(db: TenantDb, tenantId: number, supplierId: number): Promise<SupplierPerformance> {
-  const items = await db.select().from(inventoryItems).where(and(eq(inventoryItems.tenantId, tenantId), eq(inventoryItems.defaultSupplierId, supplierId)));
+export async function computeSupplierPerformance(db: TenantDb, supplierId: number): Promise<SupplierPerformance> {
+  const items = await db.select().from(inventoryItems).where(and(eq(inventoryItems.defaultSupplierId, supplierId)));
   const itemIds = items.map((i) => i.id);
 
   if (itemIds.length === 0) {
@@ -66,9 +66,9 @@ export async function computeSupplierPerformance(db: TenantDb, tenantId: number,
   }
 
   const [movements, requests, alerts] = await Promise.all([
-    db.select().from(inventoryMovements).where(and(eq(inventoryMovements.tenantId, tenantId), inArray(inventoryMovements.itemId, itemIds), eq(inventoryMovements.movementType, "receive"))),
-    db.select().from(inventoryReorderRequests).where(and(eq(inventoryReorderRequests.tenantId, tenantId), inArray(inventoryReorderRequests.itemId, itemIds))),
-    db.select().from(inventoryAlerts).where(and(eq(inventoryAlerts.tenantId, tenantId), inArray(inventoryAlerts.itemId, itemIds), eq(inventoryAlerts.alertType, "below_min"))),
+    db.select().from(inventoryMovements).where(and(inArray(inventoryMovements.itemId, itemIds), eq(inventoryMovements.movementType, "receive"))),
+    db.select().from(inventoryReorderRequests).where(and(inArray(inventoryReorderRequests.itemId, itemIds))),
+    db.select().from(inventoryAlerts).where(and(inArray(inventoryAlerts.itemId, itemIds), eq(inventoryAlerts.alertType, "below_min"))),
   ]);
 
   const now = Date.now();
@@ -131,15 +131,15 @@ export async function computeSupplierPerformance(db: TenantDb, tenantId: number,
 /** GET /suppliers/:id/performance */
 export const getSupplierPerformanceHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, id), eq(suppliers.tenantId, req.tenantId!)));
+  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, id)));
   if (!supplier) throw AppError.notFound("Supplier");
 
-  res.json(await computeSupplierPerformance(req.db!, req.tenantId!, id));
+  res.json(await computeSupplierPerformance(req.db!, id));
 });
 
 /** GET /suppliers/performance-summary — every supplier's performance, for the Dashboard's supplier-risk stats. */
 export const performanceSummaryHandler = asyncHandler(async (req: Request, res: Response) => {
-  const allSuppliers = await req.db!.select().from(suppliers).where(eq(suppliers.tenantId, req.tenantId!));
-  const results = await Promise.all(allSuppliers.map((s) => computeSupplierPerformance(req.db!, req.tenantId!, s.id)));
+  const allSuppliers = await req.db!.select().from(suppliers);
+  const results = await Promise.all(allSuppliers.map((s) => computeSupplierPerformance(req.db!, s.id)));
   res.json(results.map((r, i) => ({ ...r, supplierName: allSuppliers[i]!.name })));
 });

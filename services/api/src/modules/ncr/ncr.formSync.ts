@@ -73,11 +73,11 @@ function setFirstRowField(existing: unknown, columnKey: string, value: string, m
  * passed in `patch`, never the RCA method, 5-Why table, closure
  * signatures, or any other section a user has filled in directly.
  */
-export async function syncNcrFormData(db: TenantDb, tenantId: number, ncrId: number, patch: NcrFormSyncPatch, createdBy?: number): Promise<void> {
+export async function syncNcrFormData(db: TenantDb, ncrId: number, patch: NcrFormSyncPatch, createdBy?: number): Promise<void> {
   const [existing] = await db
     .select()
     .from(formData)
-    .where(and(eq(formData.tenantId, tenantId), eq(formData.formType, FORM_TYPE), eq(formData.entityType, ENTITY_TYPE), eq(formData.entityId, ncrId)));
+    .where(and(eq(formData.formType, FORM_TYPE), eq(formData.entityType, ENTITY_TYPE), eq(formData.entityId, ncrId)));
   const data: Record<string, unknown> = { ...(existing?.data ?? {}) };
 
   // ncrNumber/dateIssued are set once, on creation, and never overwritten
@@ -99,6 +99,6 @@ export async function syncNcrFormData(db: TenantDb, tenantId: number, ncrId: num
   if (existing) {
     await db.update(formData).set({ data, updatedAt: new Date() }).where(eq(formData.id, existing.id));
   } else {
-    await db.insert(formData).values({ tenantId, formType: FORM_TYPE, entityType: ENTITY_TYPE, entityId: ncrId, data, createdBy });
+    await db.insert(formData).values({ formType: FORM_TYPE, entityType: ENTITY_TYPE, entityId: ncrId, data, createdBy });
   }
 }

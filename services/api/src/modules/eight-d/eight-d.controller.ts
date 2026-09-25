@@ -36,7 +36,7 @@ export const completeStepHandler = asyncHandler(async (req: Request, res: Respon
   const step = Number(req.params.step);
   if (step < 1 || step > 8) throw AppError.badRequest("Step must be between 1 and 8");
 
-  const [existing] = await req.db!.select().from(eightD).where(and(eq(eightD.id, id), eq(eightD.tenantId, req.tenantId!)));
+  const [existing] = await req.db!.select().from(eightD).where(and(eq(eightD.id, id)));
   if (!existing) throw AppError.notFound("8D Report");
 
   const stepKey = STEP_KEYS[step - 1] ?? "d1_team";
@@ -46,19 +46,18 @@ export const completeStepHandler = asyncHandler(async (req: Request, res: Respon
   const [updated] = await req
     .db!.update(eightD)
     .set({ data: mergedData, currentStep: nextStep, updatedAt: new Date() })
-    .where(and(eq(eightD.id, id), eq(eightD.tenantId, req.tenantId!)))
+    .where(and(eq(eightD.id, id)))
     .returning();
 
   const isClosure = step === 8;
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "8D Report",
     entityId: id,
     action: isClosure ? "status_change" : "update",
     changes: { subAction: "step_completed", step, stepKey, ...(isClosure ? { closed: true } : {}) },
     performedBy: req.user?.id,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "eight_d", event: isClosure ? "closed" : "step_completed", entityId: id });
+  await publishEvent(WORKFLOW_STREAM, { module: "eight_d", event: isClosure ? "closed" : "step_completed", entityId: id });
 
   res.json(updated);
 });

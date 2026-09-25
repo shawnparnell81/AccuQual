@@ -28,14 +28,14 @@ function assertAdmin(req: Request) {
 }
 
 async function loadCustomer(req: Request, id: number) {
-  const [row] = await req.db!.select().from(customers).where(and(eq(customers.id, id), eq(customers.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(customers).where(and(eq(customers.id, id)));
   if (!row) throw AppError.notFound("Customer");
   return row;
 }
 
 export const listCustomersHandler = asyncHandler(async (req: Request, res: Response) => {
   const { status } = req.query as Record<string, string | undefined>;
-  const conditions = [eq(customers.tenantId, req.tenantId!)];
+  const conditions = [];
   if (status) conditions.push(eq(customers.status, status));
   const rows = await req.db!.select().from(customers).where(and(...conditions)).orderBy(desc(customers.createdAt));
   res.json(rows);
@@ -43,8 +43,8 @@ export const listCustomersHandler = asyncHandler(async (req: Request, res: Respo
 
 export const createCustomerHandler = asyncHandler(async (req: Request, res: Response) => {
   assertDepartment(req, ["sales_and_marketing"]);
-  const [created] = await req.db!.insert(customers).values({ ...req.body, tenantId: req.tenantId!, createdBy: req.user?.id }).returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Customer", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  const [created] = await req.db!.insert(customers).values({ ...req.body, createdBy: req.user?.id }).returning();
+  await recordAuditTrail(req.db!, { entityType: "Customer", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
@@ -69,9 +69,9 @@ export const addCustomerScorecardHandler = asyncHandler(async (req: Request, res
 
   const [scorecard] = await req
     .db!.insert(customerScorecards)
-    .values({ ...req.body, customerId: customer.id, tenantId: req.tenantId!, overallScore: String(overallScore) })
+    .values({ ...req.body, customerId: customer.id, overallScore: String(overallScore) })
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "CustomerScorecard", entityId: scorecard!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "CustomerScorecard", entityId: scorecard!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(scorecard);
 });
 
@@ -81,7 +81,7 @@ export const listCustomerScorecardsHandler = asyncHandler(async (req: Request, r
   const rows = await req.db!
     .select()
     .from(customerScorecards)
-    .where(and(eq(customerScorecards.tenantId, req.tenantId!), eq(customerScorecards.customerId, customer.id)))
+    .where(and(eq(customerScorecards.customerId, customer.id)))
     .orderBy(desc(customerScorecards.createdAt));
   res.json(rows);
 });
@@ -95,9 +95,9 @@ export const listCustomerScorecardsHandler = asyncHandler(async (req: Request, r
 export const customerScorecardSummaryHandler = asyncHandler(async (req: Request, res: Response) => {
   const customer = await loadCustomer(req, Number(req.params.id));
   const [warranty, crar, feasibility] = await Promise.all([
-    req.db!.select({ id: warrantyClaims.id }).from(warrantyClaims).where(and(eq(warrantyClaims.tenantId, req.tenantId!), eq(warrantyClaims.customerId, customer.id))),
-    req.db!.select({ id: crarClaims.id }).from(crarClaims).where(and(eq(crarClaims.tenantId, req.tenantId!), eq(crarClaims.customerId, customer.id))),
-    req.db!.select({ id: feasibilityReviews.id }).from(feasibilityReviews).where(and(eq(feasibilityReviews.tenantId, req.tenantId!), eq(feasibilityReviews.customerId, customer.id))),
+    req.db!.select({ id: warrantyClaims.id }).from(warrantyClaims).where(and(eq(warrantyClaims.customerId, customer.id))),
+    req.db!.select({ id: crarClaims.id }).from(crarClaims).where(and(eq(crarClaims.customerId, customer.id))),
+    req.db!.select({ id: feasibilityReviews.id }).from(feasibilityReviews).where(and(eq(feasibilityReviews.customerId, customer.id))),
   ]);
   res.json({ warrantyClaimCount: warranty.length, crarCount: crar.length, feasibilityReviewCount: feasibility.length });
 });
@@ -109,7 +109,6 @@ export const updateCustomerHandler = asyncHandler(async (req: Request, res: Resp
   const body = stripClientOwnedFields(rest);
   const [updated] = await req.db!.update(customers).set({ ...body, updatedAt: new Date() }).where(eq(customers.id, customer.id)).returning();
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "Customer",
     entityId: customer.id,
     action: "update",
@@ -139,8 +138,8 @@ async function transitionCustomer(req: Request, id: number, newStatus: string) {
     .set({ status: newStatus, updatedAt: new Date(), ...timestamps })
     .where(eq(customers.id, id))
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Customer", entityId: id, action: "status_change", changes: { oldStatus: customer.status, newStatus }, performedBy: req.user?.id });
-  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "customers", event: newStatus, entityId: id });
+  await recordAuditTrail(req.db!, { entityType: "Customer", entityId: id, action: "status_change", changes: { oldStatus: customer.status, newStatus }, performedBy: req.user?.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "customers", event: newStatus, entityId: id });
   return updated!;
 }
 
@@ -168,7 +167,7 @@ export const activateCustomerHandler = asyncHandler(async (req: Request, res: Re
 export const deleteCustomerHandler = asyncHandler(async (req: Request, res: Response) => {
   assertAdmin(req);
   const customer = await loadCustomer(req, Number(req.params.id));
-  await req.db!.delete(customers).where(and(eq(customers.id, customer.id), eq(customers.tenantId, req.tenantId!)));
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Customer", entityId: customer.id, action: "delete", changes: { legalName: customer.legalName }, performedBy: req.user?.id });
+  await req.db!.delete(customers).where(and(eq(customers.id, customer.id)));
+  await recordAuditTrail(req.db!, { entityType: "Customer", entityId: customer.id, action: "delete", changes: { legalName: customer.legalName }, performedBy: req.user?.id });
   res.status(204).send();
 });

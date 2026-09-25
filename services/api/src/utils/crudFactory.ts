@@ -103,9 +103,9 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
     return inArray(siteCol as never, allowed);
   }
 
-  function requireTenantDb(req: Request): { db: ReturnType<typeof untypedDbOf>; tenantId: number } {
+  function requireTenantDb(req: Request): { db: ReturnType<typeof untypedDbOf>; } {
     if (!req.db || req.tenantId === undefined) throw AppError.unauthorized("Missing tenant context");
-    return { db: untypedDbOf(req.db), tenantId: req.tenantId };
+    return { db: untypedDbOf(req.db), };
   }
 
   const list = asyncHandler(async (req: Request, res: Response) => {
@@ -135,15 +135,14 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
   });
 
   const create = asyncHandler(async (req: Request, res: Response) => {
-    const { db, tenantId } = requireTenantDb(req);
+    const { db } = requireTenantDb(req);
     if (options.siteScoped && !req.siteId) throw AppError.forbidden("You aren't assigned to a plant, so you can't add records here.");
     const [created] = await db
       .insert(table)
-      .values({ ...stripClientOwnedFields(req.body), tenantId, createdBy: req.user?.id, ...(options.siteScoped ? { siteId: req.siteId } : {}) })
+      .values({ ...stripClientOwnedFields(req.body), createdBy: req.user?.id, ...(options.siteScoped ? { siteId: req.siteId } : {}) })
       .returning();
     const createdId = (created as { id: number }).id;
     await recordAuditTrail(req.db!, {
-      tenantId,
       entityType: options.entityName,
       entityId: createdId,
       action: "create",
@@ -154,7 +153,6 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
     // so it becomes retrievable by the AI pipelines' similarity search.
     await publishEvent(AI_STREAM, {
       job: "embed",
-      tenantId,
       entityType: options.entityName,
       entityId: createdId,
       content: JSON.stringify(req.body),
@@ -178,7 +176,6 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
       .returning();
     if (!updated) throw AppError.notFound(options.entityName);
     await recordAuditTrail(req.db!, {
-      tenantId,
       entityType: options.entityName,
       entityId: id,
       action: "update",
@@ -205,7 +202,6 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
       if (deleted.length === 0) throw AppError.notFound(options.entityName);
     }
     await recordAuditTrail(req.db!, {
-      tenantId,
       entityType: options.entityName,
       entityId: id,
       action: "delete",
@@ -251,7 +247,6 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
         .returning();
       if (!updated) throw AppError.notFound(`${options.entityName} #${id}`);
       await recordAuditTrail(req.db!, {
-        tenantId,
         entityType: options.entityName,
         entityId: id,
         action: "update",

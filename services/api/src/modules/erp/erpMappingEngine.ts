@@ -284,18 +284,17 @@ export function applyValidation(record: Record<string, unknown>, validationRules
   return errors;
 }
 
-async function loadSupplierRecords(db: TenantDb, tenantId: number): Promise<Record<string, unknown>[]> {
-  const rows = await db.select().from(suppliers).where(eq(suppliers.tenantId, tenantId)).limit(MAX_RECORDS_PER_SYNC);
+async function loadSupplierRecords(db: TenantDb): Promise<Record<string, unknown>[]> {
+  const rows = await db.select().from(suppliers).limit(MAX_RECORDS_PER_SYNC);
   return rows as unknown as Record<string, unknown>[];
 }
 
-async function loadPurchaseOrderRecords(db: TenantDb, tenantId: number): Promise<Record<string, unknown>[]> {
-  const rows = await db.select().from(erpPurchaseOrders).where(and(eq(erpPurchaseOrders.tenantId, tenantId))).limit(MAX_RECORDS_PER_SYNC);
+async function loadPurchaseOrderRecords(db: TenantDb): Promise<Record<string, unknown>[]> {
+  const rows = await db.select().from(erpPurchaseOrders).limit(MAX_RECORDS_PER_SYNC);
   return rows as unknown as Record<string, unknown>[];
 }
 
 export interface RecordSyncErrorInput {
-  tenantId: number;
   module: string;
   presetId?: number;
   presetVersion?: number;
@@ -320,7 +319,6 @@ export async function recordSyncError(db: TenantDb, input: RecordSyncErrorInput)
     const [row] = await db
       .insert(erpSyncErrors)
       .values({
-        tenantId: input.tenantId,
         module: input.module,
         presetId: input.presetId,
         presetVersion: input.presetVersion,
@@ -330,9 +328,9 @@ export async function recordSyncError(db: TenantDb, input: RecordSyncErrorInput)
         payloadSnapshot: input.payloadSnapshot ?? null,
       })
       .returning({ id: erpSyncErrors.id });
-    logger.error("ERP sync error recorded", { errorId: row?.id, tenantId: input.tenantId, module: input.module, errorType, message: input.message });
+    logger.error("ERP sync error recorded", { errorId: row?.id, module: input.module, errorType, message: input.message });
   } catch (err) {
-    logger.error("Failed to record an ERP sync error (the underlying sync failure is still real)", { tenantId: input.tenantId, module: input.module, errorType, cause: err instanceof Error ? err.message : String(err) });
+    logger.error("Failed to record an ERP sync error (the underlying sync failure is still real)", { module: input.module, errorType, cause: err instanceof Error ? err.message : String(err) });
   }
 }
 
@@ -349,14 +347,14 @@ export async function recordSyncError(db: TenantDb, input: RecordSyncErrorInput)
  * own informational `errors` field) AND persisted via recordSyncError — one
  * bad record is skipped, never aborts the whole module's mapping run.
  */
-export async function buildErpPayload(db: TenantDb, tenantId: number, module: string, preset: ErpConnectorPreset): Promise<ErpPayloadResult | null> {
+export async function buildErpPayload(db: TenantDb, module: string, preset: ErpConnectorPreset): Promise<ErpPayloadResult | null> {
   let sourceRecords: Record<string, unknown>[];
   if (module === "suppliers") {
-    sourceRecords = await loadSupplierRecords(db, tenantId);
+    sourceRecords = await loadSupplierRecords(db);
   } else if (module === "purchaseOrders") {
-    sourceRecords = await loadPurchaseOrderRecords(db, tenantId);
+    sourceRecords = await loadPurchaseOrderRecords(db);
   } else {
-    logger.info(`ERP preset mapping engine has no wired record source for module "${module}" yet — skipping`, { tenantId, module });
+    logger.info(`ERP preset mapping engine has no wired record source for module "${module}" yet — skipping`, { module });
     return null;
   }
 
@@ -368,7 +366,6 @@ export async function buildErpPayload(db: TenantDb, tenantId: number, module: st
     if (validationErrors.length > 0) {
       for (const err of validationErrors) errors.push({ sourceId, ...err });
       await recordSyncError(db, {
-        tenantId,
         module,
         presetId: preset.id,
         presetVersion: preset.version,
@@ -383,7 +380,6 @@ export async function buildErpPayload(db: TenantDb, tenantId: number, module: st
     const { fields, errors: mappingErrors } = applyFieldMappingSafe(record, preset.mappingConfig.fieldMappings);
     if (mappingErrors.length > 0) {
       await recordSyncError(db, {
-        tenantId,
         module,
         presetId: preset.id,
         presetVersion: preset.version,
@@ -405,7 +401,6 @@ export async function buildErpPayload(db: TenantDb, tenantId: number, module: st
   // this session against every logger.* call site, never logs raw record
   // content, only IDs/counts/metadata).
   logger.info("ERP preset mapping run complete", {
-    tenantId,
     module,
     presetId: preset.id,
     presetVersion: preset.version,

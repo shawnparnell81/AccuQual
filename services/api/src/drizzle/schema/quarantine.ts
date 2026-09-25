@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, jsonb, boolean, numeric } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
 export const QUARANTINE_STATUSES = ["quarantined", "released", "destroyed"] as const;
@@ -24,7 +23,6 @@ export type QuarantineReasonCategory = (typeof QUARANTINE_REASON_CATEGORIES)[num
  */
 export const quarantineRecords = pgTable("quarantine_records", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   itemType: text("item_type").$type<QuarantineItemType>().notNull(),
   /** inventory_lot -> inventory_lots.id; inventory_item -> inventory_items.id; otherwise unused. Deliberately not a foreign key: the module does not depend on the tables it can hold. */
   itemId: integer("item_id"),
@@ -56,7 +54,6 @@ export const quarantineRecords = pgTable("quarantine_records", {
 /** Where the held quantity physically is (a quarantine cage, a bin). The rows of one record add up to its quantity. */
 export const quarantineInventory = pgTable("quarantine_inventory", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   quarantineId: integer("quarantine_id").references(() => quarantineRecords.id).notNull(),
   location: text("location").notNull(),
   quantity: numeric("quantity").notNull(),
@@ -67,7 +64,6 @@ export const quarantineInventory = pgTable("quarantine_inventory", {
 /** Each decision taken on (part of) a hold: released back into use, or removed from stock. Append-only history. */
 export const quarantineResolutions = pgTable("quarantine_resolutions", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   quarantineId: integer("quarantine_id").references(() => quarantineRecords.id).notNull(),
   action: text("action").$type<"release" | "destroy">().notNull(),
   /** release: use_as_is | reworked | sorted. destroy: scrapped | returned_to_supplier | other. */

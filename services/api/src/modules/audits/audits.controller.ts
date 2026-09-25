@@ -17,7 +17,7 @@ const NONCONFORMANCE_SEVERITIES = ["minor", "major", "critical"];
 
 export const addItemHandler = asyncHandler(async (req: Request, res: Response) => {
   const auditId = Number(req.params.id);
-  const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, auditId), eq(audits.tenantId, req.tenantId!)));
+  const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, auditId)));
   if (!audit) throw AppError.notFound("Audit");
   assertRecordOnAllowedSite(audit.siteId, req.allowedSiteIds, "Audit");
 
@@ -25,10 +25,10 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
   const [{ maxPosition } = { maxPosition: null }] = await req.db!
     .select({ maxPosition: sql<number | null>`max(${auditItems.sortOrder})` })
     .from(auditItems)
-    .where(and(eq(auditItems.auditId, auditId), eq(auditItems.tenantId, req.tenantId!)));
+    .where(and(eq(auditItems.auditId, auditId)));
   const [item] = await req.db!
     .insert(auditItems)
-    .values({ ...req.body, auditId, tenantId: req.tenantId!, ...(maxPosition != null ? { sortOrder: Number(maxPosition) + 1 } : {}) })
+    .values({ ...req.body, auditId, ...(maxPosition != null ? { sortOrder: Number(maxPosition) + 1 } : {}) })
     .returning();
   if (!item) throw new Error("Insert did not return the created audit item");
 
@@ -39,7 +39,6 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
   // left no audit-trail entry for its own creation at all. Every finding
   // gets one now, regardless of whether it also happens to cascade.
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "Audit Finding",
     entityId: item.id,
     action: "create",
@@ -55,7 +54,7 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
   // and gives AI Finding Classification's "previous similar findings"
   // (ai.assistant.ts) real history to search as findings come in.
   if (item.finding) {
-    await publishEvent(AI_STREAM, { job: "embed", tenantId: req.tenantId!, entityType: "audit_finding", entityId: item.id, content: item.finding });
+    await publishEvent(AI_STREAM, { job: "embed", entityType: "audit_finding", entityId: item.id, content: item.finding });
   }
 
   // Automation: a nonconformance found during an internal audit opens its
@@ -67,7 +66,6 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
     [discrepancy] = await req
       .db!.insert(discrepancyInvestigations)
       .values({
-        tenantId: req.tenantId!,
         title: `Nonconformance — ${audit.name}: ${item.question ?? `Finding #${item.id}`}`,
         description: item.finding ?? undefined,
         severity: item.severity,
@@ -82,7 +80,6 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
     // crudFactory entityName exactly, same reasoning as the QA sweep
     // review's History-tab casing fix.
     await recordAuditTrail(req.db!, {
-      tenantId: req.tenantId!,
       entityType: "Discrepancy investigation",
       entityId: discrepancy.id,
       action: "create",
@@ -91,20 +88,20 @@ export const addItemHandler = asyncHandler(async (req: Request, res: Response) =
     });
     // Seed the investigation form (title/severity/description/source) so it
     // opens pre-filled instead of blank.
-    await syncDiRecordToForm(req.db!, req.tenantId!, discrepancy, req.user?.id);
+    await syncDiRecordToForm(req.db!, discrepancy, req.user?.id);
   }
 
   res.status(201).json({ ...item, discrepancyInvestigation: discrepancy });
 });
 
 export const listItemsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, Number(req.params.id)), eq(audits.tenantId, req.tenantId!)));
+  const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, Number(req.params.id))));
   if (!audit) throw AppError.notFound("Audit");
   assertRecordOnAllowedSite(audit.siteId, req.allowedSiteIds, "Audit");
   const items = await req
     .db!.select()
     .from(auditItems)
-    .where(and(eq(auditItems.auditId, Number(req.params.id)), eq(auditItems.tenantId, req.tenantId!)))
+    .where(and(eq(auditItems.auditId, Number(req.params.id))))
     // Reordered checklists follow their saved positions; ones never reordered keep creation order.
     .orderBy(sql`${auditItems.sortOrder} ASC NULLS LAST`, asc(auditItems.id));
   res.json(items);
@@ -113,12 +110,12 @@ export const listItemsHandler = asyncHandler(async (req: Request, res: Response)
 /** Drag-to-reorder for the audit checklist. Every question must be listed exactly once; the list's order becomes the checklist's order. */
 export const reorderItemsHandler = asyncHandler(async (req: Request, res: Response) => {
   const auditId = Number(req.params.id);
-  const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, auditId), eq(audits.tenantId, req.tenantId!)));
+  const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, auditId)));
   if (!audit) throw AppError.notFound("Audit");
   assertRecordOnAllowedSite(audit.siteId, req.allowedSiteIds, "Audit");
   if (audit.status === "completed") throw AppError.badRequest("A completed audit's checklist can't be reordered.");
 
-  const existing = await req.db!.select({ id: auditItems.id }).from(auditItems).where(and(eq(auditItems.auditId, auditId), eq(auditItems.tenantId, req.tenantId!)));
+  const existing = await req.db!.select({ id: auditItems.id }).from(auditItems).where(and(eq(auditItems.auditId, auditId)));
   const ids = (req.body as { ids: number[] }).ids;
   const known = new Set(existing.map((row) => row.id));
   if (ids.length !== existing.length || new Set(ids).size !== ids.length || ids.some((id) => !known.has(id))) {
@@ -127,33 +124,31 @@ export const reorderItemsHandler = asyncHandler(async (req: Request, res: Respon
   for (const [index, id] of ids.entries()) {
     await req.db!.update(auditItems).set({ sortOrder: index + 1 }).where(eq(auditItems.id, id));
   }
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Audit", entityId: auditId, action: "update", changes: { subAction: "items_reordered", order: ids }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "Audit", entityId: auditId, action: "update", changes: { subAction: "items_reordered", order: ids }, performedBy: req.user?.id });
 
-  const items = await req.db!.select().from(auditItems).where(and(eq(auditItems.auditId, auditId), eq(auditItems.tenantId, req.tenantId!))).orderBy(sql`${auditItems.sortOrder} ASC NULLS LAST`, asc(auditItems.id));
+  const items = await req.db!.select().from(auditItems).where(and(eq(auditItems.auditId, auditId))).orderBy(sql`${auditItems.sortOrder} ASC NULLS LAST`, asc(auditItems.id));
   res.json(items);
 });
 
 /** Scheduled -> In Progress. Previously only reachable via the generic PATCH with no sequence check at all (see the Rules Dictionary). */
 export const startHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const tenantId = req.tenantId!;
-  const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, id), eq(audits.tenantId, tenantId)));
+  const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, id)));
   if (!audit) throw AppError.notFound("Audit");
   assertRecordOnAllowedSite(audit.siteId, req.allowedSiteIds, "Audit");
   if (audit.status !== "scheduled") throw AppError.badRequest(`Cannot start an audit from status "${audit.status}" — must be "scheduled"`);
 
   const [updated] = await req.db!.update(audits).set({ status: "in_progress" }).where(eq(audits.id, id)).returning();
 
-  await recordAuditTrail(req.db!, { tenantId, entityType: "Audit", entityId: id, action: "status_change", changes: { action: "start" }, performedBy: req.user?.id });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "audit", event: "start", entityId: id });
+  await recordAuditTrail(req.db!, { entityType: "Audit", entityId: id, action: "status_change", changes: { action: "start" }, performedBy: req.user?.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "audit", event: "start", entityId: id });
 
   res.json(updated);
 });
 
 export const completeHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const tenantId = req.tenantId!;
-  const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, id), eq(audits.tenantId, tenantId)));
+  const [audit] = await req.db!.select().from(audits).where(and(eq(audits.id, id)));
   if (!audit) throw AppError.notFound("Audit");
   assertRecordOnAllowedSite(audit.siteId, req.allowedSiteIds, "Audit");
   if (audit.status !== "in_progress") throw AppError.badRequest(`Cannot complete an audit from status "${audit.status}" — must be "in_progress"`);
@@ -162,8 +157,8 @@ export const completeHandler = asyncHandler(async (req: Request, res: Response) 
 
   // Was missing entirely (see the Outputs Dictionary) — the one dedicated
   // transition in the app that left no audit trail of itself.
-  await recordAuditTrail(req.db!, { tenantId, entityType: "Audit", entityId: id, action: "status_change", changes: { action: "complete" }, performedBy: req.user?.id });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "audit", event: "complete", entityId: id });
+  await recordAuditTrail(req.db!, { entityType: "Audit", entityId: id, action: "status_change", changes: { action: "complete" }, performedBy: req.user?.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "audit", event: "complete", entityId: id });
 
   res.json(updated);
 });

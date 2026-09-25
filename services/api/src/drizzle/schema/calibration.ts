@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
 export const EQUIPMENT_STATUSES = ["active", "inactive", "out_of_service"] as const;
@@ -9,7 +8,6 @@ export type CalibrationStatus = (typeof CALIBRATION_STATUSES)[number];
 
 export const equipment = pgTable("equipment", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   name: text("name").notNull(),
   serialNumber: text("serial_number"),
   location: text("location"),
@@ -29,7 +27,6 @@ export const equipment = pgTable("equipment", {
 
 export const calibrations = pgTable("calibrations", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   equipmentId: integer("equipment_id").references(() => equipment.id).notNull(),
   // Null while the calibration is only scheduled; set when it is done.
   performedAt: timestamp("performed_at"),

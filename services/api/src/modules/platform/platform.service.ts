@@ -107,7 +107,6 @@ export async function createTenant(input: CreateTenantInput) {
   const [adminUser] = await db
     .insert(users)
     .values({
-      tenantId: tenant.id,
       email: input.adminEmail,
       passwordHash,
       name: input.adminName ?? "Tenant Admin",
@@ -123,13 +122,13 @@ export async function createTenant(input: CreateTenantInput) {
   //    existing tenant, so a brand-new tenant starts with sane, real rows on
   //    file rather than an all-"none" empty slate (getUserAccessLevel has no
   //    hardcoded fallback to lean on anymore — see departmentAccess.ts).
-  const defaultPermissionRows: { tenantId: number; departmentName: Department; moduleName: ResourceKey; accessLevel: AccessLevel }[] = [];
+  const defaultPermissionRows: { departmentName: Department; moduleName: ResourceKey; accessLevel: AccessLevel }[] = [];
   for (const moduleName of Object.keys(INITIAL_DEFAULT_PERMISSIONS) as ResourceKey[]) {
     const perDept = INITIAL_DEFAULT_PERMISSIONS[moduleName];
     for (const departmentName of Object.keys(perDept) as Department[]) {
       const accessLevel = perDept[departmentName];
       if (!accessLevel || accessLevel === "none") continue;
-      defaultPermissionRows.push({ tenantId: tenant.id, departmentName, moduleName, accessLevel });
+      defaultPermissionRows.push({ departmentName, moduleName, accessLevel });
     }
   }
   if (defaultPermissionRows.length > 0) {
@@ -141,7 +140,7 @@ export async function createTenant(input: CreateTenantInput) {
   //     department_permissions above, so a brand-new tenant starts with the
   //     "advanced" System items already hidden instead of needing a tenant
   //     admin to hide them by hand.
-  await db.insert(navHiddenItems).values(defaultHiddenNavScopes().map((scope) => ({ tenantId: tenant.id, scope }))).onConflictDoNothing();
+  await db.insert(navHiddenItems).values(defaultHiddenNavScopes().map((scope) => ({ scope }))).onConflictDoNothing();
 
   // 4. Provision tenant storage (local filesystem when STORAGE_DRIVER=local; a real
   //    deployment would provision the equivalent Azure Blob prefixes instead).
@@ -157,7 +156,6 @@ export async function createTenant(input: CreateTenantInput) {
   //    template set until the tenant uploads its own (see forms.service.ts).
   await db.insert(formTemplates).values(
     DEFAULT_FORM_TYPES.map((formType) => ({
-      tenantId: tenant.id,
       formType,
       pdfPath: `/templates/defaults/${formType}.pdf`,
       fieldMap: {},
@@ -227,7 +225,7 @@ export async function getAiOverview() {
       const recent = await db
         .select({ status: aiSuggestions.status })
         .from(aiSuggestions)
-        .where(and(eq(aiSuggestions.tenantId, tenant.id), gte(aiSuggestions.createdAt, sinceDate)));
+        .where(and(gte(aiSuggestions.createdAt, sinceDate)));
       const errorCount = recent.filter((r) => r.status === "error" || r.status === "malformed").length;
       const stubCount = recent.filter((r) => r.status === "stub").length;
       const okCount = recent.filter((r) => r.status === "ok").length;
@@ -244,7 +242,6 @@ export async function getAiOverview() {
             : "stub";
 
       return {
-        tenantId: tenant.id,
         tenantName: tenant.name,
         tenantCode: tenant.code,
         enabled,
@@ -273,7 +270,7 @@ export async function deleteTenant(id: number) {
   const [tenant] = await db.update(tenants).set({ status: "inactive", isDeleted: true }).where(eq(tenants.id, id)).returning();
   if (!tenant) throw AppError.notFound("Tenant");
 
-  await db.update(users).set({ isActive: false }).where(eq(users.tenantId, id));
+  await db.update(users).set({ isActive: false });
   // Workflows/AI pipelines have no per-row "enabled" flag to flip yet (TODO);
   // in practice they become unreachable anyway once every user is deactivated
   // and the tenant's JWTs can no longer be issued (login checks tenant.status).

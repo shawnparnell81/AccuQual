@@ -16,13 +16,12 @@ import type { TenantDb } from "../../lib/tenantScope.js";
  */
 export async function mergeFormData(
   db: TenantDb,
-  tenantId: number,
   opts: { formType: string; entityType: string; entityId: number; patch?: Record<string, unknown>; defaults?: Record<string, unknown>; createdBy?: number }
 ): Promise<void> {
   const [existing] = await db
     .select()
     .from(formData)
-    .where(and(eq(formData.tenantId, tenantId), eq(formData.formType, opts.formType), eq(formData.entityId, opts.entityId)))
+    .where(and(eq(formData.formType, opts.formType), eq(formData.entityId, opts.entityId)))
     .orderBy(desc(formData.id));
 
   const data: Record<string, unknown> = { ...(existing?.data ?? {}) };
@@ -36,6 +35,6 @@ export async function mergeFormData(
     if (JSON.stringify(existing.data ?? {}) === JSON.stringify(data)) return;
     await db.update(formData).set({ data, updatedAt: new Date() }).where(eq(formData.id, existing.id));
   } else {
-    await db.insert(formData).values({ tenantId, formType: opts.formType, entityType: opts.entityType, entityId: opts.entityId, data, version: 1, createdBy: opts.createdBy });
+    await db.insert(formData).values({ formType: opts.formType, entityType: opts.entityType, entityId: opts.entityId, data, version: 1, createdBy: opts.createdBy });
   }
 }

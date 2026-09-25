@@ -75,7 +75,7 @@ export const reportSummaryHandler = asyncHandler(async (req: Request, res: Respo
 // Scheduled reports — CRUD + manual "Send Now" dispatch.
 // ---------------------------------------------------------------------------
 export const listReportSchedulesHandler = asyncHandler(async (req: Request, res: Response) => {
-  const rows = await req.db!.select().from(reportSchedules).where(eq(reportSchedules.tenantId, req.tenantId!));
+  const rows = await req.db!.select().from(reportSchedules);
   res.json(rows);
 });
 
@@ -83,15 +83,15 @@ export const createReportScheduleHandler = asyncHandler(async (req: Request, res
   const { reportType, frequency, recipients, enabled } = req.body as { reportType: string; frequency: "daily" | "weekly" | "monthly"; recipients: string[]; enabled?: boolean };
   const [created] = await req
     .db!.insert(reportSchedules)
-    .values({ tenantId: req.tenantId!, reportType, frequency, recipients, enabled: enabled ?? true, nextRunAt: computeNextRunAt(frequency), createdBy: req.user?.id })
+    .values({ reportType, frequency, recipients, enabled: enabled ?? true, nextRunAt: computeNextRunAt(frequency), createdBy: req.user?.id })
     .returning();
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "ReportSchedule", entityId: created!.id, action: "create", changes: { reportType, frequency, recipients }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "ReportSchedule", entityId: created!.id, action: "create", changes: { reportType, frequency, recipients }, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
 async function loadSchedule(req: Request, id: number) {
-  const [row] = await req.db!.select().from(reportSchedules).where(and(eq(reportSchedules.id, id), eq(reportSchedules.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(reportSchedules).where(and(eq(reportSchedules.id, id)));
   if (!row) throw AppError.notFound("ReportSchedule");
   return row;
 }
@@ -107,14 +107,14 @@ export const updateReportScheduleHandler = asyncHandler(async (req: Request, res
     .where(eq(reportSchedules.id, existing.id))
     .returning();
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "ReportSchedule", entityId: existing.id, action: "update", changes: patch, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "ReportSchedule", entityId: existing.id, action: "update", changes: patch, performedBy: req.user?.id });
   res.json(updated);
 });
 
 export const deleteReportScheduleHandler = asyncHandler(async (req: Request, res: Response) => {
   const existing = await loadSchedule(req, Number(req.params.id));
   await req.db!.delete(reportSchedules).where(eq(reportSchedules.id, existing.id));
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "ReportSchedule", entityId: existing.id, action: "delete", changes: { reportType: existing.reportType }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "ReportSchedule", entityId: existing.id, action: "delete", changes: { reportType: existing.reportType }, performedBy: req.user?.id });
   res.status(204).send();
 });
 
@@ -189,7 +189,6 @@ export const exportReportHandler = asyncHandler(async (req: Request, res: Respon
   };
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "ReportExport",
     entityId: tenantId,
     action: "create",

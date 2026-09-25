@@ -68,7 +68,7 @@ export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAda
     "/:id/versions/:versionId",
     view,
     asyncHandler(async (req: Request, res: Response) => {
-      res.json(await engine.getVersion(dbOf(req), adapter, req.tenantId!, idParam(req), Number(req.params.versionId)));
+      res.json(await engine.getVersion(dbOf(req), adapter, idParam(req), Number(req.params.versionId)));
     }),
   );
 

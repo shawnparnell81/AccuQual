@@ -90,7 +90,7 @@ registerActionHandler("send_email", async (node, context, dryRun) => {
   const status = await sendEmail({ to, subject, body });
   const db = context.__db as TenantDb | undefined;
   const tenantId = context.__tenantId as number | undefined;
-  if (db && tenantId) await db.insert(notificationLog).values({ tenantId, channel: "email", recipient: to, subject, body, status, relatedEntityType: "WorkflowRun" });
+  if (db && tenantId) await db.insert(notificationLog).values({ channel: "email", recipient: to, subject, body, status, relatedEntityType: "WorkflowRun" });
   recordActionRun(context, "send_email", { to, subject, status });
 });
 
@@ -113,7 +113,7 @@ registerActionHandler("notify_department", async (node, context, dryRun) => {
     recordActionRun(context, "notify_department", { skipped: true, reason: "no tenant database context available" });
     return;
   }
-  const recipientCount = await notifyDepartment(db, { tenantId, department: config.department, subject, body });
+  const recipientCount = await notifyDepartment(db, { department: config.department, subject, body });
   recordActionRun(context, "notify_department", { department: config.department, subject, recipientCount });
 });
 
@@ -135,13 +135,13 @@ registerActionHandler("notify_supplier", async (node, context, dryRun) => {
     return;
   }
 
-  const [supplier] = await db.select({ contactEmail: suppliers.contactEmail }).from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, tenantId)));
+  const [supplier] = await db.select({ contactEmail: suppliers.contactEmail }).from(suppliers).where(and(eq(suppliers.id, supplierId)));
   if (!supplier?.contactEmail) {
     recordActionRun(context, "notify_supplier", { skipped: true, reason: "supplier has no contact email on file" });
     return;
   }
   const status = await sendEmail({ to: supplier.contactEmail, subject, body });
-  await db.insert(notificationLog).values({ tenantId, channel: "email", recipient: supplier.contactEmail, subject, body, status, relatedEntityType: "Supplier", relatedEntityId: supplierId });
+  await db.insert(notificationLog).values({ channel: "email", recipient: supplier.contactEmail, subject, body, status, relatedEntityType: "Supplier", relatedEntityId: supplierId });
   recordActionRun(context, "notify_supplier", { supplierId, subject, status });
 });
 
@@ -164,7 +164,6 @@ registerActionHandler("create_ncr", async (node, context, dryRun) => {
   const [created] = await db
     .insert(ncr)
     .values({
-      tenantId,
       title,
       description,
       severity: config.severity,
@@ -175,14 +174,13 @@ registerActionHandler("create_ncr", async (node, context, dryRun) => {
     .returning();
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "NCR",
     entityId: created!.id,
     action: "create",
     changes: { message: "NCR auto-created by workflow action", workflowNode: node.id },
     performedBy: context.__performedBy as number | undefined,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "ncr", event: "created", entityId: created!.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "ncr", event: "created", entityId: created!.id });
   recordActionRun(context, "create_ncr", { ncrId: created!.id, title });
 });
 
@@ -205,7 +203,6 @@ registerActionHandler("escalate_capa", async (node, context, dryRun) => {
   const [created] = await db
     .insert(capa)
     .values({
-      tenantId,
       ncrId,
       rootCause,
       status: "open",
@@ -215,14 +212,13 @@ registerActionHandler("escalate_capa", async (node, context, dryRun) => {
     .returning();
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "CAPA",
     entityId: created!.id,
     action: "create",
     changes: { message: "CAPA escalation triggered by workflow action", workflowNode: node.id },
     performedBy: context.__performedBy as number | undefined,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "capa", event: "escalated", entityId: created!.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "capa", event: "escalated", entityId: created!.id });
   recordActionRun(context, "escalate_capa", { capaId: created!.id });
 });
 
@@ -248,9 +244,8 @@ registerActionHandler("assign_user", async (node, context, dryRun) => {
   }
 
   const table = assignable.table;
-  await db.update(table).set({ [assignable.column]: userId } as never).where(and(eq(table.id, entityId), eq(table.tenantId, tenantId)));
+  await db.update(table).set({ [assignable.column]: userId } as never).where(and(eq(table.id, entityId)));
   await recordAuditTrail(db, {
-    tenantId,
     entityType: config.module === "ncr" ? "NCR" : "CAPA",
     entityId,
     action: "update",

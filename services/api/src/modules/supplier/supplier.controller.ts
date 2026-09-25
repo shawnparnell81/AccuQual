@@ -31,7 +31,7 @@ export async function ensureSupplierRole(db: TenantDb): Promise<Role> {
 
 export const addScorecardHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = Number(req.params.id);
-  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, req.tenantId!)));
+  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, supplierId)));
   if (!supplier) throw AppError.notFound("Supplier");
 
   const { qualityScore = 0, deliveryScore = 0 } = req.body;
@@ -39,12 +39,12 @@ export const addScorecardHandler = asyncHandler(async (req: Request, res: Respon
 
   const [scorecard] = await req
     .db!.insert(supplierScorecards)
-    .values({ ...req.body, supplierId, tenantId: req.tenantId!, overallScore: String(overallScore) })
+    .values({ ...req.body, supplierId, overallScore: String(overallScore) })
     .returning();
   // Previously missing — every other create path in this app records one;
   // this just closes that gap for a table that had no UI writer at all
   // until now (see SupplierScorecard.tsx's new entry form).
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "SupplierScorecard", entityId: scorecard!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "SupplierScorecard", entityId: scorecard!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(scorecard);
 });
 
@@ -58,15 +58,14 @@ export const addScorecardHandler = asyncHandler(async (req: Request, res: Respon
  */
 async function setSupplierStatus(req: Request, res: Response, action: string, newStatus: string) {
   const id = Number(req.params.id);
-  const tenantId = req.tenantId!;
-  const [current] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, id), eq(suppliers.tenantId, tenantId)));
+  const [current] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, id)));
   if (!current) throw AppError.notFound("Supplier");
   if (current.status === "disqualified") throw AppError.badRequest(`Cannot "${action}" a disqualified supplier — disqualification is terminal`);
 
   const [updated] = await req.db!.update(suppliers).set({ status: newStatus }).where(eq(suppliers.id, id)).returning();
 
-  await recordAuditTrail(req.db!, { tenantId, entityType: "Supplier", entityId: id, action: "status_change", changes: { action, from: current.status, to: newStatus }, performedBy: req.user?.id });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "supplier", event: action, entityId: id });
+  await recordAuditTrail(req.db!, { entityType: "Supplier", entityId: id, action: "status_change", changes: { action, from: current.status, to: newStatus }, performedBy: req.user?.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "supplier", event: action, entityId: id });
 
   res.json(updated);
 }
@@ -81,13 +80,12 @@ export const removeHandler = asyncHandler(async (req: Request, res: Response) =>
   // "disqualified" itself (idempotent) — it's the terminal state, not
   // something to be blocked from re-affirming.
   const id = Number(req.params.id);
-  const tenantId = req.tenantId!;
-  const [current] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, id), eq(suppliers.tenantId, tenantId)));
+  const [current] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, id)));
   if (!current) throw AppError.notFound("Supplier");
 
   const [updated] = await req.db!.update(suppliers).set({ status: "disqualified" }).where(eq(suppliers.id, id)).returning();
-  await recordAuditTrail(req.db!, { tenantId, entityType: "Supplier", entityId: id, action: "status_change", changes: { action: "remove", from: current.status, to: "disqualified" }, performedBy: req.user?.id });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "supplier", event: "remove", entityId: id });
+  await recordAuditTrail(req.db!, { entityType: "Supplier", entityId: id, action: "status_change", changes: { action: "remove", from: current.status, to: "disqualified" }, performedBy: req.user?.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "supplier", event: "remove", entityId: id });
   res.json(updated);
 });
 
@@ -107,8 +105,7 @@ export const removeHandler = asyncHandler(async (req: Request, res: Response) =>
  */
 export const createPortalAccountHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = Number(req.params.id);
-  const tenantId = req.tenantId!;
-  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, tenantId)));
+  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, supplierId)));
   if (!supplier) throw AppError.notFound("Supplier");
 
   const { email, name } = req.body as { email: string; name?: string };
@@ -122,11 +119,11 @@ export const createPortalAccountHandler = asyncHandler(async (req: Request, res:
 
   const [created] = await req
     .db!.insert(users)
-    .values({ tenantId, email, passwordHash, name: name ?? supplier.name, roleId: supplierRole.id, department: null, supplierId })
+    .values({ email, passwordHash, name: name ?? supplier.name, roleId: supplierRole.id, department: null, supplierId })
     .returning();
   if (!created) throw new AppError("Failed to create the portal login", 500);
 
-  await recordAuditTrail(req.db!, { tenantId, entityType: "Supplier", entityId: supplierId, action: "update", changes: { action: "create_portal_account", email }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "Supplier", entityId: supplierId, action: "update", changes: { action: "create_portal_account", email }, performedBy: req.user?.id });
 
   const { passwordHash: _omit, ...safe } = created;
   res.status(201).json({ user: safe, temporaryPassword: tempPassword });
@@ -141,7 +138,7 @@ export const createPortalAccountHandler = asyncHandler(async (req: Request, res:
 // ---------------------------------------------------------------------------
 
 async function loadSupplierOrThrow(req: Request, id: number) {
-  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, id), eq(suppliers.tenantId, req.tenantId!)));
+  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, id)));
   if (!supplier) throw AppError.notFound("Supplier");
   return supplier;
 }
@@ -163,7 +160,7 @@ export const recomputeSupplierRiskScoreHandler = asyncHandler(async (req: Reques
 export const getSupplierKpisHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   await loadSupplierOrThrow(req, id);
-  const [factors, health] = await Promise.all([getSupplierQualityFactors(req.db!, req.tenantId!, id), getSupplierHealth(req.db!, req.tenantId!, id)]);
+  const [factors, health] = await Promise.all([getSupplierQualityFactors(req.db!, id), getSupplierHealth(req.db!, id)]);
   res.json({ ...factors, health });
 });
 

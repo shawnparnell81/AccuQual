@@ -99,7 +99,7 @@ dataExportRouter.post(
     requestLog.set(tenantId, [...recent, now]);
 
     const token = jwt.sign({ sub: String(req.user!.id), tid: tenantId, fmt: body.format, files: body.includeFiles, jti: randomUUID() } satisfies TokenPayload, tokenSecret, { expiresIn: TOKEN_TTL_SECONDS });
-    await recordAuditTrailStandalone(pool, { tenantId, entityType: "Tenant", entityId: tenantId, action: "status_change", changes: { event: "data_export_requested", format: body.format, includeFiles: body.includeFiles }, performedBy: req.user!.id });
+    await recordAuditTrailStandalone(pool, { entityType: "Tenant", entityId: tenantId, action: "status_change", changes: { event: "data_export_requested", format: body.format, includeFiles: body.includeFiles }, performedBy: req.user!.id });
     res.json({ downloadUrl: `/data-export/download?token=${encodeURIComponent(token)}`, expiresInSeconds: TOKEN_TTL_SECONDS });
   }),
 );
@@ -119,10 +119,10 @@ dataExportRouter.get(
 
     // The link was minted for an admin; make sure they still are one, and still belong to that organization.
     const [row] = await db
-      .select({ id: users.id, email: users.email, isActive: users.isActive, tenantId: users.tenantId, roleName: roles.name })
+      .select({ id: users.id, email: users.email, isActive: users.isActive, roleName: roles.name })
       .from(users)
       .leftJoin(roles, eq(users.roleId, roles.id))
-      .where(and(eq(users.id, Number(payload.sub)), eq(users.tenantId, payload.tid)));
+      .where(and(eq(users.id, Number(payload.sub))));
     if (!row || !row.isActive || (row.roleName !== "admin" && row.roleName !== "platform_admin")) throw AppError.forbidden("This account can no longer export data.");
     if (running.has(payload.tid)) throw new AppError("An export for this organization is already running.", 409);
 
@@ -136,10 +136,10 @@ dataExportRouter.get(
     const archive = newArchive();
     let finished = false;
     const audit = (event: string, extra: Record<string, unknown> = {}) =>
-      recordAuditTrailStandalone(pool, { tenantId: payload.tid, entityType: "Tenant", entityId: payload.tid, action: "status_change", changes: { event, format: payload.fmt, includeFiles: payload.files, ...extra }, performedBy: row.id });
+      recordAuditTrailStandalone(pool, { entityType: "Tenant", entityId: payload.tid, action: "status_change", changes: { event, format: payload.fmt, includeFiles: payload.files, ...extra }, performedBy: row.id });
 
     archive.on("error", (err) => {
-      logger.error("Data export archive failed", { tenantId: payload.tid, err: String(err) });
+      logger.error("Data export archive failed", { err: String(err) });
       res.destroy(err);
     });
     res.on("close", () => {
@@ -149,12 +149,12 @@ dataExportRouter.get(
     archive.pipe(res);
 
     try {
-      const manifest = await writeTenantExport(archive, { tenantId: payload.tid, userId: row.id, email: row.email }, { format: payload.fmt, includeFiles: payload.files });
+      const manifest = await writeTenantExport(archive, { userId: row.id, email: row.email }, { format: payload.fmt, includeFiles: payload.files });
       await archive.finalize();
       finished = true;
       await audit("data_export_completed", { tables: manifest.tables.length, rows: manifest.totalRows, files: manifest.files.included, filesSkipped: manifest.files.skipped.length, truncatedTables: manifest.tables.filter((t) => t.truncated).map((t) => t.name), ms: Date.now() - startedAt });
     } catch (err) {
-      logger.error("Data export failed", { tenantId: payload.tid, err: String(err) });
+      logger.error("Data export failed", { err: String(err) });
       await audit("data_export_failed", { error: (err as Error).message.slice(0, 200) });
       archive.abort();
       res.destroy(err as Error);

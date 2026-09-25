@@ -80,8 +80,8 @@ export interface Actor {
 
 const conflict = (message: string) => new AppError(message, 409);
 
-async function audit(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, action: "create" | "update" | "status_change" | "delete", actor: number | undefined, changes: Record<string, unknown>) {
-  await recordAuditTrail(db, { tenantId, entityType: adapter.entityType, entityId: subjectId, action, changes, performedBy: actor });
+async function audit(db: TenantDb, adapter: SubjectAdapter, subjectId: number, action: "create" | "update" | "status_change" | "delete", actor: number | undefined, changes: Record<string, unknown>) {
+  await recordAuditTrail(db, { entityType: adapter.entityType, entityId: subjectId, action, changes, performedBy: actor });
 }
 
 /** Gives a subject that pre-dates versioning its version 1 (the live record as it stands), so the timeline starts from truth, not from nothing. */
@@ -90,12 +90,11 @@ export async function ensureBootstrapped(db: TenantDb, adapter: SubjectAdapter, 
   const [any] = await db
     .select({ id: controlledVersions.id })
     .from(controlledVersions)
-    .where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId)))
+    .where(and(eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId)))
     .limit(1);
   if (any) return;
   const startStatus = adapter.bootstrapStatus?.(live) ?? "published";
   await db.insert(controlledVersions).values({
-    tenantId,
     subjectType: adapter.subject,
     subjectId,
     versionNumber: live.version && live.version > 0 ? live.version : 1,
@@ -113,7 +112,7 @@ export async function listVersions(db: TenantDb, adapter: SubjectAdapter, tenant
   const rows = await db
     .select()
     .from(controlledVersions)
-    .where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId)))
+    .where(and(eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId)))
     .orderBy(desc(controlledVersions.versionNumber));
   const names = await userNames(db, rows.flatMap((r) => [r.createdBy, r.submittedBy, r.reviewedBy, r.publishedBy]));
   // The list omits payloads (they can be large); GET one version returns it.
@@ -134,11 +133,11 @@ async function userNames(db: TenantDb, ids: (number | null)[]): Promise<Map<numb
 }
 const nameOf = (m: Map<number, string>, id: number | null) => (id === null ? null : (m.get(id) ?? null));
 
-export async function getVersion(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number): Promise<ControlledVersion> {
+export async function getVersion(db: TenantDb, adapter: SubjectAdapter, subjectId: number, versionId: number): Promise<ControlledVersion> {
   const [row] = await db
     .select()
     .from(controlledVersions)
-    .where(and(eq(controlledVersions.id, versionId), eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId)));
+    .where(and(eq(controlledVersions.id, versionId), eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId)));
   if (!row) throw AppError.notFound("Version");
   return row;
 }
@@ -149,7 +148,7 @@ export async function getCurrent(db: TenantDb, adapter: SubjectAdapter, tenantId
   const rows = await db
     .select()
     .from(controlledVersions)
-    .where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId), inArray(controlledVersions.status, ["published", "draft", "in_review"])))
+    .where(and(eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId), inArray(controlledVersions.status, ["published", "draft", "in_review"])))
     .orderBy(desc(controlledVersions.versionNumber));
   const open = rows.find((r) => r.status === "draft" || r.status === "in_review") ?? null;
   const published = rows.find((r) => r.status === "published") ?? null;
@@ -160,27 +159,27 @@ export async function getCurrent(db: TenantDb, adapter: SubjectAdapter, tenantId
   };
 }
 
-async function nextNumber(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number): Promise<number> {
+async function nextNumber(db: TenantDb, adapter: SubjectAdapter, subjectId: number): Promise<number> {
   const [row] = await db
     .select({ n: max(controlledVersions.versionNumber) })
     .from(controlledVersions)
-    .where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId)));
+    .where(and(eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId)));
   return (row?.n ?? 0) + 1;
 }
 
-async function openVersion(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number) {
+async function openVersion(db: TenantDb, adapter: SubjectAdapter, subjectId: number) {
   const [row] = await db
     .select()
     .from(controlledVersions)
-    .where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId), inArray(controlledVersions.status, ["draft", "in_review"])));
+    .where(and(eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId), inArray(controlledVersions.status, ["draft", "in_review"])));
   return row ?? null;
 }
 
-async function publishedVersion(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number) {
+async function publishedVersion(db: TenantDb, adapter: SubjectAdapter, subjectId: number) {
   const [row] = await db
     .select()
     .from(controlledVersions)
-    .where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId), eq(controlledVersions.status, "published")));
+    .where(and(eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId), eq(controlledVersions.status, "published")));
   return row ?? null;
 }
 
@@ -195,10 +194,10 @@ export async function createDraft(
 ): Promise<ControlledVersion> {
   await ensureBootstrapped(db, adapter, tenantId, subjectId);
   await adapter.guardDraft?.(db, tenantId, subjectId);
-  const existing = await openVersion(db, adapter, tenantId, subjectId);
+  const existing = await openVersion(db, adapter, subjectId);
   if (existing) throw conflict(`There is already an open ${adapter.noun} version (v${existing.versionNumber}, ${existing.status.replace("_", " ")}). Finish or discard it first.`);
-  const published = await publishedVersion(db, adapter, tenantId, subjectId);
-  const number = await nextNumber(db, adapter, tenantId, subjectId);
+  const published = await publishedVersion(db, adapter, subjectId);
+  const number = await nextNumber(db, adapter, subjectId);
   const startPayload = opts.payload ?? (published ? (adapter.seedDraft?.(published.payload, { versionNumber: number, currentPayload: published.payload }) ?? published.payload) : adapter.blank());
   if (opts.payload) {
     const problems = (await adapter.checkPayload?.(db, tenantId, subjectId, number, startPayload, "save")) ?? [];
@@ -207,7 +206,6 @@ export async function createDraft(
   const [created] = await db
     .insert(controlledVersions)
     .values({
-      tenantId,
       subjectType: adapter.subject,
       subjectId,
       versionNumber: number,
@@ -218,7 +216,7 @@ export async function createDraft(
       createdBy: actor.id,
     })
     .returning();
-  await audit(db, adapter, tenantId, subjectId, "create", actor.id, { event: "draft_created", version: number, basedOn: published?.versionNumber ?? null });
+  await audit(db, adapter, subjectId, "create", actor.id, { event: "draft_created", version: number, basedOn: published?.versionNumber ?? null });
   await adapter.onTransition?.(db, tenantId, subjectId, { type: "draft_created", version: number, hasPublished: !!published });
   return created!;
 }
@@ -227,9 +225,9 @@ export async function createDraft(
 export async function createInitialDraft(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, actor: Actor, payload: Record<string, unknown>): Promise<ControlledVersion> {
   const [created] = await db
     .insert(controlledVersions)
-    .values({ tenantId, subjectType: adapter.subject, subjectId, versionNumber: 1, status: "draft", payload, metadata: { summary: "Initial version" }, createdBy: actor.id })
+    .values({ subjectType: adapter.subject, subjectId, versionNumber: 1, status: "draft", payload, metadata: { summary: "Initial version" }, createdBy: actor.id })
     .returning();
-  await audit(db, adapter, tenantId, subjectId, "create", actor.id, { event: "draft_created", version: 1, basedOn: null });
+  await audit(db, adapter, subjectId, "create", actor.id, { event: "draft_created", version: 1, basedOn: null });
   await adapter.onTransition?.(db, tenantId, subjectId, { type: "draft_created", version: 1, hasPublished: false });
   return created!;
 }
@@ -246,7 +244,7 @@ export async function saveDraft(
   actor: Actor,
   input: { payload?: Record<string, unknown>; summary?: string },
 ): Promise<ControlledVersion> {
-  const v = await getVersion(db, adapter, tenantId, subjectId, versionId);
+  const v = await getVersion(db, adapter, subjectId, versionId);
   if (v.status === "draft" && input.payload) {
     const problems = (await adapter.checkPayload?.(db, tenantId, subjectId, v.versionNumber, input.payload, "save")) ?? [];
     if (problems.length > 0) throw new AppError(problems[0]!.message, 422, { errors: problems, warnings: [] });
@@ -263,22 +261,22 @@ export async function saveDraft(
     .set({ ...(input.payload ? { payload: input.payload } : {}), metadata, updatedAt: new Date(), updatedBy: actor.id })
     .where(eq(controlledVersions.id, v.id))
     .returning();
-  if (shouldAudit) await audit(db, adapter, tenantId, subjectId, "update", actor.id, { event: "draft_edited", version: v.versionNumber });
+  if (shouldAudit) await audit(db, adapter, subjectId, "update", actor.id, { event: "draft_edited", version: v.versionNumber });
   return updated!;
 }
 
 /** Discards an unpublished draft. */
 export async function discardDraft(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, actor: Actor): Promise<void> {
-  const v = await getVersion(db, adapter, tenantId, subjectId, versionId);
+  const v = await getVersion(db, adapter, subjectId, versionId);
   if (v.status !== "draft") throw conflict("Only a draft can be discarded.");
   await db.delete(controlledVersions).where(eq(controlledVersions.id, v.id));
-  await audit(db, adapter, tenantId, subjectId, "delete", actor.id, { event: "draft_discarded", version: v.versionNumber });
-  await adapter.onTransition?.(db, tenantId, subjectId, { type: "discarded", version: v.versionNumber, hasPublished: !!(await publishedVersion(db, adapter, tenantId, subjectId)) });
+  await audit(db, adapter, subjectId, "delete", actor.id, { event: "draft_discarded", version: v.versionNumber });
+  await adapter.onTransition?.(db, tenantId, subjectId, { type: "discarded", version: v.versionNumber, hasPublished: !!(await publishedVersion(db, adapter, subjectId)) });
 }
 
 /** draft -> in_review. The content must pass the subject's validation first. */
 export async function submitForReview(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, actor: Actor, notes?: string, opts: { reviewerId?: number } = {}): Promise<ControlledVersion> {
-  const v = await getVersion(db, adapter, tenantId, subjectId, versionId);
+  const v = await getVersion(db, adapter, subjectId, versionId);
   if (v.status !== "draft") throw conflict("Only a draft can be sent for review.");
   const report = adapter.validate(v.payload);
   const dbIssues = (await adapter.checkPayload?.(db, tenantId, subjectId, v.versionNumber, v.payload, "submit")) ?? [];
@@ -288,7 +286,7 @@ export async function submitForReview(db: TenantDb, adapter: SubjectAdapter, ten
   // A named reviewer must be someone in this organization who is allowed to review, and not the author.
   let assignedReviewerId: number | undefined;
   if (opts.reviewerId !== undefined) {
-    const [reviewer] = await db.select({ id: users.id }).from(users).where(and(eq(users.id, opts.reviewerId), eq(users.tenantId, tenantId), eq(users.isActive, true)));
+    const [reviewer] = await db.select({ id: users.id }).from(users).where(and(eq(users.id, opts.reviewerId), eq(users.isActive, true)));
     if (!reviewer) throw AppError.badRequest("That reviewer isn't a user in this organization.");
     if (reviewer.id === actor.id) throw AppError.badRequest("Choose someone other than yourself to review it.");
     assignedReviewerId = reviewer.id;
@@ -308,9 +306,9 @@ export async function submitForReview(db: TenantDb, adapter: SubjectAdapter, ten
     })
     .where(eq(controlledVersions.id, v.id))
     .returning();
-  await audit(db, adapter, tenantId, subjectId, "status_change", actor.id, { event: "submitted_for_review", version: v.versionNumber, notes: notes ?? null, ...(assignedReviewerId !== undefined ? { assignedReviewerId } : {}) });
-  await adapter.onTransition?.(db, tenantId, subjectId, { type: "submitted", version: v.versionNumber, hasPublished: !!(await publishedVersion(db, adapter, tenantId, subjectId)) });
-  if (adapter.notifyReviewLifecycle) await notifyReview(db, adapter, tenantId, subjectId, updated!, "requested", actor).catch((err) => logger.error("Review notification failed", { err: String(err), subject: adapter.subject, subjectId }));
+  await audit(db, adapter, subjectId, "status_change", actor.id, { event: "submitted_for_review", version: v.versionNumber, notes: notes ?? null, ...(assignedReviewerId !== undefined ? { assignedReviewerId } : {}) });
+  await adapter.onTransition?.(db, tenantId, subjectId, { type: "submitted", version: v.versionNumber, hasPublished: !!(await publishedVersion(db, adapter, subjectId)) });
+  if (adapter.notifyReviewLifecycle) await notifyReview(db, adapter, subjectId, updated!, "requested", actor).catch((err) => logger.error("Review notification failed", { err: String(err), subject: adapter.subject, subjectId }));
   return updated!;
 }
 
@@ -320,7 +318,7 @@ export async function submitForReview(db: TenantDb, adapter: SubjectAdapter, ten
  * one-person organization is not stuck — and that self-review is recorded as such.
  */
 export async function reviewVersion(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, actor: Actor, decision: "approved" | "rejected", notes?: string): Promise<ControlledVersion> {
-  const v = await getVersion(db, adapter, tenantId, subjectId, versionId);
+  const v = await getVersion(db, adapter, subjectId, versionId);
   if (v.status !== "in_review") throw conflict("Only a version that is in review can be reviewed.");
   const selfReview = v.submittedBy === actor.id;
   if (selfReview && actor.roleName !== "admin" && actor.roleName !== "platform_admin") {
@@ -337,9 +335,9 @@ export async function reviewVersion(db: TenantDb, adapter: SubjectAdapter, tenan
     )
     .where(eq(controlledVersions.id, v.id))
     .returning();
-  await audit(db, adapter, tenantId, subjectId, "status_change", actor.id, { event: decision === "approved" ? "review_approved" : "review_rejected", version: v.versionNumber, notes: notes ?? null, ...(selfReview ? { selfReviewed: true } : {}) });
-  await adapter.onTransition?.(db, tenantId, subjectId, { type: decision === "approved" ? "approved" : "rejected", version: v.versionNumber, hasPublished: !!(await publishedVersion(db, adapter, tenantId, subjectId)) });
-  if (adapter.notifyReviewLifecycle) await notifyReview(db, adapter, tenantId, subjectId, updated!, decision === "approved" ? "approved" : "rejected", actor).catch((err) => logger.error("Review notification failed", { err: String(err), subject: adapter.subject, subjectId }));
+  await audit(db, adapter, subjectId, "status_change", actor.id, { event: decision === "approved" ? "review_approved" : "review_rejected", version: v.versionNumber, notes: notes ?? null, ...(selfReview ? { selfReviewed: true } : {}) });
+  await adapter.onTransition?.(db, tenantId, subjectId, { type: decision === "approved" ? "approved" : "rejected", version: v.versionNumber, hasPublished: !!(await publishedVersion(db, adapter, subjectId)) });
+  if (adapter.notifyReviewLifecycle) await notifyReview(db, adapter, subjectId, updated!, decision === "approved" ? "approved" : "rejected", actor).catch((err) => logger.error("Review notification failed", { err: String(err), subject: adapter.subject, subjectId }));
   return updated!;
 }
 
@@ -349,7 +347,7 @@ export async function reviewVersion(db: TenantDb, adapter: SubjectAdapter, tenan
  * anywhere leaves the previous version live.
  */
 export async function publishVersion(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, actor: Actor): Promise<ControlledVersion> {
-  const v = await getVersion(db, adapter, tenantId, subjectId, versionId);
+  const v = await getVersion(db, adapter, subjectId, versionId);
   if (v.status !== "in_review") throw conflict("Only a version that is in review can be published.");
   if (v.reviewDecision !== "approved") throw conflict("A reviewer has to approve this version before it can be published.");
 
@@ -358,13 +356,13 @@ export async function publishVersion(db: TenantDb, adapter: SubjectAdapter, tena
   const errors = [...report.errors, ...dbIssues];
   if (errors.length > 0) throw new AppError(`Can't publish: ${errors[0]!.message}`, 422, { errors, warnings: report.warnings });
 
-  const previous = await publishedVersion(db, adapter, tenantId, subjectId);
+  const previous = await publishedVersion(db, adapter, subjectId);
   const live = await adapter.loadLive(db, tenantId, subjectId);
   await adapter.apply(db, tenantId, subjectId, v.payload, { versionNumber: v.versionNumber, actor: actor.id, firstPublish: !previous, previousLive: live.exists ? live.payload : null, version: v });
 
   if (previous) await db.update(controlledVersions).set({ status: "archived" }).where(eq(controlledVersions.id, previous.id));
   const [published] = await db.update(controlledVersions).set({ status: "published", publishedBy: actor.id, publishedAt: new Date() }).where(eq(controlledVersions.id, v.id)).returning();
-  await audit(db, adapter, tenantId, subjectId, "status_change", actor.id, {
+  await audit(db, adapter, subjectId, "status_change", actor.id, {
     event: "published",
     version: v.versionNumber,
     replaced: previous?.versionNumber ?? null,
@@ -372,7 +370,7 @@ export async function publishVersion(db: TenantDb, adapter: SubjectAdapter, tena
     ...(previous ? { changes: adapter.diff(previous.payload, v.payload).summary } : {}),
   });
 
-  await notifyPublished(db, adapter, tenantId, subjectId, v, actor).catch((err) => logger.error("Publish notification failed", { err: String(err), subject: adapter.subject, subjectId }));
+  await notifyPublished(db, adapter, subjectId, v, actor).catch((err) => logger.error("Publish notification failed", { err: String(err), subject: adapter.subject, subjectId }));
   return published!;
 }
 
@@ -386,24 +384,24 @@ function withRecordLink(body: string, subject: string, subjectId: number): strin
   return link ? `${body}\n\nOpen it: ${link}` : body;
 }
 
-async function notifyPublished(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, v: ControlledVersion, actor: Actor) {
+async function notifyPublished(db: TenantDb, adapter: SubjectAdapter, subjectId: number, v: ControlledVersion, actor: Actor) {
   const subject = `${adapter.noun[0]!.toUpperCase()}${adapter.noun.slice(1)} version ${v.versionNumber} was published`;
   const body = withRecordLink(`A new version of the ${adapter.noun} is now in force (version ${v.versionNumber}${v.isRollback ? `, restoring version ${v.basedOnVersion}` : ""}).`, adapter.subject, subjectId);
-  for (const department of adapter.notifyDepartments) await notifyDepartment(db, { tenantId, department, subject, body, relatedEntityType: adapter.entityType, relatedEntityId: subjectId });
+  for (const department of adapter.notifyDepartments) await notifyDepartment(db, { department, subject, body, relatedEntityType: adapter.entityType, relatedEntityId: subjectId });
   const names = await db.select({ email: users.email, id: users.id }).from(users).where(inArray(users.id, [v.createdBy, v.submittedBy].filter((i): i is number => typeof i === "number" && i !== actor.id)));
   for (const u of names) await sendEmail({ to: u.email, subject, body });
 }
 
 /** Tells the right people about a review step: the named reviewer (or the department if none was named) when it is requested, the author when it is decided. */
-async function notifyReview(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, v: ControlledVersion, kind: "requested" | "approved" | "rejected", actor: Actor) {
+async function notifyReview(db: TenantDb, adapter: SubjectAdapter, subjectId: number, v: ControlledVersion, kind: "requested" | "approved" | "rejected", actor: Actor) {
   const noun = `${adapter.noun[0]!.toUpperCase()}${adapter.noun.slice(1)}`;
-  const emailsOf = async (ids: number[]) => (ids.length === 0 ? [] : (await db.select({ email: users.email }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.isActive, true), inArray(users.id, ids)))).map((r) => r.email));
+  const emailsOf = async (ids: number[]) => (ids.length === 0 ? [] : (await db.select({ email: users.email }).from(users).where(and(eq(users.isActive, true), inArray(users.id, ids)))).map((r) => r.email));
   if (kind === "requested") {
     const subject = `${noun} version ${v.versionNumber} is waiting for your review`;
     const body = withRecordLink(`A new version of the ${adapter.noun} was sent for review${v.reviewNotes ? `: ${v.reviewNotes}` : "."}`, adapter.subject, subjectId);
     const assigned = typeof v.metadata?.assignedReviewerId === "number" ? (v.metadata.assignedReviewerId as number) : null;
-    if (assigned !== null) await notifyRecipients(db, tenantId, await emailsOf([assigned]), subject, body, adapter.entityType, subjectId);
-    else for (const department of adapter.notifyDepartments) await notifyDepartment(db, { tenantId, department, subject, body, relatedEntityType: adapter.entityType, relatedEntityId: subjectId });
+    if (assigned !== null) await notifyRecipients(db, await emailsOf([assigned]), subject, body, adapter.entityType, subjectId);
+    else for (const department of adapter.notifyDepartments) await notifyDepartment(db, { department, subject, body, relatedEntityType: adapter.entityType, relatedEntityId: subjectId });
     return;
   }
   const author = v.submittedBy && v.submittedBy !== actor.id ? [v.submittedBy] : [];
@@ -413,7 +411,7 @@ async function notifyReview(db: TenantDb, adapter: SubjectAdapter, tenantId: num
     adapter.subject,
     subjectId
   );
-  await notifyRecipients(db, tenantId, await emailsOf(author), subject, body, adapter.entityType, subjectId);
+  await notifyRecipients(db, await emailsOf(author), subject, body, adapter.entityType, subjectId);
 }
 
 /** Rollback: a new draft whose content is an earlier version's. It still goes through review and publishing like any other change. */
@@ -422,21 +420,20 @@ export async function rollbackTo(db: TenantDb, adapter: SubjectAdapter, tenantId
   const [target] = await db
     .select()
     .from(controlledVersions)
-    .where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId), eq(controlledVersions.versionNumber, versionNumber)));
+    .where(and(eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId), eq(controlledVersions.versionNumber, versionNumber)));
   if (!target) throw AppError.notFound("Version");
   if (target.status !== "published" && target.status !== "archived") throw conflict("You can only roll back to a version that was published.");
   if (target.status === "published") throw conflict("That version is already the live one.");
 
   await adapter.guardDraft?.(db, tenantId, subjectId);
-  const existing = await openVersion(db, adapter, tenantId, subjectId);
+  const existing = await openVersion(db, adapter, subjectId);
   if (existing) throw conflict(`There is already an open ${adapter.noun} version (v${existing.versionNumber}). Finish or discard it first.`);
 
-  const number = await nextNumber(db, adapter, tenantId, subjectId);
-  const inForce = await publishedVersion(db, adapter, tenantId, subjectId);
+  const number = await nextNumber(db, adapter, subjectId);
+  const inForce = await publishedVersion(db, adapter, subjectId);
   const [created] = await db
     .insert(controlledVersions)
     .values({
-      tenantId,
       subjectType: adapter.subject,
       subjectId,
       versionNumber: number,
@@ -448,7 +445,7 @@ export async function rollbackTo(db: TenantDb, adapter: SubjectAdapter, tenantId
       createdBy: actor.id,
     })
     .returning();
-  await audit(db, adapter, tenantId, subjectId, "create", actor.id, { event: "rollback_draft_created", version: number, rollbackTo: versionNumber });
+  await audit(db, adapter, subjectId, "create", actor.id, { event: "rollback_draft_created", version: number, rollbackTo: versionNumber });
   await adapter.onTransition?.(db, tenantId, subjectId, { type: "draft_created", version: number, hasPublished: true });
   return created!;
 }
@@ -456,19 +453,19 @@ export async function rollbackTo(db: TenantDb, adapter: SubjectAdapter, tenantId
 /** Compares a version with another (by default the one just before it) and records that a comparison was made. */
 export async function diffVersions(db: TenantDb, adapter: SubjectAdapter, tenantId: number, subjectId: number, versionId: number, againstVersionId: number | undefined, actor: Actor) {
   await ensureBootstrapped(db, adapter, tenantId, subjectId);
-  const after = await getVersion(db, adapter, tenantId, subjectId, versionId);
+  const after = await getVersion(db, adapter, subjectId, versionId);
   let before: ControlledVersion | undefined;
-  if (againstVersionId !== undefined) before = await getVersion(db, adapter, tenantId, subjectId, againstVersionId);
+  if (againstVersionId !== undefined) before = await getVersion(db, adapter, subjectId, againstVersionId);
   else {
     const all = await db
       .select()
       .from(controlledVersions)
-      .where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId)))
+      .where(and(eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId)))
       .orderBy(desc(controlledVersions.versionNumber));
     before = all.find((r) => r.versionNumber < after.versionNumber);
   }
   const base = before?.payload ?? adapter.blank();
   const result = adapter.diff(base, after.payload);
-  await audit(db, adapter, tenantId, subjectId, "update", actor.id, { event: "versions_compared", version: after.versionNumber, against: before?.versionNumber ?? null, ...result.summary });
+  await audit(db, adapter, subjectId, "update", actor.id, { event: "versions_compared", version: after.versionNumber, against: before?.versionNumber ?? null, ...result.summary });
   return { from: before ? { id: before.id, versionNumber: before.versionNumber, status: before.status } : null, to: { id: after.id, versionNumber: after.versionNumber, status: after.status }, ...result };
 }

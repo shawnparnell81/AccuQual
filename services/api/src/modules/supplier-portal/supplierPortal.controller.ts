@@ -96,7 +96,7 @@ function assertReviewTransition(currentStatus: string, nextStatus: string) {
 }
 
 async function assertSupplierExists(req: Request, supplierId: number) {
-  const [row] = await req.db!.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.id, supplierId)));
   if (!row) throw AppError.badRequest(`Supplier #${supplierId} not found`);
 }
 
@@ -124,7 +124,6 @@ export const uploadOnboardingDocumentHandler = asyncHandler(async (req: Request,
   const [created] = await req
     .db!.insert(supplierOnboardingDocuments)
     .values({
-      tenantId: req.tenantId!,
       supplierId,
       documentType,
       fileName: stored.fileName,
@@ -136,7 +135,6 @@ export const uploadOnboardingDocumentHandler = asyncHandler(async (req: Request,
     .returning();
 
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "SupplierOnboardingDocument",
     entityId: created!.id,
     action: "create",
@@ -149,7 +147,7 @@ export const uploadOnboardingDocumentHandler = asyncHandler(async (req: Request,
 /** GET /supplier-portal/onboarding/status — the latest row per documentType (resubmission inserts a new row rather than overwriting — see the schema comment), so a rejected-then-resubmitted document shows only its current state. */
 export const onboardingStatusHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierFilter(req);
-  const conditions = [eq(supplierOnboardingDocuments.tenantId, req.tenantId!)];
+  const conditions = [];
   if (supplierId) conditions.push(eq(supplierOnboardingDocuments.supplierId, supplierId));
 
   const rows = await req.db!.select().from(supplierOnboardingDocuments).where(and(...conditions)).orderBy(desc(supplierOnboardingDocuments.createdAt));
@@ -168,11 +166,11 @@ export const reviewOnboardingDocumentHandler = asyncHandler(async (req: Request,
   const [updated] = await req
     .db!.update(supplierOnboardingDocuments)
     .set({ status, reviewNotes, reviewedByUserId: req.user?.id, updatedAt: new Date() })
-    .where(and(eq(supplierOnboardingDocuments.id, id), eq(supplierOnboardingDocuments.tenantId, req.tenantId!)))
+    .where(and(eq(supplierOnboardingDocuments.id, id)))
     .returning();
   if (!updated) throw AppError.notFound("SupplierOnboardingDocument");
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "SupplierOnboardingDocument", entityId: id, action: "status_change", changes: { status, reviewNotes }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "SupplierOnboardingDocument", entityId: id, action: "status_change", changes: { status, reviewNotes }, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -190,16 +188,16 @@ export const uploadSupplierDocumentHandler = asyncHandler(async (req: Request, r
 
   const [created] = await req
     .db!.insert(supplierDocuments)
-    .values({ tenantId: req.tenantId!, supplierId, name, category, fileName: stored.fileName, filePath: stored.filePath, mimeType: stored.mimeType, fileSize: stored.fileSize, uploadedByUserId: req.user?.id })
+    .values({ supplierId, name, category, fileName: stored.fileName, filePath: stored.filePath, mimeType: stored.mimeType, fileSize: stored.fileSize, uploadedByUserId: req.user?.id })
     .returning();
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "SupplierDocument", entityId: created!.id, action: "create", changes: { supplierId, name, category }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "SupplierDocument", entityId: created!.id, action: "create", changes: { supplierId, name, category }, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
 export const listSupplierDocumentsHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierFilter(req);
-  const conditions = [eq(supplierDocuments.tenantId, req.tenantId!)];
+  const conditions = [];
   if (supplierId) conditions.push(eq(supplierDocuments.supplierId, supplierId));
   const rows = await req.db!.select().from(supplierDocuments).where(and(...conditions)).orderBy(desc(supplierDocuments.createdAt));
   res.json(rows);
@@ -216,10 +214,10 @@ export const submitPpapHandler = asyncHandler(async (req: Request, res: Response
 
   const [created] = await req
     .db!.insert(supplierPpapSubmissions)
-    .values({ tenantId: req.tenantId!, supplierId, level, partNumber, description, submittedByUserId: req.user?.id })
+    .values({ supplierId, level, partNumber, description, submittedByUserId: req.user?.id })
     .returning();
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "SupplierPpapSubmission", entityId: created!.id, action: "create", changes: { supplierId, level, partNumber }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "SupplierPpapSubmission", entityId: created!.id, action: "create", changes: { supplierId, level, partNumber }, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
@@ -229,7 +227,7 @@ export const uploadPpapDocumentHandler = asyncHandler(async (req: Request, res: 
   if (!file) throw AppError.badRequest("No file uploaded");
   const id = Number(req.params.id);
   const documentType = req.body.documentType as string;
-  const [submission] = await req.db!.select().from(supplierPpapSubmissions).where(and(eq(supplierPpapSubmissions.id, id), eq(supplierPpapSubmissions.tenantId, req.tenantId!)));
+  const [submission] = await req.db!.select().from(supplierPpapSubmissions).where(and(eq(supplierPpapSubmissions.id, id)));
   if (!submission) throw AppError.notFound("SupplierPpapSubmission");
   if (req.user?.roleName === "supplier" && submission.supplierId !== req.user.supplierId) throw AppError.forbidden("Not your submission");
 
@@ -237,14 +235,14 @@ export const uploadPpapDocumentHandler = asyncHandler(async (req: Request, res: 
   const nextDocuments = { ...(submission.documents ?? {}), [documentType]: stored };
   const [updated] = await req.db!.update(supplierPpapSubmissions).set({ documents: nextDocuments, updatedAt: new Date() }).where(eq(supplierPpapSubmissions.id, id)).returning();
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "SupplierPpapSubmission", entityId: id, action: "update", changes: { addedDocument: documentType, fileName: file.originalname }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "SupplierPpapSubmission", entityId: id, action: "update", changes: { addedDocument: documentType, fileName: file.originalname }, performedBy: req.user?.id });
   res.json(updated);
 });
 
 /** GET /supplier-portal/ppap/status — list form (a supplier's own submissions, or every submission for internal staff, optionally filtered). */
 export const ppapStatusHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierFilter(req);
-  const conditions = [eq(supplierPpapSubmissions.tenantId, req.tenantId!)];
+  const conditions = [];
   if (supplierId) conditions.push(eq(supplierPpapSubmissions.supplierId, supplierId));
   const rows = await req.db!.select().from(supplierPpapSubmissions).where(and(...conditions)).orderBy(desc(supplierPpapSubmissions.createdAt));
   res.json(rows);
@@ -257,11 +255,11 @@ export const reviewPpapHandler = asyncHandler(async (req: Request, res: Response
   const [updated] = await req
     .db!.update(supplierPpapSubmissions)
     .set({ status, reviewNotes, reviewedByUserId: req.user?.id, updatedAt: new Date() })
-    .where(and(eq(supplierPpapSubmissions.id, id), eq(supplierPpapSubmissions.tenantId, req.tenantId!)))
+    .where(and(eq(supplierPpapSubmissions.id, id)))
     .returning();
   if (!updated) throw AppError.notFound("SupplierPpapSubmission");
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "SupplierPpapSubmission", entityId: id, action: "status_change", changes: { status, reviewNotes }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "SupplierPpapSubmission", entityId: id, action: "status_change", changes: { status, reviewNotes }, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -277,7 +275,6 @@ export const respondCorrectiveActionHandler = asyncHandler(async (req: Request, 
   const [created] = await req
     .db!.insert(supplierCorrectiveActions)
     .values({
-      tenantId: req.tenantId!,
       supplierId,
       linkedNcrId: linkedNcrId ? Number(linkedNcrId) : undefined,
       linkedCapaId: linkedCapaId ? Number(linkedCapaId) : undefined,
@@ -286,13 +283,13 @@ export const respondCorrectiveActionHandler = asyncHandler(async (req: Request, 
     })
     .returning();
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "SupplierCorrectiveAction", entityId: created!.id, action: "create", changes: { supplierId, linkedNcrId, linkedCapaId }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "SupplierCorrectiveAction", entityId: created!.id, action: "create", changes: { supplierId, linkedNcrId, linkedCapaId }, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
 export const listCorrectiveActionsHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierFilter(req);
-  const conditions = [eq(supplierCorrectiveActions.tenantId, req.tenantId!)];
+  const conditions = [];
   if (supplierId) conditions.push(eq(supplierCorrectiveActions.supplierId, supplierId));
   const rows = await req.db!.select().from(supplierCorrectiveActions).where(and(...conditions)).orderBy(desc(supplierCorrectiveActions.createdAt));
   res.json(rows);
@@ -303,22 +300,22 @@ export const reviewCorrectiveActionHandler = asyncHandler(async (req: Request, r
   const id = Number(req.params.id);
   const { status, reviewNotes } = req.body as { status: string; reviewNotes?: string };
 
-  const [existing] = await req.db!.select({ status: supplierCorrectiveActions.status }).from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.id, id), eq(supplierCorrectiveActions.tenantId, req.tenantId!)));
+  const [existing] = await req.db!.select({ status: supplierCorrectiveActions.status }).from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.id, id)));
   if (!existing) throw AppError.notFound("SupplierCorrectiveAction");
   assertReviewTransition(existing.status, status);
 
   const [updated] = await req
     .db!.update(supplierCorrectiveActions)
     .set({ status, reviewNotes, reviewedByUserId: req.user?.id, updatedAt: new Date() })
-    .where(and(eq(supplierCorrectiveActions.id, id), eq(supplierCorrectiveActions.tenantId, req.tenantId!)))
+    .where(and(eq(supplierCorrectiveActions.id, id)))
     .returning();
   if (!updated) throw AppError.notFound("SupplierCorrectiveAction");
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "SupplierCorrectiveAction", entityId: id, action: "status_change", changes: { status, reviewNotes }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "SupplierCorrectiveAction", entityId: id, action: "status_change", changes: { status, reviewNotes }, performedBy: req.user?.id });
   // Phase 9 — the Supplier Corrective Action review had no workflow event
   // at all before this (confirmed absent), so no workflow definition could
   // react to it. Additive only — the review logic above is unchanged.
-  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "supplier_car", event: status, entityId: id, supplierId: updated!.supplierId });
+  await publishEvent(WORKFLOW_STREAM, { module: "supplier_car", event: status, entityId: id, supplierId: updated!.supplierId });
   res.json(updated);
 });
 
@@ -337,7 +334,6 @@ export const submit8dHandler = asyncHandler(async (req: Request, res: Response) 
   const [created] = await req
     .db!.insert(supplier8dResponses)
     .values({
-      tenantId: req.tenantId!,
       supplierId,
       linkedNcrId: linkedNcrId ? Number(linkedNcrId) : undefined,
       linkedEightDId: linkedEightDId ? Number(linkedEightDId) : undefined,
@@ -346,13 +342,13 @@ export const submit8dHandler = asyncHandler(async (req: Request, res: Response) 
     })
     .returning();
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Supplier8dResponse", entityId: created!.id, action: "create", changes: { supplierId, linkedNcrId, linkedEightDId }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "Supplier8dResponse", entityId: created!.id, action: "create", changes: { supplierId, linkedNcrId, linkedEightDId }, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
 export const eightDStatusHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierFilter(req);
-  const conditions = [eq(supplier8dResponses.tenantId, req.tenantId!)];
+  const conditions = [];
   if (supplierId) conditions.push(eq(supplier8dResponses.supplierId, supplierId));
   const rows = await req.db!.select().from(supplier8dResponses).where(and(...conditions)).orderBy(desc(supplier8dResponses.createdAt));
   res.json(rows);
@@ -363,18 +359,18 @@ export const review8dHandler = asyncHandler(async (req: Request, res: Response) 
   const id = Number(req.params.id);
   const { status, reviewNotes } = req.body as { status: string; reviewNotes?: string };
 
-  const [existing] = await req.db!.select({ status: supplier8dResponses.status }).from(supplier8dResponses).where(and(eq(supplier8dResponses.id, id), eq(supplier8dResponses.tenantId, req.tenantId!)));
+  const [existing] = await req.db!.select({ status: supplier8dResponses.status }).from(supplier8dResponses).where(and(eq(supplier8dResponses.id, id)));
   if (!existing) throw AppError.notFound("Supplier8dResponse");
   assertReviewTransition(existing.status, status);
 
   const [updated] = await req
     .db!.update(supplier8dResponses)
     .set({ status, reviewNotes, reviewedByUserId: req.user?.id, updatedAt: new Date() })
-    .where(and(eq(supplier8dResponses.id, id), eq(supplier8dResponses.tenantId, req.tenantId!)))
+    .where(and(eq(supplier8dResponses.id, id)))
     .returning();
   if (!updated) throw AppError.notFound("Supplier8dResponse");
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Supplier8dResponse", entityId: id, action: "status_change", changes: { status, reviewNotes }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "Supplier8dResponse", entityId: id, action: "status_change", changes: { status, reviewNotes }, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -390,10 +386,10 @@ export const sendMessageHandler = asyncHandler(async (req: Request, res: Respons
 
   const [created] = await req
     .db!.insert(supplierMessages)
-    .values({ tenantId: req.tenantId!, supplierId, threadKey: threadKey || "general", senderRole, senderUserId: req.user?.id, body, category: category || "message", aiDrafted: aiDrafted === true })
+    .values({ supplierId, threadKey: threadKey || "general", senderRole, senderUserId: req.user?.id, body, category: category || "message", aiDrafted: aiDrafted === true })
     .returning();
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "SupplierMessage", entityId: created!.id, action: "create", changes: { supplierId, senderRole, threadKey: created!.threadKey, category: created!.category, aiDrafted: created!.aiDrafted }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "SupplierMessage", entityId: created!.id, action: "create", changes: { supplierId, senderRole, threadKey: created!.threadKey, category: created!.category, aiDrafted: created!.aiDrafted }, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
@@ -413,17 +409,16 @@ export const sendMessageEmailHandler = asyncHandler(async (req: Request, res: Re
   const supplierId = resolveSupplierScope(req, req.body.supplierId);
   const { subject, body, threadKey, category, aiDrafted } = req.body as { subject: string; body: string; threadKey?: string; category?: string; aiDrafted?: boolean };
 
-  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, req.tenantId!)));
+  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, supplierId)));
   if (!supplier) throw AppError.notFound("Supplier");
   if (!supplier.contactEmail) throw AppError.badRequest("This supplier has no contact email on file — add one before sending an email.");
 
   const status = await sendEmail({ to: supplier.contactEmail, subject, body });
-  await req.db!.insert(notificationLog).values({ tenantId: req.tenantId!, channel: "email", recipient: supplier.contactEmail, subject, body, status, relatedEntityType: "Supplier", relatedEntityId: supplierId });
+  await req.db!.insert(notificationLog).values({ channel: "email", recipient: supplier.contactEmail, subject, body, status, relatedEntityType: "Supplier", relatedEntityId: supplierId });
 
   const [created] = await req
     .db!.insert(supplierMessages)
     .values({
-      tenantId: req.tenantId!,
       supplierId,
       threadKey: threadKey || "general",
       senderRole: "internal",
@@ -435,7 +430,6 @@ export const sendMessageEmailHandler = asyncHandler(async (req: Request, res: Re
     .returning();
 
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "SupplierMessage",
     entityId: created!.id,
     action: "create",
@@ -456,12 +450,12 @@ export const getThreadHandler = asyncHandler(async (req: Request, res: Response)
   await req
     .db!.update(supplierMessages)
     .set({ readAt: new Date() })
-    .where(and(eq(supplierMessages.tenantId, req.tenantId!), eq(supplierMessages.supplierId, supplierId), eq(supplierMessages.threadKey, threadKey), eq(supplierMessages.senderRole, otherRole), isNull(supplierMessages.readAt)));
+    .where(and(eq(supplierMessages.supplierId, supplierId), eq(supplierMessages.threadKey, threadKey), eq(supplierMessages.senderRole, otherRole), isNull(supplierMessages.readAt)));
 
   const rows = await req
     .db!.select()
     .from(supplierMessages)
-    .where(and(eq(supplierMessages.tenantId, req.tenantId!), eq(supplierMessages.supplierId, supplierId), eq(supplierMessages.threadKey, threadKey)))
+    .where(and(eq(supplierMessages.supplierId, supplierId), eq(supplierMessages.threadKey, threadKey)))
     .orderBy(supplierMessages.createdAt);
   res.json(rows);
 });
@@ -475,17 +469,17 @@ export const getThreadHandler = asyncHandler(async (req: Request, res: Response)
 
 export const scorecardHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
-  const rows = await req.db!.select().from(supplierScorecards).where(and(eq(supplierScorecards.tenantId, req.tenantId!), eq(supplierScorecards.supplierId, supplierId))).orderBy(desc(supplierScorecards.createdAt));
+  const rows = await req.db!.select().from(supplierScorecards).where(and(eq(supplierScorecards.supplierId, supplierId))).orderBy(desc(supplierScorecards.createdAt));
   res.json(rows);
 });
 
 export const performanceHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
-  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, req.tenantId!)));
+  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, supplierId)));
   if (!supplier) throw AppError.notFound("Supplier");
 
-  const openCorrectiveActions = await req.db!.select().from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.tenantId, req.tenantId!), eq(supplierCorrectiveActions.supplierId, supplierId)));
-  const ppapSubmissions = await req.db!.select().from(supplierPpapSubmissions).where(and(eq(supplierPpapSubmissions.tenantId, req.tenantId!), eq(supplierPpapSubmissions.supplierId, supplierId)));
+  const openCorrectiveActions = await req.db!.select().from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.supplierId, supplierId)));
+  const ppapSubmissions = await req.db!.select().from(supplierPpapSubmissions).where(and(eq(supplierPpapSubmissions.supplierId, supplierId)));
   const approvedPpap = ppapSubmissions.filter((p) => p.status === "approved").length;
 
   res.json({
@@ -507,21 +501,19 @@ export const performanceHandler = asyncHandler(async (req: Request, res: Respons
 
 export const supplierNcrListHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
-  const tenantId = req.tenantId!;
-  const ncrIds = await getSupplierNcrIds(req.db!, tenantId, supplierId);
+  const ncrIds = await getSupplierNcrIds(req.db!, supplierId);
   if (ncrIds.length === 0) return res.json([]);
 
-  const rows = await req.db!.select().from(ncr).where(and(eq(ncr.tenantId, tenantId), inArray(ncr.id, ncrIds)));
+  const rows = await req.db!.select().from(ncr).where(and(inArray(ncr.id, ncrIds)));
   res.json(rows);
 });
 
 export const supplierCapaListHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
-  const tenantId = req.tenantId!;
-  const capaIds = await getSupplierCapaIds(req.db!, tenantId, supplierId);
+  const capaIds = await getSupplierCapaIds(req.db!, supplierId);
   if (capaIds.length === 0) return res.json([]);
 
-  const rows = await req.db!.select().from(capa).where(and(eq(capa.tenantId, tenantId), inArray(capa.id, capaIds)));
+  const rows = await req.db!.select().from(capa).where(and(inArray(capa.id, capaIds)));
   res.json(rows);
 });
 
@@ -537,19 +529,19 @@ export const supplierCapaListHandler = asyncHandler(async (req: Request, res: Re
 
 export const supplierRmaListHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
-  const rows = await req.db!.select().from(rma).where(and(eq(rma.tenantId, req.tenantId!), eq(rma.supplierId, supplierId))).orderBy(desc(rma.createdAt));
+  const rows = await req.db!.select().from(rma).where(and(eq(rma.supplierId, supplierId))).orderBy(desc(rma.createdAt));
   res.json(rows);
 });
 
 export const supplierWarrantyListHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
-  const rows = await req.db!.select().from(warrantyClaims).where(and(eq(warrantyClaims.tenantId, req.tenantId!), eq(warrantyClaims.supplierId, supplierId))).orderBy(desc(warrantyClaims.createdAt));
+  const rows = await req.db!.select().from(warrantyClaims).where(and(eq(warrantyClaims.supplierId, supplierId))).orderBy(desc(warrantyClaims.createdAt));
   res.json(rows);
 });
 
 export const supplierScarListHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
-  const rows = await req.db!.select().from(scarForms).where(and(eq(scarForms.tenantId, req.tenantId!), eq(scarForms.supplierId, supplierId))).orderBy(desc(scarForms.createdAt));
+  const rows = await req.db!.select().from(scarForms).where(and(eq(scarForms.supplierId, supplierId))).orderBy(desc(scarForms.createdAt));
   res.json(rows);
 });
 
@@ -562,7 +554,7 @@ export const supplierScarListHandler = asyncHandler(async (req: Request, res: Re
  */
 export const supplierInspectionListHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
-  const rows = await req.db!.select().from(qualityInspectionReports).where(and(eq(qualityInspectionReports.tenantId, req.tenantId!), eq(qualityInspectionReports.supplierId, supplierId))).orderBy(desc(qualityInspectionReports.createdAt));
+  const rows = await req.db!.select().from(qualityInspectionReports).where(and(eq(qualityInspectionReports.supplierId, supplierId))).orderBy(desc(qualityInspectionReports.createdAt));
   res.json(rows);
 });
 
@@ -576,7 +568,7 @@ export const supplierInspectionListHandler = asyncHandler(async (req: Request, r
  */
 export const supplierLotListHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
-  const lots = await req.db!.select().from(inventoryLots).where(and(eq(inventoryLots.tenantId, req.tenantId!), eq(inventoryLots.supplierId, supplierId))).orderBy(desc(inventoryLots.createdAt));
+  const lots = await req.db!.select().from(inventoryLots).where(and(eq(inventoryLots.supplierId, supplierId))).orderBy(desc(inventoryLots.createdAt));
   const lineItemIds = lots.map((l) => l.receivingLineItemId).filter((id): id is number => id !== null);
   const lineItems = lineItemIds.length > 0 ? await req.db!.select({ id: erpReceivingLineItems.id, status: erpReceivingLineItems.status }).from(erpReceivingLineItems).where(inArray(erpReceivingLineItems.id, lineItemIds)) : [];
   const statusByLineItem = new Map(lineItems.map((l) => [l.id, l.status]));
@@ -596,7 +588,7 @@ export const supplierLotListHandler = asyncHandler(async (req: Request, res: Res
  */
 export const supplierKpisHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
-  const [factors, health] = await Promise.all([getSupplierQualityFactors(req.db!, req.tenantId!, supplierId), getSupplierHealth(req.db!, req.tenantId!, supplierId)]);
+  const [factors, health] = await Promise.all([getSupplierQualityFactors(req.db!, supplierId), getSupplierHealth(req.db!, supplierId)]);
   res.json({ ...factors, health });
 });
 
@@ -616,7 +608,7 @@ export const supplierRiskScoreHandler = asyncHandler(async (req: Request, res: R
 export const supplierScorecardExportHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
   const format = (req.query.format as string | undefined) || "csv";
-  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, req.tenantId!)));
+  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, supplierId)));
   if (!supplier) throw AppError.notFound("Supplier");
   await exportSupplierScorecard(req, res, supplier, format);
 });
@@ -629,7 +621,7 @@ export const supplierScorecardExportHandler = asyncHandler(async (req: Request, 
 
 export const getSupplierSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
-  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, req.tenantId!)));
+  const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, supplierId)));
   if (!supplier) throw AppError.notFound("Supplier");
   res.json({ id: supplier.id, name: supplier.name, contactEmail: supplier.contactEmail });
 });
@@ -637,9 +629,9 @@ export const getSupplierSettingsHandler = asyncHandler(async (req: Request, res:
 export const updateSupplierSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
   const supplierId = resolveSupplierScope(req, req.body.supplierId);
   const { contactEmail } = req.body as { contactEmail?: string };
-  const [updated] = await req.db!.update(suppliers).set({ contactEmail }).where(and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, req.tenantId!))).returning();
+  const [updated] = await req.db!.update(suppliers).set({ contactEmail }).where(and(eq(suppliers.id, supplierId))).returning();
   if (!updated) throw AppError.notFound("Supplier");
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Supplier", entityId: supplierId, action: "update", changes: { contactEmail }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "Supplier", entityId: supplierId, action: "update", changes: { contactEmail }, performedBy: req.user?.id });
   res.json({ id: updated.id, name: updated.name, contactEmail: updated.contactEmail });
 });

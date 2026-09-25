@@ -20,23 +20,23 @@ import { capa } from "../../drizzle/schema/capa.js";
  * erp/receivingAutomation.ts) — included here too, or a supplier-triggered
  * receiving NCR would be invisible in their own Supplier Portal.
  */
-export async function getSupplierNcrIds(db: TenantDb, tenantId: number, supplierId: number): Promise<number[]> {
+export async function getSupplierNcrIds(db: TenantDb, supplierId: number): Promise<number[]> {
   const [rmaRows, warrantyRows, carRows, eightDRows, directRows] = await Promise.all([
-    db.select({ ncrId: rma.linkedNcrId }).from(rma).where(and(eq(rma.tenantId, tenantId), eq(rma.supplierId, supplierId))),
-    db.select({ ncrId: warrantyClaims.linkedNcrId }).from(warrantyClaims).where(and(eq(warrantyClaims.tenantId, tenantId), eq(warrantyClaims.supplierId, supplierId))),
-    db.select({ ncrId: supplierCorrectiveActions.linkedNcrId }).from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.tenantId, tenantId), eq(supplierCorrectiveActions.supplierId, supplierId))),
-    db.select({ ncrId: supplier8dResponses.linkedNcrId }).from(supplier8dResponses).where(and(eq(supplier8dResponses.tenantId, tenantId), eq(supplier8dResponses.supplierId, supplierId))),
-    db.select({ ncrId: ncr.id }).from(ncr).where(and(eq(ncr.tenantId, tenantId), eq(ncr.supplierId, supplierId), eq(ncr.isDeleted, false))),
+    db.select({ ncrId: rma.linkedNcrId }).from(rma).where(and(eq(rma.supplierId, supplierId))),
+    db.select({ ncrId: warrantyClaims.linkedNcrId }).from(warrantyClaims).where(and(eq(warrantyClaims.supplierId, supplierId))),
+    db.select({ ncrId: supplierCorrectiveActions.linkedNcrId }).from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.supplierId, supplierId))),
+    db.select({ ncrId: supplier8dResponses.linkedNcrId }).from(supplier8dResponses).where(and(eq(supplier8dResponses.supplierId, supplierId))),
+    db.select({ ncrId: ncr.id }).from(ncr).where(and(eq(ncr.supplierId, supplierId), eq(ncr.isDeleted, false))),
   ]);
   return [...new Set([...rmaRows, ...warrantyRows, ...carRows, ...eightDRows, ...directRows].map((r) => r.ncrId).filter((id): id is number => id !== null))];
 }
 
 /** Phase 8 adds direct `capa.supplierId` (set by receivingAutomation.ts's checkCapaEscalation) — same reasoning as getSupplierNcrIds above. */
-export async function getSupplierCapaIds(db: TenantDb, tenantId: number, supplierId: number): Promise<number[]> {
+export async function getSupplierCapaIds(db: TenantDb, supplierId: number): Promise<number[]> {
   const [rmaRows, carRows, directRows] = await Promise.all([
-    db.select({ capaId: rma.linkedCapaId }).from(rma).where(and(eq(rma.tenantId, tenantId), eq(rma.supplierId, supplierId))),
-    db.select({ capaId: supplierCorrectiveActions.linkedCapaId }).from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.tenantId, tenantId), eq(supplierCorrectiveActions.supplierId, supplierId))),
-    db.select({ capaId: capa.id }).from(capa).where(and(eq(capa.tenantId, tenantId), eq(capa.supplierId, supplierId))),
+    db.select({ capaId: rma.linkedCapaId }).from(rma).where(and(eq(rma.supplierId, supplierId))),
+    db.select({ capaId: supplierCorrectiveActions.linkedCapaId }).from(supplierCorrectiveActions).where(and(eq(supplierCorrectiveActions.supplierId, supplierId))),
+    db.select({ capaId: capa.id }).from(capa).where(and(eq(capa.supplierId, supplierId))),
   ]);
   return [...new Set([...rmaRows, ...carRows, ...directRows].map((r) => r.capaId).filter((id): id is number => id !== null))];
 }

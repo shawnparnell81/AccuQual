@@ -23,7 +23,6 @@ export const baseHandlers = crudFactory(customerCommunications, {
     // not a bespoke "communication.created" payload shape the engine has no
     // matcher for.
     await publishEvent(WORKFLOW_STREAM, {
-      tenantId: req.tenantId!,
       module: "customer_communications",
       event: "created",
       entityId: row.id,

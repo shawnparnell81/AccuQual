@@ -38,8 +38,8 @@ export class SsoDenied extends Error {
   }
 }
 
-async function audit(tenantId: number, userId: number, changes: Record<string, unknown>) {
-  await recordAuditTrail(db, { tenantId, entityType: "User", entityId: userId, action: "status_change", changes, performedBy: userId }).catch((err) => logger.error("Failed to audit an SSO event", { userId, err }));
+async function audit(userId: number, changes: Record<string, unknown>) {
+  await recordAuditTrail(db, { entityType: "User", entityId: userId, action: "status_change", changes, performedBy: userId }).catch((err) => logger.error("Failed to audit an SSO event", { userId, err }));
 }
 
 export async function findConnectionByTenantCode(code: string): Promise<SsoConnection | null> {
@@ -71,7 +71,7 @@ export async function handleCallback(callbackUrl: URL, flow: SsoFlowState): Prom
   try {
     claims = await completeAuthorization(conn, callbackUrl, flow);
   } catch (err) {
-    logger.warn("SSO callback failed provider validation", { tenantId: conn.tenantId, err: String(err) });
+    logger.warn("SSO callback failed provider validation", { err: String(err) });
     throw new SsoDenied("provider_error", conn.tenantId);
   }
 
@@ -80,7 +80,7 @@ export async function handleCallback(callbackUrl: URL, flow: SsoFlowState): Prom
   if (conn.requireVerifiedEmail && !claims.emailVerified) throw new SsoDenied("email_not_verified", conn.tenantId, { email });
 
   const domain = email.split("@")[1] ?? "";
-  const [verified] = await db.select().from(ssoDomains).where(and(eq(ssoDomains.tenantId, conn.tenantId), eq(ssoDomains.domain, domain)));
+  const [verified] = await db.select().from(ssoDomains).where(and(eq(ssoDomains.domain, domain)));
   if (!verified?.verifiedAt) throw new SsoDenied("domain_not_allowed", conn.tenantId, { email });
 
   // 1. Already linked to this provider identity.
@@ -101,26 +101,26 @@ export async function handleCallback(callbackUrl: URL, flow: SsoFlowState): Prom
       if (!role || SSO_FORBIDDEN_ROLES.has(role.name)) throw new SsoDenied("no_account", conn.tenantId, { email });
       const [created] = await db
         .insert(users)
-        .values({ tenantId: conn.tenantId, email, name: claims.name, roleId: role.id, passwordHash: await bcrypt.hash(randomBytes(32).toString("hex"), 10), passwordChangedAt: new Date() })
+        .values({ email, name: claims.name, roleId: role.id, passwordHash: await bcrypt.hash(randomBytes(32).toString("hex"), 10), passwordChangedAt: new Date() })
         .returning();
       userId = created!.id;
       provisioned = true;
     }
-    await db.insert(userIdentities).values({ tenantId: conn.tenantId, userId, connectionId: conn.id, subject: claims.sub, email, lastLoginAt: new Date() });
-    await audit(conn.tenantId, userId, { action: provisioned ? "sso_account_provisioned" : "sso_identity_linked", provider: conn.displayName, email });
+    await db.insert(userIdentities).values({ userId, connectionId: conn.id, subject: claims.sub, email, lastLoginAt: new Date() });
+    await audit(userId, { action: provisioned ? "sso_account_provisioned" : "sso_identity_linked", provider: conn.displayName, email });
   } else {
     await db.update(userIdentities).set({ lastLoginAt: new Date(), email }).where(eq(userIdentities.id, identity!.id));
   }
 
-  const [target] = await db.select({ isActive: users.isActive, tenantId: users.tenantId }).from(users).where(eq(users.id, userId));
+  const [target] = await db.select({ isActive: users.isActive, }).from(users).where(eq(users.id, userId));
   if (!target || !target.isActive || target.tenantId !== conn.tenantId) throw new SsoDenied("account_disabled", conn.tenantId, { email });
 
-  await audit(conn.tenantId, userId, { action: "sso_login", provider: conn.displayName });
+  await audit(userId, { action: "sso_login", provider: conn.displayName });
   return { session: await startSessionForSsoUser(userId), provisioned };
 }
 
 /** Records a refused SSO attempt against the tenant's audit trail (there is no user to attribute it to, so it hangs off the tenant). */
 export async function auditDenied(denied: SsoDenied): Promise<void> {
   if (!denied.tenantId) return;
-  await recordAuditTrail(db, { tenantId: denied.tenantId, entityType: "Tenant", entityId: denied.tenantId, action: "status_change", changes: { action: "sso_login_denied", reason: denied.reason, ...denied.detail } }).catch((err) => logger.error("Failed to audit a refused SSO attempt", { err }));
+  await recordAuditTrail(db, { entityType: "Tenant", entityId: denied.tenantId, action: "status_change", changes: { action: "sso_login_denied", reason: denied.reason, ...denied.detail } }).catch((err) => logger.error("Failed to audit a refused SSO attempt", { err }));
 }

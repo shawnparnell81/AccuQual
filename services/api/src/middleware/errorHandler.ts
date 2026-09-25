@@ -101,7 +101,6 @@ function logFailedTransition(req: Request, err: unknown, statusCode: number): vo
   const isPermissionDenied = statusCode === 403;
 
   recordAuditTrailStandalone(pool, {
-    tenantId: req.tenantId,
     entityType: target.entityType,
     entityId: target.entityId,
     action: isPermissionDenied ? "permission_denied" : "transition_failed",

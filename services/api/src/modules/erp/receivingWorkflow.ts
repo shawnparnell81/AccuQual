@@ -28,20 +28,20 @@ export const RECEIVING_TRANSITIONS: Record<string, string[]> = {
 
 const QUALITY_OWNED_TARGETS = new Set(["inspected", "accepted", "rejected", "quarantined", "disposition_required"]);
 
-async function loadReceivingLineItem(db: TenantDb, tenantId: number, id: number): Promise<ErpReceivingLineItem> {
-  const [row] = await db.select().from(erpReceivingLineItems).where(and(eq(erpReceivingLineItems.id, id), eq(erpReceivingLineItems.tenantId, tenantId)));
+async function loadReceivingLineItem(db: TenantDb, id: number): Promise<ErpReceivingLineItem> {
+  const [row] = await db.select().from(erpReceivingLineItems).where(and(eq(erpReceivingLineItems.id, id)));
   if (!row) throw AppError.notFound("ReceivingLineItem");
   return row;
 }
 
 /** Resolves the real supplier behind a receiving line item — line → PO line → PO.supplierId — the one join every automation/reporting query in this phase needs. */
-export async function getSupplierIdForReceivingLineItem(db: TenantDb, tenantId: number, lineItemId: number): Promise<number | null> {
+export async function getSupplierIdForReceivingLineItem(db: TenantDb, lineItemId: number): Promise<number | null> {
   const [row] = await db
     .select({ supplierId: erpPurchaseOrders.supplierId })
     .from(erpReceivingLineItems)
     .innerJoin(erpPoLineItems, eq(erpReceivingLineItems.poLineItemId, erpPoLineItems.id))
     .innerJoin(erpPurchaseOrders, eq(erpPoLineItems.purchaseOrderId, erpPurchaseOrders.id))
-    .where(and(eq(erpReceivingLineItems.id, lineItemId), eq(erpReceivingLineItems.tenantId, tenantId)));
+    .where(and(eq(erpReceivingLineItems.id, lineItemId)));
   return row?.supplierId ?? null;
 }
 
@@ -64,7 +64,7 @@ export interface TransitionOptions {
  * as separate, individually-audited steps rather than one combined action.
  */
 export async function transitionReceivingLineItem(db: TenantDb, tenantId: number, lineItemId: number, targetStatus: string, options: TransitionOptions) {
-  const line = await loadReceivingLineItem(db, tenantId, lineItemId);
+  const line = await loadReceivingLineItem(db, lineItemId);
   const allowed = RECEIVING_TRANSITIONS[line.status] ?? [];
   if (!allowed.includes(targetStatus)) {
     throw AppError.badRequest(`Cannot move a receiving line item from "${line.status}" to "${targetStatus}"`);
@@ -80,26 +80,25 @@ export async function transitionReceivingLineItem(db: TenantDb, tenantId: number
 
   const [updated] = await db.update(erpReceivingLineItems).set({ status: targetStatus }).where(eq(erpReceivingLineItems.id, lineItemId)).returning();
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "ErpReceivingLineItem",
     entityId: lineItemId,
     action: "status_change",
     changes: { from: line.status, to: targetStatus, notes: options.notes },
     performedBy: options.performedBy,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "receiving", event: targetStatus, entityId: lineItemId });
+  await publishEvent(WORKFLOW_STREAM, { module: "receiving", event: targetStatus, entityId: lineItemId });
 
   // A line moving to "quarantined" really holds the stock (the quarantine module asks the inventory system to protect it); a line
   // leaving quarantine as accepted releases that hold, and one rejected stays held until it is returned or scrapped.
-  const hold = targetStatus === "quarantined" ? await openFromReceivingLine(db, tenantId, lineItemId, options.performedBy) : null;
+  const hold = targetStatus === "quarantined" ? await openFromReceivingLine(db, lineItemId, options.performedBy) : null;
   if (line.status === "quarantined" && (targetStatus === "accepted" || targetStatus === "rejected")) {
-    await resolveFromReceivingLine(db, tenantId, lineItemId, targetStatus, { id: options.performedBy ?? 0, roleName: options.isAdminOrPlatformAdmin ? "admin" : null });
+    await resolveFromReceivingLine(db, lineItemId, targetStatus, { id: options.performedBy ?? 0, roleName: options.isAdminOrPlatformAdmin ? "admin" : null });
   }
 
   if (targetStatus === "rejected" || targetStatus === "quarantined") {
-    const supplierId = await getSupplierIdForReceivingLineItem(db, tenantId, lineItemId);
+    const supplierId = await getSupplierIdForReceivingLineItem(db, lineItemId);
     const ncr = await maybeAutoCreateNcr(db, tenantId, updated!, targetStatus, supplierId, options.defectCategory, options.performedBy, options.siteId);
-    if (hold && ncr) await linkNcrFromReceiving(db, tenantId, hold.id, ncr.id);
+    if (hold && ncr) await linkNcrFromReceiving(db, hold.id, ncr.id);
     if (supplierId) await checkCapaEscalation(db, tenantId, supplierId, ncr?.id, options.performedBy, ncr?.siteId);
   }
 

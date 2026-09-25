@@ -28,13 +28,13 @@ async function main() {
 
   let inserted = 0;
   for (const tenant of allTenants) {
-    const rows: { tenantId: number; departmentName: Department; moduleName: ResourceKey; accessLevel: AccessLevel }[] = [];
+    const rows: { departmentName: Department; moduleName: ResourceKey; accessLevel: AccessLevel }[] = [];
     for (const moduleName of Object.keys(INITIAL_DEFAULT_PERMISSIONS) as ResourceKey[]) {
       const perDept = INITIAL_DEFAULT_PERMISSIONS[moduleName];
       for (const departmentName of Object.keys(perDept) as Department[]) {
         const accessLevel = perDept[departmentName];
         if (!accessLevel || accessLevel === "none") continue;
-        rows.push({ tenantId: tenant.id, departmentName, moduleName, accessLevel });
+        rows.push({ departmentName, moduleName, accessLevel });
       }
     }
     if (rows.length === 0) continue;

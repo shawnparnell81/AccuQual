@@ -60,8 +60,8 @@ export interface ItemCosting {
  * scrap/consumption would cost at today's price," not the actual cost paid
  * at the time, exactly as the reviewed prompt specified.
  */
-export async function computeItemCosting(db: TenantDb, tenantId: number, item: InventoryItem, days: number = DEFAULT_WINDOW_DAYS, settings?: InventorySettings): Promise<ItemCosting> {
-  const stockRows = await db.select().from(inventoryStock).where(and(eq(inventoryStock.itemId, item.id), eq(inventoryStock.tenantId, tenantId)));
+export async function computeItemCosting(db: TenantDb, item: InventoryItem, days: number = DEFAULT_WINDOW_DAYS, settings?: InventorySettings): Promise<ItemCosting> {
+  const stockRows = await db.select().from(inventoryStock).where(and(eq(inventoryStock.itemId, item.id)));
   const onHand = stockRows.reduce((sum, r) => sum + Number(r.onHand), 0);
 
   const unitCost = item.unitCost === null ? null : Number(item.unitCost);
@@ -71,7 +71,7 @@ export async function computeItemCosting(db: TenantDb, tenantId: number, item: I
   const movements = await db
     .select()
     .from(inventoryMovements)
-    .where(and(eq(inventoryMovements.itemId, item.id), eq(inventoryMovements.tenantId, tenantId)));
+    .where(and(eq(inventoryMovements.itemId, item.id)));
   const inWindow = movements.filter((m) => new Date(m.performedAt ?? 0).getTime() >= since);
 
   const scrapQty = inWindow.filter((m) => m.movementType === "scrap").reduce((sum, m) => sum + Number(m.quantity), 0);
@@ -108,9 +108,9 @@ export interface CostingSummary {
   days: number;
 }
 
-export async function computeCostingSummary(db: TenantDb, tenantId: number, days: number = DEFAULT_WINDOW_DAYS, settings?: InventorySettings): Promise<CostingSummary> {
-  const items = await db.select().from(inventoryItems).where(eq(inventoryItems.tenantId, tenantId));
-  const costings = await Promise.all(items.map((item) => computeItemCosting(db, tenantId, item, days, settings)));
+export async function computeCostingSummary(db: TenantDb, days: number = DEFAULT_WINDOW_DAYS, settings?: InventorySettings): Promise<CostingSummary> {
+  const items = await db.select().from(inventoryItems);
+  const costings = await Promise.all(items.map((item) => computeItemCosting(db, item, days, settings)));
 
   const uncostedItemCount = costings.filter((c) => c.unitCost === null).length;
   const totalInventoryValue = costings.reduce((sum, c) => sum + (c.itemValue ?? 0), 0);
@@ -131,7 +131,7 @@ export async function computeCostingSummary(db: TenantDb, tenantId: number, days
   }
 
   if (bySupplier.size > 0) {
-    const supplierRows = await db.select().from(suppliers).where(and(eq(suppliers.tenantId, tenantId), inArray(suppliers.id, Array.from(bySupplier.keys()))));
+    const supplierRows = await db.select().from(suppliers).where(and(inArray(suppliers.id, Array.from(bySupplier.keys()))));
     for (const s of supplierRows) {
       const entry = bySupplier.get(s.id);
       if (entry) entry.supplierName = s.name;
@@ -150,7 +150,7 @@ export async function computeCostingSummary(db: TenantDb, tenantId: number, days
 }
 
 async function loadItem(req: Request, id: number): Promise<InventoryItem> {
-  const [item] = await req.db!.select().from(inventoryItems).where(and(eq(inventoryItems.id, id), eq(inventoryItems.tenantId, req.tenantId!)));
+  const [item] = await req.db!.select().from(inventoryItems).where(and(eq(inventoryItems.id, id)));
   if (!item) throw AppError.notFound("InventoryItem");
   return item;
 }
@@ -165,11 +165,11 @@ export const getItemCostingHandler = asyncHandler(async (req: Request, res: Resp
   const itemId = Number(req.params.itemId);
   const item = await loadItem(req, itemId);
   const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
-  res.json(await computeItemCosting(req.db!, req.tenantId!, item, parseDays(req), getInventorySettings(tenant)));
+  res.json(await computeItemCosting(req.db!, item, parseDays(req), getInventorySettings(tenant)));
 });
 
 /** GET /inventory/costing/summary?days=30 */
 export const costingSummaryHandler = asyncHandler(async (req: Request, res: Response) => {
   const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
-  res.json(await computeCostingSummary(req.db!, req.tenantId!, parseDays(req), getInventorySettings(tenant)));
+  res.json(await computeCostingSummary(req.db!, parseDays(req), getInventorySettings(tenant)));
 });

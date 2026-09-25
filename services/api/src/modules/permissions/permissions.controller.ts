@@ -35,10 +35,9 @@ export const listModulesHandler = asyncHandler(async (_req: Request, res: Respon
 /** GET /permissions/effective — the CURRENT user's own effective access to every module, computed live. This is what the frontend's button/nav gating should read instead of a static config file. */
 export const getMyEffectivePermissionsHandler = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db! as TenantDb;
-  const tenantId = req.tenantId!;
   const user = { id: req.user!.id, roleName: req.user!.roleName, department: req.user!.department };
 
-  const entries = await Promise.all(RESOURCE_KEYS.map(async (key) => [key, await getUserAccessLevel(db, tenantId, user, key)] as const));
+  const entries = await Promise.all(RESOURCE_KEYS.map(async (key) => [key, await getUserAccessLevel(db, user, key)] as const));
   res.json(Object.fromEntries(entries));
 });
 
@@ -48,8 +47,7 @@ export const getMyEffectivePermissionsHandler = asyncHandler(async (req: Request
 
 /** GET /permissions/department-permissions — the FULL department x module grid: every cell, whether it's an explicit tenant override or just the shipped default, and the row id if one exists (so the frontend never has to guess). */
 export const listDepartmentPermissionsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
-  const rows = await req.db!.select().from(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
+  const rows = await req.db!.select().from(departmentPermissions);
   const overrides = new Map(rows.map((r) => [`${r.departmentName}:${r.moduleName}`, r]));
 
   const grid = DEPARTMENTS.flatMap((departmentName) =>
@@ -69,17 +67,16 @@ export const listDepartmentPermissionsHandler = asyncHandler(async (req: Request
 
 /** PATCH /permissions/department-permissions — upsert ONE cell of the grid, keyed by the natural (department, module) pair the admin UI actually knows, rather than a synthetic row id it would otherwise have to look up first. */
 export const upsertDepartmentPermissionHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const { departmentName, moduleName, accessLevel } = req.body as { departmentName: Department; moduleName: ResourceKey; accessLevel: AccessLevel };
 
   const [existing] = await req
     .db!.select()
     .from(departmentPermissions)
-    .where(and(eq(departmentPermissions.tenantId, tenantId), eq(departmentPermissions.departmentName, departmentName), eq(departmentPermissions.moduleName, moduleName)));
+    .where(and(eq(departmentPermissions.departmentName, departmentName), eq(departmentPermissions.moduleName, moduleName)));
 
   const [row] = await req
     .db!.insert(departmentPermissions)
-    .values({ tenantId, departmentName, moduleName, accessLevel })
+    .values({ departmentName, moduleName, accessLevel })
     .onConflictDoUpdate({
       target: [departmentPermissions.tenantId, departmentPermissions.departmentName, departmentPermissions.moduleName],
       set: { accessLevel, updatedAt: new Date() },
@@ -87,7 +84,6 @@ export const upsertDepartmentPermissionHandler = asyncHandler(async (req: Reques
     .returning();
 
   await recordAuditTrail(req.db!, {
-    tenantId,
     entityType: "DepartmentPermission",
     entityId: row!.id,
     action: existing ? "update" : "create",
@@ -99,18 +95,16 @@ export const upsertDepartmentPermissionHandler = asyncHandler(async (req: Reques
 
 /** DELETE /permissions/department-permissions — remove an explicit override, reverting that cell back to the shipped default. Body: {departmentName, moduleName}. */
 export const deleteDepartmentPermissionHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const { departmentName, moduleName } = req.body as { departmentName: Department; moduleName: ResourceKey };
 
   const [existing] = await req
     .db!.select()
     .from(departmentPermissions)
-    .where(and(eq(departmentPermissions.tenantId, tenantId), eq(departmentPermissions.departmentName, departmentName), eq(departmentPermissions.moduleName, moduleName)));
+    .where(and(eq(departmentPermissions.departmentName, departmentName), eq(departmentPermissions.moduleName, moduleName)));
   if (!existing) throw AppError.notFound("DepartmentPermission");
 
   await req.db!.delete(departmentPermissions).where(eq(departmentPermissions.id, existing.id));
   await recordAuditTrail(req.db!, {
-    tenantId,
     entityType: "DepartmentPermission",
     entityId: existing.id,
     action: "delete",
@@ -126,13 +120,11 @@ export const deleteDepartmentPermissionHandler = asyncHandler(async (req: Reques
 
 /** GET /permissions/roles — every custom role this tenant has defined, with its module grants and how many users hold it. */
 export const listPermissionRolesHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
-  const roles = await req.db!.select().from(permissionRoles).where(eq(permissionRoles.tenantId, tenantId));
-  const moduleRows = await req.db!.select().from(permissionRoleModules).where(eq(permissionRoleModules.tenantId, tenantId));
+  const roles = await req.db!.select().from(permissionRoles);
+  const moduleRows = await req.db!.select().from(permissionRoleModules);
   const memberCounts = await req
     .db!.select({ roleId: userPermissionRoles.roleId, count: sql<number>`count(*)::int` })
     .from(userPermissionRoles)
-    .where(eq(userPermissionRoles.tenantId, tenantId))
     .groupBy(userPermissionRoles.roleId);
 
   const countByRole = new Map(memberCounts.map((m) => [m.roleId, m.count]));
@@ -146,16 +138,15 @@ export const listPermissionRolesHandler = asyncHandler(async (req: Request, res:
 });
 
 export const createPermissionRoleHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const { roleName, description } = req.body as { roleName: string; description?: string };
 
-  const [created] = await req.db!.insert(permissionRoles).values({ tenantId, roleName, description }).returning();
-  await recordAuditTrail(req.db!, { tenantId, entityType: "PermissionRole", entityId: created!.id, action: "create", changes: { roleName, description }, performedBy: req.user?.id });
+  const [created] = await req.db!.insert(permissionRoles).values({ roleName, description }).returning();
+  await recordAuditTrail(req.db!, { entityType: "PermissionRole", entityId: created!.id, action: "create", changes: { roleName, description }, performedBy: req.user?.id });
   res.status(201).json({ ...created, modules: [], memberCount: 0 });
 });
 
 async function loadPermissionRole(req: Request, id: number) {
-  const [row] = await req.db!.select().from(permissionRoles).where(and(eq(permissionRoles.id, id), eq(permissionRoles.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(permissionRoles).where(and(eq(permissionRoles.id, id)));
   if (!row) throw AppError.notFound("PermissionRole");
   return row;
 }
@@ -167,7 +158,7 @@ export const updatePermissionRoleHandler = asyncHandler(async (req: Request, res
     .set({ ...req.body, updatedAt: new Date() })
     .where(eq(permissionRoles.id, role.id))
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "PermissionRole", entityId: role.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "PermissionRole", entityId: role.id, action: "update", changes: req.body, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -177,19 +168,18 @@ export const deletePermissionRoleHandler = asyncHandler(async (req: Request, res
   // onDelete:"cascade" (see the schema's own comment) — one delete here
   // cleans up every module grant and user assignment atomically.
   await req.db!.delete(permissionRoles).where(eq(permissionRoles.id, role.id));
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "PermissionRole", entityId: role.id, action: "delete", changes: { roleName: role.roleName }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "PermissionRole", entityId: role.id, action: "delete", changes: { roleName: role.roleName }, performedBy: req.user?.id });
   res.status(204).send();
 });
 
 /** PATCH /permissions/roles/:id/modules — upsert this role's access level on one module. */
 export const upsertRoleModuleHandler = asyncHandler(async (req: Request, res: Response) => {
   const role = await loadPermissionRole(req, Number(req.params.id));
-  const tenantId = req.tenantId!;
   const { moduleName, accessLevel } = req.body as { moduleName: ResourceKey; accessLevel: AccessLevel };
 
   const [row] = await req
     .db!.insert(permissionRoleModules)
-    .values({ tenantId, roleId: role.id, moduleName, accessLevel })
+    .values({ roleId: role.id, moduleName, accessLevel })
     .onConflictDoUpdate({
       target: [permissionRoleModules.tenantId, permissionRoleModules.roleId, permissionRoleModules.moduleName],
       set: { accessLevel, updatedAt: new Date() },
@@ -197,7 +187,6 @@ export const upsertRoleModuleHandler = asyncHandler(async (req: Request, res: Re
     .returning();
 
   await recordAuditTrail(req.db!, {
-    tenantId,
     entityType: "PermissionRole",
     entityId: role.id,
     action: "update",
@@ -214,12 +203,11 @@ export const deleteRoleModuleHandler = asyncHandler(async (req: Request, res: Re
 
   const deleted = await req
     .db!.delete(permissionRoleModules)
-    .where(and(eq(permissionRoleModules.tenantId, req.tenantId!), eq(permissionRoleModules.roleId, role.id), eq(permissionRoleModules.moduleName, moduleName)))
+    .where(and(eq(permissionRoleModules.roleId, role.id), eq(permissionRoleModules.moduleName, moduleName)))
     .returning();
   if (deleted.length === 0) throw AppError.notFound("PermissionRoleModule");
 
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "PermissionRole",
     entityId: role.id,
     action: "update",
@@ -235,7 +223,6 @@ export const deleteRoleModuleHandler = asyncHandler(async (req: Request, res: Re
 
 /** GET /permissions/user-roles — every assignment in this tenant, with enough joined user/role info for the User Assignment page to render without extra round-trips. */
 export const listUserRolesHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const rows = await req
     .db!.select({
       id: userPermissionRoles.id,
@@ -248,24 +235,21 @@ export const listUserRolesHandler = asyncHandler(async (req: Request, res: Respo
     })
     .from(userPermissionRoles)
     .innerJoin(users, eq(users.id, userPermissionRoles.userId))
-    .innerJoin(permissionRoles, eq(permissionRoles.id, userPermissionRoles.roleId))
-    .where(eq(userPermissionRoles.tenantId, tenantId));
+    .innerJoin(permissionRoles, eq(permissionRoles.id, userPermissionRoles.roleId));
   res.json(rows);
 });
 
 export const createUserRoleHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const { userId, roleId } = req.body as { userId: number; roleId: number };
 
-  const [targetUser] = await req.db!.select({ id: users.id }).from(users).where(and(eq(users.id, userId), eq(users.tenantId, tenantId)));
+  const [targetUser] = await req.db!.select({ id: users.id }).from(users).where(and(eq(users.id, userId)));
   if (!targetUser) throw AppError.badRequest(`User #${userId} not found in this tenant`);
   await loadPermissionRole(req, roleId);
 
-  const [row] = await req.db!.insert(userPermissionRoles).values({ tenantId, userId, roleId }).onConflictDoNothing().returning();
-  const finalRow = row ?? (await req.db!.select().from(userPermissionRoles).where(and(eq(userPermissionRoles.tenantId, tenantId), eq(userPermissionRoles.userId, userId), eq(userPermissionRoles.roleId, roleId))))[0];
+  const [row] = await req.db!.insert(userPermissionRoles).values({ userId, roleId }).onConflictDoNothing().returning();
+  const finalRow = row ?? (await req.db!.select().from(userPermissionRoles).where(and(eq(userPermissionRoles.userId, userId), eq(userPermissionRoles.roleId, roleId))))[0];
 
   await recordAuditTrail(req.db!, {
-    tenantId,
     entityType: "UserPermissionRole",
     entityId: finalRow!.id,
     action: "create",
@@ -276,14 +260,12 @@ export const createUserRoleHandler = asyncHandler(async (req: Request, res: Resp
 });
 
 export const deleteUserRoleHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const id = Number(req.params.id);
-  const [existing] = await req.db!.select().from(userPermissionRoles).where(and(eq(userPermissionRoles.id, id), eq(userPermissionRoles.tenantId, tenantId)));
+  const [existing] = await req.db!.select().from(userPermissionRoles).where(and(eq(userPermissionRoles.id, id)));
   if (!existing) throw AppError.notFound("UserPermissionRole");
 
   await req.db!.delete(userPermissionRoles).where(eq(userPermissionRoles.id, id));
   await recordAuditTrail(req.db!, {
-    tenantId,
     entityType: "UserPermissionRole",
     entityId: id,
     action: "delete",
@@ -295,7 +277,6 @@ export const deleteUserRoleHandler = asyncHandler(async (req: Request, res: Resp
 
 /** GET /permissions/users/:userId/effective — the full per-module breakdown for one user: their real effective level (department baseline, custom-role grants, and the admin bypass, exactly as getUserAccessLevel computes it everywhere else in the app) plus, for transparency, the department-only baseline so an admin can see how much of that level (if any) came from a custom role grant. */
 export const getUserEffectivePermissionsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const userId = Number(req.params.userId);
   const db = req.db! as TenantDb;
 
@@ -303,14 +284,14 @@ export const getUserEffectivePermissionsHandler = asyncHandler(async (req: Reque
     .select({ id: users.id, email: users.email, department: users.department, roleName: roles.name })
     .from(users)
     .leftJoin(roles, eq(roles.id, users.roleId))
-    .where(and(eq(users.id, userId), eq(users.tenantId, tenantId)));
+    .where(and(eq(users.id, userId)));
   if (!targetUser) throw AppError.notFound("User");
 
   const breakdown = await Promise.all(
     RESOURCE_KEYS.map(async (moduleName) => {
       const [effectiveLevel, departmentLevel] = await Promise.all([
-        getUserAccessLevel(db, tenantId, targetUser, moduleName),
-        getDepartmentAccessLevel(db, tenantId, targetUser.department as Department | null, moduleName),
+        getUserAccessLevel(db, targetUser, moduleName),
+        getDepartmentAccessLevel(db, targetUser.department as Department | null, moduleName),
       ]);
       return { moduleName, label: MODULE_LABELS[moduleName], departmentLevel, effectiveLevel };
     })

@@ -13,7 +13,6 @@ import type { NextFunction, Request, Response } from "express";
  */
 export interface RequestContext {
   requestId: string;
-  tenantId?: number;
   userId?: number;
 }
 

@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
 /**
@@ -24,7 +23,6 @@ import { users } from "./users.js";
  */
 export const attachments = pgTable("attachments", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   entityType: text("entity_type"), // ncr | capa | eight_d | feasibility | ... | null for a general upload
   entityId: integer("entity_id"), // null for a general upload
   fileName: text("file_name").notNull(), // original filename, shown in the UI

@@ -57,7 +57,7 @@ function computeScoring(severity: unknown, probability: unknown) {
  */
 export const listRisksHandler = asyncHandler(async (req: Request, res: Response) => {
   const { status, department } = req.query as Record<string, string | undefined>;
-  const conditions = [eq(riskAssessments.tenantId, req.tenantId!)];
+  const conditions = [];
   if (status) conditions.push(eq(riskAssessments.status, status));
   if (department) conditions.push(eq(riskAssessments.department, department));
 
@@ -66,7 +66,7 @@ export const listRisksHandler = asyncHandler(async (req: Request, res: Response)
 });
 
 async function loadRisk(req: Request, id: number) {
-  const [row] = await req.db!.select().from(riskAssessments).where(and(eq(riskAssessments.id, id), eq(riskAssessments.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(riskAssessments).where(and(eq(riskAssessments.id, id)));
   if (!row) throw AppError.notFound("Risk assessment");
   return row;
 }
@@ -88,14 +88,13 @@ async function transition(req: Request, id: number, newStatus: string) {
     .where(eq(riskAssessments.id, record.id))
     .returning();
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "RiskAssessment",
     entityId: record.id,
     action: "status_change",
     changes: { oldStatus: record.status, newStatus },
     performedBy: req.user?.id,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "risk", event: newStatus, entityId: record.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "risk", event: newStatus, entityId: record.id });
   return updated!;
 }
 
@@ -117,16 +116,16 @@ export const createRiskHandler = asyncHandler(async (req: Request, res: Response
 
   const [created] = await req
     .db!.insert(riskAssessments)
-    .values({ ...req.body, riskScore, riskLevel, tenantId: req.tenantId!, createdBy: req.user?.id })
+    .values({ ...req.body, riskScore, riskLevel, createdBy: req.user?.id })
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "RiskAssessment", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "RiskAssessment", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
 export const getRiskHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadRisk(req, Number(req.params.id));
-  const mitigations = await req.db!.select().from(riskMitigations).where(and(eq(riskMitigations.riskAssessmentId, record.id), eq(riskMitigations.tenantId, req.tenantId!)));
-  const fmea = await req.db!.select().from(fmeaItems).where(and(eq(fmeaItems.riskAssessmentId, record.id), eq(fmeaItems.tenantId, req.tenantId!)));
+  const mitigations = await req.db!.select().from(riskMitigations).where(and(eq(riskMitigations.riskAssessmentId, record.id)));
+  const fmea = await req.db!.select().from(fmeaItems).where(and(eq(fmeaItems.riskAssessmentId, record.id)));
   res.json({ ...record, mitigations, fmeaItems: fmea });
 });
 
@@ -159,7 +158,6 @@ export const updateRiskHandler = asyncHandler(async (req: Request, res: Response
     .returning();
 
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "RiskAssessment",
     entityId: record.id,
     action: "update",
@@ -202,11 +200,11 @@ export const deleteRiskHandler = asyncHandler(async (req: Request, res: Response
   assertAdmin(req);
   const record = await loadRisk(req, Number(req.params.id));
 
-  await req.db!.delete(riskMitigations).where(and(eq(riskMitigations.riskAssessmentId, record.id), eq(riskMitigations.tenantId, req.tenantId!)));
-  await req.db!.delete(fmeaItems).where(and(eq(fmeaItems.riskAssessmentId, record.id), eq(fmeaItems.tenantId, req.tenantId!)));
-  await req.db!.delete(riskAssessments).where(and(eq(riskAssessments.id, record.id), eq(riskAssessments.tenantId, req.tenantId!)));
+  await req.db!.delete(riskMitigations).where(and(eq(riskMitigations.riskAssessmentId, record.id)));
+  await req.db!.delete(fmeaItems).where(and(eq(fmeaItems.riskAssessmentId, record.id)));
+  await req.db!.delete(riskAssessments).where(and(eq(riskAssessments.id, record.id)));
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "RiskAssessment", entityId: record.id, action: "delete", changes: { title: record.title, status: record.status }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "RiskAssessment", entityId: record.id, action: "delete", changes: { title: record.title, status: record.status }, performedBy: req.user?.id });
   res.status(204).send();
 });
 
@@ -217,9 +215,9 @@ export const addFmeaItemHandler = asyncHandler(async (req: Request, res: Respons
 
   const [item] = await req
     .db!.insert(fmeaItems)
-    .values({ ...req.body, riskAssessmentId: risk.id, tenantId: req.tenantId!, rpn: String(rpn) })
+    .values({ ...req.body, riskAssessmentId: risk.id, rpn: String(rpn) })
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "RiskAssessment", entityId: risk.id, action: "update", changes: { action: "fmea_item_added", failureMode: item!.failureMode, rpn }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "RiskAssessment", entityId: risk.id, action: "update", changes: { action: "fmea_item_added", failureMode: item!.failureMode, rpn }, performedBy: req.user?.id });
   res.status(201).json(item);
 });
 
@@ -227,7 +225,7 @@ export const listFmeaItemsHandler = asyncHandler(async (req: Request, res: Respo
   const items = await req
     .db!.select()
     .from(fmeaItems)
-    .where(and(eq(fmeaItems.riskAssessmentId, Number(req.params.id)), eq(fmeaItems.tenantId, req.tenantId!)));
+    .where(and(eq(fmeaItems.riskAssessmentId, Number(req.params.id))));
   res.json(items);
 });
 
@@ -239,10 +237,9 @@ export const createMitigationHandler = asyncHandler(async (req: Request, res: Re
 
   const [created] = await req
     .db!.insert(riskMitigations)
-    .values({ ...body, riskAssessmentId: risk.id, tenantId: req.tenantId!, createdBy: req.user?.id })
+    .values({ ...body, riskAssessmentId: risk.id, createdBy: req.user?.id })
     .returning();
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "RiskMitigation",
     entityId: created!.id,
     action: "create",
@@ -256,7 +253,7 @@ export const updateMitigationHandler = asyncHandler(async (req: Request, res: Re
   assertDepartment(req, ["quality", "engineering", "production", "purchasing", "material_management"]);
   const riskId = Number(req.params.id);
   const mitigationId = Number(req.params.mid);
-  const [existing] = await req.db!.select().from(riskMitigations).where(and(eq(riskMitigations.id, mitigationId), eq(riskMitigations.riskAssessmentId, riskId), eq(riskMitigations.tenantId, req.tenantId!)));
+  const [existing] = await req.db!.select().from(riskMitigations).where(and(eq(riskMitigations.id, mitigationId), eq(riskMitigations.riskAssessmentId, riskId)));
   if (!existing) throw AppError.notFound("Risk mitigation");
 
   const [updated] = await req
@@ -264,6 +261,6 @@ export const updateMitigationHandler = asyncHandler(async (req: Request, res: Re
     .set({ ...stripClientOwnedFields(req.body), updatedAt: new Date() })
     .where(eq(riskMitigations.id, mitigationId))
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "RiskMitigation", entityId: mitigationId, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "RiskMitigation", entityId: mitigationId, action: "update", changes: req.body, performedBy: req.user?.id });
   res.json(updated);
 });

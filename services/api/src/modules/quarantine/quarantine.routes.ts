@@ -36,21 +36,21 @@ quarantineRouter.get(
   view,
   asyncHandler(async (req: Request, res: Response) => {
     const q = req.query as Record<string, string | undefined>;
-    res.json(await service.listQuarantine(dbOf(req), req.tenantId!, { status: q.status, itemType: q.itemType, q: q.q, olderThanDays: q.olderThanDays ? Number(q.olderThanDays) : undefined }));
+    res.json(await service.listQuarantine(dbOf(req), { status: q.status, itemType: q.itemType, q: q.q, olderThanDays: q.olderThanDays ? Number(q.olderThanDays) : undefined }));
   }),
 );
 quarantineRouter.get(
   "/summary",
   view,
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await service.summary(dbOf(req), req.tenantId!));
+    res.json(await service.summary(dbOf(req)));
   }),
 );
 quarantineRouter.get(
   "/inventory",
   view,
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await service.listInventory(dbOf(req), req.tenantId!, typeof req.query.location === "string" ? req.query.location : undefined));
+    res.json(await service.listInventory(dbOf(req), typeof req.query.location === "string" ? req.query.location : undefined));
   }),
 );
 
@@ -59,7 +59,7 @@ quarantineRouter.post(
   manage,
   validate(createQuarantineSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    res.status(201).json(await service.createQuarantine(dbOf(req), req.tenantId!, req.body as service.CreateInput, req.user?.id));
+    res.status(201).json(await service.createQuarantine(dbOf(req), req.body as service.CreateInput, req.user?.id));
   }),
 );
 
@@ -67,7 +67,7 @@ quarantineRouter.get(
   "/:id",
   view,
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await service.getQuarantine(dbOf(req), req.tenantId!, idParam(req)));
+    res.json(await service.getQuarantine(dbOf(req), idParam(req)));
   }),
 );
 
@@ -76,7 +76,7 @@ quarantineRouter.patch(
   manage,
   validate(updateQuarantineSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await service.updateQuarantine(dbOf(req), req.tenantId!, idParam(req), req.body as Parameters<typeof service.updateQuarantine>[3], req.user?.id));
+    res.json(await service.updateQuarantine(dbOf(req), idParam(req), req.body as Parameters<typeof service.updateQuarantine>[3], req.user?.id));
   }),
 );
 
@@ -85,8 +85,8 @@ quarantineRouter.post(
   manage,
   validate(relocateSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    await service.relocate(dbOf(req), req.tenantId!, idParam(req), req.body as { fromLocation: string; toLocation: string; quantity: number }, req.user?.id);
-    res.json(await service.getQuarantine(dbOf(req), req.tenantId!, idParam(req)));
+    await service.relocate(dbOf(req), idParam(req), req.body as { fromLocation: string; toLocation: string; quantity: number }, req.user?.id);
+    res.json(await service.getQuarantine(dbOf(req), idParam(req)));
   }),
 );
 
@@ -95,8 +95,8 @@ quarantineRouter.post(
   release,
   validate(releaseSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    await service.resolveQuarantine(dbOf(req), req.tenantId!, idParam(req), "release", req.body as service.ResolveInput, actorOf(req));
-    res.json(await service.getQuarantine(dbOf(req), req.tenantId!, idParam(req)));
+    await service.resolveQuarantine(dbOf(req), idParam(req), "release", req.body as service.ResolveInput, actorOf(req));
+    res.json(await service.getQuarantine(dbOf(req), idParam(req)));
   }),
 );
 
@@ -105,7 +105,7 @@ quarantineRouter.post(
   release,
   validate(destroySchema),
   asyncHandler(async (req: Request, res: Response) => {
-    await service.resolveQuarantine(dbOf(req), req.tenantId!, idParam(req), "destroy", req.body as service.ResolveInput, actorOf(req));
-    res.json(await service.getQuarantine(dbOf(req), req.tenantId!, idParam(req)));
+    await service.resolveQuarantine(dbOf(req), idParam(req), "destroy", req.body as service.ResolveInput, actorOf(req));
+    res.json(await service.getQuarantine(dbOf(req), idParam(req)));
   }),
 );

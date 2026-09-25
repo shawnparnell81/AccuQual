@@ -15,7 +15,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
  */
 export const listRmaActivityLogHandler = asyncHandler(async (req: Request, res: Response) => {
   const { rmaId } = req.query as Record<string, string | undefined>;
-  const conditions: SQL[] = [eq(rmaActivityLog.tenantId, req.tenantId!)];
+  const conditions: SQL[] = [];
   if (rmaId) conditions.push(eq(rmaActivityLog.rmaId, Number(rmaId)));
 
   const rows = await req.db!.select().from(rmaActivityLog).where(and(...conditions)).orderBy(desc(rmaActivityLog.createdAt));

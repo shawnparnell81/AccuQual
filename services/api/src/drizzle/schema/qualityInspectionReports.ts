@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, numeric } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
 import { erpReceivingLineItems } from "./erp.js";
@@ -17,7 +16,6 @@ import { erpReceivingLineItems } from "./erp.js";
  */
 export const qualityInspectionReports = pgTable("quality_inspection_reports", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   inspectionDate: timestamp("inspection_date"),
   inspectorName: text("inspector_name"),
   inspectionType: text("inspection_type"), // incoming | in_process | final
@@ -52,7 +50,6 @@ export const qualityInspectionReports = pgTable("quality_inspection_reports", {
 /** The mockup's "Inspection Checklist & Measured Results" table — a real, freely-addable set of rows. */
 export const qualityInspectionItems = pgTable("quality_inspection_items", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   reportId: integer("report_id").references(() => qualityInspectionReports.id).notNull(),
   itemNumber: numeric("item_number"),
   parameter: text("parameter"),

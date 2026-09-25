@@ -28,7 +28,7 @@ function tenantOf(req: Request): number {
 billingRouter.get(
   "/",
   asyncHandler(async (req: Request, res: Response) => {
-    res.json({ ...(await describeBilling(tenantOf(req))), plans: PLANS });
+    res.json({ ...(await describeBilling()), plans: PLANS });
   })
 );
 
@@ -47,7 +47,7 @@ billingRouter.post(
 billingRouter.post(
   "/portal",
   asyncHandler(async (req: Request, res: Response) => {
-    res.json({ url: await createPortalSession(tenantOf(req)) });
+    res.json({ url: await createPortalSession() });
   })
 );
 

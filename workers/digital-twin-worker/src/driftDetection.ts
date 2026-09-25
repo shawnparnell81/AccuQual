@@ -70,7 +70,7 @@ async function seedFromHistory(tenantId: number, deviceId: string) {
     const recent = await db
       .select()
       .from(iotData)
-      .where(and(eq(iotData.tenantId, tenantId), eq(iotData.deviceId, deviceId)))
+      .where(and(eq(iotData.deviceId, deviceId)))
       .orderBy(desc(iotData.timestamp), desc(iotData.id))
       .limit(SEED_HISTORY_LIMIT + 1);
     // The API stores a reading BEFORE publishing it here, so the newest
@@ -134,10 +134,9 @@ export async function handleReading(fields: Record<string, string>) {
     const [device] = await db
       .select({ id: iotDevices.id })
       .from(iotDevices)
-      .where(and(eq(iotDevices.tenantId, tenantId), eq(iotDevices.deviceId, fields.deviceId)));
+      .where(and(eq(iotDevices.deviceId, fields.deviceId)));
 
     await db.insert(aiRiskScores).values({
-      tenantId,
       entityType: "iot_device",
       entityId: device?.id,
       score: String(score),

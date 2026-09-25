@@ -24,13 +24,13 @@ const AUDIT_ENTITY_TYPE = "DocumentFolder";
  * previous level's real auto-increment ids as `parentId`, so this can't be a
  * single bulk insert). Only ever runs once per tenant — see `list` below.
  */
-async function seedDefaults(db: TenantDb, tenantId: number): Promise<void> {
+async function seedDefaults(db: TenantDb): Promise<void> {
   async function insertLevel(nodes: DefaultFolderSeed[], parentId: number | null): Promise<void> {
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i]!;
       const [created] = await db
         .insert(documentFolders)
-        .values({ tenantId, name: node.name, parentId: parentId ?? undefined, sortOrder: i })
+        .values({ name: node.name, parentId: parentId ?? undefined, sortOrder: i })
         .returning();
       if (!created) throw new Error("Insert did not return the created document folder");
       if (node.children.length > 0) await insertLevel(node.children, created.id);
@@ -46,11 +46,11 @@ async function seedDefaults(db: TenantDb, tenantId: number): Promise<void> {
  * tenants that already existed before this feature shipped, and even
  * recreates it if a user ever deletes it.
  */
-async function ensureLibraryPool(db: TenantDb, tenantId: number, topLevel: (typeof documentFolders.$inferSelect)[]): Promise<typeof documentFolders.$inferSelect> {
+async function ensureLibraryPool(db: TenantDb, topLevel: (typeof documentFolders.$inferSelect)[]): Promise<typeof documentFolders.$inferSelect> {
   const existingPool = topLevel.find((f) => f.name === LIBRARY_POOL_NAME);
   if (existingPool) return existingPool;
   const siblingCount = topLevel.length;
-  const [created] = await db.insert(documentFolders).values({ tenantId, name: LIBRARY_POOL_NAME, sortOrder: siblingCount }).returning();
+  const [created] = await db.insert(documentFolders).values({ name: LIBRARY_POOL_NAME, sortOrder: siblingCount }).returning();
   if (!created) throw new AppError("Failed to create the library pool folder", 500);
   return created;
 }
@@ -135,7 +135,7 @@ const ADDITIONAL_SUBFOLDERS: { department: string; folder: string; subfolder: st
   { department: "Purchasing", folder: "Compliance & Documentation", subfolder: "PO Quality Requirements" },
 ];
 
-async function ensureAdditionalSubfolders(db: TenantDb, tenantId: number, all: (typeof documentFolders.$inferSelect)[]): Promise<(typeof documentFolders.$inferSelect)[]> {
+async function ensureAdditionalSubfolders(db: TenantDb, all: (typeof documentFolders.$inferSelect)[]): Promise<(typeof documentFolders.$inferSelect)[]> {
   let list = all;
   for (const { department, folder, subfolder } of ADDITIONAL_SUBFOLDERS) {
     const dept = list.find((f) => f.parentId === null && f.name === department);
@@ -144,7 +144,7 @@ async function ensureAdditionalSubfolders(db: TenantDb, tenantId: number, all: (
     if (!parentFolder) continue;
     if (list.some((f) => f.parentId === parentFolder.id && f.name === subfolder)) continue;
     const siblingCount = list.filter((f) => f.parentId === parentFolder.id).length;
-    const [created] = await db.insert(documentFolders).values({ tenantId, name: subfolder, parentId: parentFolder.id, sortOrder: siblingCount }).returning();
+    const [created] = await db.insert(documentFolders).values({ name: subfolder, parentId: parentFolder.id, sortOrder: siblingCount }).returning();
     if (created) list = [...list, created];
   }
   return list;
@@ -157,14 +157,14 @@ async function ensureAdditionalSubfolders(db: TenantDb, tenantId: number, all: (
  * without a one-off migration script. Skips anything naming a *procedure*
  * (a reference document about the process, not the live record type).
  */
-async function linkKnownForms(db: TenantDb, tenantId: number, all: (typeof documentFolders.$inferSelect)[]): Promise<void> {
+async function linkKnownForms(db: TenantDb, all: (typeof documentFolders.$inferSelect)[]): Promise<void> {
   const hasChildren = new Set(all.map((f) => f.parentId).filter((id): id is number => id !== null));
   const toLink = all.filter((f) => !hasChildren.has(f.id) && !f.linkedPath && !/procedure/i.test(f.name));
 
   for (const leaf of toLink) {
     const rule = FORM_LINK_RULES.find((r) => r.pattern.test(leaf.name));
     if (!rule) continue;
-    await db.update(documentFolders).set({ linkedPath: rule.path }).where(and(eq(documentFolders.id, leaf.id), eq(documentFolders.tenantId, tenantId)));
+    await db.update(documentFolders).set({ linkedPath: rule.path }).where(and(eq(documentFolders.id, leaf.id)));
     leaf.linkedPath = rule.path; // keep the in-memory list the caller returns consistent with what we just wrote
   }
 }
@@ -175,11 +175,11 @@ async function linkKnownForms(db: TenantDb, tenantId: number, all: (typeof docum
  * Folder Explorer can show "Draft" / "Expiring Soon" / "Expired" without a
  * per-leaf round trip. Leaves without a linked document are untouched.
  */
-async function withLinkedDocumentInfo(db: TenantDb, tenantId: number, all: (typeof documentFolders.$inferSelect)[]) {
+async function withLinkedDocumentInfo(db: TenantDb, all: (typeof documentFolders.$inferSelect)[]) {
   const documentIds = [...new Set(all.map((f) => f.documentId).filter((id): id is number => id !== null))];
   if (documentIds.length === 0) return all;
 
-  const linked = await db.select().from(documents).where(and(eq(documents.tenantId, tenantId), inArray(documents.id, documentIds)));
+  const linked = await db.select().from(documents).where(and(inArray(documents.id, documentIds)));
   const byId = new Map(linked.map((d) => [d.id, d]));
 
   return all.map((f) => {
@@ -193,49 +193,46 @@ async function withLinkedDocumentInfo(db: TenantDb, tenantId: number, all: (type
 /** Full flat folder list for the tenant, seeding the default department tree on first use. */
 export const list = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
-  const tenantId = req.tenantId!;
 
-  const existing = await db.select().from(documentFolders).where(eq(documentFolders.tenantId, tenantId));
+  const existing = await db.select().from(documentFolders);
   if (existing.length === 0) {
-    await seedDefaults(db, tenantId);
-    const seeded = await db.select().from(documentFolders).where(eq(documentFolders.tenantId, tenantId));
-    const pool = await ensureLibraryPool(db, tenantId, seeded.filter((f) => f.parentId === null));
-    const all = await ensureAdditionalSubfolders(db, tenantId, [...seeded, pool]);
-    await linkKnownForms(db, tenantId, all);
-    return res.json(await withLinkedDocumentInfo(db, tenantId, all));
+    await seedDefaults(db);
+    const seeded = await db.select().from(documentFolders);
+    const pool = await ensureLibraryPool(db, seeded.filter((f) => f.parentId === null));
+    const all = await ensureAdditionalSubfolders(db, [...seeded, pool]);
+    await linkKnownForms(db, all);
+    return res.json(await withLinkedDocumentInfo(db, all));
   }
 
-  const pool = await ensureLibraryPool(db, tenantId, existing.filter((f) => f.parentId === null));
+  const pool = await ensureLibraryPool(db, existing.filter((f) => f.parentId === null));
   const alreadyIncluded = existing.some((f) => f.id === pool.id);
   const withPool = alreadyIncluded ? existing : [...existing, pool];
-  const all = await ensureAdditionalSubfolders(db, tenantId, withPool);
-  await linkKnownForms(db, tenantId, all);
-  res.json(await withLinkedDocumentInfo(db, tenantId, all));
+  const all = await ensureAdditionalSubfolders(db, withPool);
+  await linkKnownForms(db, all);
+  res.json(await withLinkedDocumentInfo(db, all));
 });
 
 export const create = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
-  const tenantId = req.tenantId!;
   const { name, parentId } = req.body as { name: string; parentId?: number };
 
   if (parentId !== undefined) {
-    const [parent] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, parentId), eq(documentFolders.tenantId, tenantId)));
+    const [parent] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, parentId)));
     if (!parent) throw AppError.notFound("Parent folder");
   }
 
   const siblings = await db
     .select()
     .from(documentFolders)
-    .where(and(eq(documentFolders.tenantId, tenantId), parentId === undefined ? isNull(documentFolders.parentId) : eq(documentFolders.parentId, parentId)));
+    .where(and(parentId === undefined ? isNull(documentFolders.parentId) : eq(documentFolders.parentId, parentId)));
 
   const [created] = await db
     .insert(documentFolders)
-    .values({ tenantId, name, parentId, sortOrder: siblings.length })
+    .values({ name, parentId, sortOrder: siblings.length })
     .returning();
   if (!created) throw new AppError("Failed to create document folder", 500);
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: AUDIT_ENTITY_TYPE,
     entityId: created.id,
     action: "create",
@@ -247,14 +244,14 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /** Would setting `candidateParentId` as this folder's parent make it its own ancestor? */
-async function wouldCreateCycle(db: TenantDb, tenantId: number, folderId: number, candidateParentId: number): Promise<boolean> {
+async function wouldCreateCycle(db: TenantDb, folderId: number, candidateParentId: number): Promise<boolean> {
   let cursor: number | null = candidateParentId;
   const seen = new Set<number>();
   while (cursor !== null) {
     if (cursor === folderId) return true;
     if (seen.has(cursor)) return false; // defensive: shouldn't happen in a well-formed tree
     seen.add(cursor);
-    const [row] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, cursor), eq(documentFolders.tenantId, tenantId)));
+    const [row] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, cursor)));
     cursor = row?.parentId ?? null;
   }
   return false;
@@ -262,7 +259,6 @@ async function wouldCreateCycle(db: TenantDb, tenantId: number, folderId: number
 
 export const update = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
-  const tenantId = req.tenantId!;
   const id = Number(req.params.id);
   const { name, parentId, sortOrder, documentId } = req.body as {
     name?: string;
@@ -271,14 +267,14 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
     documentId?: number | null;
   };
 
-  const [current] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, id), eq(documentFolders.tenantId, tenantId)));
+  const [current] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, id)));
   if (!current) throw AppError.notFound("Document folder");
 
   if (parentId !== undefined && parentId !== null) {
     if (parentId === id) throw AppError.badRequest("A folder cannot be its own parent");
-    const [parent] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, parentId), eq(documentFolders.tenantId, tenantId)));
+    const [parent] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, parentId)));
     if (!parent) throw AppError.notFound("Parent folder");
-    if (await wouldCreateCycle(db, tenantId, id, parentId)) {
+    if (await wouldCreateCycle(db, id, parentId)) {
       throw AppError.badRequest("That move would nest a folder inside itself");
     }
   }
@@ -292,12 +288,11 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
   const [updated] = await db
     .update(documentFolders)
     .set(patch)
-    .where(and(eq(documentFolders.id, id), eq(documentFolders.tenantId, tenantId)))
+    .where(and(eq(documentFolders.id, id)))
     .returning();
   if (!updated) throw AppError.notFound("Document folder");
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: AUDIT_ENTITY_TYPE,
     entityId: id,
     action: "update",
@@ -310,22 +305,20 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
 
 export const remove = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
-  const tenantId = req.tenantId!;
   const id = Number(req.params.id);
 
-  const children = await db.select().from(documentFolders).where(and(eq(documentFolders.parentId, id), eq(documentFolders.tenantId, tenantId)));
+  const children = await db.select().from(documentFolders).where(and(eq(documentFolders.parentId, id)));
   if (children.length > 0) {
     throw AppError.badRequest("Move or delete this folder's contents before deleting it");
   }
 
   const [deleted] = await db
     .delete(documentFolders)
-    .where(and(eq(documentFolders.id, id), eq(documentFolders.tenantId, tenantId)))
+    .where(and(eq(documentFolders.id, id)))
     .returning();
   if (!deleted) throw AppError.notFound("Document folder");
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: AUDIT_ENTITY_TYPE,
     entityId: id,
     action: "delete",
@@ -350,7 +343,7 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
  * attachment deletes the old file first.
  */
 async function attachFileToFolder(db: TenantDb, tenantId: number, folderId: number, file: Express.Multer.File, performedBy: number | undefined) {
-  const [folder] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, folderId), eq(documentFolders.tenantId, tenantId)));
+  const [folder] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, folderId)));
   if (!folder) throw AppError.notFound("Document folder");
 
   const dir = `${env.STORAGE_LOCAL_PATH}/tenants/${tenantId}/forms/custom`;
@@ -366,11 +359,10 @@ async function attachFileToFolder(db: TenantDb, tenantId: number, folderId: numb
   const [updated] = await db
     .update(documentFolders)
     .set({ pdfPath: path, pdfMimeType: file.mimetype, updatedAt: new Date() })
-    .where(and(eq(documentFolders.id, folderId), eq(documentFolders.tenantId, tenantId)))
+    .where(and(eq(documentFolders.id, folderId)))
     .returning();
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: AUDIT_ENTITY_TYPE,
     entityId: folderId,
     action: "update",
@@ -407,15 +399,15 @@ export const uploadDocument = asyncHandler(async (req: Request, res: Response) =
   const parentId = Number(req.body.parentId);
   if (!parentId) throw AppError.badRequest("parentId is required — pick a real folder to file this document under");
 
-  const [parent] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, parentId), eq(documentFolders.tenantId, tenantId)));
+  const [parent] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, parentId)));
   if (!parent) throw AppError.notFound("Document folder");
 
   const rawName = (req.body.name as string | undefined)?.trim();
   const fallbackName = file.originalname.includes(".") ? file.originalname.slice(0, file.originalname.lastIndexOf(".")) : file.originalname;
   const name = rawName || fallbackName;
 
-  const [created] = await db.insert(documentFolders).values({ tenantId, name, parentId }).returning();
-  await recordAuditTrail(db, { tenantId, entityType: AUDIT_ENTITY_TYPE, entityId: created!.id, action: "create", changes: { name, parentId }, performedBy: req.user?.id });
+  const [created] = await db.insert(documentFolders).values({ name, parentId }).returning();
+  await recordAuditTrail(db, { entityType: AUDIT_ENTITY_TYPE, entityId: created!.id, action: "create", changes: { name, parentId }, performedBy: req.user?.id });
 
   const updated = await attachFileToFolder(db, tenantId, created!.id, file, req.user?.id);
   res.status(201).json(updated);
@@ -424,10 +416,9 @@ export const uploadDocument = asyncHandler(async (req: Request, res: Response) =
 /** Streams the attached file back, e.g. for the "live preview" / download affordance. */
 export const downloadTemplate = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
-  const tenantId = req.tenantId!;
   const id = Number(req.params.id);
 
-  const [folder] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, id), eq(documentFolders.tenantId, tenantId)));
+  const [folder] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, id)));
   if (!folder) throw AppError.notFound("Document folder");
   if (!folder.pdfPath || !existsSync(folder.pdfPath)) throw AppError.notFound("Attached template file");
 
@@ -444,10 +435,9 @@ export const downloadTemplate = asyncHandler(async (req: Request, res: Response)
  */
 export const removeTemplate = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
-  const tenantId = req.tenantId!;
   const id = Number(req.params.id);
 
-  const [folder] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, id), eq(documentFolders.tenantId, tenantId)));
+  const [folder] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, id)));
   if (!folder) throw AppError.notFound("Document folder");
 
   if (folder.pdfPath && existsSync(folder.pdfPath)) {
@@ -457,11 +447,10 @@ export const removeTemplate = asyncHandler(async (req: Request, res: Response) =
   const [updated] = await db
     .update(documentFolders)
     .set({ pdfPath: null, updatedAt: new Date() })
-    .where(and(eq(documentFolders.id, id), eq(documentFolders.tenantId, tenantId)))
+    .where(and(eq(documentFolders.id, id)))
     .returning();
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: AUDIT_ENTITY_TYPE,
     entityId: id,
     action: "update",

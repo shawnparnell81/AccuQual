@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
 /**
@@ -54,14 +53,13 @@ export const permissionRoles = pgTable(
   "permission_roles",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     roleName: text("role_name").notNull(),
     description: text("description"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at"),
   },
   (table) => ({
-    tenantRoleNameUnique: uniqueIndex("permission_roles_tenant_name_idx").on(table.tenantId, table.roleName),
+    roleNameUnique: uniqueIndex("permission_roles_name_idx").on(table.roleName),
   })
 );
 
@@ -80,7 +78,6 @@ export const permissionRoleModules = pgTable(
   "permission_role_modules",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     roleId: integer("role_id").references(() => permissionRoles.id, { onDelete: "cascade" }).notNull(),
     moduleName: text("module_name").notNull(),
     accessLevel: text("access_level").notNull().default("none"),
@@ -88,7 +85,7 @@ export const permissionRoleModules = pgTable(
     updatedAt: timestamp("updated_at"),
   },
   (table) => ({
-    tenantRoleModuleUnique: uniqueIndex("permission_role_modules_tenant_role_module_idx").on(table.tenantId, table.roleId, table.moduleName),
+    roleModuleUnique: uniqueIndex("permission_role_modules_role_module_idx").on(table.roleId, table.moduleName),
   })
 );
 
@@ -103,13 +100,12 @@ export const userPermissionRoles = pgTable(
   "user_permission_roles",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     userId: integer("user_id").references(() => users.id).notNull(),
     roleId: integer("role_id").references(() => permissionRoles.id, { onDelete: "cascade" }).notNull(),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => ({
-    tenantUserRoleUnique: uniqueIndex("user_permission_roles_tenant_user_role_idx").on(table.tenantId, table.userId, table.roleId),
+    userRoleUnique: uniqueIndex("user_permission_roles_user_role_idx").on(table.userId, table.roleId),
   })
 );
 
@@ -117,7 +113,6 @@ export const departmentPermissions = pgTable(
   "department_permissions",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     departmentName: text("department_name").notNull(),
     moduleName: text("module_name").notNull(),
     accessLevel: text("access_level").notNull().default("none"),
@@ -125,7 +120,7 @@ export const departmentPermissions = pgTable(
     updatedAt: timestamp("updated_at"),
   },
   (table) => ({
-    tenantDeptModuleUnique: uniqueIndex("department_permissions_tenant_dept_module_idx").on(table.tenantId, table.departmentName, table.moduleName),
+    deptModuleUnique: uniqueIndex("department_permissions_dept_module_idx").on(table.departmentName, table.moduleName),
   })
 );
 

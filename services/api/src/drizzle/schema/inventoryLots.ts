@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, numeric } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { inventoryItems } from "./inventory.js";
 import { suppliers } from "./supplier.js";
 import { erpPurchaseOrders, erpReceivingLineItems } from "./erp.js";
@@ -28,7 +27,6 @@ import { erpPurchaseOrders, erpReceivingLineItems } from "./erp.js";
  */
 export const inventoryLots = pgTable("inventory_lots", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   itemId: integer("item_id").references(() => inventoryItems.id).notNull(),
   lotNumber: text("lot_number").notNull(),
   serialNumber: text("serial_number"),

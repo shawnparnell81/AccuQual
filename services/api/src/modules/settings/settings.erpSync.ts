@@ -81,18 +81,18 @@ export async function triggerErpSync(
         const preset = await getActivePresetCached(db, tenantId, module);
         if (!preset) continue;
         if (event && !evaluateTrigger(preset.mappingConfig.triggers, event)) {
-          logger.info("ERP preset skipped — no matching trigger rule for this event", { tenantId, module, presetId: preset.id, event: event.on });
+          logger.info("ERP preset skipped — no matching trigger rule for this event", { module, presetId: preset.id, event: event.on });
           continue;
         }
-        const result = await buildErpPayload(db, tenantId, module, preset);
+        const result = await buildErpPayload(db, module, preset);
         if (result) mappedData[module] = result;
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error mapping this module";
-        logger.error("ERP preset mapping threw — skipping this module, continuing the sync", { tenantId, module, message });
-        await recordSyncError(db, { tenantId, module, stage: undefined, message: `Mapping failed for module "${module}": ${message}` });
+        logger.error("ERP preset mapping threw — skipping this module, continuing the sync", { module, message });
+        await recordSyncError(db, { module, stage: undefined, message: `Mapping failed for module "${module}": ${message}` });
       }
     }
-    const payload = JSON.stringify({ tenantId, direction: config.direction ?? "push", modules, triggeredAt: new Date().toISOString(), ...(Object.keys(mappedData).length > 0 ? { mappedData } : {}) });
+    const payload = JSON.stringify({ direction: config.direction ?? "push", modules, triggeredAt: new Date().toISOString(), ...(Object.keys(mappedData).length > 0 ? { mappedData } : {}) });
     const maxRetries = Math.min(config.retryPolicy?.maxRetries ?? 0, MAX_RETRIES_CAP);
     const backoffSeconds = Math.min(config.retryPolicy?.backoffSeconds ?? 0, MAX_BACKOFF_SECONDS_CAP);
 
@@ -113,7 +113,7 @@ export async function triggerErpSync(
         await assertSafeWebhookUrl(config.webhookUrl);
       } catch (err) {
         lastError = err instanceof Error ? err.message : "Webhook URL failed validation";
-        logger.error("ERP sync webhook rejected — unsafe target", { tenantId, message: lastError });
+        logger.error("ERP sync webhook rejected — unsafe target", { message: lastError });
       }
     }
     for (attempts = 1; attempts <= maxRetries + 1 && !delivered && !lastError; attempts++) {
@@ -143,14 +143,13 @@ export async function triggerErpSync(
       : { at: new Date().toISOString(), status: "failed", modules, message: lastError ?? "Webhook delivery failed." };
 
     if (!delivered) {
-      logger.error("ERP sync webhook delivery failed", { tenantId, attempts, lastError });
+      logger.error("ERP sync webhook delivery failed", { attempts, lastError });
       // One row per module that actually had data in the failed delivery —
       // not per retry attempt (matches statusHistory's own "final outcome
       // only" granularity) — so filtering the errors dashboard by module
       // surfaces a delivery failure that affected that module's data too.
       for (const module of Object.keys(mappedData)) {
         await recordSyncError(db, {
-          tenantId,
           module,
           stage: "erpApi",
           message: lastError ?? "Webhook delivery failed.",
@@ -165,7 +164,6 @@ export async function triggerErpSync(
   await db.update(tenants).set({ erpSyncSettings: merged }).where(eq(tenants.id, tenantId));
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "ErpSyncSettings",
     entityId: tenantId,
     action: "status_change",

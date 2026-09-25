@@ -27,19 +27,18 @@ export async function withSiteContext(req: Request, _res: Response, next: NextFu
       return next(AppError.unauthorized("Missing tenant context"));
     }
 
-    const tenantId = req.tenantId;
     const headerSiteId = readHeaderSiteId(req);
     const admin = isSiteAdmin(req.user.roleName);
 
     const [siteRows, userRow, membershipRows] = await Promise.all([
-      req.db.select({ id: sites.id, isDefault: sites.isDefault, status: sites.status }).from(sites).where(eq(sites.tenantId, tenantId)),
+      req.db.select({ id: sites.id, isDefault: sites.isDefault, status: sites.status }).from(sites),
       req.db.select({ currentSiteId: users.currentSiteId }).from(users).where(eq(users.id, req.user.id)),
       admin
         ? Promise.resolve([] as { siteId: number }[])
         : req.db
             .select({ siteId: userSites.siteId })
             .from(userSites)
-            .where(and(eq(userSites.tenantId, tenantId), eq(userSites.userId, req.user.id))),
+            .where(and(eq(userSites.userId, req.user.id))),
     ]);
 
     const allowedIds = admin ? siteRows.map((site) => site.id) : membershipRows.map((row) => row.siteId);

@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, boolean, uniqueIndex } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
 /**
@@ -15,7 +14,6 @@ export const sites = pgTable(
   "sites",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     name: text("name").notNull(),
     code: text("code").notNull(),
     status: text("status").notNull().default("active"), // active, inactive
@@ -24,7 +22,7 @@ export const sites = pgTable(
     updatedAt: timestamp("updated_at"),
   },
   (table) => ({
-    tenantCodeUnique: uniqueIndex("sites_tenant_code_idx").on(table.tenantId, table.code),
+    codeUnique: uniqueIndex("sites_code_idx").on(table.code),
   })
 );
 
@@ -33,7 +31,6 @@ export const userSites = pgTable(
   "user_sites",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     userId: integer("user_id").references(() => users.id).notNull(),
     siteId: integer("site_id").references(() => sites.id).notNull(),
     createdAt: timestamp("created_at").defaultNow(),

@@ -54,7 +54,6 @@ export async function runReportSchedule(scheduleId: number): Promise<void> {
     const statuses = await Promise.all(schedule.recipients.map((to) => sendEmail({ to, subject, body })));
     for (const [i, status] of statuses.entries()) {
       await db.insert(notificationLog).values({
-        tenantId: schedule.tenantId,
         channel: "email",
         recipient: schedule.recipients[i]!,
         subject,
@@ -74,7 +73,6 @@ export async function runReportSchedule(scheduleId: number): Promise<void> {
       .where(eq(reportSchedules.id, schedule.id));
 
     await recordAuditTrail(db, {
-      tenantId: schedule.tenantId,
       entityType: "ReportSchedule",
       entityId: schedule.id,
       action: "update",
