@@ -39,7 +39,7 @@ export const ssoDomains = pgTable(
     verifiedAt: timestamp("verified_at"),
     createdAt: timestamp("created_at").defaultNow(),
   },
-  (t) => ({ uniqueDomainPerTenant: unique("sso_domains_domain_uq").on(t.domain) }),
+  (t) => ({ uniqueDomain: unique("sso_domains_domain_uq").on(t.domain) }),
 );
 
 /** Links a local user to their identity at the provider (the stable `sub`, not the mutable email). */

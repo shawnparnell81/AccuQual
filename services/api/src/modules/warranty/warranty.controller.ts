@@ -19,7 +19,7 @@ import type { Db } from "../../lib/requestDb.js";
 /** Same inline-guard style as rma.controller.ts/inventory.controller.ts's assertDepartment — used for the one thing left that's a real fixed business rule (which stage of the workflow belongs to whom) rather than a tunable access level. */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin" || role === "platform_admin") return;
+  if (role === "admin") return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -27,7 +27,7 @@ function assertDepartment(req: Request, allowed: string[]) {
 }
 
 function isAdmin(req: Request): boolean {
-  return req.user?.roleName === "admin" || req.user?.roleName === "platform_admin";
+  return req.user?.roleName === "admin";
 }
 
 /**

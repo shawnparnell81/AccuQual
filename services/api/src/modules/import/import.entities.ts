@@ -269,7 +269,7 @@ const peopleEntity: ImportEntity<PersonValue, { rolesByName: Map<string, number>
     if (roleText) {
       roleId = lookups.rolesByName.get(roleText.toLowerCase().replace(/\s+/g, "_")) ?? lookups.rolesByName.get(roleText.toLowerCase());
       if (roleId === undefined) errors.push(`Role "${roleText}" doesn't exist.`);
-      else if (["admin", "platform_admin"].includes(roleText.toLowerCase())) errors.push("Admin accounts can't be created by import. Add them one at a time.");
+      else if (["admin"].includes(roleText.toLowerCase())) errors.push("Admin accounts can't be created by import. Add them one at a time.");
     }
 
     let department: string | undefined;

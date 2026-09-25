@@ -302,7 +302,7 @@ export async function resolveQuarantine(db: Db, id: number, action: "release" | 
   if (!(quantity > 0) || quantity > held) throw AppError.badRequest(`Choose a quantity between 0 and ${held}.`);
 
   // Four eyes: whoever put material on hold does not also decide what happens to it (an admin excepted, and that is recorded).
-  const isAdmin = actor.roleName === "admin" || actor.roleName === "platform_admin";
+  const isAdmin = actor.roleName === "admin";
   const selfDecision = record.createdBy === actor.id;
   if (selfDecision && !isAdmin && !actor.skipFourEyes) throw AppError.forbidden("You put this on hold, so someone else has to decide what happens to it.");
 

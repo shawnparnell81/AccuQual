@@ -40,7 +40,7 @@ auditTrailRouter.use(requireAuth, withDb);
  *      level; revisit it here if that ever changes too.
  *   2. Genuinely system/permission-level types (Tenant, User, department
  *      and role permission grants) — no single business department owns
- *      these, so they require admin/platform_admin outright instead of a
+ *      these, so they require admin outright instead of a
  *      ResourceKey lookup.
  */
 const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
@@ -109,7 +109,7 @@ const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   audit_finding: "audit", // same inconsistent-casing situation as warranty_claim above
 };
 
-/** No business department owns these — admin/platform_admin only, not a ResourceKey lookup. */
+/** No business department owns these — admin only, not a ResourceKey lookup. */
 const ADMIN_ONLY_ENTITY_TYPES = new Set(["Tenant", "User", "DepartmentPermission", "PermissionRole", "UserPermissionRole"]);
 
 /** History for a single entity, e.g. GET /audit-trail/ncr/42 */
@@ -117,7 +117,7 @@ auditTrailRouter.get(
   "/:entityType/:entityId",
   asyncHandler(async (req, res) => {
     const role = req.user?.roleName;
-    const isAdmin = role === "admin" || role === "platform_admin";
+    const isAdmin = role === "admin";
     const entityType = req.params.entityType!;
 
     if (!isAdmin) {

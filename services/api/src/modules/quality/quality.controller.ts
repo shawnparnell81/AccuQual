@@ -4,7 +4,7 @@ import { discrepancyInvestigations, type DiscrepancyInvestigation } from "../../
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
-import { assertTenantUser } from "../../utils/assertTenantUser.js";
+import { assertCompanyUser } from "../../utils/assertTenantUser.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { syncDiRecordToForm } from "./quality.formSync.js";
@@ -33,7 +33,7 @@ async function loadOwned(req: Request): Promise<DiscrepancyInvestigation> {
 export const updateHandler = asyncHandler(async (req: Request, res: Response) => {
   const current = await loadOwned(req);
   if (current.status === "closed") throw AppError.badRequest("A closed discrepancy investigation cannot be edited.");
-  if (req.body.assignedTo) await assertTenantUser(req.db!, req.body.assignedTo);
+  if (req.body.assignedTo) await assertCompanyUser(req.db!, req.body.assignedTo);
 
   const [updated] = await req
     .db!.update(discrepancyInvestigations)

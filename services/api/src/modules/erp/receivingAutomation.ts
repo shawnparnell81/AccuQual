@@ -5,7 +5,7 @@ import { ncr, type Ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
-import { loadTenantForSettings } from "../settings/settings.service.js";
+import { loadCompanyForSettings } from "../settings/settings.service.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 
@@ -32,8 +32,8 @@ export async function maybeAutoCreateNcr(
   performedBy: number | undefined,
   siteId?: number | null
 ): Promise<Ncr | null> {
-  const tenant = await loadTenantForSettings(db);
-  const settings = tenant.receivingSettings ?? {};
+  const co = await loadCompanyForSettings(db);
+  const settings = co.receivingSettings ?? {};
   const enabled = disposition === "rejected" ? settings.autoCreateNcrOnRejection : settings.autoCreateNcrOnQuarantine;
   if (!enabled) return null;
 
@@ -86,8 +86,8 @@ export async function maybeAutoCreateNcr(
  * duplicate escalation once the threshold is already met once.
  */
 export async function checkCapaEscalation(db: Db, supplierId: number, triggeringNcrId: number | undefined, performedBy: number | undefined, siteId?: number | null): Promise<void> {
-  const tenant = await loadTenantForSettings(db);
-  const settings = tenant.receivingSettings ?? {};
+  const co = await loadCompanyForSettings(db);
+  const settings = co.receivingSettings ?? {};
   const threshold = settings.capaEscalationThreshold ?? DEFAULT_CAPA_THRESHOLD;
   const windowDays = settings.capaEscalationWindowDays ?? DEFAULT_CAPA_WINDOW_DAYS;
   const since = new Date(Date.now() - windowDays * DAY_MS);

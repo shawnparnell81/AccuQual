@@ -12,7 +12,7 @@ import { applyMovement } from "../inventory/inventory.service.js";
 /** Same inline-guard style as inventory.controller.ts/erp.controller.ts/rma.controller.ts's assertDepartment — Customer Service owns work orders (per explicit user request, 2026-09-15); every other read-level department (production/quality/material_management/purchasing) can view but never start/complete/cancel one. Admin/platform_admin bypass this entirely, which is how "General Manager" gets full access without a dedicated department. */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin" || role === "platform_admin") return;
+  if (role === "admin") return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);

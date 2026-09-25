@@ -8,7 +8,7 @@ import { logger } from "../../utils/logger.js";
 import { assertSafeWebhookUrl } from "../../utils/ssrfGuard.js";
 import { env } from "../../config/env.js";
 import { decryptSecret } from "../company/crypto.js";
-import { loadTenantForSettings, getErpSyncSettings } from "../settings/settings.service.js";
+import { loadCompanyForSettings, getErpSyncSettings } from "../settings/settings.service.js";
 import { getActivePresetCached } from "./erpPresets.service.js";
 import { buildErpPayload, recordSyncError } from "./erpMappingEngine.js";
 
@@ -98,8 +98,8 @@ export async function retryError(db: Db, id: number, performedBy: number | undef
   if (original.resolvedAt) throw AppError.badRequest("This error is already resolved.");
 
   if (original.errorType === "erpApiError") {
-    const tenant = await loadTenantForSettings(db);
-    const config = getErpSyncSettings(tenant);
+    const co = await loadCompanyForSettings(db);
+    const config = getErpSyncSettings(co);
     if (!config.webhookUrl) {
       await recordSyncError(db, { module: original.module, presetId: original.presetId ?? undefined, presetVersion: original.presetVersion ?? undefined, stage: "erpApi", message: "No webhook URL configured — nothing to retry." });
       const [fresh] = await db.select().from(erpSyncErrors).orderBy(desc(erpSyncErrors.id)).limit(1);

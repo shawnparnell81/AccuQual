@@ -4,7 +4,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { callLlmDetailed } from "./llm-gateway.js";
 import { estimateCost } from "./pricing.js";
-import { checkUsageLimit, loadTenantLlmOptions } from "./ai.usage.js";
+import { checkUsageLimit, loadCompanyLlmOptions } from "./ai.usage.js";
 import { wrapUntrustedData } from "./promptSafety.js";
 
 /**
@@ -405,9 +405,9 @@ export const assistantHandler = asyncHandler(async (req: Request, res: Response)
   // (e.g. after a TENANT_AI_CONFIG_ENCRYPTION_KEY rotation) must degrade to
   // the stub like every other "no key configured" path, never crash the
   // request (Full-System Audit finding C4).
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db! as Db);
+  const { co, llmOptions } = await loadCompanyLlmOptions(req.db! as Db);
 
-  const limitError = await checkUsageLimit(req.db!, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const limitError = await checkUsageLimit(req.db!, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
   const contextSummary = context ? await loadContextSummary(req.db!, context.module, context.recordId) : null;

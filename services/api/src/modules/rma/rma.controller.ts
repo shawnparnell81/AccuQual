@@ -13,7 +13,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 /** Same inline-guard style as inventory.controller.ts/erp.controller.ts's assertDepartment — the department PERMISSION_MATRIX entry is binary (read/edit) and can't express these per-action splits on its own. */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin" || role === "platform_admin") return;
+  if (role === "admin") return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -21,7 +21,7 @@ function assertDepartment(req: Request, allowed: string[]) {
 }
 
 function isAdmin(req: Request): boolean {
-  return req.user?.roleName === "admin" || req.user?.roleName === "platform_admin";
+  return req.user?.roleName === "admin";
 }
 
 /**
@@ -184,7 +184,7 @@ export const updateRmaHandler = asyncHandler(async (req: Request, res: Response)
   const record = await loadRma(req, Number(req.params.id));
   const role = req.user?.roleName;
   const department = req.user?.department;
-  const isQuality = role !== "admin" && role !== "platform_admin" && department === "quality";
+  const isQuality = role !== "admin" && department === "quality";
 
   if (isQuality) {
     const disallowed = Object.keys(req.body).filter((k) => !QUALITY_EDITABLE_FIELDS.includes(k));

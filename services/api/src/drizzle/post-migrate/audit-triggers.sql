@@ -8,7 +8,7 @@
 --   * audit_row_changes — this file: WHAT changed, field by field, old -> new,
 --                         written by a database trigger so no code path (or
 --                         forgotten call site) can skip it, and readable but
---                         never writable by the tenant-scoped app role.
+--                         never writable by the app role.
 -- Both carry the Postgres transaction id, which is how a history entry finds
 -- its field changes.
 
@@ -26,7 +26,6 @@ DECLARE
   k text;
   ov jsonb;
   nv jsonb;
-  tenant int;
   rid int;
   actor int;
   -- Columns never worth logging: timestamps that change on every write, plus
@@ -48,14 +47,6 @@ BEGIN
     base_j := new_j;
   END IF;
 
-  IF TG_TABLE_NAME = 'tenants' THEN
-    tenant := (base_j ->> 'id')::int;
-  ELSE
-    tenant := (base_j ->> 'tenant_id')::int;
-  END IF;
-  IF tenant IS NULL THEN
-    RETURN NULL; -- cannot be attributed to a tenant
-  END IF;
   rid := (base_j ->> 'id')::int;
 
   FOR k IN SELECT jsonb_object_keys(base_j) LOOP
@@ -86,8 +77,8 @@ BEGIN
   END IF;
 
   actor := NULLIF(current_setting('app.current_user_id', true), '')::int;
-  INSERT INTO audit_row_changes (tenant_id, table_name, row_id, op, changes, actor_user_id, txid)
-  VALUES (tenant, TG_TABLE_NAME, rid, TG_OP, diff, actor, txid_current());
+  INSERT INTO audit_row_changes (table_name, row_id, op, changes, actor_user_id, txid)
+  VALUES (TG_TABLE_NAME, rid, TG_OP, diff, actor, txid_current());
   RETURN NULL;
 END;
 $$;
@@ -106,7 +97,7 @@ BEGIN
       ('users',                       ARRAY['last_login_at', 'theme_preferences', 'failed_login_count', 'first_failed_login_at', 'mfa_last_used_step']),
       ('sites',                       ARRAY[]::text[]),
       ('user_sites',                  ARRAY[]::text[]),
-      ('tenants',                     ARRAY['ai_config', 'erp_sync_settings', 'ai_usage_tokens', 'ai_usage_cost']),
+      ('company',                     ARRAY['ai_config', 'erp_sync_settings', 'ai_usage_tokens', 'ai_usage_cost']),
       ('department_permissions',      ARRAY[]::text[]),
       ('permission_roles',            ARRAY[]::text[]),
       ('permission_role_modules',     ARRAY[]::text[]),
@@ -184,28 +175,30 @@ BEGIN
   END LOOP;
 END $$;
 
--- Append-only for the tenant-scoped app role.
+-- Append-only for the app role.
 --
--- audit_trail: it may read its tenant's rows and add new ones — never rewrite
--- or remove history. (rls-policies.sql just GRANTed it UPDATE/DELETE like every
--- other table, and gave it one FOR ALL policy; both are replaced here.)
+-- audit_trail: it may read rows and add new ones — never rewrite or remove history. (rls-policies.sql GRANTed it
+-- UPDATE/DELETE like every other table; that is revoked here, and it gets read and insert policies only.)
 REVOKE UPDATE, DELETE, TRUNCATE ON audit_trail FROM accuqual_app;
-DROP POLICY IF EXISTS tenant_isolation ON audit_trail;
+ALTER TABLE audit_trail ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS audit_trail_read ON audit_trail;
 CREATE POLICY audit_trail_read ON audit_trail
   FOR SELECT
-  USING (tenant_id = current_setting('app.current_tenant_id', true)::int);
+  TO accuqual_app
+  USING (true);
 DROP POLICY IF EXISTS audit_trail_append ON audit_trail;
 CREATE POLICY audit_trail_append ON audit_trail
   FOR INSERT
-  WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true)::int);
+  TO accuqual_app
+  WITH CHECK (true);
 
--- audit_row_changes: read-only. Rows arrive only through the SECURITY DEFINER
--- trigger above, so the app role gets no write privilege of any kind.
+-- audit_row_changes: read-only. Rows arrive only through the SECURITY DEFINER trigger above, so the app role gets no
+-- write privilege of any kind.
 REVOKE ALL ON audit_row_changes FROM accuqual_app;
 GRANT SELECT ON audit_row_changes TO accuqual_app;
-DROP POLICY IF EXISTS tenant_isolation ON audit_row_changes;
+ALTER TABLE audit_row_changes ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS audit_row_changes_read ON audit_row_changes;
 CREATE POLICY audit_row_changes_read ON audit_row_changes
   FOR SELECT
-  USING (tenant_id = current_setting('app.current_tenant_id', true)::int);
+  TO accuqual_app
+  USING (true);

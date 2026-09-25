@@ -29,7 +29,7 @@ interface PendingApproval {
 }
 
 function canDecide(user: { roleName: string | null; department: string | null }, pending: PendingApproval): boolean {
-  if (user.roleName === "admin" || user.roleName === "platform_admin") return true;
+  if (user.roleName === "admin") return true;
   if (pending.approverRole && user.roleName === pending.approverRole) return true;
   if (pending.approverDepartment && user.department === pending.approverDepartment) return true;
   return false;

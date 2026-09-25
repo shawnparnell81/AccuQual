@@ -175,7 +175,7 @@ export const exportReportHandler = asyncHandler(async (req: Request, res: Respon
   if (!builder) throw AppError.badRequest(`Unknown report "${reportKey}"`);
 
   const db = req.db! as Db;
-  const [tenant] = await db.select().from(company);
+  const [co] = await db.select().from(company);
   const [performer] = req.user?.id ? await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, req.user.id)) : [undefined];
 
   const partial = await builder(db, parseRange(req));
@@ -183,7 +183,7 @@ export const exportReportHandler = asyncHandler(async (req: Request, res: Respon
     ...partial,
     generatedAt: new Date(),
     generatedBy: performer?.name || performer?.email || `User #${req.user?.id}`,
-    companyName: tenant?.name ?? "AccuQual",
+    companyName: co?.name ?? "AccuQual",
   };
 
   await recordAuditTrail(db, {

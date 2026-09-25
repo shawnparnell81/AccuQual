@@ -6,7 +6,7 @@ import { company } from "../../drizzle/schema/company.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail, resolveUserNames } from "../audit-trail/audit-trail.service.js";
-import { runPipelineAndRecord, describeAiState, loadTenantLlmOptions, checkUsageLimit } from "./ai.usage.js";
+import { runPipelineAndRecord, describeAiState, loadCompanyLlmOptions, checkUsageLimit } from "./ai.usage.js";
 import type { Db } from "../../lib/requestDb.js";
 import * as pipelines from "./ai.pipelines.js";
 
@@ -79,10 +79,10 @@ export const riskScore = asyncHandler(async (req: Request, res: Response) => {
   const { entityType, entityId, input } = req.body;
   const db = req.db! as Db;
 
-  const [tenant] = await db.select().from(company);
-  const limitError = await checkUsageLimit(db, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const [co] = await db.select().from(company);
+  const limitError = await checkUsageLimit(db, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
-  const { llmOptions } = await loadTenantLlmOptions(db);
+  const { llmOptions } = await loadCompanyLlmOptions(db);
 
   const { classified } = await pipelines.runRiskScoringPipeline(input, llmOptions);
   const output = classified.data as { score?: number };

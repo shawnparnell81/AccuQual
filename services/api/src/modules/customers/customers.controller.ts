@@ -14,7 +14,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 /** Same inline-guard style as risk/feasibility/sales.controller.ts's assertDepartment. */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin" || role === "platform_admin") return;
+  if (role === "admin") return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -24,7 +24,7 @@ function assertDepartment(req: Request, allowed: string[]) {
 /** Delete stays admin-only — no department gets it, same stricter rule as sales.controller.ts's assertAdmin. */
 function assertAdmin(req: Request) {
   const role = req.user?.roleName;
-  if (role !== "admin" && role !== "platform_admin") throw AppError.forbidden("Only an admin can delete a customer onboarding case.");
+  if (role !== "admin") throw AppError.forbidden("Only an admin can delete a customer onboarding case.");
 }
 
 async function loadCustomer(req: Request, id: number) {

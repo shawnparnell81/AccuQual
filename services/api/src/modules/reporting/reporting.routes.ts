@@ -32,7 +32,7 @@ import {
  * to NCR data is exactly the access level they get to the NCR report — one
  * source of truth, no risk of the two drifting apart (see Phase 3's
  * findings on "declared but never enforced" permissions for why a second,
- * parallel key is a real risk, not a hypothetical one). admin/platform_admin
+ * parallel key is a real risk, not a hypothetical one). admin
  * bypass every one of these the same way they bypass the underlying module.
  *
  * Receiving inspection trends and Inventory quality trends both read from

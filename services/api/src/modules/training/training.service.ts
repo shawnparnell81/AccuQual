@@ -159,7 +159,7 @@ async function loadCourse(db: Db, id: number): Promise<TrainingCourse> {
 }
 
 /** Ids that are active people in this organization; anything else is refused (an id from another organization must not get through). */
-export async function assertTenantUsers(db: Db, userIds: number[]): Promise<Map<number, { id: number; name: string | null; email: string }>> {
+export async function assertCompanyUsers(db: Db, userIds: number[]): Promise<Map<number, { id: number; name: string | null; email: string }>> {
   const unique = [...new Set(userIds)];
   const found = unique.length ? await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(and(eq(users.isActive, true), inArray(users.id, unique))) : [];
   if (found.length !== unique.length) throw AppError.badRequest("One or more of those people aren't active users in this organization.");
@@ -176,7 +176,7 @@ async function documentVersionNow(db: Db, documentId: number | null): Promise<nu
 export async function assignCourse(db: Db, courseId: number, userIds: number[], opts: { dueAt?: Date; reason?: string }, actor?: number): Promise<TrainingAssignment[]> {
   const course = await loadCourse(db, courseId);
   if (!course.active) throw AppError.badRequest("This course is retired and can't be assigned.");
-  const people = await assertTenantUsers(db, userIds);
+  const people = await assertCompanyUsers(db, userIds);
   const open = await db.select({ userId: trainingAssignments.userId }).from(trainingAssignments).where(and(eq(trainingAssignments.courseId, courseId), inArray(trainingAssignments.status, ["assigned", "in_progress"])));
   const alreadyOpen = new Set(open.map((o) => o.userId));
   const created: TrainingAssignment[] = [];
@@ -258,7 +258,7 @@ export interface SessionInput {
 async function checkRoster(db: Db, attendance: AttendanceEntry[], capacity: number | null | undefined) {
   const ids = attendance.map((a) => a.userId);
   if (new Set(ids).size !== ids.length) throw AppError.badRequest("Someone is on the attendance list twice.");
-  await assertTenantUsers(db, ids);
+  await assertCompanyUsers(db, ids);
   if (capacity && attendance.length > capacity) throw AppError.badRequest(`The session holds ${capacity} people and ${attendance.length} are listed.`);
 }
 
@@ -267,7 +267,7 @@ export async function scheduleSession(db: Db, input: SessionInput, actor?: numbe
   if (!course.active) throw AppError.badRequest("This course is retired and can't be scheduled.");
   let instructorName = input.instructorName?.trim() || null;
   if (input.instructorId !== undefined) {
-    const p = await assertTenantUsers(db, [input.instructorId]);
+    const p = await assertCompanyUsers(db, [input.instructorId]);
     instructorName = p.get(input.instructorId)!.name ?? p.get(input.instructorId)!.email;
   }
   const attendance = input.attendance ?? [];
@@ -291,7 +291,7 @@ export async function updateSession(db: Db, id: number, patch: Partial<Omit<Sess
   if (patch.attendance) await checkRoster(db, patch.attendance, capacity);
   let instructorName = patch.instructorName !== undefined ? patch.instructorName.trim() || null : undefined;
   if (patch.instructorId !== undefined) {
-    const p = await assertTenantUsers(db, [patch.instructorId]);
+    const p = await assertCompanyUsers(db, [patch.instructorId]);
     instructorName = p.get(patch.instructorId)!.name ?? p.get(patch.instructorId)!.email;
   }
   const [updated] = await db
@@ -394,7 +394,7 @@ export interface EvaluatorActor {
   roleName: string | null;
 }
 
-const isAdmin = (a: EvaluatorActor) => a.roleName === "admin" || a.roleName === "platform_admin";
+const isAdmin = (a: EvaluatorActor) => a.roleName === "admin";
 
 /** Applies a pass/fail decision to a row (which may be new or a pending one). Enforces the rules that make an evaluation mean something. */
 function checkDecision(course: TrainingCourse, subjectUserId: number, input: DecideInput, actor: EvaluatorActor) {
@@ -412,7 +412,7 @@ function checkDecision(course: TrainingCourse, subjectUserId: number, input: Dec
 
 export async function createCompetency(db: Db, input: { userId: number; courseId: number; sessionId?: number; status?: "pending" | "pass" | "fail"; evaluation?: EvaluationInput; score?: number; notes?: string }, actor: EvaluatorActor): Promise<TrainingCompetency> {
   const course = await loadCourse(db, input.courseId);
-  await assertTenantUsers(db, [input.userId]);
+  await assertCompanyUsers(db, [input.userId]);
   if (input.sessionId !== undefined) await loadSession(db, input.sessionId);
   const status = input.status ?? "pending";
 

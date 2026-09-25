@@ -38,7 +38,7 @@ export type PermissionSubject = keyof typeof PERMISSION_SUBJECTS;
 export type PermissionAction = "view" | "edit" | "review" | "publish" | "manage" | "calibrate" | "override" | "release" | "manageCourses" | "manageSessions" | "evaluate";
 export type PermissionName = `${PermissionSubject}.${PermissionAction}`;
 
-export const REVIEWER_ROLES = new Set(["admin", "platform_admin", "quality_manager"]);
+export const REVIEWER_ROLES = new Set(["admin", "quality_manager"]);
 const EXTERNAL_ROLES = new Set(["customer", "supplier"]);
 
 const NEEDED_LEVEL: Record<PermissionAction, AccessLevel> = { view: "read", edit: "edit", review: "edit", publish: "edit", manage: "edit", calibrate: "edit", override: "edit", release: "edit", manageCourses: "edit", manageSessions: "edit", evaluate: "edit" };

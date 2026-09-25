@@ -30,7 +30,7 @@ export const users = pgTable("users", {
   // supplier-portal route scopes its queries to this id (never trusts a
   // supplierId the client sends), which is how "a supplier can only ever
   // see their own data" is actually enforced, not just hidden in the UI.
-  // Null for every internal/admin/platform_admin account.
+  // Null for every internal/admin account.
   supplierId: integer("supplier_id").references(() => suppliers.id),
   tokenVersion: integer("token_version").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),

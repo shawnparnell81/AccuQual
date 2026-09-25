@@ -2,7 +2,7 @@ import { randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
 import { env } from "../../config/env.js";
 
 const ALGORITHM = "aes-256-gcm";
-const key = Buffer.from(env.TENANT_AI_CONFIG_ENCRYPTION_KEY, "hex");
+const key = Buffer.from(env.AI_CONFIG_ENCRYPTION_KEY, "hex");
 
 /** Real AES-256-GCM, not a fictional external key-management service. Format: iv:authTag:ciphertext, all hex, so one string round-trips through jsonb cleanly. */
 export function encryptSecret(plaintext: string): string {

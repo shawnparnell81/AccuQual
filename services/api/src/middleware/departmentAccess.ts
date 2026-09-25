@@ -172,7 +172,7 @@ export async function getRoleGrantedAccessLevel(db: Db, userId: number, moduleNa
  *      permissionRoleModules row for any permissionRole this user is
  *      assigned to that names this moduleName.
  *
- * admin/platform_admin bypass both sources entirely and always get "edit".
+ * admin bypass both sources entirely and always get "edit".
  * This is a live DB read on every call (no caching) — unlike roleName/
  * department, which are baked into the JWT at login and only change on the
  * next token refresh, a tenant admin's permission change here takes effect
@@ -183,7 +183,7 @@ export async function getUserAccessLevel(
   user: { id: number; roleName: string | null; department: string | null },
   moduleName: ResourceKey
 ): Promise<AccessLevel> {
-  if (user.roleName === "admin" || user.roleName === "platform_admin") return "edit";
+  if (user.roleName === "admin") return "edit";
 
   const [deptLevel, roleLevel] = await Promise.all([
     getDepartmentAccessLevel(db, user.department as Department | null, moduleName),
@@ -203,7 +203,7 @@ export async function getUserAccessLevel(
 export function requireDepartmentAccess(resourceKey: ResourceKey) {
   return asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
     const role = req.user?.roleName;
-    if (role === "platform_admin" || role === "admin") return next();
+    if (role === "admin") return next();
     if (!req.user || !req.db) return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
 
     const level = await getUserAccessLevel(req.db as Db, req.user, resourceKey);
@@ -235,7 +235,7 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
 export function requireAnyDepartment(...departments: Department[]) {
   return (req: Request, _res: Response, next: NextFunction) => {
     const role = req.user?.roleName;
-    if (role === "platform_admin" || role === "admin") return next();
+    if (role === "admin") return next();
 
     const department = req.user?.department as Department | null | undefined;
     if (department && departments.includes(department)) return next();
@@ -256,11 +256,11 @@ export function requireAnyDepartment(...departments: Department[]) {
  *    getUserAccessLevel(..., "supplier_portal") (Quality/Purchasing edit,
  *    Engineering read, by default — self-service configurable per tenant
  *    same as everything else now).
- * admin/platform_admin bypass both branches, same as everywhere else.
+ * admin bypass both branches, same as everywhere else.
  */
 export const requireSupplierPortalAccess = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
   const role = req.user?.roleName;
-  if (role === "platform_admin" || role === "admin") return next();
+  if (role === "admin") return next();
 
   if (role === "supplier") {
     if (!req.user?.supplierId) {

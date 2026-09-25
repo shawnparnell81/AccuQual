@@ -8,7 +8,7 @@ import { suppliers } from "../../drizzle/schema/supplier.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { prJustificationPrompt } from "../ai/prompts.js";
-import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
+import { checkUsageLimit, loadCompanyLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
 import { computeSupplierPerformance } from "../supplier/supplier.performance.js";
 
 /**
@@ -25,8 +25,8 @@ export const requisitionAiJustifyHandler = asyncHandler(async (req: Request, res
   const [requisition] = await req.db!.select().from(erpPurchaseRequisitions).where(and(eq(erpPurchaseRequisitions.id, id)));
   if (!requisition) throw AppError.notFound("PurchaseRequisition");
 
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!);
-  const limitError = await checkUsageLimit(req.db!, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const { co, llmOptions } = await loadCompanyLlmOptions(req.db!);
+  const limitError = await checkUsageLimit(req.db!, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
   const [item] = await req.db!.select().from(inventoryItems).where(eq(inventoryItems.id, requisition.itemId));

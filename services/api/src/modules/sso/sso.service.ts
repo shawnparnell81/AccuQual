@@ -12,7 +12,7 @@ import { startSessionForSsoUser } from "../auth/auth.service.js";
 import { completeAuthorization, type SsoFlowState } from "./oidc.js";
 
 /** Roles SSO may never hand out on its own: whoever controls (or spoofs) the provider must not be able to mint admins. */
-export const SSO_FORBIDDEN_ROLES = new Set(["admin", "platform_admin"]);
+export const SSO_FORBIDDEN_ROLES = new Set(["admin"]);
 
 // Anyone can register these, so proving control of one proves nothing about an organization.
 const FREE_MAIL_DOMAINS = new Set(["gmail.com", "googlemail.com", "yahoo.com", "outlook.com", "hotmail.com", "live.com", "msn.com", "icloud.com", "me.com", "aol.com", "proton.me", "protonmail.com", "gmx.com", "mail.com", "zoho.com", "yandex.com"]);

@@ -65,7 +65,7 @@ function numericChannels(data: Record<string, unknown>): Array<[string, number]>
 }
 
 /** First time this process sees a device: rebuild its baselines from the readings already stored, oldest first. */
-async function seedFromHistory(tenantId: number, deviceId: string) {
+async function seedFromHistory(deviceId: string) {
   try {
     const recent = await db
       .select()
@@ -78,7 +78,7 @@ async function seedFromHistory(tenantId: number, deviceId: string) {
     // judged against history, not folded into it.
     for (const row of recent.slice(1).reverse()) {
       for (const [channel, value] of numericChannels((row.data ?? {}) as Record<string, unknown>)) {
-        updateBaseline(`${tenantId}:${deviceId}:${channel}`, value);
+        updateBaseline(`${deviceId}:${channel}`, value);
       }
     }
   } catch (err) {
@@ -87,7 +87,7 @@ async function seedFromHistory(tenantId: number, deviceId: string) {
 }
 
 export async function handleReading(fields: Record<string, string>) {
-  if (fields.event !== "iot_reading" || !fields.tenantId || !fields.deviceId || !fields.data) return;
+  if (fields.event !== "iot_reading" || !fields.deviceId || !fields.data) return;
 
   let data: Record<string, unknown> = {};
   try {
@@ -100,11 +100,10 @@ export async function handleReading(fields: Record<string, string>) {
   const channels = numericChannels(data);
   if (channels.length === 0) return;
 
-  const tenantId = Number(fields.tenantId);
-  const deviceKey = `${tenantId}:${fields.deviceId}`;
+  const deviceKey = fields.deviceId;
   if (!seededDevices.has(deviceKey)) {
     seededDevices.add(deviceKey);
-    await seedFromHistory(tenantId, fields.deviceId);
+    await seedFromHistory(fields.deviceId);
   }
 
   for (const [channel, value] of channels) {
@@ -129,7 +128,7 @@ export async function handleReading(fields: Record<string, string>) {
 
     const factor = direction === "up" ? magnitude / meanMagnitude : meanMagnitude / Math.max(magnitude, EPSILON);
     const score = Math.min(100, 50 + Math.round(10 * (Math.min(factor, 6) - 1)));
-    logger.warn(`Process drift detected on device ${fields.deviceId} channel ${channel} (tenant ${tenantId}): reading=${value} runningMean=${meanBeforeUpdate} direction=${direction}`);
+    logger.warn(`Process drift detected on device ${fields.deviceId} channel ${channel}: reading=${value} runningMean=${meanBeforeUpdate} direction=${direction}`);
 
     const [device] = await db
       .select({ id: iotDevices.id })

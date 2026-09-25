@@ -319,7 +319,7 @@ export async function reviewVersion(db: Db, adapter: SubjectAdapter, subjectId: 
   const v = await getVersion(db, adapter, subjectId, versionId);
   if (v.status !== "in_review") throw conflict("Only a version that is in review can be reviewed.");
   const selfReview = v.submittedBy === actor.id;
-  if (selfReview && actor.roleName !== "admin" && actor.roleName !== "platform_admin") {
+  if (selfReview && actor.roleName !== "admin") {
     throw AppError.forbidden("You submitted this version, so someone else has to review it.");
   }
   if (decision === "rejected" && !notes?.trim()) throw AppError.badRequest("Say why it is being sent back, so the author knows what to fix.");

@@ -10,7 +10,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 /** Same inline-guard style as risk/feasibility.controller.ts's assertDepartment. */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin" || role === "platform_admin") return;
+  if (role === "admin") return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -20,7 +20,7 @@ function assertDepartment(req: Request, allowed: string[]) {
 /** Delete stays admin-only — no department gets it, per the module's own explicit "Admin: delete records" rule (unlike risk/feasibility's wider delete gate). */
 function assertAdmin(req: Request) {
   const role = req.user?.roleName;
-  if (role !== "admin" && role !== "platform_admin") throw AppError.forbidden("Only an admin can delete a sales record.");
+  if (role !== "admin") throw AppError.forbidden("Only an admin can delete a sales record.");
 }
 
 async function loadAccount(req: Request, id: number) {

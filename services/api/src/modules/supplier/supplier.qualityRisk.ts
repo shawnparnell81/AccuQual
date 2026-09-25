@@ -218,8 +218,8 @@ export function scoreSupplierQualityRisk(factors: SupplierQualityFactors, weight
 }
 
 async function loadRiskWeights(db: Db): Promise<Partial<SupplierRiskWeights>> {
-  const [tenant] = await db.select({ supplierRiskWeights: company.supplierRiskWeights }).from(company);
-  return tenant?.supplierRiskWeights ?? {};
+  const [co] = await db.select({ supplierRiskWeights: company.supplierRiskWeights }).from(company);
+  return co?.supplierRiskWeights ?? {};
 }
 
 /**
@@ -335,13 +335,13 @@ export async function exportSupplierScorecard(req: Request, res: Response, suppl
     getSupplierRiskScoreWithTrend(db, supplier.id),
     req.user?.id ? db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, req.user.id)) : Promise.resolve([]),
   ]);
-  const [tenant] = await db.select({ name: company.name }).from(company);
+  const [co] = await db.select({ name: company.name }).from(company);
 
   const report: ExportableReport = {
     title: `Supplier Scorecard — ${supplier.name}`,
     generatedAt: new Date(),
     generatedBy: performer[0]?.name || performer[0]?.email || `User #${req.user?.id ?? "unknown"}`,
-    companyName: tenant?.name ?? "Unknown Tenant",
+    companyName: co?.name ?? "Unknown Tenant",
     columns: ["Metric", "Value"],
     rows: [
       ["Quality Risk Score", riskResult.latest.score],

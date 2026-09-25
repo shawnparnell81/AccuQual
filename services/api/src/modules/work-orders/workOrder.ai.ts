@@ -8,7 +8,7 @@ import { ncr } from "../../drizzle/schema/ncr.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { workOrderPlanPrompt } from "../ai/prompts.js";
-import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
+import { checkUsageLimit, loadCompanyLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
 
 function parseSuggestions(raw: string): unknown {
   try {
@@ -33,8 +33,8 @@ function parseSuggestions(raw: string): unknown {
  * suggestion, same "no autonomous action" guarantee as ai.assistant.ts.
  */
 export const workOrderAiPlanHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!);
-  const limitError = await checkUsageLimit(req.db!, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const { co, llmOptions } = await loadCompanyLlmOptions(req.db!);
+  const limitError = await checkUsageLimit(req.db!, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
   const openNcrs = await req.db!.select({ id: ncr.id, title: ncr.title, status: ncr.status, severity: ncr.severity }).from(ncr).where(and(ne(ncr.status, "closed")));

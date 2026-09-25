@@ -5,12 +5,12 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { notifyDepartment } from "../notifications/notification.service.js";
-import { loadTenantForSettings, getFeasibilitySettings, requiredDocumentDisplayNames } from "../settings/settings.service.js";
+import { loadCompanyForSettings, getFeasibilitySettings, requiredDocumentDisplayNames } from "../settings/settings.service.js";
 
 /** Full-record edit — engineering owns this document; same pattern as risk/workOrders/erp/rma.controller.ts's assertDepartment. */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin" || role === "platform_admin") return;
+  if (role === "admin") return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -35,7 +35,7 @@ const SIGNOFF_OWNER: Record<string, string> = {
  */
 function assertSignoffFieldsAllowed(req: Request, body: Record<string, unknown>) {
   const role = req.user?.roleName;
-  if (role === "admin" || role === "platform_admin") return;
+  if (role === "admin") return;
   const department = req.user?.department;
   if (department === "engineering") return;
 
@@ -68,8 +68,8 @@ export const listFeasibilityHandler = asyncHandler(async (req: Request, res: Res
 export const createFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
   assertDepartment(req, ["engineering", "sales_and_marketing"]);
 
-  const tenant = await loadTenantForSettings(req.db!);
-  const settings = getFeasibilitySettings(tenant);
+  const co = await loadCompanyForSettings(req.db!);
+  const settings = getFeasibilitySettings(co);
   const ownerId = req.body.ownerId ?? (settings.autoAssignOwner ? req.user?.id : undefined);
 
   // defaultRiskLevel seeds every one of the 7 fixed assessment rows — the
@@ -150,8 +150,8 @@ export const finalizeFeasibilityHandler = asyncHandler(async (req: Request, res:
   const record = await loadFeasibility(req, Number(req.params.id));
   if (record.status === "final") throw AppError.badRequest("Already finalized.");
 
-  const tenant = await loadTenantForSettings(req.db!);
-  const settings = getFeasibilitySettings(tenant);
+  const co = await loadCompanyForSettings(req.db!);
+  const settings = getFeasibilitySettings(co);
   const required = settings.requiredDocuments ?? [];
   const provided = new Set((record.providedDocuments ?? []).map((doc) => String(doc)));
   const missing = required.filter((doc) => !provided.has(doc));

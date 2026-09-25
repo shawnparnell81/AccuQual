@@ -5,7 +5,7 @@ import { getUserAccessLevel, RESOURCE_KEYS, type ResourceKey } from "../../middl
 import type { Db } from "../../lib/requestDb.js";
 import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { onboardingPrompt } from "../ai/prompts.js";
-import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
+import { checkUsageLimit, loadCompanyLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
 
 /**
  * Real, honest descriptions of what each module actually does today — no
@@ -56,11 +56,11 @@ export const onboardingAiGenerateHandler = asyncHandler(async (req: Request, res
     throw AppError.badRequest("No department is set on your account yet — an admin needs to assign one before onboarding can suggest anything.");
   }
 
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!);
-  const limitError = await checkUsageLimit(req.db!, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const { co, llmOptions } = await loadCompanyLlmOptions(req.db!);
+  const limitError = await checkUsageLimit(req.db!, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
-  const isAdmin = user.roleName === "admin" || user.roleName === "platform_admin";
+  const isAdmin = user.roleName === "admin";
   const inputData = { department: user.department ?? (isAdmin ? "admin" : null), accessibleModules };
   const result = await callLlmDetailed(onboardingPrompt(inputData), { system: "You are AccuQual's onboarding assistant.", ...llmOptions });
 

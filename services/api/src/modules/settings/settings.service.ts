@@ -13,10 +13,10 @@ import { normalizeRequiredDocumentIds } from "./requiredDocuments.js";
  * feasibility.controller.ts, inventory.service.ts/inventory.costing.ts) all
  * need to read this same row without duplicating the query.
  */
-export async function loadTenantForSettings(db: Db): Promise<Company> {
-  const [tenant] = await db.select().from(company);
-  if (!tenant) throw AppError.notFound("Tenant");
-  return tenant;
+export async function loadCompanyForSettings(db: Db): Promise<Company> {
+  const [co] = await db.select().from(company);
+  if (!co) throw AppError.notFound("Tenant");
+  return co;
 }
 
 export type FeasibilitySettings = NonNullable<Company["feasibilitySettings"]>;
@@ -25,8 +25,8 @@ export type ErpSyncSettings = NonNullable<Company["erpSyncSettings"]>;
 export type SupplierRiskSettings = NonNullable<Company["supplierRiskWeights"]>;
 export type ReceivingSettings = NonNullable<Company["receivingSettings"]>;
 
-export function getFeasibilitySettings(tenant: Company): FeasibilitySettings {
-  const stored = tenant.feasibilitySettings ?? {};
+export function getFeasibilitySettings(co: Company): FeasibilitySettings {
+  const stored = co.feasibilitySettings ?? {};
   return { ...stored, requiredDocuments: normalizeRequiredDocumentIds(stored.requiredDocuments) };
 }
 
@@ -66,18 +66,18 @@ export async function requiredDocumentDisplayNames(db: Db, ids: string[]): Promi
   return ids.map((id) => titles.get(id) || `Document #${id}`);
 }
 
-export function getInventorySettings(tenant: Company): InventorySettings {
-  return tenant.inventorySettings ?? {};
+export function getInventorySettings(co: Company): InventorySettings {
+  return co.inventorySettings ?? {};
 }
 
-export function getErpSyncSettings(tenant: Company): ErpSyncSettings {
-  return tenant.erpSyncSettings ?? {};
+export function getErpSyncSettings(co: Company): ErpSyncSettings {
+  return co.erpSyncSettings ?? {};
 }
 
-export function getSupplierRiskSettings(tenant: Company): SupplierRiskSettings {
-  return tenant.supplierRiskWeights ?? {};
+export function getSupplierRiskSettings(co: Company): SupplierRiskSettings {
+  return co.supplierRiskWeights ?? {};
 }
 
-export function getReceivingSettings(tenant: Company): ReceivingSettings {
-  return tenant.receivingSettings ?? {};
+export function getReceivingSettings(co: Company): ReceivingSettings {
+  return co.receivingSettings ?? {};
 }

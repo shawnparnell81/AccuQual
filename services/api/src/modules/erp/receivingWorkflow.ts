@@ -47,7 +47,7 @@ export async function getSupplierIdForReceivingLineItem(db: Db, lineItemId: numb
 
 export interface TransitionOptions {
   department: string | null;
-  isAdminOrPlatformAdmin: boolean;
+  isAdmin: boolean;
   defectCategory?: string;
   notes?: string;
   performedBy: number | undefined;
@@ -70,7 +70,7 @@ export async function transitionReceivingLineItem(db: Db, lineItemId: number, ta
     throw AppError.badRequest(`Cannot move a receiving line item from "${line.status}" to "${targetStatus}"`);
   }
 
-  if (!options.isAdminOrPlatformAdmin) {
+  if (!options.isAdmin) {
     if (QUALITY_OWNED_TARGETS.has(targetStatus)) {
       if (options.department !== "quality") throw AppError.forbidden(`Moving a receiving line item to "${targetStatus}" requires department: quality`);
     } else if (options.department !== "material_management" && options.department !== "quality") {
@@ -92,7 +92,7 @@ export async function transitionReceivingLineItem(db: Db, lineItemId: number, ta
   // leaving quarantine as accepted releases that hold, and one rejected stays held until it is returned or scrapped.
   const hold = targetStatus === "quarantined" ? await openFromReceivingLine(db, lineItemId, options.performedBy) : null;
   if (line.status === "quarantined" && (targetStatus === "accepted" || targetStatus === "rejected")) {
-    await resolveFromReceivingLine(db, lineItemId, targetStatus, { id: options.performedBy ?? 0, roleName: options.isAdminOrPlatformAdmin ? "admin" : null });
+    await resolveFromReceivingLine(db, lineItemId, targetStatus, { id: options.performedBy ?? 0, roleName: options.isAdmin ? "admin" : null });
   }
 
   if (targetStatus === "rejected" || targetStatus === "quarantined") {

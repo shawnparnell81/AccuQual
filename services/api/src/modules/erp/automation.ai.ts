@@ -7,7 +7,7 @@ import { suppliers } from "../../drizzle/schema/supplier.js";
 import { audits } from "../../drizzle/schema/audits.js";
 import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { erpAutomationPrompt } from "../ai/prompts.js";
-import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
+import { checkUsageLimit, loadCompanyLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
 
 function parseSuggestions(raw: string): unknown {
   try {
@@ -29,8 +29,8 @@ function parseSuggestions(raw: string): unknown {
  * never creates or changes anything but its own ai_suggestions audit row.
  */
 export const erpAutomationSuggestionsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!);
-  const limitError = await checkUsageLimit(req.db!, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const { co, llmOptions } = await loadCompanyLlmOptions(req.db!);
+  const limitError = await checkUsageLimit(req.db!, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
   const belowMinItems = await req

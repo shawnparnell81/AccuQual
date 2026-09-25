@@ -24,7 +24,6 @@ BEGIN
        OR NEW.version_number IS DISTINCT FROM OLD.version_number
        OR NEW.subject_type IS DISTINCT FROM OLD.subject_type
        OR NEW.subject_id IS DISTINCT FROM OLD.subject_id
-       OR NEW.tenant_id IS DISTINCT FROM OLD.tenant_id
        OR NEW.created_by IS DISTINCT FROM OLD.created_by
        OR NEW.published_by IS DISTINCT FROM OLD.published_by
        OR NEW.published_at IS DISTINCT FROM OLD.published_at
@@ -47,8 +46,7 @@ LANGUAGE plpgsql
 SET search_path = public, pg_temp
 AS $$
 BEGIN
-  IF NEW.tenant_id IS DISTINCT FROM OLD.tenant_id
-     OR NEW.document_id IS DISTINCT FROM OLD.document_id
+  IF NEW.document_id IS DISTINCT FROM OLD.document_id
      OR NEW.file_name IS DISTINCT FROM OLD.file_name
      OR NEW.mime_type IS DISTINCT FROM OLD.mime_type
      OR NEW.size_bytes IS DISTINCT FROM OLD.size_bytes

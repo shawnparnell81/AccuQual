@@ -7,7 +7,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { logger } from "../../utils/logger.js";
 import { assertSafeWebhookUrl } from "../../utils/ssrfGuard.js";
 import { env } from "../../config/env.js";
-import { loadTenantForSettings, getErpSyncSettings, type ErpSyncSettings } from "./settings.service.js";
+import { loadCompanyForSettings, getErpSyncSettings, type ErpSyncSettings } from "./settings.service.js";
 import { getActivePresetCached } from "../erp/erpPresets.service.js";
 import { buildErpPayload, evaluateTrigger, recordSyncError, type ErpPayloadResult } from "../erp/erpMappingEngine.js";
 import type { ErpTriggerRule } from "../../drizzle/schema/erpPresets.js";
@@ -53,8 +53,8 @@ export async function triggerErpSync(
   performedBy: number | undefined,
   event?: { on: ErpTriggerRule["on"]; statusValue?: string }
 ): Promise<SyncResult> {
-  const tenant = await loadTenantForSettings(db);
-  const config = getErpSyncSettings(tenant);
+  const co = await loadCompanyForSettings(db);
+  const config = getErpSyncSettings(co);
   const modules = config.modulesEnabled ?? [];
 
   let entry: SyncHistoryEntry;

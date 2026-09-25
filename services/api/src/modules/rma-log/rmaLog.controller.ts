@@ -30,7 +30,7 @@ function generateRmaLogNumber(id: number): string {
 const LINK_FIELDS = ["warrantyId", "supplierRmaRequestId", "qualityId"] as const;
 
 function isAdmin(req: Request): boolean {
-  return req.user?.roleName === "admin" || req.user?.roleName === "platform_admin";
+  return req.user?.roleName === "admin";
 }
 
 async function loadRmaLog(req: Request, id: number) {

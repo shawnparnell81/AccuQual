@@ -85,7 +85,7 @@ export const deleteAttachmentHandler = asyncHandler(async (req: Request, res: Re
   if (!row) throw AppError.notFound("Attachment");
 
   const role = req.user?.roleName;
-  const isAdmin = role === "admin" || role === "platform_admin";
+  const isAdmin = role === "admin";
   if (!isAdmin && row.uploadedBy !== req.user?.id) throw AppError.forbidden("Only the uploader or an admin can delete this attachment.");
 
   await req.db!.delete(attachments).where(eq(attachments.id, id));

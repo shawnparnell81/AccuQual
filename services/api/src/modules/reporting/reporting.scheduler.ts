@@ -45,8 +45,8 @@ export async function runReportSchedule(scheduleId: number): Promise<void> {
   const [schedule] = await db.select().from(reportSchedules).where(eq(reportSchedules.id, scheduleId));
   if (!schedule) return;
 
-  const [tenant] = await db.select().from(company);
-  const companyName = tenant?.name ?? "AccuQual";
+  const [co] = await db.select().from(company);
+  const companyName = co?.name ?? "AccuQual";
 
   try {
     const { subject, body } = await buildReportEmail(db, schedule.reportType as ReportType, companyName);

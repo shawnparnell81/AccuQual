@@ -65,7 +65,7 @@ function isInternalStaff(req: Request): boolean {
 /** Reviewing/approving a supplier's submission is Quality/Purchasing-or-admin only — Engineering's read-only PERMISSION_MATRIX.supplier_portal level already blocks it at the router; a supplier account is never internal staff at all. */
 function assertReviewer(req: Request) {
   const role = req.user?.roleName;
-  if (role === "admin" || role === "platform_admin") return;
+  if (role === "admin") return;
   const department = req.user?.department;
   if (!isInternalStaff(req) || !department || !["quality", "purchasing"].includes(department)) {
     throw AppError.forbidden("Only Quality or Purchasing may review a supplier submission");

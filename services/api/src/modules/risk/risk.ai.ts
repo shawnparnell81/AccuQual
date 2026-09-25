@@ -9,7 +9,7 @@ import { workOrders } from "../../drizzle/schema/workOrders.js";
 import { erpReceivingDocuments } from "../../drizzle/schema/erp.js";
 import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { riskAnalysisPrompt } from "../ai/prompts.js";
-import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
+import { checkUsageLimit, loadCompanyLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
 
 /**
  * POST /risk/:id/ai-analysis — read-only, mirrors requisitionAiJustifyHandler's
@@ -30,8 +30,8 @@ export const riskAiAnalysisHandler = asyncHandler(async (req: Request, res: Resp
   const [risk] = await req.db!.select().from(riskAssessments).where(and(eq(riskAssessments.id, id)));
   if (!risk) throw AppError.notFound("Risk assessment");
 
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!);
-  const limitError = await checkUsageLimit(req.db!, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const { co, llmOptions } = await loadCompanyLlmOptions(req.db!);
+  const limitError = await checkUsageLimit(req.db!, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
   let source: Record<string, unknown> | null = null;

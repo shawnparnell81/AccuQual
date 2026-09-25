@@ -20,7 +20,7 @@ import {
   isCycleCountDue,
 } from "./inventory.service.js";
 import { getItemLots, getLotTraceability } from "./inventoryLots.service.js";
-import { loadTenantForSettings, getInventorySettings } from "../settings/settings.service.js";
+import { loadCompanyForSettings, getInventorySettings } from "../settings/settings.service.js";
 import { isObviousTestName } from "../../utils/testDataGuard.js";
 import { env } from "../../config/env.js";
 
@@ -77,8 +77,8 @@ export const listItemsHandler = asyncHandler(async (req: Request, res: Response)
   // Settings → Inventory Module expansion: aging + cycle count, computed
   // live for every row rather than stored — see inventory.service.ts's own
   // comments on computeAgingBucket/isCycleCountDue.
-  const tenant = await loadTenantForSettings(req.db!);
-  const settings = getInventorySettings(tenant);
+  const co = await loadCompanyForSettings(req.db!);
+  const settings = getInventorySettings(co);
 
   res.json(
     items.map((item) => {
@@ -103,7 +103,7 @@ export const listItemsHandler = asyncHandler(async (req: Request, res: Response)
  */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin" || role === "platform_admin") return;
+  if (role === "admin") return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -120,8 +120,8 @@ async function loadItem(req: Request, id: number) {
 export const getItemHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const item = await loadItem(req, id);
-  const tenant = await loadTenantForSettings(req.db!);
-  const settings = getInventorySettings(tenant);
+  const co = await loadCompanyForSettings(req.db!);
+  const settings = getInventorySettings(co);
 
   // Lazy reservation expiry — see applyReservationAutoRelease's own comment
   // on why this runs here (the one place a human actually looks at this
@@ -150,8 +150,8 @@ export const movementHandler = asyncHandler(async (req: Request, res: Response) 
     throw AppError.badRequest(`Cannot "produce" into a raw_material item — produce is only valid for wip or finished_good items`);
   }
 
-  const tenant = await loadTenantForSettings(req.db!);
-  const { movement } = await applyMovement(req.db!, id, req.body, req.user?.id, getInventorySettings(tenant));
+  const co = await loadCompanyForSettings(req.db!);
+  const { movement } = await applyMovement(req.db!, id, req.body, req.user?.id, getInventorySettings(co));
   await recordAuditTrail(req.db!, {
     entityType: "InventoryItem",
     entityId: id,
@@ -169,8 +169,8 @@ export const reserveHandler = asyncHandler(async (req: Request, res: Response) =
   const id = Number(req.params.id);
   await loadItem(req, id);
   const { quantity, location } = req.body as { quantity: number; location?: string };
-  const tenant = await loadTenantForSettings(req.db!);
-  const stock = await reserveStock(req.db!, id, quantity, location, getInventorySettings(tenant), req.user?.id);
+  const co = await loadCompanyForSettings(req.db!);
+  const stock = await reserveStock(req.db!, id, quantity, location, getInventorySettings(co), req.user?.id);
   res.status(201).json({ stock });
 });
 
@@ -514,7 +514,7 @@ export const checkMinMaxHandler = asyncHandler(async (req: Request, res: Respons
 export const updateItemHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   if (req.body.active === false) {
-    assertDepartment(req, []); // admin/platform_admin only
+    assertDepartment(req, []); // admin only
   }
 
   const [updated] = await req.db!

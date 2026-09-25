@@ -53,7 +53,7 @@ export const updateAiConfigSchema = z.object({
  * duplicate); the rest are new `profile` jsonb fields. All optional/patchy,
  * same "" clears convention as updateBrandingSchema above.
  */
-export const updateTenantProfileSchema = z.object({
+export const updateCompanyProfileSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   logoUrl: z.string().url().optional().or(z.literal("")),
   timezone: z.string().max(100).optional().or(z.literal("")),
@@ -62,7 +62,7 @@ export const updateTenantProfileSchema = z.object({
   contactPhone: z.string().max(50).optional().or(z.literal("")),
 });
 
-export const updateTenantSecuritySchema = z.object({
+export const updateCompanySecuritySchema = z.object({
   mfaPolicy: z.enum(["optional", "admins", "all"]),
 });
 

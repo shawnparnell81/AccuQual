@@ -81,9 +81,9 @@ export async function checkUsageLimit(db: Db, monthlyLimit: number | null, limit
  * uses the tenant's own configured key when set, falling back to the
  * platform's global env config exactly like every existing pipeline.
  */
-export async function loadTenantLlmOptions(db: Db): Promise<{ tenant: typeof company.$inferSelect | undefined; llmOptions: LlmCallOptions }> {
-  const [tenant] = await db.select().from(company);
-  const aiConfig = tenant?.aiConfig ?? {};
+export async function loadCompanyLlmOptions(db: Db): Promise<{ co: typeof company.$inferSelect | undefined; llmOptions: LlmCallOptions }> {
+  const [co] = await db.select().from(company);
+  const aiConfig = co?.aiConfig ?? {};
 
   // A real, live-reproduced bug (found testing the rebuilt AI Insights
   // dashboard): decryptSecret throws if the stored ciphertext can't be
@@ -104,7 +104,7 @@ export async function loadTenantLlmOptions(db: Db): Promise<{ tenant: typeof com
   }
 
   return {
-    tenant,
+    co,
     llmOptions: {
       provider: aiConfig.provider,
       apiKey,
@@ -199,11 +199,11 @@ export async function runPipelineAndRecord(
   okVerb: string,
   runner: (llmOptions: LlmCallOptions) => Promise<PipelineRun>
 ): Promise<{ suggestion: typeof aiSuggestions.$inferSelect; output: Record<string, unknown> }> {
-  const [tenant] = await db.select().from(company);
-  const limitError = await checkUsageLimit(db, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const [co] = await db.select().from(company);
+  const limitError = await checkUsageLimit(db, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
-  const { llmOptions } = await loadTenantLlmOptions(db);
+  const { llmOptions } = await loadCompanyLlmOptions(db);
 
   try {
     const { classified, result } = await runner(llmOptions);
@@ -213,7 +213,7 @@ export async function runPipelineAndRecord(
     // like "standard" mode would, but the request itself fails with a clear
     // error instead of returning a 200 the caller might render as if it
     // were a real (if flagged) suggestion.
-    if (classified.status === "malformed" && tenant?.aiConfig?.safetyMode === "strict") {
+    if (classified.status === "malformed" && co?.aiConfig?.safetyMode === "strict") {
       await recordAiSuggestion(db, { module, pipeline, input, output: classified.data, result, performedBy, status: classified.status, errorMessage: classified.errorMessage, okVerb });
       throw new AppError(classified.errorMessage ?? "The AI response didn't match the expected shape and was refused under this tenant's strict safety mode.", 502);
     }

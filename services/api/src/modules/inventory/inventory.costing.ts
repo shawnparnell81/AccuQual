@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import type { Db } from "../../lib/requestDb.js";
 import type { InventoryItem } from "../../drizzle/schema/inventory.js";
-import { loadTenantForSettings, getInventorySettings, type InventorySettings } from "../settings/settings.service.js";
+import { loadCompanyForSettings, getInventorySettings, type InventorySettings } from "../settings/settings.service.js";
 
 /**
  * Settings → Inventory Module expansion: costAdjustmentRules.roundingPrecision
@@ -164,12 +164,12 @@ function parseDays(req: Request): number {
 export const getItemCostingHandler = asyncHandler(async (req: Request, res: Response) => {
   const itemId = Number(req.params.itemId);
   const item = await loadItem(req, itemId);
-  const tenant = await loadTenantForSettings(req.db!);
-  res.json(await computeItemCosting(req.db!, item, parseDays(req), getInventorySettings(tenant)));
+  const co = await loadCompanyForSettings(req.db!);
+  res.json(await computeItemCosting(req.db!, item, parseDays(req), getInventorySettings(co)));
 });
 
 /** GET /inventory/costing/summary?days=30 */
 export const costingSummaryHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!);
-  res.json(await computeCostingSummary(req.db!, parseDays(req), getInventorySettings(tenant)));
+  const co = await loadCompanyForSettings(req.db!);
+  res.json(await computeCostingSummary(req.db!, parseDays(req), getInventorySettings(co)));
 });

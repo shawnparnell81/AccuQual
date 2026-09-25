@@ -55,7 +55,7 @@ const envSchema = z.object({
   // with `openssl rand -hex 32`. Defaulted only so a fresh dev checkout
   // doesn't hard-fail before anyone has set one — never rely on the default
   // outside local dev.
-  TENANT_AI_CONFIG_ENCRYPTION_KEY: z
+  AI_CONFIG_ENCRYPTION_KEY: z
     .string()
     .length(64, "must be 64 hex chars (32 bytes) — generate with `openssl rand -hex 32`")
     .default("00".repeat(32)),
@@ -137,7 +137,7 @@ const DEFAULT_ENCRYPTION_KEY = "00".repeat(32);
  * local checkouts and CI keep working without anyone having to generate a
  * key just to run the app.
  */
-if (env.TENANT_AI_CONFIG_ENCRYPTION_KEY === DEFAULT_ENCRYPTION_KEY) {
+if (env.AI_CONFIG_ENCRYPTION_KEY === DEFAULT_ENCRYPTION_KEY) {
   const message =
     "TENANT_AI_CONFIG_ENCRYPTION_KEY is still the hardcoded default (00×32) — " +
     "every tenant's stored AI provider API key would be encrypted with a key anyone reading " +

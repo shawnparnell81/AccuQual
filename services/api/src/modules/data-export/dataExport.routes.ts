@@ -121,7 +121,7 @@ dataExportRouter.get(
       .from(users)
       .leftJoin(roles, eq(users.roleId, roles.id))
       .where(and(eq(users.id, Number(payload.sub))));
-    if (!row || !row.isActive || (row.roleName !== "admin" && row.roleName !== "platform_admin")) throw AppError.forbidden("This account can no longer export data.");
+    if (!row || !row.isActive || (row.roleName !== "admin")) throw AppError.forbidden("This account can no longer export data.");
     if (running.has(COMPANY_KEY)) throw new AppError("An export is already running.", 409);
 
     running.add(COMPANY_KEY);

@@ -16,7 +16,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
  */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin" || role === "platform_admin") return;
+  if (role === "admin") return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -26,7 +26,7 @@ function assertDepartment(req: Request, allowed: string[]) {
 /** Admin-only, not a department at all — same convention as platform-admin-gated routes, just scoped to a single tenant-level action instead of a whole router. */
 function assertAdmin(req: Request) {
   const role = req.user?.roleName;
-  if (role !== "admin" && role !== "platform_admin") {
+  if (role !== "admin") {
     throw AppError.forbidden("Only an admin can delete a risk.");
   }
 }

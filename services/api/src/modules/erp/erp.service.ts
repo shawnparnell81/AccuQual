@@ -13,7 +13,7 @@ import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { applyMovement } from "../inventory/inventory.service.js";
 import { receiveIntoLot } from "../inventory/inventoryLots.service.js";
-import { loadTenantForSettings, getInventorySettings } from "../settings/settings.service.js";
+import { loadCompanyForSettings, getInventorySettings } from "../settings/settings.service.js";
 
 export interface LineItemInput {
   itemId: number;
@@ -151,8 +151,8 @@ export async function createReceivingDocument(
     performedBy: createdBy,
   });
 
-  const tenant = await loadTenantForSettings(db);
-  const inventorySettings = getInventorySettings(tenant);
+  const co = await loadCompanyForSettings(db);
+  const inventorySettings = getInventorySettings(co);
   for (const created of createdLines) {
     const poLine = poLineItemById.get(created.poLineItemId)!;
     const input = lineItems.find((li) => li.poLineItemId === created.poLineItemId)!;

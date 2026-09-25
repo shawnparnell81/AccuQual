@@ -4,7 +4,7 @@ import { company } from "../../drizzle/schema/company.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { encryptSecret, maskSecret, decryptSecret } from "../company/crypto.js";
-import { loadTenantForSettings, getFeasibilitySettings, assertAccessibleRequiredDocuments, getInventorySettings, getErpSyncSettings, getSupplierRiskSettings, getReceivingSettings } from "./settings.service.js";
+import { loadCompanyForSettings, getFeasibilitySettings, assertAccessibleRequiredDocuments, getInventorySettings, getErpSyncSettings, getSupplierRiskSettings, getReceivingSettings } from "./settings.service.js";
 import { triggerErpSync } from "./settings.erpSync.js";
 
 // ============================================================
@@ -12,14 +12,14 @@ import { triggerErpSync } from "./settings.erpSync.js";
 // ============================================================
 
 export const getFeasibilitySettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!);
-  res.json(getFeasibilitySettings(tenant));
+  const co = await loadCompanyForSettings(req.db!);
+  res.json(getFeasibilitySettings(co));
 });
 
 export const updateFeasibilitySettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!);
+  const co = await loadCompanyForSettings(req.db!);
   if (Array.isArray(req.body.requiredDocuments)) await assertAccessibleRequiredDocuments(req.db!, req.body.requiredDocuments);
-  const merged = { ...getFeasibilitySettings(tenant), ...req.body };
+  const merged = { ...getFeasibilitySettings(co), ...req.body };
 
   const [updated] = await req.db!.update(company).set({ feasibilitySettings: merged }).returning();
   await recordAuditTrail(req.db!, {
@@ -37,13 +37,13 @@ export const updateFeasibilitySettingsHandler = asyncHandler(async (req: Request
 // ============================================================
 
 export const getInventorySettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!);
-  res.json(getInventorySettings(tenant));
+  const co = await loadCompanyForSettings(req.db!);
+  res.json(getInventorySettings(co));
 });
 
 export const updateInventorySettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!);
-  const merged = { ...getInventorySettings(tenant), ...req.body };
+  const co = await loadCompanyForSettings(req.db!);
+  const merged = { ...getInventorySettings(co), ...req.body };
 
   const [updated] = await req.db!.update(company).set({ inventorySettings: merged }).returning();
   await recordAuditTrail(req.db!, {
@@ -62,8 +62,8 @@ export const updateInventorySettingsHandler = asyncHandler(async (req: Request, 
 
 /** Never returns the real secret — a masked display string + whether one is set, same convention as tenant.controller.ts's getAiConfigHandler. */
 export const getErpSyncSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!);
-  const config = getErpSyncSettings(tenant);
+  const co = await loadCompanyForSettings(req.db!);
+  const config = getErpSyncSettings(co);
   res.json({
     schedule: config.schedule ?? null,
     direction: config.direction ?? null,
@@ -78,10 +78,10 @@ export const getErpSyncSettingsHandler = asyncHandler(async (req: Request, res: 
 });
 
 export const updateErpSyncSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!);
+  const co = await loadCompanyForSettings(req.db!);
   const { webhookSecret, webhookUrl, ...rest } = req.body as { webhookSecret?: string; webhookUrl?: string } & Record<string, unknown>;
 
-  const merged = { ...getErpSyncSettings(tenant), ...rest };
+  const merged = { ...getErpSyncSettings(co), ...rest };
   if (webhookUrl !== undefined) merged.webhookUrl = webhookUrl === "" ? undefined : webhookUrl;
   if (webhookSecret !== undefined) merged.webhookSecretEncrypted = encryptSecret(webhookSecret);
 
@@ -116,13 +116,13 @@ export const updateErpSyncSettingsHandler = asyncHandler(async (req: Request, re
 // ============================================================
 
 export const getSupplierRiskSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!);
-  res.json(getSupplierRiskSettings(tenant));
+  const co = await loadCompanyForSettings(req.db!);
+  res.json(getSupplierRiskSettings(co));
 });
 
 export const updateSupplierRiskSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!);
-  const merged = { ...getSupplierRiskSettings(tenant), ...req.body };
+  const co = await loadCompanyForSettings(req.db!);
+  const merged = { ...getSupplierRiskSettings(co), ...req.body };
 
   const [updated] = await req.db!.update(company).set({ supplierRiskWeights: merged }).returning();
   await recordAuditTrail(req.db!, {
@@ -141,13 +141,13 @@ export const updateSupplierRiskSettingsHandler = asyncHandler(async (req: Reques
 // ============================================================
 
 export const getReceivingSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!);
-  res.json(getReceivingSettings(tenant));
+  const co = await loadCompanyForSettings(req.db!);
+  res.json(getReceivingSettings(co));
 });
 
 export const updateReceivingSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenant = await loadTenantForSettings(req.db!);
-  const merged = { ...getReceivingSettings(tenant), ...req.body };
+  const co = await loadCompanyForSettings(req.db!);
+  const merged = { ...getReceivingSettings(co), ...req.body };
 
   const [updated] = await req.db!.update(company).set({ receivingSettings: merged }).returning();
   await recordAuditTrail(req.db!, {

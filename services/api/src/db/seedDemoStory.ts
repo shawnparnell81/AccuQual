@@ -122,7 +122,7 @@ async function main() {
     });
     await tdb.insert(inventoryMovements).values({ itemId: bracket!.id, movementType: "receive", quantity: String(outcome.qty), lotNumber: `TC-LOT-${outcome.daysAgo}`, referenceType: "receiving", referenceId: String(doc!.id), performedBy, performedAt: daysAgo(outcome.daysAgo) });
 
-    const transitionOpts = { department: "quality", isAdminOrPlatformAdmin: true, performedBy, notes: "Dimensional check failed — bracket mounting holes out of tolerance" };
+    const transitionOpts = { department: "quality", isAdmin: true, performedBy, notes: "Dimensional check failed — bracket mounting holes out of tolerance" };
     await transitionReceivingLineItem(tdb, line!.id, "pending_inspection", transitionOpts);
     await transitionReceivingLineItem(tdb, line!.id, "inspected", transitionOpts);
     await transitionReceivingLineItem(tdb, line!.id, outcome.disposition, transitionOpts);
@@ -138,7 +138,7 @@ async function main() {
     const [line] = await tdb.insert(erpReceivingLineItems).values({ receivingDocumentId: doc!.id, poLineItemId: poLine!.id, quantityReceived: 500, lotNumber: "MF-LOT-20" }).returning();
     await receiveIntoLot(tdb, { itemId: gasket!.id, lotNumber: "MF-LOT-20", supplierId: meridian!.id, purchaseOrderId: po!.id, receivingLineItemId: line!.id, quantity: 500 });
     await tdb.insert(inventoryMovements).values({ itemId: gasket!.id, movementType: "receive", quantity: "500", lotNumber: "MF-LOT-20", referenceType: "receiving", referenceId: String(doc!.id), performedBy, performedAt: daysAgo(20) });
-    const cleanOpts = { department: "quality", isAdminOrPlatformAdmin: true, performedBy };
+    const cleanOpts = { department: "quality", isAdmin: true, performedBy };
     await transitionReceivingLineItem(tdb, line!.id, "pending_inspection", cleanOpts);
     await transitionReceivingLineItem(tdb, line!.id, "inspected", cleanOpts);
     await transitionReceivingLineItem(tdb, line!.id, "accepted", cleanOpts);

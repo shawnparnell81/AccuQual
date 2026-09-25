@@ -27,7 +27,7 @@ import { qualityInspectionReports } from "../../drizzle/schema/qualityInspection
 /** Purchasing owns the PO lifecycle (create/edit/send/cancel); material_management owns receiving — same inline-guard style as inventory.controller.ts's assertDepartment. */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin" || role === "platform_admin") return;
+  if (role === "admin") return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -215,7 +215,7 @@ export const transitionReceivingLineItemHandler = asyncHandler(async (req: Reque
 
   const updated = await transitionReceivingLineItem(req.db!, id, status, {
     department: req.user?.department ?? null,
-    isAdminOrPlatformAdmin: req.user?.roleName === "admin" || req.user?.roleName === "platform_admin",
+    isAdmin: req.user?.roleName === "admin",
     defectCategory: report?.defectCategory ?? undefined,
     notes,
     performedBy: req.user?.id,
