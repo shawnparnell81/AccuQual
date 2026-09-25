@@ -115,6 +115,7 @@ import { AdminSystemHealthPage } from "./routes/Admin/AdminSystemHealthPage";
 import { AdminApiDocsPage } from "./routes/Admin/AdminApiDocsPage";
 import { AdminTenantSettingsPage } from "./routes/Admin/AdminTenantSettingsPage";
 import { AdminSsoPage } from "./routes/Admin/AdminSsoPage";
+import { AdminBillingPage } from "./routes/Admin/AdminBillingPage";
 import { AdminDataExportPage } from "./routes/Admin/AdminDataExportPage";
 import { HomePage } from "./routes/Home/HomePage";
 import { homeKind } from "./lib/opsLanguage";
@@ -268,6 +269,7 @@ export function App() {
             <Route path="tenant-settings" element={<AdminTenantSettingsPage />} />
             <Route path="sso" element={<AdminSsoPage />} />
             <Route path="data-export" element={<AdminDataExportPage />} />
+            <Route path="billing" element={<AdminBillingPage />} />
             <Route path="tenant-branding" element={<AdminTenantBrandingPage />} />
             <Route path="tenant-templates" element={<AdminTenantTemplatesPage />} />
             <Route path="digital-twin" element={<AdminDigitalTwinSetupPage />} />

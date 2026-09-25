@@ -54,6 +54,20 @@ services:
       # Render's dashboard, never into this repo.
       - key: ZEPTOMAIL_SEND_TOKEN
         sync: false
+      # Stripe billing (docs/billing-setup.md) — paste values in Render's
+      # dashboard, never into this repo. Unset = billing shows "not set up".
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_FOUNDATION
+        sync: false
+      - key: STRIPE_PRICE_OPERATIONS
+        sync: false
+      - key: STRIPE_PRICE_ENTERPRISE
+        sync: false
+      - key: CONTACT_INBOX_EMAIL
+        sync: false
       # Real SMTP delivery (onboarding/notification email) — all optional;
       # leave blank to keep every send in the honest log-only stub mode
       # notification.service.ts already falls back to. Verified working
