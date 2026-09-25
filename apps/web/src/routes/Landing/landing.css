@@ -152,15 +152,10 @@
 /* illustrated scenes */
 .lp-scenes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 40px; }
 .lp-scene { margin: 0; border: 1px solid var(--lp-line); background: var(--lp-bg2); }
-.lp-scene-art { background: linear-gradient(var(--lp-line) 1px, transparent 1px) 0 0 / 100% 24px, var(--lp-bg); border-bottom: 1px solid var(--lp-line); padding: 12px; }
-.lp-svg { display: block; width: 100%; height: auto; }
+.lp-scene-art { border-bottom: 1px solid var(--lp-line); aspect-ratio: 4 / 3; overflow: hidden; background: var(--lp-bg); }
+.lp-scene-art img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s; }
+.lp-scene:hover .lp-scene-art img { transform: scale(1.04); }
 .lp-scene figcaption { padding: 18px 20px 22px; }
 .lp-scene h3 { font-size: 30px; margin-top: 6px; }
 .lp-scene p { margin-top: 8px; font-size: 16px; color: #bdbaae; }
-.lp-slide { animation: lp-slide 5s ease-in-out infinite alternate; }
-.lp-fork { animation: lp-fork 6s ease-in-out infinite alternate; }
-.lp-glass { animation: lp-glass 6s ease-in-out infinite alternate; }
-@keyframes lp-slide { from { transform: translateX(0); } to { transform: translateX(-8px); } }
-@keyframes lp-fork { from { transform: translateX(0); } to { transform: translateX(14px); } }
-@keyframes lp-glass { from { transform: translate(0, 0); } to { transform: translate(-16px, 10px); } }
 @media (max-width: 900px) { .lp-scenes { grid-template-columns: minmax(0, 1fr); } }
