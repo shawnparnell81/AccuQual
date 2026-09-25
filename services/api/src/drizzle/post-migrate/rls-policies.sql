@@ -84,7 +84,9 @@ DECLARE
     'sso_connections', 'sso_domains', 'user_identities', 'controlled_versions',
     'document_files', 'quarantine_records', 'quarantine_inventory', 'quarantine_resolutions',
     'training_sessions', 'training_competencies', 'worker_profiles',
-    'sites', 'user_sites'
+    'sites', 'user_sites',
+    -- Billing: the app role only ever sees its own company's row; Stripe's webhook and the billing service run as the owner role, which RLS doesn't bind.
+    'tenant_subscriptions', 'billing_events'
   ];
 BEGIN
   FOREACH t IN ARRAY tenant_tables LOOP

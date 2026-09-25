@@ -73,6 +73,7 @@ import { permissionsRouter } from "../modules/permissions/permissions.routes.js"
 import { reportingRouter } from "../modules/reporting/reporting.routes.js";
 import { systemHealthRouter } from "../modules/system-health/systemHealth.routes.js";
 import { contactRouter } from "../modules/contact/contact.routes.js";
+import { billingRouter } from "../modules/billing/billing.routes.js";
 import { docsRouter } from "../docs/docs.routes.js";
 
 export const apiRouter = Router();
@@ -80,6 +81,7 @@ export const apiRouter = Router();
 // Before /auth: /auth/sso/* is its own router (no session yet), and authRouter would otherwise never see it as anything but an unknown path.
 apiRouter.use("/auth/sso", ssoPublicRouter);
 apiRouter.use("/contact", contactRouter);
+apiRouter.use("/billing", billingRouter);
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/sso", ssoAdminRouter);
 apiRouter.use("/data-export", dataExportRouter);
