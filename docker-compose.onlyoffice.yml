@@ -1,0 +1,18 @@
+# Optional ONLYOFFICE Document Server for in-app Word/Excel editing.
+# Merge it with the main stack (see docs/onlyoffice.md):
+#   docker compose -f docker-compose.yml -f docker-compose.onlyoffice.yml up -d onlyoffice
+#
+# The image is Community Edition: 20 simultaneous connections. For one self-hosted
+# company that is often enough; more open editors need a commercial license.
+services:
+  onlyoffice:
+    image: onlyoffice/documentserver:8.3.3.1
+    ports:
+      - "8080:80"
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: ${ONLYOFFICE_JWT_SECRET:-dev-onlyoffice-secret}
+      JWT_HEADER: Authorization
+      # The API container is on a private address. Without this, Document Server
+      # refuses to download the file it is supposed to open.
+      ALLOW_PRIVATE_IP_ADDRESS: "true"
