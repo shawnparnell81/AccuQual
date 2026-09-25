@@ -32,6 +32,9 @@ export function KanbanBoard<T>({
   onMove,
   renderCard,
   rejectMessage,
+  people,
+  assignedTo,
+  onAssign,
 }: {
   columns: BoardColumn[];
   items: T[];
@@ -42,13 +45,59 @@ export function KanbanBoard<T>({
   onMove: (item: T, toColumn: string) => void;
   renderCard: (item: T) => ReactNode;
   rejectMessage: (item: T, toColumn: string) => string;
+  /** Optional: a row of people a card can be dropped onto to assign it. */
+  people?: { id: number; name: string }[];
+  assignedTo?: (item: T) => number | null;
+  onAssign?: (item: T, personId: number, personName: string) => void;
 }) {
   const toast = useToast();
   const [dragging, setDragging] = useState<T | null>(null);
   const [hover, setHover] = useState<string | null>(null);
+  const [hoverPerson, setHoverPerson] = useState<number | null>(null);
   const target = dragging ? nextOf(dragging) : null;
 
+  const showPeople = !!people && people.length > 0 && !!onAssign;
+
   return (
+    <>
+      {showPeople && (
+        <div className={`mb-3 rounded-xl border p-3 transition-colors ${dragging ? "border-primary/60 bg-primary/5" : "border-border"}`}>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{dragging ? "Drop on a person to assign it" : "Assign by dragging a card onto a person"}</p>
+          <div className="flex flex-wrap gap-2">
+            {people!.slice(0, 30).map((person) => {
+              const isHover = hoverPerson === person.id && dragging != null;
+              return (
+                <div
+                  key={person.id}
+                  onDragOver={(e) => {
+                    if (!dragging) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    setHoverPerson(person.id);
+                  }}
+                  onDragLeave={() => setHoverPerson((h) => (h === person.id ? null : h))}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const item = dragging;
+                    setHoverPerson(null);
+                    setDragging(null);
+                    setHover(null);
+                    if (!item) return;
+                    if (assignedTo?.(item) === person.id) toast.error(`Already assigned to ${person.name}.`);
+                    else onAssign!(item, person.id, person.name);
+                  }}
+                  className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-sm transition-all ${
+                    isHover ? "scale-105 border-primary bg-primary/15 shadow-md" : dragging ? "border-primary/40" : "border-border"
+                  }`}
+                >
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{person.name.trim().charAt(0).toUpperCase() || "?"}</span>
+                  {person.name}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     <div className="grid gap-3 overflow-x-auto pb-2" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(15rem, 1fr))` }}>
       {columns.map((column) => {
         const cards = items.filter((item) => columnOf(item) === column.key);
@@ -116,5 +165,6 @@ export function KanbanBoard<T>({
         );
       })}
     </div>
+    </>
   );
 }

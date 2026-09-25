@@ -86,7 +86,31 @@ export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrde
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't remove that operation.")),
   });
 
-  const operations = [...(workOrder.operations ?? [])].sort((a, b) => a.opNumber - b.opNumber);
+  const operations = [...(workOrder.operations ?? [])].sort((a, b) => a.opNumber - b.opNumber || a.id - b.id);
+
+  const reorderOperations = useMutation({
+    mutationFn: async (ids: number[]) => (await apiClient.post(`/work-orders/${workOrder.id}/operations/reorder`, { ids })).data,
+    onSuccess: invalidate,
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't reorder the operations.")),
+  });
+  const [dragOpId, setDragOpId] = useState<number | null>(null);
+  const [overOpId, setOverOpId] = useState<number | null>(null);
+
+  function dropOperation(targetId: number) {
+    const movingId = dragOpId;
+    setDragOpId(null);
+    setOverOpId(null);
+    if (movingId === null || movingId === targetId) return;
+    const ids = operations.map((o) => o.id).filter((id) => id !== movingId);
+    ids.splice(ids.indexOf(targetId), 0, movingId);
+    // A signed-off operation vouches for its own place in the routing, so it can't be shifted.
+    const shifted = operations.find((o, index) => o.signOff && ids[index] !== o.id);
+    if (shifted) {
+      toast.error(`Operation ${shifted.opNumber} is already signed off and can't be moved.`);
+      return;
+    }
+    reorderOperations.mutate(ids);
+  }
 
   return (
     <div className="wot-scope">
@@ -119,6 +143,9 @@ export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrde
         .wot-sign-off-block { margin-top: 20px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; }
         .wot-remove-op { border: none; background: transparent; color: #94a3b8; cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 4px; }
         .wot-remove-op:hover { color: #dc2626; }
+        .wot-grip-op { cursor: grab; color: #94a3b8; font-size: 14px; line-height: 1; padding: 2px 4px; user-select: none; }
+        .wot-grip-op:hover { color: #0f1423; }
+        .wot-row-over td { box-shadow: inset 0 2px 0 #2451ff; }
         .wot-add-op { margin-top: 10px; border: 1px dashed #9d4edd; background: transparent; color: #9d4edd; border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
         .wot-add-op:disabled { opacity: 0.4; cursor: not-allowed; }
         /* Real print support (previously missing entirely — see the "Save/
@@ -128,7 +155,7 @@ export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrde
            since a shop-floor traveler is meant to be printed and physically
            signed. The colored header/branding is intentional and prints as-is. */
         @media print {
-          .wot-add-op, .wot-remove-op { display: none; }
+          .wot-add-op, .wot-remove-op, .wot-grip-op { display: none; }
           .wot-work-order { border: 2px solid #0f1423; box-shadow: none; }
         }
       `}</style>
@@ -211,7 +238,23 @@ export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrde
                 </tr>
               )}
               {operations.map((op) => (
-                <OperationRow key={op.id} op={op} canEdit={canEditTraveler} onPatch={(body) => patchOperation.mutate({ opId: op.id, body })} onDelete={() => deleteOperation.mutate(op.id)} />
+                <OperationRow
+                  key={op.id}
+                  op={op}
+                  canEdit={canEditTraveler}
+                  onPatch={(body) => patchOperation.mutate({ opId: op.id, body })}
+                  onDelete={() => deleteOperation.mutate(op.id)}
+                  canDrag={canEditTraveler && operations.length > 1}
+                  isDragging={dragOpId === op.id}
+                  isOver={overOpId === op.id && dragOpId !== null && dragOpId !== op.id}
+                  onDragStart={() => setDragOpId(op.id)}
+                  onDragEnd={() => {
+                    setDragOpId(null);
+                    setOverOpId(null);
+                  }}
+                  onDragOverRow={() => dragOpId !== null && setOverOpId(op.id)}
+                  onDropRow={() => dropOperation(op.id)}
+                />
               ))}
             </tbody>
           </table>
@@ -276,16 +319,41 @@ function OperationRow({
   canEdit,
   onPatch,
   onDelete,
+  canDrag,
+  isDragging,
+  isOver,
+  onDragStart,
+  onDragEnd,
+  onDragOverRow,
+  onDropRow,
 }: {
   op: WorkOrderOperation;
   canEdit: boolean;
   onPatch: (body: Record<string, unknown>) => void;
   onDelete: () => void;
+  canDrag: boolean;
+  isDragging: boolean;
+  isOver: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDragOverRow: () => void;
+  onDropRow: () => void;
 }) {
   const [signOffDraft, setSignOffDraft] = useState(op.signOff ?? "");
 
   return (
-    <tr>
+    <tr
+      className={isOver ? "wot-row-over" : undefined}
+      style={isDragging ? { opacity: 0.4 } : undefined}
+      onDragOver={(e) => {
+        onDragOverRow();
+        e.preventDefault();
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDropRow();
+      }}
+    >
       <td>
         <input className="wot-cell-input" type="number" defaultValue={op.opNumber} disabled={!canEdit} onBlur={(e) => Number(e.target.value) !== op.opNumber && onPatch({ opNumber: Number(e.target.value) })} />
       </td>
@@ -319,7 +387,25 @@ function OperationRow({
           {op.signOffDate && <span style={{ fontSize: 10, color: "#64748b" }}>{new Date(op.signOffDate).toLocaleDateString()}</span>}
         </div>
       </td>
-      <td>
+      <td style={{ whiteSpace: "nowrap" }}>
+        {canDrag && (
+          <span
+            className="wot-grip-op"
+            draggable={!op.signOff}
+            title={op.signOff ? "Signed off — this operation can't be moved" : "Drag to reorder"}
+            style={op.signOff ? { opacity: 0.35, cursor: "not-allowed" } : undefined}
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = "move";
+              e.dataTransfer.setData("text/plain", String(op.id));
+              const row = (e.currentTarget as HTMLElement).closest("tr");
+              if (row) e.dataTransfer.setDragImage(row, 10, 10);
+              onDragStart();
+            }}
+            onDragEnd={onDragEnd}
+          >
+            ⠿
+          </span>
+        )}
         {canEdit && (
           <button className="wot-remove-op" onClick={onDelete} title="Remove operation">
             ✕

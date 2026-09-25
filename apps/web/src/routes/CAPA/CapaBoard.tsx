@@ -29,7 +29,7 @@ export function CapaBoard({ capas, canEdit }: { capas: Capa[]; canEdit: boolean 
   const navigate = useNavigate();
   const toast = useToast();
   const qc = useQueryClient();
-  const { label } = usePersonDirectory();
+  const { label, people } = usePersonDirectory();
   const [step, setStep] = useState<StepRequest | null>(null);
 
   async function post(capa: Capa, path: string, body?: Record<string, string>, done?: string) {
@@ -64,6 +64,15 @@ export function CapaBoard({ capas, canEdit }: { capas: Capa[]; canEdit: boolean 
         rejectMessage={(c, to) => {
           const next = NEXT[c.status];
           return next ? `Fixes move one step at a time. #${c.id} goes from ${statusPhrase(c.status)} to ${statusPhrase(next)} first — drop it there.` : `#${c.id} is closed and can't move (${statusPhrase(to)}).`;
+        }}
+        people={people.map((person) => ({ id: person.id, name: person.name?.trim() || person.email }))}
+        assignedTo={(c) => c.ownerId}
+        onAssign={(c, personId, personName) => {
+          apiClient
+            .patch(`/capa/${c.id}`, { ownerId: personId })
+            .then(() => qc.invalidateQueries({ queryKey: ["capa"] }))
+            .then(() => toast.success(`Fix #${c.id} assigned to ${personName}.`))
+            .catch((err) => toast.error(extractErrorMessage(err, "Couldn't assign this fix.")));
         }}
         renderCard={(c) => (
           <div onClick={() => navigate(`/capa/${c.id}`)} className="cursor-pointer">
