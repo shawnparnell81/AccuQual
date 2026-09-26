@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useToast } from "../shared/ToastProvider";
@@ -31,6 +31,8 @@ interface ResourceListPageProps<T extends { id: number }> {
   accessNote?: string | null;
   /** Extra buttons next to "+ New" (for example Import from Excel). */
   headerActions?: ReactNode;
+  /** Open the create dialog on arrival, used by the dashboard's Schedule audit button. */
+  createOnMount?: boolean;
 }
 
 /**
@@ -50,8 +52,12 @@ export function ResourceListPage<T extends { id: number }>({
   canCreate,
   accessNote,
   headerActions,
+  createOnMount,
 }: ResourceListPageProps<T>) {
   const [createOpen, setCreateOpen] = useState(false);
+  useEffect(() => {
+    if (createOnMount) setCreateOpen(true);
+  }, [createOnMount]);
   const [search, setSearch] = useState("");
   const toast = useToast();
   const hooks = createResourceHooks<T>(resource);

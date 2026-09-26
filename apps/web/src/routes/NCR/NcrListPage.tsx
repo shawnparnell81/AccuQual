@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
@@ -37,12 +37,20 @@ interface NcrTriageSuggestion {
 /** NCR List: filters (severity, status, date range), export, quick-create. */
 export function NcrListPage() {
   const { canEdit, reason } = usePlantWrite("ncr");
+  const accessPending = !canEdit && reason == null;
   const { label, people } = usePersonDirectory();
   const [severityFilter, setSeverityFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (accessPending || params.get("new") !== "1") return;
+    if (canEdit) setCreateOpen(true);
+    const next = new URLSearchParams(params);
+    next.delete("new");
+    setParams(next, { replace: true });
+  }, [accessPending, canEdit, params, setParams]);
   const view: "list" | "board" = params.get("view") === "board" ? "board" : "list";
   const [form, setForm] = useState<{ title: string; description: string; severity: Ncr["severity"]; dueDate: string; assignedTo: string }>({
     title: "",

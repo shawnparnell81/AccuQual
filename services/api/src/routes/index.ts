@@ -74,6 +74,7 @@ import { reportingRouter } from "../modules/reporting/reporting.routes.js";
 import { systemHealthRouter } from "../modules/system-health/systemHealth.routes.js";
 import { contactRouter } from "../modules/contact/contact.routes.js";
 import { docsRouter } from "../docs/docs.routes.js";
+import { dashboardRouter } from "../modules/dashboard/dashboard.routes.js";
 
 export const apiRouter = Router();
 
@@ -161,6 +162,7 @@ apiRouter.use("/crar", crarRouter);
 apiRouter.use("/rma-activity-log", rmaActivityLogRouter);
 apiRouter.use("/rma-log", rmaLogRouter);
 apiRouter.use("/permissions", permissionsRouter);
+apiRouter.use("/dashboard", dashboardRouter);
 apiRouter.use("/reporting", reportingRouter);
 apiRouter.use("/system-health", systemHealthRouter);
 apiRouter.use("/admin/api-docs", docsRouter);

@@ -18,7 +18,7 @@ export interface PlantContext {
   sites: PlantSummary[];
 }
 
-const SITE_SCOPED_QUERIES = new Set(["ncr", "capa", "audits", "calendar", "nav-kpi-counts"]);
+const SITE_SCOPED_QUERIES = new Set(["ncr", "capa", "audits", "calendar", "nav-kpi-counts", "dashboard"]);
 
 export function useSites() {
   const user = useCurrentUser();

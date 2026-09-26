@@ -1,4 +1,5 @@
-import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenWindowButton } from "../../components/shared/OpenWindowButton";
@@ -8,7 +9,15 @@ import type { Audit } from "../../api/types";
 
 export function AuditsPage() {
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const { canEdit, reason } = usePlantWrite("audit");
+  const accessPending = !canEdit && reason == null;
+  useEffect(() => {
+    if (accessPending || params.get("new") !== "1") return;
+    const next = new URLSearchParams(params);
+    next.delete("new");
+    setParams(next, { replace: true });
+  }, [accessPending, params, setParams]);
   return (
     <div className="flex flex-col gap-2">
     <CurrentPlantNote />
@@ -16,6 +25,7 @@ export function AuditsPage() {
       title="Audits"
       resource="audits"
       canCreate={canEdit}
+      createOnMount={params.get("new") === "1" && canEdit}
       accessNote={reason}
       onRowClick={(a) => navigate(`/audits/${a.id}`)}
       onCreated={(a) => navigate(`/audits/${a.id}`)}
