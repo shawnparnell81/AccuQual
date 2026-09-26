@@ -4,6 +4,7 @@ import { passwordSchema } from "../../utils/passwordPolicy.js";
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  // Accepted so an older sign-in page does not fail. It no longer changes how long the session lasts.
   rememberMe: z.boolean().optional(),
 });
 

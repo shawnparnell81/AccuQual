@@ -2,7 +2,6 @@ import type { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { env } from "../../config/env.js";
-import { REMEMBER_ME_TTL_MS } from "../../utils/jwt.js";
 import * as authService from "./auth.service.js";
 import { hashTrustedDeviceToken, listTrustedDevices, revokeAllTrustedDevices, revokeTrustedDevice, TRUSTED_DEVICE_TTL_MS } from "./trustedDevice.service.js";
 
@@ -36,8 +35,8 @@ function sessionCookieOptions() {
   };
 }
 
-/** `remember` (the "Remember me" tick) makes it a persistent cookie; without it the cookie ends when the browser closes. */
-export function setRefreshCookie(res: Response, refreshToken: string, remember = false) {
+/** Persistent until the sign-in's absolute end, so closing the browser does not sign the user out. Max-Age is the time left, not a fresh 12 hours. */
+export function setRefreshCookie(res: Response, refreshToken: string, sessionExpiresAt: Date) {
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
     ...sessionCookieOptions(),
     // SameSite=None (only valid with Secure, which production already sets)
@@ -52,7 +51,7 @@ export function setRefreshCookie(res: Response, refreshToken: string, remember =
     // api.accuqualqms.com. A host-only cookie is stored for the host the
     // browser actually called and is sent back on /api/*. Pinning Domain to
     // the API host would hide it from that call.
-    ...(remember ? { maxAge: REMEMBER_ME_TTL_MS } : {}),
+    maxAge: Math.max(0, sessionExpiresAt.getTime() - Date.now()),
   });
 }
 
@@ -81,8 +80,8 @@ function trustedDeviceCookie(req: Request): string | undefined {
  * auth.service.ts's own internal bookkeeping key for the refresh_tokens
  * table; it has no reason to ever reach the client.
  */
-function withoutRefreshToken<T extends { refreshToken: string; refreshJti?: string; remember?: boolean; trustedDeviceToken?: string }>(result: T) {
-  const { refreshToken: _refreshToken, refreshJti: _refreshJti, remember: _remember, trustedDeviceToken: _trustedDeviceToken, ...rest } = result;
+function withoutRefreshToken<T extends { refreshToken: string; refreshJti?: string; remember?: boolean; trustedDeviceToken?: string; sessionExpiresAt?: Date }>(result: T) {
+  const { refreshToken: _refreshToken, refreshJti: _refreshJti, remember: _remember, trustedDeviceToken: _trustedDeviceToken, sessionExpiresAt: _sessionExpiresAt, ...rest } = result;
   return rest;
 }
 
@@ -91,6 +90,7 @@ type FinishedSession = {
   refreshJti?: string;
   remember?: boolean;
   trustedDeviceToken?: string;
+  sessionExpiresAt: Date;
 };
 
 /** A finished sign-in sets the refresh cookie; a pending second step (or forced enrollment) issues nothing but its short-lived challenge token. */
@@ -100,7 +100,7 @@ function sendSession(res: Response, result: Awaited<ReturnType<typeof authServic
     return;
   }
   const session = result as FinishedSession;
-  setRefreshCookie(res, session.refreshToken, session.remember);
+  setRefreshCookie(res, session.refreshToken, session.sessionExpiresAt);
   if (session.trustedDeviceToken) setTrustedDeviceCookie(res, session.trustedDeviceToken);
   res.json(withoutRefreshToken(session as FinishedSession & Record<string, unknown>));
 }
@@ -119,7 +119,7 @@ export const mfaEnrollStartHandler = asyncHandler(async (req: Request, res: Resp
 
 export const mfaEnrollConfirmHandler = asyncHandler(async (req: Request, res: Response) => {
   const result = await authService.confirmEnrollmentWithToken(req.body.mfaToken, req.body.code, req.body.rememberMe === true, req.body.trustDevice === true, req.get("user-agent"));
-  setRefreshCookie(res, result.refreshToken, result.remember);
+  setRefreshCookie(res, result.refreshToken, result.sessionExpiresAt);
   if (result.trustedDeviceToken) setTrustedDeviceCookie(res, result.trustedDeviceToken);
   res.json(withoutRefreshToken(result));
 });
@@ -170,7 +170,7 @@ export const refreshHandler = asyncHandler(async (req: Request, res: Response) =
   if (!token) throw AppError.unauthorized("Missing refresh token");
 
   const result = await authService.refresh(token);
-  setRefreshCookie(res, result.refreshToken, result.remember);
+  setRefreshCookie(res, result.refreshToken, result.sessionExpiresAt);
   res.json(withoutRefreshToken(result));
 });
 

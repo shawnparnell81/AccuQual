@@ -13,7 +13,7 @@ import { ssoConnections } from "../../drizzle/schema/sso.js";
 import { passwordResetTokens } from "../../drizzle/schema/passwordResetTokens.js";
 import { refreshTokens } from "../../drizzle/schema/refreshTokens.js";
 import { AppError } from "../../utils/appError.js";
-import { signAccessToken, signRefreshToken, verifyRefreshToken, REFRESH_TOKEN_TTL_MS, REMEMBER_ME_TTL_MS } from "../../utils/jwt.js";
+import { signAccessToken, signRefreshToken, verifyRefreshToken, SESSION_MAX_MS } from "../../utils/jwt.js";
 import { issueTrustedDevice, revokeAllTrustedDevices, useTrustedDevice } from "./trustedDevice.service.js";
 
 /**
@@ -63,6 +63,21 @@ async function userWithRole(userId: number) {
  * being replayed after it was already rotated — see refreshTokens.ts's
  * own comment.
  */
+function freshSessionEnd(): Date {
+  return new Date(Date.now() + SESSION_MAX_MS);
+}
+
+/**
+ * The replacement token ends at the same instant as the one it replaces.
+ * A row dated further out than 12 hours (an older remember-me or 7-day
+ * token) is pulled in to 12 hours from now, once, and later refreshes copy
+ * that earlier end.
+ */
+function continuingSessionEnd(stored: Date): Date {
+  const cap = Date.now() + SESSION_MAX_MS;
+  return stored.getTime() > cap ? new Date(cap) : stored;
+}
+
 async function issueTokens(user: {
   id: number;
   roleId: number | null;
@@ -70,7 +85,7 @@ async function issueTokens(user: {
   department: string | null;
   supplierId?: number | null;
   tokenVersion: number;
-}, remember = false) {
+}, sessionExpiresAt: Date) {
   const accessToken = signAccessToken({
     sub: String(user.id),
     roleId: user.roleId,
@@ -80,12 +95,13 @@ async function issueTokens(user: {
     tv: user.tokenVersion,
   });
   const jti = randomUUID();
-  const refreshToken = signRefreshToken({ sub: String(user.id), tokenVersion: user.tokenVersion, jti, ...(remember ? { rm: true } : {}) });
-  await db.insert(refreshTokens).values({ userId: user.id, jti, expiresAt: new Date(Date.now() + (remember ? REMEMBER_ME_TTL_MS : REFRESH_TOKEN_TTL_MS)) });
-  // refreshJti never reaches a response body — auth.controller.ts's
-  // withoutRefreshToken strips it alongside refreshToken itself; it's only
-  // for refresh()'s own internal replacedByJti bookkeeping below.
-  return { accessToken, refreshToken, refreshJti: jti, remember };
+  const refreshToken = signRefreshToken({ sub: String(user.id), tokenVersion: user.tokenVersion, jti }, sessionExpiresAt);
+  await db.insert(refreshTokens).values({ userId: user.id, jti, expiresAt: sessionExpiresAt });
+  // refreshJti and sessionExpiresAt never reach a response body —
+  // auth.controller.ts's withoutRefreshToken strips them alongside
+  // refreshToken itself. refreshJti is only for refresh()'s own internal
+  // replacedByJti bookkeeping below.
+  return { accessToken, refreshToken, refreshJti: jti, sessionExpiresAt };
 }
 
 export async function login(input: { email: string; password: string; rememberMe?: boolean; trustedDeviceToken?: string }) {
@@ -128,27 +144,27 @@ export async function login(input: { email: string; password: string; rememberMe
   const mfa = evaluateMfa(user, roleName, row.company?.mfaPolicy);
   if (user.mfaEnabled) {
     if (await useTrustedDevice(user.id, input.trustedDeviceToken)) {
-      return completeLogin(user, roleName, row.company, null, input.rememberMe === true);
+      return completeLogin(user, roleName, row.company, null);
     }
     return { mfaRequired: true as const, mfaToken: signMfaToken(user.id, "verify", user.tokenVersion) };
   }
   if (mfa.state === "blocked") return { mfaEnrollmentRequired: true as const, mfaToken: signMfaToken(user.id, "enroll", user.tokenVersion) };
   if (mfa.required && !user.mfaRequiredSince) await markMfaRequired(user.id);
 
-  return completeLogin(user, roleName, row.company, mfa.state === "grace" ? mfa.graceEndsAt : null, input.rememberMe === true);
+  return completeLogin(user, roleName, row.company, mfa.state === "grace" ? mfa.graceEndsAt : null);
 }
 
 type LoginUserRow = typeof users.$inferSelect;
 type LoginCompanyRow = typeof company.$inferSelect | null;
 
-/** Stamps the successful sign-in, clears the failed-attempt counters (and an expired lock), and issues the session. */
-async function completeLogin(user: LoginUserRow, roleName: string | null, co: LoginCompanyRow, mfaGraceEndsAt: Date | null = null, remember = false) {
+/** Stamps the successful sign-in, clears the failed-attempt counters (and an expired lock), and issues a session that ends 12 hours from now. */
+async function completeLogin(user: LoginUserRow, roleName: string | null, co: LoginCompanyRow, mfaGraceEndsAt: Date | null = null) {
   // Phase 7 — Supplier Portal health indicators ("last supplier login")
   // read this; best-effort, never blocks a successful login on its own
   // failure.
   await db.update(users).set({ lastLoginAt: new Date(), failedLoginCount: 0, firstFailedLoginAt: null, lockedUntil: null }).where(eq(users.id, user.id)).catch(() => undefined);
 
-  const tokens = await issueTokens({ id: user.id, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion }, remember);
+  const tokens = await issueTokens({ id: user.id, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion }, freshSessionEnd());
   return {
     user: sanitize({ ...user, roleName }),
     company: co ? { id: co.id, name: co.name, branding: co.branding } : null,
@@ -173,7 +189,7 @@ async function loginContext(userId: number) {
 }
 
 /** Second step of a sign-in: the authenticator (or recovery) code. Wrong codes count toward the same lockout as wrong passwords. */
-export async function verifyMfaLogin(mfaToken: string, code: string, rememberMe = false, trustDevice = false, userAgent?: string) {
+export async function verifyMfaLogin(mfaToken: string, code: string, _rememberMe = false, trustDevice = false, userAgent?: string) {
   const userId = await verifyMfaToken(mfaToken, "verify");
   const ctx = await loginContext(userId);
   const kind = await checkSecondFactor(userId, code);
@@ -184,7 +200,7 @@ export async function verifyMfaLogin(mfaToken: string, code: string, rememberMe 
   if (kind === "recovery") {
     await recordAuditTrail(db, { entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_recovery_code_used" }, performedBy: userId }).catch((err) => logger.error("Failed to audit a recovery-code sign-in", { userId, err }));
   }
-  const session = await completeLogin(ctx.user, ctx.roleName, ctx.company, null, rememberMe);
+  const session = await completeLogin(ctx.user, ctx.roleName, ctx.company, null);
   const trustedDeviceToken = trustDevice ? (await issueTrustedDevice(userId, userAgent)).raw : undefined;
   return { ...session, trustedDeviceToken };
 }
@@ -196,7 +212,7 @@ export async function startEnrollmentWithToken(mfaToken: string) {
   return startEnrollment(userId, ctx.user.email);
 }
 
-export async function confirmEnrollmentWithToken(mfaToken: string, code: string, rememberMe = false, trustDevice = false, userAgent?: string) {
+export async function confirmEnrollmentWithToken(mfaToken: string, code: string, _rememberMe = false, trustDevice = false, userAgent?: string) {
   const userId = await verifyMfaToken(mfaToken, "enroll");
   const ctx = await loginContext(userId);
   let recoveryCodes: string[];
@@ -209,7 +225,7 @@ export async function confirmEnrollmentWithToken(mfaToken: string, code: string,
   await recordAuditTrail(db, { entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_enabled" }, performedBy: userId }).catch((err) => logger.error("Failed to audit MFA enrollment", { userId, err }));
 
   const [fresh] = await db.select().from(users).where(eq(users.id, userId));
-  const session = await completeLogin(fresh ?? ctx.user, ctx.roleName, ctx.company, null, rememberMe);
+  const session = await completeLogin(fresh ?? ctx.user, ctx.roleName, ctx.company, null);
   const trustedDeviceToken = trustDevice ? (await issueTrustedDevice(userId, userAgent)).raw : undefined;
   return { ...session, recoveryCodes, trustedDeviceToken };
 }
@@ -281,6 +297,11 @@ export async function refresh(refreshToken: string) {
     throw AppError.unauthorized("Multi-factor authentication setup is required. Please sign in again.");
   }
 
+  // The sign-in ends at the expiresAt stored when it began. Refresh copies
+  // that instant; it does not start a new 12 hours. A token with no jti
+  // (minted before rotation tracking) is capped once at 12 hours from now.
+  let sessionExpiresAt = freshSessionEnd();
+
   // Security-audit finding (medium): reuse detection. `jti` is only absent
   // on a token minted before this feature existed (graceful degrade — an
   // old in-flight session isn't force-logged-out by this deploy). The claim
@@ -295,14 +316,11 @@ export async function refresh(refreshToken: string) {
     if (!tokenRow || tokenRow.revokedAt) {
       throw AppError.unauthorized("Refresh token has been revoked");
     }
-    // Idle timeout: an active browser renews its access token every
-    // JWT_ACCESS_TTL, so a refresh token this old means nobody used the
-    // session for that long. Ends the session; the user signs in again.
-    const idleLimitMs = payload.rm ? REMEMBER_ME_TTL_MS : env.SESSION_IDLE_TIMEOUT_MINUTES * 60_000;
-    if (tokenRow.createdAt && Date.now() - tokenRow.createdAt.getTime() > idleLimitMs) {
+    if (tokenRow.expiresAt.getTime() - Date.now() < 1000) {
       await revokeRefreshTokenRows(full.id);
-      throw AppError.unauthorized("Your session ended after a period of inactivity. Please sign in again.");
+      throw AppError.unauthorized("Your sign-in expired after 12 hours. Please sign in again.");
     }
+    sessionExpiresAt = continuingSessionEnd(tokenRow.expiresAt);
 
     const [claimed] = await db
       .update(refreshTokens)
@@ -323,7 +341,7 @@ export async function refresh(refreshToken: string) {
     }
   }
 
-  const tokens = await issueTokens(full, payload.rm === true);
+  const tokens = await issueTokens(full, sessionExpiresAt);
   if (payload.jti) {
     // Keep the first replacement. A grace-window sibling must not overwrite
     // the chain, or a later replay could no longer tell which token came next.
