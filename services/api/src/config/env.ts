@@ -37,6 +37,15 @@ const envSchema = z.object({
   // Public base URL of this API as the browser sees it — where the identity provider sends users back after SSO sign-in (`<this>/auth/sso/callback`). Defaults to FRONTEND_URL + "/api", which is how the bundled nginx proxies it; set it when the API lives on its own origin (e.g. Render).
   API_PUBLIC_URL: z.string().optional(),
 
+  // In-app Word/Excel editing (docs/onlyoffice.md). All optional: leave them unset and the editor stays off.
+  // ONLYOFFICE_URL is the document server as the browser loads it. ONLYOFFICE_INTERNAL_URL is that same server
+  // as this API reaches it (often http://onlyoffice on the compose network). ONLYOFFICE_API_BASE_URL is this API
+  // as the document server reaches it. The JWT secret must match the document server's JWT_SECRET.
+  ONLYOFFICE_URL: z.string().url().optional().or(z.literal("").transform(() => undefined)),
+  ONLYOFFICE_INTERNAL_URL: z.string().url().optional().or(z.literal("").transform(() => undefined)),
+  ONLYOFFICE_API_BASE_URL: z.string().url().optional().or(z.literal("").transform(() => undefined)),
+  ONLYOFFICE_JWT_SECRET: z.string().min(1).optional().or(z.literal("").transform(() => undefined)),
+
   REDIS_URL: z.string().default("redis://localhost:6379"),
 
   STORAGE_DRIVER: z.enum(["local", "azure"]).default("local"),
