@@ -89,20 +89,13 @@ describe("Inventory Lot/Serial Visibility (real DB + real HTTP path)", () => {
     expect(itemRes.status).toBe(201);
     itemId = itemRes.body.id;
 
-    // Real PO -> send -> receive-with-lot-number, the exact chain a
-    // physical receiving event produces (see erp.service.ts's
-    // createReceivingDocument).
-    const poRes = await request(app)
-      .post("/erp/purchase-orders")
-      .set("Authorization", `Bearer ${purchasingToken}`)
-      .send({ supplierId, lineItems: [{ itemId, quantity: 100, unitCost: 5 }] });
-    expect(poRes.status).toBe(201);
-    poId = poRes.body.id;
-    const sendRes = await request(app).post(`/erp/purchase-orders/${poId}/send`).set("Authorization", `Bearer ${purchasingToken}`);
-    expect(sendRes.status).toBe(200);
-
-    const poDetail = await request(app).get(`/erp/purchase-orders/${poId}`).set("Authorization", `Bearer ${purchasingToken}`);
-    const poLineItemId = poDetail.body.lineItems[0].id;
+    // Purchase-order screens are gone. The row is still what a receiving
+    // document attaches to, so the test writes that row directly and then
+    // uses the receiving endpoint a receiver still has.
+    const [po] = await db.insert(erpPurchaseOrders).values({ supplierId, status: "sent" }).returning();
+    poId = po!.id;
+    const [poLine] = await db.insert(erpPoLineItems).values({ purchaseOrderId: poId, itemId, quantity: 100, unitCost: "5" }).returning();
+    const poLineItemId = poLine!.id;
 
     lotNumber = `LOT-${suffix}`;
     serialNumber = `SN-${suffix}`;

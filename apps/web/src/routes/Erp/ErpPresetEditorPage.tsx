@@ -9,7 +9,7 @@ import { TextField, TextAreaField, SelectField } from "../../components/forms/Fi
 import type { ErpConnectorPreset, ErpFieldMapping, ErpPresetModule, ErpPresetVendor, ErpTransformRule, ErpTriggerRule, ErpValidationRule } from "../../api/types";
 
 const VENDORS: ErpPresetVendor[] = ["sap", "oracle", "netsuite", "epicor", "dynamics", "custom"];
-const MODULES: ErpPresetModule[] = ["inventory", "suppliers", "purchaseOrders", "workOrders", "ncr", "capa", "training", "audits", "documentControl"];
+const MODULES: ErpPresetModule[] = ["inventory", "suppliers", "workOrders", "ncr", "capa", "training", "audits", "documentControl"];
 const TRANSFORM_KINDS = ["none", "dateFormat", "statusMap", "codeMap", "stringCase", "staticValue", "template", "numeric", "boolean"] as const;
 const TRIGGER_KINDS: ErpTriggerRule["on"][] = ["create", "update", "statusChange", "workflowEvent"];
 

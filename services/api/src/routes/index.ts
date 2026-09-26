@@ -45,7 +45,6 @@ import { notificationsRouter } from "../modules/notifications/notification.route
 import { notificationsMeRouter } from "../modules/notifications/notification.me.routes.js";
 import { inventoryRouter } from "../modules/inventory/inventory.routes.js";
 import { erpRouter } from "../modules/erp/erp.routes.js";
-import { erpRequisitionsRouter } from "../modules/erp/erpRequisitions.routes.js";
 import { erpPresetsRouter } from "../modules/erp/erpPresets.routes.js";
 import { erpSyncErrorsRouter } from "../modules/erp/erpSyncErrors.routes.js";
 import { companyRouter } from "../modules/company/company.routes.js";
@@ -125,11 +124,6 @@ apiRouter.use("/nav", navRouter);
 apiRouter.use("/calendar", calendarRouter);
 apiRouter.use("/workers", workerRouter);
 apiRouter.use("/inventory", inventoryRouter);
-// Registered before /erp: a more specific prefix match must come first so
-// /erp/requisitions/* is handled by its own router (a different department
-// gate — see erpRequisitions.routes.ts's own comment) instead of falling
-// into erpRouter's blanket "erp" gate.
-apiRouter.use("/erp/requisitions", erpRequisitionsRouter);
 // Same precedent as above — /erp/presets/* and /erp/active-preset/* use
 // their own admin-only gate (see erpPresets.routes.ts's own comment), not
 // erpRouter's requireDepartmentAccess("erp").

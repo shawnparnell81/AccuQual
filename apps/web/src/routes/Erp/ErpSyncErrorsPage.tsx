@@ -10,7 +10,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { ErpErrorType, ErpSyncError, ErpSyncErrorsListResult } from "../../api/types";
 
 const ERROR_TYPES: ErpErrorType[] = ["mappingError", "validationError", "transformError", "triggerError", "erpApiError", "unexpectedError"];
-const MODULES = ["inventory", "suppliers", "purchaseOrders", "workOrders", "ncr", "capa", "training", "audits", "documentControl"];
+const MODULES = ["inventory", "suppliers", "workOrders", "ncr", "capa", "training", "audits", "documentControl"];
 const PAGE_SIZE = 25;
 
 function useErpSyncErrors(filters: { module: string; errorType: string; resolved: string; offset: number }) {

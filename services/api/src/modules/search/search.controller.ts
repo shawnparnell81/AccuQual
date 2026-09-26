@@ -2,7 +2,6 @@ import type { Request, Response } from "express";
 import { and, eq, sql, ilike, type SQLWrapper } from "drizzle-orm";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
-import { erpPurchaseOrders } from "../../drizzle/schema/erp.js";
 import { workOrders } from "../../drizzle/schema/workOrders.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
@@ -74,16 +73,6 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
   if (digits && await canRead(db, user, "capa")) {
     const rows = await db.select().from(capa).where(and(eq(capa.siteId, req.siteId ?? -1), idPrefix(capa.id, digits))).limit(RESULTS_PER_TYPE);
     for (const r of rows) results.push({ type: "CAPA", id: r.id, label: `CAPA #${r.id}${r.ncrId ? ` (NCR #${r.ncrId})` : ""}`, path: `/capa/${r.id}` });
-  }
-
-  if (digits && await canRead(db, user, "erp")) {
-    const rows = await db
-      .select({ id: erpPurchaseOrders.id, status: erpPurchaseOrders.status, supplierName: suppliers.name })
-      .from(erpPurchaseOrders)
-      .leftJoin(suppliers, eq(erpPurchaseOrders.supplierId, suppliers.id))
-      .where(and(idPrefix(erpPurchaseOrders.id, digits)))
-      .limit(RESULTS_PER_TYPE);
-    for (const r of rows) results.push({ type: "PO", id: r.id, label: `PO #${r.id}${r.supplierName ? ` — ${r.supplierName}` : ""} (${r.status})`, path: `/erp/${r.id}` });
   }
 
   if (digits && await canRead(db, user, "work_orders")) {

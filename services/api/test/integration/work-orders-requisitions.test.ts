@@ -16,7 +16,6 @@ import { users } from "../../src/drizzle/schema/users.js";
 import { suppliers } from "../../src/drizzle/schema/supplier.js";
 import { inventoryItems, inventoryMovements, inventoryStock } from "../../src/drizzle/schema/inventory.js";
 import { workOrders } from "../../src/drizzle/schema/workOrders.js";
-import { erpPurchaseOrders, erpPoLineItems, erpPurchaseRequisitions } from "../../src/drizzle/schema/erp.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
@@ -29,8 +28,6 @@ let companyId: number;
 let supplierId: number;
 let itemId: number;
 let workOrderId: number;
-let requisitionId: number;
-let purchaseOrderId: number | undefined;
 const userIds: number[] = [];
 
 let productionUserId: number;
@@ -152,34 +149,8 @@ describe("Work Orders + Purchase Requisitions (real DB + real HTTP path)", () =>
     expect(res.status).toBe(400);
   });
 
-  it("engineering (no matrix entry for erp at all) can still create its own purchase requisition — a broader gate than 'erp'", async () => {
-    const res = await request(app).post("/erp/requisitions").set("Authorization", `Bearer ${engineeringToken}`).send({ itemId, quantity: 25 });
-    expect(res.status).toBe(201);
-    expect(res.body.status).toBe("draft");
-    expect(res.body.supplierId).toBe(supplierId); // defaulted from the item's defaultSupplierId
-    requisitionId = res.body.id;
-  });
-
-  it("engineering can submit its own draft requisition", async () => {
-    const res = await request(app).post(`/erp/requisitions/${requisitionId}/submit`).set("Authorization", `Bearer ${engineeringToken}`);
-    expect(res.status).toBe(200);
-    expect(res.body.status).toBe("pending_approval");
-  });
-
-  it("engineering cannot approve — purchasing-only", async () => {
-    const res = await request(app).post(`/erp/requisitions/${requisitionId}/approve`).set("Authorization", `Bearer ${engineeringToken}`);
-    expect(res.status).toBe(403);
-  });
-
-  it("purchasing can approve, then convert it to a real Purchase Order", async () => {
-    const approve = await request(app).post(`/erp/requisitions/${requisitionId}/approve`).set("Authorization", `Bearer ${purchasingToken}`);
-    expect(approve.status).toBe(200);
-    expect(approve.body.status).toBe("approved");
-
-    const convert = await request(app).post(`/erp/requisitions/${requisitionId}/convert-to-po`).set("Authorization", `Bearer ${purchasingToken}`);
-    expect(convert.status).toBe(200);
-    expect(convert.body.requisition.status).toBe("converted_to_po");
-    expect(convert.body.purchaseOrder.supplierId).toBe(supplierId);
-    purchaseOrderId = convert.body.purchaseOrder.id;
+  it("purchase orders and requisitions are no longer available", async () => {
+    expect((await request(app).get("/erp/purchase-orders").set("Authorization", `Bearer ${purchasingToken}`)).status).toBe(404);
+    expect((await request(app).post("/erp/requisitions").set("Authorization", `Bearer ${engineeringToken}`).send({ itemId, quantity: 25 })).status).toBe(404);
   });
 });

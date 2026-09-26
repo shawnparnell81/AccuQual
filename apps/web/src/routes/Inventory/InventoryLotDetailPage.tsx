@@ -102,9 +102,7 @@ export function InventoryLotDetailPage() {
             <Field
               label="PO #"
               value={
-                <Link to={`/erp/${purchaseOrder.id}`} className="text-primary hover:underline">
-                  PO #{purchaseOrder.id}
-                </Link>
+                PO #{purchaseOrder.id}
               }
             />
             <Field label="PO Status" value={<StatusBadge value={purchaseOrder.status} />} />

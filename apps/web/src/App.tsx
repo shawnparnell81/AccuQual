@@ -70,9 +70,6 @@ import { InventoryAlertsPage } from "./routes/Inventory/InventoryAlertsPage";
 import { InventoryLotsPage } from "./routes/Inventory/InventoryLotsPage";
 import { InventoryLotDetailPage } from "./routes/Inventory/InventoryLotDetailPage";
 import { LotLabelPrint } from "./routes/Inventory/LotLabelPrint";
-import { ErpPurchaseOrdersPage } from "./routes/Erp/ErpPurchaseOrdersPage";
-import { ErpNewPurchaseOrderPage } from "./routes/Erp/ErpNewPurchaseOrderPage";
-import { ErpPurchaseOrderDetailPage } from "./routes/Erp/ErpPurchaseOrderDetailPage";
 import { RmaListPage } from "./routes/Rma/RmaListPage";
 import { RmaDetailPage } from "./routes/Rma/RmaDetailPage";
 import { WarrantyClaimsList } from "./routes/Warranty/WarrantyClaimsList";
@@ -83,8 +80,6 @@ import { CrarDetailPage } from "./routes/Crar/CrarDetailPage";
 import { RmaActivityLogPage } from "./routes/RmaActivityLog/RmaActivityLogPage";
 import { RmaLogListPage } from "./routes/RmaLog/RmaLogListPage";
 import { RmaLogDetailPage } from "./routes/RmaLog/RmaLogDetailPage";
-import { ErpRequisitionsPage } from "./routes/Erp/ErpRequisitionsPage";
-import { ErpRequisitionDetailPage } from "./routes/Erp/ErpRequisitionDetailPage";
 import { ErpPresetsListPage } from "./routes/Erp/ErpPresetsListPage";
 import { ErpSyncErrorsPage } from "./routes/Erp/ErpSyncErrorsPage";
 import { ErpPresetEditorPage } from "./routes/Erp/ErpPresetEditorPage";
@@ -208,14 +203,14 @@ export function App() {
           <Route path="/inventory/lots/:id" element={<InventoryLotDetailPage />} />
           <Route path="/inventory/lots/:id/label" element={<LotLabelPrint />} />
           <Route path="/inventory/:id" element={<InventoryDetailPage />} />
-          <Route path="/erp" element={<ErpPurchaseOrdersPage />} />
-          <Route path="/erp/new" element={<ErpNewPurchaseOrderPage />} />
-          <Route path="/erp/requisitions" element={<ErpRequisitionsPage />} />
-          <Route path="/erp/requisitions/:id" element={<ErpRequisitionDetailPage />} />
+          <Route path="/erp" element={<Navigate to="/" replace />} />
+          <Route path="/erp/new" element={<Navigate to="/" replace />} />
+          <Route path="/erp/requisitions" element={<Navigate to="/" replace />} />
+          <Route path="/erp/requisitions/:id" element={<Navigate to="/" replace />} />
           <Route path="/erp/presets" element={<ErpPresetsListPage />} />
           <Route path="/erp/presets/:id" element={<ErpPresetEditorPage />} />
           <Route path="/erp/errors" element={<ErpSyncErrorsPage />} />
-          <Route path="/erp/:id" element={<ErpPurchaseOrderDetailPage />} />
+          <Route path="/erp/:id" element={<Navigate to="/" replace />} />
           <Route path="/rma" element={<RmaListPage />} />
           <Route path="/rma/:id" element={<RmaDetailPage />} />
           <Route path="/warranty" element={<WarrantyClaimsList />} />

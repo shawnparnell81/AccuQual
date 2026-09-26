@@ -36,7 +36,10 @@ const REUSED_MODULE_DOCUMENTS: QmsDocumentEntry[] = [
   { title: "Engineering Change Order", department: "Engineering", route: "/change", isGeneric: false },
 ];
 
+const HIDDEN_FORM_DEPARTMENTS = new Set(["Purchasing", "Sales and Marketing", "Customer Service"]);
+const HIDDEN_FORM_TYPES = new Set(["po_quality_requirements", "customer_satisfaction_record", "product_traceability_record"]);
+
 export const ALL_QMS_DOCUMENTS: QmsDocumentEntry[] = [
-  ...QMS_FORM_DEFINITIONS.map((def) => ({ title: def.title, department: def.folderPath[0], route: `/qms-forms/${def.formType}`, isGeneric: true })),
+  ...QMS_FORM_DEFINITIONS.filter((def) => !HIDDEN_FORM_DEPARTMENTS.has(def.folderPath[0]) && !HIDDEN_FORM_TYPES.has(def.formType)).map((def) => ({ title: def.title, department: def.folderPath[0], route: `/qms-forms/${def.formType}`, isGeneric: true })),
   ...REUSED_MODULE_DOCUMENTS,
 ];

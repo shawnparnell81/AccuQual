@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { exportFormPdf } from "../../api/formHooks";
-import type { Ncr, Capa, Rma, WorkOrder, ErpPurchaseRequisition } from "../../api/types";
+import type { Ncr, Capa, Rma, WorkOrder } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextAreaField } from "../../components/forms/Field";
 import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowAction";
@@ -32,8 +32,6 @@ const ncrHooks = createResourceHooks<Ncr>("ncr");
 const capaHooks = createResourceHooks<Capa>("capa");
 const rmaHooks = createResourceHooks<Rma>("rma");
 const workOrderHooks = createResourceHooks<WorkOrder>("work-orders");
-const requisitionHooks = createResourceHooks<ErpPurchaseRequisition>("erp/requisitions");
-
 interface EightDReport {
   id: number;
   ncrId: number | null;
@@ -346,14 +344,12 @@ function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTi
   const { data: eightDs = [] } = eightDHooks.useList();
   const { data: rmas = [] } = rmaHooks.useList();
   const { data: workOrders = [] } = workOrderHooks.useList();
-  const { data: requisitions = [] } = requisitionHooks.useList();
   const [attachId, setAttachId] = useState("");
 
   const linkedCapas = capas.filter((c) => c.ncrId === ncrId);
   const linkedEightDs = eightDs.filter((r) => r.ncrId === ncrId);
   const linkedRmas = rmas.filter((r) => r.linkedNcrId === ncrId);
   const linkedWorkOrders = workOrders.filter((w) => w.linkedNcrId === ncrId);
-  const linkedRequisitions = requisitions.filter((r) => r.linkedNcrId === ncrId);
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
@@ -440,14 +436,6 @@ function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTi
             <button onClick={() => navigate(`/work-orders/${w.id}`)} className="flex w-full items-center justify-between text-left hover:text-primary">
               <span>Work Order #{w.id}</span>
               <StatusBadge value={w.status} />
-            </button>
-          </li>
-        ))}
-        {linkedRequisitions.map((r) => (
-          <li key={`pr-${r.id}`} className="pb-1">
-            <button onClick={() => navigate(`/erp/requisitions/${r.id}`)} className="flex w-full items-center justify-between text-left hover:text-primary">
-              <span>Requisition #{r.id}</span>
-              <StatusBadge value={r.status} />
             </button>
           </li>
         ))}
