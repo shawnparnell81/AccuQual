@@ -4,7 +4,7 @@ import { discrepancyInvestigations, type DiscrepancyInvestigation } from "../../
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
-import { assertCompanyUser } from "../../utils/assertTenantUser.js";
+import { assertCompanyUser } from "../../utils/assertCompanyUser.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { syncDiRecordToForm } from "./quality.formSync.js";

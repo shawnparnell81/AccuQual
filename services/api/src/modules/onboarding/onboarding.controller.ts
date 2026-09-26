@@ -6,7 +6,7 @@ import { AppError } from "../../utils/appError.js";
 
 const VALID_STATUSES = ["not_started", "in_progress", "completed"];
 
-/** GET /onboarding/progress — this user's own checklist state across every module they've touched so far. Not crudFactory-based: rows are keyed by (tenantId, userId, moduleKey), not a single numeric id. */
+/** GET /onboarding/progress — this user's own checklist state across every module they've touched so far. Not crudFactory-based: rows are keyed by (userId, moduleKey), not a single numeric id. */
 export const listOnboardingProgressHandler = asyncHandler(async (req: Request, res: Response) => {
   const rows = await req.db!.select().from(onboardingProgress).where(and(eq(onboardingProgress.userId, req.user!.id)));
   res.json(rows);

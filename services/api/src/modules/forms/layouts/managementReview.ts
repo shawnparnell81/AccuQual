@@ -10,8 +10,8 @@ import type { FormLayout } from "./types.js";
  * not a bug — documented here explicitly rather than left implicit.
  * TODO (future versioning, not planned/implemented): if a real dated
  * history of past reviews is ever wanted, this form_data row would need
- * to become one row per review date instead of one shared row per tenant
- * (form_data is keyed by (tenantId, formType, entityId) — see forms.ts's
+ * to become one row per review date instead of one shared row per company
+ * (form_data is keyed by (formType, entityId) — see forms.ts's
  * schema comment — so a real per-review entityId is the natural seam).
  */
 export const managementReviewLayout: FormLayout = {

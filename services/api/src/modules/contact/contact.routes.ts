@@ -8,7 +8,7 @@ import { logger } from "../../utils/logger.js";
 import { sendEmail } from "../notifications/notification.service.js";
 
 /**
- * Public "contact us" form on the marketing page. No session and no tenant: it only turns a
+ * Public "contact us" form on the marketing page. No session and no company: it only turns a
  * visitor's message into one email to the sales inbox. A hidden `website` field catches bots
  * (real visitors never see or fill it) and a tight per-address limit keeps the endpoint from
  * being used to spam the inbox.

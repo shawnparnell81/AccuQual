@@ -65,8 +65,8 @@ export async function recordAuditTrail(db: Db, input: RecordAuditTrailInput): Pr
  * back whenever the response is an error — reusing req.db here would insert
  * the failure record into the very transaction that's about to be discarded,
  * silently losing it. This opens a short-lived, independent connection off
- * the shared pool instead, sets the same `app.current_tenant_id` RLS setting
- * withDb would have set, and commits on its own — so the record
+ * the shared pool instead, switches to the same restricted role
+ * withDb uses, and commits on its own — so the record
  * survives regardless of what happens to the request's own transaction.
  * Never throws, same as recordAuditTrail().
  */
@@ -79,11 +79,10 @@ export async function recordAuditTrailStandalone(pool: Pool, input: RecordAuditT
 
   try {
     await client.query("BEGIN");
-    // Same role switch withDb uses (see tenantScope.ts) — a failed-
+    // Same role switch withDb uses (see requestDb.ts) — a failed-
     // transition audit entry should be subject to the same real RLS layer
-    // as every other tenant-scoped write, not a superuser/owner exception.
+    // as every other write, not a superuser/owner exception.
     await client.query("SET LOCAL ROLE accuqual_app");
-    await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [String()]);
     const db = drizzle(client, { schema });
     await db.insert(auditTrail).values({
       entityType: input.entityType,
@@ -158,7 +157,7 @@ const ENTITY_TABLE: Record<string, string> = {
   Crar: "crar",
   Customer: "customers",
   User: "users",
-  Company: "tenants",
+  Company: "company",
   FeasibilityReview: "feasibility_reviews",
   QmsForm: "qms_forms",
   ScarForm: "scar_forms",

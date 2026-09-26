@@ -1,8 +1,8 @@
 // Phase 1 task 2: remove the leftover manual/exploratory test SKUs found in
-// the real demo tenant's Inventory list (TEST-CHANGED-COUNT, REORDER-TEST,
+// the real demo company's Inventory list (TEST-CHANGED-COUNT, REORDER-TEST,
 // FALLBACK-TEST, PERF-TEST — id 6/7/8/9). Unlike the 26 automated-test
-// tenants (scripts/cleanup-test-tenants.ts), these live inside the ONE real
-// tenant this app keeps, and two of them are referenced by otherwise-normal-
+// companies (scripts/cleanup-test-companies.ts), these live inside the ONE real
+// company this app keeps, and two of them are referenced by otherwise-normal-
 // looking demo records: PO #1 ("Q3 restock", status "received") has its one
 // line item pointing at PERF-TEST, and Work Order #53 (cancelled) points at
 // REORDER-TEST. Deleting those two items would cascade into deleting that
@@ -12,7 +12,7 @@
 //     order/work-order references (checked directly, not assumed) — deleted
 //     outright, along with their few inventory_alerts/reorder_requests rows.
 //   - REORDER-TEST (id 7) and PERF-TEST (id 9) are RENAMED to realistic
-//     hardware SKUs instead, matching this tenant's existing naming
+//     hardware SKUs instead, matching this company's existing naming
 //     convention (NUT-M8, WASHER-M8, BOLT-M8-20) — the PO and work order
 //     that reference them stay completely intact.
 import { pool } from "../src/db/index.js";

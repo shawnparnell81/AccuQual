@@ -52,7 +52,7 @@ export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAda
     "/:id/current",
     view,
     asyncHandler(async (req: Request, res: Response) => {
-      res.json(await engine.getCurrent(dbOf(req), adapter, 1));
+      res.json(await engine.getCurrent(dbOf(req), adapter, idParam(req)));
     }),
   );
 
@@ -158,8 +158,8 @@ export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAda
 }
 
 /**
- * Router for a tenant-singleton controlled document (Management Review, Context of the Organization). There is one
- * record per tenant, always id 1 — the same singleton the forms engine has always used for it — so `POST /` simply
+ * Router for a company-singleton controlled document (Management Review, Context of the Organization). There is one
+ * record per company, always id 1 — the same singleton the forms engine has always used for it — so `POST /` simply
  * makes sure it exists and returns its current state.
  */
 function createDocumentRouter(adapter: SubjectAdapter, permission: PermissionSubject): Router {

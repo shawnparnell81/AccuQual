@@ -30,7 +30,7 @@ export interface SupplierPerformance {
 }
 
 /**
- * Every number here comes from real rows this tenant already has —
+ * Every number here comes from real rows this company already has —
  * inventory_items.default_supplier_id, inventory_movements (receive),
  * inventory_reorder_requests, inventory_alerts. No ERP, no Work Order
  * module, nothing external. Fetch-and-aggregate in JS, same convention as

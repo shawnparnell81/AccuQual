@@ -38,7 +38,7 @@ COPY workers/workflow-worker ./workers/workflow-worker
 # registers action handlers spanning nearly every module (create_ncr,
 # escalate_capa, notify_department, send_email, ai_suggestion, ...), so it
 # transitively imports far more of services/api than just modules/workflow
-# (lib/tenantScope.ts, middleware/departmentAccess.ts, modules/notifications,
+# (lib/requestDb.ts, middleware/departmentAccess.ts, modules/notifications,
 # modules/audit-trail, modules/ai, ...). A narrower whitelist here silently
 # broke this exact build the first time a new import was added to that file
 # (see git history) with zero warning from CI, since CI's own "Build Workers"

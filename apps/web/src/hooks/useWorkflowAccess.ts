@@ -26,8 +26,8 @@ export function useWorkflowAccessLevel(navKey: string): AccessLevel {
   const { effective, isLoading } = useEffectivePermissions();
   if (UNGATED_MODULES.has(navKey)) return "edit";
 
-  const isBypass = user?.roleName === "admin" || user?.roleName === "platform_admin";
-  // admin/platform_admin bypass the matrix entirely, same as
+  const isBypass = user?.roleName === "admin";
+  // admin bypass the matrix entirely, same as
   // requireDepartmentAccess — checked BEFORE the "no nav leaf" fallback
   // below, since a real permission key can exist (and be used for a live
   // check, e.g. rma_log_status/rma_log_linkage/crar_workflow) without ever

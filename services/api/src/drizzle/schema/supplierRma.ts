@@ -45,7 +45,7 @@ export const supplierRmaRequests = pgTable("supplier_rma_requests", {
 /**
  * A dedicated, Quality/Customer-Service-facing feed of the supplier-RMA
  * pipeline's own lifecycle events — deliberately separate from the
- * general-purpose, tenant-wide `audit_trail` table (which already logs
+ * general-purpose, company-wide `audit_trail` table (which already logs
  * every create/update on every entity type, but isn't a business-readable
  * "here's every RMA request and what happened to it" report on its own).
  * One row per real event: request submitted, RMA auto-created + numbered,

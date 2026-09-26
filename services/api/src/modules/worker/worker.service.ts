@@ -62,7 +62,7 @@ function toView(row: {
   };
 }
 
-/** The roster: every internal user of this tenant, with their profile fields left-joined in (a user who has never been given a profile still appears, with employmentStatus defaulting to "active"). */
+/** The roster: every internal user of this company, with their profile fields left-joined in (a user who has never been given a profile still appears, with employmentStatus defaulting to "active"). */
 export async function listWorkers(db: Db): Promise<WorkerProfileView[]> {
   const rows = await db
     .select({
@@ -129,8 +129,8 @@ export async function profileRowExists(db: Db, userId: number): Promise<boolean>
 }
 
 export async function getWorkerActivity(db: Db, userId: number): Promise<CalendarItem[]> {
-  // Confirm the target user is a real, internal member of this tenant before aggregating — the same isolation check
-  // getWorkerProfile does, so a permission-holding caller still can't probe another tenant's (or an external) user id.
+  // Confirm the target user is a real, internal member of this company before aggregating — the same isolation check
+  // getWorkerProfile does, so a permission-holding caller still can't probe another company's (or an external) user id.
   await getWorkerProfile(db, userId);
   return getItemsForUser(db, userId);
 }

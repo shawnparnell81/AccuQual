@@ -36,7 +36,7 @@ async function checkDatabase(): Promise<HealthCheck> {
   }
 }
 
-/** Mode mirrors tenant.controller.ts's getAiConfigHandler keyStatus logic exactly — "live" here is that function's "ready". */
+/** Mode mirrors company.controller.ts's getAiConfigHandler keyStatus logic exactly — "live" here is that function's "ready". */
 async function checkAi(db: Db): Promise<HealthCheck> {
   const [co] = await db.select({ aiConfig: company.aiConfig }).from(company);
   const mode: "live" | "stub" = co?.aiConfig?.apiKeyEncrypted || env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY ? "live" : "stub";

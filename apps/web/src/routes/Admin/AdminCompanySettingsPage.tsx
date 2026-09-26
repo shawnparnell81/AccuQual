@@ -6,27 +6,27 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { TextField, SelectField } from "../../components/forms/Field";
-import type { TenantProfile } from "../../api/types";
+import type { CompanyProfile } from "../../api/types";
 
-function useTenantProfile() {
-  return useQuery<TenantProfile>({ queryKey: ["tenant/profile"], queryFn: async () => (await apiClient.get("/company/profile")).data });
+function useCompanyProfile() {
+  return useQuery<CompanyProfile>({ queryKey: ["company/profile"], queryFn: async () => (await apiClient.get("/company/profile")).data });
 }
 
 /**
- * Phase 10 — a real, editable "Tenant Settings" (name/logo/timezone/contact
- * info), genuinely new: before this, Settings' own "Tenant Settings" tab was
+ * Phase 10 — a real, editable "Company Settings" (name/logo/timezone/contact
+ * info), genuinely new: before this, Settings' own "Company Settings" tab was
  * read-only and pointed admins at Platform Administration for edits, but
- * that page has no branding/name editor at all (it's cross-tenant
+ * that page has no branding/name editor at all (it's cross-company
  * provisioning only) — a real dead end this fixes. `name` and `logoUrl`
- * reuse the existing tenants.name column / branding.logoUrl field (not a
- * duplicate store) via the new GET/PATCH /tenant/profile endpoint; the full
- * color palette still lives at Tenant Branding, linked below rather than
+ * reuse the existing company.name column / branding.logoUrl field (not a
+ * duplicate store) via the new GET/PATCH /company/profile endpoint; the full
+ * color palette still lives at Company Branding, linked below rather than
  * duplicated here.
  */
-export function AdminTenantSettingsPage() {
+export function AdminCompanySettingsPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
-  const { data: profile, isLoading } = useTenantProfile();
+  const { data: profile, isLoading } = useCompanyProfile();
   const [name, setName] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [timezone, setTimezone] = useState("");
@@ -45,11 +45,11 @@ export function AdminTenantSettingsPage() {
     }
   }, [profile]);
 
-  const { data: security } = useQuery<{ mfaPolicy: "optional" | "admins" | "all" }>({ queryKey: ["tenant/security"], queryFn: async () => (await apiClient.get("/company/security")).data });
+  const { data: security } = useQuery<{ mfaPolicy: "optional" | "admins" | "all" }>({ queryKey: ["company/security"], queryFn: async () => (await apiClient.get("/company/security")).data });
   const saveSecurity = useMutation({
     mutationFn: async (mfaPolicy: string) => (await apiClient.patch("/company/security", { mfaPolicy })).data,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tenant/security"] });
+      queryClient.invalidateQueries({ queryKey: ["company/security"] });
       toast.success("Sign-in security policy saved.");
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save the policy.")),
@@ -58,17 +58,17 @@ export function AdminTenantSettingsPage() {
   const save = useMutation({
     mutationFn: async () => (await apiClient.patch("/company/profile", { name, logoUrl, timezone, contactName, contactEmail, contactPhone })).data,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tenant/profile"] });
-      toast.success("Tenant settings saved.");
+      queryClient.invalidateQueries({ queryKey: ["company/profile"] });
+      toast.success("Company settings saved.");
     },
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save tenant settings.")),
+    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save company settings.")),
   });
 
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold">Tenant Settings</h1>
-        {profile && <p className="text-sm text-muted-foreground">Tenant code: {profile.code}</p>}
+        <h1 className="text-2xl font-semibold">Company Settings</h1>
+        {profile && <p className="text-sm text-muted-foreground">Company code: {profile.code}</p>}
       </div>
 
       {isLoading ? (
@@ -92,13 +92,13 @@ export function AdminTenantSettingsPage() {
             </div>
             <p className="text-xs text-muted-foreground">
               Full color palette and PDF header/footer branding are configured on the{" "}
-              <Link to="/admin/tenant-branding" className="text-primary hover:underline">
-                Tenant Branding
+              <Link to="/admin/company-branding" className="text-primary hover:underline">
+                Company Branding
               </Link>{" "}
               page.
             </p>
             <button type="submit" disabled={save.isPending} className="w-fit rounded-md bg-button px-4 py-2 text-sm font-medium text-button-foreground disabled:opacity-60">
-              {save.isPending ? "Saving…" : "Save Tenant Settings"}
+              {save.isPending ? "Saving…" : "Save Company Settings"}
             </button>
           </form>
 
@@ -110,7 +110,7 @@ export function AdminTenantSettingsPage() {
               <option value="all">Everyone in this organization</option>
             </SelectField>
             <p className="text-xs text-muted-foreground">
-              People newly covered have 7 days to set it up before they're asked at sign-in. Platform administrators always need it. An admin can reset a user's two-step sign-in from Users &amp; Roles if they lose their phone.
+              People newly covered have 7 days to set it up before they're asked at sign-in. An admin can reset a user's two-step sign-in from Users &amp; Roles if they lose their phone.
             </p>
           </div>
         </AdminOnlyGuard>

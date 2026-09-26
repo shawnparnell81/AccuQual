@@ -1,6 +1,6 @@
 # AccuQual
 
-A multi-tenant Quality Management System: quality modules structured
+A Quality Management System for one company: quality modules structured
 around ISO 9001 / IATF 16949 practices (AccuQual itself is **not**
 certified, registered or endorsed by ISO, IATF, or any other standards
 body). TypeScript monorepo, 108 tables across 65 migrations, 43
@@ -9,7 +9,7 @@ nav-registered modules across 7 departments.
 ## Stack
 
 - **Backend** (`services/api`): Node.js, Express, Drizzle ORM, PostgreSQL
-  with Row-Level Security (hosted on **Supabase**, including in local
+  (hosted on **Supabase**, including in local
   dev — see below), Zod, JWT, Winston, Redis Streams, pdf-lib.
 - **Frontend** (`apps/web`): React, Vite, TailwindCSS, React Query,
   Zustand, React Router, Axios, Recharts, PDF.js, react-rnd.
@@ -37,19 +37,17 @@ docker compose up -d          # postgres, redis, api, web, and all 3 workers
   run from inside `services/api` reads a *different* `.env` pointing at
   a local Postgres, with no warning if you get it backwards.
 
-Seeded accounts (`services/api/src/db/seed.ts` — **change these before
+Seeded account (`services/api/src/db/seed.ts` — **change this before
 any real use**):
-- Platform admin: `platform-admin@accuqual.local` / `ChangeMe123!` —
-  manages tenants, has no `tenantId` of its own.
-- Demo tenant (code `demo`) admin: `admin@accuqual.local` /
-  `ChangeMe123!`.
+- Demo company admin: `admin@accuqual.local` / `ChangeMe123!`.
 - `npm run db:seed-demo-story --workspace services/api` — a coherent
   demo dataset (a supplier defect walked from receiving through a
-  computed risk score) for the demo tenant. `db:reset-demo-story`
-  removes only those rows.
+  computed risk score). `db:reset-demo-story` removes only those rows.
 
-New users self-register with `POST /auth/register` + a `tenantCode`.
-Tenants themselves are provisioned by a platform admin at `/platform`.
+This installation belongs to exactly one company. A real installation
+creates its company and first administrator with
+`npm run db:create-company --workspace services/api -- --name "Company" --email admin@company.com`.
+There is no self-registration: the administrator creates every other user.
 
 ## What's here
 
@@ -66,32 +64,31 @@ history below), the modules themselves are the source of truth:
 - **Which modules use the generic Workflow Engine vs. their own
   hand-coded state machine**: `accuqual-workflow-architecture.md`.
 
-## Multi-tenancy — how isolation actually works
+## One company — how data access works
 
-Two independent, deliberately redundant layers:
+The application serves a single company; there is no per-company
+scoping anywhere. The company itself is one row in the `company` table,
+which also holds the company-wide settings (branding, AI, plants and
+module rules).
 
-1. **Application-level (primary, always active):** every tenant-owned
-   table carries a `tenantId`. `src/lib/tenantScope.ts`'s `withTenantDb`
-   middleware resolves `tenantId` from the JWT and opens **one Postgres
-   transaction per request**, running `SET LOCAL app.current_tenant_id`
-   on it. Every module's controller/service also explicitly filters by
-   `req.tenantId` — this is what actually gates every read/write,
-   independent of RLS.
-2. **Database-level (defense in depth):**
-   `src/drizzle/post-migrate/rls-policies.sql` enables Row-Level Security
-   and a `tenant_isolation` policy on every tenant-owned table (a new
-   table's name is added to that file's `tenant_tables` array when it's
-   created — see `docs/development/adding-a-module.md`).
+Requests run in **one Postgres transaction each**
+(`src/lib/requestDb.ts`'s `withDb`), which switches into a restricted
+database role, `accuqual_app`. That role can read and write ordinary
+tables but is limited on the audit tables
+(`src/drizzle/post-migrate/audit-triggers.sql`): it can only append to
+`audit_trail` and can only read `audit_row_changes`, so a bug in
+application code cannot rewrite history. Every table also has
+row-level security switched on with one policy for that role
+(`src/drizzle/post-migrate/rls-policies.sql`), which keeps Supabase's
+public roles out.
 
 Deliberate exceptions to the per-request `req.db` convention (see
-`grep -rn "db/index.js" services/api/src/modules`): `modules/auth` and
-`modules/platform` (no tenant resolved yet, or inherently cross-tenant),
-`modules/roles` (platform-wide constants), monitoring's liveness pings
-(no tenant-scoped query exists to bypass), the reporting scheduler (an
-in-process poller with no HTTP request to scope from — every query inside
-it is still filtered by the row's own `tenantId`), and controllers that
-call `recordAuditTrailStandalone` to log an entry that must survive even
-if the request's own transaction rolls back.
+`grep -rn "db/index.js" services/api/src/modules`): `modules/auth`
+(no signed-in user yet), `modules/roles` (constants), monitoring's
+liveness pings, the reporting scheduler (an in-process poller with no
+HTTP request), and controllers that call `recordAuditTrailStandalone` to
+log an entry that must survive even if the request's own transaction
+rolls back.
 
 ## Known limits (told to every testing round — keep this list honest)
 
@@ -103,7 +100,6 @@ if the request's own transaction rolls back.
   identity provider.
 - "Similar past NCRs" needs an embeddings key that isn't configured.
 - Worker Runtime (a shop-floor worker module) is designed but not built.
-- Self-service sign-up is blocked on an undecided billing-tier design.
 
 ## Where to look next
 
@@ -126,9 +122,9 @@ if the request's own transaction rolls back.
 ## Earlier build history
 
 The detailed pass-by-pass build log that used to live in this file (the
-original single-tenant build, the multi-tenant conversion, the two QMS
+original build, an earlier version, the two QMS
 form-library passes, and the RLS/CSRF/refresh-token gaps identified back
-then) has been superseded by everything built since — RLS is enforced,
+then) has been superseded by everything built since — the database role switch is enforced,
 CSRF is fixed (PR #78), refresh tokens rotate with reuse detection, and
 dozens of modules were added. That history is preserved in git log rather
 than repeated here; `git log --oneline` and each PR's description are the

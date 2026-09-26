@@ -13,7 +13,7 @@ import { generateDeviceKey, parseDeviceKey, deviceSecretMatches } from "./digita
 
 /**
  * A device as the API returns it: never the key hash (not reversible, but
- * there's no reason to hand it to every user in the tenant — device GETs are
+ * there's no reason to hand it to every user in the company — device GETs are
  * open to all of them), just whether a key has been issued.
  */
 function publicDevice(row: typeof iotDevices.$inferSelect) {
@@ -218,11 +218,10 @@ export const revokeDeviceKeyHandler = asyncHandler(async (req: Request, res: Res
 
 /**
  * Device-authenticated ingest (POST /digital-twin/device-ingest, no user
- * session): a PLC/sensor sends its key in X-Device-Key. The tenant and
- * deviceId come from the device's OWN row, never the request body, so a
+ * session): a PLC/sensor sends its key in X-Device-Key. The
+ * deviceId comes from the device's OWN row, never the request body, so a
  * device can only ever write to itself. Uses the unscoped connection (there
- * is no tenant context before the key is verified — same reason login does)
- * and always writes an explicit tenantId.
+ * is no signed-in user before the key is verified — same reason login does).
  */
 export const deviceIngestHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = parseDeviceKey(req.header("x-device-key"));

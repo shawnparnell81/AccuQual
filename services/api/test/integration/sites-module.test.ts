@@ -1,3 +1,4 @@
+import { ensureTestCompany } from "../helpers/company.js";
 // Real-DB integration test. One organization, two plants: an issue logged
 // at plant A does not show up on plant B's default list.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -5,7 +6,7 @@ import { eq } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { sites } from "../../src/drizzle/schema/sites.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
@@ -18,7 +19,7 @@ import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let adminId: number;
 let qualityId: number;
 let eastOnlyId: number;
@@ -26,35 +27,29 @@ let adminToken: string;
 let qualityToken: string;
 let eastOnlyToken: string;
 
-describe("plants (one tenant, many sites)", () => {
+describe("plants (one company, many sites)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Plants Test Tenant ${suffix}`, code: `plants-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    await seedDefaultPermissions(tenantId);
+    const co = await ensureTestCompany();
+    companyId = co!.id;
+    await seedDefaultPermissions(companyId);
 
-    const [admin] = await db.insert(users).values({ tenantId, email: `plants-admin-${suffix}@test.local`, passwordHash: "unused", name: "Plant Admin" }).returning();
-    const [quality] = await db.insert(users).values({ tenantId, email: `plants-quality-${suffix}@test.local`, passwordHash: "unused", name: "Quality", department: "quality" }).returning();
-    const [eastOnly] = await db.insert(users).values({ tenantId, email: `plants-east-${suffix}@test.local`, passwordHash: "unused", name: "East Only", department: "quality" }).returning();
+    const [admin] = await db.insert(users).values({ email: `plants-admin-${suffix}@test.local`, passwordHash: "unused", name: "Plant Admin" }).returning();
+    const [quality] = await db.insert(users).values({ email: `plants-quality-${suffix}@test.local`, passwordHash: "unused", name: "Quality", department: "quality" }).returning();
+    const [eastOnly] = await db.insert(users).values({ email: `plants-east-${suffix}@test.local`, passwordHash: "unused", name: "East Only", department: "quality" }).returning();
     adminId = admin!.id;
     qualityId = quality!.id;
     eastOnlyId = eastOnly!.id;
-    adminToken = signAccessToken({ sub: String(adminId), tenantId, roleId: null, roleName: "admin", department: null });
-    qualityToken = signAccessToken({ sub: String(qualityId), tenantId, roleId: null, roleName: "operator", department: "quality" });
-    eastOnlyToken = signAccessToken({ sub: String(eastOnlyId), tenantId, roleId: null, roleName: "operator", department: "quality" });
+    adminToken = signAccessToken({ sub: String(adminId), roleId: null, roleName: "admin", department: null });
+    qualityToken = signAccessToken({ sub: String(qualityId), roleId: null, roleName: "operator", department: "quality" });
+    eastOnlyToken = signAccessToken({ sub: String(eastOnlyId), roleId: null, roleName: "operator", department: "quality" });
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(formData).where(eq(formData.tenantId, tenantId));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(ncr).where(eq(ncr.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    await db.delete(users).where(eq(users.tenantId, tenantId));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
-  it("gives an existing-style tenant a main plant and assigns the new user to it", async () => {
+  it("gives an existing-style company a main plant and assigns the new user to it", async () => {
     const res = await request(app).get("/sites").set("Authorization", `Bearer ${qualityToken}`);
     expect(res.status).toBe(200);
     expect(res.body.canManage).toBe(false);
@@ -67,7 +62,7 @@ describe("plants (one tenant, many sites)", () => {
     expect(created.status).toBe(201);
     const eastId = created.body.id as number;
 
-    const main = await db.select().from(sites).where(eq(sites.tenantId, tenantId));
+    const main = await db.select().from(sites);
     const mainId = main.find((site) => site.isDefault)!.id;
 
     const addEast = await request(app).put(`/sites/${eastId}/members`).set("Authorization", `Bearer ${adminToken}`).send({ userIds: [qualityId, eastOnlyId] });

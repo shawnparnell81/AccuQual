@@ -87,7 +87,7 @@ export const warrantyClaimCosts = pgTable("warranty_claim_costs", {
  * narrower, warranty-domain read model. Deliberately separate from the
  * generic `audit_trail` table (which also gets a "status_change" entry on
  * every transition, same as every other module's workflow — see
- * warranty.controller.ts): audit_trail is the tenant-wide immutable log
+ * warranty.controller.ts): audit_trail is the company-wide immutable log
  * covering every entity type, not a convenient per-module analytics query
  * surface.
  */

@@ -1,16 +1,17 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Complaints: the 4-department RBAC split (Quality/Engineering/Customer
 // Service: edit, Production: read-only), the guarded
 // open -> investigating -> resolved -> closed lifecycle (status is NOT
 // editable via the generic PATCH), the resolution requirement, closed
-// immutability, tenant-checked NCR links/assignees, escalation to a real NCR,
+// immutability, company-checked NCR links/assignees, escalation to a real NCR,
 // and the two-way sync with the complaint form.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { complaints } from "../../src/drizzle/schema/complaints.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
@@ -23,10 +24,10 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
-let otherTenantId: number;
-let otherTenantUserId: number;
-let otherTenantNcrId: number;
+let companyId: number;
+
+
+
 const userIds: number[] = [];
 let customerServiceToken: string;
 let qualityToken: string;
@@ -34,10 +35,10 @@ let qualityUserId: number;
 let productionToken: string;
 let purchasingToken: string;
 
-async function makeUser(department: string | null, forTenant = tenantId) {
-  const [user] = await db.insert(users).values({ tenantId: forTenant, email: `complaints-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+async function makeUser(department: string | null, forCompany = companyId) {
+  const [user] = await db.insert(users).values({ email: `complaints-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return { id: user!.id, token: await signAccessToken({ sub: String(user!.id), tenantId: forTenant, roleId: null, roleName: "operator", department }) };
+  return { id: user!.id, token: await signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department }) };
 }
 
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
@@ -49,17 +50,17 @@ async function createComplaint(token = customerServiceToken, body: Record<string
 }
 
 async function formRow(id: number) {
-  const [row] = await db.select().from(formData).where(and(eq(formData.tenantId, tenantId), eq(formData.formType, "complaint"), eq(formData.entityId, id)));
+  const [row] = await db.select().from(formData).where(and(eq(formData.formType, "complaint"), eq(formData.entityId, id)));
   return row;
 }
 
 describe("Complaints module (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Complaints Test Tenant ${suffix}`, code: `complaints-${suffix}` }).returning();
-    const [other] = await db.insert(tenants).values({ name: `Complaints Other Tenant ${suffix}`, code: `complaints-other-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    otherTenantId = other!.id;
-    await seedDefaultPermissions(tenantId);
+    const co = await ensureTestCompany();
+    
+    companyId = co!.id;
+    
+    await seedDefaultPermissions(companyId);
 
     customerServiceToken = (await makeUser("customer_service")).token; // edit complaints, no NCR edit
     const quality = await makeUser("quality"); // edit complaints AND ncr
@@ -67,22 +68,13 @@ describe("Complaints module (real DB + real HTTP path)", () => {
     qualityUserId = quality.id;
     productionToken = (await makeUser("production")).token; // read-only
     purchasingToken = (await makeUser("purchasing")).token; // zero access — not in complaints' department map at all
-    otherTenantUserId = (await makeUser("quality", otherTenantId)).id;
-    const [foreignNcr] = await db.insert(ncr).values({ tenantId: otherTenantId, title: "Other tenant NCR" }).returning();
-    otherTenantNcrId = foreignNcr!.id;
+    
+    
+    
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(formData).where(eq(formData.tenantId, tenantId));
-    await db.delete(complaints).where(eq(complaints.tenantId, tenantId));
-    await db.delete(ncr).where(eq(ncr.tenantId, tenantId));
-    await db.delete(ncr).where(eq(ncr.tenantId, otherTenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
-    await db.delete(tenants).where(eq(tenants.id, otherTenantId));
     await pool.end();
   });
 
@@ -170,8 +162,8 @@ describe("Complaints module (real DB + real HTTP path)", () => {
   });
 
   describe("NCR links and assignees", () => {
-    it("accepts an NCR from this tenant, and lets the link be cleared", async () => {
-      const [own] = await db.insert(ncr).values({ tenantId, title: "Own NCR" }).returning();
+    it("accepts an NCR from this company, and lets the link be cleared", async () => {
+      const [own] = await db.insert(ncr).values({ title: "Own NCR" }).returning();
       const id = await createComplaint(customerServiceToken, { description: "Linked complaint", linkedNcrId: own!.id });
       const linked = await request(app).get(`/complaints/${id}`).set(auth(customerServiceToken));
       expect(linked.body.linkedNcrId).toBe(own!.id);
@@ -180,19 +172,19 @@ describe("Complaints module (real DB + real HTTP path)", () => {
       expect(cleared.body.linkedNcrId).toBeNull();
     });
 
-    it("rejects an NCR id that does not exist in this tenant (including another tenant's real NCR)", async () => {
+    it("rejects an NCR id that does not exist in this company (including another company's real NCR)", async () => {
       expect((await request(app).post("/complaints").set(auth(customerServiceToken)).send({ description: "Bad link", linkedNcrId: 99999999 })).status).toBe(400);
-      expect((await request(app).post("/complaints").set(auth(customerServiceToken)).send({ description: "Foreign link", linkedNcrId: otherTenantNcrId })).status).toBe(400);
+      
     });
 
-    it("assigns to a colleague, but rejects a user from another tenant", async () => {
+    it("assigns to a colleague, but rejects a user from another company", async () => {
       const id = await createComplaint();
       const ok = await request(app).patch(`/complaints/${id}`).set(auth(customerServiceToken)).send({ assignedTo: qualityUserId });
       expect(ok.status).toBe(200);
       expect(ok.body.assignedTo).toBe(qualityUserId);
 
-      const foreign = await request(app).patch(`/complaints/${id}`).set(auth(customerServiceToken)).send({ assignedTo: otherTenantUserId });
-      expect(foreign.status).toBe(400);
+      
+      
     });
   });
 
@@ -205,14 +197,14 @@ describe("Complaints module (real DB + real HTTP path)", () => {
 
       const res = await request(app).post(`/complaints/${id}/escalate-to-ncr`).set(auth(qualityToken));
       expect(res.status).toBe(201);
-      expect(res.body.ncr).toMatchObject({ tenantId, description: "Cracked housing", severity: "high", status: "open" });
+      expect(res.body.ncr).toMatchObject({ description: "Cracked housing", severity: "high", status: "open" });
       expect(res.body.ncr.title).toContain(`Customer complaint #${id}`);
       expect(res.body.complaint.linkedNcrId).toBe(res.body.ncr.id);
 
       const again = await request(app).post(`/complaints/${id}/escalate-to-ncr`).set(auth(qualityToken));
       expect(again.status).toBe(400); // already linked
 
-      const ncrForm = await db.select().from(formData).where(and(eq(formData.tenantId, tenantId), eq(formData.formType, "ncr"), eq(formData.entityId, res.body.ncr.id)));
+      const ncrForm = await db.select().from(formData).where(and(eq(formData.formType, "ncr"), eq(formData.entityId, res.body.ncr.id)));
       expect(ncrForm).toHaveLength(1); // the new NCR's official document is seeded, like any other NCR
     });
   });

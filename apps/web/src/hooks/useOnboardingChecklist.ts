@@ -13,14 +13,14 @@ export function useOnboardingChecklist() {
   const qc = useQueryClient();
 
   const { data } = useQuery<OnboardingProgress>({
-    queryKey: ["tenant/onboarding"],
+    queryKey: ["company/onboarding"],
     queryFn: async () => (await apiClient.get("/company/onboarding")).data,
-    enabled: user?.tenantId != null,
+    enabled: user != null,
   });
 
   const patch = useMutation({
     mutationFn: async (body: Partial<OnboardingProgress>) => (await apiClient.patch("/company/onboarding", body)).data,
-    onSuccess: (updated: OnboardingProgress) => qc.setQueryData(["tenant/onboarding"], updated),
+    onSuccess: (updated: OnboardingProgress) => qc.setQueryData(["company/onboarding"], updated),
   });
 
   const progress = data ?? { dismissed: false, completedItems: [] };

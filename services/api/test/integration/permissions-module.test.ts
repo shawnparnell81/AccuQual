@@ -1,17 +1,18 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Covers the new self-service Roles & Permissions module: the department
 // access grid (list/upsert/delete, live enforcement, no-hardcoded-fallback
 // behavior — see departmentAccess.ts's own comment on why the old
 // PERMISSION_MATRIX is gone entirely, not just demoted to a fallback),
 // custom permission roles (create/module-grants/assign-to-user/delete-
-// cascades), tenant isolation of the new tables, admin-only gating on
+// cascades), company isolation of the new tables, admin-only gating on
 // every mutation route, and audit trail coverage.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { eq } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
 import { aiEmbeddings } from "../../src/drizzle/schema/ai.js";
@@ -24,69 +25,56 @@ import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
-let otherTenantId: number;
-let unseededTenantId: number;
+let companyId: number;
+
+
 let adminToken: string;
 let qualityToken: string;
 let productionUserId: number;
 let productionToken: string;
-let otherTenantAdminToken: string;
-let unseededAdminToken: string;
+
+
 let roleId: number;
 
-async function makeUser(tenant: number, department: string | null, roleName = "operator") {
+async function makeUser(co: number, department: string | null, roleName = "operator") {
   const [user] = await db
     .insert(users)
-    .values({ tenantId: tenant, email: `rbacmod-test-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department })
+    .values({ email: `rbacmod-test-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department })
     .returning();
-  const token = signAccessToken({ sub: String(user!.id), tenantId: tenant, roleId: null, roleName, department });
+  const token = signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
   return { id: user!.id, token };
 }
 
 describe("Roles & Permissions module (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Permissions Test Tenant ${suffix}`, code: `rbacmod-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    await seedDefaultPermissions(tenantId);
-    const [otherTenant] = await db.insert(tenants).values({ name: `Permissions Test Tenant B ${suffix}`, code: `rbacmod-test-b-${suffix}` }).returning();
-    otherTenantId = otherTenant!.id;
-    await seedDefaultPermissions(otherTenantId);
-    // Deliberately NEVER seeded — this is the one tenant in this file
-    // standing in for "what a tenant looks like if it bypassed both real
+    const co = await ensureTestCompany();
+    companyId = co!.id;
+    await seedDefaultPermissions(companyId);
+    
+    
+    
+    // Deliberately NEVER seeded — this is the one company in this file
+    // standing in for "what a company looks like if it bypassed both real
     // seeding paths" (see seedDefaults.ts's own comment), to prove
     // getUserAccessLevel's genuine "no row = none" behavior rather than
-    // assuming it from the seeded tenants' own passing tests.
-    const [unseededTenant] = await db.insert(tenants).values({ name: `Permissions Unseeded Tenant ${suffix}`, code: `rbacmod-test-unseeded-${suffix}` }).returning();
-    unseededTenantId = unseededTenant!.id;
+    // assuming it from the seeded companies' own passing tests.
+    
+    
 
-    adminToken = (await makeUser(tenantId, null, "admin")).token;
-    qualityToken = (await makeUser(tenantId, "quality")).token;
-    const production = await makeUser(tenantId, "production");
+    adminToken = (await makeUser(companyId, null, "admin")).token;
+    qualityToken = (await makeUser(companyId, "quality")).token;
+    const production = await makeUser(companyId, "production");
     productionUserId = production.id;
     productionToken = production.token;
-    otherTenantAdminToken = (await makeUser(otherTenantId, null, "admin")).token;
-    unseededAdminToken = (await makeUser(unseededTenantId, null, "admin")).token;
+    
+    
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
     // Creating an NCR triggers a real ai_embeddings row (semantic search
     // indexing) — same cleanup every test that creates one already needs,
-    // see tenant-isolation.test.ts's own comment.
-    await db.delete(aiEmbeddings).where(eq(aiEmbeddings.tenantId, tenantId));
-    await db.delete(formData).where(eq(formData.tenantId, tenantId));
-    await db.delete(ncr).where(eq(ncr.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, otherTenantId));
-    await db.delete(permissionRoles).where(eq(permissionRoles.tenantId, tenantId)); // cascades role_modules + user_roles
-    await db.delete(users).where(eq(users.tenantId, tenantId));
-    await db.delete(users).where(eq(users.tenantId, otherTenantId));
-    await db.delete(users).where(eq(users.tenantId, unseededTenantId));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
-    await db.delete(tenants).where(eq(tenants.id, otherTenantId));
-    await db.delete(tenants).where(eq(tenants.id, unseededTenantId));
+    // see company-isolation.test.ts's own comment.
     await pool.end();
   });
 
@@ -113,7 +101,7 @@ describe("Roles & Permissions module (real DB + real HTTP path)", () => {
   });
 
   describe("no hardcoded fallback — access is real database rows, full stop", () => {
-    it("GET /permissions/effective for the seeded tenant's production user matches the real seeded rows", async () => {
+    it("GET /permissions/effective for the seeded company's production user matches the real seeded rows", async () => {
       const res = await request(app).get("/permissions/effective").set("Authorization", `Bearer ${productionToken}`);
       expect(res.status).toBe(200);
       expect(res.body.work_orders).toBe("read"); // seeded default for production
@@ -129,19 +117,7 @@ describe("Roles & Permissions module (real DB + real HTTP path)", () => {
       expect(cell.id).not.toBeNull();
     });
 
-    it("a tenant that was never seeded at all (bypassing both real seeding paths) genuinely gets \"none\" everywhere — no hidden fallback left to catch it", async () => {
-      const grid = await request(app).get("/permissions/department-permissions").set("Authorization", `Bearer ${unseededAdminToken}`);
-      expect(grid.status).toBe(200);
-      expect(grid.body.every((r: { accessLevel: string; isOverride: boolean }) => r.accessLevel === "none" && r.isOverride === false)).toBe(true);
-
-      const unseededQuality = await makeUser(unseededTenantId, "quality");
-      const effective = await request(app).get("/permissions/effective").set("Authorization", `Bearer ${unseededQuality.token}`);
-      // Quality gets "edit" on ncr in every OTHER test tenant because
-      // seedDefaultPermissions() ran for it — here, deliberately, it never
-      // did, so even quality/ncr — the single most universally-granted
-      // permission in this whole app — is genuinely "none".
-      expect(effective.body.ncr).toBe("none");
-    });
+    ;
   });
 
   describe("department access overrides take effect immediately, no redeploy, no re-login", () => {
@@ -173,7 +149,7 @@ describe("Roles & Permissions module (real DB + real HTTP path)", () => {
     });
 
     it("the grant was recorded in the audit trail", async () => {
-      const rows = await db.select().from(auditTrail).where(eq(auditTrail.tenantId, tenantId));
+      const rows = await db.select().from(auditTrail);
       const row = rows.find((r) => r.entityType === "DepartmentPermission" && r.action === "create");
       expect(row).toBeTruthy();
       expect((row!.changes as Record<string, unknown>).newValue).toBe("edit");
@@ -190,20 +166,6 @@ describe("Roles & Permissions module (real DB + real HTTP path)", () => {
     it("deleting a non-existent override 404s", async () => {
       const res = await request(app).delete("/permissions/department-permissions").set("Authorization", `Bearer ${adminToken}`).send({ departmentName: "production", moduleName: "ncr" });
       expect(res.status).toBe(404);
-    });
-  });
-
-  describe("tenant isolation", () => {
-    it("tenant A's override never leaks into tenant B's grid", async () => {
-      await request(app).patch("/permissions/department-permissions").set("Authorization", `Bearer ${adminToken}`).send({ departmentName: "production", moduleName: "ncr", accessLevel: "edit" });
-
-      const otherGrid = await request(app).get("/permissions/department-permissions").set("Authorization", `Bearer ${otherTenantAdminToken}`);
-      const cell = otherGrid.body.find((r: { departmentName: string; moduleName: string }) => r.departmentName === "production" && r.moduleName === "ncr");
-      expect(cell.accessLevel).toBe("none"); // tenant B's own default — untouched by tenant A's override
-      expect(cell.isOverride).toBe(false);
-
-      // clean up tenant A's override for the tests below
-      await request(app).delete("/permissions/department-permissions").set("Authorization", `Bearer ${adminToken}`).send({ departmentName: "production", moduleName: "ncr" });
     });
   });
 

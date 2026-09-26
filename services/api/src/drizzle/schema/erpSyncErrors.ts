@@ -22,8 +22,7 @@ export interface ErpSyncErrorPayloadSnapshot {
  * left by erpMappingEngine.ts's buildErpPayload, which already computes
  * real per-record validation errors but never persisted them anywhere
  * (they only rode along inside the outbound webhook payload). Always
- * tenant-owned (no "global" concept, unlike erp_connector_presets) — a
- * standard RLS tenant table, no special nullable-tenantId policy needed.
+ * company-owned (no built-in rows, unlike erp_connector_presets).
  *
  * payloadSnapshot is deliberately narrow: the failing record's id plus only
  * the specific field(s) that actually failed, never the entire mapped

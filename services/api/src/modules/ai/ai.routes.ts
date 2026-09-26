@@ -61,7 +61,7 @@ aiRouter.post("/warranty-triage", validate(warrantyTriageSchema), warrantyTriage
 aiRouter.post("/inspection-notes", validate(inspectionNotesSchema), inspectionNotes);
 
 // Real browsable AI suggestion history — admin-only, same gate as
-// GET /tenant/ai-usage (the page this feeds — see AdminAiUsagePage.tsx).
+// GET /company/ai-usage (the page this feeds — see AdminAiUsagePage.tsx).
 aiRouter.get("/suggestions", requireRole("admin"), listSuggestions);
 
 // Phase 5 — explicit accept/reject on an already-generated suggestion.

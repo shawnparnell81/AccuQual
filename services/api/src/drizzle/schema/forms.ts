@@ -1,13 +1,13 @@
 import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 
-/** Tenant-scoped registry of fillable PDF templates per form type (NCR, CAPA, 8D, ...). */
+/** Registry of fillable PDF templates per form type (NCR, CAPA, 8D, ...). */
 export const formTemplates = pgTable("form_templates", {
   id: serial("id").primaryKey(),
   formType: text("form_type").notNull(), // ncr, capa, eight_d, five_why, audit_checklist, audit_plan, di, supplier, training, change, calibration, complaint
-  pdfPath: text("pdf_path").notNull(), // /tenants/<tenantId>/forms/<formType>/template.pdf
+  pdfPath: text("pdf_path").notNull(), // /forms/<formType>/template.pdf
   fieldMap: jsonb("field_map").$type<Record<string, string>>().notNull(),
-  isDefault: text("is_default").notNull().default("true"), // "true" = AccuQual-provided, "false" = tenant-uploaded custom
+  isDefault: text("is_default").notNull().default("true"), // "true" = AccuQual-provided, "false" = company-uploaded custom
   createdAt: timestamp("created_at").defaultNow(),
 });
 

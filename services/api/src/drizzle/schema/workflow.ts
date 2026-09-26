@@ -7,7 +7,7 @@ import { users } from "./users.js";
  *
  * Phase 9 — `version`/`versionHistory` added for real edit versioning (task
  * 7): every PATCH that changes `definition` bumps `version` and appends the
- * PRIOR definition (not the new one) to `versionHistory`, so a tenant can
+ * PRIOR definition (not the new one) to `versionHistory`, so a company can
  * see exactly what a workflow looked like before each edit. Capped in
  * application code (workflow.controller.ts), not here, at 20 entries —
  * same "human-edited config, not an unbounded ledger" convention

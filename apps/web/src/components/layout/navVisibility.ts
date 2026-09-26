@@ -14,7 +14,7 @@ import { ALL_MODULE_LEAVES, NAV_STRUCTURE, type AccessLevel, type Department, ty
  * For the viewer's OWN department, `myEffective` (GET /permissions/effective)
  * is authoritative — it already folds in custom permission-role grants a
  * department-level grid can't see. For any OTHER department being previewed
- * (only admin/platform_admin ever see more than their own), the admin-only
+ * (only admin ever see more than their own), the admin-only
  * department x module grid is the only live source available.
  *
  * Extracted verbatim from TopNav.tsx (moved, not duplicated) so both TopNav's
@@ -51,7 +51,6 @@ export function extraGrantedLeaves(
  */
 export function useNavVisibility() {
   const user = useCurrentUser();
-  const isPlatformAdmin = user?.roleName === "platform_admin";
   const isAdmin = user?.roleName === "admin";
   const userDept = user?.department as Department | null | undefined;
   const { effective: myEffective } = useEffectivePermissions();
@@ -61,13 +60,13 @@ export function useNavVisibility() {
   const hidden = useMemo(() => new Set(hiddenScopes), [hiddenScopes]);
 
   const visibleGroups = useMemo(() => {
-    return NAV_STRUCTURE.filter((g) => g.department === null || isAdmin || isPlatformAdmin || g.department === userDept)
+    return NAV_STRUCTURE.filter((g) => g.department === null || isAdmin || g.department === userDept)
       .filter((g) => !hidden.has(departmentScope(g.department ?? "system")))
       .map((g) => ({
         ...g,
         items: g.items.filter((item) => !hidden.has(itemScope(g.department ?? "system", item.key))),
       }));
-  }, [isAdmin, isPlatformAdmin, userDept, hidden]);
+  }, [isAdmin, userDept, hidden]);
 
   const allVisibleLeaves = useMemo(() => {
     const seen = new Set<string>();

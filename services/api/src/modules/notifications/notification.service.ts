@@ -187,11 +187,11 @@ export function setEmailTransport(transport: EmailTransport | null) {
 /**
  * One-off, single-recipient send (password reset, future account-level
  * emails) — notifyDepartment below is for "every active user in department
- * X," a different shape. Not tied to a tenant transaction: callers like
- * forgot-password run before any tenant context exists (see
+ * X," a different shape. Not tied to a company transaction: callers like
+ * forgot-password run before any company context exists (see
  * auth.service.ts's own comment on why login/register use the unscoped db),
  * so this never touches notification_log the way notifyDepartment does —
- * there's no tenant-scoped table to write it against pre-auth. Real
+ * there's no table to write it against pre-auth. Real
  * delivery still goes through the exact same transport.
  */
 /** One delivery attempt through the active transport; a failure is counted for the "outgoing email" alert. */
@@ -255,7 +255,7 @@ export async function notifyDepartment(db: Db, input: NotifyDepartmentInput): Pr
  * only an explicit trigger" — see erpSyncSettings' schema comment); this is
  * that same shape for email: an admin (or a future scheduled job, if one's
  * ever added) calls this to re-attempt every row still marked "failed" for
- * this tenant. Updates each row's own status in place rather than inserting
+ * this company. Updates each row's own status in place rather than inserting
  * a new log row, so notification_log stays one row per real send attempt's
  * current outcome, not a growing chain of retries for the same message.
  */
@@ -272,7 +272,7 @@ export async function retryFailedNotifications(db: Db): Promise<{ retried: numbe
   return { retried: failed.length, sent };
 }
 
-/** The caller's own email — req.user carries no email claim (see AuthenticatedUser), only id/tenantId/role/department, so every self-service notification query resolves it fresh from `users` rather than trusting anything client-supplied. */
+/** The caller's own email — req.user carries no email claim (see AuthenticatedUser), only id/role/department, so every self-service notification query resolves it fresh from `users` rather than trusting anything client-supplied. */
 async function ownEmail(db: Db, userId: number): Promise<string | null> {
   const [row] = await db.select({ email: users.email }).from(users).where(and(eq(users.id, userId)));
   return row?.email ?? null;
@@ -281,7 +281,7 @@ async function ownEmail(db: Db, userId: number): Promise<string | null> {
 /**
  * In-app notification bell — the first thing that ever reads notification_log back for display, so every query here
  * is hard-scoped to `recipient = the caller's own email` (never a client-supplied recipient, never another user's rows
- * even within the same tenant) on top of the usual tenant scoping. Newest first, capped, with an unread count computed
+ * even within the same company) on top of the usual company scoping. Newest first, capped, with an unread count computed
  * from the same rows rather than a second query.
  */
 export async function listMyNotifications(db: Db, userId: number, limit = 30) {

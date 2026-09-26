@@ -15,9 +15,9 @@ const DEFAULT_CAPA_WINDOW_DAYS = 90;
 
 /**
  * Phase 8 task 6 — "rejected receiving inspection can auto-create NCR."
- * Reads Settings → Receiving (tenants.receivingSettings) to decide whether
+ * Reads Settings → Receiving (companies.receivingSettings) to decide whether
  * this specific disposition qualifies: the rejection/quarantine toggle for
- * that disposition must be on, AND (if the tenant configured a defect
+ * that disposition must be on, AND (if the company configured a defect
  * category allow-list) the inspection's defectCategory must be in it.
  * Returns the created NCR (or null if settings say not to create one) so
  * the caller can chain it into checkCapaEscalation below without a second

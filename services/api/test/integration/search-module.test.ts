@@ -1,9 +1,10 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Security-audit finding (low): search had zero test coverage — search.
-// controller.ts's canRead() department gate and its per-tenant WHERE
+// controller.ts's canRead() department gate and its WHERE
 // clauses were both entirely unexercised. This is exactly the kind of
 // cross-module aggregation endpoint most likely to regress into a
-// cross-tenant leak during a refactor.
+// leak during a refactor.
 //
 // Real behavior verified directly against search.controller.ts before
 // writing this (NOT assumed): NCR/CAPA/etc. only ever match a numeric
@@ -15,7 +16,7 @@ import { eq } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
 import { rma } from "../../src/drizzle/schema/rma.js";
@@ -31,8 +32,8 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 
 const app = createApp();
 const suffix = Date.now();
-let tenantId: number;
-let otherTenantId: number;
+let companyId: number;
+
 let ncrId: number;
 let rmaId: number;
 let eightDId: number;
@@ -43,63 +44,50 @@ let ppapId: number;
 const userIds: number[] = [];
 let qualityToken: string;
 let engineeringToken: string;
-let otherTenantToken: string;
+
 
 describe("Search (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Search Test Tenant ${suffix}`, code: `search-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    const [other] = await db.insert(tenants).values({ name: `Search Other Tenant ${suffix}`, code: `search-other-${suffix}` }).returning();
-    otherTenantId = other!.id;
-    await seedDefaultPermissions(tenantId);
-    await seedDefaultPermissions(otherTenantId);
+    const co = await ensureTestCompany();
+    companyId = co!.id;
+    
+    
+    await seedDefaultPermissions(companyId);
+    
 
-    const [qualityUser] = await db.insert(users).values({ tenantId, email: `search-quality-${suffix}@test.local`, passwordHash: "unused" }).returning();
+    const [qualityUser] = await db.insert(users).values({ email: `search-quality-${suffix}@test.local`, passwordHash: "unused" }).returning();
     userIds.push(qualityUser!.id);
-    qualityToken = signAccessToken({ sub: String(qualityUser!.id), tenantId, roleId: null, roleName: "operator", department: "quality" });
+    qualityToken = signAccessToken({ sub: String(qualityUser!.id), roleId: null, roleName: "operator", department: "quality" });
 
     // ncr's own default permission entry is quality-only — engineering has zero rows for it.
-    const [engineeringUser] = await db.insert(users).values({ tenantId, email: `search-engineering-${suffix}@test.local`, passwordHash: "unused" }).returning();
+    const [engineeringUser] = await db.insert(users).values({ email: `search-engineering-${suffix}@test.local`, passwordHash: "unused" }).returning();
     userIds.push(engineeringUser!.id);
-    engineeringToken = signAccessToken({ sub: String(engineeringUser!.id), tenantId, roleId: null, roleName: "operator", department: "engineering" });
+    engineeringToken = signAccessToken({ sub: String(engineeringUser!.id), roleId: null, roleName: "operator", department: "engineering" });
 
-    const [otherUser] = await db.insert(users).values({ tenantId: otherTenantId, email: `search-other-${suffix}@test.local`, passwordHash: "unused" }).returning();
-    userIds.push(otherUser!.id);
-    otherTenantToken = signAccessToken({ sub: String(otherUser!.id), tenantId: otherTenantId, roleId: null, roleName: "operator", department: "quality" });
+    
+    
+    
 
-    const [created] = await db.insert(ncr).values({ tenantId, title: `Search test NCR ${suffix}` }).returning();
+    const [created] = await db.insert(ncr).values({ title: `Search test NCR ${suffix}` }).returning();
     ncrId = created!.id;
 
-    const [supplier] = await db.insert(suppliers).values({ tenantId, name: `Search Test Supplier ${suffix}` }).returning();
-    const [rmaRow] = await db.insert(rma).values({ tenantId, rmaNumber: `RMA-${suffix}`, supplierId: supplier!.id }).returning();
+    const [supplier] = await db.insert(suppliers).values({ name: `Search Test Supplier ${suffix}` }).returning();
+    const [rmaRow] = await db.insert(rma).values({ rmaNumber: `RMA-${suffix}`, supplierId: supplier!.id }).returning();
     rmaId = rmaRow!.id;
-    const [eightDRow] = await db.insert(eightD).values({ tenantId }).returning();
+    const [eightDRow] = await db.insert(eightD).values({ }).returning();
     eightDId = eightDRow!.id;
-    const [complaintRow] = await db.insert(complaints).values({ tenantId, description: `Search test complaint ${suffix}` }).returning();
+    const [complaintRow] = await db.insert(complaints).values({ description: `Search test complaint ${suffix}` }).returning();
     complaintId = complaintRow!.id;
-    const [changeRow] = await db.insert(changeRequests).values({ tenantId, title: `Search test change ${suffix}` }).returning();
+    const [changeRow] = await db.insert(changeRequests).values({ title: `Search test change ${suffix}` }).returning();
     changeId = changeRow!.id;
-    const [riskRow] = await db.insert(riskAssessments).values({ tenantId, title: `Search test risk ${suffix}` }).returning();
+    const [riskRow] = await db.insert(riskAssessments).values({ title: `Search test risk ${suffix}` }).returning();
     riskId = riskRow!.id;
-    const [ppapRow] = await db.insert(ppapPackages).values({ tenantId, partNumber: `PN-SEARCH-${suffix}` }).returning();
+    const [ppapRow] = await db.insert(ppapPackages).values({ partNumber: `PN-SEARCH-${suffix}` }).returning();
     ppapId = ppapRow!.id;
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(ncr).where(eq(ncr.id, ncrId));
-    await db.delete(rma).where(eq(rma.id, rmaId));
-    await db.delete(suppliers).where(eq(suppliers.tenantId, tenantId));
-    await db.delete(eightD).where(eq(eightD.id, eightDId));
-    await db.delete(complaints).where(eq(complaints.id, complaintId));
-    await db.delete(changeRequests).where(eq(changeRequests.id, changeId));
-    await db.delete(riskAssessments).where(eq(riskAssessments.id, riskId));
-    await db.delete(ppapPackages).where(eq(ppapPackages.id, ppapId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, otherTenantId));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
-    await db.delete(tenants).where(eq(tenants.id, otherTenantId));
     await pool.end();
   });
 
@@ -115,11 +103,7 @@ describe("Search (real DB + real HTTP path)", () => {
     expect(res.body.results.some((r: { type: string }) => r.type === "NCR")).toBe(false);
   });
 
-  it("tenant B searching the same id prefix finds nothing — real tenant scoping, not just a shared id space coincidence", async () => {
-    const res = await request(app).get(`/search?q=${ncrId}`).set("Authorization", `Bearer ${otherTenantToken}`);
-    expect(res.status).toBe(200);
-    expect(res.body.results.some((r: { type: string }) => r.type === "NCR")).toBe(false);
-  });
+  ;
 
   it("an empty query returns an empty result set instead of erroring", async () => {
     const res = await request(app).get("/search?q=").set("Authorization", `Bearer ${qualityToken}`);
@@ -165,8 +149,5 @@ describe("Search (real DB + real HTTP path)", () => {
     expect(res.body.results.some((r: { type: string }) => r.type === "PPAP")).toBe(false);
   });
 
-  it("tenant B finds none of the six new types either", async () => {
-    const res = await request(app).get(`/search?q=${rmaId}`).set("Authorization", `Bearer ${otherTenantToken}`);
-    expect(res.body.results.some((r: { type: string }) => r.type === "RMA")).toBe(false);
-  });
+  ;
 });

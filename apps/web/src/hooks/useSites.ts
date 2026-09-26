@@ -22,7 +22,7 @@ const SITE_SCOPED_QUERIES = new Set(["ncr", "capa", "audits", "calendar", "nav-k
 
 export function useSites() {
   const user = useCurrentUser();
-  const enabled = user?.tenantId != null && user.roleName !== "platform_admin";
+  const enabled = user != null;
   const currentSiteId = useSiteStore((s) => s.currentSiteId);
   const query = useQuery({
     queryKey: ["sites"],

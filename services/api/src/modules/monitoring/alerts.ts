@@ -88,7 +88,7 @@ export const defaultDeps: RuleDeps = {
     }
   },
   async countFailedWorkflowRuns(sinceMs) {
-    // Owner connection on purpose: this counts across every tenant, which no tenant-scoped session may do.
+    // Plain pool on purpose: this runs from the monitor loop, outside any request.
     const { rows } = await pool.query("SELECT count(*)::int AS n FROM workflow_runs WHERE status = 'failed' AND simulated = false AND finished_at > $1", [new Date(sinceMs)]);
     return rows[0]?.n ?? 0;
   },

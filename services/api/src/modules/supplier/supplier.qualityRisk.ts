@@ -52,7 +52,7 @@ export interface SupplierRiskWeights {
   responsiveness: number;
 }
 
-/** Weights need not sum to any particular total — scoreSupplierQualityRisk normalizes by their sum, so a tenant can emphasize one factor without rebalancing every other one by hand. */
+/** Weights need not sum to any particular total — scoreSupplierQualityRisk normalizes by their sum, so a company can emphasize one factor without rebalancing every other one by hand. */
 export const DEFAULT_SUPPLIER_RISK_WEIGHTS: SupplierRiskWeights = {
   ncr: 20,
   capa: 15,
@@ -83,7 +83,7 @@ export interface SupplierQualityFactors {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Every number here comes from data this tenant already has — no new
+ * Every number here comes from data this company already has — no new
  * tracked metric, no external input. See each factor's own comment for the
  * exact derivation and the (documented, defensible-not-invented)
  * normalization threshold used to turn it into a 0-1 risk contribution in
@@ -170,7 +170,7 @@ export interface SupplierRiskScoreResult {
  * spirit as supplier.performance.ts's own point system. Each factor is
  * normalized to 0-1 against a documented, defensible threshold (not a
  * statistically fit model — there isn't enough real history yet to fit
- * one), then combined by the tenant's configured weights (Settings →
+ * one), then combined by the company's configured weights (Settings →
  * Supplier Risk; falls back to DEFAULT_SUPPLIER_RISK_WEIGHTS) into a 0-100
  * score, higher = riskier.
  */
@@ -341,7 +341,7 @@ export async function exportSupplierScorecard(req: Request, res: Response, suppl
     title: `Supplier Scorecard — ${supplier.name}`,
     generatedAt: new Date(),
     generatedBy: performer[0]?.name || performer[0]?.email || `User #${req.user?.id ?? "unknown"}`,
-    companyName: co?.name ?? "Unknown Tenant",
+    companyName: co?.name ?? "Unknown Company",
     columns: ["Metric", "Value"],
     rows: [
       ["Quality Risk Score", riskResult.latest.score],

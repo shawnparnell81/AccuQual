@@ -25,25 +25,22 @@ Connection Method → **Session pooler**. It looks like:
 postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
 ```
 
-Session pooler, not Transaction pooler — this app's real Row-Level
-Security enforcement depends on `SET LOCAL ROLE` + `SET LOCAL
-app.current_tenant_id` persisting for one transaction (see
-`src/lib/tenantScope.ts`), which Session pooler supports and Transaction
-pooler is not guaranteed to. Both verified to work end-to-end already;
-only Session pooler is recommended.
+Session pooler, not Transaction pooler — every request runs in one
+transaction that does `SET LOCAL ROLE accuqual_app` (see
+`src/lib/requestDb.ts`), which Session pooler supports and Transaction
+pooler is not guaranteed to. Only Session pooler is recommended.
 
 ## What's already proven, live, against the real Supabase project
 
-- Full schema + real RLS role (`accuqual_app`) + pgvector + all indexes
-  deploy cleanly via the existing `npm run db:migrate` — no changes needed.
-- Real RLS enforcement (correct tenant sees its row; wrong/missing tenant
-  context sees zero rows) works identically over the network as it does
-  locally.
-- The full automated test suite (28 tests: tenant isolation + department
-  permissions) passes against the real remote database.
+- Full schema + the restricted database role (`accuqual_app`) + pgvector + all
+  indexes deploy cleanly via the existing `npm run db:migrate`.
+- The append-only audit tables are enforced by the database role switch, and
+  Supabase's anon/authenticated roles are locked out of every table, over the
+  network exactly as locally.
+- The full automated test suite passes against a real Postgres database.
 - The actual production Docker image (`services/api/Dockerfile`) boots
   correctly against Supabase via the Session Pooler, a real login
-  round-trips correctly, and the RLS role-switch works through the pooler.
+  round-trips correctly, and the role switch works through the pooler.
 - The production boot guard correctly refuses to start with a default
   encryption key when `NODE_ENV=production` (tested deliberately) — and
   correctly stays quiet when given a real one.
@@ -63,7 +60,7 @@ against live data. For everyday building and testing use the local-database over
 
 ```
 docker compose up -d postgres redis   # once: start the local database
-npm run local:db:setup                # once: schema + demo tenant + demo story on that local database
+npm run local:db:setup                # once: schema + demo company + demo story on that local database
 npm run local:up                      # run the whole stack against the local database
 npm run local:down                    # stop it
 ```
@@ -112,9 +109,11 @@ files into `dist`, so migrations only ever run from a real source
 checkout (via `tsx`), never from the built image. Re-run this same
 command any time you add a new migration — it's fully idempotent.
 
-If you want real demo/reference data (roles, a demo tenant, test users) on
+If you want demo/reference data (roles, a demo company, test users) on
 a fresh database, also run `DATABASE_URL="..." npm run db:seed` once.
-Skip this for a real customer's database.
+For the real installation, skip it and create the company and its first
+administrator instead:
+`DATABASE_URL="..." npm run db:create-company --workspace services/api -- --name "Company" --email admin@company.com`.
 
 ### 3. Deploy via the render.yaml blueprint (or manually — see below)
 
@@ -129,7 +128,7 @@ In Render: New → Blueprint → connect this GitHub repo → it should pick up
 - **accuqual-workflow-worker** / **accuqual-ai-worker** / **accuqual-digital-twin-worker**
   — the three background processes that consume that Redis stream (see
   `/workers`). Each needs the exact same `DATABASE_URL` and
-  `TENANT_AI_CONFIG_ENCRYPTION_KEY` values as `accuqual-api` — Render has
+  `AI_CONFIG_ENCRYPTION_KEY` values as `accuqual-api` — Render has
   no way to share one service's `sync: false` value with another, so
   you'll paste each of those two values in four times total, identically.
   Already deployed to only the original two services? Render Dashboard →
@@ -138,21 +137,21 @@ In Render: New → Blueprint → connect this GitHub repo → it should pick up
 
 You'll be prompted for the env vars marked `sync: false`. On `accuqual-api`:
 - `DATABASE_URL` → your Session Pooler string from step 1
-- `TENANT_AI_CONFIG_ENCRYPTION_KEY` → generate with `openssl rand -hex 32`;
+- `AI_CONFIG_ENCRYPTION_KEY` → generate with `openssl rand -hex 32`;
   this must be a real value, or the app refuses to start (see the boot
   guard note above)
 - `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`SMTP_FROM` and
   `ALERT_WEBHOOK_URL` are optional — see their own sections below.
 
 On each of the three workers: the same `DATABASE_URL` and
-`TENANT_AI_CONFIG_ENCRYPTION_KEY` values as `accuqual-api` (not fresh
+`AI_CONFIG_ENCRYPTION_KEY` values as `accuqual-api` (not fresh
 ones — the encryption key in particular MUST match, since
-`accuqual-workflow-worker` decrypts tenant BYOK keys that were encrypted
+`accuqual-workflow-worker` decrypts company BYOK keys that were encrypted
 under `accuqual-api`'s key). `accuqual-workflow-worker` also optionally
 takes the same `SMTP_*`/`ANTHROPIC_API_KEY`/`OPENAI_API_KEY` values as
 `accuqual-api`, and `accuqual-ai-worker` optionally takes `OPENAI_API_KEY`
 (its embedding generation always calls OpenAI specifically, regardless of
-a tenant's own provider choice).
+a company's own provider choice).
 
 `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET` are set to `generateValue: true`
 on every service — Render generates real random secrets for you, nothing
@@ -187,7 +186,7 @@ fallback is manual:
 - Check each worker's own Render log stream shows its real "listening on
   accuqual:..." startup line (see each `workers/*/src/index.ts`) instead of
   a crash-and-restart loop — the most common cause of the latter is a
-  missing/mismatched `TENANT_AI_CONFIG_ENCRYPTION_KEY` on that worker.
+  missing/mismatched `AI_CONFIG_ENCRYPTION_KEY` on that worker.
 - Open the deployed frontend URL, log in with a real seeded user, confirm
   a page that hits the API (e.g., the NCR list) loads without a CORS or
   network error in the browser console.
@@ -246,7 +245,7 @@ Paste either into `ALERT_WEBHOOK_URL` (already declared, `sync: false`, in `rend
 Create two projects (one Node.js, one React) and copy each DSN. Set `SENTRY_DSN`
 on the API and `VITE_SENTRY_DSN` on the web service (a build-time value: redeploy
 the web after setting it). What is sent: the error, its stack, the page path without the query string, the
-tenant id and user id (numbers only), the request id, and the release (`APP_VERSION` —
+user id (a number only), the request id, and the release (`APP_VERSION` —
 the git commit on Render). What is never sent: request bodies, form values, cookies,
 authorization headers, query strings, email addresses, IP addresses, session recordings.
 Performance tracing is off. The API also exits (so the host restarts it) after an uncaught
@@ -313,7 +312,7 @@ The procedure, the checklist for a real recovery, and the results of the 2026-09
 `public` and `drizzle` schemas with `pg_dump --format=custom`, restore into an empty PostgreSQL 17 + pgvector,
 run `npm run db:migrate` (recreates the application role, grants and security policies), then prove it with
 `npm run db:verify-restore` (`SOURCE_DATABASE_URL` = original, `DATABASE_URL` = restored copy). Uploaded files and
-the secrets in `.env` (notably `TENANT_AI_CONFIG_ENCRYPTION_KEY`) are **not** in a database backup — keep separate
+the secrets in `.env` (notably `AI_CONFIG_ENCRYPTION_KEY`) are **not** in a database backup — keep separate
 copies. Never store a dump as a GitHub artifact: the repository is public.
 
 **Nightly off-platform backup.** `.github/workflows/backup.yml` takes an AES-256-encrypted backup every night to a private
@@ -367,7 +366,5 @@ needed regardless of which port your provider gives you.
 
 ## What's still not set up (honest gaps, not this file's job to fix)
 
-- No self-serve signup — accounts are still provisioned via the internal
-  platform-admin flow.
-- No billing/tier enforcement — see the Inspection Report's TIER-01
-  finding.
+- No self-serve signup — this installation belongs to one company and its
+  administrator creates every account.

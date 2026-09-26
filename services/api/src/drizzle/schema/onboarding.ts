@@ -2,12 +2,12 @@ import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 
 /**
- * Per-user onboarding checklist progress. Keyed by (tenantId, userId,
- * moduleKey) rather than a single per-tenant row: onboarding is naturally
+ * Per-user onboarding checklist progress. Keyed by (userId,
+ * moduleKey) rather than a single row: onboarding is naturally
  * per-user (same grain as trainingAssignments — two users at the same
- * tenant are at different points), and moduleKey is one of
+ * company are at different points), and moduleKey is one of
  * departmentAccess.ts's real ResourceKey values, not a fabricated
- * "enabled module" concept (no such per-tenant toggle exists anywhere in
+ * "enabled module" concept (no such toggle exists anywhere in
  * this schema — see the AI Onboarding review).
  *
  * status: not_started | in_progress | completed

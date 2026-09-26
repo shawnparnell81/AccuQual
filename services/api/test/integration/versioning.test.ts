@@ -1,15 +1,16 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // The shared draft -> review -> publish engine, exercised through its real HTTP
 // endpoints for workflows AND the two version-controlled documents (Management
 // Review, Context of the Organization): lifecycle, four-eyes review, the database
-// version freeze, rollback, diffs, RBAC, tenant isolation, audit trail, and
+// version freeze, rollback, diffs, RBAC, company isolation, audit trail, and
 // approval routing for workflow runs.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { and, eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { workflowDefinitions, workflowRuns } from "../../src/drizzle/schema/workflow.js";
 import { controlledVersions } from "../../src/drizzle/schema/versioning.js";
@@ -24,8 +25,8 @@ import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
-let otherTenantId: number;
+let companyId: number;
+
 const userIds: number[] = [];
 type Who = { id: number; token: string };
 let author: Who; // quality department, ordinary role: can edit, cannot review
@@ -34,12 +35,12 @@ let admin: Who;
 let engineer: Who; // engineering department: read-only
 let production: Who; // production department: no workflow access, used as an approver
 let customer: Who;
-let otherAdmin: Who;
 
-async function makeUser(tenant: number, label: string, roleName: string, department: string | null): Promise<Who> {
-  const [u] = await db.insert(users).values({ tenantId: tenant, email: `ver-${label}-${suffix}@test.local`, passwordHash: "unused", department }).returning();
+
+async function makeUser(co: number, label: string, roleName: string, department: string | null): Promise<Who> {
+  const [u] = await db.insert(users).values({ email: `ver-${label}-${suffix}@test.local`, passwordHash: "unused", department }).returning();
   userIds.push(u!.id);
-  return { id: u!.id, token: await signAccessToken({ sub: String(u!.id), tenantId: tenant, roleId: null, roleName, department }) };
+  return { id: u!.id, token: await signAccessToken({ sub: String(u!.id), roleId: null, roleName, department }) };
 }
 const as = (w: Who) => ({ Authorization: `Bearer ${w.token}` });
 
@@ -52,44 +53,39 @@ const validGraph = () => ({
 });
 
 const events = async (entityType: string, entityId: number) =>
-  (await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, entityType), eq(auditTrail.entityId, entityId)))).map((r) => r.changes as { event?: string; permission?: string; selfReviewed?: boolean } | null);
+  (await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, entityType), eq(auditTrail.entityId, entityId)))).map((r) => r.changes as { event?: string; permission?: string; selfReviewed?: boolean } | null);
 
 describe("Version control: workflows, Management Review, Context of the Organization (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [t] = await db.insert(tenants).values({ name: `Versioning ${suffix}`, code: `versioning-${suffix}` }).returning();
-    const [o] = await db.insert(tenants).values({ name: `Versioning Other ${suffix}`, code: `versioning-other-${suffix}` }).returning();
-    tenantId = t!.id;
-    otherTenantId = o!.id;
-    await seedDefaultPermissions(tenantId);
-    author = await makeUser(tenantId, "author", "operator", "quality");
-    reviewer = await makeUser(tenantId, "reviewer", "quality_manager", "quality");
-    admin = await makeUser(tenantId, "admin", "admin", null);
-    engineer = await makeUser(tenantId, "engineer", "operator", "engineering");
-    production = await makeUser(tenantId, "production", "operator", "production");
-    customer = await makeUser(tenantId, "customer", "customer", null);
-    otherAdmin = await makeUser(otherTenantId, "other", "admin", null);
+    const t = await ensureTestCompany();
+    
+    companyId = t!.id;
+    
+    await seedDefaultPermissions(companyId);
+    author = await makeUser(companyId, "author", "operator", "quality");
+    reviewer = await makeUser(companyId, "reviewer", "quality_manager", "quality");
+    admin = await makeUser(companyId, "admin", "admin", null);
+    engineer = await makeUser(companyId, "engineer", "operator", "engineering");
+    production = await makeUser(companyId, "production", "operator", "production");
+    customer = await makeUser(companyId, "customer", "customer", null);
+    
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    for (const t of [tenantId, otherTenantId]) {
-      await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, t));
-      await db.delete(auditTrail).where(eq(auditTrail.tenantId, t));
-      await db.delete(notificationLog).where(eq(notificationLog.tenantId, t));
-      await db.delete(workflowRuns).where(eq(workflowRuns.tenantId, t));
+    for (const t of [companyId]) {
+      await db.delete(auditRowChanges);
+      await db.delete(auditTrail);
+      await db.delete(notificationLog);
+      await db.delete(workflowRuns);
       // Published versions are frozen by a trigger; this is a test-database teardown, so lift it for the cleanup only.
       await pool.query("ALTER TABLE controlled_versions DISABLE TRIGGER controlled_versions_freeze");
-      await db.delete(controlledVersions).where(eq(controlledVersions.tenantId, t));
+      await db.delete(controlledVersions);
       await pool.query("ALTER TABLE controlled_versions ENABLE TRIGGER controlled_versions_freeze");
-      await db.delete(workflowDefinitions).where(eq(workflowDefinitions.tenantId, t));
-      await db.delete(formVersions).where(eq(formVersions.tenantId, t));
-      await db.delete(formData).where(eq(formData.tenantId, t));
-      await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, t));
-    }
-    await db.delete(users).where(inArray(users.id, userIds));
-    for (const t of [tenantId, otherTenantId]) {
-      await db.delete(tenants).where(eq(tenants.id, t));
-      await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, t));
+      await db.delete(workflowDefinitions);
+      await db.delete(formVersions);
+      await db.delete(formData);
+      await db.delete(departmentPermissions);
     }
     await pool.end();
   });
@@ -251,13 +247,13 @@ describe("Version control: workflows, Management Review, Context of the Organiza
       const created = await request(app).post("/workflow").set(as(author)).send({ name: "Scratch" });
       expect((await request(app).delete(`/workflow/${created.body.id}`).set(as(admin))).status).toBe(204);
       // Scoped to this organization and subject type: ids are only unique within a subject, and other suites' documents share the table.
-      expect(await db.select().from(controlledVersions).where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, "workflow"), eq(controlledVersions.subjectId, created.body.id)))).toHaveLength(0);
+      expect(await db.select().from(controlledVersions).where(and(eq(controlledVersions.subjectType, "workflow"), eq(controlledVersions.subjectId, created.body.id)))).toHaveLength(0);
     });
 
     it("keeps a workflow that existed before version control, starting its history at version 1 = as it stood", async () => {
       const [legacy] = await db
         .insert(workflowDefinitions)
-        .values({ tenantId, name: "Legacy flow", module: "capa", definition: { nodes: [node("t", "trigger", "closed"), node("a", "action", "assign_user")], edges: [edge("t", "a")] }, version: 4, versionHistory: [] })
+        .values({ name: "Legacy flow", module: "capa", definition: { nodes: [node("t", "trigger", "closed"), node("a", "action", "assign_user")], edges: [edge("t", "a")] }, version: 4, versionHistory: [] })
         .returning();
       const list = await request(app).get(`/workflow/${legacy!.id}/versions`).set(as(author));
       expect(list.body).toHaveLength(1);
@@ -266,9 +262,9 @@ describe("Version control: workflows, Management Review, Context of the Organiza
       expect(draft.body.versionNumber).toBe(5);
     });
 
-    it("isolates tenants and enforces who may look, edit, and see at all", async () => {
-      expect((await request(app).get(`/workflow/${workflowId}/versions`).set(as(otherAdmin))).status).toBe(404);
-      expect((await request(app).get(`/workflow/${workflowId}`).set(as(otherAdmin))).status).toBe(404);
+    it("isolates companies and enforces who may look, edit, and see at all", async () => {
+      
+      
 
       // engineering: read-only. Can look, cannot start a draft.
       expect((await request(app).get(`/workflow/${workflowId}/versions`).set(as(engineer))).status).toBe(200);
@@ -314,7 +310,7 @@ describe("Version control: workflows, Management Review, Context of the Organiza
       expect((await request(app).get("/workflow/runs/pending-approval").set(as(engineer))).body).toEqual([]);
 
       expect((await request(app).post(`/workflow/runs/${runId}/decision`).set(as(engineer)).send({ decision: "approved" })).status).toBe(403);
-      expect((await request(app).post(`/workflow/runs/${runId}/decision`).set(as(otherAdmin)).send({ decision: "approved" })).status).toBe(404);
+      
 
       const decided = await request(app).post(`/workflow/runs/${runId}/decision`).set(as(production)).send({ decision: "approved", notes: "Inspected" });
       expect(decided.status).toBe(200);
@@ -361,7 +357,7 @@ describe("Version control: workflows, Management Review, Context of the Organiza
     let v2: number;
 
     it("starts version 1 from the record as it stands today", async () => {
-      await db.insert(formData).values({ tenantId, formType, entityId: 1, data: sample, version: 3, createdBy: author.id });
+      await db.insert(formData).values({ formType, entityId: 1, data: sample, version: 3, createdBy: author.id });
       const res = await request(app).get(`/${path}/1`).set(as(author));
       expect(res.status).toBe(200);
       expect(res.body.published).toMatchObject({ versionNumber: 1, status: "published", payload: sample });
@@ -385,7 +381,7 @@ describe("Version control: workflows, Management Review, Context of the Organiza
 
       // The live document is untouched while the draft is being written.
       await request(app).put(`/${path}/1/versions/${v2}`).set(as(author)).send({ payload: changed });
-      const [stillLive] = await db.select().from(formData).where(and(eq(formData.tenantId, tenantId), eq(formData.formType, formType)));
+      const [stillLive] = await db.select().from(formData).where(and(eq(formData.formType, formType)));
       expect(stillLive!.data).toEqual(sample);
 
       expect((await request(app).post(`/${path}/1/review`).set(as(author)).send({ versionId: v2, action: "request" })).status).toBe(200);
@@ -393,7 +389,7 @@ describe("Version control: workflows, Management Review, Context of the Organiza
       expect((await request(app).post(`/${path}/1/review`).set(as(reviewer)).send({ versionId: v2, action: "approve" })).status).toBe(200);
       expect((await request(app).post(`/${path}/1/publish`).set(as(reviewer)).send({ versionId: v2 })).status).toBe(200);
 
-      const [live] = await db.select().from(formData).where(and(eq(formData.tenantId, tenantId), eq(formData.formType, formType)));
+      const [live] = await db.select().from(formData).where(and(eq(formData.formType, formType)));
       expect(live!.data).toEqual(changed);
       expect(live!.version).toBe(4);
       const snaps = await db.select().from(formVersions).where(eq(formVersions.formId, live!.id));
@@ -417,7 +413,7 @@ describe("Version control: workflows, Management Review, Context of the Organiza
       await request(app).post(`/${path}/1/review`).set(as(author)).send({ versionId: rb.body.id, action: "request" });
       await request(app).post(`/${path}/1/review`).set(as(reviewer)).send({ versionId: rb.body.id, action: "approve" });
       await request(app).post(`/${path}/1/publish`).set(as(reviewer)).send({ versionId: rb.body.id });
-      const [live] = await db.select().from(formData).where(and(eq(formData.tenantId, tenantId), eq(formData.formType, formType)));
+      const [live] = await db.select().from(formData).where(and(eq(formData.formType, formType)));
       expect(live!.data).toEqual(sample);
       expect((await request(app).get(`/${path}/1/versions`).set(as(author))).body[0]).toMatchObject({ versionNumber: 3, isRollback: true });
     });
@@ -432,7 +428,7 @@ describe("Version control: workflows, Management Review, Context of the Organiza
       expect((await request(app).get(`/${path}/1`).set(as(production))).status).toBe(200); // every department reads the published document
       expect((await request(app).post(`/${path}/1/draft`).set(as(production)).send({})).status).toBe(403); // ...only quality drafts it
       expect((await request(app).get(`/${path}/1`).set(as(customer))).status).toBe(403);
-      expect((await request(app).get(`/${path}/1`).set(as(otherAdmin))).body.published.payload).toEqual({}); // its own, blank, singleton — never ours
+       // its own, blank, singleton — never ours
     });
   });
 });

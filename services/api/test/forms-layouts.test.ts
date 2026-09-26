@@ -1,4 +1,4 @@
-// Pure-logic unit test — no DB (see tenant-isolation.test.ts's header
+// Pure-logic unit test — no DB (see company-isolation.test.ts's header
 // comment on the distinction). Full-System Audit finding H3: `audit_checklist`
 // was a real FORM_TYPES entry with no layout registered for it, so
 // pdf-merger.ts's mergePdfFields fell all the way through to a plain

@@ -71,7 +71,7 @@ inventoryRouter.post("/items/:id/mark-reorder-pending", markReorderPendingHandle
 inventoryRouter.post("/items/:id/mark-on-order", markOnOrderHandler);
 inventoryRouter.get("/items/:id/history", historyHandler);
 // Phase 8 — real per-lot/serial traceability (task 4). "/lots" (fixed
-// literal, tenant-wide search) before "/lots/:id/trace" (param-shaped),
+// literal, company-wide search) before "/lots/:id/trace" (param-shaped),
 // same literal-before-param convention as "/alerts"/"/check-minmax" above.
 inventoryRouter.get("/lots", searchLotsHandler);
 inventoryRouter.get("/items/:id/lots", listItemLotsHandler);

@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Quarantine through its real HTTP endpoints: a hold that really stops inventory being issued / consumed / reserved / scrapped,
 // partial release and destroy, four-eyes, locations, records that are not enforced, the receiving hook, RBAC, isolation, audit.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -6,7 +7,7 @@ import request from "supertest";
 import { and, eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { roles } from "../../src/drizzle/schema/roles.js";
 import { suppliers } from "../../src/drizzle/schema/supplier.js";
@@ -26,8 +27,8 @@ import { applyMovement } from "../../src/modules/inventory/inventory.service.js"
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
-let otherTenantId: number;
+let companyId: number;
+
 const userIds: number[] = [];
 type Who = { id: number; email: string; token: string };
 let qualityUser: Who; // quality department, ordinary role: can place and move holds, cannot release
@@ -36,25 +37,25 @@ let admin: Who;
 let production: Who; // read on quarantine, edit on inventory
 let sales: Who; // no access to quarantine at all
 let customer: Who;
-let otherAdmin: Who;
+
 let supplierId: number;
 
-async function makeUser(tenant: number, label: string, roleName: string, department: string | null): Promise<Who> {
+async function makeUser(co: number, label: string, roleName: string, department: string | null): Promise<Who> {
   const email = `quar-${label}-${suffix}@test.local`;
-  const [u] = await db.insert(users).values({ tenantId: tenant, email, passwordHash: "unused", department }).returning();
+  const [u] = await db.insert(users).values({ email, passwordHash: "unused", department }).returning();
   userIds.push(u!.id);
-  return { id: u!.id, email, token: await signAccessToken({ sub: String(u!.id), tenantId: tenant, roleId: null, roleName, department }) };
+  return { id: u!.id, email, token: await signAccessToken({ sub: String(u!.id), roleId: null, roleName, department }) };
 }
 const as = (w: Who) => ({ Authorization: `Bearer ${w.token}` });
 
-const events = async (id: number) => (await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "Quarantine"), eq(auditTrail.entityId, id)))).map((r) => r.changes as Record<string, unknown> | null);
+const events = async (id: number) => (await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "Quarantine"), eq(auditTrail.entityId, id)))).map((r) => r.changes as Record<string, unknown> | null);
 const hasEvent = async (id: number, event: string) => (await events(id)).some((c) => c?.event === event);
 
 /** An inventory item with `qty` in stock and one lot holding all of it — the shape a real receipt leaves behind. */
 async function stockedLot(qty: number, sku = `Q-${Math.random().toString(36).slice(2, 8)}`) {
-  const [item] = await db.insert(inventoryItems).values({ tenantId, sku, description: "Quarantine test part", unitOfMeasure: "pcs" }).returning();
-  await applyMovement(db, tenantId, item!.id, { movementType: "receive", quantity: qty }, undefined);
-  const [lot] = await db.insert(inventoryLots).values({ tenantId, itemId: item!.id, lotNumber: `L-${sku}`, receivedQty: String(qty), remainingQty: String(qty) }).returning();
+  const [item] = await db.insert(inventoryItems).values({ sku, description: "Quarantine test part", unitOfMeasure: "pcs" }).returning();
+  await applyMovement(db, item!.id, { movementType: "receive", quantity: qty }, undefined);
+  const [lot] = await db.insert(inventoryLots).values({ itemId: item!.id, lotNumber: `L-${sku}`, receivedQty: String(qty), remainingQty: String(qty) }).returning();
   return { itemId: item!.id, lotId: lot!.id, sku };
 }
 const itemRow = async (id: number) => (await db.select().from(inventoryItems).where(eq(inventoryItems.id, id)))[0]!;
@@ -68,55 +69,50 @@ const consume = (itemId: number, quantity: number, extra: Record<string, unknown
 
 describe("Quarantine (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [t] = await db.insert(tenants).values({ name: `Quar ${suffix}`, code: `quar-${suffix}` }).returning();
-    const [o] = await db.insert(tenants).values({ name: `Quar Other ${suffix}`, code: `quar-other-${suffix}` }).returning();
-    tenantId = t!.id;
-    otherTenantId = o!.id;
-    await seedDefaultPermissions(tenantId);
-    await seedDefaultPermissions(otherTenantId);
-    qualityUser = await makeUser(tenantId, "quality", "operator", "quality");
-    manager = await makeUser(tenantId, "manager", "quality_manager", "quality");
-    admin = await makeUser(tenantId, "admin", "admin", null);
-    production = await makeUser(tenantId, "production", "operator", "production");
-    sales = await makeUser(tenantId, "sales", "operator", "sales_and_marketing");
-    customer = await makeUser(tenantId, "customer", "customer", null);
-    otherAdmin = await makeUser(otherTenantId, "other", "admin", null);
+    const t = await ensureTestCompany();
+    
+    companyId = t!.id;
+    
+    await seedDefaultPermissions(companyId);
+    
+    qualityUser = await makeUser(companyId, "quality", "operator", "quality");
+    manager = await makeUser(companyId, "manager", "quality_manager", "quality");
+    admin = await makeUser(companyId, "admin", "admin", null);
+    production = await makeUser(companyId, "production", "operator", "production");
+    sales = await makeUser(companyId, "sales", "operator", "sales_and_marketing");
+    customer = await makeUser(companyId, "customer", "customer", null);
+    
     await db.insert(roles).values([{ name: "quality_manager" }, { name: "admin" }]).onConflictDoNothing();
     // By default Quality has only read access to the ERP area, which the receiving state machine sits behind; this organization grants edit.
-    await db.update(departmentPermissions).set({ accessLevel: "edit" }).where(and(eq(departmentPermissions.tenantId, tenantId), eq(departmentPermissions.departmentName, "quality"), eq(departmentPermissions.moduleName, "erp")));
-    supplierId = (await db.insert(suppliers).values({ tenantId, name: `Quar Supplier ${suffix}` }).returning())[0]!.id;
+    await db.update(departmentPermissions).set({ accessLevel: "edit" }).where(and(eq(departmentPermissions.departmentName, "quality"), eq(departmentPermissions.moduleName, "erp")));
+    supplierId = (await db.insert(suppliers).values({ name: `Quar Supplier ${suffix}` }).returning())[0]!.id;
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    for (const t of [tenantId, otherTenantId]) {
-      await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, t));
-      await db.delete(auditTrail).where(eq(auditTrail.tenantId, t));
-      await db.delete(notificationLog).where(eq(notificationLog.tenantId, t));
+    for (const t of [companyId]) {
+      await db.delete(auditRowChanges);
+      await db.delete(auditTrail);
+      await db.delete(notificationLog);
       // The decision log is append-only by trigger; this is a test-database teardown, so lift it for the cleanup only.
       await pool.query("ALTER TABLE quarantine_resolutions DISABLE TRIGGER quarantine_resolutions_append_only");
-      await db.delete(quarantineResolutions).where(eq(quarantineResolutions.tenantId, t));
+      await db.delete(quarantineResolutions);
       await pool.query("ALTER TABLE quarantine_resolutions ENABLE TRIGGER quarantine_resolutions_append_only");
-      await db.delete(quarantineInventory).where(eq(quarantineInventory.tenantId, t));
-      await db.delete(quarantineRecords).where(eq(quarantineRecords.tenantId, t));
-      await db.delete(ncr).where(eq(ncr.tenantId, t));
+      await db.delete(quarantineInventory);
+      await db.delete(quarantineRecords);
+      await db.delete(ncr);
       // Lots point at receiving lines, and movements at lots, so they go first.
-      await db.delete(inventoryMovements).where(eq(inventoryMovements.tenantId, t));
-      await db.delete(inventoryAlerts).where(eq(inventoryAlerts.tenantId, t));
-      await db.delete(inventoryLots).where(eq(inventoryLots.tenantId, t));
-      await db.delete(erpReceivingLineItems).where(eq(erpReceivingLineItems.tenantId, t));
-      await db.delete(erpReceivingDocuments).where(eq(erpReceivingDocuments.tenantId, t));
-      await db.delete(erpPoLineItems).where(eq(erpPoLineItems.tenantId, t));
-      await db.delete(erpPurchaseOrders).where(eq(erpPurchaseOrders.tenantId, t));
-      await db.delete(inventoryStock).where(eq(inventoryStock.tenantId, t));
-      await db.delete(inventoryItems).where(eq(inventoryItems.tenantId, t));
-      await db.delete(suppliers).where(eq(suppliers.tenantId, t));
-      await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, t));
-    }
-    await db.delete(users).where(inArray(users.id, userIds));
-    for (const t of [tenantId, otherTenantId]) {
-      await db.delete(tenants).where(eq(tenants.id, t));
-      await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, t));
+      await db.delete(inventoryMovements);
+      await db.delete(inventoryAlerts);
+      await db.delete(inventoryLots);
+      await db.delete(erpReceivingLineItems);
+      await db.delete(erpReceivingDocuments);
+      await db.delete(erpPoLineItems);
+      await db.delete(erpPurchaseOrders);
+      await db.delete(inventoryStock);
+      await db.delete(inventoryItems);
+      await db.delete(suppliers);
+      await db.delete(departmentPermissions);
     }
     await pool.end();
   });
@@ -202,7 +198,7 @@ describe("Quarantine (real DB + real HTTP path)", () => {
       expect(self.body.message).toMatch(/someone else/i);
       const editor = await request(app).post(`/quarantine/${qId}/release`).set(as(qualityUser)).send({ disposition: "use_as_is", notes: "Checked and fine" });
       expect(editor.status).toBe(403);
-      expect((await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "Quarantine")))).some((r) => (r.changes as { permission?: string } | null)?.permission === "quarantine.release")).toBe(true);
+      expect((await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "Quarantine")))).some((r) => (r.changes as { permission?: string } | null)?.permission === "quarantine.release")).toBe(true);
       expect(Number((await lotRow(s.lotId)).heldQty)).toBe(60); // nothing changed
     });
 
@@ -285,7 +281,7 @@ describe("Quarantine (real DB + real HTTP path)", () => {
       const res = await hold(qualityUser, { itemType: "finished_goods", itemLabel: "Pallet 7 — Bracket 4400", quantity: 12, reasonCategory: "customer_return" });
       expect(res.status).toBe(201);
       expect(res.body).toMatchObject({ enforced: false, itemLabel: "Pallet 7 — Bracket 4400" });
-      const note = (await db.select().from(notificationLog).where(and(eq(notificationLog.tenantId, tenantId), eq(notificationLog.recipient, manager.email)))).find((m) => /Pallet 7/.test(m.subject));
+      const note = (await db.select().from(notificationLog).where(and(eq(notificationLog.recipient, manager.email)))).find((m) => /Pallet 7/.test(m.subject));
       expect(note?.body).toMatch(/record only/i);
       // releasing it works the same way, with nothing in inventory to change
       const done = await request(app).post(`/quarantine/${res.body.id}/release`).set(as(manager)).send({ disposition: "reworked", notes: "Reworked and re-inspected" });
@@ -302,10 +298,10 @@ describe("Quarantine (real DB + real HTTP path)", () => {
       expect((await request(app).get("/quarantine?q=Bracket").set(as(production))).body.length).toBeGreaterThanOrEqual(1);
       expect((await request(app).get("/quarantine?olderThanDays=1").set(as(production))).body).toEqual([]); // everything here is new
 
-      const mine = (await db.insert(ncr).values({ tenantId, title: "Linked NCR" }).returning())[0]!;
-      const theirs = (await db.insert(ncr).values({ tenantId: otherTenantId, title: "Someone else's NCR" }).returning())[0]!;
+      const mine = (await db.insert(ncr).values({ title: "Linked NCR" }).returning())[0]!;
+      
       const s = await stockedLot(5);
-      expect((await hold(qualityUser, { itemType: "inventory_lot", itemId: s.lotId, quantity: 1, ncrId: theirs.id })).status).toBe(400);
+      
       const linked = await hold(qualityUser, { itemType: "inventory_lot", itemId: s.lotId, quantity: 1, ncrId: mine.id });
       expect(linked.body.ncrId).toBe(mine.id);
       const edited = await request(app).patch(`/quarantine/${linked.body.id}`).set(as(qualityUser)).send({ reason: "Reason updated after investigation", metadata: { target: { itemId: 999, lotId: 999 } } });
@@ -318,10 +314,10 @@ describe("Quarantine (real DB + real HTTP path)", () => {
   // -------------------------------------------------------------------------------------------------------------------------------------------------------
   describe("receiving", () => {
     async function receivedLine(qty = 100) {
-      const [item] = await db.insert(inventoryItems).values({ tenantId, sku: `RCV-${Math.random().toString(36).slice(2, 8)}`, description: "Received part" }).returning();
+      const [item] = await db.insert(inventoryItems).values({ sku: `RCV-${Math.random().toString(36).slice(2, 8)}`, description: "Received part" }).returning();
       const purchasing = qualityUser; // the PO endpoints are gated by department; use API-created records through a purchasing user
-      const buyer = await makeUser(tenantId, `buyer-${Math.random().toString(36).slice(2, 6)}`, "operator", "purchasing");
-      const receiver = await makeUser(tenantId, `recv-${Math.random().toString(36).slice(2, 6)}`, "operator", "material_management");
+      const buyer = await makeUser(companyId, `buyer-${Math.random().toString(36).slice(2, 6)}`, "operator", "purchasing");
+      const receiver = await makeUser(companyId, `recv-${Math.random().toString(36).slice(2, 6)}`, "operator", "material_management");
       void purchasing;
       const po = await request(app).post("/erp/purchase-orders").set(as(buyer)).send({ supplierId, lineItems: [{ itemId: item!.id, quantity: qty, unitCost: 5 }] });
       expect(po.status).toBe(201);
@@ -340,7 +336,7 @@ describe("Quarantine (real DB + real HTTP path)", () => {
     it("puts the received stock on hold when a line is quarantined — and really stops it being used", async () => {
       const r = await receivedLine(100);
       expect((await r.status("quarantined")).status).toBe(200);
-      const [q] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.tenantId, tenantId), eq(quarantineRecords.sourceType, "receiving_line_item"), eq(quarantineRecords.sourceId, r.lineId)));
+      const [q] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.sourceType, "receiving_line_item"), eq(quarantineRecords.sourceId, r.lineId)));
       expect(q).toMatchObject({ status: "quarantined", enforced: true, itemType: "inventory_lot", reasonCategory: "nonconforming_material", lotNumber: r.lotNumber });
       expect(Number(q!.quantity)).toBe(100);
       expect(Number((await itemRow(r.itemId)).heldQty)).toBe(100);
@@ -404,17 +400,6 @@ describe("Quarantine (real DB + real HTTP path)", () => {
       expect((await request(app).get("/quarantine")).status).toBe(401);
     });
 
-    it("keeps organizations apart — including what can be held", async () => {
-      expect((await request(app).get(`/quarantine/${id}`).set(as(otherAdmin))).status).toBe(404);
-      expect((await request(app).post(`/quarantine/${id}/release`).set(as(otherAdmin)).send({ disposition: "use_as_is", notes: "Not mine to release" })).status).toBe(404);
-      expect((await request(app).post(`/quarantine/${id}/destroy`).set(as(otherAdmin)).send({ disposition: "scrapped", notes: "Not mine to destroy" })).status).toBe(404);
-      expect((await request(app).post(`/quarantine/${id}/relocate`).set(as(otherAdmin)).send({ fromLocation: "a", toLocation: "b", quantity: 1 })).status).toBe(404);
-      expect((await request(app).get("/quarantine").set(as(otherAdmin))).body).toEqual([]);
-      expect((await request(app).get("/quarantine/summary").set(as(otherAdmin))).body.openHolds).toBe(0);
-      // Their user cannot put MY lot on hold:
-      const mineLot = (await db.select().from(inventoryLots).where(eq(inventoryLots.itemId, itemId)))[0]!;
-      expect((await hold(otherAdmin, { itemType: "inventory_lot", itemId: mineLot.id, quantity: 1 })).status).toBe(404);
-      expect(Number((await itemRow(itemId)).heldQty)).toBe(10); // untouched
-    });
+    ;
   });
 });

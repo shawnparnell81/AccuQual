@@ -68,7 +68,7 @@ export function SettingsPage() {
               <dd className="capitalize">{user?.department ?? "—"}</dd>
             </dl>
             <p className="mt-3 text-xs text-muted-foreground">
-              Name, role, and department, along with every other organization-wide setting (users &amp; roles, permissions, AI, supplier/quality/receiving settings, tenant profile), are managed in the{" "}
+              Name, role, and department, along with every other organization-wide setting (users &amp; roles, permissions, AI, supplier/quality/receiving settings, company profile), are managed in the{" "}
               <Link to="/admin" className="text-accent hover:underline">
                 Admin Console
               </Link>

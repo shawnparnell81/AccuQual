@@ -7,7 +7,7 @@ import type { EffectivePermissions } from "../api/types";
  * The current user's own live, DB-driven access level on every real module
  * (GET /permissions/effective — see the Roles & Permissions module). This is
  * the replacement for reading navConfig.ts's static `access` maps directly:
- * a tenant admin's change to department_permissions or a custom role grant
+ * an administrator's change to department_permissions or a custom role grant
  * shows up here on the very next fetch, no re-login, no redeploy.
  *
  * navConfig.ts's own `access` maps aren't deleted — they're still the

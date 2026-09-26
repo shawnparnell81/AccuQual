@@ -1,15 +1,16 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment
 // for why this category exists). Covers the new GET /ai/suggestions
 // history endpoint — previously ai_suggestions could only be read back one
-// row at a time (the decision endpoint) or as a cross-tenant aggregate
-// count (Platform Admin's AI Overview); nothing let a tenant browse its own
+// row at a time (the decision endpoint) or as a aggregate
+// count (Platform Admin's AI Overview); nothing let a company browse its own
 // AI suggestion history at all.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { eq } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { aiSuggestions } from "../../src/drizzle/schema/ai.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
@@ -18,41 +19,34 @@ import { signAccessToken } from "../../src/utils/jwt.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
-let otherTenantId: number;
+let companyId: number;
+
 const userIds: number[] = [];
 let adminToken: string;
 let operatorToken: string;
 
-async function makeUser(forTenantId: number, roleName: string) {
-  const [user] = await db.insert(users).values({ tenantId: forTenantId, email: `ai-hist-${roleName}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+async function makeUser(forCompanyId: number, roleName: string) {
+  const [user] = await db.insert(users).values({ email: `ai-hist-${roleName}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId: forTenantId, roleId: null, roleName, department: null });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department: null });
 }
 
 describe("GET /ai/suggestions — AI suggestion history (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `AI History Test Tenant ${suffix}`, code: `ai-hist-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    const [other] = await db.insert(tenants).values({ name: `AI History Other Tenant ${suffix}`, code: `ai-hist-other-${suffix}` }).returning();
-    otherTenantId = other!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
+    
+    
 
-    adminToken = await makeUser(tenantId, "admin");
-    operatorToken = await makeUser(tenantId, "operator");
+    adminToken = await makeUser(companyId, "admin");
+    operatorToken = await makeUser(companyId, "operator");
   });
 
   afterAll(async () => {
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, otherTenantId));
-    await db.delete(aiSuggestions).where(eq(aiSuggestions.tenantId, tenantId));
-    await db.delete(aiSuggestions).where(eq(aiSuggestions.tenantId, otherTenantId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
-    await db.delete(tenants).where(eq(tenants.id, otherTenantId));
     await pool.end();
   });
 
-  it("lists real suggestion rows this tenant has generated, newest first, with the actor's real name", async () => {
+  it("lists real suggestion rows this company has generated, newest first, with the actor's real name", async () => {
     const rootCause = await request(app)
       .post("/ai/root-cause")
       .set("Authorization", `Bearer ${adminToken}`)
@@ -120,15 +114,5 @@ describe("GET /ai/suggestions — AI suggestion history (real DB + real HTTP pat
     expect(res.status).toBe(403);
   });
 
-  it("never shows another tenant's suggestions", async () => {
-    const otherAdminToken = await makeUser(otherTenantId, "admin");
-    const otherSuggestion = await request(app)
-      .post("/ai/root-cause")
-      .set("Authorization", `Bearer ${otherAdminToken}`)
-      .send({ ncrData: { title: "Other Tenant NCR" } });
-    expect(otherSuggestion.status).toBe(200);
-
-    const list = await request(app).get("/ai/suggestions").set("Authorization", `Bearer ${adminToken}`);
-    expect(list.body.items.find((s: { id: number }) => s.id === otherSuggestion.body.id)).toBeUndefined();
-  });
+  ;
 });

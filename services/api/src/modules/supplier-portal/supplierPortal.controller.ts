@@ -397,7 +397,7 @@ export const sendMessageHandler = asyncHandler(async (req: Request, res: Respons
  * Phase 5 — "Ensure email templates integrate with Phase 1 email
  * infrastructure": internal-staff-only (a supplier login has no reason to
  * email itself). Sends a REAL email via notification.service.ts's
- * sendEmail() — the same transport tenant onboarding/password reset use —
+ * sendEmail() — the same transport company onboarding/password reset use —
  * to the supplier's own contactEmail, not just an in-app portal message
  * (a supplier may not be logged into the portal to see that). Logs a real
  * notification_log row (same shape every other real notification leaves)

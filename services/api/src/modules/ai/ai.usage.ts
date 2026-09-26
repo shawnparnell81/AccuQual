@@ -49,9 +49,9 @@ export function describeAiState(status: AiOutputStatus, okVerb = "AI-suggested")
  * modules review). Checked before every real call, not against a stored
  * counter: a single cumulative field can't implement "monthly" without
  * something resetting it, and this app has no background jobs to do that
- * reset, so this instead sums this tenant's own real audit_trail rows
+ * reset, so this instead sums this company's own real audit_trail rows
  * carrying a `tokens` field from the 1st of the current calendar month
- * onward. Deliberately NOT filtered to one entityType — tenants.aiMonthlyLimit
+ * onward. Deliberately NOT filtered to one entityType — companies.aiMonthlyLimit
  * is documented as an overall BYOK usage cap, not one scoped to a single
  * feature, so every AI pipeline's spend counts against the same limit.
  * Returns null when under limit (or no limit set), or an error message to
@@ -70,15 +70,15 @@ export async function checkUsageLimit(db: Db, monthlyLimit: number | null, limit
     .where(and(gte(auditTrail.createdAt, startOfMonth)));
 
   const usedThisMonth = row?.total ?? 0;
-  if (usedThisMonth >= monthlyLimit) return "AI usage limit reached for this tenant.";
+  if (usedThisMonth >= monthlyLimit) return "AI usage limit reached for this company.";
   return null;
 }
 
 /**
- * Loads a tenant's row and turns its aiConfig into the provider/apiKey/model
+ * Loads a company's row and turns its aiConfig into the provider/apiKey/model
  * overrides callLlm/callLlmDetailed accept — the same lookup+decrypt
  * ai.assistant.ts already did inline, shared here so every new AI pipeline
- * uses the tenant's own configured key when set, falling back to the
+ * uses the company's own configured key when set, falling back to the
  * platform's global env config exactly like every existing pipeline.
  */
 export async function loadCompanyLlmOptions(db: Db): Promise<{ co: typeof company.$inferSelect | undefined; llmOptions: LlmCallOptions }> {
@@ -87,7 +87,7 @@ export async function loadCompanyLlmOptions(db: Db): Promise<{ co: typeof compan
 
   // A real, live-reproduced bug (found testing the rebuilt AI Insights
   // dashboard): decryptSecret throws if the stored ciphertext can't be
-  // authenticated under the CURRENT TENANT_AI_CONFIG_ENCRYPTION_KEY — e.g.
+  // authenticated under the CURRENT AI_CONFIG_ENCRYPTION_KEY — e.g.
   // after a real key rotation, or any other way stored ciphertext and the
   // active key fall out of sync. That's exactly as recoverable as "no key
   // configured" (every pipeline already has a clean stub path for that),
@@ -99,7 +99,7 @@ export async function loadCompanyLlmOptions(db: Db): Promise<{ co: typeof compan
     try {
       apiKey = decryptSecret(aiConfig.apiKeyEncrypted);
     } catch (err) {
-      logger.warn("Tenant AI config key failed to decrypt — falling back to stub mode for this call", { err: err instanceof Error ? err.message : err });
+      logger.warn("Company AI config key failed to decrypt — falling back to stub mode for this call", { err: err instanceof Error ? err.message : err });
     }
   }
 
@@ -123,7 +123,7 @@ export async function loadCompanyLlmOptions(db: Db): Promise<{ co: typeof compan
  * Onboarding, ERP Automation) called the plain `callLlm` (text-only,
  * discards usage) and logged only `{ module, pipeline }`, so their real
  * spend never showed up in Admin → AI Usage and never counted toward
- * `checkUsageLimit`'s sum above despite this function's own tenant-wide
+ * `checkUsageLimit`'s sum above despite this function's own company-wide
  * scope — found live in the QA sweep review. Every new AI pipeline should
  * call this (via `callLlmDetailed`, not `callLlm`) instead of inserting
  * into `aiSuggestions` by hand.
@@ -180,7 +180,7 @@ export async function recordAiSuggestion(
 
 /**
  * The one call site every `ai.controller.ts` handler now goes through:
- * checks the tenant's usage limit, runs the pipeline with the tenant's BYOK
+ * checks the company's usage limit, runs the pipeline with the company's BYOK
  * options, and always records a row — "ok"/"stub"/"malformed" from the
  * pipeline's own guardrail check (see ai.guardrails.ts), or "error" (a real
  * provider failure after retries, e.g. rate-limit exhaustion or a network
@@ -208,14 +208,14 @@ export async function runPipelineAndRecord(
   try {
     const { classified, result } = await runner(llmOptions);
 
-    // "strict" safety mode (Settings → Tenant AI Config): a malformed
+    // "strict" safety mode (Settings → Company AI Config): a malformed
     // response is refused outright — recorded for the audit trail exactly
     // like "standard" mode would, but the request itself fails with a clear
     // error instead of returning a 200 the caller might render as if it
     // were a real (if flagged) suggestion.
     if (classified.status === "malformed" && co?.aiConfig?.safetyMode === "strict") {
       await recordAiSuggestion(db, { module, pipeline, input, output: classified.data, result, performedBy, status: classified.status, errorMessage: classified.errorMessage, okVerb });
-      throw new AppError(classified.errorMessage ?? "The AI response didn't match the expected shape and was refused under this tenant's strict safety mode.", 502);
+      throw new AppError(classified.errorMessage ?? "The AI response didn't match the expected shape and was refused under this company's strict safety mode.", 502);
     }
 
     const suggestion = await recordAiSuggestion(db, {

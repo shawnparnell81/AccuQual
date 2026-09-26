@@ -49,13 +49,13 @@ function useFeasibilitySettings() {
 export function FeasibilityReviewForm({ review }: { review: FeasibilityReview }) {
   const toast = useToast();
   const queryClient = useQueryClient();
-  const logoUrl = useAuthStore((s) => s.tenant?.branding?.logoUrl);
+  const logoUrl = useAuthStore((s) => s.company?.branding?.logoUrl);
   const user = useCurrentUser();
   const { data: settings } = useFeasibilitySettings();
   const requiredDocuments = settings?.requiredDocuments ?? [];
   const { data: catalog = [] } = useControlledDocuments(requiredDocuments.length > 0);
 
-  const isAdmin = user?.roleName === "admin" || user?.roleName === "platform_admin";
+  const isAdmin = user?.roleName === "admin";
   const canEditRecord = isAdmin || user?.department === "engineering";
   const isFinal = review.status === "final";
 

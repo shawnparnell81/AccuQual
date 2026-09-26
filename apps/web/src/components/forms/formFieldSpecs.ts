@@ -1,10 +1,10 @@
 import type { FormField } from "../../types/forms";
 
 /**
- * Default field layout per form type. A tenant's uploaded custom template
+ * Default field layout per form type. A company's uploaded custom template
  * would carry its own `fieldMap` (see form_templates.fieldMap) that a real
  * AcroForm-coordinate overlay would read instead — this generic set is what
- * renders until that per-tenant mapping exists (see Forms & PDF Engine Spec §4).
+ * renders until that mapping exists (see Forms & PDF Engine Spec §4).
  */
 export const FORM_FIELD_SPECS: Record<string, FormField[]> = {
   ncr: [

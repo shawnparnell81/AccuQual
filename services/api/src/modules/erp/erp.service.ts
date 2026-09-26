@@ -22,7 +22,7 @@ export interface LineItemInput {
   notes?: string;
 }
 
-/** Every request here already runs inside one Postgres transaction (see tenantScope.ts's withDb) — no separate db.transaction() needed for these multi-insert operations to be atomic. */
+/** Every request here already runs inside one Postgres transaction (see requestDb.ts's withDb) — no separate db.transaction() needed for these multi-insert operations to be atomic. */
 export async function createPurchaseOrder(
   db: Db,
   supplierId: number,

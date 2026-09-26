@@ -2,7 +2,7 @@
 // LOCAL Postgres container (localhost:5433) and refuses to run against anything
 // else, so it can never touch Supabase / production by accident.
 //
-//   node ops/local-db.mjs setup    apply migrations, seed the demo tenant + admin, seed the demo story
+//   node ops/local-db.mjs setup    apply migrations, seed the demo company + admin, seed the demo story
 //   node ops/local-db.mjs migrate  apply migrations only
 //   node ops/local-db.mjs status   show which host this would use and whether it answers
 //

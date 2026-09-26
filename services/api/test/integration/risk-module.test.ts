@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Covers the Risk Management module rebuild: full CRUD (the previous
 // risk.routes.ts only had GET/POST/GET-by-id/fmea), the open -> mitigation
 // -> monitoring -> closed workflow with department gating, mitigation
@@ -9,7 +10,7 @@ import request from "supertest";
 import { eq, inArray, and } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
 import { riskAssessments, riskMitigations, fmeaItems } from "../../src/drizzle/schema/risk.js";
@@ -22,7 +23,7 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let ncrId: number;
 let riskId: number;
 const userIds: number[] = [];
@@ -34,19 +35,19 @@ let customerServiceToken: string;
 let adminToken: string;
 
 async function makeUser(department: string | null, roleName = "operator") {
-  const [user] = await db.insert(users).values({ tenantId, email: `risk-test-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+  const [user] = await db.insert(users).values({ email: `risk-test-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName, department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
 }
 
 describe("Risk Management module (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Risk Test Tenant ${suffix}`, code: `risk-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
 
-    await seedDefaultPermissions(tenantId);
+    await seedDefaultPermissions(companyId);
 
-    const [ncrRow] = await db.insert(ncr).values({ tenantId, title: "Risk test NCR", description: "x" }).returning();
+    const [ncrRow] = await db.insert(ncr).values({ title: "Risk test NCR", description: "x" }).returning();
     ncrId = ncrRow!.id;
 
     qualityToken = await makeUser("quality");
@@ -58,18 +59,6 @@ describe("Risk Management module (real DB + real HTTP path)", () => {
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(inArray(auditTrail.performedBy, userIds));
-    await db.delete(aiSuggestions).where(inArray(aiSuggestions.createdBy, userIds));
-    if (riskId) {
-      await db.delete(riskMitigations).where(eq(riskMitigations.riskAssessmentId, riskId));
-      await db.delete(fmeaItems).where(eq(fmeaItems.riskAssessmentId, riskId));
-      await db.delete(riskAssessments).where(eq(riskAssessments.id, riskId));
-    }
-    await db.delete(ncr).where(eq(ncr.id, ncrId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 

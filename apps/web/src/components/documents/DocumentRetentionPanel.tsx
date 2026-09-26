@@ -54,7 +54,7 @@ export function DocumentRetentionPanel({ document }: { document: AccuQualDocumen
   });
 
   // New in Phase 6 (services/api's documents.controller.ts): archives this
-  // one document on demand instead of waiting for the tenant-wide sweep
+  // one document on demand instead of waiting for the company-wide sweep
   // above. Same eligibility rule server-side (decideRetention()).
   const archiveNow = useMutation({
     mutationFn: async () => (await apiClient.post(`/documents/${document.id}/archive`)).data,
@@ -120,7 +120,7 @@ export function DocumentRetentionPanel({ document }: { document: AccuQualDocumen
               onClick={() => runRetention.mutate()}
               disabled={runRetention.isPending}
               className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-60"
-              title="Applies retention rules to every obsolete, aged-out document in this tenant right now"
+              title="Applies retention rules to every obsolete, aged-out document in this company right now"
             >
               {runRetention.isPending ? "Running…" : "Run Retention Now"}
             </button>

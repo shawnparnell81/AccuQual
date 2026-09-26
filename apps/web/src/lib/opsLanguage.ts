@@ -7,7 +7,6 @@
 export type HomeKind = "lead" | "auditor" | "floor";
 
 const ROLE_PHRASES: Record<string, string> = {
-  platform_admin: "Platform admin",
   admin: "Administrator",
   quality_manager: "Quality lead",
   auditor: "Auditor",

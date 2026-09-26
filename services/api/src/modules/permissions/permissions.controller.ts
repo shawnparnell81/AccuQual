@@ -24,7 +24,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import type { Db } from "../../lib/requestDb.js";
 
 // ---------------------------------------------------------------------------
-// Read endpoints open to any authenticated tenant user
+// Read endpoints open to any authenticated company user
 // ---------------------------------------------------------------------------
 
 /** GET /permissions/modules — the fixed, real module catalog, for populating any admin grid's columns. */
@@ -45,7 +45,7 @@ export const getMyEffectivePermissionsHandler = asyncHandler(async (req: Request
 // Department Access grid — admin only
 // ---------------------------------------------------------------------------
 
-/** GET /permissions/department-permissions — the FULL department x module grid: every cell, whether it's an explicit tenant override or just the shipped default, and the row id if one exists (so the frontend never has to guess). */
+/** GET /permissions/department-permissions — the FULL department x module grid: every cell, whether it's an explicit company override or just the shipped default, and the row id if one exists (so the frontend never has to guess). */
 export const listDepartmentPermissionsHandler = asyncHandler(async (req: Request, res: Response) => {
   const rows = await req.db!.select().from(departmentPermissions);
   const overrides = new Map(rows.map((r) => [`${r.departmentName}:${r.moduleName}`, r]));
@@ -118,7 +118,7 @@ export const deleteDepartmentPermissionHandler = asyncHandler(async (req: Reques
 // Custom Permission Roles — admin only
 // ---------------------------------------------------------------------------
 
-/** GET /permissions/roles — every custom role this tenant has defined, with its module grants and how many users hold it. */
+/** GET /permissions/roles — every custom role this company has defined, with its module grants and how many users hold it. */
 export const listPermissionRolesHandler = asyncHandler(async (req: Request, res: Response) => {
   const roles = await req.db!.select().from(permissionRoles);
   const moduleRows = await req.db!.select().from(permissionRoleModules);
@@ -221,7 +221,7 @@ export const deleteRoleModuleHandler = asyncHandler(async (req: Request, res: Re
 // User <-> Permission Role assignment — admin only
 // ---------------------------------------------------------------------------
 
-/** GET /permissions/user-roles — every assignment in this tenant, with enough joined user/role info for the User Assignment page to render without extra round-trips. */
+/** GET /permissions/user-roles — every assignment in this company, with enough joined user/role info for the User Assignment page to render without extra round-trips. */
 export const listUserRolesHandler = asyncHandler(async (req: Request, res: Response) => {
   const rows = await req
     .db!.select({
@@ -243,7 +243,7 @@ export const createUserRoleHandler = asyncHandler(async (req: Request, res: Resp
   const { userId, roleId } = req.body as { userId: number; roleId: number };
 
   const [targetUser] = await req.db!.select({ id: users.id }).from(users).where(and(eq(users.id, userId)));
-  if (!targetUser) throw AppError.badRequest(`User #${userId} not found in this tenant`);
+  if (!targetUser) throw AppError.badRequest(`User #${userId} not found in this company`);
   await loadPermissionRole(req, roleId);
 
   const [row] = await req.db!.insert(userPermissionRoles).values({ userId, roleId }).onConflictDoNothing().returning();

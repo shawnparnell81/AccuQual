@@ -23,7 +23,7 @@ export function useSavedViews(pageKey: string) {
   const { data } = useQuery<SavedViewsBlob>({
     queryKey: ["users/me/saved-views"],
     queryFn: async () => (await apiClient.get("/users/me/saved-views")).data,
-    enabled: user?.tenantId != null,
+    enabled: user != null,
   });
 
   const views = data?.[pageKey] ?? [];

@@ -69,7 +69,7 @@ const FORM_TYPE_TO_RESOURCE: Partial<Record<(typeof FORM_TYPES)[number], Resourc
 /**
  * Write-path only (POST save/version), matching this finding's own scope
  * and the pre-existing production_log gate's own scope — reads stay open
- * to any authenticated tenant user, unchanged, same as before this fix.
+ * to any authenticated company user, unchanged, same as before this fix.
  */
 function gateKnownFormTypes(req: Request, res: Response, next: NextFunction) {
   const resourceKey = req.params.type ? FORM_TYPE_TO_RESOURCE[req.params.type as (typeof FORM_TYPES)[number]] : undefined;

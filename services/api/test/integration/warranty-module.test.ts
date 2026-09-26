@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Covers the Warranty module end to end: create (Customer Service intake),
 // the full new -> inspection -> supplier_review -> approved -> replaced ->
 // closed lifecycle plus the rejected -> closed branch, department gating on
@@ -11,7 +12,7 @@ import request from "supertest";
 import { eq, and } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { customers } from "../../src/drizzle/schema/customers.js";
 import { warrantyClaims, warrantyClaimCosts, warrantyClaimWorkflow } from "../../src/drizzle/schema/warranty.js";
@@ -24,7 +25,7 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let customerId: number;
 let customerServiceToken: string;
 let qualityToken: string;
@@ -38,17 +39,17 @@ let secondClaimId: number;
 async function makeUser(department: string | null, roleName = "operator") {
   const [user] = await db
     .insert(users)
-    .values({ tenantId, email: `warranty-test-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department })
+    .values({ email: `warranty-test-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department })
     .returning();
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName, department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
 }
 
 describe("Warranty module (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Warranty Test Tenant ${suffix}`, code: `warranty-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
 
-    await seedDefaultPermissions(tenantId);
+    await seedDefaultPermissions(companyId);
 
     customerServiceToken = await makeUser("customer_service");
     qualityToken = await makeUser("quality");
@@ -57,22 +58,12 @@ describe("Warranty module (real DB + real HTTP path)", () => {
     salesToken = await makeUser("sales_and_marketing");
     adminToken = await makeUser(null, "admin");
 
-    const [customer] = await db.insert(customers).values({ tenantId, legalName: `Warranty Test Customer ${suffix}`, status: "active" }).returning();
+    const [customer] = await db.insert(customers).values({ legalName: `Warranty Test Customer ${suffix}`, status: "active" }).returning();
     customerId = customer!.id;
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(attachments).where(eq(attachments.tenantId, tenantId));
-    await db.delete(warrantyClaimWorkflow).where(eq(warrantyClaimWorkflow.tenantId, tenantId));
-    await db.delete(warrantyClaimCosts).where(eq(warrantyClaimCosts.tenantId, tenantId));
-    await db.delete(warrantyClaims).where(eq(warrantyClaims.tenantId, tenantId));
-    await db.delete(customers).where(eq(customers.tenantId, tenantId));
-    await db.delete(users).where(eq(users.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 

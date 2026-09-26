@@ -13,7 +13,7 @@ const LEVEL_LABEL: Record<ModuleAccessLevel, string> = { none: "None", read: "Re
  * cell, auto-saving on change (same "toggle, no Save button" convention as
  * Settings > Navigation's own hide/show grid). A dimmed cell with no reset
  * button is running on the shipped default; a full-contrast cell with a
- * reset (↺) button is an explicit tenant override.
+ * reset (↺) button is an explicit company override.
  */
 export function PermissionsDepartmentAccessTab() {
   const toast = useToast();

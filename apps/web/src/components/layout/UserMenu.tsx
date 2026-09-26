@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronDown, LogOut, Settings } from "lucide-react";
-import { useCurrentTenant, useCurrentUser, useLogout } from "../../hooks/useAuth";
+import { useCurrentCompany, useCurrentUser, useLogout } from "../../hooks/useAuth";
 import { rolePhrase } from "../../lib/opsLanguage";
 
 /** Who you are, in one place: email, role and organization, plus Settings and Logout. */
 export function UserMenu() {
   const user = useCurrentUser();
-  const tenant = useCurrentTenant();
+  const company = useCurrentCompany();
   const logout = useLogout();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -49,7 +49,7 @@ export function UserMenu() {
             <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               {user?.roleName && <span className="rounded-full border border-accent/40 bg-accent/15 px-2 py-0.5 text-[11px] text-accent">{rolePhrase(user.roleName)}</span>}
-              {tenant?.name && <span className="truncate text-[11px] text-muted-foreground">{tenant.name}</span>}
+              {company?.name && <span className="truncate text-[11px] text-muted-foreground">{company.name}</span>}
             </div>
           </div>
           <Link to="/settings" onClick={() => setOpen(false)} className="mt-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-secondary">

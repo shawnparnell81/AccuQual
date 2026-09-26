@@ -232,7 +232,7 @@ export const changeRmaStatusHandler = asyncHandler(async (req: Request, res: Res
     changes: { oldStatus: record.status, newStatus, userId: req.user?.id },
     performedBy: req.user?.id,
   });
-  // Opt-in only: lets a tenant build automation on RMA events in the existing
+  // Opt-in only: lets a company build automation on RMA events in the existing
   // Workflow Builder, exactly like supplier/inventory/erp already allow for
   // themselves — not a change to any workflow outside this module.
   await publishEvent(WORKFLOW_STREAM, { module: "rma", event: newStatus, entityId: record.id });

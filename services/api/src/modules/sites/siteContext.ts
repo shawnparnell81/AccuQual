@@ -24,7 +24,7 @@ function readHeaderSiteId(req: Request): number | null {
 export async function withSiteContext(req: Request, _res: Response, next: NextFunction) {
   try {
     if (!req.db || !req.user) {
-      return next(AppError.unauthorized("Missing tenant context"));
+      return next(AppError.unauthorized("Missing company context"));
     }
 
     const headerSiteId = readHeaderSiteId(req);

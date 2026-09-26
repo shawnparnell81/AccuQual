@@ -2,7 +2,7 @@
 
 The checklist actually followed to add Equipment & Calibration, Quarantine,
 and Training & Competency (all merged in PR #77) and Document Versioning
-(PR #76). A "module" here means a new tenant-owned table (or set of
+(PR #76). A "module" here means a new table (or set of
 tables) with its own routes, RBAC, and — usually — a nav entry. Skip
 whichever steps don't apply (a module with no nav entry, no audit-worthy
 writes, etc.).
@@ -12,10 +12,8 @@ step 1 below needs the drizzle-kit workaround and the right `.env`.
 
 ## 1. Schema
 
-New file, `services/api/src/drizzle/schema/<module>.ts`. Every tenant-owned
-table needs a `tenantId: integer("tenant_id").references(() => tenants.id).notNull()`
-column — that's what layer 1 of tenant isolation (`withTenantDb`) and layer 2
-(RLS) both key off. Export it from `drizzle/schema/index.ts`.
+New file, `services/api/src/drizzle/schema/<module>.ts`. There is one company,
+so tables carry no company column. Export it from `drizzle/schema/index.ts`.
 
 Generate the migration:
 
@@ -30,14 +28,12 @@ as a drop + add instead of a rename, which loses data on a real database.
 
 ## 2. Post-migrate SQL
 
-Three files under `services/api/src/drizzle/post-migrate/`, each with its
-own list to extend:
+Files under `services/api/src/drizzle/post-migrate/`. `rls-policies.sql` needs
+no edit for an ordinary table: it enables row-level security and adds the
+`accuqual_app` policy on every table in `public` automatically. Extend:
 
-- **`rls-policies.sql`** — add the new table name to the `tenant_tables`
-  array. This is what turns on Row-Level Security for it.
 - **`indexes.sql`** — add whatever indexes the module's own query patterns
-  need (at minimum, an index on `tenant_id`, usually composite with the
-  columns you'll filter or sort by).
+  need (columns you'll filter or sort by).
 - **`version-freeze.sql`** — only if something about the table needs to be
   append-only or frozen once decided (quarantine resolutions, decided
   competency evaluations, published document versions all use this
@@ -60,7 +56,7 @@ database.
 - `<module>.controller.ts` — thin; each handler calls the service and
   shapes the response. Every handler that mutates data should call
   `recordAuditTrail` (or fit into the module's own `recordAuditTrailStandalone`
-  case — see the README's tenant-isolation section for when that's used
+  case — see the README's "how data access works" section for when that's used
   instead of the default per-request `req.db`).
 - `<module>.routes.ts` — mount each route behind
   `requirePermission("<subject>.<action>")` (see step 6). Register the
@@ -78,10 +74,10 @@ database.
   list its actions (`view`, `edit`, `manage`, or a module-specific verb
   like `calibrate`/`release`/`evaluate`).
 - **`db/defaultPermissions.ts`** — seed which departments get `view` vs
-  `edit` by default for a brand-new tenant.
+  `edit` by default on a fresh installation.
 - **`db/backfillDepartmentPermissions.ts`** — this is what has to be
-  *run* (not just edited) against every **existing** tenant after deploy,
-  or nobody in an existing company can use the new module until an admin
+  *run* (not just edited) against the **existing** installation after deploy,
+  or nobody can use the new module until an admin
   manually grants it. `npm run db:backfill-permissions --workspace services/api`
   is idempotent — safe to re-run.
 
@@ -92,7 +88,7 @@ database.
 - **`apps/web/src/components/layout/navConfig.ts`** — add the `NavLeaf`
   and put it in the right department's `items` array (or the `department:
   null` System group). The dynamic nav registry means this is only the
-  *default* visibility — a tenant admin granting another department
+  *default* visibility — an admin granting another department
   access via Roles & Permissions makes the item appear for them too,
   without touching this file again.
 
@@ -128,10 +124,9 @@ doesn't exist in the docs even though it works.
 ## 10. Tests
 
 `services/api/test/integration/<module>-lifecycle.test.ts` — a real-DB
-integration test (see `tenant-isolation.test.ts`'s header comment for the
-pattern) covering: the actual lifecycle end to end, RBAC (each department's
-view vs edit, and that customers/suppliers are always refused), tenant
-isolation, and the audit trail. Run the full suite three times, not once
+integration test (start from `ensureTestCompany()` in `test/helpers/company.ts`)
+covering: the actual lifecycle end to end, RBAC (each department's
+view vs edit, and that customers/suppliers are always refused), and the audit trail. Run the full suite three times, not once
 — see `local-setup-and-testing.md` on why.
 
 ## 11. Deploy

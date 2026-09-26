@@ -90,11 +90,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
 /**
  * A user's own theme override — scoped by req.user!.id alone (no admin
  * check, unlike GET/PATCH /users/:id, since this only ever reads/writes the
- * caller's own row). This router's withDb already requires a
- * tenantId to reach here at all, so platform_admin accounts (no tenantId)
- * hit the same "Missing tenant context" 401 every other /users/* route
- * already gives them — not something new this endpoint introduces.
- */
+ * caller's own row).  */
 export const getMyTheme = asyncHandler(async (req: Request, res: Response) => {
   const [row] = await req.db!.select({ themePreferences: users.themePreferences }).from(users).where(eq(users.id, req.user!.id));
   res.json(row?.themePreferences ?? {});
@@ -103,7 +99,7 @@ export const getMyTheme = asyncHandler(async (req: Request, res: Response) => {
 export const updateMyTheme = asyncHandler(async (req: Request, res: Response) => {
   const [existing] = await req.db!.select({ themePreferences: users.themePreferences }).from(users).where(eq(users.id, req.user!.id));
   const body = req.body as Record<string, string>;
-  // "" clears a field back to unset (follow tenant/default) rather than storing an empty string forever.
+  // "" clears a field back to unset (follow company/default) rather than storing an empty string forever.
   const patch = Object.fromEntries(Object.entries(body).map(([k, v]) => [k, v === "" ? undefined : v]));
   const merged = { ...existing?.themePreferences, ...patch };
   const fieldsChanged = Object.keys(body);

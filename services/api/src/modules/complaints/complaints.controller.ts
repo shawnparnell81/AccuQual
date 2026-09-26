@@ -5,7 +5,7 @@ import { ncr } from "../../drizzle/schema/ncr.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
-import { assertCompanyUser } from "../../utils/assertTenantUser.js";
+import { assertCompanyUser } from "../../utils/assertCompanyUser.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
@@ -31,7 +31,7 @@ async function assertNcrInCompany(req: Request, ncrId: number): Promise<void> {
   if (!row) throw AppError.badRequest("Linked NCR not found in this organization.");
 }
 
-/** A linked NCR and an assignee must belong to THIS tenant — both are bare ids on the row (linkedNcrId is not even a foreign key). */
+/** A linked NCR and an assignee must belong to THIS company — both are bare ids on the row (linkedNcrId is not even a foreign key). */
 export const verifyReferences = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
   if (req.body.linkedNcrId) await assertNcrInCompany(req, req.body.linkedNcrId);
   if (req.body.assignedTo) await assertCompanyUser(req.db!, req.body.assignedTo);

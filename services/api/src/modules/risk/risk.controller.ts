@@ -23,7 +23,7 @@ function assertDepartment(req: Request, allowed: string[]) {
   }
 }
 
-/** Admin-only, not a department at all — same convention as platform-admin-gated routes, just scoped to a single tenant-level action instead of a whole router. */
+/** Admin-only, not a department at all — same convention as platform-admin-gated routes, just scoped to a single company-level action instead of a whole router. */
 function assertAdmin(req: Request) {
   const role = req.user?.roleName;
   if (role !== "admin") {
@@ -190,7 +190,7 @@ export const closeRiskHandler = asyncHandler(async (req: Request, res: Response)
 });
 
 /**
- * Delete — admin only (tenant-level admin or platform_admin), never a
+ * Delete — admin only (admin), never a
  * department. Hard delete (matches crudFactory's default, and this table
  * has no `isDeleted` column) — mitigations and FMEA items are deleted first
  * to satisfy their FK constraints, all inside the same request transaction,

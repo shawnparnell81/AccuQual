@@ -38,7 +38,7 @@ function generateSupplierRmaNumber(id: number): string {
   return `RMA-${year}-${String(id).padStart(4, "0")}`;
 }
 
-/** Best-effort: pull the first run of digits out of the supplier's own free-text PO Number and match it to a real PO id for this tenant+supplier. Never invents a match — a miss is logged honestly, not silently ignored. */
+/** Best-effort: pull the first run of digits out of the supplier's own free-text PO Number and match it to a real PO id for this company+supplier. Never invents a match — a miss is logged honestly, not silently ignored. */
 async function tryMatchPurchaseOrder(req: Request, supplierId: number, poNumber: string | undefined) {
   if (!poNumber) return null;
   const digits = poNumber.match(/\d+/)?.[0];

@@ -1,7 +1,7 @@
 /**
  * Pure client-side helpers for the per-user Calendar feed (see
  * hooks/useCalendarItems.ts). Kept separate from workflowMetrics.ts, which is
- * scoped to the existing tenant-wide, endpoint-free workflow dashboards —
+ * scoped to the existing company-wide, endpoint-free workflow dashboards —
  * this one works off the real GET /calendar response instead of computing
  * "overdue" from raw module data client-side.
  */

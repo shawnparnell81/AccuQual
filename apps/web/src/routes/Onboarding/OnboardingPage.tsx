@@ -48,7 +48,7 @@ export function OnboardingPage() {
 
       {suggestion && rawOutput?.note && (
         <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-          {rawOutput.note} A real AI provider key isn't configured for this tenant yet (Admin → Tenant AI Config) — ask your admin to set one up for a real, personalized checklist.
+          {rawOutput.note} A real AI provider key isn't configured for this company yet (Admin → Company AI Config) — ask your admin to set one up for a real, personalized checklist.
         </div>
       )}
 

@@ -18,7 +18,6 @@ import {
   Truck,
   ClipboardSignature,
   Boxes,
-  Building2,
   FileText,
   GraduationCap,
   GitBranch,
@@ -66,7 +65,7 @@ import {
  *      belongs to at all (TopNav.tsx renders each user's own department
  *      group from NAV_STRUCTURE, then filters individual leaves by the
  *      LIVE level).
- * Fully dynamic nav registry (2026-09-15): a tenant admin granting any
+ * Fully dynamic nav registry (2026-09-15): an administrator granting any
  * department edit/read on any module via the Roles & Permissions UI now ALSO
  * gains a real nav dropdown entry for it, not just backend enforcement —
  * see ALL_MODULE_LEAVES below and TopNav.tsx's `extraGrantedLeaves`. The
@@ -103,8 +102,8 @@ export interface NavLeaf {
    * inside the everyday System menu"). Only meaningful for the System
    * catch-all group (department: null) — every department-owned leaf stays
    * in one flat dropdown as before. "advanced" items are seeded hidden by
-   * default for every tenant (see db/defaultNavPreferences.ts /
-   * backfillNavPreferences.ts) — a tenant admin can still turn any of them
+   * default for every company (see db/defaultNavPreferences.ts /
+   * backfillNavPreferences.ts) — an administrator can still turn any of them
    * back on from Settings > Navigation, same toggle every other nav item
    * already uses.
    */
@@ -367,7 +366,7 @@ export const CUSTOMERS: NavLeaf = {
 // as a duplicate-menu-item bug rather than two real destinations. Nothing
 // in the actual PPAP route or page ever checks the separate "apqp"
 // ResourceKey (confirmed by reading both) — it's a real, distinct
-// permission a tenant admin could still grant in Roles & Permissions, but
+// permission an administrator could still grant in Roles & Permissions, but
 // there's no second page for it to gate — so merging the nav down to one
 // leaf loses no real access, just the redundant menu row. Revert this back
 // to two leaves the moment a dedicated APQP page actually exists.
@@ -608,7 +607,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
         access: {},
         kpi: false,
         priority: 3,
-        notes: "Not in the department sheet — unchanged access. Real simulation/results/AI-interpretation code, but no in-app way to create a model yet (\"create one via the API/DB seed\") — a dead end for a real tenant, hidden until that exists.",
+        notes: "Not in the department sheet — unchanged access. Real simulation/results/AI-interpretation code, but no in-app way to create a model yet (\"create one via the API/DB seed\") — a dead end for a real company, hidden until that exists.",
         section: "advanced",
       },
       {
@@ -622,7 +621,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
         notes: "Not in the department sheet — visible to every department, same as AI Insights/Workflow Builder; POST /onboarding/ai-generate has no department gate either",
         section: "quality",
       },
-      // Phase 10 — these 6 separate leaves (Tenant Branding/Templates/AI
+      // Phase 10 — these 6 separate leaves (Company Branding/Templates/AI
       // Config/AI Usage/Digital Twin Setup/Roles & Permissions) collapsed
       // into ONE "Admin Console" entry: the pages themselves are unchanged
       // (each still has its own AdminOnlyGuard + real requireRole("admin")
@@ -639,7 +638,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
         access: {},
         kpi: false,
         priority: 3,
-        notes: "Users & roles, permissions, AI/supplier/quality/receiving-inventory settings, system health, tenant settings — each section keeps its own real RBAC, not gated as a block",
+        notes: "Users & roles, permissions, AI/supplier/quality/receiving-inventory settings, system health, company settings — each section keeps its own real RBAC, not gated as a block",
         section: "admin",
       },
     ],
@@ -676,7 +675,6 @@ export const ALL_MODULE_LEAVES: NavLeaf[] = (() => {
 
 export const SYSTEM_LABEL = "System";
 export const DASHBOARD_LEAF = { key: "dashboard", label: "Dashboard", path: "/", icon: LayoutDashboard };
-export const PLATFORM_LEAF = { key: "platform", label: "Platform Admin", path: "/platform", icon: Building2 };
 
 /** Every KPI-flagged leaf's key that a live count exists for (GET /nav/kpi-counts). Pareto and Production Log are KPI="Yes" in the sheet but aren't countable the same way — see nav.controller.ts. */
 export const KPI_COUNT_KEYS = ["ncr", "capa", "8d", "di", "complaints"] as const;
@@ -685,7 +683,7 @@ export const KPI_COUNT_KEYS = ["ncr", "capa", "8d", "di", "complaints"] as const
  * The System group's "advanced" leaves, derived from each leaf's own
  * `section: "advanced"` tag above — used by TopNav.tsx to group the System
  * dropdown into sections. The backend's db/defaultNavPreferences.ts (which
- * seeds these hidden by default for every tenant) can't import this file —
+ * seeds these hidden by default for every company) can't import this file —
  * apps/web and services/api are separate deployables with no shared
  * package — so it keeps its own copy of these same three key strings, with
  * a comment pointing back here as the source of truth to keep them in sync.

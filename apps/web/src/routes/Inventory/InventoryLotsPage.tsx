@@ -10,7 +10,7 @@ const lotHooks = createResourceHooks<InventoryLotSearchResult>("inventory/lots")
 const STATUSES = ["active", "consumed", "scrapped", "returned", "expired"] as const;
 
 /**
- * Tenant-wide lot/serial visibility — the real gap Phase 8 left open: the
+ * Company-wide lot/serial visibility — the real gap Phase 8 left open: the
  * per-lot ledger (inventory_lots) and the full receiving→supplier→
  * inspection traceability chain (GET /inventory/lots/:id/trace) both
  * existed already, but only reachable from an item's own detail page, one

@@ -106,8 +106,8 @@ export const deleteHandler = asyncHandler(async (req: Request, res: Response) =>
  * only" audit entry on the WorkflowDefinition itself, never on whatever
  * real record the context happens to reference.
  *
- * Also fixes a real bug: `__db`/`__tenantId`/`__performedBy` (injected so
- * workflowActions.ts's real handlers can reach a live DB/tenant/actor — see
+ * Also fixes a real bug: `__db`/`__performedBy` (injected so
+ * workflowActions.ts's real handlers can reach a live DB/actor — see
  * that file's own comment) are NOT JSON-serializable and must never be
  * persisted into workflowRuns.context.
  */

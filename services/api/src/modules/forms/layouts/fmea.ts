@@ -94,7 +94,7 @@ export const fmeaLayout: FormLayout = {
           label: "Severity / Occurrence / Detection Rating Notes:",
           hint:
             "Per AIAG scale: Severity 1=No effect … 10=Hazardous without warning. Occurrence 1=Almost never … 10=Very high (>1/10). " +
-            "Detection 1=Almost certain to detect … 10=Almost impossible to detect. Record any tenant-specific scale deviations here.",
+            "Detection 1=Almost certain to detect … 10=Almost impossible to detect. Record any company-specific scale deviations here.",
         },
       ],
     },

@@ -3,7 +3,7 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 /**
  * Phase 6 "Add Export Options" — one shared shape every report export
- * builds from: a title, an audit-metadata line (who/when/tenant — "Ensure
+ * builds from: a title, an audit-metadata line (who/when/company — "Ensure
  * exports include audit metadata"), and a flat table of rows. Each report
  * type's controller flattens its own reporting.service.ts result into this
  * shape once; the 3 format functions below never know which report they're
@@ -23,7 +23,7 @@ export function toCsv(report: ExportableReport): string {
     const s = String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const meta = [`# ${report.title}`, `# Tenant: ${report.companyName}`, `# Generated: ${report.generatedAt.toISOString()} by ${report.generatedBy}`, ""];
+  const meta = [`# ${report.title}`, `# Company: ${report.companyName}`, `# Generated: ${report.generatedAt.toISOString()} by ${report.generatedBy}`, ""];
   const lines = [report.columns.map(escape).join(","), ...report.rows.map((r) => r.map(escape).join(","))];
   return [...meta, ...lines].join("\n");
 }
@@ -35,7 +35,7 @@ export async function toExcel(report: ExportableReport): Promise<Buffer> {
   const sheet = workbook.addWorksheet(report.title.slice(0, 31)); // Excel's own 31-char sheet-name limit
 
   sheet.addRow([report.title]).font = { bold: true, size: 14 };
-  sheet.addRow([`Tenant: ${report.companyName}`]);
+  sheet.addRow([`Company: ${report.companyName}`]);
   sheet.addRow([`Generated: ${report.generatedAt.toLocaleString()} by ${report.generatedBy}`]);
   sheet.addRow([]);
   const headerRow = sheet.addRow(report.columns);
@@ -64,7 +64,7 @@ export async function toPdf(report: ExportableReport): Promise<Uint8Array> {
 
   page.drawText(report.title, { x: margin, y, size: 16, font: boldFont, color: rgb(0.1, 0.1, 0.15) });
   y -= lineHeight * 1.5;
-  page.drawText(`Tenant: ${report.companyName}`, { x: margin, y, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
+  page.drawText(`Company: ${report.companyName}`, { x: margin, y, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
   y -= lineHeight;
   page.drawText(`Generated: ${report.generatedAt.toLocaleString()} by ${report.generatedBy}`, { x: margin, y, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
   y -= lineHeight * 1.5;

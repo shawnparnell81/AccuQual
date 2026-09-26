@@ -90,7 +90,7 @@ function useSupplierPerformance(supplierId: number | undefined) {
   });
 }
 
-/** No dedicated /suppliers/:id/costing endpoint — the reviewed prompt's own deliverable list named exactly two costing endpoints, both under /inventory/costing. This reads the tenant-wide summary and picks out this supplier's entry, same as the Dashboard's Supplier Cost Distribution chart does. */
+/** No dedicated /suppliers/:id/costing endpoint — the reviewed prompt's own deliverable list named exactly two costing endpoints, both under /inventory/costing. This reads the company-wide summary and picks out this supplier's entry, same as the Dashboard's Supplier Cost Distribution chart does. */
 function useSupplierCosting(supplierId: number | undefined) {
   const query = useQuery<CostingSummary>({
     queryKey: ["inventory/costing/summary"],

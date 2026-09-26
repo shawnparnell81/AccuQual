@@ -6,7 +6,7 @@ import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { OpenWindowButton } from "../../components/shared/OpenWindowButton";
 import type { AccuQualDocument } from "../../api/types";
 
-/** A tenant-wide master index of every controlled document, not one document record — a fixed singleton, same pattern as the Production Logs page. */
+/** A company-wide master index of every controlled document, not one document record — a fixed singleton, same pattern as the Production Logs page. */
 const DOCUMENT_CONTROL_INDEX_ENTITY_ID = 1;
 
 /**

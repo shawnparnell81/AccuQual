@@ -74,7 +74,7 @@ export const createFeasibilityHandler = asyncHandler(async (req: Request, res: R
 
   // defaultRiskLevel seeds every one of the 7 fixed assessment rows — the
   // old model had one riskLevel field for the whole record; this one has 7,
-  // so "apply the tenant default" now means "start every row at that level"
+  // so "apply the company default" now means "start every row at that level"
   // rather than skip the setting.
   const areaDefaults: Record<string, string> = {};
   if (settings.defaultRiskLevel) {

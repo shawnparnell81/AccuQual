@@ -14,12 +14,12 @@ that path has not been exercised (see [What is still unproven](#what-is-still-un
 | Records, users, audit history, workflow definitions, settings | PostgreSQL (`public` schema) | Yes |
 | Migration history | PostgreSQL (`drizzle` schema) | Yes — **must be included**, see below |
 | Uploaded files (attachments, certificates, PDFs) | `STORAGE_LOCAL_PATH` (a Docker volume, or a persistent disk on Render) | **No** — back this folder up separately |
-| Secrets (`.env`: JWT secrets, `TENANT_AI_CONFIG_ENCRYPTION_KEY`, email token, database URL) | Your hosting accounts / password manager | **No** — keep a copy somewhere else |
+| Secrets (`.env`: JWT secrets, `AI_CONFIG_ENCRYPTION_KEY`, email token, database URL) | Your hosting accounts / password manager | **No** — keep a copy somewhere else |
 | Queues, rate-limit counters, worker heartbeats | Redis | No, and not needed: it is rebuilt. Workflow runs in flight at the moment of loss are the only thing that can be lost |
 
 Two things that surprise people:
 
-1. **Without `TENANT_AI_CONFIG_ENCRYPTION_KEY` the restored database cannot decrypt any organization's saved AI
+1. **Without `AI_CONFIG_ENCRYPTION_KEY` the restored database cannot decrypt any organization's saved AI
    provider key.** Losing that key is not fatal (organizations re-enter their key) but it is avoidable: store it with
    the other secrets.
 2. **A backup of only the `public` schema restores the data but breaks migrations.** `npm run db:migrate` then tries to
@@ -76,8 +76,8 @@ cd services/api
 DATABASE_URL=postgres://accuqual:<pw>@localhost:5544/accuqual_restore npm run db:migrate
 ```
 
-Step 4 is not optional. Until it runs, the restored database has none of the tenant-isolation policies enforced for
-the application role, because `--no-privileges` deliberately left the grants behind.
+Step 4 is not optional. Until it runs, the restored database has none of the grants or policies the application role
+needs (including its append-only limits on the audit tables), because `--no-privileges` deliberately left the grants behind.
 
 On Windows Git Bash prefix the `docker exec`/`cp` lines with `MSYS_NO_PATHCONV=1`, otherwise `/tmp/...` is rewritten
 into a Windows path.
@@ -97,13 +97,13 @@ gone (a real disaster), run it against a second copy, or use the checklist below
 
 ### After a real restore
 
-1. `npm run db:verify-restore` passes, or (no original available) `select count(*)` on `users`, `tenants` and a few
+1. `npm run db:verify-restore` passes, or (no original available) `select count(*)` on `users`, `company` and a few
    record tables looks right.
 2. Point the API at the restored database (`DATABASE_URL`), start it, and check `GET /health` reports the database `ok`.
-3. Sign in as an administrator. Open a record list and confirm you see only your own organization's records.
+3. Sign in as an administrator. Open a record list and confirm the records you expect are there.
 4. Confirm the audit log is still append-only (an attempted delete by the application role must be refused).
 5. Restore the uploaded-files folder to `STORAGE_LOCAL_PATH` and open an attachment.
-6. Put the secrets back (especially `TENANT_AI_CONFIG_ENCRYPTION_KEY`).
+6. Put the secrets back (especially `AI_CONFIG_ENCRYPTION_KEY`).
 7. Restart the three workers. Anything mid-run when the loss happened will not resume; re-trigger it.
 8. Record the incident and the data-loss window (the time between the backup and the failure) for affected customers.
 

@@ -2,12 +2,12 @@ import { pgTable, serial, text, integer, timestamp, boolean, jsonb } from "drizz
 import { users } from "./users.js";
 
 /**
- * Phase 6 Reporting & Analytics Hub — one row per recurring report a tenant
+ * Phase 6 Reporting & Analytics Hub — one row per recurring report a company
  * wants emailed on a schedule. `nextRunAt` is a real stored timestamp (not
  * re-derived from a cron expression on every check) so the scheduler's own
  * poll loop (reporting/scheduler.ts) is a cheap `WHERE next_run_at <= now()`
  * — computing "is a weekly report due" from scratch on every tick across
- * every tenant would be needless work for what's really just "add 1 day /
+ * every company would be needless work for what's really just "add 1 day /
  * 7 days / 1 month to a timestamp" arithmetic done once, at save time and
  * again after each run.
  */

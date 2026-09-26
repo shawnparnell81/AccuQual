@@ -10,14 +10,14 @@ export const digitalTwinRouter = Router();
 digitalTwinRouter.use(requireAuth, withDb);
 
 // Model creation/editing and device registration are admin-only (see the
-// Tenant Digital Twin Setup review) — a real tightening, but not a
+// Company Digital Twin Setup review) — a real tightening, but not a
 // back-compat break: no frontend ever called these POST/PATCH endpoints
 // before this round (DigitalTwinPage only ever listed models — "create one
 // via the API/DB seed"). /simulate is deliberately NOT gated here: the
 // existing DigitalTwinPage already has a real, live "Run simulation" button
-// any tenant user can use today — restricting it now would be an actual
+// any company user can use today — restricting it now would be an actual
 // regression, not a tightening. Viewing (GET) stays open to the whole
-// tenant throughout, unchanged.
+// company throughout, unchanged.
 digitalTwinRouter.get("/models", baseHandlers.list);
 digitalTwinRouter.post("/models", requireRole("admin"), validate(createModelSchema), baseHandlers.create);
 digitalTwinRouter.get("/models/:id", baseHandlers.getOne);
@@ -34,7 +34,7 @@ digitalTwinRouter.delete("/devices/:id", requireRole("admin"), deleteDeviceHandl
 digitalTwinRouter.post("/devices/:id/api-key", requireRole("admin"), rotateDeviceKeyHandler);
 digitalTwinRouter.delete("/devices/:id/api-key", requireRole("admin"), revokeDeviceKeyHandler);
 
-// Drift alerts the worker recorded — viewing stays open to the whole tenant, like every other GET here.
+// Drift alerts the worker recorded — viewing stays open to the whole company, like every other GET here.
 digitalTwinRouter.get("/alerts", listAlertsHandler);
 
 digitalTwinRouter.post("/iot-ingest", validate(iotIngestSchema), ingestIot);

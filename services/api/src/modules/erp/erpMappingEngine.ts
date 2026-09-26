@@ -6,7 +6,7 @@ import { erpPurchaseOrders } from "../../drizzle/schema/erp.js";
 import { erpSyncErrors, type ErpErrorType, type ErpSyncErrorPayloadSnapshot } from "../../drizzle/schema/erpSyncErrors.js";
 import { logger } from "../../utils/logger.js";
 
-// A tenant may manually trigger a sync at any time (see settings.erpSync.ts's
+// A company may manually trigger a sync at any time (see settings.erpSync.ts's
 // own "no background scheduler exists" comment) — there's no reliable "since
 // last sync" cursor to filter on (suppliers has no updatedAt column at all),
 // so this caps how many current, non-deleted records get mapped per trigger
@@ -339,7 +339,7 @@ export async function recordSyncError(db: Db, input: RecordSyncErrorInput): Prom
  * the two ERP-native modules a vendor system natively has fields for. Every
  * other module (ncr/capa/training/audits/documentControl) is explicitly
  * deferred: this returns null with a logged reason rather than silently
- * producing an empty/misleading payload, so a tenant enabling one of those
+ * producing an empty/misleading payload, so a company enabling one of those
  * modules on a sync gets an honest signal instead of a false "synced".
  *
  * Every validation failure and every per-record mapping/transform exception
@@ -395,7 +395,7 @@ export async function buildErpPayload(db: Db, module: string, preset: ErpConnect
     }
     records.push({ sourceId, fields });
   }
-  // Structured, multi-tenant-safe summary — counts and preset identity only,
+  // Structured, multi-company-safe summary — counts and preset identity only,
   // never field values (a mapped record can carry a customer/vendor name,
   // email, or address; this app's own logging convention, confirmed earlier
   // this session against every logger.* call site, never logs raw record

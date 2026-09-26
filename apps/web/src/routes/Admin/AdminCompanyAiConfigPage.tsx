@@ -6,14 +6,14 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { TextField, SelectField } from "../../components/forms/Field";
-import type { TenantAiConfig } from "../../api/types";
+import type { CompanyAiConfig } from "../../api/types";
 
 // The two real, already-integrated providers (see llm-gateway.ts) — not an
 // open list, so this can never store a provider the app has no code path for.
 const PROVIDERS = ["anthropic", "openai"] as const;
 
 function useAiConfig() {
-  return useQuery<TenantAiConfig>({ queryKey: ["tenant/ai-config"], queryFn: async () => (await apiClient.get("/company/ai-config")).data });
+  return useQuery<CompanyAiConfig>({ queryKey: ["company/ai-config"], queryFn: async () => (await apiClient.get("/company/ai-config")).data });
 }
 
 function AiConfigForm() {
@@ -59,8 +59,8 @@ function AiConfigForm() {
         })
       ).data,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tenant/ai-config"] });
-      queryClient.invalidateQueries({ queryKey: ["tenant/assistant-name"] });
+      queryClient.invalidateQueries({ queryKey: ["company/ai-config"] });
+      queryClient.invalidateQueries({ queryKey: ["company/assistant-name"] });
       setApiKey("");
       toast.success("AI configuration saved.");
     },
@@ -90,7 +90,7 @@ function AiConfigForm() {
             <span className="font-medium text-success">Ready — AI features will use a real provider.</span>
           ) : (
             <span className="font-medium text-warning">
-              Missing — no key configured here or by your platform admin. AI features return a clearly-labeled placeholder response
+              Missing — no key configured here. AI features return a clearly-labeled placeholder response
               until one is set.
             </span>
           )}
@@ -176,10 +176,10 @@ function AiConfigForm() {
   );
 }
 
-export function AdminTenantAiConfigPage() {
+export function AdminCompanyAiConfigPage() {
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">Tenant AI Configuration</h1>
+      <h1 className="text-2xl font-semibold">Company AI Configuration</h1>
       <AdminOnlyGuard>
         <AiConfigForm />
       </AdminOnlyGuard>

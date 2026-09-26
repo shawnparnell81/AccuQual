@@ -12,7 +12,7 @@ import { documents } from "./documents.js";
  *
  * Any node — but in practice a leaf (no children) — can carry an attached PDF
  * via `pdfPath`, uploaded through POST /document-folders/:id/template. One
- * reserved top-level node per tenant (name === LIBRARY_POOL_NAME) is the
+ * reserved top-level node per company (name === LIBRARY_POOL_NAME) is the
  * "library pool": moving a leaf there (a plain parentId update, same as any
  * other move) is how "remove this form, send it back to the library" works —
  * no separate pool table or status flag needed, it's just another folder.
@@ -35,7 +35,7 @@ export const documentFolders = pgTable("document_folders", {
   pdfMimeType: text("pdf_mime_type"),
   // A real in-app route (e.g. "/ncr") this leaf corresponds to, for the small
   // subset of the taxonomy that names an actual built-in QMS record type
-  // (see linkKnownForms in the controller — self-heals per tenant, matching
+  // (see linkKnownForms in the controller — self-heals per company, matching
   // leaf names against the app's real form types). Independent of pdfPath:
   // a leaf can be linked to a live module AND still carry its own attached
   // reference PDF.

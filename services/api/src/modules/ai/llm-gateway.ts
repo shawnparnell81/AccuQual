@@ -7,7 +7,7 @@ export interface LlmCallOptions {
   system?: string;
   maxTokens?: number;
   temperature?: number;
-  /** Per-call overrides — used by the AI Assistant to call using a tenant's own configured provider/key/model instead of the platform-global env config. All optional; omitting them falls back to env, exactly the pre-existing behavior every other caller still gets. */
+  /** Per-call overrides — used by the AI Assistant to call using a company's own configured provider/key/model instead of the platform-global env config. All optional; omitting them falls back to env, exactly the pre-existing behavior every other caller still gets. */
   provider?: "anthropic" | "openai";
   apiKey?: string;
   model?: string;
@@ -70,7 +70,7 @@ export async function callLlmDetailed(prompt: string, options: LlmCallOptions = 
   // immediately with a clear 400 — never retried, never silently truncated,
   // and never sent to the provider (a real cost-control measure alongside
   // the injection-hardening one: a giant injected payload is exactly the
-  // kind of input this also protects a tenant's own BYOK budget from).
+  // kind of input this also protects a company's own BYOK budget from).
   const combinedLength = prompt.length + system.length;
   if (combinedLength > maxPromptChars) {
     throw new AppError(`AI request input is too large (${combinedLength} characters, limit ${maxPromptChars}).`, 400);
@@ -107,7 +107,7 @@ async function callAnthropic(prompt: string, options: LlmCallOptions): Promise<L
 
   // Newer Claude models reject `temperature` outright (400 "`temperature` is
   // deprecated for this model"), so it's only sent when a caller explicitly
-  // sets one (a tenant's BYOK config can) — never as a hidden default — and
+  // sets one (a company's BYOK config can) — never as a hidden default — and
   // dropped and retried once if the model refuses it anyway.
   const send = (withTemperature: boolean) =>
     fetch("https://api.anthropic.com/v1/messages", {
@@ -186,9 +186,9 @@ async function callOpenAi(prompt: string, options: LlmCallOptions): Promise<LlmC
 /**
  * A real, minimal (max_tokens: 1) call to the provider to confirm a key
  * actually works before it's ever encrypted/stored — see
- * tenant.controller.ts's updateAiConfigHandler. This is a genuine trade-off
+ * company.controller.ts's updateAiConfigHandler. This is a genuine trade-off
  * the reviewed BYOK prompt asked for explicitly ("perform a test request...
- * if invalid, reject"): it spends a trivial, real amount of the tenant's
+ * if invalid, reject"): it spends a trivial, real amount of the company's
  * own provider quota on every key save, unlike every other AI call in this
  * app (which only ever runs on an explicit user action). Returns true/false
  * rather than throwing — a network hiccup and a genuinely bad key both mean

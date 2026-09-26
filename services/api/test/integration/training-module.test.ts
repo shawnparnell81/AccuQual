@@ -1,8 +1,9 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Regression coverage for Full-System Audit finding C2: the training
 // router had NO RBAC gate at all, and no ResourceKey existed in the
 // permission system to add one — structurally excluded, not just
-// mis-wired. Any authenticated tenant user could create courses, assign
+// mis-wired. Any authenticated company user could create courses, assign
 // training, mark any employee's assignment complete, and upload a
 // "certificate" for anyone.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -10,7 +11,7 @@ import request from "supertest";
 import { eq } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { trainingCourses, trainingAssignments } from "../../src/drizzle/schema/training.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
@@ -22,7 +23,7 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let courseId: number;
 let traineeUserId: number;
 const userIds: number[] = [];
@@ -30,16 +31,16 @@ let qualityToken: string;
 let engineeringToken: string;
 
 async function makeUser(department: string | null) {
-  const [user] = await db.insert(users).values({ tenantId, email: `training-test-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+  const [user] = await db.insert(users).values({ email: `training-test-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return { id: user!.id, token: signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName: "operator", department }) };
+  return { id: user!.id, token: signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department }) };
 }
 
 describe("Training module (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Training Test Tenant ${suffix}`, code: `training-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    await seedDefaultPermissions(tenantId);
+    const co = await ensureTestCompany();
+    companyId = co!.id;
+    await seedDefaultPermissions(companyId);
 
     const quality = await makeUser("quality");
     qualityToken = quality.token;
@@ -51,16 +52,7 @@ describe("Training module (real DB + real HTTP path)", () => {
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
     // Assigning training now tells the person, which leaves a notice behind.
-    await db.delete(notificationLog).where(eq(notificationLog.tenantId, tenantId));
-    if (courseId) {
-      await db.delete(trainingAssignments).where(eq(trainingAssignments.courseId, courseId));
-      await db.delete(trainingCourses).where(eq(trainingCourses.id, courseId));
-    }
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
@@ -123,7 +115,7 @@ describe("Training module (real DB + real HTTP path)", () => {
   });
 
   it("a due date set at assignment time round-trips correctly through the employee history endpoint", async () => {
-    const [course] = await db.insert(trainingCourses).values({ tenantId, title: "Due-date fixture course" }).returning();
+    const [course] = await db.insert(trainingCourses).values({ title: "Due-date fixture course" }).returning();
     const dueAt = new Date(Date.UTC(2027, 0, 15));
     const assign = await request(app).post(`/training/${course!.id}/assign`).set("Authorization", `Bearer ${qualityToken}`).send({ userIds: [traineeUserId], dueAt: dueAt.toISOString() });
     expect(assign.status).toBe(201);

@@ -86,7 +86,7 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
     }
   }
 
-  const isAdmin = user?.roleName === "admin" || user?.roleName === "platform_admin";
+  const isAdmin = user?.roleName === "admin";
 
   // Real in-app preview for PDF attachments, via the same PdfViewer every
   // form-export preview already uses — fetches the real bytes on demand

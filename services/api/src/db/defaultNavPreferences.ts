@@ -9,10 +9,10 @@
  *
  * Same two-consumer seed pattern db/defaultPermissions.ts already
  * established for department_permissions:
- *   1. db/backfillNavPreferences.ts — hides these for every EXISTING tenant.
- *   2. platform.service.ts's createTenant() — hides these for a brand-new
- *      tenant at creation time.
- * A tenant admin can still turn any of them back on from Settings >
+ *   1. db/backfillNavPreferences.ts — hides these for every EXISTING company.
+ *   2. platform.service.ts's createCompany() — hides these for a brand-new
+ *      company at creation time.
+ * A company admin can still turn any of them back on from Settings >
  * Navigation at any time — this only changes the starting default, using
  * the exact same nav_hidden_items mechanism every other nav toggle already
  * uses (scope "item:system:<key>", see navPreferences.ts's own comment).

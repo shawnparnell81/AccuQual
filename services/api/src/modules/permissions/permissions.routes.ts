@@ -32,13 +32,13 @@ import {
 export const permissionsRouter = Router();
 permissionsRouter.use(requireAuth, withDb);
 
-// Open to any authenticated tenant user — reading your OWN effective access
+// Open to any authenticated company user — reading your OWN effective access
 // (or the fixed module catalog) isn't a configuration action.
 permissionsRouter.get("/modules", listModulesHandler);
 permissionsRouter.get("/effective", getMyEffectivePermissionsHandler);
 
-// Everything below configures tenant-wide access control — admin only,
-// same as every other tenant-config surface in this app (settings.routes.ts,
+// Everything below configures company-wide access control — admin only,
+// same as every other company-config surface in this app (settings.routes.ts,
 // AdminOnlyGuard-backed pages).
 permissionsRouter.use(requireRole("admin"));
 

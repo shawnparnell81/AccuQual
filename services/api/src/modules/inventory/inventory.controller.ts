@@ -37,7 +37,7 @@ export const baseHandlers = crudFactory(inventoryItems, { entityName: "Inventory
 export const createItemHandler = asyncHandler(async (req: Request, res: Response) => {
   // Phase 1 hygiene guardrail — see utils/testDataGuard.ts's own comment.
   // This is what would have caught TEST-CHANGED-COUNT/REORDER-TEST/
-  // FALLBACK-TEST/PERF-TEST before they ever landed in the demo tenant.
+  // FALLBACK-TEST/PERF-TEST before they ever landed in the demo company.
   if (env.NODE_ENV === "production" && isObviousTestName(req.body.sku)) {
     throw AppError.badRequest(`Refusing to create SKU "${req.body.sku}" in production — it matches the naming pattern manual test data has used before. If this is a real part number, rename it to avoid that pattern.`);
   }
@@ -56,7 +56,7 @@ export const createItemHandler = asyncHandler(async (req: Request, res: Response
  * GET /inventory/items — crudFactory.list's plain item rows plus a summed
  * on_hand per item, so the list page can show real stock without every
  * caller having to fetch each item's stock rows separately. Aggregated in
- * JS rather than a SQL group-by: tenant-scoped item/stock tables are small
+ * JS rather than a SQL group-by: item/stock tables are small
  * (QMS-scale, not warehouse-scale), and this keeps the query as two plain
  * selects instead of a raw SQL escape hatch.
  */
@@ -247,7 +247,7 @@ export const markOnOrderHandler = asyncHandler(async (req: Request, res: Respons
   res.json(updated);
 });
 
-/** GET /inventory/reorder-requests?itemId=... — itemId optional (omit for every request across the tenant). */
+/** GET /inventory/reorder-requests?itemId=... — itemId optional (omit for every request across the company). */
 export const listReorderRequestsHandler = asyncHandler(async (req: Request, res: Response) => {
   const itemId = req.query.itemId ? Number(req.query.itemId) : undefined;
   const rows = await req.db!
@@ -341,7 +341,7 @@ export const notesReorderRequestHandler = asyncHandler(async (req: Request, res:
 });
 
 /**
- * GET /inventory/lots?q=&status= — tenant-wide lot/serial visibility. Phase
+ * GET /inventory/lots?q=&status= — company-wide lot/serial visibility. Phase
  * 8's per-item lot list and lot-trace endpoint both required already
  * knowing which item to start from; a real recall/traceability
  * investigation usually starts from a lot number, a serial number, or a
@@ -414,7 +414,7 @@ export const historyHandler = asyncHandler(async (req: Request, res: Response) =
 });
 
 /**
- * GET /inventory/alerts — every alert for the tenant, newest first, joined
+ * GET /inventory/alerts — every alert for the company, newest first, joined
  * live with the item's identifying + threshold fields (never denormalized
  * onto the alert row — see the Alerts UI review) plus a summed current
  * stock, same aggregation approach as listItemsHandler.
@@ -480,7 +480,7 @@ export const acknowledgeAlertHandler = asyncHandler(async (req: Request, res: Re
 
 /**
  * POST /inventory/check-minmax — manual recompute; itemId in body recomputes
- * one item, omitted recomputes every item for the tenant. `changed` counts
+ * one item, omitted recomputes every item for the company. `changed` counts
  * only items whose state actually moved (recomputeState returns every
  * evaluated item regardless, since it's also used internally after every
  * movement) — reported separately so a caller isn't left assuming "checked"

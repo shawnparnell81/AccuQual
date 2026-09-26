@@ -35,7 +35,7 @@ export async function listPresets(db: Db, filters: { vendor?: string; module?: s
   return db.select().from(erpConnectorPresets).where(and(...conditions));
 }
 
-/** Global presets are visible to every tenant read-only; a tenant's own row must actually belong to them. */
+/** Global presets are visible to every company read-only; a company's own row must actually belong to them. */
 export async function getPreset(db: Db, id: number): Promise<ErpConnectorPreset> {
   const [row] = await db
     .select()
@@ -76,8 +76,8 @@ export async function createPreset(
 }
 
 /**
- * Clones a global (or another tenant's, though that path is never reachable
- * from the UI) preset into a real tenant-owned row the tenant can then edit
+ * Clones a global (or another company's, though that path is never reachable
+ * from the UI) preset into a real company-owned row the company can then edit
  * — "Customize" in the list UI. Starts a fresh version history, same as any
  * other create.
  */
@@ -132,15 +132,15 @@ export async function softDeletePreset(db: Db, id: number, performedBy: number |
 }
 
 /**
- * Exactly one active preset per (tenantId, module) — enforced here rather
+ * Exactly one active preset per (module) — enforced here rather
  * than a DB constraint, same "app-enforced activation" convention
  * workflowDefinitions.isActive already uses. No explicit db.transaction()
  * needed: every request already runs inside one Postgres transaction (see
- * tenantScope.ts's withDb, same convention erp.service.ts's own
+ * requestDb.ts's withDb, same convention erp.service.ts's own
  * comment documents). Publishes the app's
- * real, universal 4-field workflow-event shape (tenantId/module/event/
+ * real, universal workflow-event shape (module/event/
  * entityId — confirmed against ~30 existing publishEvent call sites) so a
- * tenant can optionally react to a preset activation from their own
+ * company can optionally react to a preset activation from their own
  * Workflow Builder, same as any other module event; with no such workflow
  * authored yet, this is a real, structurally-consumed event that simply has
  * no matching definition to trigger — not a no-op by design.

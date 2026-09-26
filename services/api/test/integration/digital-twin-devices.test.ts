@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment
 // for why this category exists). Covers the two real Digital Twin device
 // gaps closed this round: PATCH /devices/:id (edit-by-id, previously only
 // reachable via the registration endpoint's upsert-by-deviceId semantics,
@@ -9,7 +10,7 @@ import request from "supertest";
 import { eq } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { iotDevices, digitalTwinModels } from "../../src/drizzle/schema/digitalTwin.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
@@ -18,38 +19,30 @@ import { signAccessToken } from "../../src/utils/jwt.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
-let otherTenantId: number;
+let companyId: number;
+
 const userIds: number[] = [];
 let adminToken: string;
 let operatorToken: string;
 
-async function makeUser(forTenantId: number, roleName: string) {
-  const [user] = await db.insert(users).values({ tenantId: forTenantId, email: `dt-device-${roleName}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+async function makeUser(forCompanyId: number, roleName: string) {
+  const [user] = await db.insert(users).values({ email: `dt-device-${roleName}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId: forTenantId, roleId: null, roleName, department: null });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department: null });
 }
 
 describe("Digital Twin IoT devices — edit/delete (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `DT Device Test Tenant ${suffix}`, code: `dt-device-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    const [other] = await db.insert(tenants).values({ name: `DT Device Other Tenant ${suffix}`, code: `dt-device-other-${suffix}` }).returning();
-    otherTenantId = other!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
+    
+    
 
-    adminToken = await makeUser(tenantId, "admin");
-    operatorToken = await makeUser(tenantId, "operator");
+    adminToken = await makeUser(companyId, "admin");
+    operatorToken = await makeUser(companyId, "operator");
   });
 
   afterAll(async () => {
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, otherTenantId));
-    await db.delete(iotDevices).where(eq(iotDevices.tenantId, tenantId));
-    await db.delete(iotDevices).where(eq(iotDevices.tenantId, otherTenantId));
-    await db.delete(digitalTwinModels).where(eq(digitalTwinModels.tenantId, tenantId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
-    await db.delete(tenants).where(eq(tenants.id, otherTenantId));
     await pool.end();
   });
 
@@ -84,7 +77,7 @@ describe("Digital Twin IoT devices — edit/delete (real DB + real HTTP path)", 
   });
 
   it("links to a real model, then unlinks it back to null", async () => {
-    const [model] = await db.insert(digitalTwinModels).values({ tenantId, name: `DT Device Test Model ${suffix}`, modelJson: { nodes: [], edges: [] } }).returning();
+    const [model] = await db.insert(digitalTwinModels).values({ name: `DT Device Test Model ${suffix}`, modelJson: { nodes: [], edges: [] } }).returning();
     const created = await request(app).post("/digital-twin/devices").set("Authorization", `Bearer ${adminToken}`).send({ deviceId: `link-${suffix}` });
 
     const linked = await request(app).patch(`/digital-twin/devices/${created.body.id}`).set("Authorization", `Bearer ${adminToken}`).send({ digitalTwinModelId: model!.id });
@@ -116,15 +109,5 @@ describe("Digital Twin IoT devices — edit/delete (real DB + real HTTP path)", 
     expect(list.body.find((d: { id: number }) => d.id === created.body.id)).toBeUndefined();
   });
 
-  it("cannot edit or delete another tenant's device — real tenant isolation, not just a happy-path route", async () => {
-    const otherAdminToken = await makeUser(otherTenantId, "admin");
-    const otherDevice = await request(app).post("/digital-twin/devices").set("Authorization", `Bearer ${otherAdminToken}`).send({ deviceId: `other-tenant-${suffix}` });
-    expect(otherDevice.status).toBe(201);
-
-    const patchAttempt = await request(app).patch(`/digital-twin/devices/${otherDevice.body.id}`).set("Authorization", `Bearer ${adminToken}`).send({ name: "Should not work" });
-    expect(patchAttempt.status).toBe(404);
-
-    const deleteAttempt = await request(app).delete(`/digital-twin/devices/${otherDevice.body.id}`).set("Authorization", `Bearer ${adminToken}`);
-    expect(deleteAttempt.status).toBe(404);
-  });
+  ;
 });

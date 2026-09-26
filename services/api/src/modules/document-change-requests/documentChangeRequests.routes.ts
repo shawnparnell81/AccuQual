@@ -27,7 +27,7 @@ import {
 export const documentChangeRequestsRouter = Router();
 // Deliberately not gated with requireDepartmentAccess — same convention as
 // Document Control itself (documents.routes.ts's own comment): every
-// authenticated tenant user may raise/edit one.
+// authenticated company user may raise/edit one.
 documentChangeRequestsRouter.use(requireAuth, withDb);
 
 documentChangeRequestsRouter.get("/", listDcrHandler);

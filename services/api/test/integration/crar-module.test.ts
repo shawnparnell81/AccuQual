@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Covers the Customer Return Analysis Report: creation (Quality-only),
 // the full new -> quality_review -> warranty_review -> completed
 // lifecycle, department gating on each transition, the engineering/
@@ -9,7 +10,7 @@ import request from "supertest";
 import { eq, and } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { crarClaims } from "../../src/drizzle/schema/crar.js";
 import { warrantyClaims } from "../../src/drizzle/schema/warranty.js";
@@ -21,7 +22,7 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let qualityToken: string;
 let customerServiceToken: string;
 let engineeringToken: string;
@@ -32,16 +33,16 @@ let warrantyClaimId: number;
 let crarId: number;
 
 async function makeUser(department: string, roleName = "operator") {
-  const [user] = await db.insert(users).values({ tenantId, email: `crar-test-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department }).returning();
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName, department });
+  const [user] = await db.insert(users).values({ email: `crar-test-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department }).returning();
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
 }
 
 describe("CRAR module (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `CRAR Test Tenant ${suffix}`, code: `crar-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
 
-    await seedDefaultPermissions(tenantId);
+    await seedDefaultPermissions(companyId);
 
     qualityToken = await makeUser("quality");
     customerServiceToken = await makeUser("customer_service");
@@ -50,19 +51,12 @@ describe("CRAR module (real DB + real HTTP path)", () => {
     salesToken = await makeUser("sales_and_marketing");
     adminToken = await makeUser(null as unknown as string, "admin");
 
-    const [claim] = await db.insert(warrantyClaims).values({ tenantId, claimNumber: `WC-CRARTEST-${suffix}`, status: "new" }).returning();
+    const [claim] = await db.insert(warrantyClaims).values({ claimNumber: `WC-CRARTEST-${suffix}`, status: "new" }).returning();
     warrantyClaimId = claim!.id;
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(crarClaims).where(eq(crarClaims.tenantId, tenantId));
-    await db.delete(warrantyClaims).where(eq(warrantyClaims.tenantId, tenantId));
-    await db.delete(users).where(eq(users.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 

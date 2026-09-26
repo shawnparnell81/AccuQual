@@ -7,7 +7,7 @@ import { users } from "./users.js";
  * Feasibility/DCR/SCAR/Quality Inspection Report/Risk/Audits/Calibration/
  * Complaints/Change/Work Orders/Training/PPAP/RMA/Suppliers — entityType +
  * entityId set) or as a standalone upload not tied to any record
- * (entityType/entityId both null — a shared, tenant-wide "General Uploads"
+ * (entityType/entityId both null — a shared, company-wide "General Uploads"
  * bin, same "shared QMS records, not personal silos" spirit as every other
  * module in this app). NOT the same as the pre-existing, never-wired-up
  * `ncrAttachments` table in ncr.ts — that one has zero controller/route
@@ -16,9 +16,9 @@ import { users } from "./users.js";
  * per-module table.
  *
  * Real local-disk storage under
- * `${STORAGE_LOCAL_PATH}/tenants/<tenantId>/attachments/<uuid>-<filename>`
+ * `${STORAGE_LOCAL_PATH}/attachments/<uuid>-<filename>`
  * (see attachments.controller.ts) — same convention as forms/documents/
- * digital-twin/exports already use (see platform.service.ts's tenant
+ * digital-twin/exports already use (see platform.service.ts's company
  * provisioning step 4).
  */
 export const attachments = pgTable("attachments", {

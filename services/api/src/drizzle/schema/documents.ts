@@ -53,7 +53,7 @@ export const documentVersions = pgTable("document_versions", {
  * One uploaded file belonging to a controlled document. A row is immutable evidence (name, size, SHA-256 of the exact
  * bytes): versions reference files by id, so a file carried unchanged from revision to revision is stored once, and what a
  * published revision contained can always be proven. Rows are added when a file is uploaded to a draft; the bytes live in
- * the tenant's own storage folder. Because the path column is called file_path, tenant data export picks these up.
+ * the company's own storage folder. Because the path column is called file_path, company data export picks these up.
  */
 export const documentFiles = pgTable("document_files", {
   id: serial("id").primaryKey(),

@@ -35,7 +35,7 @@ COPY workers/digital-twin-worker ./workers/digital-twin-worker
 # TypeScript instantiate drizzle-orm's types twice (once per module format)
 # and fail with spurious "private property" incompatibility errors.
 COPY services/api/package.json ./services/api/package.json
-# services/api/src/utils/logger.ts (and the auth/tenant-scope helpers) read the per-request context from this one file.
+# services/api/src/utils/logger.ts (and the auth/company-scope helpers) read the per-request context from this one file.
 COPY services/api/src/modules/monitoring/requestContext.ts ./services/api/src/modules/monitoring/requestContext.ts
 COPY services/api/src/drizzle ./services/api/src/drizzle
 COPY services/api/src/modules/digital-twin ./services/api/src/modules/digital-twin

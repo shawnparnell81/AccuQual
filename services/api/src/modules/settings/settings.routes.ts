@@ -20,11 +20,11 @@ import {
 } from "./settings.controller.js";
 
 /**
- * Tenant-wide configuration for three modules (Feasibility/Inventory/ERP
- * Sync) — see tenants.ts's own schema comments for why this lives as jsonb
- * on the tenants row rather than a separate tenant_settings table (same
+ * Company-wide configuration for three modules (Feasibility/Inventory/ERP
+ * Sync) — see companies.ts's own schema comments for why this lives as jsonb
+ * on the companies row rather than a separate company_settings table (same
  * "rarely-changed config a human edits" precedent as branding/aiConfig,
- * see modules/company/tenant.controller.ts). GET is open to any department
+ * see modules/company/company.controller.ts). GET is open to any department
  * with real access to that module's records (so e.g. a Quality user can see
  * why a feasibility review defaulted to a given risk level); PATCH is
  * narrower — see each route's own RBAC below, matching the "4./5./6." spec's

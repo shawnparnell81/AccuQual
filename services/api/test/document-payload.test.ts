@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { blankDocumentPayload, diffDocumentVersions, diffLines, lettersFor, nextRevisionCode, normalizeDocumentPayload, revisionCodeForNumber, revisionRank, validateDocumentPayload } from "../src/modules/documents/documentPayload.js";
-import { detectFileType, isInsideTenantStorage } from "../src/modules/documents/documentVersioning.js";
+import { detectFileType, isInsideStorage } from "../src/modules/documents/documentVersioning.js";
 import { env } from "../src/config/env.js";
 import path from "node:path";
 
@@ -138,13 +138,13 @@ describe("file acceptance", () => {
   });
 });
 
-describe("tenant storage boundary", () => {
-  it("only trusts paths inside the organization's own storage folder", () => {
-    const own = path.join(env.STORAGE_LOCAL_PATH, "tenants", "7", "documents", "1", "a.pdf");
-    expect(isInsideTenantStorage(7, own)).toBe(true);
-    expect(isInsideTenantStorage(8, own)).toBe(false); // another organization's folder
-    expect(isInsideTenantStorage(7, path.join(env.STORAGE_LOCAL_PATH, "tenants", "7", "..", "8", "x.pdf"))).toBe(false); // traversal
-    expect(isInsideTenantStorage(7, "/etc/passwd")).toBe(false);
-    expect(isInsideTenantStorage(7, path.join(env.STORAGE_LOCAL_PATH, "tenants", "70", "x.pdf"))).toBe(false); // prefix trick
+describe("storage boundary", () => {
+  it("only trusts paths inside the storage folder", () => {
+    const own = path.join(env.STORAGE_LOCAL_PATH, "documents", "1", "a.pdf");
+    expect(isInsideStorage(own)).toBe(true);
+    expect(isInsideStorage(path.join(env.STORAGE_LOCAL_PATH, "..", "elsewhere", "x.pdf"))).toBe(false); // outside the storage folder
+    expect(isInsideStorage(path.join(env.STORAGE_LOCAL_PATH, "documents", "..", "..", "x.pdf"))).toBe(false); // traversal
+    expect(isInsideStorage("/etc/passwd")).toBe(false);
+    expect(isInsideStorage(`${path.resolve(env.STORAGE_LOCAL_PATH)}-evil/x.pdf`)).toBe(false); // prefix trick
   });
 });

@@ -173,7 +173,7 @@ async function main() {
 
   // ---------------------------------------------------------------------
   // CAPA — let the real receiving automation's escalation stand if it
-  // fired; otherwise (e.g. this tenant's thresholds were customized) fall
+  // fired; otherwise (e.g. this company's thresholds were customized) fall
   // back to a direct insert so the demo story still completes.
   // ---------------------------------------------------------------------
   let [demoCapa] = await tdb.select().from(capa).where(and(eq(capa.supplierId, titan!.id), eq(capa.escalationSource, "receiving_recurrence")));

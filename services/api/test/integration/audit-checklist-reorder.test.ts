@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Drag-to-reorder for an audit's checklist: the new order is saved and comes back on the next read, a question added
 // afterwards goes to the end, a partial or duplicate list is refused, and a completed audit's checklist is locked.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -6,7 +7,7 @@ import request from "supertest";
 import { eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { sites } from "../../src/drizzle/schema/sites.js";
 import { audits, auditItems } from "../../src/drizzle/schema/audits.js";
@@ -17,7 +18,7 @@ import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 
 const app = createApp();
 const suffix = Date.now();
-let tenantId: number;
+let companyId: number;
 let siteId: number;
 let auditId: number;
 let adminId: number;
@@ -30,32 +31,25 @@ const questions = async () => (await request(app).get(`/audits/${auditId}/item`)
 
 describe("Audit checklist reorder (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [t] = await db.insert(tenants).values({ name: `Audit Reorder ${suffix}`, code: `audit-reorder-${suffix}` }).returning();
-    tenantId = t!.id;
-    await seedDefaultPermissions(tenantId);
-    // New tenants get their default plant automatically.
-    const [site] = await db.select().from(sites).where(eq(sites.tenantId, tenantId));
+    const t = await ensureTestCompany();
+    companyId = t!.id;
+    await seedDefaultPermissions(companyId);
+    // New companies get their default plant automatically.
+    const [site] = await db.select().from(sites);
     siteId = site!.id;
-    const [admin] = await db.insert(users).values({ tenantId, email: `audit-reorder-${suffix}@test.local`, passwordHash: "unused" }).returning();
+    const [admin] = await db.insert(users).values({ email: `audit-reorder-${suffix}@test.local`, passwordHash: "unused" }).returning();
     adminId = admin!.id;
-    token = await signAccessToken({ sub: String(adminId), tenantId, roleId: null, roleName: "admin", department: null });
-    const [audit] = await db.insert(audits).values({ tenantId, siteId, name: "Process audit", status: "in_progress" }).returning();
+    token = await signAccessToken({ sub: String(adminId), roleId: null, roleName: "admin", department: null });
+    const [audit] = await db.insert(audits).values({ siteId, name: "Process audit", status: "in_progress" }).returning();
     auditId = audit!.id;
     for (const q of ["Q1 calibration", "Q2 records", "Q3 training"]) {
-      const [item] = await db.insert(auditItems).values({ tenantId, auditId, question: q }).returning();
+      const [item] = await db.insert(auditItems).values({ auditId, question: q }).returning();
       ids[q] = item!.id;
     }
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(auditItems).where(eq(auditItems.auditId, auditId));
-    await db.delete(audits).where(eq(audits.id, auditId));
-    await db.delete(users).where(eq(users.id, adminId));
-    await db.delete(sites).where(eq(sites.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
@@ -67,7 +61,7 @@ describe("Audit checklist reorder (real DB + real HTTP path)", () => {
     const res = await reorder([ids["Q3 training"]!, ids["Q1 calibration"]!, ids["Q2 records"]!]);
     expect(res.status).toBe(200);
     expect(await questions()).toEqual(["Q3 training", "Q1 calibration", "Q2 records"]);
-    const audits_ = await db.select().from(auditTrail).where(eq(auditTrail.tenantId, tenantId));
+    const audits_ = await db.select().from(auditTrail);
     expect(audits_.some((a) => (a.changes as { subAction?: string } | null)?.subAction === "items_reordered")).toBe(true);
   });
 

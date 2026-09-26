@@ -28,7 +28,7 @@ export const controlledVersions = pgTable(
   {
     id: serial("id").primaryKey(),
     subjectType: text("subject_type").$type<VersionSubject>().notNull(),
-    // workflow_definitions.id for workflows; the form_data entity id (1, the tenant singleton) for the two documents.
+    // workflow_definitions.id for workflows; the form_data entity id (1, the company singleton) for the two documents.
     subjectId: integer("subject_id").notNull(),
     versionNumber: integer("version_number").notNull(),
     status: text("status").$type<VersionStatus>().notNull().default("draft"),

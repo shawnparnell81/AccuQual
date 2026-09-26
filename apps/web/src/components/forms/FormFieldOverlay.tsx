@@ -10,7 +10,7 @@ interface FormFieldOverlayProps {
 /**
  * Renders one bound form field. Named "overlay" per the Forms & PDF Engine
  * Spec's `FormFieldOverlay.tsx`, but — since AccuQual doesn't have real
- * per-tenant AcroForm coordinate maps to overlay onto a PDF canvas yet (see
+ * AcroForm coordinate maps to overlay onto a PDF canvas yet (see
  * pdf-merger.ts's plain-render fallback) — this renders as a normal bound
  * input in the field list rather than a positioned overlay on top of
  * PdfViewer. Swapping in true coordinate overlays later only touches this

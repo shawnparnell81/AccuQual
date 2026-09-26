@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 /**
  * Field-level before/after history, written ONLY by the audit_row_change()
  * database trigger (see post-migrate/audit-triggers.sql) — never by app code,
- * so no code path can skip it and the tenant-scoped app role has no INSERT,
+ * so no code path can skip it and the app role has no INSERT,
  * UPDATE or DELETE privilege on it at all (read-only).
  *
  * `changes` is { column: { from, to } } for an UPDATE, { column: { to } } for
@@ -16,8 +16,8 @@ import { sql } from "drizzle-orm";
  * (which has the same column) and its row changes share it, which is how
  * the history screens attach "field: old -> new" to the right entry.
  *
- * tenant_id is deliberately NOT a foreign key: this is an append-only log
- * whose retention must not depend on the tenant row's lifecycle.
+ * company_id is deliberately NOT a foreign key: this is an append-only log
+ * whose retention must not depend on the company row's lifecycle.
  */
 export const auditRowChanges = pgTable(
   "audit_row_changes",

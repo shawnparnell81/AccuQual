@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Covers the rebuilt bespoke Feasibility Review ("Contract & Project
 // Feasibility Review Form", QMS-FR-001 — see feasibility.ts's own schema
 // comment): engineering-owned full-record edit, the 5 fixed sign-off rows
@@ -11,7 +12,7 @@ import request from "supertest";
 import { eq, inArray, and } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { feasibilityReviews } from "../../src/drizzle/schema/feasibility.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
@@ -22,7 +23,7 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let reviewId: number;
 const userIds: number[] = [];
 
@@ -35,17 +36,17 @@ let customerServiceToken: string;
 let adminToken: string;
 
 async function makeUser(department: string | null, roleName = "operator") {
-  const [user] = await db.insert(users).values({ tenantId, email: `feas-test-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department }).returning();
+  const [user] = await db.insert(users).values({ email: `feas-test-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName, department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
 }
 
 describe("Feasibility Review — bespoke document (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Feasibility Test Tenant ${suffix}`, code: `feas-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
 
-    await seedDefaultPermissions(tenantId);
+    await seedDefaultPermissions(companyId);
 
     engineeringToken = await makeUser("engineering");
     qualityToken = await makeUser("quality");
@@ -58,12 +59,6 @@ describe("Feasibility Review — bespoke document (real DB + real HTTP path)", (
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(inArray(auditTrail.performedBy, userIds));
-    if (reviewId) await db.delete(feasibilityReviews).where(eq(feasibilityReviews.id, reviewId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 

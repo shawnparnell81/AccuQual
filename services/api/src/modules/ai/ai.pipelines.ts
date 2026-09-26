@@ -23,7 +23,7 @@ import {
  * Every pipeline now returns both the classified/guarded output AND the raw
  * LlmCallResult (real usage/model/isStub) — Phase 4 unification: previously
  * only the parsed JSON left this file, so ai.controller.ts had no usage/cost
- * to record and every one of these 9 endpoints bypassed the tenant BYOK
+ * to record and every one of these 9 endpoints bypassed the company BYOK
  * config, the monthly usage-limit check, and the audit trail entirely (see
  * ai.usage.ts's recordAiSuggestion, which every newer pipeline — Work Order
  * Planning, PR Justification, ERP Automation, Risk Register — already used).

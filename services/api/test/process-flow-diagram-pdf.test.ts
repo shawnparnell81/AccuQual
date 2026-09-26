@@ -1,4 +1,4 @@
-// Pure-logic unit test — no DB (see tenant-isolation.test.ts's header
+// Pure-logic unit test — no DB (see company-isolation.test.ts's header
 // comment on the distinction). Process Flow Diagram full build, Phase 5:
 // exercises a real branch (one node, two outgoing edges) and a real merge
 // (one node, two incoming edges) through the actual pdf-lib renderer, not

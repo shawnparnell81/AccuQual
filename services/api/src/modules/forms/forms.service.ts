@@ -7,17 +7,17 @@ import { mergePdfFields } from "./pdf-merger.js";
 /**
  * Self-healing (same pattern as document-folders.controller.ts's
  * ensureLibraryPool/ensureAdditionalSubfolders): platform.service.ts seeds
- * one default template per tenant at provisioning time from a fixed list,
- * but a form type added after a tenant was provisioned — or simply left off
+ * one default template per company at provisioning time from a fixed list,
+ * but a form type added after a company was provisioned — or simply left off
  * that list by mistake (customer_requirements/inventory_item both were) —
  * had NO template row and 404'd on every Preview/Export PDF, forever, for
- * every tenant. That 404 also came back with no visible cause: exportFormPdf
+ * every company. That 404 also came back with no visible cause: exportFormPdf
  * uses `responseType: "arraybuffer"`, so the real JSON error body arrived as
  * raw bytes and extractErrorMessage silently fell back to its generic
  * caller-supplied text ("save it at least once first") regardless of what
  * actually failed — see useWorkflowAction.ts's own fix. Auto-provisioning
  * the default template here on first real use closes the gap for good,
- * without needing a one-off backfill script per tenant or a second list to
+ * without needing a one-off backfill script per company or a second list to
  * keep in sync with platform.service.ts's own.
  */
 export async function loadTemplate(db: Db, formType: string) {
@@ -25,7 +25,7 @@ export async function loadTemplate(db: Db, formType: string) {
     .select()
     .from(formTemplates)
     .where(and(eq(formTemplates.formType, formType)))
-    .orderBy(desc(formTemplates.id)); // prefer a tenant-uploaded custom template over the seeded default if both exist
+    .orderBy(desc(formTemplates.id)); // prefer a company-uploaded custom template over the seeded default if both exist
   if (template) return template;
 
   const [created] = await db.insert(formTemplates).values({ formType, pdfPath: `/templates/defaults/${formType}.pdf`, fieldMap: {}, isDefault: "true" }).returning();

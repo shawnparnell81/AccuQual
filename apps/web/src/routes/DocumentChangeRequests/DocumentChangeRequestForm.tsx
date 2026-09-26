@@ -21,7 +21,7 @@ const STATUSES: DocumentChangeStatus[] = ["draft", "active", "obsolete"];
 export function DocumentChangeRequestForm({ dcr }: { dcr: DocumentChangeRequest }) {
   const toast = useToast();
   const queryClient = useQueryClient();
-  const logoUrl = useAuthStore((s) => s.tenant?.branding?.logoUrl);
+  const logoUrl = useAuthStore((s) => s.company?.branding?.logoUrl);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["document-change-requests", dcr.id] });
 

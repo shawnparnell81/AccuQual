@@ -18,7 +18,7 @@ export const createPresetHandler = asyncHandler(async (req: Request, res: Respon
   res.status(201).json(created);
 });
 
-/** POST /erp/presets/:id/clone — "Customize" in the list UI: clones a global (or another visible) preset into a real, editable tenant-owned copy. */
+/** POST /erp/presets/:id/clone — "Customize" in the list UI: clones a global (or another visible) preset into a real, editable company-owned copy. */
 export const clonePresetHandler = asyncHandler(async (req: Request, res: Response) => {
   const cloned = await erpPresets.clonePreset(req.db!, Number(req.params.id), req.user?.id);
   res.status(201).json(cloned);

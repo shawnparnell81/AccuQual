@@ -12,17 +12,17 @@ import { FORM_TYPES } from "./forms.validation.js";
 import { loadTemplate } from "./forms.service.js";
 
 /**
- * Tenant template upload/replace/delete — the write side of a real,
+ * Company template upload/replace/delete — the write side of a real,
  * already-existing read path. forms.service.ts's loadTemplate() has always
- * preferred the newest form_templates row (a tenant-uploaded custom one
+ * preferred the newest form_templates row (a company-uploaded custom one
  * over the seeded default), and pdfPath's own schema comment already
- * documents this exact tenant-scoped storage convention — there was just
+ * documents this exact storage convention — there was just
  * never an endpoint that actually created that row. Same multer +
  * STORAGE_LOCAL_PATH pattern as document-folders' uploadTemplate/
  * downloadTemplate/removeTemplate and calibration's certificate upload.
  */
 
-/** GET /forms/templates — every real form type, with whichever template row is currently active for this tenant (custom if one exists, else the seeded default). */
+/** GET /forms/templates — every real form type, with whichever template row is currently active for this company (custom if one exists, else the seeded default). */
 export const listTemplatesHandler = asyncHandler(async (req: Request, res: Response) => {
   const rows = await req.db!.select().from(formTemplates).orderBy(desc(formTemplates.id));
   const activeByType = new Map<string, (typeof rows)[number]>();
@@ -77,7 +77,7 @@ export const downloadTemplateHandler = asyncHandler(async (req: Request, res: Re
   createReadStream(template.pdfPath).pipe(res);
 });
 
-/** Removes the tenant's own custom template(s) for this type — the seeded default row is never deleted, so the type reverts to it automatically (loadTemplate just has nothing newer to prefer). */
+/** Removes the company's own custom template(s) for this type — the seeded default row is never deleted, so the type reverts to it automatically (loadTemplate just has nothing newer to prefer). */
 export const deleteTemplateHandler = asyncHandler(async (req: Request, res: Response) => {
   const formType = req.params.type!;
   const customRows = await req.db!.select().from(formTemplates).where(and(eq(formTemplates.formType, formType), eq(formTemplates.isDefault, "false")));

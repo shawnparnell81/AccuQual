@@ -9,7 +9,7 @@ import { list, create, update, remove, uploadTemplate, uploadDocument, downloadT
 
 export const documentFoldersRouter = Router();
 // Security audit finding (high): this router had no RBAC gate at all — any
-// authenticated tenant user could create/rename/delete folders and
+// authenticated company user could create/rename/delete folders and
 // upload/remove templates, bypassing the same "documents" gate its sibling
 // documents.routes.ts already enforces.
 documentFoldersRouter.use(requireAuth, withDb, requireDepartmentAccess("documents"));

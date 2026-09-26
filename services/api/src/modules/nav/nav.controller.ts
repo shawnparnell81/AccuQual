@@ -10,12 +10,12 @@ import { complaints } from "../../drizzle/schema/complaints.js";
 /**
  * Live badge counts for the nav bar's KPI-flagged items (navConfig.ts's
  * `kpi: true` leaves — see "Subfolder links.xlsx"). Each count is "how many
- * open items need attention", scoped to the caller's tenant:
+ * open items need attention", scoped to the caller's company:
  *  - ncr/capa/di/complaints: rows whose status isn't "closed"
  *  - eight_d: rows not yet past step 8 (closure)
  * Pareto Analysis and Production Log are KPI-flagged in the sheet too, but
  * aren't countable the same way (Pareto is a chart, not a record list;
- * Production Log is a singleton per-tenant document, not a list) — the nav
+ * Production Log is a singleton document, not a list) — the nav
  * marks those with a plain KPI indicator instead of a number.
  */
 export const getKpiCounts = asyncHandler(async (req: Request, res: Response) => {

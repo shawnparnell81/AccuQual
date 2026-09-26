@@ -12,7 +12,7 @@ export const onboardingRouter = Router();
 // No department gate at all — onboarding must work for any user in any
 // department, same reasoning as POST /ai/assistant. Every row is scoped to
 // req.user.id (never a body-supplied userId), so there's nothing to guard
-// beyond being a real authenticated user of this tenant.
+// beyond being a real authenticated user of this company.
 onboardingRouter.use(requireAuth, withDb);
 
 onboardingRouter.post("/ai-generate", onboardingAiGenerateHandler);

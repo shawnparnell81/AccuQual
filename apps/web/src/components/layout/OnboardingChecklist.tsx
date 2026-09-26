@@ -13,7 +13,7 @@ const CHECKLIST_ITEMS = [
 ] as const;
 
 /**
- * First-run guided checklist for a brand-new tenant's first admin — shown
+ * First-run guided checklist for a brand-new company's first admin — shown
  * on the home dashboard until dismissed or every item is checked off.
  * Admin-only (the server-side PATCH already enforces this; gating the
  * whole component the same way here means a non-admin never sees a

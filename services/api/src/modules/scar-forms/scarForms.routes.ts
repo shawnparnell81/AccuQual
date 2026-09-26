@@ -11,7 +11,7 @@ export const scarFormsRouter = Router();
 // ungated by citing QMS Forms as a sibling with the same "deliberately
 // open" convention — but QMS Forms was fixed earlier in this same audit
 // series (requireDepartmentAccess("qms_forms")) specifically so it would
-// be real and tenant-configurable instead of invisible to the permission
+// be real and company-configurable instead of invisible to the permission
 // system. SCAR gets the same treatment now, same all-departments-edit
 // default (defaultPermissions.ts) so this is zero-behavior-change from
 // today, just makes it real and configurable.

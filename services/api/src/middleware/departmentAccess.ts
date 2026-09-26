@@ -25,7 +25,7 @@ export type ResourceKey =
   // (see the Department union above) — reusing it as a ResourceKey too
   // would create exactly the kind of same-string-different-type confusion
   // this finding is trying to prevent, not fix it. A rename would also
-  // break every existing tenant's already-persisted department_permissions
+  // break every existing company's already-persisted department_permissions
   // rows (moduleName = 'di' is real stored data, not just code) and touch
   // ~6 other call sites (defaultPermissions.ts, quality.routes.ts,
   // audit-trail's ENTITY_TYPE_TO_RESOURCE map, forms.routes.ts's
@@ -76,7 +76,7 @@ export type ResourceKey =
 
 export const DEPARTMENTS: Department[] = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management", "sales_and_marketing"];
 
-/** Friendly labels for the Roles & Permissions admin UI's modules list — the real, complete, fixed set ("no fictional modules": a tenant can only configure access to a module that actually has a requireDepartmentAccess/requireSupplierPortalAccess gate on it, never an invented name). */
+/** Friendly labels for the Roles & Permissions admin UI's modules list — the real, complete, fixed set ("no fictional modules": a company can only configure access to a module that actually has a requireDepartmentAccess/requireSupplierPortalAccess gate on it, never an invented name). */
 export const MODULE_LABELS: Record<ResourceKey, string> = {
   ncr: "NCR",
   capa: "CAPA",
@@ -136,8 +136,8 @@ function higherLevel(a: AccessLevel, b: AccessLevel): AccessLevel {
  * hardcoded fallback lives in this file anymore (see
  * db/defaultPermissions.ts's own comment on where that data went and why:
  * it's a one-time seed fixture consumed by db/backfillDepartmentPermissions.ts
- * and platform.service.ts's createTenant(), never read at request time). A
- * tenant with no row for this (department, module) pair simply has no
+ * and platform.service.ts's createCompany(), never read at request time). A
+ * company with no row for this (department, module) pair simply has no
  * access to it — "none" — full stop.
  */
 export async function getDepartmentAccessLevel(db: Db, department: Department | null, moduleName: ResourceKey): Promise<AccessLevel> {
@@ -175,7 +175,7 @@ export async function getRoleGrantedAccessLevel(db: Db, userId: number, moduleNa
  * admin bypass both sources entirely and always get "edit".
  * This is a live DB read on every call (no caching) — unlike roleName/
  * department, which are baked into the JWT at login and only change on the
- * next token refresh, a tenant admin's permission change here takes effect
+ * next token refresh, a company admin's permission change here takes effect
  * on this user's very next request.
  */
 export async function getUserAccessLevel(
@@ -197,7 +197,7 @@ export async function getUserAccessLevel(
  * Gate a route by department/role-granted access — the real, live check now
  * lives in getUserAccessLevel() above; this is just the same Express
  * middleware shape every route file already calls (zero call-site changes
- * anywhere in the app). platform_admin/admin bypass entirely, same as
+ * anywhere in the app). admin bypass entirely, same as
  * always. Wrapped in asyncHandler since this now needs a real DB read.
  */
 export function requireDepartmentAccess(resourceKey: ResourceKey) {
@@ -219,13 +219,13 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
 }
 
 /**
- * Gate a route to admin (platform_admin/admin) or one of a fixed list of
+ * Gate a route to admin (admin) or one of a fixed list of
  * departments, full stop — for settings-style endpoints that don't fit the
  * ResourceKey/getUserAccessLevel shape above (a resource other departments
  * can read/edit at *different levels*). Not part of the self-service Roles &
  * Permissions module at all (deliberately — these gates aren't keyed by a
  * ResourceKey/moduleName, just a fixed department list per endpoint, so
- * there's no per-module row for a tenant admin to configure). Tenant-wide
+ * there's no per-module row for a company admin to configure). Company-wide
  * config either belongs to
  * the department(s) that own it, or an admin — there's no "read-only"
  * tier. See modules/settings/settings.routes.ts for the concrete use
@@ -254,7 +254,7 @@ export function requireAnyDepartment(...departments: Department[]) {
  *    real supplier-portal user).
  *  - internal staff, gated exactly like every other module via
  *    getUserAccessLevel(..., "supplier_portal") (Quality/Purchasing edit,
- *    Engineering read, by default — self-service configurable per tenant
+ *    Engineering read, by default — self-service configurable per company
  *    same as everything else now).
  * admin bypass both branches, same as everywhere else.
  */

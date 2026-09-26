@@ -4,7 +4,7 @@ import { apiClient } from "../../api/client";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { WarrantyAnalytics } from "../../api/types";
 
-/** GET /warranty/analytics — real counts/cost totals/average time-in-status, no fabricated figures (an empty tenant shows real zeros, not sample data). */
+/** GET /warranty/analytics — real counts/cost totals/average time-in-status, no fabricated figures (an empty company shows real zeros, not sample data). */
 export function WarrantyDashboard() {
   const navigate = useNavigate();
   const { data, isLoading } = useQuery<WarrantyAnalytics>({

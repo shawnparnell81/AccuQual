@@ -6,7 +6,7 @@ import { validate } from "../../middleware/validate.js";
 import { updateBrandingSchema, updateAiConfigSchema, updateCompanyProfileSchema, updateCompanySecuritySchema, updateOnboardingSchema } from "./company.validation.js";
 import { getBrandingHandler, updateBrandingHandler, getAiConfigHandler, updateAiConfigHandler, getAssistantNameHandler, getAiUsageHandler, getProfileHandler, updateProfileHandler, getSecurityHandler, updateSecurityHandler, getOnboardingHandler, updateOnboardingHandler } from "./company.controller.js";
 
-/** A tenant admin's own settings — scoped to req.tenantId, never a foreign tenant id. Admin-only (requireRole), not department-gated: branding/AI config aren't a department concern. */
+/** A company admin's own settings — the settings of the one company. Admin-only (requireRole), not department-gated: branding/AI config aren't a department concern. */
 export const companyRouter = Router();
 companyRouter.use(requireAuth, withDb);
 

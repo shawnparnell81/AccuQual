@@ -1,12 +1,13 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Worker Runtime: profile fields on top of `users`, a self-service "me" endpoint with no extra gate, RBAC on viewing/editing
-// someone else's profile, tenant isolation, an activity view that reuses the Calendar aggregator, and the audit trail.
+// someone else's profile, company isolation, an activity view that reuses the Calendar aggregator, and the audit trail.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { and, eq } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { roles } from "../../src/drizzle/schema/roles.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
@@ -20,14 +21,14 @@ import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
-let otherTenantId: number;
+let companyId: number;
+
 const userIds: number[] = [];
 type Who = { id: number; email: string; token: string };
 let qualityUser: Who; // quality department, ordinary role: view + manage (default worker_profile edit)
 let production: Who; // production department: view only (default read)
 let customer: Who; // external: refused entirely
-let otherAdmin: Who;
+
 
 const roleIdByName = new Map<string, number>();
 async function roleId(name: string): Promise<number> {
@@ -41,41 +42,31 @@ async function roleId(name: string): Promise<number> {
 // A real `roleId` FK, not just a roleName in the JWT — worker.service.ts looks up a TARGET user's role from the database (it
 // can't trust a client-supplied claim about someone else), so the "customer is excluded from the roster" behavior can only be
 // exercised with a fixture that actually has one, the same way every real account (register/SSO) does.
-async function makeUser(tenant: number, label: string, roleName: string, department: string | null): Promise<Who> {
+async function makeUser(co: number, label: string, roleName: string, department: string | null): Promise<Who> {
   const email = `worker-${label}-${suffix}@test.local`;
   const rid = await roleId(roleName);
-  const [u] = await db.insert(users).values({ tenantId: tenant, email, passwordHash: "unused", name: `${label} person`, department, roleId: rid }).returning();
+  const [u] = await db.insert(users).values({ email, passwordHash: "unused", name: `${label} person`, department, roleId: rid }).returning();
   userIds.push(u!.id);
-  return { id: u!.id, email, token: await signAccessToken({ sub: String(u!.id), tenantId: tenant, roleId: rid, roleName, department }) };
+  return { id: u!.id, email, token: await signAccessToken({ sub: String(u!.id), roleId: rid, roleName, department }) };
 }
 const as = (w: Who) => ({ Authorization: `Bearer ${w.token}` });
 
 describe("Worker Runtime (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [t] = await db.insert(tenants).values({ name: `Worker ${suffix}`, code: `worker-${suffix}` }).returning();
-    const [o] = await db.insert(tenants).values({ name: `Worker Other ${suffix}`, code: `worker-other-${suffix}` }).returning();
-    tenantId = t!.id;
-    otherTenantId = o!.id;
-    await seedDefaultPermissions(tenantId);
-    await seedDefaultPermissions(otherTenantId);
-    qualityUser = await makeUser(tenantId, "quality", "operator", "quality");
-    production = await makeUser(tenantId, "production", "operator", "production");
-    customer = await makeUser(tenantId, "customer", "customer", null);
-    otherAdmin = await makeUser(otherTenantId, "other", "admin", null);
+    const t = await ensureTestCompany();
+    
+    companyId = t!.id;
+    
+    await seedDefaultPermissions(companyId);
+    
+    qualityUser = await makeUser(companyId, "quality", "operator", "quality");
+    production = await makeUser(companyId, "production", "operator", "production");
+    customer = await makeUser(companyId, "customer", "customer", null);
+    
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    for (const t of [tenantId, otherTenantId]) {
-      await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, t));
-      await db.delete(auditTrail).where(eq(auditTrail.tenantId, t));
-      await db.delete(workerProfiles).where(eq(workerProfiles.tenantId, t));
-      await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, t));
-      await db.delete(ncr).where(eq(ncr.tenantId, t));
-      await db.delete(users).where(eq(users.tenantId, t));
-    }
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
-    await db.delete(tenants).where(eq(tenants.id, otherTenantId));
     await pool.end();
   });
 
@@ -140,14 +131,14 @@ describe("Worker Runtime (real DB + real HTTP path)", () => {
     const rows = await db
       .select()
       .from(auditTrail)
-      .where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "WorkerProfile"), eq(auditTrail.entityId, production.id)));
+      .where(and(eq(auditTrail.entityType, "WorkerProfile"), eq(auditTrail.entityId, production.id)));
     const actions = rows.map((r) => r.action);
     expect(actions).toContain("create");
     expect(actions).toContain("update");
   });
 
   it("activity aggregates real assignments — an NCR assigned to the worker shows up in their /me and their detail view", async () => {
-    const [row] = await db.insert(ncr).values({ tenantId, title: "Worker activity test NCR", assignedTo: production.id, isDeleted: false }).returning();
+    const [row] = await db.insert(ncr).values({ title: "Worker activity test NCR", assignedTo: production.id, isDeleted: false }).returning();
 
     const mine = await request(app).get("/workers/me").set(as(production));
     expect(mine.body.activity.some((item: { id: string }) => item.id === `ncr-${row!.id}`)).toBe(true);
@@ -156,10 +147,7 @@ describe("Worker Runtime (real DB + real HTTP path)", () => {
     expect(seenByManager.body.activity.some((item: { id: string }) => item.id === `ncr-${row!.id}`)).toBe(true);
   });
 
-  it("404s for a real user id from a DIFFERENT tenant — never silently returns another tenant's worker", async () => {
-    const res = await request(app).get(`/workers/${otherAdmin.id}`).set(as(qualityUser));
-    expect(res.status).toBe(404);
-  });
+  ;
 
   it("404s for a supplier/customer account id — external logins are never a worker to look up", async () => {
     const res = await request(app).get(`/workers/${customer.id}`).set(as(qualityUser));

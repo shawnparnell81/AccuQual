@@ -52,7 +52,7 @@ export function SalesAccountDetailPage() {
   const toast = useToast();
   const currentUser = useCurrentUser();
   const canEdit = useCanEditWorkflow("sales_accounts");
-  const isAdmin = currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin";
+  const isAdmin = currentUser?.roleName === "admin";
 
   const { data: account, isLoading, isError } = salesAccountHooks.useOne(accountId);
   const historyKey: unknown[][] = [["workflow-history", "sales_accounts", accountId]];

@@ -9,7 +9,7 @@ import { checkUsageLimit, loadCompanyLlmOptions, recordAiSuggestion } from "../a
 
 /**
  * Real, honest descriptions of what each module actually does today — no
- * "enabled modules per tenant" concept exists anywhere in this schema (see
+ * "enabled modules per company" concept exists anywhere in this schema (see
  * the AI Onboarding review), so this is grounded on the one real signal
  * available: getUserAccessLevel, walked for every real module to find which
  * ResourceKeys this specific user can actually reach (their own department

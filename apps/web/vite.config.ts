@@ -48,7 +48,7 @@ export default defineConfig(({ mode }) => ({
       manifest: {
         name: "AccuQual",
         short_name: "AccuQual",
-        description: "Multi-tenant quality management system.",
+        description: "Quality management system.",
         start_url: "/",
         display: "standalone",
         background_color: "#05070a",

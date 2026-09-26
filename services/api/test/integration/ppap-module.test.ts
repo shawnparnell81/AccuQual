@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Full-System Audit finding L2: PPAP had zero dedicated test coverage — no
 // coverage of its RBAC gate (Phase 3's own fix, engineering: edit) at all.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -6,7 +7,7 @@ import { eq } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { ppapPackages } from "../../src/drizzle/schema/ppap.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
@@ -17,22 +18,22 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 const userIds: number[] = [];
 let engineeringToken: string;
 let productionToken: string;
 
 async function makeUser(department: string | null) {
-  const [user] = await db.insert(users).values({ tenantId, email: `ppap-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+  const [user] = await db.insert(users).values({ email: `ppap-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName: "operator", department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department });
 }
 
 describe("PPAP module (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `PPAP Test Tenant ${suffix}`, code: `ppap-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    await seedDefaultPermissions(tenantId);
+    const co = await ensureTestCompany();
+    companyId = co!.id;
+    await seedDefaultPermissions(companyId);
 
     engineeringToken = await makeUser("engineering");
     productionToken = await makeUser("production"); // ppap's default permissions are engineering-only
@@ -40,11 +41,6 @@ describe("PPAP module (real DB + real HTTP path)", () => {
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(ppapPackages).where(eq(ppapPackages.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
@@ -59,7 +55,7 @@ describe("PPAP module (real DB + real HTTP path)", () => {
     expect(res.body.partNumber).toBe("PN-1001");
   });
 
-  it("engineering can list and read its own tenant's PPAP packages", async () => {
+  it("engineering can list and read its own company's PPAP packages", async () => {
     const create = await request(app).post("/ppap").set("Authorization", `Bearer ${engineeringToken}`).send({ partNumber: "PN-1002" });
     const id = create.body.id as number;
 

@@ -7,7 +7,7 @@ export type ErpPresetVendor = (typeof ERP_PRESET_VENDORS)[number];
 // Deliberately a superset of ErpSyncSettings.modulesEnabled (settings.erpSync.ts):
 // inventory/suppliers/purchaseOrders/workOrders are the ERP-native modules a
 // sync can actually enable today; ncr/capa/training/audits/documentControl are
-// QMS modules a tenant may want to push into an ERP's own quality/HR module
+// QMS modules a company may want to push into an ERP's own quality/HR module
 // (e.g. SAP QM) — a preset can target any of these, but the mapping engine
 // (erpMappingEngine.ts) only has real per-record data wired for suppliers and
 // purchaseOrders in this pass; the rest are explicitly deferred, not silently

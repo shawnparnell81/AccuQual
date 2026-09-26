@@ -24,7 +24,7 @@ reads it, applies it, and deletes any temp copy it made along the way.
 | Cloudflare R2 access key / secret | GitHub secrets `BACKUP_S3_ACCESS_KEY_ID` / `BACKUP_S3_SECRET_ACCESS_KEY` | nothing local — only the nightly backup workflow uses these |
 | Backup encryption passphrase | GitHub secret `BACKUP_PASSPHRASE`; a copy on the Desktop | **Do not rotate casually** — see below |
 | SMTP / ZeptoMail password | `SMTP_PASSWORD` in `services/api/.env` (and root `.env`'s `ZEPTOMAIL_SEND_TOKEN` if that's the transport in use) | Whichever containers send email |
-| JWT / encryption secrets (`JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `TENANT_AI_CONFIG_ENCRYPTION_KEY`) | root `.env` (Render: `generateValue: true`, no action needed there) | Rotating `TENANT_AI_CONFIG_ENCRYPTION_KEY` invalidates every tenant's stored BYOK key — see the warning below |
+| JWT / encryption secrets (`JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `AI_CONFIG_ENCRYPTION_KEY`) | root `.env` (Render: `generateValue: true`, no action needed there) | Rotating `AI_CONFIG_ENCRYPTION_KEY` invalidates every company's stored BYOK key — see the warning below |
 
 ## Rotating the Supabase database password
 

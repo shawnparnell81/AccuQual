@@ -409,3 +409,85 @@ ALTER TABLE "tenants" RENAME TO "company";
 ALTER TABLE "company" RENAME CONSTRAINT "tenants_pkey" TO "company_pkey";
 --> statement-breakpoint
 ALTER SEQUENCE "tenants_id_seq" RENAME TO "company_id_seq";
+
+--> statement-breakpoint
+-- The plant triggers from migration 0070 looked plants up by tenant_id. Recreate them for one company.
+CREATE OR REPLACE FUNCTION accuqual_company_default_site() RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO sites (name, code, status, is_default)
+  VALUES ('Main plant', 'main', 'active', true)
+  ON CONFLICT DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+DROP TRIGGER IF EXISTS tenants_default_site ON "company";
+--> statement-breakpoint
+DROP TRIGGER IF EXISTS company_default_site ON "company";
+--> statement-breakpoint
+CREATE TRIGGER company_default_site
+AFTER INSERT ON "company"
+FOR EACH ROW EXECUTE FUNCTION accuqual_company_default_site();
+--> statement-breakpoint
+DROP FUNCTION IF EXISTS accuqual_tenant_default_site();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION accuqual_user_default_site_before() RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  sid int;
+BEGIN
+  IF NEW.current_site_id IS NOT NULL THEN
+    RETURN NEW;
+  END IF;
+  SELECT id INTO sid FROM sites WHERE is_default = true ORDER BY id LIMIT 1;
+  IF sid IS NOT NULL THEN
+    NEW.current_site_id := sid;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION accuqual_user_default_site_after() RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  sid int;
+BEGIN
+  SELECT id INTO sid FROM sites WHERE is_default = true ORDER BY id LIMIT 1;
+  IF sid IS NOT NULL THEN
+    INSERT INTO user_sites (user_id, site_id)
+    VALUES (NEW.id, sid)
+    ON CONFLICT (user_id, site_id) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION accuqual_fill_site_id() RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.site_id IS NULL THEN
+    SELECT id INTO NEW.site_id
+    FROM sites
+    WHERE is_default = true
+    ORDER BY id
+    LIMIT 1;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+-- At most one default plant (the old index was per company).
+CREATE UNIQUE INDEX IF NOT EXISTS "sites_one_default" ON "sites" ("is_default") WHERE "is_default";

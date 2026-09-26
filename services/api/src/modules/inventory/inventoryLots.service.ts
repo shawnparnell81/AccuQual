@@ -23,7 +23,7 @@ export interface ReceiveLotInput {
 /**
  * The one real per-lot ledger write path — called from erp.service.ts's
  * createReceivingDocument (see that file's own comment) whenever a
- * receiving line item carries a lot number. Upserts by (tenantId, itemId,
+ * receiving line item carries a lot number. Upserts by (itemId,
  * lotNumber): a second receipt against the SAME lot number (a real case —
  * a partial shipment split across two receiving documents) adds to the
  * existing lot's received/remaining quantity rather than creating a

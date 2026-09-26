@@ -170,7 +170,7 @@ export const employeeHistoryHandler = asyncHandler(async (req: Request, res: Res
   res.json(rows.map(withEffectiveStatus));
 });
 
-/** Employees for the assignment picker (TrainingAssignmentModal) — every active user in the tenant. */
+/** Employees for the assignment picker (TrainingAssignmentModal) — every active user in the company. */
 export const listEmployeesHandler = asyncHandler(async (req: Request, res: Response) => {
   const rows = await req
     .db!.select({ id: users.id, name: users.name, email: users.email })

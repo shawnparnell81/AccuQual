@@ -108,7 +108,7 @@ function AiPlanPanel({ items }: { items: InventoryItem[] }) {
 
       {suggestion && rawOutput?.note && (
         <p className="mt-3 text-xs text-muted-foreground">
-          {rawOutput.note} No suggestions to review until a real AI provider key is configured for this tenant (Admin → Tenant AI Config).
+          {rawOutput.note} No suggestions to review until a real AI provider key is configured for this company (Admin → Company AI Config).
         </p>
       )}
 

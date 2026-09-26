@@ -52,7 +52,7 @@ export async function getError(db: Db, id: number): Promise<ErpSyncErrorRow> {
 }
 
 export async function resolveError(db: Db, id: number, resolvedBy: number | undefined): Promise<ErpSyncErrorRow> {
-  await getError(db, id); // 404s if missing/not this tenant's
+  await getError(db, id); // 404s if missing/not this company's
   const [updated] = await db
     .update(erpSyncErrors)
     .set({ resolvedAt: new Date(), resolvedBy })
@@ -87,7 +87,7 @@ async function attemptWebhookDelivery(webhookUrl: string, webhookSecretEncrypted
 
 /**
  * Retries just the ONE module the original error belongs to, not the
- * tenant's whole enabled-module set — a scoped re-attempt, not a full
+ * company's whole enabled-module set — a scoped re-attempt, not a full
  * re-trigger of the sync. On success, resolves the original row; on
  * failure, records a brand-new row (via recordSyncError, itself
  * non-throwing) and leaves the original exactly as it was, so the error
@@ -120,7 +120,7 @@ export async function retryError(db: Db, id: number, performedBy: number | undef
   }
 
   // mappingError / validationError / transformError / triggerError / unexpectedError:
-  // re-run mapping for this module against the tenant's CURRENT active preset
+  // re-run mapping for this module against the company's CURRENT active preset
   // (may have since been fixed/edited) and see whether the same source
   // record(s) still fail.
   const preset = await getActivePresetCached(db, original.module);

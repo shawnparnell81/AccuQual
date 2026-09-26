@@ -28,10 +28,8 @@ import { triggerErpSync } from "../settings/settings.erpSync.js";
  * parameter on runWorkflow itself, which stays a pure, DB-agnostic
  * function) so the SAME engine code works whether it's called from the API
  * process (a real `Db` inside a request transaction) or the
- * workflow-worker process (its own plain pool connection, tenant-filtered
- * explicitly — see workers/workflow-worker/src/db.ts):
- *   __db: Db-compatible query interface for this tenant
- *   __tenantId: number
+ * workflow-worker process (its own plain pool connection — see workers/workflow-worker/src/db.ts):
+ *   __db: Db-compatible query interface
  *   __performedBy: number | undefined — the user who triggered this run,
  *     or undefined for a worker-driven run with no human actor (audit
  *     trail's own `performedBy` is already nullable for exactly this case
@@ -267,8 +265,8 @@ registerActionHandler("ai_suggestion", async (node, context, dryRun) => {
   recordActionRun(context, "ai_suggestion", { suggestionId: suggestion.id, output });
 });
 
-// Integration node: hand the tenant's configured ERP sync a nudge — the same
-// triggerErpSync() the "Trigger Sync Now" button calls, so it obeys the tenant's
+// Integration node: hand the company's configured ERP sync a nudge — the same
+// triggerErpSync() the "Trigger Sync Now" button calls, so it obeys the company's
 // own webhook, enabled modules, presets and error log. Reports "skipped" (not
 // "sent") when no webhook is configured, exactly as the button does.
 registerActionHandler("erp_sync", async (_node, context, dryRun) => {

@@ -8,7 +8,7 @@ import { getUserAccessLevel, type AccessLevel, type ResourceKey } from "./depart
 
 /**
  * `requirePermission("workflow.edit")` — a "<subject>.<action>" permission
- * name resolved onto this app's real, tenant-configurable access model rather
+ * name resolved onto this app's real, company-configurable access model rather
  * than a second, parallel permission system:
  *
  *   view     -> "read" access to the subject's resource (Roles & Permissions)
@@ -16,7 +16,7 @@ import { getUserAccessLevel, type AccessLevel, type ResourceKey } from "./depart
  *   review   -> "edit" access AND a reviewer role (admin or quality_manager)
  *   publish  -> "edit" access AND a reviewer role (admin or quality_manager)
  *
- * So a tenant admin still controls who may edit a workflow through the
+ * So a company admin still controls who may edit a workflow through the
  * Roles & Permissions screen; "review" and "publish" additionally require the
  * reviewer role, so drafting rights alone can never put a change into force.
  * Customers and suppliers (external logins) are always refused.

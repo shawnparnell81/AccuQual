@@ -58,7 +58,7 @@ function ErpAutomationPanel() {
           {generate.isPending ? "Thinking…" : "Suggest Actions"}
         </button>
       </div>
-      {suggestion && rawOutput?.note && <p className="mt-3 text-xs text-muted-foreground">{rawOutput.note} No real AI provider key configured for this tenant yet.</p>}
+      {suggestion && rawOutput?.note && <p className="mt-3 text-xs text-muted-foreground">{rawOutput.note} No real AI provider key configured for this company yet.</p>}
       {suggestions.length > 0 && (
         <ul className="mt-3 flex flex-col gap-2">
           {suggestions.map((s, i) => (

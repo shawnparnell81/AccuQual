@@ -37,7 +37,7 @@ export interface SyncResult {
  * against, not a fabricated call. No fake success: a missing webhookUrl is
  * reported as "skipped", never silently reported as sent.
  *
- * There is no background scheduler in this app (see tenants.erpSyncSettings'
+ * There is no background scheduler in this app (see companies.erpSyncSettings'
  * own schema comment) — `schedule` is stored config for a future worker to
  * read; today a sync only actually runs when this function is called, i.e.
  * from POST /settings/erp-sync/trigger.
@@ -67,7 +67,7 @@ export async function triggerErpSync(
     // mapping engine (see erpMappingEngine.ts — suppliers/purchaseOrders
     // only in this pass) AND an active preset, the outbound payload gets a
     // real per-record, vendor-field-mapped `mappedData` block alongside the
-    // existing envelope below — additive, not a replacement, so a tenant
+    // existing envelope below — additive, not a replacement, so a company
     // with no preset configured still gets exactly today's behavior.
     const mappedData: Record<string, ErpPayloadResult> = {};
     // Real resilience fix: one module's mapping throwing an uncaught
@@ -97,7 +97,7 @@ export async function triggerErpSync(
 
     let lastError: string | undefined;
     let delivered = false;
-    // Security-audit finding (S2, high): a tenant-configured webhookUrl was
+    // Security-audit finding (S2, high): a company-configured webhookUrl was
     // fetched server-side with no validation against internal/private
     // targets (e.g. the 169.254.169.254 cloud metadata endpoint) — checked
     // once before the retry loop, same "reject the config" treatment as an

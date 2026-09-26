@@ -31,7 +31,7 @@ export const inventoryItems = pgTable("inventory_items", {
   heldQty: numeric("held_qty").notNull().default("0"),
   active: boolean("active").notNull().default(true),
   notes: text("notes"),
-  // Settings → Inventory Module expansion (tenants.inventorySettings.
+  // Settings → Inventory Module expansion (companies.inventorySettings.
   // auditFrequency): the last time someone recorded a real cycle count
   // against this item (POST /inventory/items/:id/count). Null means "never
   // counted" — cycleCountDue is computed live from this + auditFrequency on

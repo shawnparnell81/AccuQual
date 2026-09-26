@@ -13,7 +13,7 @@ account before this list is shared with a customer._
 | **Zoho ZeptoMail** | Sends the system's emails (password resets, notices, supplier messages) | Recipient address, subject and body of each email | **[confirm data centre]** | Yes, when email is configured |
 | **Anthropic** | Powers AI suggestions and the assistant | The text of the record being analysed and the prompt; results | United States **[confirm]** | Only when an AI feature is used. An organization may supply its own provider key; without one, AccuQual's key is used |
 | **OpenAI** | Optional alternative AI provider | Same as above | United States **[confirm]** | Only if configured (not currently) |
-| **Sentry** | Error tracking | Error details, numeric tenant/user ids, request reference; no request bodies, cookies, headers, emails or IP addresses | **[confirm region]** | Only if `SENTRY_DSN` is set |
+| **Sentry** | Error tracking | Error details, numeric user ids, request reference; no request bodies, cookies, headers, emails or IP addresses | **[confirm region]** | Only if `SENTRY_DSN` is set |
 
 ## Services that do not receive customer data
 

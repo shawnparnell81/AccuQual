@@ -299,7 +299,7 @@ async function raiseAlertIfNeeded(db: Db, item: InventoryItem, alertType: "below
 /**
  * POST /inventory/items/:id/reserve. Blocks reserving past on-hand unless
  * inventorySettings.reservationRules.allowNegativeAllocation is on (a real
- * backorder-style allowance some tenants want, off by default).
+ * backorder-style allowance some companies want, off by default).
  */
 export async function reserveStock(db: Db, itemId: number, quantity: number, location: string | undefined, settings: InventorySettings | undefined, performedBy: number | undefined) {
   const loc = location ?? DEFAULT_LOCATION;

@@ -25,7 +25,7 @@ import {
 /**
  * Phase 6 Reporting & Analytics Hub — RBAC deliberately reuses each report's
  * own underlying module's existing ResourceKey (requireDepartmentAccess),
- * never a new parallel "reporting" permission a tenant admin would have to
+ * never a new parallel "reporting" permission a company admin would have to
  * remember to configure separately. This is what the phase's own task 5
  * ("Quality roles see quality reports, Supplier roles see supplier
  * reports...") means in practice: whatever access level a user already has
@@ -76,11 +76,11 @@ reportingRouter.post("/summary", validate(reportSummarySchema), reportSummaryHan
 /**
  * Scheduled reports are admin-only (not the per-report ResourceKeys above):
  * a schedule's `recipients` list is an arbitrary set of email addresses the
- * creator chooses — sending a tenant's own real quality/supplier/warranty
+ * creator chooses — sending a company's own real quality/supplier/warranty
  * numbers to any inbox on a recurring basis is a materially different,
  * more sensitive action than just viewing the dashboard, and this app's own
  * established convention for "configures a recurring/external-facing
- * thing" (Settings → ERP Sync, tenant AI config, notification retry) is
+ * thing" (Settings → ERP Sync, company AI config, notification retry) is
  * already admin-only throughout.
  */
 reportingRouter.get("/schedules", requireRole("admin"), listReportSchedulesHandler);

@@ -391,8 +391,8 @@ async function loadSimilarAuditFindings(db: Db, queryText: string): Promise<stri
 /**
  * POST /ai/assistant — the one endpoint with no department gate at all
  * (just requireAuth + withDb), per "the assistant must work for ANY
- * user in ANY department". Uses the tenant's own configured provider/key
- * when set (see tenant.controller.ts's updateAiConfigHandler), falling
+ * user in ANY department". Uses the company's own configured provider/key
+ * when set (see company.controller.ts's updateAiConfigHandler), falling
  * back to the platform's global env config exactly like every other AI
  * pipeline — including the honest stub response when neither has a key.
  */
@@ -400,9 +400,9 @@ export const assistantHandler = asyncHandler(async (req: Request, res: Response)
   const { messages, context } = req.body as { messages: AssistantMessage[]; context?: { module: string; recordId?: number } };
 
   // Was its own inline db.select + decryptSecret call with no try/catch —
-  // the one AI endpoint that missed the fix ai.usage.ts's loadTenantLlmOptions
+  // the one AI endpoint that missed the fix ai.usage.ts's loadCompanyLlmOptions
   // already applies everywhere else: a stored key that fails to decrypt
-  // (e.g. after a TENANT_AI_CONFIG_ENCRYPTION_KEY rotation) must degrade to
+  // (e.g. after a AI_CONFIG_ENCRYPTION_KEY rotation) must degrade to
   // the stub like every other "no key configured" path, never crash the
   // request (Full-System Audit finding C4).
   const { co, llmOptions } = await loadCompanyLlmOptions(req.db! as Db);
@@ -421,14 +421,14 @@ export const assistantHandler = asyncHandler(async (req: Request, res: Response)
   });
 
   // Only a real provider response has real usage to bill/track — the
-  // honest no-key stub (result.usage === null) never touches the tenant's
+  // honest no-key stub (result.usage === null) never touches the company's
   // BYOK counters, same as it never touches a real provider either.
   const cost = result.usage ? estimateCost(result.model, result.usage.inputTokens, result.usage.outputTokens) : 0;
   const totalTokens = result.usage ? result.usage.inputTokens + result.usage.outputTokens : null;
 
   if (result.usage) {
     // Atomic column increments (col = col + $1), not a read-modify-write of
-    // the whole tenant row — see tenants.aiUsageTokens's own schema comment
+    // the whole company row — see companies.aiUsageTokens's own schema comment
     // on why these two fields are real columns instead of living in the
     // aiConfig jsonb: two concurrent AI calls must never lose one's count
     // to the other's write.
@@ -438,7 +438,7 @@ export const assistantHandler = asyncHandler(async (req: Request, res: Response)
   }
 
   // No dedicated chat-message table exists (no persistence, per this
-  // module's scope) — entityId is the tenant, same convention the AI
+  // module's scope) — entityId is the company, same convention the AI
   // config change entries already use, since there's no other real owning
   // record for "one assistant usage event" to key on. performedBy is the
   // real invoking user either way. tokens/tokensIn/tokensOut/cost are what

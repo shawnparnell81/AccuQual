@@ -11,7 +11,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 /**
  * ONE generic upload/list/download/delete surface reused by every module —
  * see attachments.ts's own schema comment. No department gate: any
- * authenticated tenant user may upload, view, and download; delete is
+ * authenticated company user may upload, view, and download; delete is
  * restricted to the uploader or an admin (see deleteAttachmentHandler).
  * Same multer memoryStorage + STORAGE_LOCAL_PATH pattern as forms'
  * uploadTemplateHandler and document-folders' uploadTemplate.

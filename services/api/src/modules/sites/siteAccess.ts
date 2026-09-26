@@ -6,7 +6,7 @@ export interface SiteChoice {
   status: string;
 }
 
-/** Tenant admins manage every plant. Everyone else is limited to membership. */
+/** Company admins manage every plant. Everyone else is limited to membership. */
 export function isSiteAdmin(roleName: string | null | undefined): boolean {
   return roleName === "admin";
 }

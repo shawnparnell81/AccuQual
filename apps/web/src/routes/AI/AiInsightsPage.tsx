@@ -84,7 +84,7 @@ function Card({ icon, title, description, children }: { icon: ReactNode; title: 
 export function AiInsightsPage() {
   const toast = useToast();
   const currentUser = useCurrentUser();
-  const isAdmin = currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin";
+  const isAdmin = currentUser?.roleName === "admin";
 
   const [supplierId, setSupplierId] = useState<number | "">("");
   const { data: suppliers = [] } = useQuery<Supplier[]>({ queryKey: ["suppliers"], queryFn: async () => (await apiClient.get("/suppliers")).data });

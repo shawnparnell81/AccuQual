@@ -77,7 +77,7 @@ function inferFailedTransitionTarget(req: Request): { entityType: string; entity
  * Fire-and-forget: logs a failed workflow transition attempt for ISO
  * traceability (see the Audit Trail Dictionary, section 4). Deliberately
  * narrow — only state-changing requests against a recognized module, with a
- * resolvable record id and tenant context, get logged; everything else is
+ * resolvable record id and company context, get logged; everything else is
  * silently skipped rather than guessed at. Never awaited by the caller and
  * never throws, so it can't delay or break the real error response.
  *

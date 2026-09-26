@@ -4,7 +4,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { InventoryItem } from "../../api/types";
 import { ImportButton } from "../../components/import/ImportDialog";
 
-/** Item roster + quick-create. Stock/movements/alerts live on InventoryDetailPage and InventoryAlertsPage; tenant-wide lot/serial search lives on InventoryLotsPage — same "reached from a link, not its own nav entry" convention InventoryAlertsPage already established. */
+/** Item roster + quick-create. Stock/movements/alerts live on InventoryDetailPage and InventoryAlertsPage; company-wide lot/serial search lives on InventoryLotsPage — same "reached from a link, not its own nav entry" convention InventoryAlertsPage already established. */
 export function InventoryListPage() {
   const navigate = useNavigate();
   return (

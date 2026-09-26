@@ -11,7 +11,7 @@ import { getHandler, listHandler, createHandler, updateHandler, deleteHandler, r
 export const workflowRouter = Router();
 // Phase 9 — previously requireAuth only (any authenticated user of any
 // department could create/run a definition that fires real actions
-// against this tenant's data — see defaultPermissions.ts's own comment on
+// against this company's data — see defaultPermissions.ts's own comment on
 // the new "workflow" ResourceKey this now uses).
 workflowRouter.use(requireAuth, withDb, requireDepartmentAccess("workflow"));
 

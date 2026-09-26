@@ -22,7 +22,7 @@ const AUDIT_ENTITY_TYPE = "DocumentFolder";
 /**
  * Inserts one level of the default tree at a time (each level needs the
  * previous level's real auto-increment ids as `parentId`, so this can't be a
- * single bulk insert). Only ever runs once per tenant — see `list` below.
+ * single bulk insert). Only ever runs once per company — see `list` below.
  */
 async function seedDefaults(db: Db): Promise<void> {
   async function insertLevel(nodes: DefaultFolderSeed[], parentId: number | null): Promise<void> {
@@ -40,10 +40,10 @@ async function seedDefaults(db: Db): Promise<void> {
 }
 
 /**
- * Ensures the tenant has a top-level "Library Pool" node — the one place
+ * Ensures the company has a top-level "Library Pool" node — the one place
  * "remove this form" moves a leaf to (see the schema comment). Runs on every
  * `list` call rather than only during initial seeding, so it self-heals for
- * tenants that already existed before this feature shipped, and even
+ * companies that already existed before this feature shipped, and even
  * recreates it if a user ever deletes it.
  */
 async function ensureLibraryPool(db: Db, topLevel: (typeof documentFolders.$inferSelect)[]): Promise<typeof documentFolders.$inferSelect> {
@@ -117,11 +117,11 @@ const FORM_LINK_RULES: { pattern: RegExp; path: string }[] = [
 
 /**
  * The 9 subfolders added to DEFAULT_DOCUMENT_FOLDERS by the "ACCUQUAL
- * Forms" batch (see qmsFormDefinitions.ts) after many tenants had already
- * been seeded — backfilled here for any tenant whose tree already existed,
+ * Forms" batch (see qmsFormDefinitions.ts) after many companies had already
+ * been seeded — backfilled here for any company whose tree already existed,
  * same self-healing idea as ensureLibraryPool/linkKnownForms rather than a
- * one-off migration script (which could never reach a tenant created after
- * it ran anyway; this reaches every tenant, always).
+ * one-off migration script (which could never reach a company created after
+ * it ran anyway; this reaches every company, always).
  */
 const ADDITIONAL_SUBFOLDERS: { department: string; folder: string; subfolder: string }[] = [
   { department: "Quality", folder: "Document Control", subfolder: "Record Retention Log" },
@@ -139,7 +139,7 @@ async function ensureAdditionalSubfolders(db: Db, all: (typeof documentFolders.$
   let list = all;
   for (const { department, folder, subfolder } of ADDITIONAL_SUBFOLDERS) {
     const dept = list.find((f) => f.parentId === null && f.name === department);
-    if (!dept) continue; // tenant doesn't have this department branch (e.g. a customized tree) — skip rather than force it back in
+    if (!dept) continue; // company doesn't have this department branch (e.g. a customized tree) — skip rather than force it back in
     const parentFolder = list.find((f) => f.parentId === dept.id && f.name === folder);
     if (!parentFolder) continue;
     if (list.some((f) => f.parentId === parentFolder.id && f.name === subfolder)) continue;
@@ -153,7 +153,7 @@ async function ensureAdditionalSubfolders(db: Db, all: (typeof documentFolders.$
 /**
  * Self-heals `linkedPath` onto any leaf (no children) whose name matches a
  * known QMS module and doesn't already have one — same self-healing pattern
- * as ensureLibraryPool, so it applies to every tenant (existing or new)
+ * as ensureLibraryPool, so it applies to every company (existing or new)
  * without a one-off migration script. Skips anything naming a *procedure*
  * (a reference document about the process, not the live record type).
  */
@@ -190,7 +190,7 @@ async function withLinkedDocumentInfo(db: Db, all: (typeof documentFolders.$infe
   });
 }
 
-/** Full flat folder list for the tenant, seeding the default department tree on first use. */
+/** Full flat folder list for the company, seeding the default department tree on first use. */
 export const list = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
 
@@ -333,7 +333,7 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
  * Attach a user-uploaded FILE to a folder node ("use your own policy/
  * procedure instead of — or in addition to — the supplied taxonomy").
  * Multer (memoryStorage, see routes) has already validated size and put the
- * file on `req.file`; this persists it under the tenant's provisioned
+ * file on `req.file`; this persists it under the company's provisioned
  * `forms/custom` directory (same STORAGE_LOCAL_PATH convention the seeded
  * form templates use) and records the path + real mime type on the folder
  * row. Any file type is accepted — real controlled documents (a Quality

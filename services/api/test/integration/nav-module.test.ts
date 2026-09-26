@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Full-System Audit finding M8: nav had zero test coverage — no coverage of
 // getKpiCounts' real "open" filtering per module, and no coverage of the
 // hide/show nav-preferences round-trip (including L8's new Zod validation).
@@ -7,7 +8,7 @@ import { eq } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
 import { complaints } from "../../src/drizzle/schema/complaints.js";
@@ -17,47 +18,40 @@ import { signAccessToken } from "../../src/utils/jwt.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
-let otherTenantId: number;
+let companyId: number;
+
 const userIds: number[] = [];
 let token: string;
 
 describe("Nav (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Nav Test Tenant ${suffix}`, code: `nav-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    const [other] = await db.insert(tenants).values({ name: `Nav Other Tenant ${suffix}`, code: `nav-other-${suffix}` }).returning();
-    otherTenantId = other!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
+    
+    
 
-    const [user] = await db.insert(users).values({ tenantId, email: `nav-${suffix}@test.local`, passwordHash: "unused" }).returning();
+    const [user] = await db.insert(users).values({ email: `nav-${suffix}@test.local`, passwordHash: "unused" }).returning();
     userIds.push(user!.id);
-    token = signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName: "admin", department: null });
+    token = signAccessToken({ sub: String(user!.id), roleId: null, roleName: "admin", department: null });
   });
 
   afterAll(async () => {
-    await db.delete(navHiddenItems).where(eq(navHiddenItems.tenantId, tenantId));
-    await db.delete(ncr).where(eq(ncr.tenantId, tenantId));
-    await db.delete(ncr).where(eq(ncr.tenantId, otherTenantId));
-    await db.delete(complaints).where(eq(complaints.tenantId, tenantId));
-    await db.delete(users).where(eq(users.tenantId, tenantId));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
-    await db.delete(tenants).where(eq(tenants.id, otherTenantId));
     await pool.end();
   });
 
   describe("GET /nav/kpi-counts", () => {
-    it("counts only this tenant's own open (non-closed) records, per module", async () => {
+    it("counts only this company's own open (non-closed) records, per module", async () => {
       await db.insert(ncr).values([
-        { tenantId, title: "Open NCR 1" },
-        { tenantId, title: "Open NCR 2" },
-        { tenantId, title: "Closed NCR", status: "closed" },
+        { title: "Open NCR 1" },
+        { title: "Open NCR 2" },
+        { title: "Closed NCR", status: "closed" },
       ]);
       await db.insert(complaints).values([
-        { tenantId, description: "Open complaint" },
-        { tenantId, description: "Closed complaint", status: "closed" },
+        { description: "Open complaint" },
+        { description: "Closed complaint", status: "closed" },
       ]);
-      // A different tenant's own open records must never bleed into this count.
-      await db.insert(ncr).values({ tenantId: otherTenantId, title: "Other tenant's open NCR" });
+      // A different company's own open records must never bleed into this count.
+      
 
       const res = await request(app).get("/nav/kpi-counts").set("Authorization", `Bearer ${token}`);
       expect(res.status).toBe(200);

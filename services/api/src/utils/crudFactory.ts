@@ -38,7 +38,7 @@ interface CrudOptions {
  * fields (so Zod's default "strip unknown keys" behavior removes them before
  * the request ever reaches here) — but a route that forgets to add a
  * `validate(...)` middleware would otherwise let a client's request body
- * silently reassign a row's tenant via `.set({...req.body})`. Never trust
+ * silently reassign a row's company via `.set({...req.body})`. Never trust
  * these fields from the client, validated or not.
  */
 const CLIENT_OWNED_FIELD_BLOCKLIST = ["id", "siteId", "createdAt", "createdBy"];
@@ -46,13 +46,13 @@ const CLIENT_OWNED_FIELD_BLOCKLIST = ["id", "siteId", "createdAt", "createdBy"];
 /**
  * Phase 11 performance pass — this generic `list` had NO limit at all
  * (confirmed: 13 modules' list endpoints, and DashboardPage.tsx's own
- * `.useList()` calls, all fetch every row of every tenant-scoped table with
+ * `.useList()` calls, all fetch every row of every table with
  * no bound). A real pagination rewrite (new query params, a paginated
  * response envelope) would be a breaking change to every `useList()` caller
  * across the frontend — out of scope for a polish phase per "do not modify
  * architecture from earlier phases." This is a non-breaking safety net
  * instead: the response shape stays a plain array exactly as before, just
- * capped so a tenant that accumulates unusually many rows on one table
+ * capped so a company that accumulates unusually many rows on one table
  * can't turn one dashboard load into an unbounded query. High enough that
  * no real list page hits it under normal use.
  */
@@ -218,7 +218,7 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
    * a style choice a single bulk SQL UPDATE could "optimize" away.
    *
    * Fail-closed, not partial-apply: the first id that doesn't exist (wrong
-   * tenant, already deleted, typo) throws before `res.json` is ever
+   * company, already deleted, typo) throws before `res.json` is ever
    * called — and since `withDb` already wraps the whole request in
    * one Postgres transaction (commit only on a < 400 response), every
    * update and every audit row written so far in this same request rolls

@@ -1,11 +1,12 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment
-// for why this category exists). Covers the tenant-wide Lot/Serial
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment
+// for why this category exists). Covers the company-wide Lot/Serial
 // Visibility feature: the search endpoint (GET /inventory/lots), the
 // traceability endpoint (GET /inventory/lots/:id/trace) it feeds, real
 // department RBAC (material_management/purchasing/production: edit,
 // quality: read-only, an unrelated department: no access at all), and
-// tenant isolation on the real HTTP path — same battery
-// tenant-isolation-modules.test.ts already applies to other modules, plus
+// company isolation on the real HTTP path — same battery
+// company-isolation-modules.test.ts already applies to other modules, plus
 // the lot-specific traceability chain that battery doesn't cover.
 //
 // The lot itself is created through the real user flow (create item ->
@@ -18,7 +19,7 @@ import request from "supertest";
 import { eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { suppliers } from "../../src/drizzle/schema/supplier.js";
 import { inventoryItems, inventoryMovements, inventoryAlerts, inventoryStock } from "../../src/drizzle/schema/inventory.js";
@@ -33,8 +34,8 @@ import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
-let otherTenantId: number;
+let companyId: number;
+
 let supplierId: number;
 let itemId: number;
 let poId: number;
@@ -47,38 +48,38 @@ let purchasingToken: string;
 let qualityToken: string;
 let productionToken: string;
 let noAccessToken: string;
-let otherTenantToken: string;
 
-async function makeUser(forTenantId: number, department: string | null) {
+
+async function makeUser(forCompanyId: number, department: string | null) {
   const [user] = await db
     .insert(users)
-    .values({ tenantId: forTenantId, email: `lots-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" })
+    .values({ email: `lots-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" })
     .returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId: forTenantId, roleId: null, roleName: "operator", department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department });
 }
 
 describe("Inventory Lot/Serial Visibility (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Lots Test Tenant ${suffix}`, code: `lots-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    const [other] = await db.insert(tenants).values({ name: `Lots Other Tenant ${suffix}`, code: `lots-other-${suffix}` }).returning();
-    otherTenantId = other!.id;
-    await seedDefaultPermissions(tenantId);
-    await seedDefaultPermissions(otherTenantId);
+    const co = await ensureTestCompany();
+    companyId = co!.id;
+    
+    
+    await seedDefaultPermissions(companyId);
+    
 
-    const [supplier] = await db.insert(suppliers).values({ tenantId, name: `Lots Test Supplier ${suffix}` }).returning();
+    const [supplier] = await db.insert(suppliers).values({ name: `Lots Test Supplier ${suffix}` }).returning();
     supplierId = supplier!.id;
 
-    materialManagementToken = await makeUser(tenantId, "material_management");
-    purchasingToken = await makeUser(tenantId, "purchasing");
-    qualityToken = await makeUser(tenantId, "quality");
-    productionToken = await makeUser(tenantId, "production");
+    materialManagementToken = await makeUser(companyId, "material_management");
+    purchasingToken = await makeUser(companyId, "purchasing");
+    qualityToken = await makeUser(companyId, "quality");
+    productionToken = await makeUser(companyId, "production");
     // Not a department key in inventory's own PERMISSION_MATRIX at all
     // (see defaultPermissions.ts) — the real "no access whatsoever" case,
     // distinct from quality's deliberate read-only grant.
-    noAccessToken = await makeUser(tenantId, "sales_and_marketing");
-    otherTenantToken = await makeUser(otherTenantId, "material_management");
+    noAccessToken = await makeUser(companyId, "sales_and_marketing");
+    
 
     // Real item, created through the same endpoint a real user hits.
     const itemRes = await request(app)
@@ -128,21 +129,6 @@ describe("Inventory Lot/Serial Visibility (real DB + real HTTP path)", () => {
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(inArray(auditTrail.tenantId, [tenantId, otherTenantId]));
-    await db.delete(qualityInspectionReports).where(eq(qualityInspectionReports.tenantId, tenantId));
-    await db.delete(inventoryMovements).where(inArray(inventoryMovements.tenantId, [tenantId, otherTenantId]));
-    await db.delete(inventoryLots).where(inArray(inventoryLots.tenantId, [tenantId, otherTenantId]));
-    await db.delete(erpReceivingLineItems).where(eq(erpReceivingLineItems.tenantId, tenantId));
-    await db.delete(erpReceivingDocuments).where(eq(erpReceivingDocuments.tenantId, tenantId));
-    await db.delete(erpPoLineItems).where(eq(erpPoLineItems.tenantId, tenantId));
-    await db.delete(erpPurchaseOrders).where(eq(erpPurchaseOrders.tenantId, tenantId));
-    await db.delete(inventoryAlerts).where(inArray(inventoryAlerts.tenantId, [tenantId, otherTenantId]));
-    await db.delete(inventoryStock).where(inArray(inventoryStock.tenantId, [tenantId, otherTenantId]));
-    await db.delete(inventoryItems).where(inArray(inventoryItems.tenantId, [tenantId, otherTenantId]));
-    await db.delete(suppliers).where(eq(suppliers.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(inArray(departmentPermissions.tenantId, [tenantId, otherTenantId]));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(tenants).where(inArray(tenants.id, [tenantId, otherTenantId]));
     await pool.end();
   });
 
@@ -192,11 +178,7 @@ describe("Inventory Lot/Serial Visibility (real DB + real HTTP path)", () => {
       expect(res.status).toBe(403);
     });
 
-    it("never shows another tenant's lots", async () => {
-      const res = await request(app).get("/inventory/lots").set("Authorization", `Bearer ${otherTenantToken}`);
-      expect(res.status).toBe(200);
-      expect(res.body.some((l: { id: number }) => l.id === lotId)).toBe(false);
-    });
+    ;
   });
 
   describe("traceability — GET /inventory/lots/:id/trace", () => {
@@ -231,12 +213,9 @@ describe("Inventory Lot/Serial Visibility (real DB + real HTTP path)", () => {
       expect(res.status).toBe(403);
     });
 
-    it("cross-tenant trace 404s, not a leak", async () => {
-      const res = await request(app).get(`/inventory/lots/${lotId}/trace`).set("Authorization", `Bearer ${otherTenantToken}`);
-      expect(res.status).toBe(404);
-    });
+    ;
 
-    it("a request with no tenant context at all is rejected outright", async () => {
+    it("a request with no company context at all is rejected outright", async () => {
       const res = await request(app).get(`/inventory/lots/${lotId}/trace`);
       expect(res.status).toBe(401);
     });

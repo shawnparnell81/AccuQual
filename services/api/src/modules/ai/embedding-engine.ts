@@ -8,9 +8,9 @@ import type { Db } from "../../lib/requestDb.js";
  * Generates a text embedding and upserts it into the pgvector-backed
  * `ai_embeddings` table so records (NCRs, CAPA actions, audit findings,
  * supplier issues, training materials, documents) can be retrieved by
- * semantic similarity for the AI pipelines below. Always tenant-scoped —
- * per the Multi-Tenant Patch Pack, embeddings and retrieval must never mix
- * data across tenants.
+ * semantic similarity for the AI pipelines below. Always company-scoped —
+ * per the Multi-Company Patch Pack, embeddings and retrieval must never mix
+ * data across companies.
  */
 export async function embedAndStore(db: Db, entityType: string, entityId: number, content: string): Promise<void> {
   const embedding = await generateEmbedding(content);

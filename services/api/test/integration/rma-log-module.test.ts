@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Covers the real, manually-maintained RMA Log register (module-specific
 // RBAC build, 2026-09-16) — NOT the automated Supplier RMA Request event
 // trail, which was renamed to rma_activity_log at the same time (see
@@ -14,7 +15,7 @@ import request from "supertest";
 import { eq, and } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { rmaLogRecords } from "../../src/drizzle/schema/rmaLog.js";
 import { warrantyClaims } from "../../src/drizzle/schema/warranty.js";
@@ -26,7 +27,7 @@ import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let qualityToken: string;
 let customerServiceToken: string;
 let engineeringToken: string;
@@ -36,15 +37,15 @@ let warrantyClaimId: number;
 let recordId: number;
 
 async function makeUser(department: string | null, roleName = "operator") {
-  const [user] = await db.insert(users).values({ tenantId, email: `rmalog-test-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department }).returning();
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName, department });
+  const [user] = await db.insert(users).values({ email: `rmalog-test-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department }).returning();
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
 }
 
 describe("RMA Log module (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `RMA Log Test Tenant ${suffix}`, code: `rmalog-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    await seedDefaultPermissions(tenantId);
+    const co = await ensureTestCompany();
+    companyId = co!.id;
+    await seedDefaultPermissions(companyId);
 
     qualityToken = await makeUser("quality");
     customerServiceToken = await makeUser("customer_service");
@@ -52,18 +53,12 @@ describe("RMA Log module (real DB + real HTTP path)", () => {
     productionToken = await makeUser("production");
     adminToken = await makeUser(null, "admin");
 
-    const [claim] = await db.insert(warrantyClaims).values({ tenantId, claimNumber: `WC-RMALOGTEST-${suffix}`, status: "new" }).returning();
+    const [claim] = await db.insert(warrantyClaims).values({ claimNumber: `WC-RMALOGTEST-${suffix}`, status: "new" }).returning();
     warrantyClaimId = claim!.id;
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(rmaLogRecords).where(eq(rmaLogRecords.tenantId, tenantId));
-    await db.delete(warrantyClaims).where(eq(warrantyClaims.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    await db.delete(users).where(eq(users.tenantId, tenantId));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
@@ -89,7 +84,7 @@ describe("RMA Log module (real DB + real HTTP path)", () => {
   });
 
   it("the create was recorded in the audit trail", async () => {
-    const rows = await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "RmaLog"), eq(auditTrail.action, "create")));
+    const rows = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "RmaLog"), eq(auditTrail.action, "create")));
     expect(rows.length).toBeGreaterThan(0);
   });
 
@@ -121,7 +116,7 @@ describe("RMA Log module (real DB + real HTTP path)", () => {
       const res = await request(app).patch(`/rma-log/${recordId}`).set("Authorization", `Bearer ${engineeringToken}`).send({ warrantyId: warrantyClaimId });
       expect(res.status).toBe(403);
 
-      const rows = await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "RmaLog"), eq(auditTrail.action, "permission_denied")));
+      const rows = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "RmaLog"), eq(auditTrail.action, "permission_denied")));
       expect(rows.some((r) => (r.changes as Record<string, unknown>).attemptedAction === "update_linkage")).toBe(true);
     });
 
@@ -150,7 +145,7 @@ describe("RMA Log module (real DB + real HTTP path)", () => {
       const res = await request(app).post(`/rma-log/${recordId}/status`).set("Authorization", `Bearer ${engineeringToken}`).send({ status: "received" });
       expect(res.status).toBe(403);
 
-      const rows = await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "RmaLog"), eq(auditTrail.action, "permission_denied")));
+      const rows = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "RmaLog"), eq(auditTrail.action, "permission_denied")));
       expect(rows.some((r) => (r.changes as Record<string, unknown>).attemptedAction === "status_change")).toBe(true);
     });
 

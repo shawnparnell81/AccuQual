@@ -22,12 +22,12 @@ function isPrivateIp(ip: string): boolean {
 }
 
 /**
- * Security-audit finding (S2, high): blocks SSRF via a tenant-configurable
+ * Security-audit finding (S2, high): blocks SSRF via a company-configurable
  * outbound webhook URL — resolves the hostname and rejects any target that
  * resolves to a loopback/private/link-local address (including
  * 169.254.169.254, the cloud metadata endpoint), not just an obviously-local
  * hostname string, which a DNS record can trivially point around. The threat
- * model here is a malicious/compromised tenant admin's *configured* URL, not
+ * model here is a malicious/compromised company admin's *configured* URL, not
  * a live DNS-rebinding attacker racing this check against the request that
  * follows it — that would need a second resolve-and-compare at connect time,
  * which Node's fetch doesn't expose a hook for.

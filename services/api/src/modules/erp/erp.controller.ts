@@ -60,7 +60,7 @@ async function lineItemsWithContext(req: Request, purchaseOrderId: number) {
  * Phase 1 buyer-evaluation finding ("PO list columns") — totalValue is
  * computed here, not stored: summed from erp_po_line_items' own
  * quantity * unitCost, the same real numbers the PO detail page's line-item
- * table already shows. Two plain queries + a JS reduce, same "tenant-scoped
+ * table already shows. Two plain queries + a JS reduce, same "company-scoped
  * tables are QMS-scale, not warehouse-scale" reasoning inventory's own list
  * handler already uses, rather than a SQL group-by join.
  */

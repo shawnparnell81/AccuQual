@@ -1,14 +1,15 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // TOTP multi-factor authentication: enrollment, the two-step sign-in, replay and
-// recovery-code handling, the tenant policy (optional / admins / all) with its
-// grace period, platform_admin always being required, and admin reset.
+// recovery-code handling, the company policy (optional / admins / all) with its
+// grace period, and admin reset.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import bcrypt from "bcryptjs";
 import request from "supertest";
 import { eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { roles } from "../../src/drizzle/schema/roles.js";
 import { refreshTokens } from "../../src/drizzle/schema/refreshTokens.js";
@@ -26,9 +27,8 @@ const PASSWORD = "violet-lantern-quarry-88";
 const CSRF = { "X-AccuQual-Csrf": "1" };
 const DAY = 86_400_000;
 
-let tenantId: number;
+let companyId: number;
 let adminRoleId: number;
-let platformRoleId: number;
 const userIds: number[] = [];
 
 // 'admin' and 'platform_admin' are real system roles; a fresh CI database may not have them yet. They are created if missing and deliberately left in place afterwards — other test files run in parallel and their users reference the same rows.
@@ -42,7 +42,7 @@ async function ensureRole(name: string): Promise<number> {
 
 async function makeUser(label: string, extra: Partial<typeof users.$inferInsert> = {}) {
   const email = `mfa-${label}-${suffix}@test.local`;
-  const [u] = await db.insert(users).values({ tenantId, email, passwordHash: await bcrypt.hash(PASSWORD, 4), ...extra }).returning();
+  const [u] = await db.insert(users).values({ email, passwordHash: await bcrypt.hash(PASSWORD, 4), ...extra }).returning();
   userIds.push(u!.id);
   return { id: u!.id, email };
 }
@@ -63,21 +63,13 @@ async function enroll(token: string) {
 
 describe("TOTP multi-factor authentication (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [t] = await db.insert(tenants).values({ name: `MFA Test ${suffix}`, code: `mfa-${suffix}` }).returning();
-    tenantId = t!.id;
+    const t = await ensureTestCompany();
+    companyId = t!.id;
     adminRoleId = await ensureRole("admin");
-    platformRoleId = await ensureRole("platform_admin");
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, tenantId));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(mfaRecoveryCodes).where(inArray(mfaRecoveryCodes.userId, userIds));
-    await db.delete(refreshTokens).where(inArray(refreshTokens.userId, userIds));
-    await db.delete(users).where(inArray(users.id, userIds));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
-    await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, tenantId));
     await pool.end();
   });
 
@@ -208,9 +200,9 @@ describe("TOTP multi-factor authentication (real DB + real HTTP path)", () => {
     });
   });
 
-  describe("tenant policy", () => {
+  describe("company policy", () => {
     it("default 'admins': an admin gets a grace period, then is stopped at sign-in and must enroll", async () => {
-      await db.update(tenants).set({ mfaPolicy: "admins" }).where(eq(tenants.id, tenantId));
+      await db.update(company).set({ mfaPolicy: "admins" });
       const admin = await makeUser("admin-grace", { roleId: adminRoleId });
 
       const inGrace = await login(admin.email);
@@ -250,65 +242,52 @@ describe("TOTP multi-factor authentication (real DB + real HTTP path)", () => {
       const worker = await makeUser("worker-policy");
       const admin = await makeUser("admin-policy", { roleId: adminRoleId, mfaRequiredSince: new Date(Date.now() - 30 * DAY) });
 
-      await db.update(tenants).set({ mfaPolicy: "admins" }).where(eq(tenants.id, tenantId));
+      await db.update(company).set({ mfaPolicy: "admins" });
       expect((await login(worker.email)).body.accessToken).toBeTruthy();
       expect((await login(admin.email)).body.mfaEnrollmentRequired).toBe(true);
 
-      await db.update(tenants).set({ mfaPolicy: "optional" }).where(eq(tenants.id, tenantId));
+      await db.update(company).set({ mfaPolicy: "optional" });
       expect((await login(admin.email)).body.accessToken).toBeTruthy();
 
-      await db.update(tenants).set({ mfaPolicy: "all" }).where(eq(tenants.id, tenantId));
+      await db.update(company).set({ mfaPolicy: "all" });
       await db.update(users).set({ mfaRequiredSince: new Date(Date.now() - 30 * DAY) }).where(eq(users.id, worker.id));
       expect((await login(worker.email)).body.mfaEnrollmentRequired).toBe(true);
 
-      await db.update(tenants).set({ mfaPolicy: "admins" }).where(eq(tenants.id, tenantId));
+      await db.update(company).set({ mfaPolicy: "admins" });
     });
 
     it("a session cannot be refreshed once its owner has become subject to MFA and the grace period has ended", async () => {
-      await db.update(tenants).set({ mfaPolicy: "optional" }).where(eq(tenants.id, tenantId));
+      await db.update(company).set({ mfaPolicy: "optional" });
       const admin = await makeUser("admin-refresh", { roleId: adminRoleId });
       const agent = request.agent(app);
       expect((await agent.post("/auth/login").send({ email: admin.email, password: PASSWORD })).status).toBe(200);
       expect((await agent.post("/auth/refresh").set(CSRF)).status).toBe(200);
 
-      await db.update(tenants).set({ mfaPolicy: "admins" }).where(eq(tenants.id, tenantId));
+      await db.update(company).set({ mfaPolicy: "admins" });
       await db.update(users).set({ mfaRequiredSince: new Date(Date.now() - 30 * DAY) }).where(eq(users.id, admin.id));
       const res = await agent.post("/auth/refresh").set(CSRF);
       expect(res.status).toBe(401);
       expect(res.body.message).toMatch(/Multi-factor/);
     });
 
-    it("platform_admin always needs MFA — no grace period, whatever the tenant policy says", async () => {
-      await db.update(tenants).set({ mfaPolicy: "optional" }).where(eq(tenants.id, tenantId));
-      const [pa] = await db
-        .insert(users)
-        .values({ tenantId: null, email: `mfa-platform-${suffix}@test.local`, passwordHash: await bcrypt.hash(PASSWORD, 4), roleId: platformRoleId })
-        .returning();
-      userIds.push(pa!.id);
-      const res = await login(pa!.email);
-      expect(res.body.mfaEnrollmentRequired).toBe(true);
-      expect(res.body.accessToken).toBeUndefined();
-      await db.update(tenants).set({ mfaPolicy: "admins" }).where(eq(tenants.id, tenantId));
-    });
-
-    it("an admin can read and change the tenant policy; a non-admin cannot change it", async () => {
+    it("an admin can read and change the company policy; a non-admin cannot change it", async () => {
       const admin = await makeUser("policy-admin", { roleId: adminRoleId });
-      const adminToken = await signAccessToken({ sub: String(admin.id), tenantId, roleId: adminRoleId, roleName: "admin", department: null });
+      const adminToken = await signAccessToken({ sub: String(admin.id), roleId: adminRoleId, roleName: "admin", department: null });
       const worker = await makeUser("policy-worker");
-      const workerToken = await signAccessToken({ sub: String(worker.id), tenantId, roleId: null, roleName: null, department: null });
+      const workerToken = await signAccessToken({ sub: String(worker.id), roleId: null, roleName: null, department: null });
 
-      expect((await request(app).patch("/tenant/security").set(bearer(workerToken)).send({ mfaPolicy: "all" })).status).toBe(403);
-      expect((await request(app).patch("/tenant/security").set(bearer(adminToken)).send({ mfaPolicy: "bogus" })).status).toBe(400);
-      expect((await request(app).patch("/tenant/security").set(bearer(adminToken)).send({ mfaPolicy: "all" })).body).toEqual({ mfaPolicy: "all" });
-      expect((await request(app).get("/tenant/security").set(bearer(workerToken))).body).toEqual({ mfaPolicy: "all" });
-      await db.update(tenants).set({ mfaPolicy: "admins" }).where(eq(tenants.id, tenantId));
+      expect((await request(app).patch("/company/security").set(bearer(workerToken)).send({ mfaPolicy: "all" })).status).toBe(403);
+      expect((await request(app).patch("/company/security").set(bearer(adminToken)).send({ mfaPolicy: "bogus" })).status).toBe(400);
+      expect((await request(app).patch("/company/security").set(bearer(adminToken)).send({ mfaPolicy: "all" })).body).toEqual({ mfaPolicy: "all" });
+      expect((await request(app).get("/company/security").set(bearer(workerToken))).body).toEqual({ mfaPolicy: "all" });
+      await db.update(company).set({ mfaPolicy: "admins" });
     });
   });
 
   describe("admin reset", () => {
     it("clears a user's second factor and ends their sessions", async () => {
       const admin = await makeUser("reset-admin", { roleId: adminRoleId });
-      const adminToken = await signAccessToken({ sub: String(admin.id), tenantId, roleId: adminRoleId, roleName: "admin", department: null });
+      const adminToken = await signAccessToken({ sub: String(admin.id), roleId: adminRoleId, roleName: "admin", department: null });
       const u = await makeUser("reset-target");
       const userToken = (await login(u.email)).body.accessToken as string;
       await enroll(userToken);
@@ -322,7 +301,7 @@ describe("TOTP multi-factor authentication (real DB + real HTTP path)", () => {
       expect(after.body.accessToken).toBeTruthy();
 
       const worker = await makeUser("reset-nonadmin");
-      const workerToken = await signAccessToken({ sub: String(worker.id), tenantId, roleId: null, roleName: null, department: null });
+      const workerToken = await signAccessToken({ sub: String(worker.id), roleId: null, roleName: null, department: null });
       expect((await request(app).post(`/users/${u.id}/mfa/reset`).set(bearer(workerToken))).status).toBe(403);
     });
   });

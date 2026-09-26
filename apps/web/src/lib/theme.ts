@@ -1,4 +1,4 @@
-import type { TenantBranding, UserThemePreferences } from "../api/types";
+import type { CompanyBranding, UserThemePreferences } from "../api/types";
 
 export type ResolvedMode = "light" | "dark";
 
@@ -189,7 +189,7 @@ function assignExact(vars: Record<string, string>, cssVar: string, hex: string |
 
 export interface DerivedThemeInput {
   mode: ResolvedMode;
-  branding?: TenantBranding;
+  branding?: CompanyBranding;
   userPrefs?: UserThemePreferences;
 }
 
@@ -247,7 +247,7 @@ export function resolveMode(mode: UserThemePreferences["mode"] | undefined): Res
   return "dark"; // AccuQual's long-standing default — see globals.css's own comment
 }
 
-/** Instant-paint hint read before the tenant/user API calls resolve, so the very first frame isn't wrong-then-flips. Best-effort: wrapped for private-browsing/blocked-storage. */
+/** Instant-paint hint read before the company/user API calls resolve, so the very first frame isn't wrong-then-flips. Best-effort: wrapped for private-browsing/blocked-storage. */
 export function getStoredMode(): ResolvedMode | null {
   try {
     const stored = localStorage.getItem(THEME_MODE_STORAGE_KEY);
@@ -302,12 +302,12 @@ function persistVars(vars: Record<string, string>) {
 /**
  * The one real theme engine entry point: sets the light/dark stamp plus
  * every color CSS custom property globals.css defines, in priority order
- * (user override > derived palette > explicit tenant field > built-in
+ * (user override > derived palette > explicit company field > built-in
  * default). Light and dark are chosen only from the mode preference —
  * a color never flips the mode. Every existing component already renders
  * through these tokens (bg-primary, text-foreground, border-border, ...).
  */
-export function applyTheme(branding: TenantBranding | undefined, userPrefs: UserThemePreferences | undefined): ResolvedMode {
+export function applyTheme(branding: CompanyBranding | undefined, userPrefs: UserThemePreferences | undefined): ResolvedMode {
   const mode = resolveMode(userPrefs?.mode);
   const root = document.documentElement;
 

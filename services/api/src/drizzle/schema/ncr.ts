@@ -7,7 +7,7 @@ export const ncr = pgTable("ncr", {
   id: serial("id").primaryKey(),
   // Plant this issue belongs to. Nullable in the type so inserts that omit
   // it still compile; the database column is NOT NULL and a BEFORE INSERT
-  // trigger fills the tenant's default plant when the caller doesn't (see
+  // trigger fills the company's default plant when the caller doesn't (see
   // 0070_sites.sql). Request creates stamp the current plant explicitly.
   siteId: integer("site_id").references(() => sites.id),
   title: text("title").notNull(),

@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Bulk import from Excel/CSV: preview + column auto-mapping, whole-file validation, real inserts with audit
 // entries, duplicate handling (existing rows and repeats inside the file), inventory's supplier lookup,
 // people's one-time credentials, and who is allowed to import what.
@@ -8,7 +9,7 @@ import request from "supertest";
 import { eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { roles } from "../../src/drizzle/schema/roles.js";
 import { suppliers } from "../../src/drizzle/schema/supplier.js";
@@ -24,7 +25,7 @@ const app = createApp();
 const suffix = Date.now();
 const CSRF = { "X-AccuQual-Csrf": "1" };
 
-let tenantId: number;
+let companyId: number;
 let adminToken: string;
 let operatorToken: string;
 let roleId: number;
@@ -47,36 +48,23 @@ async function upload(path: string, token: string, file: Buffer, fields: Record<
 
 describe("Excel / CSV import (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [t] = await db.insert(tenants).values({ name: `Import Test ${suffix}`, code: `import-test-${suffix}` }).returning();
-    tenantId = t!.id;
-    await seedDefaultPermissions(tenantId);
+    const t = await ensureTestCompany();
+    companyId = t!.id;
+    await seedDefaultPermissions(companyId);
     const [role] = await db.insert(roles).values({ name: `import-role-${suffix}` }).returning();
     roleId = role!.id;
-    const [admin] = await db.insert(users).values({ tenantId, email: `import-admin-${suffix}@test.local`, passwordHash: "unused" }).returning();
-    const [operator] = await db.insert(users).values({ tenantId, email: `import-operator-${suffix}@test.local`, passwordHash: "unused", department: "production" }).returning();
+    const [admin] = await db.insert(users).values({ email: `import-admin-${suffix}@test.local`, passwordHash: "unused" }).returning();
+    const [operator] = await db.insert(users).values({ email: `import-operator-${suffix}@test.local`, passwordHash: "unused", department: "production" }).returning();
     userIds.push(admin!.id, operator!.id);
-    adminToken = await signAccessToken({ sub: String(admin!.id), tenantId, roleId: null, roleName: "admin", department: null });
-    operatorToken = await signAccessToken({ sub: String(operator!.id), tenantId, roleId: null, roleName: "operator", department: "production" });
+    adminToken = await signAccessToken({ sub: String(admin!.id), roleId: null, roleName: "admin", department: null });
+    operatorToken = await signAccessToken({ sub: String(operator!.id), roleId: null, roleName: "operator", department: "production" });
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    const items = await db.select({ id: inventoryItems.id }).from(inventoryItems).where(eq(inventoryItems.tenantId, tenantId));
+    const items = await db.select({ id: inventoryItems.id }).from(inventoryItems);
     const itemIds = items.map((i) => i.id);
-    if (itemIds.length) {
-      await db.delete(inventoryAlerts).where(inArray(inventoryAlerts.itemId, itemIds));
-      await db.delete(inventoryStock).where(inArray(inventoryStock.itemId, itemIds));
-    }
-    await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, tenantId));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(inventoryItems).where(eq(inventoryItems.tenantId, tenantId));
-    await db.delete(suppliers).where(eq(suppliers.tenantId, tenantId));
-    const tenantUsers = await db.select({ id: users.id }).from(users).where(eq(users.tenantId, tenantId));
-    if (tenantUsers.length) await db.delete(refreshTokens).where(inArray(refreshTokens.userId, tenantUsers.map((u) => u.id)));
-    await db.delete(users).where(eq(users.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    await db.delete(roles).where(eq(roles.id, roleId));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
+    const companyUsers = await db.select({ id: users.id }).from(users);
     await pool.end();
   });
 
@@ -113,7 +101,7 @@ describe("Excel / CSV import (real DB + real HTTP path)", () => {
     expect(byRow[3]).toMatch(/required/i);
     expect(byRow[4]).toMatch(/email/i);
     expect(byRow[5]).toMatch(/more than once/i);
-    expect(await db.select().from(suppliers).where(eq(suppliers.tenantId, tenantId))).toHaveLength(0);
+    expect(await db.select().from(suppliers)).toHaveLength(0);
   });
 
   it("imports the valid suppliers, records an audit entry per row, and skips ones that already exist", async () => {
@@ -121,9 +109,9 @@ describe("Excel / CSV import (real DB + real HTTP path)", () => {
     const first = await upload("/import/suppliers/run", adminToken, file, { mapping: JSON.stringify({ name: 0, contactEmail: 1 }), mode: "import" });
     expect(first.status).toBe(200);
     expect(first.body).toMatchObject({ created: 2, invalid: 0 });
-    const rows = await db.select().from(suppliers).where(eq(suppliers.tenantId, tenantId));
+    const rows = await db.select().from(suppliers);
     expect(rows.map((r) => r.name).sort()).toEqual(["Acme Fasteners", "Bolt Co"]);
-    const audits = await db.select().from(auditTrail).where(eq(auditTrail.tenantId, tenantId));
+    const audits = await db.select().from(auditTrail);
     expect(audits.filter((a) => a.entityType === "Supplier" && a.action === "create")).toHaveLength(2);
 
     const again = await upload("/import/suppliers/run", adminToken, await xlsx([["Name"], ["acme fasteners"], ["New One"]]), { mapping: JSON.stringify({ name: 0, contactEmail: null }), mode: "import" });
@@ -153,7 +141,7 @@ describe("Excel / CSV import (real DB + real HTTP path)", () => {
     const res = await upload("/import/inventory_items/run", adminToken, file, { mapping: JSON.stringify(preview.body.mapping), mode: "import" });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ total: 5, created: 2, invalid: 3 });
-    const items = await db.select().from(inventoryItems).where(eq(inventoryItems.tenantId, tenantId));
+    const items = await db.select().from(inventoryItems);
     const bySku = Object.fromEntries(items.map((i) => [i.sku, i]));
     expect(bySku["FST-1"]).toMatchObject({ itemType: "raw_material", unitCost: "0.12", minLevel: "100" });
     expect(bySku["FST-1"]!.defaultSupplierId).not.toBeNull();
@@ -189,7 +177,7 @@ describe("Excel / CSV import (real DB + real HTTP path)", () => {
     const { email, temporaryPassword } = res.body.credentials[0];
     expect(email).toBe(`jamie-${suffix}@test.local`);
     const [created] = await db.select().from(users).where(eq(users.email, email));
-    expect(created).toMatchObject({ tenantId, roleId, department: "production", name: "Jamie Rivera" });
+    expect(created).toMatchObject({ roleId, department: "production", name: "Jamie Rivera" });
     userIds.push(created!.id);
     // The password is never in the row summary, only in `credentials`, and it signs in for real.
     expect(JSON.stringify(res.body.createdRows)).not.toContain(temporaryPassword);

@@ -101,7 +101,7 @@ function useUploadDocument() {
  * localStorage, plus (this pass): a Library Pool shelf that removed forms
  * land in instead of disappearing, and per-document PDF attach/view/remove.
  * The default 7-department taxonomy seeds itself the first time this loads
- * for a tenant with no folders yet; the Library Pool self-heals every load.
+ * for a company with no folders yet; the Library Pool self-heals every load.
  */
 export function FolderExplorerPage() {
   const { data: folders = [], isLoading } = useDocumentFolders();

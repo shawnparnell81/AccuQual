@@ -11,7 +11,7 @@ const logger = winston.createLogger({
 /**
  * Drift detector. Each numeric channel of a device's readings (temperature,
  * pressure, vibration, ...) gets its OWN exponential running mean, keyed by
- * tenant + device + channel — so one tenant's noisy sensor never touches
+ * company + device + channel — so one company's noisy sensor never touches
  * another's baseline, and a spike on one channel can't hide behind a stable
  * one (the earlier version averaged every channel of a reading into a single
  * number first, which both masked real drift and mixed units).

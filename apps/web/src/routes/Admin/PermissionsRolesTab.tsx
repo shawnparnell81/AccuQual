@@ -9,7 +9,7 @@ import type { ModuleAccessLevel, PermissionModuleInfo, PermissionRole } from "..
 const LEVELS: ModuleAccessLevel[] = ["read", "edit"];
 
 /**
- * Custom, tenant-defined roles (e.g. "Line Lead") — additive on top of a
+ * Custom, company-defined roles (e.g. "Line Lead") — additive on top of a
  * user's department baseline, never subtractive (see permissions.ts's own
  * schema comment). Create a role, grant it access to specific modules, then
  * assign it to users on the User Assignments tab.

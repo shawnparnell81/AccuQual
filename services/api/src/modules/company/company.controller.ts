@@ -19,7 +19,7 @@ import { env } from "../../config/env.js";
  */
 async function loadCompany(req: Request) {
   const [co] = await req.db!.select().from(company);
-  if (!co) throw AppError.notFound("Tenant");
+  if (!co) throw AppError.notFound("Company");
   return co;
 }
 
@@ -57,7 +57,7 @@ export const updateBrandingHandler = asyncHandler(async (req: Request, res: Resp
 /**
  * GET/PATCH /co/profile — Admin Console "Company Settings" (Phase 10):
  * name, logo, timezone, contact info as one consolidated section, per the
- * roadmap's own grouping. Reuses `tenants.name` and `branding.logoUrl`
+ * roadmap's own grouping. Reuses `companies.name` and `branding.logoUrl`
  * rather than storing the name/logo a second time — this endpoint is a
  * convenience view over fields that already exist plus the two genuinely
  * new ones (timezone, contact), not a new source of truth for name/logo.
@@ -90,7 +90,7 @@ export const updateProfileHandler = asyncHandler(async (req: Request, res: Respo
 
   const [updated] = await req.db!.update(company).set(patch).returning();
   await recordAuditTrail(req.db!, {
-    entityType: "Tenant",
+    entityType: "Company",
     entityId: 1,
     action: "update",
     changes: { action: "update_profile", fieldsChanged: Object.keys(req.body) },
@@ -168,7 +168,7 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
 
   // Never log apiKey itself, encrypted or not — only what changed and to what non-secret values.
   await recordAuditTrail(req.db!, {
-    entityType: "Tenant",
+    entityType: "Company",
     entityId: 1,
     action: "update",
     changes: {
@@ -297,7 +297,7 @@ export const updateSecurityHandler = asyncHandler(async (req: Request, res: Resp
   const { mfaPolicy } = req.body as { mfaPolicy: "optional" | "admins" | "all" };
   await req.db!.update(company).set({ mfaPolicy });
   await recordAuditTrail(req.db!, {
-    entityType: "Tenant",
+    entityType: "Company",
     entityId: 1,
     action: "update",
     changes: { setting: "mfaPolicy", from: co.mfaPolicy, to: mfaPolicy },

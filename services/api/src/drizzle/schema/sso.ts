@@ -3,8 +3,8 @@ import { users } from "./users.js";
 import { roles } from "./roles.js";
 
 /**
- * A tenant's single-sign-on connection (OpenID Connect). One per tenant.
- * The client secret is AES-256-GCM ciphertext (tenant/crypto.ts), never returned by any GET.
+ * A company's single-sign-on connection (OpenID Connect). One per company.
+ * The client secret is AES-256-GCM ciphertext (company/crypto.ts), never returned by any GET.
  */
 export const ssoConnections = pgTable("sso_connections", {
   id: serial("id").primaryKey(),
@@ -26,9 +26,9 @@ export const ssoConnections = pgTable("sso_connections", {
 });
 
 /**
- * An email domain the tenant has proven it controls (DNS TXT record). SSO only
+ * An email domain the company has proven it controls (DNS TXT record). SSO only
  * accepts identities whose email is on a verified domain, so a misconfigured or
- * hostile identity provider cannot vouch for an address the tenant does not own.
+ * hostile identity provider cannot vouch for an address the company does not own.
  */
 export const ssoDomains = pgTable(
   "sso_domains",

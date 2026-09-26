@@ -19,7 +19,7 @@ import { users } from "./users.js";
  *
  * Deliberately ungated (no requireDepartmentAccess) — same convention as
  * Document Control itself (documents.routes.ts's own comment): every
- * authenticated tenant user may raise/edit one, matching how QMS document
+ * authenticated company user may raise/edit one, matching how QMS document
  * revisions are typically proposed by whoever owns that document, not one
  * fixed department.
  *

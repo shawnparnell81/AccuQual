@@ -41,7 +41,7 @@ export const baseHandlers = crudFactory(ncr, {
 
 /**
  * GET /ncr — Phase 8 adds optional `?receivingLineItemId=`/`?supplierId=`
- * filters on top of baseHandlers.list's plain "every NCR for this tenant"
+ * filters on top of baseHandlers.list's plain "every NCR for this company"
  * (the traceability chain — receiving → inventory → NCR → CAPA → warranty
  * — needs a real way to ask "which NCR(s) came from this receiving
  * event/supplier" without a client fetching every NCR and filtering

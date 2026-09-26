@@ -163,7 +163,7 @@ export async function getCapaMetrics(db: Db, range?: DateRange): Promise<CapaMet
 // Supplier performance report — reuses computeSupplierPerformance (the same
 // "v1 weighted formula" the Dashboard and Supplier detail pages already
 // read) per supplier, then aggregates the risk-bucket distribution across
-// the whole tenant, which no existing endpoint does.
+// the whole company, which no existing endpoint does.
 // ---------------------------------------------------------------------------
 export interface SupplierPerformanceReport {
   suppliers: { id: number; name: string; riskScore: string; onTimeAvgDays: number | null; accuracyAvgPercent: number | null }[];

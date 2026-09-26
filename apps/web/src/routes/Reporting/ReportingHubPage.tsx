@@ -267,7 +267,7 @@ function ProductionReceivingOverview() {
         </div>
         <p className="text-xs text-muted-foreground">
           Real per-lot/serial traceability (receiving → inventory → NCR/CAPA/warranty) is available on each item's own detail page under Inventory, or searched
-          tenant-wide by lot #, serial #, or SKU under Inventory → Lot / Serial Search.
+          company-wide by lot #, serial #, or SKU under Inventory → Lot / Serial Search.
         </p>
       </div>
     </div>
@@ -437,7 +437,7 @@ const TABS = [
 
 export function ReportingHubPage() {
   const user = useCurrentUser();
-  const isAdmin = user?.roleName === "admin" || user?.roleName === "platform_admin";
+  const isAdmin = user?.roleName === "admin";
   const ncrAccess = useWorkflowAccessLevel("ncr");
   const supplierAccess = useWorkflowAccessLevel("suppliers");
   const warrantyAccess = useWorkflowAccessLevel("warranty");

@@ -18,8 +18,8 @@ export const baseHandlers = crudFactory(suppliers, { entityName: "Supplier", idC
 /**
  * Looks up the "supplier" role (see users.ts's own supplierId comment). The row
  * is created by the post-migrate step (rls-policies.sql), not here: `roles` is
- * global reference data and the tenant-scoped app role may only READ it, so
- * this can't self-heal by inserting from inside a tenant-scoped transaction
+ * global reference data and the app role may only READ it, so
+ * this can't self-heal by inserting from inside a transaction
  * (Supabase turns RLS on for it, and the policy is deliberately SELECT-only).
  * CI's fresh database runs migrations, so the row exists there too.
  */

@@ -13,11 +13,10 @@ import { users } from "./users.js";
  * by revoking the whole account's session (the same tokenVersion bump
  * logout() already uses), not just silently accepting it.
  *
- * Not in rls-policies.sql's tenant_tables array, on purpose — same
+ * Never touched through a request's `req.db`, on purpose — same
  * reasoning as passwordResetTokens.ts's own comment: refresh() runs before
- * a tenant is resolved from req.tenantId (it derives the user, and through
- * it the tenant, from the token itself), so there's no tenant context to
- * scope this by and no tenantId column to scope with.
+ * a user is resolved (it derives the user from the token itself), so it uses
+ * the plain `db` singleton. Deny-all under RLS for the app role.
  */
 export const refreshTokens = pgTable("refresh_tokens", {
   id: serial("id").primaryKey(),

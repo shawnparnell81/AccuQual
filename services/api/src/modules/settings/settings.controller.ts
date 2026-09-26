@@ -60,7 +60,7 @@ export const updateInventorySettingsHandler = asyncHandler(async (req: Request, 
 // Settings → ERP Sync Engine
 // ============================================================
 
-/** Never returns the real secret — a masked display string + whether one is set, same convention as tenant.controller.ts's getAiConfigHandler. */
+/** Never returns the real secret — a masked display string + whether one is set, same convention as company.controller.ts's getAiConfigHandler. */
 export const getErpSyncSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
   const co = await loadCompanyForSettings(req.db!);
   const config = getErpSyncSettings(co);
@@ -87,7 +87,7 @@ export const updateErpSyncSettingsHandler = asyncHandler(async (req: Request, re
 
   const [updated] = await req.db!.update(company).set({ erpSyncSettings: merged }).returning();
 
-  // Never log the secret itself, encrypted or not — same convention as tenant.controller.ts's updateAiConfigHandler.
+  // Never log the secret itself, encrypted or not — same convention as company.controller.ts's updateAiConfigHandler.
   await recordAuditTrail(req.db!, {
     entityType: "ErpSyncSettings",
     entityId: 1,
@@ -111,7 +111,7 @@ export const updateErpSyncSettingsHandler = asyncHandler(async (req: Request, re
 
 // ============================================================
 // Settings → Supplier Risk (Phase 7) — weights for the Supplier Quality
-// Risk Score's 7 factors; see tenants.ts's own schema comment for why this
+// Risk Score's 7 factors; see companies.ts's own schema comment for why this
 // lives here rather than on PlatformAdminPage.
 // ============================================================
 

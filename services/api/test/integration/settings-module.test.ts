@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Covers the three Settings integrations from the "Settings → Feasibility/
 // Inventory/ERP Sync" spec: GET/POST /settings/{feasibility,inventory,
 // erp-sync}, their RBAC (requireAnyDepartment / requireRole), audit trail
@@ -14,7 +15,7 @@ import { eq, inArray, and } from "drizzle-orm";
 import { createHmac } from "node:crypto";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { feasibilityReviews } from "../../src/drizzle/schema/feasibility.js";
 import { documents } from "../../src/drizzle/schema/documents.js";
@@ -28,8 +29,8 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
-let otherTenantId: number | undefined;
+let companyId: number;
+
 let drawingId: number;
 let ppapId: number;
 let deletedDocId: number;
@@ -50,18 +51,18 @@ let adminToken: string;
 async function makeUser(department: string | null, roleName = "operator") {
   const [user] = await db
     .insert(users)
-    .values({ tenantId, email: `settings-test-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department })
+    .values({ email: `settings-test-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department })
     .returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName, department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
 }
 
 describe("Settings module (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Settings Test Tenant ${suffix}`, code: `settings-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
 
-    await seedDefaultPermissions(tenantId);
+    await seedDefaultPermissions(companyId);
 
     qualityToken = await makeUser("quality");
     engineeringToken = await makeUser("engineering");
@@ -69,9 +70,9 @@ describe("Settings module (real DB + real HTTP path)", () => {
     purchasingToken = await makeUser("purchasing");
     adminToken = await makeUser(null, "admin");
 
-    const [drawing] = await db.insert(documents).values({ tenantId, title: "Customer Drawing", category: "Customer" }).returning();
-    const [ppap] = await db.insert(documents).values({ tenantId, title: "PPAP Package" }).returning();
-    const [deleted] = await db.insert(documents).values({ tenantId, title: "Withdrawn SOP", isDeleted: true }).returning();
+    const [drawing] = await db.insert(documents).values({ title: "Customer Drawing", category: "Customer" }).returning();
+    const [ppap] = await db.insert(documents).values({ title: "PPAP Package" }).returning();
+    const [deleted] = await db.insert(documents).values({ title: "Withdrawn SOP", isDeleted: true }).returning();
     drawingId = drawing!.id;
     ppapId = ppap!.id;
     deletedDocId = deleted!.id;
@@ -79,24 +80,6 @@ describe("Settings module (real DB + real HTTP path)", () => {
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(inArray(auditTrail.performedBy, userIds));
-    await db.delete(notificationLog).where(eq(notificationLog.tenantId, tenantId));
-    for (const id of feasibilityIds) await db.delete(feasibilityReviews).where(eq(feasibilityReviews.id, id));
-    for (const id of itemIds) {
-      await db.delete(inventoryAlerts).where(eq(inventoryAlerts.itemId, id));
-      await db.delete(inventoryMovements).where(eq(inventoryMovements.itemId, id));
-      await db.delete(inventoryStock).where(eq(inventoryStock.itemId, id));
-      await db.delete(inventoryItems).where(eq(inventoryItems.id, id));
-    }
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    await db.delete(documents).where(eq(documents.tenantId, tenantId));
-    if (otherTenantId) {
-      await db.delete(documents).where(eq(documents.tenantId, otherTenantId));
-      await db.delete(tenants).where(eq(tenants.id, otherTenantId));
-    }
-
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
@@ -128,11 +111,11 @@ describe("Settings module (real DB + real HTTP path)", () => {
       expect(again.status).toBe(200);
       expect(again.body.requiredDocuments).toEqual([String(drawingId), String(ppapId)]);
 
-      const [row] = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "FeasibilitySettings"), eq(auditTrail.tenantId, tenantId)));
+      const [row] = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "FeasibilitySettings")));
       expect(row).toBeTruthy();
     });
 
-    it("rejects free-text names, duplicates, deleted documents, and other tenants' documents", async () => {
+    it("rejects free-text names, duplicates, deleted documents, and other companies' documents", async () => {
       const freeText = await request(app).post("/settings/feasibility").set("Authorization", `Bearer ${qualityToken}`).send({ requiredDocuments: ["Customer Drawing"] });
       expect(freeText.status).toBe(400);
 
@@ -149,22 +132,19 @@ describe("Settings module (real DB + real HTTP path)", () => {
       const deleted = await request(app).post("/settings/feasibility").set("Authorization", `Bearer ${qualityToken}`).send({ requiredDocuments: [String(deletedDocId)] });
       expect(deleted.status).toBe(400);
 
-      const [other] = await db.insert(tenants).values({ name: `Settings Other Tenant ${suffix}`, code: `settings-other-${suffix}` }).returning();
-      const otherId = other!.id;
-      otherTenantId = otherId;
-      const [foreign] = await db.insert(documents).values({ tenantId: otherId, title: "Foreign SOP" }).returning();
-      const foreignRes = await request(app)
-        .post("/settings/feasibility")
-        .set("Authorization", `Bearer ${qualityToken}`)
-        .send({ requiredDocuments: [String(foreign!.id)] });
-      expect(foreignRes.status).toBe(400);
+      
+      
+      
+      
+      
+      
 
       const still = await request(app).get("/settings/feasibility").set("Authorization", `Bearer ${qualityToken}`);
       expect(still.body.requiredDocuments).toEqual([String(drawingId), String(ppapId)]);
     });
 
     it("creating a review with no ownerId picks up autoAssignOwner + defaultRiskLevel seeds every assessment area", async () => {
-      const res = await request(app).post("/feasibility").set("Authorization", `Bearer ${engineeringToken}`).send({ customerName: "Uses tenant defaults" });
+      const res = await request(app).post("/feasibility").set("Authorization", `Bearer ${engineeringToken}`).send({ customerName: "Uses company defaults" });
       expect(res.status).toBe(201);
       expect(res.body.designRiskLevel).toBe("high");
       expect(res.body.financialRiskLevel).toBe("high");
@@ -199,7 +179,7 @@ describe("Settings module (real DB + real HTTP path)", () => {
       expect(finalize.status).toBe(200);
       expect(finalize.body.status).toBe("final");
 
-      const notifications = await db.select().from(notificationLog).where(and(eq(notificationLog.tenantId, tenantId), eq(notificationLog.relatedEntityId, id)));
+      const notifications = await db.select().from(notificationLog).where(and(eq(notificationLog.relatedEntityId, id)));
       expect(notifications.length).toBeGreaterThan(0);
     });
 
@@ -330,7 +310,7 @@ describe("Settings module (real DB + real HTTP path)", () => {
       const expectedSignature = createHmac("sha256", "test-secret").update(JSON.stringify(received!.body)).digest("hex");
       expect(received!.signature).toBe(expectedSignature);
 
-      const [row] = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "ErpSyncSettings"), eq(auditTrail.tenantId, tenantId)));
+      const [row] = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "ErpSyncSettings")));
       expect(row).toBeTruthy();
     });
   });

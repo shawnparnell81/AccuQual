@@ -60,7 +60,7 @@ export function CustomerDetailPage() {
   const toast = useToast();
   const currentUser = useCurrentUser();
   const canEdit = useCanEditWorkflow("customers");
-  const isAdmin = currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin";
+  const isAdmin = currentUser?.roleName === "admin";
 
   const { data: customer, isLoading, isError } = customerHooks.useOne(customerId);
   useSetAssistantContext("customer", customerId, customer ? customer.legalName : `Customer #${customerId}`);

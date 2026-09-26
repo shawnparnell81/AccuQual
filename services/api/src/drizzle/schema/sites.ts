@@ -2,13 +2,13 @@ import { pgTable, serial, text, integer, timestamp, boolean, uniqueIndex } from 
 import { users } from "./users.js";
 
 /**
- * A plant (site) inside one tenant. The tenant is the organization; plants
+ * A plant (site) inside one company. The company is the organization; plants
  * are where operational records happen. Controlled documents stay on the
- * tenant (documents.ts has no site id) — one catalog for every plant.
+ * company (documents.ts has no site id) — one catalog for every plant.
  *
  * `isDefault` is the plant migration attaches pre-existing records to, and
  * the plant a new user is assigned to until an admin says otherwise. Only
- * one default per tenant (partial unique index in the migration).
+ * one default per company (partial unique index in the migration).
  */
 export const sites = pgTable(
   "sites",

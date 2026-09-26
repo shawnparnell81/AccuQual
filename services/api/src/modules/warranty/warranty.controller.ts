@@ -244,7 +244,7 @@ export const transitionWarrantyClaimHandler = asyncHandler(async (req: Request, 
     changes: { oldStatus: record.status, newStatus, note, userId: req.user?.id },
     performedBy: req.user?.id,
   });
-  // Opt-in only: lets a tenant build automation on warranty events in the
+  // Opt-in only: lets a company build automation on warranty events in the
   // existing Workflow Builder, same as rma/inventory/erp already allow.
   await publishEvent(WORKFLOW_STREAM, { module: "warranty", event: newStatus, entityId: record.id });
 

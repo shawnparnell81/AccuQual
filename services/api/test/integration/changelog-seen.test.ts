@@ -1,33 +1,34 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // What's new: GET/PATCH /users/me/changelog-seen — self-only, no RBAC beyond auth (same class of endpoint as /users/me/theme).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let userAId: number;
 let userBId: number;
 let tokenA: string;
 let tokenB: string;
 
 async function makeUser(label: string) {
-  const [user] = await db.insert(users).values({ tenantId, email: `changelog-${label}-${suffix}@test.local`, passwordHash: "unused" }).returning();
-  const token = await signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName: "operator", department: null });
+  const [user] = await db.insert(users).values({ email: `changelog-${label}-${suffix}@test.local`, passwordHash: "unused" }).returning();
+  const token = await signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department: null });
   return { id: user!.id, token };
 }
 
 describe("What's new changelog-seen (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Changelog Test ${suffix}`, code: `changelog-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
     const a = await makeUser("a");
     const b = await makeUser("b");
     userAId = a.id;
@@ -37,9 +38,6 @@ describe("What's new changelog-seen (real DB + real HTTP path)", () => {
   });
 
   afterAll(async () => {
-    await db.delete(users).where(eq(users.id, userAId));
-    await db.delete(users).where(eq(users.id, userBId));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
@@ -58,7 +56,7 @@ describe("What's new changelog-seen (real DB + real HTTP path)", () => {
     expect(read.body.lastSeenVersion).toBe("2026-09-22");
   });
 
-  it("is scoped to the caller's own row — a different user in the same tenant is unaffected", async () => {
+  it("is scoped to the caller's own row — a different user in the same company is unaffected", async () => {
     const res = await request(app).get("/users/me/changelog-seen").set("Authorization", `Bearer ${tokenB}`);
     expect(res.body.lastSeenVersion).toBeNull();
   });

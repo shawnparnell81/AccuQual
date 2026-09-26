@@ -30,10 +30,10 @@ const DEMO_CUSTOMER_NAME = "Northfield Industries";
  * exactly the rows seedDemoStory.ts creates (identified by the two
  * recognizable supplier names it seeds, walked outward through their real
  * FK relationships, children before parents) and nothing else — never
- * touches the tenant's own structural rows (users, roles, form templates)
+ * touches the company's own structural rows (users, roles, form templates)
  * or anything a real user added. Re-run `npm run db:seed-demo-story`
  * afterward to seed fresh. Not exposed as an in-app button deliberately —
- * a live "wipe tenant data" control is a real destructive-action risk this
+ * a live "wipe company data" control is a real destructive-action risk this
  * script avoids by staying a deliberate, explicit CLI step.
  */
 async function main() {
@@ -95,7 +95,7 @@ async function main() {
   // Wrapped in one transaction — a mid-sequence failure (e.g. a later
   // schema addition, like customer_scorecards, that references a table
   // deleted here and was never taught to this script) rolls back cleanly
-  // instead of leaving the demo tenant in a half-deleted state.
+  // instead of leaving the demo company in a half-deleted state.
   await db.transaction(async (tx) => {
     // Children first, in FK dependency order.
     if (auditIds.length) await tx.delete(auditItems).where(inArray(auditItems.auditId, auditIds));

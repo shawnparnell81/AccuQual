@@ -12,7 +12,7 @@ import * as pipelines from "./ai.pipelines.js";
 
 /**
  * Phase 4 unification: every handler below now goes through
- * runPipelineAndRecord — the same tenant-BYOK-config + usage-limit-check +
+ * runPipelineAndRecord — the same company-BYOK-config + usage-limit-check +
  * audit-trail-with-aiState path ai.assistant.ts and the newer pipelines
  * (Work Order Planning, PR Justification, ERP Automation, Risk Register)
  * already used. Previously these 9 endpoints called their pipeline directly
@@ -223,9 +223,9 @@ export const inspectionNotes = asyncHandler(async (req: Request, res: Response) 
 /**
  * Real browsable AI suggestion history — previously the ai_suggestions
  * table was only ever read back one row at a time (recordSuggestionDecision
- * below) or aggregated into a cross-tenant ok/stub/error COUNT for Platform
+ * below) or aggregated into a ok/stub/error COUNT for Platform
  * Admin's AI Overview (platform.service.ts's getAiOverview); nothing let a
- * tenant admin actually browse what the AI has produced. Tenant-scoped,
+ * company admin actually browse what the AI has produced. Company-scoped,
  * admin-gated (see ai.routes.ts), newest first, with optional `module`/
  * `status` filters and simple limit/offset paging (this table has no
  * expected-to-be-huge growth pattern that would need cursor pagination).
@@ -286,7 +286,7 @@ export const listSuggestions = asyncHandler(async (req: Request, res: Response) 
  * AiStructuredSuggestion consumer calls this exactly once per suggestion,
  * whether the user clicked Accept, clicked Reject, or closed the dialog
  * without deciding (treated as a reject — an unactioned suggestion is not
- * a silent accept). Tenant-scoped: a suggestion id from another tenant
+ * a silent accept). Company-scoped: a suggestion id from another company
  * 404s, never leaks whether it exists.
  */
 export const recordSuggestionDecision = asyncHandler(async (req: Request, res: Response) => {

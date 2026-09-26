@@ -162,7 +162,7 @@ function decideRetention(doc: Document, currentVersion?: Pick<DocumentVersion, "
   return { eligible: true, action: doc.retentionAction === "delete" ? "deleted" : "archived" };
 }
 
-/** Runs retention synchronously for every obsolete, aged-out document in the tenant — no worker, triggered on demand (POST /documents/retention/apply). */
+/** Runs retention synchronously for every obsolete, aged-out document in the company — no worker, triggered on demand (POST /documents/retention/apply). */
 export const applyRetentionHandler = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
   const obsolete = await db.select().from(documents).where(and(eq(documents.status, "obsolete")));
@@ -178,9 +178,7 @@ export const applyRetentionHandler = asyncHandler(async (req: Request, res: Resp
     const decision = decideRetention(doc, currentVersion);
     if (!decision.eligible) continue;
 
-    // M3: same defense-in-depth tenantId predicate as approve/obsolete above —
-    // `obsolete` was already loaded scoped to this tenant, so this doesn't
-    // change which documents are affected, only matches convention.
+    // M3: same guard as approve/obsolete above.
     if (decision.action === "deleted") {
       await db.update(documents).set({ isDeleted: true, updatedAt: new Date() }).where(and(eq(documents.id, doc.id)));
     } else {
@@ -204,7 +202,7 @@ export const applyRetentionHandler = asyncHandler(async (req: Request, res: Resp
  * On-demand, single-document version of applyRetentionHandler — real, new
  * (see Phase 6's endpoint list: "archive"). Same eligibility rule as the
  * bulk sweep, just for one obsolete document instead of waiting for someone
- * to run the tenant-wide pass.
+ * to run the company-wide pass.
  */
 export const archiveHandler = asyncHandler(async (req: Request, res: Response) => {
   const documentId = Number(req.params.id);

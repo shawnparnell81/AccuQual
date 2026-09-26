@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Covers the real "upload your own policy/procedure into the library"
 // feature: the one-step POST /document-folders/upload (create a leaf +
 // attach a file in one request) and generalized file-type support (any
@@ -9,7 +10,7 @@ import request from "supertest";
 import { eq, and } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { documentFolders } from "../../src/drizzle/schema/documentFolders.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
@@ -20,7 +21,7 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let userId: number;
 let token: string;
 let departmentId: number;
@@ -28,26 +29,26 @@ let uploadedId: number;
 
 describe("Document Folders — real file upload into the library (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Doc Upload Test Tenant ${suffix}`, code: `doc-upload-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
 
-    await seedDefaultPermissions(tenantId);
-    const [user] = await db.insert(users).values({ tenantId, email: `doc-upload-test-${suffix}@test.local`, passwordHash: "unused" }).returning();
+    await seedDefaultPermissions(companyId);
+    const [user] = await db.insert(users).values({ email: `doc-upload-test-${suffix}@test.local`, passwordHash: "unused" }).returning();
     userId = user!.id;
     // "quality" has real edit access to the "documents" ResourceKey this
     // router is now gated on (see the security-audit fix that added
     // requireDepartmentAccess("documents") here, matching its sibling
     // documents.routes.ts) — department: null would no longer have any
     // access to this router at all, unlike before that fix.
-    token = signAccessToken({ sub: String(userId), tenantId, roleId: null, roleName: "operator", department: "quality" });
+    token = signAccessToken({ sub: String(userId), roleId: null, roleName: "operator", department: "quality" });
 
-    const [dept] = await db.insert(documentFolders).values({ tenantId, name: `Quality Test ${suffix}`, parentId: null }).returning();
+    const [dept] = await db.insert(documentFolders).values({ name: `Quality Test ${suffix}`, parentId: null }).returning();
     departmentId = dept!.id;
   });
 
   it("a department with zero access to documents (e.g. no department at all) CANNOT upload — previously anyone could", async () => {
-    const [noDeptUser] = await db.insert(users).values({ tenantId, email: `doc-upload-nodept-${suffix}@test.local`, passwordHash: "unused" }).returning();
-    const noDeptToken = signAccessToken({ sub: String(noDeptUser!.id), tenantId, roleId: null, roleName: "operator", department: null });
+    const [noDeptUser] = await db.insert(users).values({ email: `doc-upload-nodept-${suffix}@test.local`, passwordHash: "unused" }).returning();
+    const noDeptToken = signAccessToken({ sub: String(noDeptUser!.id), roleId: null, roleName: "operator", department: null });
     const res = await request(app)
       .post("/document-folders/upload")
       .set("Authorization", `Bearer ${noDeptToken}`)
@@ -59,12 +60,6 @@ describe("Document Folders — real file upload into the library (real DB + real
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(documentFolders).where(eq(documentFolders.tenantId, tenantId));
-    await db.delete(users).where(eq(users.id, userId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
@@ -82,7 +77,7 @@ describe("Document Folders — real file upload into the library (real DB + real
     expect(res.body.pdfMimeType).toBe("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     uploadedId = res.body.id;
 
-    const [row] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, uploadedId), eq(documentFolders.tenantId, tenantId)));
+    const [row] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, uploadedId)));
     expect(row).toBeTruthy();
     expect(row!.parentId).toBe(departmentId);
   });

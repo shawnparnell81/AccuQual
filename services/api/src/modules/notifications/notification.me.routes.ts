@@ -26,7 +26,7 @@ notificationsMeRouter.get(
   })
 );
 
-/** PATCH /notifications/:id/read — marks one of the caller's own notifications read; a mismatched id (wrong tenant, or someone else's row) 404s rather than leaking whether it exists. */
+/** PATCH /notifications/:id/read — marks one of the caller's own notifications read; a mismatched id (wrong company, or someone else's row) 404s rather than leaking whether it exists. */
 notificationsMeRouter.patch(
   "/:id/read",
   asyncHandler(async (req, res) => {

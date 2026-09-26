@@ -23,7 +23,7 @@ import { users } from "./users.js";
  * production record.
  *
  * Deliberately ungated (no requireDepartmentAccess) — same convention as
- * Document Control and Document Change Request: any authenticated tenant
+ * Document Control and Document Change Request: any authenticated company
  * user may raise/edit one, since these are QMS records various departments
  * each own their own subset of, not one department's resource.
  *

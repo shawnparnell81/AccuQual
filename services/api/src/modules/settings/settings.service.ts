@@ -7,15 +7,14 @@ import { normalizeRequiredDocumentIds } from "./requiredDocuments.js";
 
 /**
  * Shared load for every settings domain below (Feasibility/Inventory/ERP
- * Sync) — same "self-service settings for the CURRENT tenant only, scoped
- * by req.tenantId" reasoning as modules/company/tenant.controller.ts's own
- * loadTenant, factored out here since three modules (settings.controller.ts,
+ * Sync) — same "self-service settings for the company" reasoning as modules/company/company.controller.ts's own
+ * loadCompany, factored out here since three modules (settings.controller.ts,
  * feasibility.controller.ts, inventory.service.ts/inventory.costing.ts) all
  * need to read this same row without duplicating the query.
  */
 export async function loadCompanyForSettings(db: Db): Promise<Company> {
   const [co] = await db.select().from(company);
-  if (!co) throw AppError.notFound("Tenant");
+  if (!co) throw AppError.notFound("Company");
   return co;
 }
 
@@ -32,8 +31,8 @@ export function getFeasibilitySettings(co: Company): FeasibilitySettings {
 
 /**
  * POST /settings/feasibility — requiredDocuments may only name documents
- * this tenant can still use. Duplicate ids are rejected. A soft-deleted
- * row or another tenant's id is inaccessible.
+ * this company can still use. Duplicate ids are rejected. A soft-deleted
+ * row or another company's id is inaccessible.
  */
 export async function assertAccessibleRequiredDocuments(db: Db, ids: string[]): Promise<void> {
   const seen = new Set<string>();

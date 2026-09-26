@@ -34,8 +34,8 @@ export const iotDevices = pgTable(
   "iot_devices",
   {
     id: serial("id").primaryKey(),
-    // Device IDs are only guaranteed unique within a tenant, not globally
-    // (two tenants' shop floors can both have a "sensor-1").
+    // Device IDs are only guaranteed unique within a company, not globally
+    // (two companies' shop floors can both have a "sensor-1").
     deviceId: text("device_id").notNull(),
     name: text("name"),
     type: text("type"), // plc, sensor, inspection_equipment, environmental

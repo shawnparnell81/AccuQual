@@ -4,7 +4,7 @@ import { OpenFormButton } from "../../components/forms/OpenFormButton";
  * Both logs are company-wide rosters — one continuous document each, not
  * records per work order — so unlike every other module here there's no
  * list of rows to click into. Both open as a fixed singleton document
- * (entityId 1) scoped by formType alone; each tenant gets exactly one of each.
+ * (entityId 1) scoped by formType alone; each company gets exactly one of each.
  */
 const SINGLETON_ENTITY_ID = 1;
 

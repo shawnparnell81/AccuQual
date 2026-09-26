@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Covers the Supplier Portal's new RMA Request tab end to end: a real
 // supplier login submits the request, the real RMA gets auto-created and
 // numbered RMA-YYYY-XXXX in the same request, a matching real part/PO get
@@ -11,7 +12,7 @@ import request from "supertest";
 import { eq, and } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { suppliers } from "../../src/drizzle/schema/supplier.js";
 import { roles } from "../../src/drizzle/schema/roles.js";
@@ -29,7 +30,7 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let supplierId: number;
 let supplierToken: string;
 let qualityToken: string;
@@ -39,48 +40,35 @@ let itemId: number;
 let createdRmaId: number;
 
 async function makeInternalUser(department: string) {
-  const [user] = await db.insert(users).values({ tenantId, email: `sprma-staff-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department }).returning();
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName: "operator", department });
+  const [user] = await db.insert(users).values({ email: `sprma-staff-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department }).returning();
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department });
 }
 
 describe("Supplier Portal RMA Request — AI-automated RMA creation (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Supplier RMA Request Test Tenant ${suffix}`, code: `sprma-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
 
-    await seedDefaultPermissions(tenantId);
+    await seedDefaultPermissions(companyId);
 
-    const [supplier] = await db.insert(suppliers).values({ tenantId, name: `RMA Request Supplier ${suffix}`, contactEmail: "supplier@test.local" }).returning();
+    const [supplier] = await db.insert(suppliers).values({ name: `RMA Request Supplier ${suffix}`, contactEmail: "supplier@test.local" }).returning();
     supplierId = supplier!.id;
 
     const roleId = (await ensureSupplierRole(db)).id;
-    const [supplierUser] = await db.insert(users).values({ tenantId, email: `sprma-login-${suffix}@test.local`, passwordHash: "unused", department: null, roleId, supplierId }).returning();
-    supplierToken = signAccessToken({ sub: String(supplierUser!.id), tenantId, roleId, roleName: "supplier", department: null, supplierId });
+    const [supplierUser] = await db.insert(users).values({ email: `sprma-login-${suffix}@test.local`, passwordHash: "unused", department: null, roleId, supplierId }).returning();
+    supplierToken = signAccessToken({ sub: String(supplierUser!.id), roleId, roleName: "supplier", department: null, supplierId });
 
     qualityToken = await makeInternalUser("quality");
     customerServiceToken = await makeInternalUser("customer_service");
 
-    const [po] = await db.insert(erpPurchaseOrders).values({ tenantId, supplierId, status: "sent" }).returning();
+    const [po] = await db.insert(erpPurchaseOrders).values({ supplierId, status: "sent" }).returning();
     poId = po!.id;
-    const [item] = await db.insert(inventoryItems).values({ tenantId, sku: `SPRMA-SKU-${suffix}`, itemType: "raw_material", minLevel: "0" }).returning();
+    const [item] = await db.insert(inventoryItems).values({ sku: `SPRMA-SKU-${suffix}`, itemType: "raw_material", minLevel: "0" }).returning();
     itemId = item!.id;
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(notificationLog).where(eq(notificationLog.tenantId, tenantId));
-    await db.delete(rmaActivityLog).where(eq(rmaActivityLog.tenantId, tenantId));
-    await db.delete(supplierRmaRequests).where(eq(supplierRmaRequests.tenantId, tenantId));
-    await db.delete(rmaItems).where(eq(rmaItems.tenantId, tenantId));
-    await db.delete(rma).where(eq(rma.tenantId, tenantId));
-    await db.delete(inventoryItems).where(eq(inventoryItems.tenantId, tenantId));
-    await db.delete(erpPurchaseOrders).where(eq(erpPurchaseOrders.tenantId, tenantId));
-    await db.delete(users).where(eq(users.tenantId, tenantId));
-    await db.delete(suppliers).where(eq(suppliers.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
@@ -126,7 +114,7 @@ describe("Supplier Portal RMA Request — AI-automated RMA creation (real DB + r
   });
 
   it("Quality and Customer Service were both notified (real, logged-only entries)", async () => {
-    const rows = await db.select().from(notificationLog).where(and(eq(notificationLog.tenantId, tenantId), eq(notificationLog.relatedEntityType, "Rma"), eq(notificationLog.relatedEntityId, createdRmaId)));
+    const rows = await db.select().from(notificationLog).where(and(eq(notificationLog.relatedEntityType, "Rma"), eq(notificationLog.relatedEntityId, createdRmaId)));
     expect(rows.length).toBeGreaterThanOrEqual(2); // at least one quality + one customer_service recipient (makeInternalUser seeded one of each so far)
   });
 
@@ -136,15 +124,15 @@ describe("Supplier Portal RMA Request — AI-automated RMA creation (real DB + r
     expect(events).toContain("rma_created");
     expect(events).toContain("notifications_sent");
 
-    const submissionRows = await db.select().from(rmaActivityLog).where(eq(rmaActivityLog.tenantId, tenantId));
+    const submissionRows = await db.select().from(rmaActivityLog);
     const allEvents = submissionRows.map((r) => r.event);
     expect(allEvents).toContain("request_submitted");
     expect(allEvents).toContain("auto_match_attempted");
   });
 
   it("the audit trail recorded both the request submission and the RMA creation", async () => {
-    const requestAudit = await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "SupplierRmaRequest")));
-    const rmaAudit = await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "Rma"), eq(auditTrail.entityId, createdRmaId)));
+    const requestAudit = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "SupplierRmaRequest")));
+    const rmaAudit = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "Rma"), eq(auditTrail.entityId, createdRmaId)));
     expect(requestAudit.length).toBeGreaterThan(0);
     expect(rmaAudit.length).toBeGreaterThan(0);
   });

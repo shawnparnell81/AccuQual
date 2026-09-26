@@ -17,7 +17,7 @@ export interface QmsFormDefinition {
    * folder, subfolder] names, matching defaultDocumentFolders.ts exactly.
    * Purely for the folder explorer's "Open Form" link and this module's own
    * folder-coverage report; not a live DB relationship (folder names are
-   * the default seed's, so a tenant that renames a folder loses the link —
+   * the default seed's, so a company that renames a folder loses the link —
    * see the module review).
    */
   folderPath: [string, string, string];

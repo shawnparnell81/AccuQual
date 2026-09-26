@@ -51,7 +51,7 @@ export async function findConnection(): Promise<SsoConnection | null> {
  * Turns a validated provider response into a local user, or refuses. The
  * checks, in order: the provider's ID token is valid (done by openid-client);
  * it carries an email that the provider says is verified; that email is on a
- * domain the tenant proved it owns; then the account is found by the stable
+ * domain the company proved it owns; then the account is found by the stable
  * provider subject, else by email, else created if auto-provisioning is on.
  * Auto-provisioned users never get an admin role.
  */
