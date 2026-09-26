@@ -1,4 +1,4 @@
-import archiver, { type Archiver } from "archiver";
+import { ZipArchive, type Archiver } from "archiver";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
@@ -274,7 +274,7 @@ export async function writeTenantExport(archive: Archiver, actor: ExportActor, o
 
 /** Creates the ZIP writer the routes pipe into the response. */
 export function newArchive(onWarning: (err: Error) => void = (e) => logger.warn("data export archive warning", { err: String(e) })): Archiver {
-  const archive = archiver("zip", { zlib: { level: 6 } });
+  const archive = new ZipArchive({ zlib: { level: 6 } });
   archive.on("warning", onWarning);
   return archive;
 }
