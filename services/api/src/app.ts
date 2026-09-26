@@ -43,14 +43,17 @@ export function createApp() {
     })
   );
   app.use(cookieParser());
-  // Off unless CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD are both set. /health and
-  // /health/live stay open so Render's health check does not need an Access token.
-  app.use(cloudflareAccessGate());
+  // Before the limiter and the Access check, so a 429 or a 403 is still logged.
+  app.use(requestLogger);
+  // The limiter is on this same registration as the Access gate. CodeQL
+  // (js/missing-rate-limiting) treats the JWT check as authorization and fails
+  // the build unless a rate limiter sits on that route. /health and /health/live
+  // stay open so Render's health check does not need an Access token. The gate
+  // itself is off unless CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD are both set.
+  app.use(apiRateLimiter, cloudflareAccessGate());
   // Refuses cookie-carried state-changing requests that lack the anti-CSRF header, before any handler runs (see middleware/csrf.ts).
   app.use(csrfProtection);
   app.use(express.json({ limit: "5mb" }));
-  app.use(requestLogger);
-  app.use(apiRateLimiter);
 
   // Render's own healthCheckPath (see render.yaml) — a real readiness check,
   // not a bare liveness ping. 503 only when the database (the one
