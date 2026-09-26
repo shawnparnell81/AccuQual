@@ -7,8 +7,36 @@ import { MfaSettingsSection } from "./MfaSettingsSection";
 import { FeasibilitySettingsPanel } from "./FeasibilitySettingsPanel";
 import { ERPSyncSettingsPanel } from "./ERPSyncSettingsPanel";
 
-const TABS = ["User Preferences", "Security", "Theme", "Notifications", "Email Alerts", "ERP Integration", "Feasibility", "Navigation"] as const;
+const TABS = ["User Preferences", "Company", "Security", "Theme", "Notifications", "Email Alerts", "ERP Integration", "Feasibility", "Navigation"] as const;
 type Tab = (typeof TABS)[number];
+
+const COMPANY_LINKS = [
+  { to: "/admin/company-settings", title: "Company name and logo", detail: "The name people see, the logo, timezone, and contact info." },
+  { to: "/admin/company-branding", title: "Branding", detail: "Colors and the header used on exported documents." },
+  { to: "/admin/users", title: "Users and roles", detail: "Add people, set their role, and turn an account off." },
+  { to: "/admin/roles-permissions", title: "Departments and permissions", detail: "Which department can see or change each module." },
+  { to: "/admin/plants", title: "Plants", detail: "Sites, and who works at each one." },
+  { to: "/admin/receiving-inventory-settings", title: "Numbering formats", detail: "Lot and serial number formats, plus receiving and inventory rules." },
+] as const;
+
+/** Company setup that used to be easy to miss. These open the same admin screens; nothing here is a second copy of the data. */
+function CompanySettingsLinks() {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-sm text-muted-foreground">These are the company settings. Each one opens the screen that already stores that information.</p>
+      <ul className="flex flex-col gap-2">
+        {COMPANY_LINKS.map((item) => (
+          <li key={item.to}>
+            <Link to={item.to} className="block rounded-lg border border-border bg-card p-4 hover:bg-muted/40">
+              <p className="text-sm font-medium">{item.title}</p>
+              <p className="text-sm text-muted-foreground">{item.detail}</p>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 /** A section of this page with nothing behind it yet — shown plainly rather than as a working-looking toggle that does nothing. */
 function NotAvailable({ what }: { what: string }) {
@@ -78,9 +106,9 @@ export function SettingsPage() {
           <div className="rounded-lg border border-border bg-card p-4">
             <h3 className="mb-2 text-sm font-medium">Navigation</h3>
             <p className="text-sm text-muted-foreground">
-              Which modules show up in the sidebar is its own real setting —{" "}
+              The sidebar folders are fixed.{" "}
               <button onClick={() => setTab("Navigation")} className="text-accent hover:underline">
-                open the Navigation tab
+                See how the menu works
               </button>
               .
             </p>
@@ -88,6 +116,7 @@ export function SettingsPage() {
         </div>
       )}
 
+      {tab === "Company" && <CompanySettingsLinks />}
       {tab === "Security" && <MfaSettingsSection />}
       {tab === "Theme" && <ThemeSettingsSection />}
 

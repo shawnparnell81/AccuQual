@@ -27,7 +27,7 @@ const DEPARTMENT_PHRASES: Record<string, string> = {
 
 /** Everyday nav labels. `standard` is the ISO/IATF term, shown smaller beside the plain name. */
 export const PRIMARY_NAV: { key: string; label: string; standard?: string }[] = [
-  { key: "ncr", label: "Issues", standard: "NCR" },
+  { key: "ncr", label: "NCR" },
   { key: "capa", label: "Fixes", standard: "CAPA" },
   { key: "documents", label: "Documents" },
   { key: "training", label: "Training" },
@@ -37,13 +37,13 @@ export const PRIMARY_NAV: { key: string; label: string; standard?: string }[] = 
 export const PRIMARY_NAV_KEYS = new Set(PRIMARY_NAV.map((item) => item.key));
 
 const NAV_PLAIN: Record<string, { label: string; standard?: string }> = {
-  ncr: { label: "Issues", standard: "NCR" },
+  ncr: { label: "NCR" },
   capa: { label: "Fixes", standard: "CAPA" },
   "8d": { label: "8D reports", standard: "8D" },
-  di: { label: "Discrepancies", standard: "DI" },
+  di: { label: "NCR" },
   audit: { label: "Audits" },
   calibration: { label: "Gages", standard: "Calibration" },
-  quarantine: { label: "Holds", standard: "Quarantine" },
+  quarantine: { label: "Quarantined items" },
   pareto: { label: "Top problems", standard: "Pareto" },
   documents: { label: "Documents", standard: "Document control" },
   general_uploads: { label: "My uploads" },

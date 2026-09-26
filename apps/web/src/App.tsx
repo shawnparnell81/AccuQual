@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { AppLayout } from "./components/layout/AppLayout";
 import { ProtectedRoute } from "./components/layout/ProtectedRoute";
 import { LoginPage } from "./routes/Auth/LoginPage";
@@ -53,12 +53,9 @@ import { SuppliersPage } from "./routes/Suppliers/SuppliersPage";
 import { SupplierDetailPage } from "./routes/Suppliers/SupplierDetailPage";
 import { CalibrationPage } from "./routes/Calibration/CalibrationPage";
 import { EquipmentDetailPage } from "./routes/Calibration/EquipmentDetailPage";
-import { ComplaintsPage } from "./routes/Complaints/ComplaintsPage";
-import { ComplaintDetailPage } from "./routes/Complaints/ComplaintDetailPage";
+import { DocumentCategoryPage } from "./routes/Documents/DocumentCategoryPage";
 import { ManagementSystemPage } from "./routes/ManagementSystem/ManagementSystemPage";
 import { ControlledDocumentPage } from "./routes/ManagementSystem/ControlledDocumentPage";
-import { QualityPage } from "./routes/Quality/QualityPage";
-import { QualityDetailPage } from "./routes/Quality/QualityDetailPage";
 import { ParetoAnalysisPage } from "./routes/Pareto/ParetoAnalysisPage";
 import { WorkflowBuilderPage } from "./routes/Workflow/WorkflowBuilderPage";
 import { WorkflowCanvasPage } from "./routes/Workflow/WorkflowCanvasPage";
@@ -81,7 +78,6 @@ import { RmaDetailPage } from "./routes/Rma/RmaDetailPage";
 import { WarrantyClaimsList } from "./routes/Warranty/WarrantyClaimsList";
 import { WarrantyClaimDetail } from "./routes/Warranty/WarrantyClaimDetail";
 import { WarrantyDashboard } from "./routes/Warranty/WarrantyDashboard";
-import { SupplierPortalHome } from "./routes/SupplierPortal/SupplierPortalHome";
 import { CrarListPage } from "./routes/Crar/CrarListPage";
 import { CrarDetailPage } from "./routes/Crar/CrarDetailPage";
 import { RmaActivityLogPage } from "./routes/RmaActivityLog/RmaActivityLogPage";
@@ -94,7 +90,6 @@ import { ErpSyncErrorsPage } from "./routes/Erp/ErpSyncErrorsPage";
 import { ErpPresetEditorPage } from "./routes/Erp/ErpPresetEditorPage";
 import { WorkOrderListPage } from "./routes/WorkOrders/WorkOrderListPage";
 import { WorkOrderDetailPage } from "./routes/WorkOrders/WorkOrderDetailPage";
-import { OnboardingPage } from "./routes/Onboarding/OnboardingPage";
 import { AdminCompanyBrandingPage } from "./routes/Admin/AdminCompanyBrandingPage";
 import { AdminCompanyTemplatesPage } from "./routes/Admin/AdminCompanyTemplatesPage";
 import { AdminCompanyAiConfigPage } from "./routes/Admin/AdminCompanyAiConfigPage";
@@ -151,9 +146,10 @@ export function App() {
           <Route path="/audits" element={<AuditsPage />} />
           <Route path="/audits/:id" element={<AuditDetailPage />} />
 
-          <Route path="/quality" element={<QualityPage />} />
-          <Route path="/quality/:id" element={<QualityDetailPage />} />
+          <Route path="/quality" element={<Navigate to="/ncr" replace />} />
+          <Route path="/quality/:id" element={<Navigate to="/ncr" replace />} />
 
+          <Route path="/folders/:category" element={<DocumentCategoryPage />} />
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/documents/folders" element={<FolderExplorerPage />} />
           <Route path="/documents/uploads" element={<GeneralUploadsPage />} />
@@ -204,8 +200,8 @@ export function App() {
           <Route path="/calibration/:id" element={<EquipmentDetailPage />} />
           <Route path="/quarantine" element={<QuarantinePage />} />
           <Route path="/quarantine/:id" element={<QuarantineDetailPage />} />
-          <Route path="/complaints" element={<ComplaintsPage />} />
-          <Route path="/complaints/:id" element={<ComplaintDetailPage />} />
+          <Route path="/complaints" element={<Navigate to="/ncr" replace />} />
+          <Route path="/complaints/:id" element={<Navigate to="/ncr" replace />} />
           <Route path="/inventory" element={<InventoryListPage />} />
           <Route path="/inventory/alerts" element={<InventoryAlertsPage />} />
           <Route path="/inventory/lots" element={<InventoryLotsPage />} />
@@ -230,10 +226,10 @@ export function App() {
           <Route path="/rma-activity-log" element={<RmaActivityLogPage />} />
           <Route path="/rma-log" element={<RmaLogListPage />} />
           <Route path="/rma-log/:id" element={<RmaLogDetailPage />} />
-          <Route path="/supplier-portal" element={<SupplierPortalHome />} />
+          <Route path="/supplier-portal" element={<Navigate to="/suppliers" replace />} />
           <Route path="/work-orders" element={<WorkOrderListPage />} />
           <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
-          <Route path="/onboarding" element={<OnboardingPage />} />
+          <Route path="/onboarding" element={<Navigate to="/settings" replace />} />
 
           <Route path="/workflow" element={<WorkflowBuilderPage />} />
           <Route path="/workflow/:id" element={<WorkflowCanvasPage />} />

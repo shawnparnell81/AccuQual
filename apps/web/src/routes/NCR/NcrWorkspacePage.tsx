@@ -24,6 +24,7 @@ import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
 import { NCR_LOOP, READ_ONLY_REASON, duePhrase, isPastDue, ncrLoopIndex, ncrNextAction, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
+import { NcrQuarantineSection } from "./NcrQuarantineSection";
 
 const FORM_TYPE = "ncr";
 
@@ -103,8 +104,8 @@ export function NcrWorkspacePage() {
     <div className="flex flex-col gap-4">
       <RecordGlance
         crumbs={[
-          { label: "Issues", to: "/ncr" },
-          { label: `Issue #${ncr.id}` },
+          { label: "NCR", to: "/ncr" },
+          { label: `NCR #${ncr.id}` },
         ]}
         title={ncr.title}
         standard={`NCR #${ncr.id}`}
@@ -169,6 +170,8 @@ export function NcrWorkspacePage() {
         }
         trail={<LoopTrail steps={NCR_LOOP} current={ncrLoopIndex(ncr.status)} />}
       />
+
+      <NcrQuarantineSection ncrId={ncrId} canEdit={canEdit} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {/* Left pane — status/linking controls + the real editable form. */}

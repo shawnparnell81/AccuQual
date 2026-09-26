@@ -880,6 +880,56 @@ input[type="radio"] {
 .aq-nav-link.active svg {
   color: hsl(var(--primary));
 }
+.aq-nav-folder {
+  padding: 0;
+  gap: 0;
+}
+.aq-nav-folder-link {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex: 1;
+  min-width: 0;
+  padding: 9px 4px 9px 12px;
+  color: inherit;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+}
+.aq-nav-folder-link.active {
+  color: hsl(var(--foreground));
+}
+.aq-nav-folder-link.active svg {
+  color: hsl(var(--primary));
+}
+.aq-nav-chevron-btn {
+  display: inline-grid;
+  place-items: center;
+  padding: 9px 10px;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+}
+.aq-nav-chevron {
+  transition: transform 0.15s ease;
+}
+.aq-nav-chevron.open {
+  transform: rotate(180deg);
+}
+.aq-nav-child {
+  padding-left: 28px;
+}
+.aq-nav-nested {
+  margin-bottom: 2px;
+}
+.aq-nav-nested > .aq-nav-folder .aq-nav-folder-link {
+  padding-left: 22px;
+}
 .aq-nav-std {
   margin-left: auto;
   font: 600 0.62rem/1 var(--fm);
@@ -950,6 +1000,17 @@ body.side-collapsed .aq-nav-link {
   justify-content: center;
   padding: 11px;
 }
+body.side-collapsed .aq-nav-children,
+body.side-collapsed .aq-nav-chevron-btn {
+  display: none;
+}
+body.side-collapsed .aq-nav-folder {
+  padding: 0;
+}
+body.side-collapsed .aq-nav-folder-link {
+  justify-content: center;
+  padding: 11px;
+}
 
 :root[data-theme="light"] .aq-topbar {
   background: hsl(var(--card) / 0.92);
@@ -1005,6 +1066,14 @@ body.side-collapsed .aq-nav-link {
   body.side-collapsed .aq-nav-link {
     justify-content: flex-start;
     padding: 9px 12px;
+  }
+  body.side-collapsed .aq-nav-children,
+  body.side-collapsed .aq-nav-chevron-btn {
+    display: revert;
+  }
+  body.side-collapsed .aq-nav-folder-link {
+    justify-content: flex-start;
+    padding: 9px 4px 9px 12px;
   }
   .aq-collapse {
     display: none;

@@ -22,6 +22,7 @@ import { PendingFilesField } from "../../components/shared/PendingFilesField";
 import { SegmentedTabs } from "../../components/dashboard/kit";
 import { uploadPendingAttachments } from "../../lib/attachments";
 import { NcrBoard } from "./NcrBoard";
+import { QuarantineDraftFields, saveDraftQuarantineItems } from "./NcrQuarantineSection";
 
 const NCR_STATUSES = ["open", "contained", "investigating", "corrective_action", "closed"] as const;
 
@@ -59,6 +60,7 @@ export function NcrListPage() {
     dueDate: "",
     assignedTo: "",
   });
+  const [quarantineRows, setQuarantineRows] = useState([{ partNumber: "", quantity: "", serialNumber: "" }]);
 
   const { data: ncrs = [], isLoading, isError } = ncrHooks.useList();
   const createNcr = ncrHooks.useCreate();
@@ -112,8 +114,8 @@ export function NcrListPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Issues</h1>
-          <p className="text-sm text-muted-foreground">Nonconformances (NCR). Log what went wrong, then contain it.</p>
+          <h1 className="text-2xl font-semibold">NCR</h1>
+          <p className="text-sm text-muted-foreground">Nonconformances. Log what went wrong, then contain it.</p>
           <CurrentPlantNote />
         </div>
         <div className="flex gap-2">
@@ -125,7 +127,7 @@ export function NcrListPage() {
               onClick={() => setCreateOpen(true)}
               className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
             >
-              Log an issue
+              Log an NCR
             </button>
           )}
         </div>
@@ -195,8 +197,8 @@ export function NcrListPage() {
         rowKey={(n) => n.id}
         isLoading={isLoading}
         isError={isError}
-        errorMessage="Couldn't load issues. Refresh the page. If it keeps failing, your access to nonconformances may have changed."
-        emptyMessage="No issues yet. Log one when a part, lot, or process isn't right."
+        errorMessage="Couldn't load NCRs. Refresh the page. If it keeps failing, your access to nonconformances may have changed."
+        emptyMessage="No NCRs yet. Log one when a part, lot, or process isn't right."
         onRowClick={(n) => navigate(`/ncr/${n.id}`)}
         selectedIds={canEdit ? selectedIds : undefined}
         onSelectionChange={canEdit ? setSelectedIds : undefined}
@@ -204,7 +206,7 @@ export function NcrListPage() {
       </>
       )}
 
-      <Modal title="Log an issue" isOpen={createOpen} onClose={() => { setCreateOpen(false); setPendingFiles([]); }}>
+      <Modal title="Log an NCR" isOpen={createOpen} onClose={() => { setCreateOpen(false); setPendingFiles([]); setQuarantineRows([{ partNumber: "", quantity: "", serialNumber: "" }]); }}>
         <form
           className="flex flex-col gap-4"
           onSubmit={(e) => {
@@ -220,11 +222,18 @@ export function NcrListPage() {
               {
               onSuccess: async (created) => {
                 const files = pendingFiles;
+                const held = quarantineRows;
                 setPendingFiles([]);
+                setQuarantineRows([{ partNumber: "", quantity: "", serialNumber: "" }]);
                 setCreateOpen(false);
                 if (files.length > 0) {
                   const result = await uploadPendingAttachments("ncr", created.id, files);
-                  if (result.failed.length > 0) toast.error(`Issue logged, but these files didn't attach: ${result.failed.join(", ")}. Add them on the issue page.`);
+                  if (result.failed.length > 0) toast.error(`NCR logged, but these files didn't attach: ${result.failed.join(", ")}. Add them on the NCR page.`);
+                }
+                try {
+                  await saveDraftQuarantineItems(created.id, held);
+                } catch (err) {
+                  toast.error(extractErrorMessage(err, "NCR logged, but the quarantined items didn't save. Add them on the NCR page."));
                 }
                 navigate(`/ncr/${created.id}`);
               },
@@ -302,9 +311,10 @@ export function NcrListPage() {
             </SelectField>
           )}
           </DetailsDisclosure>
+          <QuarantineDraftFields rows={quarantineRows} onChange={setQuarantineRows} />
           <PendingFilesField files={pendingFiles} onChange={setPendingFiles} />
           <button type="submit" className="rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground">
-            Log issue
+            Log NCR
           </button>
         </form>
       </Modal>

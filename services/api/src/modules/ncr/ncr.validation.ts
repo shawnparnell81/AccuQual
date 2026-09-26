@@ -27,3 +27,13 @@ export const assignNcrSchema = z.object({ assignedTo: z.number().int() });
 export const containmentNcrSchema = z.object({ containment: z.string().min(1).refine(rejectAiStubText, AI_STUB_REJECT_MESSAGE) });
 export const rootCauseNcrSchema = z.object({ rootCause: z.string().min(1).refine(rejectAiStubText, AI_STUB_REJECT_MESSAGE) });
 export const correctiveActionNcrSchema = z.object({ correctiveAction: z.string().min(1).refine(rejectAiStubText, AI_STUB_REJECT_MESSAGE) });
+
+export const addNcrQuarantineItemSchema = z.object({
+  partNumber: z.string().trim().min(1).max(200),
+  quantity: z.coerce.number().positive(),
+  serialNumber: z.string().trim().max(200).optional(),
+});
+
+export const completeNcrDispositionSchema = z.object({
+  disposition: z.enum(["use_as_is", "rework", "scrap", "return_to_supplier"]),
+});
