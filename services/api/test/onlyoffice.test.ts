@@ -6,7 +6,7 @@ import { buildEditorConfig, editorDocumentKey, officeDocumentType } from "../src
 import { readFileClaims, signOfficeToken, verifyOfficeToken } from "../src/modules/onlyoffice/token.js";
 import { AppError } from "../src/utils/appError.js";
 
-const actor: OfficeActor = { id: 7, tenantId: 1, roleName: "quality_manager", department: "quality", name: "Ada" };
+const actor: OfficeActor = { id: 7, roleName: "quality_manager", department: "quality", name: "Ada" };
 const draftDocx: OfficeStoredFile = {
   fileId: 4,
   status: "draft",
@@ -19,7 +19,7 @@ const draftDocx: OfficeStoredFile = {
 };
 
 function deps(file: OfficeStoredFile | null, permissions: { view?: boolean; edit?: boolean; viewReason?: string } = {}) {
-  const hasPermission = vi.fn(async (_db: unknown, _tenantId: number, _user: unknown, name: string) => {
+  const hasPermission = vi.fn(async (_db: unknown, _user: unknown, name: string) => {
     if (name === "document.view") return { allowed: permissions.view !== false, reason: permissions.viewReason };
     if (name === "document.edit") return { allowed: permissions.edit === true };
     return { allowed: false, reason: "unknown" };
@@ -33,8 +33,8 @@ describe("authorizeOfficeFile", () => {
     const gate = deps(draftDocx, { view: false, viewReason: "Requires read access to documents" });
     const result = await authorizeOfficeFile({} as never, actor, { documentId: 1, versionId: 2, fileId: 4 }, gate);
     expect(result).toEqual({ ok: false, status: 403, reason: "Requires read access to documents" });
-    expect(gate.hasPermission).toHaveBeenCalledWith(expect.anything(), actor.tenantId, actor, "document.view");
-    expect(gate.hasPermission).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), "document.edit");
+    expect(gate.hasPermission).toHaveBeenCalledWith(expect.anything(), actor, "document.view");
+    expect(gate.hasPermission).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), "document.edit");
     expect(gate.loadFile).not.toHaveBeenCalled();
   });
 
@@ -42,7 +42,7 @@ describe("authorizeOfficeFile", () => {
     const gate = deps(draftDocx, { edit: true });
     const result = await authorizeOfficeFile({} as never, actor, { documentId: 1, versionId: 2, fileId: 4 }, gate);
     expect(result).toMatchObject({ ok: true, mode: "edit", file: draftDocx });
-    expect(gate.hasPermission).toHaveBeenCalledWith(expect.anything(), actor.tenantId, actor, "document.edit");
+    expect(gate.hasPermission).toHaveBeenCalledWith(expect.anything(), actor, "document.edit");
   });
 
   it("opens a draft read-only when the caller can view but not edit", async () => {
@@ -73,13 +73,6 @@ describe("authorizeOfficeFile", () => {
     const gate = deps({ ...draftDocx, fileName: "scan.pdf" }, { edit: true });
     const result = await authorizeOfficeFile({} as never, actor, { documentId: 1, versionId: 2, fileId: 4 }, gate);
     expect(result).toMatchObject({ ok: false, status: 415 });
-  });
-
-  it("refuses a user with no company context before checking permissions", async () => {
-    const gate = deps(draftDocx, { edit: true });
-    const result = await authorizeOfficeFile({} as never, { ...actor, tenantId: null }, { documentId: 1, versionId: 2, fileId: 4 }, gate);
-    expect(result).toMatchObject({ ok: false, status: 403 });
-    expect(gate.hasPermission).not.toHaveBeenCalled();
   });
 });
 

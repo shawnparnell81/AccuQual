@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { and, eq, ne, sql } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { AppError } from "../../utils/appError.js";
 import { documentFiles } from "../../drizzle/schema/documents.js";
 import { controlledVersions } from "../../drizzle/schema/versioning.js";
@@ -12,7 +12,7 @@ import { roles } from "../../drizzle/schema/roles.js";
 import { hasPermission, type PermissionName } from "../../middleware/requirePermission.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { normalizeDocumentPayload, type DocumentAttachmentRef } from "../documents/documentPayload.js";
-import { detectFileType, documentAdapter, isInsideTenantStorage, MAX_FILE_BYTES } from "../documents/documentVersioning.js";
+import { detectFileType, documentAdapter, isInsideStorage, MAX_FILE_BYTES } from "../documents/documentVersioning.js";
 import * as engine from "../versioning/versioning.service.js";
 import { officeDocumentType } from "./editorConfig.js";
 
@@ -21,13 +21,10 @@ import { officeDocumentType } from "./editorConfig.js";
  *
  * It reuses the document permission helper (`document.view` / `document.edit`) and the same
  * attachment rule as the signed download link: the file id has to be on that revision, and the
- * bytes have to live in document storage. Company scoping stays inside this file — `hasPermission`
- * and the version lookup already take it — so removing tenancy means simplifying this module,
- * not the editor, the callback, or the tests.
+ * bytes have to live in document storage. 
  */
 export interface OfficeActor {
   id: number;
-  tenantId: number | null;
   roleName: string | null;
   department: string | null;
   name: string;
@@ -56,15 +53,14 @@ export type OfficeAuthorization =
   | { ok: false; status: 403 | 404 | 415; reason: string };
 
 type PermissionCheck = (
-  db: TenantDb,
-  tenantId: number,
+  db: Db,
   user: { id: number; roleName: string | null; department: string | null },
   name: PermissionName,
 ) => Promise<{ allowed: boolean; reason?: string }>;
 
 export interface OfficeAccessDeps {
   hasPermission: PermissionCheck;
-  loadFile: (db: TenantDb, tenantId: number, ids: OfficeTarget) => Promise<OfficeStoredFile | null>;
+  loadFile: (db: Db, ids: OfficeTarget) => Promise<OfficeStoredFile | null>;
 }
 
 export function decideOfficeAccess(
@@ -86,13 +82,12 @@ export function assertOfficeAccess(result: OfficeAuthorization): asserts result 
   throw new AppError(result.reason, result.status);
 }
 
-async function sharedWithOtherRevision(db: TenantDb, tenantId: number, documentId: number, versionId: number, fileId: number): Promise<boolean> {
+async function sharedWithOtherRevision(db: Db, documentId: number, versionId: number, fileId: number): Promise<boolean> {
   const [hit] = await db
     .select({ id: controlledVersions.id })
     .from(controlledVersions)
     .where(
       and(
-        eq(controlledVersions.tenantId, tenantId),
         eq(controlledVersions.subjectType, "document"),
         eq(controlledVersions.subjectId, documentId),
         ne(controlledVersions.id, versionId),
@@ -103,10 +98,10 @@ async function sharedWithOtherRevision(db: TenantDb, tenantId: number, documentI
   return Boolean(hit);
 }
 
-async function loadRevisionFile(db: TenantDb, tenantId: number, ids: OfficeTarget): Promise<OfficeStoredFile | null> {
+async function loadRevisionFile(db: Db, ids: OfficeTarget): Promise<OfficeStoredFile | null> {
   let version: { status: string; payload: Record<string, unknown> };
   try {
-    version = await engine.getVersion(db, documentAdapter, tenantId, ids.documentId, ids.versionId);
+    version = await engine.getVersion(db, documentAdapter, ids.documentId, ids.versionId);
   } catch (err) {
     if (err instanceof AppError && err.statusCode === 404) return null;
     throw err;
@@ -116,8 +111,8 @@ async function loadRevisionFile(db: TenantDb, tenantId: number, ids: OfficeTarge
   const [row] = await db
     .select()
     .from(documentFiles)
-    .where(and(eq(documentFiles.id, ids.fileId), eq(documentFiles.documentId, ids.documentId), eq(documentFiles.tenantId, tenantId)));
-  if (!row || !isInsideTenantStorage(tenantId, row.filePath) || !existsSync(row.filePath)) return null;
+    .where(and(eq(documentFiles.id, ids.fileId), eq(documentFiles.documentId, ids.documentId))); 
+  if (!row || !isInsideStorage(row.filePath) || !existsSync(row.filePath)) return null;
   return {
     fileId: row.id,
     status: version.status,
@@ -126,17 +121,16 @@ async function loadRevisionFile(db: TenantDb, tenantId: number, ids: OfficeTarge
     sha256: row.sha256,
     sizeBytes: row.sizeBytes,
     filePath: row.filePath,
-    sharedWithOtherRevision: await sharedWithOtherRevision(db, tenantId, ids.documentId, ids.versionId, ids.fileId),
+    sharedWithOtherRevision: await sharedWithOtherRevision(db, ids.documentId, ids.versionId, ids.fileId),
   };
 }
 
 const defaultDeps: OfficeAccessDeps = { hasPermission, loadFile: loadRevisionFile };
 
-export async function loadOfficeActor(db: TenantDb, userId: number): Promise<OfficeActor | null> {
+export async function loadOfficeActor(db: Db, userId: number): Promise<OfficeActor | null> {
   const [row] = await db
     .select({
       id: users.id,
-      tenantId: users.tenantId,
       department: users.department,
       isActive: users.isActive,
       name: users.name,
@@ -149,21 +143,19 @@ export async function loadOfficeActor(db: TenantDb, userId: number): Promise<Off
   if (!row || !row.isActive) return null;
   return {
     id: row.id,
-    tenantId: row.tenantId,
     roleName: row.roleName,
     department: row.department,
     name: row.name?.trim() || row.email,
   };
 }
 
-export async function authorizeOfficeFile(db: TenantDb, actor: OfficeActor, ids: OfficeTarget, deps: OfficeAccessDeps = defaultDeps): Promise<OfficeAuthorization> {
-  if (actor.tenantId == null) return { ok: false, status: 403, reason: "Missing company context" };
-  const view = await deps.hasPermission(db, actor.tenantId, actor, "document.view");
+export async function authorizeOfficeFile(db: Db, actor: OfficeActor, ids: OfficeTarget, deps: OfficeAccessDeps = defaultDeps): Promise<OfficeAuthorization> {
+  const view = await deps.hasPermission(db, actor, "document.view");
   if (!view.allowed) {
     const denied = decideOfficeAccess(view, { allowed: false }, null);
     return denied.ok ? { ok: false, status: 403, reason: "You don't have permission to view this document." } : denied;
   }
-  const [edit, file] = await Promise.all([deps.hasPermission(db, actor.tenantId, actor, "document.edit"), deps.loadFile(db, actor.tenantId, ids)]);
+  const [edit, file] = await Promise.all([deps.hasPermission(db, actor, "document.edit"), deps.loadFile(db, ids)]);
   const decision = decideOfficeAccess(view, edit, file);
   if (!decision.ok) return decision;
   if (!file) return { ok: false, status: 404, reason: "Attachment not found" };
@@ -174,21 +166,19 @@ export async function authorizeOfficeFile(db: TenantDb, actor: OfficeActor, ids:
  * A published revision must keep the bytes it was released with. If this draft still points at a
  * file another revision uses, copy it onto the draft first so later saves cannot change the other one.
  */
-export async function ensureExclusiveDraftFile(db: TenantDb, actor: OfficeActor, ids: OfficeTarget, file: OfficeStoredFile): Promise<OfficeStoredFile> {
+export async function ensureExclusiveDraftFile(db: Db, actor: OfficeActor, ids: OfficeTarget, file: OfficeStoredFile): Promise<OfficeStoredFile> {
   if (!file.sharedWithOtherRevision) return file;
-  if (actor.tenantId == null) throw AppError.forbidden("Missing company context");
   const bytes = await readFile(file.filePath);
   const ext = path.extname(file.fileName).toLowerCase();
   const dir = path.dirname(file.filePath);
   await mkdir(dir, { recursive: true });
   const filePath = path.join(dir, `${randomUUID()}${ext}`);
-  if (!isInsideTenantStorage(actor.tenantId, filePath)) throw AppError.badRequest("Refusing to store the file outside document storage.");
+  if (!isInsideStorage(filePath)) throw AppError.badRequest("Refusing to store the file outside document storage.");
   await writeFile(filePath, bytes);
   try {
     const [row] = await db
       .insert(documentFiles)
       .values({
-        tenantId: actor.tenantId,
         documentId: ids.documentId,
         fileName: file.fileName,
         mimeType: file.mimeType,
@@ -198,10 +188,10 @@ export async function ensureExclusiveDraftFile(db: TenantDb, actor: OfficeActor,
         uploadedBy: actor.id,
       })
       .returning();
-    const version = await engine.getVersion(db, documentAdapter, actor.tenantId, ids.documentId, ids.versionId);
+    const version = await engine.getVersion(db, documentAdapter, ids.documentId, ids.versionId);
     const payload = normalizeDocumentPayload(version.payload as Record<string, unknown>);
     const ref: DocumentAttachmentRef = { id: row!.id, fileName: file.fileName, mimeType: file.mimeType, sizeBytes: file.sizeBytes, sha256: file.sha256 };
-    await engine.saveDraft(db, documentAdapter, actor.tenantId, ids.documentId, ids.versionId, { id: actor.id, roleName: actor.roleName }, {
+    await engine.saveDraft(db, documentAdapter, ids.documentId, ids.versionId, { id: actor.id, roleName: actor.roleName }, {
       payload: { ...payload, attachments: payload.attachments.map((a) => (a.id === ids.fileId ? ref : a)) } as unknown as Record<string, unknown>,
     });
     return { ...file, fileId: row!.id, filePath, sharedWithOtherRevision: false };
@@ -218,7 +208,7 @@ export interface SavedOfficeFile {
 }
 
 /** Writes a document-server save back onto the draft. Refuses anything that is not an editable draft. */
-export async function persistEditedOfficeFile(db: TenantDb, actor: OfficeActor, ids: OfficeTarget, bytes: Buffer): Promise<SavedOfficeFile> {
+export async function persistEditedOfficeFile(db: Db, actor: OfficeActor, ids: OfficeTarget, bytes: Buffer): Promise<SavedOfficeFile> {
   const access = await authorizeOfficeFile(db, actor, ids);
   assertOfficeAccess(access);
   if (access.mode !== "edit") throw new AppError("This revision is not a draft, so the editor can't save it.", 409);
@@ -227,25 +217,23 @@ export async function persistEditedOfficeFile(db: TenantDb, actor: OfficeActor, 
   const detected = detectFileType(bytes, access.file.fileName);
   if (!detected) throw AppError.badRequest("The saved file isn't a valid Word or Excel document.");
   if (detected.ext !== path.extname(access.file.fileName).toLowerCase()) throw AppError.badRequest("The saved file type doesn't match the original.");
-  if (actor.tenantId == null) throw AppError.forbidden("Missing company context");
 
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const nextPath = path.join(path.dirname(access.file.filePath), `${randomUUID()}${detected.ext}`);
-  if (!isInsideTenantStorage(actor.tenantId, nextPath)) throw AppError.badRequest("Refusing to store the file outside document storage.");
+  if (!isInsideStorage(nextPath)) throw AppError.badRequest("Refusing to store the file outside document storage.");
   await writeFile(nextPath, bytes);
   try {
     await db
       .update(documentFiles)
       .set({ filePath: nextPath, sha256, sizeBytes: bytes.length, mimeType: detected.mime })
-      .where(and(eq(documentFiles.id, ids.fileId), eq(documentFiles.documentId, ids.documentId), eq(documentFiles.tenantId, actor.tenantId)));
-    const version = await engine.getVersion(db, documentAdapter, actor.tenantId, ids.documentId, ids.versionId);
+      .where(and(eq(documentFiles.id, ids.fileId), eq(documentFiles.documentId, ids.documentId)));
+    const version = await engine.getVersion(db, documentAdapter, ids.documentId, ids.versionId);
     const payload = normalizeDocumentPayload(version.payload as Record<string, unknown>);
     const attachments = payload.attachments.map((a) => (a.id === ids.fileId ? { ...a, sha256, sizeBytes: bytes.length, mimeType: detected.mime } : a));
-    await engine.saveDraft(db, documentAdapter, actor.tenantId, ids.documentId, ids.versionId, { id: actor.id, roleName: actor.roleName }, {
+    await engine.saveDraft(db, documentAdapter, ids.documentId, ids.versionId, { id: actor.id, roleName: actor.roleName }, {
       payload: { ...payload, attachments } as unknown as Record<string, unknown>,
     });
     await recordAuditTrail(db, {
-      tenantId: actor.tenantId,
       entityType: "DocumentVersion",
       entityId: ids.documentId,
       action: "update",

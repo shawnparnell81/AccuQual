@@ -5,7 +5,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { logger } from "../../utils/logger.js";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb, type TenantDb } from "../../lib/tenantScope.js";
+import { withDb, type Db } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { db } from "../../db/index.js";
 import { MAX_FILE_BYTES } from "../documents/documentVersioning.js";
@@ -32,18 +32,18 @@ function idQuery(req: Request, name: string): number {
  * Whether that config can edit is decided only by authorizeOfficeFile.
  */
 export const onlyOfficeRouter = Router();
-onlyOfficeRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("documents"));
+onlyOfficeRouter.use(requireAuth, withDb, requireDepartmentAccess("documents"));
 
 onlyOfficeRouter.get(
   "/session",
   asyncHandler(async (req: Request, res: Response) => {
     const settings = requireSettings();
     const ids = { documentId: idQuery(req, "documentId"), versionId: idQuery(req, "versionId"), fileId: idQuery(req, "fileId") };
-    const actor = await loadOfficeActor(req.db as TenantDb, req.user!.id);
+    const actor = await loadOfficeActor(req.db as Db, req.user!.id);
     if (!actor) throw AppError.unauthorized("Session is no longer valid");
-    const access = await authorizeOfficeFile(req.db as TenantDb, actor, ids);
+    const access = await authorizeOfficeFile(req.db as Db, actor, ids);
     assertOfficeAccess(access);
-    const file = access.mode === "edit" ? await ensureExclusiveDraftFile(req.db as TenantDb, actor, ids, access.file) : access.file;
+    const file = access.mode === "edit" ? await ensureExclusiveDraftFile(req.db as Db, actor, ids, access.file) : access.file;
     const key = editorDocumentKey(file.fileId, file.sha256);
     const claims = { userId: actor.id, documentId: ids.documentId, versionId: ids.versionId, fileId: file.fileId };
     const fileToken = signOfficeToken(settings.jwtSecret, "oo-file", claims);
@@ -107,7 +107,7 @@ onlyOfficePublicRouter.post(
       const actor = await loadOfficeActor(db, claims.userId);
       if (!actor) return res.json({ error: 1 });
       const bytes = await downloadSavedFile(command.url, { publicBase: settings.publicUrl, internalBase: settings.internalUrl }, MAX_FILE_BYTES);
-      const saved = await db.transaction(async (tx) => persistEditedOfficeFile(tx as unknown as TenantDb, actor, claims, bytes));
+      const saved = await db.transaction(async (tx) => persistEditedOfficeFile(tx as unknown as Db, actor, claims, bytes));
       if (saved.oldPath !== saved.newPath) await unlink(saved.oldPath).catch(() => undefined);
       logger.info("Office file saved", { documentId: claims.documentId, fileId: claims.fileId, status });
       res.json({ error: 0 });
