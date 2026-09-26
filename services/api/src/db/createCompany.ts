@@ -25,7 +25,9 @@ async function main() {
   const result = await provisionCompany({ name, adminEmail, adminName: arg("--admin-name") });
   logger.info(`Company "${result.company.name}" created.`);
   logger.info(`Administrator: ${adminEmail}`);
-  if (result.temporaryPassword) logger.info(`Temporary password (shown once): ${result.temporaryPassword}`);
+  // Deliberately on the terminal only, never in the log stream: this is the one time the password is shown.
+  if (result.temporaryPassword) process.stdout.write(`Temporary password (shown once): ${result.temporaryPassword}
+`);
   logger.info(`Welcome email: ${result.emailStatus ?? "not sent"}`);
   await pool.end();
 }
