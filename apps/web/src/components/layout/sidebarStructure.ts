@@ -58,6 +58,7 @@ export const DOCUMENT_FOLDER_PAGES: Record<string, { title: string; blurb: strin
   "audit-report": { title: "Audit Report", blurb: "Audit reports. Upload a file to keep it here." },
   shipping: { title: "Shipping", blurb: "Shipping documents. Upload a file to keep it here." },
   receiving: { title: "Receiving", blurb: "Receiving documents. Upload a file to keep it here." },
+  "validation-reports": { title: "Validation Reports", blurb: "Process and product validation reports. Upload a file to keep it here." },
 };
 
 function doc(key: keyof typeof DOCUMENT_FOLDER_PAGES, icon: LucideIcon): SidebarLink {
@@ -87,6 +88,8 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
     icon: ShieldCheck,
     children: [
       { key: "inspections", label: "Inspections", path: "/quality-inspection-reports", icon: ClipboardCheck },
+      doc("validation-reports", FileText),
+      { key: "fai", label: "FAI", path: "/qms-forms/first_article_inspection", icon: ClipboardCheck },
       { key: "warranty", label: "Warranty", path: "/warranty", icon: ShieldCheck },
       doc("repairs", Hammer),
       {
