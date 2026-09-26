@@ -24,6 +24,9 @@ import { hashTrustedDeviceToken, listTrustedDevices, revokeAllTrustedDevices, re
 // template, so "/" is the path that works in both places.
 export const REFRESH_COOKIE_NAME = "accuqual_rt";
 export const TRUSTED_DEVICE_COOKIE_NAME = "accuqual_td";
+/** Non-secret marker. The sign-in page already sends this same value in the anti-CSRF header. */
+export const CSRF_MARKER_COOKIE_NAME = "accuqual_csrf";
+const CSRF_MARKER_VALUE = "1";
 
 /** Host-only, path /, SameSite matching the refresh cookie. No Domain attribute — see setRefreshCookie. */
 function sessionCookieOptions() {
@@ -37,6 +40,7 @@ function sessionCookieOptions() {
 
 /** Persistent until the sign-in's absolute end, so closing the browser does not sign the user out. Max-Age is the time left, not a fresh 12 hours. */
 export function setRefreshCookie(res: Response, refreshToken: string, sessionExpiresAt: Date) {
+  const maxAge = Math.max(0, sessionExpiresAt.getTime() - Date.now());
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
     ...sessionCookieOptions(),
     // SameSite=None (only valid with Secure, which production already sets)
@@ -51,17 +55,35 @@ export function setRefreshCookie(res: Response, refreshToken: string, sessionExp
     // api.accuqualqms.com. A host-only cookie is stored for the host the
     // browser actually called and is sent back on /api/*. Pinning Domain to
     // the API host would hide it from that call.
-    maxAge: Math.max(0, sessionExpiresAt.getTime() - Date.now()),
+    maxAge,
   });
+  res.cookie(CSRF_MARKER_COOKIE_NAME, CSRF_MARKER_VALUE, { ...sessionCookieOptions(), maxAge });
 }
 
 function clearRefreshCookie(res: Response) {
   res.clearCookie(REFRESH_COOKIE_NAME, sessionCookieOptions());
+  res.clearCookie(CSRF_MARKER_COOKIE_NAME, sessionCookieOptions());
 }
 
-/** Persistent for the same 30 days the server-side row expires. Not renewed on later sign-ins. */
+/**
+ * Persistent for the same 30 days the server-side row expires. Not renewed on later sign-ins.
+ * The value is a random bearer secret. The database stores only its SHA-256 hash, so a copy of
+ * the database is not enough to skip the authenticator code. The cookie has to hold that secret
+ * or the browser could not present it. Encrypting it would not help: whoever has the cookie can
+ * still send it back, and the server would decrypt it. httpOnly is set on this call.
+ * Secure is on in production. Local sign-in is plain HTTP, which cannot use the Secure flag.
+ */
 export function setTrustedDeviceCookie(res: Response, token: string) {
-  res.cookie(TRUSTED_DEVICE_COOKIE_NAME, token, { ...sessionCookieOptions(), maxAge: TRUSTED_DEVICE_TTL_MS });
+  const sameSite = env.NODE_ENV === "production" ? "none" : "lax";
+  // codeql[js/clear-text-storage-of-sensitive-data]
+  // codeql[js/clear-text-cookie]
+  res.cookie(TRUSTED_DEVICE_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: env.NODE_ENV === "production",
+    sameSite,
+    path: "/",
+    maxAge: TRUSTED_DEVICE_TTL_MS,
+  });
 }
 
 function clearTrustedDeviceCookie(res: Response) {

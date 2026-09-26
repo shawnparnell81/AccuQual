@@ -7,7 +7,7 @@ import request from "supertest";
 import { csrfProtection } from "../src/middleware/csrf.js";
 import { errorHandler } from "../src/middleware/errorHandler.js";
 import { createApp } from "../src/app.js";
-import { REFRESH_COOKIE_NAME, TRUSTED_DEVICE_COOKIE_NAME } from "../src/modules/auth/auth.controller.js";
+import { CSRF_MARKER_COOKIE_NAME, REFRESH_COOKIE_NAME, TRUSTED_DEVICE_COOKIE_NAME } from "../src/modules/auth/auth.controller.js";
 import { SSO_COOKIE } from "../src/modules/sso/oidc.js";
 
 function tinyApp() {
@@ -46,6 +46,23 @@ describe("csrfProtection middleware", () => {
     const res = await request(tinyApp()).post("/thing").set("Cookie", REFRESH).set("X-AccuQual-Csrf", "1");
     expect(res.status).toBe(200);
     expect(res.body.reached).toBe(true);
+  });
+
+  it("refuses when the csrf marker cookie does not match the header", async () => {
+    expect(CSRF_MARKER_COOKIE_NAME).toBe("accuqual_csrf");
+    const res = await request(tinyApp())
+      .post("/thing")
+      .set("Cookie", `${REFRESH}; ${CSRF_MARKER_COOKIE_NAME}=nope`)
+      .set("X-AccuQual-Csrf", "1");
+    expect(res.status).toBe(403);
+  });
+
+  it("accepts when the csrf marker cookie matches the header", async () => {
+    const res = await request(tinyApp())
+      .post("/thing")
+      .set("Cookie", `${REFRESH}; ${CSRF_MARKER_COOKIE_NAME}=1`)
+      .set("X-AccuQual-Csrf", "1");
+    expect(res.status).toBe(200);
   });
 
   it("does not care about a request carried by a Bearer token, even with our cookie also present", async () => {
