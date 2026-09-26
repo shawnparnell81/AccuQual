@@ -3,11 +3,14 @@
 Everything in this file has been proven against the real infrastructure it
 describes — a real Supabase project, and the real Docker images this repo
 already builds — not written from theory. The private Render blueprint
-(`render.yaml`) is two services, API and web, with the URLs pasted in the
-dashboard rather than wired with `fromService`. Redis and the three
-workers are not in that blueprint; their definitions are kept in
-`render.workers.yaml` and have not been applied to a live Render account
-(the worker images themselves do build in CI).
+(`render.yaml`) is two services on the free Hobby workspace: a Docker API
+and a static web site, about **$7.25/month** (API starter $7, 1 GB disk
+$0.25, workspace and static site $0). URLs are pasted in the dashboard
+rather than wired with `fromService`. Redis and the three workers are not
+in that blueprint; their definitions are kept in `render.workers.yaml` and
+have not been applied to a live Render account (the worker images
+themselves do build in CI). Docker Compose still builds `apps/web/Dockerfile`
+and proxies `/api/` with nginx; Render does not.
 
 ## The one gotcha that will bite you if you skip this section
 
@@ -122,7 +125,7 @@ command is in [Private Render + Cloudflare Access](#private-render-cloudflare-ac
 
 In Render: New → Blueprint → connect this GitHub repo. It picks up
 `render.yaml` at the repo root. That file defines two services, not the
-workers. Plans, env vars, the disk, the domain, Cloudflare Access,
+workers. Plans, env vars, the disk, the two domains, Cloudflare Access,
 migrations, and the first administrator are in
 [Private Render + Cloudflare Access](#private-render-cloudflare-access) below.
 
@@ -131,7 +134,7 @@ migrations, and the first administrator are in
 Run the smoke test in [Private Render + Cloudflare Access](#private-render-cloudflare-access) below (upload, reset email, `/api/health`).
 What `/health` returns:
 
-- `curl https://app.accuqualqms.com/api/health` → `{"status":"ok","database":{"status":"ok",...},"redis":{"status":"critical",...},...}`
+- `curl https://api.accuqualqms.com/health` → `{"status":"ok","database":{"status":"ok",...},"redis":{"status":"critical",...},...}`
   — a real readiness check, not a bare liveness ping (see "Monitoring &
   alerting" below). `status` is 503 only when the database itself is
   unreachable. `redis` is `critical` on this blueprint because Redis is
@@ -145,16 +148,37 @@ What `/health` returns:
 
 ## Private Render + Cloudflare Access
 
-Two Render web services, both Docker, both `autoDeployTrigger: checksPass`.
+Hobby workspace, two services, both `autoDeployTrigger: checksPass`.
 No Redis, no workers, no Stripe variables (billing was removed). This
 installation is one company; do not add tenant plumbing.
 
-### Services, plans, disk
+### Cost
 
-| Service | Image | Plan | Notes |
-|---|---|---|---|
-| `accuqual-api` | `services/api/Dockerfile` | **starter** | `healthCheckPath: /health`. Persistent disk `uploads`, 1 GB, mounted at `/var/data`. A disk needs a paid instance and pins the service to one instance. |
-| `accuqual-web` | `apps/web/Dockerfile` | **starter** | `free` is valid (no disk) but sleeps after inactivity, so the first visit and a password-reset link wait on a cold start. Starter stays on. |
+| Piece | Plan | Price |
+|---|---|---|
+| Render workspace | Hobby | $0 |
+| `accuqual-web` | static site (no instance) | $0 |
+| `accuqual-api` | starter | $7 |
+| API disk | 1 GB at `/var/data` | $0.25 |
+| **Total** | | **$7.25/month** |
+
+Hobby includes the two custom domains this blueprint uses: `app.accuqualqms.com` and `api.accuqualqms.com`.
+
+### Services
+
+| Service | How it runs | Notes |
+|---|---|---|
+| `accuqual-api` | Docker, `services/api/Dockerfile`, plan **starter** | `healthCheckPath: /health`. Disk `uploads`, 1 GB, mounted at `/var/data`. A disk needs a paid instance and pins the service to one instance. Public at `api.accuqualqms.com`. |
+| `accuqual-web` | `runtime: static` | `npm ci && npm run build --workspace apps/web`, publish `apps/web/dist`. Free. Public at `app.accuqualqms.com`. |
+
+`apps/web/Dockerfile` and `apps/web/nginx.conf.template` stay in the repo. `docker compose` still builds that image and defaults `API_UPSTREAM_URL` to `http://api:3000`. Render does not build them.
+
+The static site's routes, in order:
+
+1. Rewrite `/api/*` → `https://api.accuqualqms.com/*`. The `*` is the path after `/api`, so `/api/health` is fetched as `https://api.accuqualqms.com/health`. The browser stays on `app.accuqualqms.com`. This URL is written in `render.yaml`; blueprint route destinations cannot be env vars, so it must stay equal to the API custom domain.
+2. Rewrite `/*` → `/index.html` (SPA fallback). Existing files, including `/assets/*`, are served before either rule.
+
+Security headers on `/*`: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`. `/assets/*` is cached as immutable. `/index.html` is `Cache-Control: no-cache`.
 
 **accuqual-api environment**
 
@@ -169,6 +193,8 @@ installation is one company; do not add tenant plumbing.
 | `FRONTEND_URL` | `https://app.accuqualqms.com` |
 | `STORAGE_LOCAL_PATH` | `/var/data/uploads` |
 | `MONITOR_EXPECTED_WORKERS` | empty |
+| `CF_ACCESS_TEAM_DOMAIN` | Zero Trust team host, for example `your-team.cloudflareaccess.com`. See below |
+| `CF_ACCESS_AUD` | Application Audience (AUD) tag of the Access app on `app.accuqualqms.com` |
 | `ALERT_WEBHOOK_URL` | optional |
 | `SENTRY_DSN` | optional |
 | `HEARTBEAT_URL` | optional |
@@ -176,48 +202,80 @@ installation is one company; do not add tenant plumbing.
 | `CONTACT_INBOX_EMAIL` | optional |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | optional fallback when ZeptoMail is unset |
 
-Leave `API_PUBLIC_URL` unset. SSO callbacks then use `FRONTEND_URL` + `/api`, which is this proxy.
+Leave `API_PUBLIC_URL` unset. SSO callbacks then use `FRONTEND_URL` + `/api`, which is the rewrite.
+
+Both `CF_ACCESS_*` values must be set or the API does not check Access at all (that is how local, Compose, and CI stay open). An empty string counts as unset.
 
 **accuqual-web environment**
 
 | Variable | Set to |
 |---|---|
 | `VITE_API_BASE_URL` | `/api` (same origin, baked in at build; a change needs a redeploy) |
-| `API_UPSTREAM_URL` | API origin, no path and no trailing slash, for example `https://accuqual-api.onrender.com`. Runtime only |
-| `CF_ACCESS_CLIENT_ID` | optional; blank unless the API hostname is behind Access |
-| `CF_ACCESS_CLIENT_SECRET` | optional; same. Blank sends no header |
+| `NODE_VERSION` | `20` (matches CI) |
 | `VITE_SENTRY_DSN` | optional; build-time, so a change needs a redeploy |
-| `NGINX_RESOLVER` | optional. Unset uses the container's own nameserver (`127.0.0.11` under Compose, Render's DNS on Render) |
-
-`docker compose` keeps working: the web image defaults `API_UPSTREAM_URL` to `http://api:3000`, and compose sets that same value.
 
 Workers, when you want them later, are in `render.workers.yaml`. That file is not a blueprint Render will sync.
 
-### Custom domain (Cloudflare)
+### Custom domains (Cloudflare)
 
-1. In Cloudflare DNS for `accuqualqms.com`, add a CNAME: `app` → the web service hostname Render shows (the `onrender.com` name, even though browsers will stop using it).
+Hobby's two included custom domains are both used here. For each of `app` and `api`:
+
+1. In Cloudflare DNS for `accuqualqms.com`, add a CNAME to the hostname Render shows for that service (the `onrender.com` name, even though browsers will stop using it).
 2. Leave the record **DNS only** (grey cloud) until Render's custom-domain check succeeds. An orange-cloud proxy hides Render from itself and the check fails.
 3. After Render says the domain is verified, turn the record **Proxied** (orange cloud).
 4. SSL/TLS → **Full (strict)**. Render presents a real certificate; Full (strict) checks it. Flexible will loop or strip HTTPS.
 
-The blueprint sets `domains: [app.accuqualqms.com]` on `accuqual-web`.
+The blueprint sets `app.accuqualqms.com` on `accuqual-web` and `api.accuqualqms.com` on `accuqual-api`.
 
 ### Cloudflare Access
 
 Zero Trust → Access → Applications → Add an application → **Self-hosted**.
 
-- Application domain: `app.accuqualqms.com`.
-- Policy: Action **Allow**, Include **Emails**, one address (the person who administers this company).
-- Everyone else gets the Access login wall, before nginx or the API sees the request.
+- Application domain: `app.accuqualqms.com` only.
+- Policy: Action **Allow**, Include **Emails**, one address (the owner).
+- Everyone else gets the Access login wall before the static site is served.
+- Copy the team's `cloudflareaccess.com` host into `CF_ACCESS_TEAM_DOMAIN`, and this application's **Application Audience (AUD)** tag into `CF_ACCESS_AUD`.
 
-If you also put the API hostname behind Access, create a **service token** and paste its Client ID and Client Secret into `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` on `accuqual-web`. nginx sends them as `CF-Access-Client-Id` and `CF-Access-Client-Secret`, and only when they are non-empty.
+Do **not** put Access on `api.accuqualqms.com`. The static-site rewrite is a server-side fetch. It cannot complete an interactive Access login, and a static site cannot attach a service token. Access on the API hostname would challenge that fetch and `/api` would fail for everyone, including the owner.
+
+The app login (AccuQual email and password, then the refresh cookie) stays in place. Access answers "is this the owner?"; the app login answers "which user inside the company?".
+
+#### Why the API checks the Access JWT itself
+
+Render's rewrite keeps the browser on `app.accuqualqms.com` and fetches `https://api.accuqualqms.com/...`. Render documents that rewrite as serving the destination at the original path. It does not document that `Cookie` or `Cf-Access-Jwt-Assertion` are copied onto that second request. A 2024 Render community report shows the `Host` header on that hop becomes the destination host, which means the request does reach the API, and does not prove the Access credential is forwarded.
+
+What does follow from the app working at all: login sets `accuqual_rt` and later requests send it. If that cookie round-trips, the browser's `Cookie` header is being forwarded, and `CF_Authorization` (set by Access on `app.accuqualqms.com`) is on that same header. `Cf-Access-Jwt-Assertion` is added by Cloudflare only on the request to the first origin. Render's outbound fetch will not get a fresh one, because the API hostname is not behind Access.
+
+`services/api/src/middleware/cloudflareAccess.ts` therefore accepts either credential, and only when both env vars are set:
+
+- `Cf-Access-Jwt-Assertion` header, if present (this is what the Worker below copies).
+- otherwise the `CF_Authorization` cookie.
+- signature checked with the team certs at `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs` (RS256 only, issuer is that team origin, audience is `CF_ACCESS_AUD`, expiry enforced). Certs are cached for 10 minutes and refreshed once when the key id is unknown. If the cert endpoint cannot be reached, the request is rejected.
+- `/health` and `/health/live` are exempt. Render's health check does not pass through Access, and neither route returns company data. Every other path without a valid token is **403**, including a direct call to `https://api.accuqualqms.com`.
+
+#### If a signed-in browser loads the app but `/api` returns 403
+
+The rewrite did not forward the Access token. Add a Cloudflare Worker on `app.accuqualqms.com/api/*`. Workers run after Access and before Render, so this replaces the rewrite for those paths (leave the rewrite in `render.yaml`; it is simply not reached). The Worker copies `Cf-Access-Jwt-Assertion`, which the API already accepts:
+
+```js
+export default {
+  async fetch(request) {
+    const incoming = new URL(request.url);
+    const upstream = new URL(incoming.pathname.replace(/^\/api/, "") + incoming.search, "https://api.accuqualqms.com");
+    const headers = new Headers(request.headers);
+    headers.set("Host", "api.accuqualqms.com");
+    const assertion = request.headers.get("Cf-Access-Jwt-Assertion");
+    if (assertion) headers.set("Cf-Access-Jwt-Assertion", assertion);
+    return fetch(upstream, { method: request.method, headers, body: request.body, redirect: "manual" });
+  },
+};
+```
 
 ### onrender.com subdomains
 
-`renderSubdomainPolicy: disabled` is a real blueprint field ([Render blueprint spec](https://render.com/docs/blueprint-spec)). Render rejects `disabled` unless that service has at least one custom domain.
+`renderSubdomainPolicy: disabled` is a real blueprint field ([Render blueprint spec](https://render.com/docs/blueprint-spec)). Render rejects `disabled` unless that service has at least one custom domain. Both services now have one, and both set `disabled`.
 
-- **Web**: set in `render.yaml`, because `app.accuqualqms.com` is listed. Requests to the web service's `onrender.com` hostname return 404. Confirm in the dashboard after the first sync (Settings → custom domain / subdomain).
-- **API**: not set. This blueprint gives the API no custom domain, so `disabled` would be invalid, and nginx still needs a hostname in `API_UPSTREAM_URL`. To turn the API's `onrender.com` hostname off later: add a custom domain, point `API_UPSTREAM_URL` at that `https://` origin (no path), put the hostname behind Access with the service token above, then set `renderSubdomainPolicy: disabled` on `accuqual-api`. Do that only after the upstream URL no longer uses `onrender.com`.
+Requests to either service's `onrender.com` hostname return 404. Confirm in the dashboard after the first sync (Settings → custom domain). Render's health check calls the service directly; it is not the public `onrender.com` URL, so `healthCheckPath: /health` still runs. There is no separate "disable the subdomain" switch beyond this field — `disabled` is the supported way to turn the public `onrender.com` name off.
 
 ### Migrations
 
@@ -235,7 +293,7 @@ Render does not run migrations. The API image does not contain the `.sql` files.
 
 ### First administrator
 
-On **accuqual-api** (the web image is nginx and has no Node), open Render Shell. The image's `WORKDIR` is `/app`, and `dist/db/createCompany.js` is in the image:
+On **accuqual-api** (the static site has no Node shell), open Render Shell. The image's `WORKDIR` is `/app`, and `dist/db/createCompany.js` is in the image:
 
 ```
 node dist/db/createCompany.js --name "Company Name" --email admin@company.com
@@ -247,7 +305,7 @@ Optional: `--admin-name "Full Name"`. A temporary password is printed once to th
 
 1. **Upload survives a redeploy.** Sign in, upload a file on a record (a small PDF is enough), redeploy `accuqual-api`, and open the file again. It lives on the disk at `/var/data/uploads`. Anything written outside `/var/data` is gone after the deploy.
 2. **Reset email arrives.** Use Forgot password for the administrator. The message arrives only after `ZEPTOMAIL_SEND_TOKEN` (or all of `SMTP_*`) is set; otherwise the send is logged and not delivered.
-3. **`/api/health` is ok.** `curl -fsS https://app.accuqualqms.com/api/health` returns HTTP 200 with `"status":"ok"` and `"database":{"status":"ok",...}`. `"redis":{"status":"critical"}` is expected until Redis is deployed, and it does not fail the check.
+3. **Health is ok, and the API is closed.** `curl -fsS https://api.accuqualqms.com/health` returns HTTP 200 with `"status":"ok"` and `"database":{"status":"ok",...}` and no Access token. `"redis":{"status":"critical"}` is expected until Redis is deployed, and it does not fail the check. After `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are set, `curl -s -o /dev/null -w '%{http_code}' https://api.accuqualqms.com/auth/me` is `403`. A browser that has passed Access on `app.accuqualqms.com` can still load a page that calls `/api`. Do not point an external monitor at `https://app.accuqualqms.com/api/health`: Access answers that URL with a login redirect before the rewrite runs.
 
 ## Monitoring & alerting
 
@@ -257,7 +315,7 @@ you skip it.
 
 | Layer | What it tells you | Set up |
 |---|---|---|
-| **External uptime check** | The whole service is unreachable (process crashed, host down) | Point UptimeRobot / Better Stack / Freshping at `https://app.accuqualqms.com/api/health`, 5-minute interval, alert on non-2xx |
+| **External uptime check** | The whole service is unreachable (process crashed, host down) | Point UptimeRobot / Better Stack / Freshping at `https://api.accuqualqms.com/health`, 5-minute interval, alert on non-2xx. `/health` does not require a Cloudflare Access token. `https://app.accuqualqms.com/api/health` redirects to the Access login and will false-alarm |
 | **Heartbeat (dead-man's switch)** | The API process stopped running | Create a Healthchecks.io check (period 2 min, grace 3 min), put its ping URL in `HEARTBEAT_URL` |
 | **Alert webhook** | Something inside is wrong right now | Put a Slack/Discord webhook in `ALERT_WEBHOOK_URL` (see below) |
 | **Error tracking (Sentry)** | A bug happened, with the stack trace and the request that hit it | Two Sentry projects; DSNs into `SENTRY_DSN` (API) and `VITE_SENTRY_DSN` (web) |

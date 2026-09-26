@@ -34,7 +34,7 @@ const envSchema = z.object({
   PASSWORD_BREACH_CHECK: z.enum(["true", "false"]).optional(),
   // How long a user whose company policy newly requires MFA may keep signing in before they must enroll.
   MFA_ENROLLMENT_GRACE_DAYS: z.coerce.number().int().min(0).default(7),
-  // Public base URL of this API as the browser sees it — where the identity provider sends users back after SSO sign-in (`<this>/auth/sso/callback`). Defaults to FRONTEND_URL + "/api", which is how the bundled nginx proxies it; set it when the API lives on its own origin (e.g. Render).
+  // Public base URL of this API as the browser sees it — where the identity provider sends users back after SSO sign-in (`<this>/auth/sso/callback`). Defaults to FRONTEND_URL + "/api", which is both the compose nginx proxy and the Render static-site rewrite. Leave it unset on that deploy. Set it only when the browser calls the API on its own origin.
   API_PUBLIC_URL: z.string().optional(),
 
   // In-app Word/Excel editing (docs/onlyoffice.md). All optional: leave them unset and the editor stays off.
@@ -123,6 +123,13 @@ const envSchema = z.object({
   // Comma-separated background workers that must keep reporting in ("workflow,ai,digital-twin"). Empty = don't monitor
   // them (right for local dev, and for a deployment that doesn't run the workers).
   MONITOR_EXPECTED_WORKERS: z.string().default(""),
+
+  // Optional Cloudflare Access gate (middleware/cloudflareAccess.ts). Both must
+  // be set or the gate stays off, so local, compose, and CI keep working.
+  // Team domain is the Zero Trust team host (your-team.cloudflareaccess.com).
+  // AUD is the Application Audience tag of the Access app on app.accuqualqms.com.
+  CF_ACCESS_TEAM_DOMAIN: z.string().min(1).optional().or(z.literal("").transform(() => undefined)),
+  CF_ACCESS_AUD: z.string().min(1).optional().or(z.literal("").transform(() => undefined)),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -1,4 +1,6 @@
-# Private single-company deploy: the API and the web app only.
+# Private single-company deploy on the free Hobby workspace. About $7.25/month:
+#   Hobby workspace $0, accuqual-web static site $0, accuqual-api starter $7,
+#   1 GB disk $0.25.
 # Redis and the three background workers are not provisioned from this file.
 # Their definitions are kept in render.workers.yaml so they can be added back later.
 services:
@@ -9,19 +11,23 @@ services:
     runtime: docker
     dockerfilePath: ./services/api/Dockerfile
     dockerContext: .
-    # A persistent disk is not available on the free instance type, and a
-    # service with a disk cannot scale past one instance.
+    # starter is $7/month. A persistent disk is not available on the free
+    # instance type, and a service with a disk cannot scale past one instance.
+    # The 1 GB disk is $0.25/month.
     plan: starter
     healthCheckPath: /health
     disk:
       name: uploads
       mountPath: /var/data
       sizeGB: 1
-    # renderSubdomainPolicy is omitted on purpose. Render's blueprint spec
-    # allows `disabled` only when the service lists at least one custom
-    # domain (https://render.com/docs/blueprint-spec). This service has no
-    # domain: nginx calls it via API_UPSTREAM_URL. See DEPLOY.md for how to
-    # turn the onrender.com hostname off once a custom domain exists.
+    # Hobby includes this custom domain (the other is app.accuqualqms.com on
+    # the static site). The rewrite in accuqual-web sends /api/* here.
+    domains:
+      - api.accuqualqms.com
+    # Valid because `domains` above is non-empty. Requests to this service's
+    # onrender.com hostname then receive a 404. Render's own health check is
+    # not that public hostname, so healthCheckPath keeps working.
+    renderSubdomainPolicy: disabled
     envVars:
       - key: NODE_ENV
         value: production
@@ -90,40 +96,71 @@ services:
         sync: false
       - key: SMTP_FROM
         sync: false
+      # Optional Cloudflare Access JWT check. Leave BOTH blank to disable it
+      # (local and docker-compose). When both are set, every route except
+      # /health and /health/live requires the Access JWT issued for the app
+      # at app.accuqualqms.com. Do not put Access on api.accuqualqms.com.
+      # Team domain example: your-team.cloudflareaccess.com
+      # AUD: the Application Audience tag on that Access application.
+      - key: CF_ACCESS_TEAM_DOMAIN
+        sync: false
+      - key: CF_ACCESS_AUD
+        sync: false
 
   - type: web
     name: accuqual-web
     # Deploy only after the GitHub checks (build, tests, security scan) pass - never straight from an unchecked commit.
     autoDeployTrigger: checksPass
-    runtime: docker
-    dockerfilePath: ./apps/web/Dockerfile
-    dockerContext: .
-    # starter stays on. free is a valid plan for this service (it has no
-    # disk) but a free web service sleeps after inactivity, so the first
-    # visit and a password-reset link wait on a cold start. Use starter
-    # for a private app people actually sign into.
-    plan: starter
+    # Hobby static sites are free. There is no instance plan to set.
+    # apps/web/Dockerfile and nginx.conf.template stay in the repo for
+    # docker-compose and local use; Render does not build them.
+    runtime: static
+    buildCommand: npm ci && npm run build --workspace apps/web
+    staticPublishPath: apps/web/dist
     domains:
       - app.accuqualqms.com
     # Valid here because `domains` above is non-empty. Requests to this
     # service's onrender.com hostname then receive a 404.
     renderSubdomainPolicy: disabled
     envVars:
-      # Baked into the static build (apps/web/Dockerfile ARG). The browser
-      # calls this same origin; nginx proxies /api/ to API_UPSTREAM_URL.
+      # Baked into the Vite build. The browser calls this same origin;
+      # the /api/* rewrite below forwards to the API.
       - key: VITE_API_BASE_URL
         value: /api
-      # Paste the API origin with no path and no trailing slash, for example
-      # https://accuqual-api.onrender.com — nginx does not know the compose
-      # hostname "api" on Render. Changing this does not require a rebuild.
-      - key: API_UPSTREAM_URL
-        sync: false
-      # Optional Cloudflare Access service token. Leave blank unless the API
-      # hostname is itself behind Access. Empty headers are not sent.
-      - key: CF_ACCESS_CLIENT_ID
-        sync: false
-      - key: CF_ACCESS_CLIENT_SECRET
-        sync: false
+      # Match CI (Node 20). Render's static build uses this.
+      - key: NODE_VERSION
+        value: "20"
       # Optional browser error tracking (Sentry DSN for the web project). Baked into the build, so changing it needs a redeploy.
       - key: VITE_SENTRY_DSN
         sync: false
+    # First matching route wins. Existing files are served before these rules,
+    # which is why the SPA fallback does not hide hashed assets.
+    # The API destination is a full URL, not an env var — keep it equal to
+    # the accuqual-api custom domain. /api/health becomes
+    # https://api.accuqualqms.com/health (the * is the captured suffix).
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://api.accuqualqms.com/*
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(), microphone=(), geolocation=()"
+      - path: /assets/*
+        name: Cache-Control
+        value: "public, max-age=31536000, immutable"
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache

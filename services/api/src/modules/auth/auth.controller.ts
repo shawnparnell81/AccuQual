@@ -19,8 +19,9 @@ import * as authService from "./auth.service.js";
 // "/api/auth/login", not "/auth/login". A Path=/auth cookie only ever
 // matches a browser-visible path starting with "/auth" — under that proxy
 // it silently never gets sent back on the very next refresh call. The
-// private Render deploy uses that same proxy (VITE_API_BASE_URL=/api), so
-// "/" is the path that works there too.
+// private Render deploy keeps the same browser path (VITE_API_BASE_URL=/api)
+// via the static-site rewrite, and docker-compose still uses the nginx
+// template, so "/" is the path that works in both places.
 export const REFRESH_COOKIE_NAME = "accuqual_rt";
 
 /** `remember` (the "Remember me" tick) makes it a persistent cookie; without it the cookie ends when the browser closes. */
@@ -29,9 +30,10 @@ export function setRefreshCookie(res: Response, refreshToken: string, remember =
     httpOnly: true,
     secure: env.NODE_ENV === "production",
     // SameSite=None (only valid with Secure, which production already sets)
-    // still sends the cookie on the same-origin /api proxy used by compose
-    // and by the private Render deploy. It also keeps a credentialed call
-    // working if the browser ever talks to the API on its own origin.
+    // still sends the cookie on the same-origin /api path used by compose
+    // (nginx) and by the private Render deploy (static-site rewrite). It
+    // also keeps a credentialed call working if the browser ever talks to
+    // the API on its own origin.
     // Dev runs both over plain http on localhost, where SameSite=Lax still
     // works and doesn't require https.
     sameSite: env.NODE_ENV === "production" ? "none" : "lax",

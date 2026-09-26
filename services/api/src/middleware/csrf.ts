@@ -5,9 +5,8 @@ import { SSO_COOKIE } from "../modules/sso/oidc.js";
 
 /**
  * Security-audit finding (medium): POST /auth/refresh is authenticated
- * purely by an ambient httpOnly cookie (SameSite=None in production,
- * required by the real cross-origin Render topology — see
- * auth.controller.ts's own comment) — a cross-site page can trigger a
+ * purely by an ambient httpOnly cookie (SameSite=None in production —
+ * see auth.controller.ts's own comment) — a cross-site page can trigger a
  * "simple" cross-origin POST (no custom headers, so no CORS preflight)
  * and the browser attaches the cookie regardless of which site asked for
  * it. This doesn't need a full CSRF-token architecture: this app's CORS
