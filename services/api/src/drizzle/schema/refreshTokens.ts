@@ -23,10 +23,10 @@ export const refreshTokens = pgTable("refresh_tokens", {
   userId: integer("user_id").references(() => users.id).notNull(),
   jti: text("jti").notNull().unique(),
   expiresAt: timestamp("expires_at").notNull(),
-  // Set the moment this token is redeemed via /auth/refresh — a second
-  // redemption of the same jti after this is set is reuse, not a race
-  // (the row is marked used synchronously, in the same statement that
-  // reads it, before the new token is even issued).
+  // Set by the conditional update that claims this token for rotation.
+  // A second presentation inside a short window is an overlapping renewal
+  // (see REFRESH_REUSE_GRACE_MS in auth.service.ts). After that window, or
+  // once the replacement token has itself been used, it is reuse.
   usedAt: timestamp("used_at"),
   // Set on logout/password-reset (whole-account revocation) or the moment
   // reuse is detected on this token's own family.

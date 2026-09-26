@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient, refreshAccessToken } from "../api/client";
+import { apiClient, refreshSession } from "../api/client";
 import { useAuthStore, type AuthUser, type CompanyContext } from "../store/authStore";
 import { useWindowStore } from "../window-manager/useWindowStore";
 import { clearCurrentPlant } from "./useSites";
@@ -99,21 +99,28 @@ export function useAuthBootstrap() {
   useEffect(() => {
     if (bootstrapped) return;
     let cancelled = false;
-    void refreshAccessToken().then((token) => {
-      if (cancelled) return;
-      // Deliberately unconditional, not just "when there's no token": a
-      // browser that logged in before this fix shipped can still have an
-      // old, now-stale accessToken sitting in this store from a previous
-      // (pre-httpOnly-cookie) localStorage write, and that leftover value
-      // must never substitute for a real check against the actual cookie —
-      // it would leave `bootstrapped` false forever (ProtectedRoute renders
-      // nothing while waiting on a check that never runs) since nothing
-      // else in the app would ever call setBootstrapped for it.
-      if (!token) logout(); // no valid cookie — drop any stale persisted user/company too
-      setBootstrapped();
-    });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const attempt = () => {
+      void refreshSession().then((result) => {
+        if (cancelled) return;
+        // A real rejection (no cookie, revoked session) drops any stale
+        // persisted user. A 429 or a network blip must not: wait and try
+        // again, and leave `bootstrapped` false so ProtectedRoute does not
+        // bounce a live session to /login while we do.
+        if (!result.ok) {
+          if (!result.logout) {
+            timer = setTimeout(attempt, result.retryAfterMs);
+            return;
+          }
+          logout();
+        }
+        setBootstrapped();
+      });
+    };
+    attempt();
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
     // Intentionally once per mount — bootstrapped is read only to decide
     // whether to even start, not to re-trigger this on every change it

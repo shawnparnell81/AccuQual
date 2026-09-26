@@ -15,6 +15,7 @@ import { db, pool } from "../../src/db/index.js";
 import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { refreshTokens } from "../../src/drizzle/schema/refreshTokens.js";
+import { REFRESH_REUSE_GRACE_MS } from "../../src/modules/auth/auth.service.js";
 
 const app = createApp();
 const suffix = Date.now();
@@ -62,6 +63,9 @@ describe("Auth refresh token cookie (real DB + real HTTP path)", () => {
     // request is "/api/auth/login", which a Path=/auth cookie would never
     // match on the next call.
     expect(rtCookie!.toLowerCase()).toContain("path=/;");
+    // Host-only: the browser calls app.accuqualqms.com and the /api rewrite
+    // reaches the API. A Domain attribute for the API host would hide the cookie.
+    expect(rtCookie!.toLowerCase()).not.toContain("domain=");
   });
 
   it("\"Remember me\" makes the cookie persistent and survives a refresh; without it the cookie ends with the browser session", async () => {
@@ -135,28 +139,61 @@ describe("Auth refresh token cookie (real DB + real HTTP path)", () => {
     return raw.split(";")[0]!; // "accuqual_rt=<value>", stripping the cookie's own attributes
   }
 
-  it("a refresh token can only be redeemed once — replaying the SAME cookie after it rotated is rejected", async () => {
-    const agent = request.agent(app);
-    const loginRes = await agent.post("/auth/login").send({ email, password: PASSWORD });
+  function jtiFromCookie(cookie: string): string {
+    const raw = decodeURIComponent(cookie.slice("accuqual_rt=".length));
+    const payload = raw.split(".")[1]!;
+    return (JSON.parse(Buffer.from(payload, "base64url").toString()) as { jti: string }).jti;
+  }
+
+  it("overlapping renewals of the same cookie all succeed and leave the session usable", async () => {
+    const loginRes = await request(app).post("/auth/login").send({ email, password: PASSWORD });
     const firstRt = rtCookieFrom(loginRes);
 
-    const firstRefresh = await agent.post("/auth/refresh").set(CSRF).send({});
-    expect(firstRefresh.status).toBe(200); // rotates the agent's own cookie forward
+    const burst = await Promise.all([
+      request(app).post("/auth/refresh").set(CSRF).set("Cookie", firstRt),
+      request(app).post("/auth/refresh").set(CSRF).set("Cookie", firstRt),
+      request(app).post("/auth/refresh").set(CSRF).set("Cookie", firstRt),
+    ]);
+    for (const res of burst) expect(res.status).toBe(200);
 
-    // Replay the ORIGINAL (now-superseded) refresh token by hand.
-    const replay = await request(app).post("/auth/refresh").set(CSRF).set("Cookie", firstRt);
-    expect(replay.status).toBe(401);
+    // One of the cookies issued by that burst must still renew — the overlap
+    // must not have revoked the whole session.
+    const again = await request(app).post("/auth/refresh").set(CSRF).set("Cookie", rtCookieFrom(burst[0]!));
+    expect(again.status).toBe(200);
   });
 
-  it("reuse of an already-rotated token revokes the whole session, not just that one token", async () => {
+  it("replaying the previous token after the grace window revokes the whole session", async () => {
     const agent = request.agent(app);
     const loginRes = await agent.post("/auth/login").send({ email, password: PASSWORD });
     const firstRt = rtCookieFrom(loginRes);
 
-    await agent.post("/auth/refresh").set(CSRF).send({}); // rotates once — firstRt is now stale
-    await request(app).post("/auth/refresh").set(CSRF).set("Cookie", firstRt); // reuse — triggers revocation
+    const rotated = await agent.post("/auth/refresh").set(CSRF).send({});
+    expect(rotated.status).toBe(200);
+
+    await db
+      .update(refreshTokens)
+      .set({ usedAt: new Date(Date.now() - REFRESH_REUSE_GRACE_MS - 5_000) })
+      .where(eq(refreshTokens.jti, jtiFromCookie(firstRt)));
+
+    const replay = await request(app).post("/auth/refresh").set(CSRF).set("Cookie", firstRt);
+    expect(replay.status).toBe(401);
 
     // The agent's own freshly-rotated (legitimate) cookie must now be dead too.
+    const res = await agent.post("/auth/refresh").set(CSRF).send({});
+    expect(res.status).toBe(401);
+  });
+
+  it("replaying a token the session has already moved past revokes the session even inside the grace window", async () => {
+    const agent = request.agent(app);
+    const loginRes = await agent.post("/auth/login").send({ email, password: PASSWORD });
+    const firstRt = rtCookieFrom(loginRes);
+
+    expect((await agent.post("/auth/refresh").set(CSRF).send({})).status).toBe(200);
+    expect((await agent.post("/auth/refresh").set(CSRF).send({})).status).toBe(200);
+
+    const replay = await request(app).post("/auth/refresh").set(CSRF).set("Cookie", firstRt);
+    expect(replay.status).toBe(401);
+
     const res = await agent.post("/auth/refresh").set(CSRF).send({});
     expect(res.status).toBe(401);
   });

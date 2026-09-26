@@ -1,6 +1,13 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { useAuthStore, type AuthUser, type CompanyContext } from "../store/authStore";
 import { useSiteStore } from "../store/siteStore";
+import {
+  classifyRefreshFailure,
+  createSessionRefresher,
+  nextProactiveDelayMs,
+  settleAfterRefresh,
+  type RefreshResult,
+} from "./sessionRefresh";
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "/api",
@@ -25,39 +32,51 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
-let refreshInFlight: Promise<string | null> | null = null;
+let lastRefreshAt = 0;
+let proactiveTimer: ReturnType<typeof setTimeout> | undefined;
 
-apiClient.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    const original = error.config as (InternalAxiosRequestConfig & { _retried?: boolean }) | undefined;
+const refresher = createSessionRefresher({
+  attempt: (attempt) => performRefreshAttempt(attempt),
+});
 
-    if (error.response?.status === 401 && original && !original._retried) {
-      original._retried = true;
+function endSession() {
+  useAuthStore.getState().logout();
+  useSiteStore.getState().setCurrentSiteId(null);
+}
 
-      if (!refreshInFlight) {
-        refreshInFlight = refreshAccessToken();
-      }
-      const newToken = await refreshInFlight;
-      refreshInFlight = null;
+function scheduleProactiveRefresh(token: string | null, delayOverride?: number) {
+  if (proactiveTimer) clearTimeout(proactiveTimer);
+  proactiveTimer = undefined;
+  const delay = delayOverride ?? (token ? nextProactiveDelayMs(token, Date.now(), lastRefreshAt) : null);
+  if (delay == null) return;
+  proactiveTimer = setTimeout(() => {
+    void refreshSession().then((result) => {
+      if (result.ok) return;
+      if (result.logout) endSession();
+      else scheduleProactiveRefresh(useAuthStore.getState().accessToken, result.retryAfterMs);
+    });
+  }, delay);
+}
 
-      if (newToken) {
-        original.headers.set("Authorization", `Bearer ${newToken}`);
-        return apiClient.request(original);
-      }
-
-      useAuthStore.getState().logout();
-      useSiteStore.getState().setCurrentSiteId(null);
-    }
-
-    return Promise.reject(error);
+async function performRefreshAttempt(attempt: number) {
+  try {
+    const { data } = await axios.post<RefreshResponse>(
+      `${apiClient.defaults.baseURL}/auth/refresh`,
+      {},
+      // X-AccuQual-Csrf (security-audit finding): this endpoint is
+      // authenticated purely by an ambient cookie, so the backend requires
+      // this header to force a CORS preflight — see middleware/csrf.ts.
+      // The value carries no secret; only its presence matters.
+      // Raw axios, not apiClient: a 401 from this call must not re-enter the interceptor.
+      { withCredentials: true, headers: { "X-AccuQual-Csrf": "1" } },
+    );
+    useAuthStore.getState().setSession(data.user, data.accessToken, data.company);
+    return { kind: "ok" as const, accessToken: data.accessToken };
+  } catch (err) {
+    if (!axios.isAxiosError(err)) return classifyRefreshFailure(undefined, null, attempt);
+    const header = err.response?.headers?.["retry-after"];
+    return classifyRefreshFailure(err.response?.status, typeof header === "string" ? header : null, attempt);
   }
-);
-
-interface RefreshResponse {
-  user: AuthUser;
-  company?: CompanyContext | null;
-  accessToken: string;
 }
 
 /**
@@ -71,21 +90,68 @@ interface RefreshResponse {
  * useWindowStore's openWindow) with no way to recover short of a real
  * re-login. auth.service.ts's `refresh()` was fixed to return `company` in
  * the same pass so this has something real to apply.
+ *
+ * Shares one in-flight renewal with the 401 interceptor and the timer that
+ * renews shortly before the access token expires. A 429 does not end the
+ * session; the caller should wait `retryAfterMs` and try again.
  */
+export function refreshSession(): Promise<RefreshResult> {
+  lastRefreshAt = Date.now();
+  return refresher.refresh();
+}
+
 export async function refreshAccessToken(): Promise<string | null> {
-  try {
-    const { data } = await axios.post<RefreshResponse>(
-      `${apiClient.defaults.baseURL}/auth/refresh`,
-      {},
-      // X-AccuQual-Csrf (security-audit finding): this endpoint is
-      // authenticated purely by an ambient cookie, so the backend requires
-      // this header to force a CORS preflight — see middleware/csrf.ts.
-      // The value carries no secret; only its presence matters.
-      { withCredentials: true, headers: { "X-AccuQual-Csrf": "1" } }
-    );
-    useAuthStore.getState().setSession(data.user, data.accessToken, data.company);
-    return data.accessToken;
-  } catch {
-    return null;
-  }
+  const result = await refreshSession();
+  return result.ok ? result.accessToken : null;
+}
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const original = error.config as (InternalAxiosRequestConfig & { _retried?: boolean }) | undefined;
+
+    if (error.response?.status === 401 && original && !original._retried && !isRefreshRequest(original)) {
+      original._retried = true;
+      const settled = await settleAfterRefresh(
+        () => refreshSession(),
+        (token) => {
+          original.headers.set("Authorization", `Bearer ${token}`);
+          return apiClient.request(original);
+        },
+        endSession,
+      );
+      if (settled.ok) return settled.value;
+    }
+
+    return Promise.reject(error);
+  },
+);
+
+function isRefreshRequest(config: InternalAxiosRequestConfig): boolean {
+  const url = config.url ?? "";
+  return url.includes("/auth/refresh");
+}
+
+useAuthStore.subscribe((state, previous) => {
+  if (state.accessToken !== previous.accessToken) scheduleProactiveRefresh(state.accessToken);
+});
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    const token = useAuthStore.getState().accessToken;
+    if (!token) return;
+    if (nextProactiveDelayMs(token, Date.now(), lastRefreshAt) !== 0) return;
+    void refreshSession().then((result) => {
+      if (result.ok) return;
+      if (result.logout) endSession();
+      else scheduleProactiveRefresh(token, result.retryAfterMs);
+    });
+  });
+}
+
+interface RefreshResponse {
+  user: AuthUser;
+  company?: CompanyContext | null;
+  accessToken: string;
 }

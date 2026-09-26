@@ -38,6 +38,11 @@ export function setRefreshCookie(res: Response, refreshToken: string, remember =
     // works and doesn't require https.
     sameSite: env.NODE_ENV === "production" ? "none" : "lax",
     path: "/",
+    // No Domain attribute, on purpose. The browser talks to
+    // app.accuqualqms.com and the /api rewrite forwards to
+    // api.accuqualqms.com. A host-only cookie is stored for the host the
+    // browser actually called and is sent back on /api/*. Pinning Domain to
+    // the API host would hide it from that call.
     ...(remember ? { maxAge: REMEMBER_ME_TTL_MS } : {}),
   });
 }

@@ -22,6 +22,12 @@ const allowedOrigins = env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filte
 export function createApp() {
   const app = express();
 
+  // Render's proxy (and the static-site /api rewrite in front of it) puts the
+  // caller in X-Forwarded-For. Trust exactly one hop so address-based limits
+  // see the person, not the proxy. A boolean `true` would trust every hop and
+  // let anyone spoof their address, which express-rate-limit refuses.
+  app.set("trust proxy", 1);
+
   // First: everything after this — including CORS rejections and the request log — runs with a request id.
   app.use(requestIdMiddleware);
   app.use(helmet());
