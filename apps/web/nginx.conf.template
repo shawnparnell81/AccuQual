@@ -1,8 +1,19 @@
+# SNI is the hostname only. $proxy_host keeps a non-default port (api:3000),
+# and a colon is not a legal TLS server name.
+map $proxy_host $proxy_ssl_host {
+  ~^([^:]+) $1;
+  default $proxy_host;
+}
+
 server {
   listen 80;
   server_name _;
   root /usr/share/nginx/html;
   index index.html;
+
+  # Matches the largest multer limit in the API (25 MB). The stock nginx
+  # default is 1 MB, which would reject those uploads at the proxy.
+  client_max_body_size 25m;
 
   # nginx's stock /etc/nginx/mime.types (from the base nginx:1.27-alpine
   # image) maps "application/javascript" to "js" only — it has no ".mjs"
@@ -46,9 +57,33 @@ server {
     try_files $uri $uri/ /index.html;
   }
 
+  # API_UPSTREAM_URL is an origin with no path: http://api:3000 (compose)
+  # or https://<api-host> (Render). A variable proxy_pass plus resolver
+  # defers DNS until a request arrives, so nginx still boots when that
+  # name is not resolvable yet. A literal proxy_pass http://api:3000/
+  # looks that name up while loading the config and exits if it fails,
+  # which is what happened on Render (there is no host named "api").
   location /api/ {
-    proxy_pass http://api:3000/;
-    proxy_set_header Host $host;
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=off;
+    set $api_upstream ${API_UPSTREAM_URL};
+    # Browser calls /api/...; this service serves /... .
+    rewrite ^/api/(.*)$ /$1 break;
+    proxy_pass $api_upstream$uri$is_args$args;
+
+    # HTTPS upstreams need SNI and a Host header of their own hostname.
+    # $proxy_host is that host as written in the upstream URL (api:3000
+    # for compose, the hostname with no port for https://host).
+    proxy_ssl_server_name on;
+    proxy_ssl_name $proxy_ssl_host;
+    proxy_set_header Host $proxy_host;
     proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # Cloudflare Access service token. An empty value is not sent
+    # (nginx drops a proxy header whose value is the empty string), so
+    # compose and a Render service without Access keep working.
+    proxy_set_header CF-Access-Client-Id "${CF_ACCESS_CLIENT_ID}";
+    proxy_set_header CF-Access-Client-Secret "${CF_ACCESS_CLIENT_SECRET}";
   }
 }

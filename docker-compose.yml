@@ -53,8 +53,14 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
+        # Same-origin: the browser calls /api on this nginx, which proxies to the api service.
+        VITE_API_BASE_URL: /api
         # Optional browser error tracking DSN from .env; empty = Sentry code is never loaded.
         VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+    environment:
+      # Compose DNS name of the api service. The image default is the same
+      # value; set it here so the proxy target is visible next to the service.
+      API_UPSTREAM_URL: http://api:3000
     depends_on:
       - api
     ports:

@@ -6,7 +6,11 @@ import { logger } from "../utils/logger.js";
 /**
  * Sets up this installation's one company and its first administrator.
  *
- *   npm run db:create-company -- --name "Acme Manufacturing" --email admin@acme.com [--admin-name "Pat Jones"]
+ *   npm run db:create-company --workspace services/api -- --name "Acme Manufacturing" --email admin@acme.com [--admin-name "Pat Jones"]
+ *
+ * On the production image (Render Shell, from /app — npm is not installed there):
+ *
+ *   node dist/db/createCompany.js --name "Acme Manufacturing" --email admin@acme.com
  *
  * A temporary password is generated, printed once, and emailed to the administrator if email is configured.
  */
@@ -19,7 +23,7 @@ async function main() {
   const name = arg("--name");
   const adminEmail = arg("--email");
   if (!name || !adminEmail) {
-    logger.error('Usage: npm run db:create-company -- --name "Company name" --email admin@company.com [--admin-name "Full name"]');
+    logger.error('Usage: node dist/db/createCompany.js --name "Company name" --email admin@company.com [--admin-name "Full name"]');
     process.exit(1);
   }
   const result = await provisionCompany({ name, adminEmail, adminName: arg("--admin-name") });

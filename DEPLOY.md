@@ -2,13 +2,12 @@
 
 Everything in this file has been proven against the real infrastructure it
 describes — a real Supabase project, and the real Docker images this repo
-already builds — not written from theory. Two pieces are a well-reasoned
-best effort that hasn't been run against a real Render account yet, called
-out explicitly where they appear below: Render's automatic cross-service
-URL wiring, and the `accuqual-redis`/worker service blocks (the `type:
-redis` service shape and its `connectionString` property name specifically
-— the workers' own Docker images are real and already build successfully
-in CI, only the render.yaml wiring around them is unverified).
+already builds — not written from theory. The private Render blueprint
+(`render.yaml`) is two services, API and web, with the URLs pasted in the
+dashboard rather than wired with `fromService`. Redis and the three
+workers are not in that blueprint; their definitions are kept in
+`render.workers.yaml` and have not been applied to a live Render account
+(the worker images themselves do build in CI).
 
 ## The one gotcha that will bite you if you skip this section
 
@@ -96,7 +95,10 @@ pressing Enter. `npm test` has always used a separate throwaway `accuqual_test` 
 See "the one gotcha" above. Keep it somewhere safe — you'll paste it into
 Render's dashboard, not into any file in this repo.
 
-### 2. Run migrations against production, from your own machine (once)
+### 2. Run migrations against production
+
+The production path is the **Migrate production database** GitHub Action,
+described below. The same command run by hand, from a checkout, is:
 
 ```
 cd services/api
@@ -111,85 +113,141 @@ command any time you add a new migration — it's fully idempotent.
 
 If you want demo/reference data (roles, a demo company, test users) on
 a fresh database, also run `DATABASE_URL="..." npm run db:seed` once.
-For the real installation, skip it and create the company and its first
-administrator instead:
-`DATABASE_URL="..." npm run db:create-company --workspace services/api -- --name "Company" --email admin@company.com`.
+For the real installation, skip the seed. Create the company and its first
+administrator from the **accuqual-api Render Shell** after the service is
+up — not from GitHub Actions, and not by committing a password. The exact
+command is in [Private Render + Cloudflare Access](#private-render-cloudflare-access).
 
-### 3. Deploy via the render.yaml blueprint (or manually — see below)
+### 3. Deploy
 
-In Render: New → Blueprint → connect this GitHub repo → it should pick up
-`render.yaml` at the repo root automatically. It defines six services:
-
-- **accuqual-api** — the Node/Express API (`services/api/Dockerfile`)
-- **accuqual-web** — the React frontend, served by nginx (`apps/web/Dockerfile`)
-- **accuqual-redis** — a managed Redis instance (the Workflow Engine's real
-  event bus). **This one is paid/metered**, unlike the two services above —
-  Render shows you the real plan/pricing before provisioning it.
-- **accuqual-workflow-worker** / **accuqual-ai-worker** / **accuqual-digital-twin-worker**
-  — the three background processes that consume that Redis stream (see
-  `/workers`). Each needs the exact same `DATABASE_URL` and
-  `AI_CONFIG_ENCRYPTION_KEY` values as `accuqual-api` — Render has
-  no way to share one service's `sync: false` value with another, so
-  you'll paste each of those two values in four times total, identically.
-  Already deployed to only the original two services? Render Dashboard →
-  your Blueprint → **Manual Sync** picks up these 4 new services without
-  needing to recreate anything.
-
-You'll be prompted for the env vars marked `sync: false`. On `accuqual-api`:
-- `DATABASE_URL` → your Session Pooler string from step 1
-- `AI_CONFIG_ENCRYPTION_KEY` → generate with `openssl rand -hex 32`;
-  this must be a real value, or the app refuses to start (see the boot
-  guard note above)
-- `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`SMTP_FROM` and
-  `ALERT_WEBHOOK_URL` are optional — see their own sections below.
-
-On each of the three workers: the same `DATABASE_URL` and
-`AI_CONFIG_ENCRYPTION_KEY` values as `accuqual-api` (not fresh
-ones — the encryption key in particular MUST match, since
-`accuqual-workflow-worker` decrypts company BYOK keys that were encrypted
-under `accuqual-api`'s key). `accuqual-workflow-worker` also optionally
-takes the same `SMTP_*`/`ANTHROPIC_API_KEY`/`OPENAI_API_KEY` values as
-`accuqual-api`, and `accuqual-ai-worker` optionally takes `OPENAI_API_KEY`
-(its embedding generation always calls OpenAI specifically, regardless of
-a company's own provider choice).
-
-`JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET` are set to `generateValue: true`
-on every service — Render generates real random secrets for you, nothing
-to do here. The workers never actually verify a token with these; they're
-only required because every process here imports the same env-validation
-module `accuqual-api` does.
-
-**The one part of render.yaml that's a best effort, not yet verified
-against a real Render account:** `ALLOWED_ORIGINS`, `FRONTEND_URL`, and
-`VITE_API_BASE_URL` are wired via Render's `fromService` cross-references,
-which *should* resolve to each service's real public URL automatically
-once both exist. If `accuqual-web` can't reach the API after deploying
-(check the browser console for a CORS error or failed requests), the
-fallback is manual:
-1. Find `accuqual-api`'s real URL in the Render dashboard (something like
-   `https://accuqual-api.onrender.com`).
-2. Set `accuqual-web`'s `VITE_API_BASE_URL` env var to that exact URL,
-   and trigger a manual redeploy of `accuqual-web` (Vite bakes this in at
-   build time, so a redeploy — not just a restart — is required).
-3. Set `accuqual-api`'s `ALLOWED_ORIGINS` to `accuqual-web`'s real URL the
-   same way, and redeploy `accuqual-api`.
+In Render: New → Blueprint → connect this GitHub repo. It picks up
+`render.yaml` at the repo root. That file defines two services, not the
+workers. Plans, env vars, the disk, the domain, Cloudflare Access,
+migrations, and the first administrator are in
+[Private Render + Cloudflare Access](#private-render-cloudflare-access) below.
 
 ### 4. Verify
 
-- `curl https://<your-api-url>/health` → `{"status":"ok","database":{"status":"ok",...},"redis":{"status":"ok"|"critical",...},...}`
-  — a real readiness check now, not a bare liveness ping (see "Monitoring &
+Run the smoke test in [Private Render + Cloudflare Access](#private-render-cloudflare-access) below (upload, reset email, `/api/health`).
+What `/health` returns:
+
+- `curl https://app.accuqualqms.com/api/health` → `{"status":"ok","database":{"status":"ok",...},"redis":{"status":"critical",...},...}`
+  — a real readiness check, not a bare liveness ping (see "Monitoring &
   alerting" below). `status` is 503 only when the database itself is
-  unreachable; `redis` is reported for visibility but never causes a 503
-  even now that a real managed Redis is part of this blueprint — see that
-  section for why this stayed informational-only rather than being
-  promoted to a hard dependency.
-- Check each worker's own Render log stream shows its real "listening on
-  accuqual:..." startup line (see each `workers/*/src/index.ts`) instead of
-  a crash-and-restart loop — the most common cause of the latter is a
-  missing/mismatched `AI_CONFIG_ENCRYPTION_KEY` on that worker.
-- Open the deployed frontend URL, log in with a real seeded user, confirm
-  a page that hits the API (e.g., the NCR list) loads without a CORS or
-  network error in the browser console.
+  unreachable. `redis` is `critical` on this blueprint because Redis is
+  not deployed; that does not cause a 503. See that section for why.
+- Open https://app.accuqualqms.com (through Cloudflare Access), sign in
+  with the administrator created from the Render Shell, and confirm a
+  page that hits the API (for example the NCR list) loads without a CORS
+  or network error in the browser console.
+
+<a id="private-render-cloudflare-access"></a>
+
+## Private Render + Cloudflare Access
+
+Two Render web services, both Docker, both `autoDeployTrigger: checksPass`.
+No Redis, no workers, no Stripe variables (billing was removed). This
+installation is one company; do not add tenant plumbing.
+
+### Services, plans, disk
+
+| Service | Image | Plan | Notes |
+|---|---|---|---|
+| `accuqual-api` | `services/api/Dockerfile` | **starter** | `healthCheckPath: /health`. Persistent disk `uploads`, 1 GB, mounted at `/var/data`. A disk needs a paid instance and pins the service to one instance. |
+| `accuqual-web` | `apps/web/Dockerfile` | **starter** | `free` is valid (no disk) but sleeps after inactivity, so the first visit and a password-reset link wait on a cold start. Starter stays on. |
+
+**accuqual-api environment**
+
+| Variable | Set to |
+|---|---|
+| `NODE_ENV` | `production` |
+| `DATABASE_URL` | Supabase **Session Pooler** string (dashboard only) |
+| `JWT_ACCESS_SECRET` | Render `generateValue: true` |
+| `JWT_REFRESH_SECRET` | Render `generateValue: true` |
+| `AI_CONFIG_ENCRYPTION_KEY` | `openssl rand -hex 32`. Paste once. **Never rotate** — stored company AI keys were encrypted with it |
+| `ALLOWED_ORIGINS` | `https://app.accuqualqms.com` |
+| `FRONTEND_URL` | `https://app.accuqualqms.com` |
+| `STORAGE_LOCAL_PATH` | `/var/data/uploads` |
+| `MONITOR_EXPECTED_WORKERS` | empty |
+| `ALERT_WEBHOOK_URL` | optional |
+| `SENTRY_DSN` | optional |
+| `HEARTBEAT_URL` | optional |
+| `ZEPTOMAIL_SEND_TOKEN` | optional; needed for the reset-email smoke test |
+| `CONTACT_INBOX_EMAIL` | optional |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | optional fallback when ZeptoMail is unset |
+
+Leave `API_PUBLIC_URL` unset. SSO callbacks then use `FRONTEND_URL` + `/api`, which is this proxy.
+
+**accuqual-web environment**
+
+| Variable | Set to |
+|---|---|
+| `VITE_API_BASE_URL` | `/api` (same origin, baked in at build; a change needs a redeploy) |
+| `API_UPSTREAM_URL` | API origin, no path and no trailing slash, for example `https://accuqual-api.onrender.com`. Runtime only |
+| `CF_ACCESS_CLIENT_ID` | optional; blank unless the API hostname is behind Access |
+| `CF_ACCESS_CLIENT_SECRET` | optional; same. Blank sends no header |
+| `VITE_SENTRY_DSN` | optional; build-time, so a change needs a redeploy |
+| `NGINX_RESOLVER` | optional. Unset uses the container's own nameserver (`127.0.0.11` under Compose, Render's DNS on Render) |
+
+`docker compose` keeps working: the web image defaults `API_UPSTREAM_URL` to `http://api:3000`, and compose sets that same value.
+
+Workers, when you want them later, are in `render.workers.yaml`. That file is not a blueprint Render will sync.
+
+### Custom domain (Cloudflare)
+
+1. In Cloudflare DNS for `accuqualqms.com`, add a CNAME: `app` → the web service hostname Render shows (the `onrender.com` name, even though browsers will stop using it).
+2. Leave the record **DNS only** (grey cloud) until Render's custom-domain check succeeds. An orange-cloud proxy hides Render from itself and the check fails.
+3. After Render says the domain is verified, turn the record **Proxied** (orange cloud).
+4. SSL/TLS → **Full (strict)**. Render presents a real certificate; Full (strict) checks it. Flexible will loop or strip HTTPS.
+
+The blueprint sets `domains: [app.accuqualqms.com]` on `accuqual-web`.
+
+### Cloudflare Access
+
+Zero Trust → Access → Applications → Add an application → **Self-hosted**.
+
+- Application domain: `app.accuqualqms.com`.
+- Policy: Action **Allow**, Include **Emails**, one address (the person who administers this company).
+- Everyone else gets the Access login wall, before nginx or the API sees the request.
+
+If you also put the API hostname behind Access, create a **service token** and paste its Client ID and Client Secret into `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` on `accuqual-web`. nginx sends them as `CF-Access-Client-Id` and `CF-Access-Client-Secret`, and only when they are non-empty.
+
+### onrender.com subdomains
+
+`renderSubdomainPolicy: disabled` is a real blueprint field ([Render blueprint spec](https://render.com/docs/blueprint-spec)). Render rejects `disabled` unless that service has at least one custom domain.
+
+- **Web**: set in `render.yaml`, because `app.accuqualqms.com` is listed. Requests to the web service's `onrender.com` hostname return 404. Confirm in the dashboard after the first sync (Settings → custom domain / subdomain).
+- **API**: not set. This blueprint gives the API no custom domain, so `disabled` would be invalid, and nginx still needs a hostname in `API_UPSTREAM_URL`. To turn the API's `onrender.com` hostname off later: add a custom domain, point `API_UPSTREAM_URL` at that `https://` origin (no path), put the hostname behind Access with the service token above, then set `renderSubdomainPolicy: disabled` on `accuqual-api`. Do that only after the upstream URL no longer uses `onrender.com`.
+
+### Migrations
+
+Render does not run migrations. The API image does not contain the `.sql` files.
+
+1. **Back up first.** Take a `pg_dump` of the production database (both `public` and `drizzle`) and store it outside GitHub. The repository is public, so a dump must never be a workflow artifact. Procedure: [docs/operations/backup-and-restore.md](docs/operations/backup-and-restore.md).
+2. **Confirm the database has exactly one tenant** before migrations `0073` and `0074`. `0074` aborts when `tenants` has more than one row, so two companies are not merged into one. `0073` still updates `erp_connector_presets.tenant_id`, which `0074` then drops.
+
+   ```sql
+   SELECT count(*) AS tenants FROM tenants;
+   ```
+
+   The result must be `1`. A brand-new empty database returns `0`; `0074` still applies in that case (it only refuses a count above 1) — do not seed demo data and do not insert a row by hand. If the query says `tenants` does not exist, `0074` has already run and the table is `company`.
+3. GitHub → Actions → **Migrate production database** → Run workflow → type `MIGRATE`. The workflow uses the `production` environment and its `PRODUCTION_DATABASE_URL` secret (the Session Pooler string). One-time setup: Settings → Environments → `production`, with required reviewers if you want a second click, and that secret on the environment.
+
+### First administrator
+
+On **accuqual-api** (the web image is nginx and has no Node), open Render Shell. The image's `WORKDIR` is `/app`, and `dist/db/createCompany.js` is in the image:
+
+```
+node dist/db/createCompany.js --name "Company Name" --email admin@company.com
+```
+
+Optional: `--admin-name "Full Name"`. A temporary password is printed once to that shell and, when ZeptoMail or SMTP is set, emailed. Do **not** run this from GitHub Actions. The repository is public, so the password would be in a public log.
+
+### Smoke test
+
+1. **Upload survives a redeploy.** Sign in, upload a file on a record (a small PDF is enough), redeploy `accuqual-api`, and open the file again. It lives on the disk at `/var/data/uploads`. Anything written outside `/var/data` is gone after the deploy.
+2. **Reset email arrives.** Use Forgot password for the administrator. The message arrives only after `ZEPTOMAIL_SEND_TOKEN` (or all of `SMTP_*`) is set; otherwise the send is logged and not delivered.
+3. **`/api/health` is ok.** `curl -fsS https://app.accuqualqms.com/api/health` returns HTTP 200 with `"status":"ok"` and `"database":{"status":"ok",...}`. `"redis":{"status":"critical"}` is expected until Redis is deployed, and it does not fail the check.
 
 ## Monitoring & alerting
 
@@ -199,7 +257,7 @@ you skip it.
 
 | Layer | What it tells you | Set up |
 |---|---|---|
-| **External uptime check** | The whole service is unreachable (process crashed, host down) | Point UptimeRobot / Better Stack / Freshping at `https://<api-url>/health`, 5-minute interval, alert on non-2xx |
+| **External uptime check** | The whole service is unreachable (process crashed, host down) | Point UptimeRobot / Better Stack / Freshping at `https://app.accuqualqms.com/api/health`, 5-minute interval, alert on non-2xx |
 | **Heartbeat (dead-man's switch)** | The API process stopped running | Create a Healthchecks.io check (period 2 min, grace 3 min), put its ping URL in `HEARTBEAT_URL` |
 | **Alert webhook** | Something inside is wrong right now | Put a Slack/Discord webhook in `ALERT_WEBHOOK_URL` (see below) |
 | **Error tracking (Sentry)** | A bug happened, with the stack trace and the request that hit it | Two Sentry projects; DSNs into `SENTRY_DSN` (API) and `VITE_SENTRY_DSN` (web) |
@@ -229,8 +287,10 @@ The API checks these once a minute and messages the webhook only when something
 
 Admin Console → **System Health** shows the same six with what is firing right
 now, which connections above are switched on, and the recent error rate.
-`MONITOR_EXPECTED_WORKERS` (default empty; set in `render.yaml` and
-`docker-compose.yml`) lists the workers to watch — remove a name if you don't run that worker.
+`MONITOR_EXPECTED_WORKERS` lists the workers to watch. The private Render
+blueprint sets it empty (no workers are deployed). `docker-compose.yml`
+sets `workflow,ai,digital-twin` because that stack runs all three. Remove
+a name if you don't run that worker.
 A worker "reporting in" means its process is alive; it can't detect a worker that is up but stuck.
 
 ### Getting a webhook URL
@@ -258,13 +318,13 @@ exception rather than carrying on in an unknown state.
 unreachable. `GET /health/live` answers as long as the process is up and touches no dependency — for
 a supervisor that should restart a *hung* process but never one that merely can't reach its database.
 
-**Why `/health` still doesn't fail over a Redis outage**: not every account deploying this blueprint
-necessarily re-synced to pick up the worker services. An account still running only the original
-`accuqual-api`/`accuqual-web` pair would have `/health` permanently reporting `redis` as unreachable,
-which would make Render treat an otherwise-functional deployment as unhealthy. Once you've confirmed Redis
-and all three workers are deployed and healthy, promoting `redis` to a hard dependency in
-`checkReadiness()` (`services/api/src/modules/monitoring/healthMonitor.ts`) is a safe one-line change —
-just not done automatically, since it changes `/health`'s HTTP status.
+**Why `/health` still doesn't fail over a Redis outage**: the private blueprint
+does not deploy Redis or the workers (`render.workers.yaml` holds those
+definitions for later). `/health` would otherwise stay on 503 and Render
+would restart a working API. `redis` in the JSON is informational. Promoting
+it to a hard dependency in `checkReadiness()`
+(`services/api/src/modules/monitoring/healthMonitor.ts`) is safe only after
+Redis and all three workers are actually deployed.
 
 ## Security scanning
 
