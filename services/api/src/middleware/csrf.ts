@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { AppError } from "../utils/appError.js";
-import { REFRESH_COOKIE_NAME } from "../modules/auth/auth.controller.js";
+import { REFRESH_COOKIE_NAME, TRUSTED_DEVICE_COOKIE_NAME } from "../modules/auth/auth.controller.js";
 import { SSO_COOKIE } from "../modules/sso/oidc.js";
 
 /**
@@ -58,7 +58,7 @@ export function requireCsrfHeader(req: Request, _res: Response, next: NextFuncti
 // the origin allowlist refuses) is what stops it.
 // ---------------------------------------------------------------------------
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-const OWN_COOKIES = [REFRESH_COOKIE_NAME, SSO_COOKIE];
+const OWN_COOKIES = [REFRESH_COOKIE_NAME, TRUSTED_DEVICE_COOKIE_NAME, SSO_COOKIE];
 
 export function csrfProtection(req: Request, res: Response, next: NextFunction) {
   if (SAFE_METHODS.has(req.method)) return next();

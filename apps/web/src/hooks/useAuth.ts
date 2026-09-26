@@ -130,7 +130,7 @@ export function useAuthBootstrap() {
 
 /** Mid-sign-in MFA calls: they authenticate with the short-lived mfaToken from the password step, not a session. */
 export const mfaApi = {
-  verify: async (mfaToken: string, code: string, rememberMe = false) => (await apiClient.post<AuthResponse>("/auth/mfa/verify", { mfaToken, code, rememberMe })).data,
+  verify: async (mfaToken: string, code: string, rememberMe = false, trustDevice = false) => (await apiClient.post<AuthResponse>("/auth/mfa/verify", { mfaToken, code, rememberMe, trustDevice })).data,
   enrollStart: async (mfaToken: string) => (await apiClient.post<{ secret: string; otpauthUri: string }>("/auth/mfa/enroll/start", { mfaToken })).data,
-  enrollConfirm: async (mfaToken: string, code: string, rememberMe = false) => (await apiClient.post<AuthResponse>("/auth/mfa/enroll/confirm", { mfaToken, code, rememberMe })).data,
+  enrollConfirm: async (mfaToken: string, code: string, rememberMe = false, trustDevice = false) => (await apiClient.post<AuthResponse>("/auth/mfa/enroll/confirm", { mfaToken, code, rememberMe, trustDevice })).data,
 };

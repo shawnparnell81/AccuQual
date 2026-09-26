@@ -6,6 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { revokeRefreshTokenRows } from "../auth/auth.service.js";
+import { revokeAllTrustedDevices } from "../auth/trustedDevice.service.js";
 import { clearMfa } from "../auth/mfa.service.js";
 import { assertPasswordAcceptable } from "../../utils/passwordPolicy.js";
 
@@ -189,6 +190,7 @@ export const resetUserMfa = asyncHandler(async (req: Request, res: Response) => 
   await clearMfa(target.id);
   await req.db!.update(users).set({ tokenVersion: sql`${users.tokenVersion} + 1` }).where(eq(users.id, target.id));
   await revokeRefreshTokenRows(target.id);
+  await revokeAllTrustedDevices(target.id, "mfa_reset_by_admin", req.user?.id);
   await recordAuditTrail(req.db!, { entityType: "User", entityId: target.id, action: "status_change", changes: { action: "mfa_reset_by_admin", hadMfa: target.mfaEnabled }, performedBy: req.user?.id });
   res.status(204).send();
 });

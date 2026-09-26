@@ -4,6 +4,7 @@ import { AppError } from "../../utils/appError.js";
 import { env } from "../../config/env.js";
 import { REMEMBER_ME_TTL_MS } from "../../utils/jwt.js";
 import * as authService from "./auth.service.js";
+import { hashTrustedDeviceToken, listTrustedDevices, revokeAllTrustedDevices, revokeTrustedDevice, TRUSTED_DEVICE_TTL_MS } from "./trustedDevice.service.js";
 
 // Full-System Audit finding B2: the refresh token used to be a plain field
 // in the login/refresh JSON response, which the frontend then had
@@ -23,12 +24,22 @@ import * as authService from "./auth.service.js";
 // via the static-site rewrite, and docker-compose still uses the nginx
 // template, so "/" is the path that works in both places.
 export const REFRESH_COOKIE_NAME = "accuqual_rt";
+export const TRUSTED_DEVICE_COOKIE_NAME = "accuqual_td";
+
+/** Host-only, path /, SameSite matching the refresh cookie. No Domain attribute — see setRefreshCookie. */
+function sessionCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: env.NODE_ENV === "production",
+    sameSite: (env.NODE_ENV === "production" ? "none" : "lax") as "none" | "lax",
+    path: "/",
+  };
+}
 
 /** `remember` (the "Remember me" tick) makes it a persistent cookie; without it the cookie ends when the browser closes. */
 export function setRefreshCookie(res: Response, refreshToken: string, remember = false) {
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
-    httpOnly: true,
-    secure: env.NODE_ENV === "production",
+    ...sessionCookieOptions(),
     // SameSite=None (only valid with Secure, which production already sets)
     // still sends the cookie on the same-origin /api path used by compose
     // (nginx) and by the private Render deploy (static-site rewrite). It
@@ -36,8 +47,6 @@ export function setRefreshCookie(res: Response, refreshToken: string, remember =
     // the API on its own origin.
     // Dev runs both over plain http on localhost, where SameSite=Lax still
     // works and doesn't require https.
-    sameSite: env.NODE_ENV === "production" ? "none" : "lax",
-    path: "/",
     // No Domain attribute, on purpose. The browser talks to
     // app.accuqualqms.com and the /api rewrite forwards to
     // api.accuqualqms.com. A host-only cookie is stored for the host the
@@ -48,12 +57,21 @@ export function setRefreshCookie(res: Response, refreshToken: string, remember =
 }
 
 function clearRefreshCookie(res: Response) {
-  res.clearCookie(REFRESH_COOKIE_NAME, {
-    httpOnly: true,
-    secure: env.NODE_ENV === "production",
-    sameSite: env.NODE_ENV === "production" ? "none" : "lax",
-    path: "/",
-  });
+  res.clearCookie(REFRESH_COOKIE_NAME, sessionCookieOptions());
+}
+
+/** Persistent for the same 30 days the server-side row expires. Not renewed on later sign-ins. */
+export function setTrustedDeviceCookie(res: Response, token: string) {
+  res.cookie(TRUSTED_DEVICE_COOKIE_NAME, token, { ...sessionCookieOptions(), maxAge: TRUSTED_DEVICE_TTL_MS });
+}
+
+function clearTrustedDeviceCookie(res: Response) {
+  res.clearCookie(TRUSTED_DEVICE_COOKIE_NAME, sessionCookieOptions());
+}
+
+function trustedDeviceCookie(req: Request): string | undefined {
+  const value = req.cookies?.[TRUSTED_DEVICE_COOKIE_NAME];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 /**
@@ -63,27 +81,36 @@ function clearRefreshCookie(res: Response) {
  * auth.service.ts's own internal bookkeeping key for the refresh_tokens
  * table; it has no reason to ever reach the client.
  */
-function withoutRefreshToken<T extends { refreshToken: string; refreshJti?: string; remember?: boolean }>(result: T) {
-  const { refreshToken: _refreshToken, refreshJti: _refreshJti, remember: _remember, ...rest } = result;
+function withoutRefreshToken<T extends { refreshToken: string; refreshJti?: string; remember?: boolean; trustedDeviceToken?: string }>(result: T) {
+  const { refreshToken: _refreshToken, refreshJti: _refreshJti, remember: _remember, trustedDeviceToken: _trustedDeviceToken, ...rest } = result;
   return rest;
 }
 
+type FinishedSession = {
+  refreshToken: string;
+  refreshJti?: string;
+  remember?: boolean;
+  trustedDeviceToken?: string;
+};
+
 /** A finished sign-in sets the refresh cookie; a pending second step (or forced enrollment) issues nothing but its short-lived challenge token. */
-function sendSession(res: Response, result: Awaited<ReturnType<typeof authService.login>>) {
+function sendSession(res: Response, result: Awaited<ReturnType<typeof authService.login>> | (FinishedSession & Record<string, unknown>)) {
   if ("mfaRequired" in result || "mfaEnrollmentRequired" in result) {
     res.json(result);
     return;
   }
-  setRefreshCookie(res, result.refreshToken, result.remember);
-  res.json(withoutRefreshToken(result));
+  const session = result as FinishedSession;
+  setRefreshCookie(res, session.refreshToken, session.remember);
+  if (session.trustedDeviceToken) setTrustedDeviceCookie(res, session.trustedDeviceToken);
+  res.json(withoutRefreshToken(session as FinishedSession & Record<string, unknown>));
 }
 
 export const loginHandler = asyncHandler(async (req: Request, res: Response) => {
-  sendSession(res, await authService.login(req.body));
+  sendSession(res, await authService.login({ ...req.body, trustedDeviceToken: trustedDeviceCookie(req) }));
 });
 
 export const mfaVerifyHandler = asyncHandler(async (req: Request, res: Response) => {
-  sendSession(res, await authService.verifyMfaLogin(req.body.mfaToken, req.body.code, req.body.rememberMe === true));
+  sendSession(res, await authService.verifyMfaLogin(req.body.mfaToken, req.body.code, req.body.rememberMe === true, req.body.trustDevice === true, req.get("user-agent")));
 });
 
 export const mfaEnrollStartHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -91,8 +118,9 @@ export const mfaEnrollStartHandler = asyncHandler(async (req: Request, res: Resp
 });
 
 export const mfaEnrollConfirmHandler = asyncHandler(async (req: Request, res: Response) => {
-  const result = await authService.confirmEnrollmentWithToken(req.body.mfaToken, req.body.code, req.body.rememberMe === true);
+  const result = await authService.confirmEnrollmentWithToken(req.body.mfaToken, req.body.code, req.body.rememberMe === true, req.body.trustDevice === true, req.get("user-agent"));
   setRefreshCookie(res, result.refreshToken, result.remember);
+  if (result.trustedDeviceToken) setTrustedDeviceCookie(res, result.trustedDeviceToken);
   res.json(withoutRefreshToken(result));
 });
 
@@ -115,6 +143,26 @@ export const mfaDisableHandler = asyncHandler(async (req: Request, res: Response
 
 export const mfaRecoveryCodesHandler = asyncHandler(async (req: Request, res: Response) => {
   res.json(await authService.newRecoveryCodes(req.user!.id, req.body.password, req.body.code));
+});
+
+export const listTrustedDevicesHandler = asyncHandler(async (req: Request, res: Response) => {
+  res.json({ devices: await listTrustedDevices(req.user!.id, trustedDeviceCookie(req)) });
+});
+
+export const revokeTrustedDeviceHandler = asyncHandler(async (req: Request, res: Response) => {
+  const deviceId = Number(req.params.id);
+  if (!Number.isInteger(deviceId) || deviceId <= 0) throw AppError.notFound("Trusted device");
+  const revoked = await revokeTrustedDevice(req.user!.id, deviceId);
+  if (!revoked) throw AppError.notFound("Trusted device");
+  const current = trustedDeviceCookie(req);
+  if (current && hashTrustedDeviceToken(current) === revoked.tokenHash) clearTrustedDeviceCookie(res);
+  res.status(204).send();
+});
+
+export const revokeAllTrustedDevicesHandler = asyncHandler(async (req: Request, res: Response) => {
+  await revokeAllTrustedDevices(req.user!.id, "forgotten_by_user", req.user!.id);
+  clearTrustedDeviceCookie(res);
+  res.status(204).send();
 });
 
 export const refreshHandler = asyncHandler(async (req: Request, res: Response) => {

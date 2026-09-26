@@ -6,6 +6,7 @@ import { TextField } from "../../components/forms/Field";
 import { MfaEnrollPanel, RecoveryCodesPanel } from "../../components/auth/MfaPanels";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { formatDate } from "../../lib/dates";
 
 export interface MfaStatus {
   enabled: boolean;
@@ -154,9 +155,102 @@ export function MfaSettingsSection() {
               toast.success("Two-step sign-in turned off.");
               setMode("idle");
               void refresh();
+              void queryClient.invalidateQueries({ queryKey: ["auth/trusted-devices"] });
             }}
           />
         </>
+      )}
+    </div>
+  );
+}
+
+interface TrustedDevice {
+  id: number;
+  label: string;
+  createdAt: string;
+  expiresAt: string;
+  lastUsedAt: string | null;
+  current: boolean;
+}
+
+/** Settings → Security: browsers that can skip the authenticator code until they expire. */
+export function TrustedDevicesSection() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const { data, isLoading, isError } = useQuery<{ devices: TrustedDevice[] }>({
+    queryKey: ["auth/trusted-devices"],
+    queryFn: async () => (await apiClient.get("/auth/trusted-devices")).data,
+  });
+
+  async function forget(path: string, success: string) {
+    try {
+      await apiClient.delete(path);
+      toast.success(success);
+      await queryClient.invalidateQueries({ queryKey: ["auth/trusted-devices"] });
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't forget that device."));
+    }
+  }
+
+  async function forgetAll() {
+    if (!window.confirm("Forget every trusted device? Each one will ask for an authenticator code the next time you sign in there.")) return;
+    try {
+      await apiClient.post("/auth/trusted-devices/forget-all");
+      toast.success("All trusted devices forgotten.");
+      await queryClient.invalidateQueries({ queryKey: ["auth/trusted-devices"] });
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't forget those devices."));
+    }
+  }
+
+  const devices = data?.devices ?? [];
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-4">
+      <h3 className="text-sm font-medium">Signed-in trusted devices</h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        A trusted device skips the authenticator code for 30 days. Your password is still required every time. The 30 days start when you trust the device and do not restart when you sign in.
+      </p>
+
+      {isLoading && <p className="mt-3 text-sm text-muted-foreground">Loading…</p>}
+      {isError && <p className="mt-3 text-sm text-destructive">Couldn't load trusted devices.</p>}
+
+      {!isLoading && !isError && devices.length === 0 && (
+        <p className="mt-3 text-sm text-muted-foreground">None yet. The next time you enter an authenticator code, leave the box checked to trust that browser for 30 days.</p>
+      )}
+
+      {devices.length > 0 && (
+        <ul className="mt-3 divide-y divide-border">
+          {devices.map((device) => (
+            <li key={device.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+              <div>
+                <p className="text-sm font-medium">
+                  {device.label}
+                  {device.current && <span className="ml-2 text-xs font-normal text-muted-foreground">This device</span>}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Added {formatDate(device.createdAt)} · Expires {formatDate(device.expiresAt)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!window.confirm(device.current ? "Forget this device? This browser will ask for an authenticator code the next time you sign in." : "Forget this device? It will ask for an authenticator code the next time you sign in there.")) return;
+                  void forget(`/auth/trusted-devices/${device.id}`, "Device forgotten.");
+                }}
+                className="rounded-md border border-border px-3 py-1.5 text-sm"
+              >
+                Forget this device
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {devices.length > 0 && (
+        <button type="button" onClick={() => void forgetAll()} className="mt-2 text-sm text-destructive hover:underline">
+          Forget all devices
+        </button>
       )}
     </div>
   );

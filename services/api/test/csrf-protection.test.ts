@@ -7,7 +7,7 @@ import request from "supertest";
 import { csrfProtection } from "../src/middleware/csrf.js";
 import { errorHandler } from "../src/middleware/errorHandler.js";
 import { createApp } from "../src/app.js";
-import { REFRESH_COOKIE_NAME } from "../src/modules/auth/auth.controller.js";
+import { REFRESH_COOKIE_NAME, TRUSTED_DEVICE_COOKIE_NAME } from "../src/modules/auth/auth.controller.js";
 import { SSO_COOKIE } from "../src/modules/sso/oidc.js";
 
 function tinyApp() {
@@ -31,6 +31,11 @@ describe("csrfProtection middleware", () => {
       expect(res.body.message).toMatch(/anti-CSRF header/i);
     });
   }
+
+  it("refuses when only the trusted-device cookie carries the request", async () => {
+    const res = await request(tinyApp()).post("/thing").set("Cookie", `${TRUSTED_DEVICE_COOKIE_NAME}=abc`);
+    expect(res.status).toBe(403);
+  });
 
   it("refuses when only the SSO flow cookie carries the request", async () => {
     const res = await request(tinyApp()).post("/thing").set("Cookie", SSO);

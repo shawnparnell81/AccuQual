@@ -81,6 +81,24 @@ function SsoSignIn() {
 
 const REMEMBERED_EMAIL_KEY = "accuqual-remembered-email";
 
+function TrustDeviceChoice({ checked, onChange }: { checked: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm">
+      <input
+        id="trust-device"
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 h-4 w-4 rounded border-form-field accent-[hsl(var(--primary))]"
+      />
+      <span>
+        Don't ask for a code on this device for 30 days
+        <span className="block text-xs text-muted-foreground">Your password is still required every time. After 30 days, or in a different browser, we'll ask for the code again.</span>
+      </span>
+    </label>
+  );
+}
+
 function readRememberedEmail(): string {
   try {
     return localStorage.getItem(REMEMBERED_EMAIL_KEY) ?? "";
@@ -102,8 +120,8 @@ export function LoginPage() {
   const [searchParams] = useSearchParams();
   const ssoError = searchParams.get("sso_error");
   const [email, setEmail] = useState(readRememberedEmail);
-  const [remember, setRemember] = useState(() => readRememberedEmail() !== "");
   const [password, setPassword] = useState("");
+  const [trustDevice, setTrustDevice] = useState(true);
   const [stage, setStage] = useState<Stage>({ kind: "password" });
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState<string | null>(null);
@@ -133,10 +151,11 @@ export function LoginPage() {
     const mfaToken = stage.mfaToken;
     return (
       <Card subtitle="Your organization requires multi-factor authentication. Set it up to finish signing in.">
+        <TrustDeviceChoice checked={trustDevice} onChange={setTrustDevice} />
         <MfaEnrollPanel<AuthResponse>
           start={() => mfaApi.enrollStart(mfaToken)}
           confirm={async (c) => {
-            const session = await mfaApi.enrollConfirm(mfaToken, c, remember);
+            const session = await mfaApi.enrollConfirm(mfaToken, c, false, trustDevice);
             return { recoveryCodes: session.recoveryCodes ?? [], payload: session };
           }}
           onEnrolled={(codes, session) => setStage({ kind: "codes", codes, session })}
@@ -156,7 +175,7 @@ export function LoginPage() {
           setCodeError(null);
           setCodeBusy(true);
           try {
-            startSession(await mfaApi.verify(mfaToken, code, remember));
+            startSession(await mfaApi.verify(mfaToken, code, false, trustDevice));
           } catch (err) {
             setCodeError(extractErrorMessage(err, "That code didn't work."));
           } finally {
@@ -166,6 +185,7 @@ export function LoginPage() {
       >
         <TextField label="Authentication code" autoComplete="one-time-code" autoFocus value={code} onChange={(e) => setCode(e.target.value)} required />
         <p className="mt-1 text-xs text-muted-foreground">Lost your phone? Enter one of your recovery codes instead (like ABCDE-FGHIJ).</p>
+        <TrustDeviceChoice checked={trustDevice} onChange={setTrustDevice} />
         {codeError && <p className="mt-3 text-sm text-destructive">{codeError}</p>}
         <button type="submit" disabled={codeBusy} className="mt-6 w-full rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
           {codeBusy ? "Checking…" : "Verify"}
@@ -182,9 +202,9 @@ export function LoginPage() {
       subtitle="Sign in to your quality management workspace"
       onSubmit={(e) => {
         e.preventDefault();
-        storeRememberedEmail(remember ? email : null);
+        storeRememberedEmail(email);
         login.mutate(
-          { email, password, rememberMe: remember },
+          { email, password },
           {
             onSuccess: (data) => {
               if (isSession(data)) return;
@@ -202,19 +222,6 @@ export function LoginPage() {
             Forgot password?
           </Link>
         </div>
-        <label className="flex cursor-pointer items-start gap-2 text-sm">
-          <input
-            id="remember-me"
-            type="checkbox"
-            checked={remember}
-            onChange={(e) => setRemember(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-form-field accent-[hsl(var(--primary))]"
-          />
-          <span>
-            Remember me
-            <span className="block text-xs text-muted-foreground">Stay signed in on this device for 30 days. Only use on a computer you trust.</span>
-          </span>
-        </label>
       </div>
 
       {ssoError && <p className="mt-3 text-sm text-destructive">{SSO_ERRORS[ssoError] ?? "Single sign-on didn't complete. Please try again."}</p>}

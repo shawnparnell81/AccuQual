@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { NavigationSettingsPage } from "./NavigationSettingsPage";
 import { ThemeSettingsSection } from "./ThemeSettingsSection";
-import { MfaSettingsSection } from "./MfaSettingsSection";
+import { MfaSettingsSection, TrustedDevicesSection } from "./MfaSettingsSection";
 import { FeasibilitySettingsPanel } from "./FeasibilitySettingsPanel";
 import { ERPSyncSettingsPanel } from "./ERPSyncSettingsPanel";
 
@@ -88,7 +88,12 @@ export function SettingsPage() {
         </div>
       )}
 
-      {tab === "Security" && <MfaSettingsSection />}
+      {tab === "Security" && (
+        <div className="flex flex-col gap-4">
+          <MfaSettingsSection />
+          <TrustedDevicesSection />
+        </div>
+      )}
       {tab === "Theme" && <ThemeSettingsSection />}
 
       {tab === "Notifications" && <NotAvailable what="Notifications" />}

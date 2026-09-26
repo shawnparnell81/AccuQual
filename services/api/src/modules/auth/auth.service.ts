@@ -14,6 +14,7 @@ import { passwordResetTokens } from "../../drizzle/schema/passwordResetTokens.js
 import { refreshTokens } from "../../drizzle/schema/refreshTokens.js";
 import { AppError } from "../../utils/appError.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken, REFRESH_TOKEN_TTL_MS, REMEMBER_ME_TTL_MS } from "../../utils/jwt.js";
+import { issueTrustedDevice, revokeAllTrustedDevices, useTrustedDevice } from "./trustedDevice.service.js";
 
 /**
  * Two renewals that leave the browser at the same moment both present the
@@ -87,7 +88,7 @@ async function issueTokens(user: {
   return { accessToken, refreshToken, refreshJti: jti, remember };
 }
 
-export async function login(input: { email: string; password: string; rememberMe?: boolean }) {
+export async function login(input: { email: string; password: string; rememberMe?: boolean; trustedDeviceToken?: string }) {
   const [row] = await db
     .select()
     .from(users)
@@ -122,9 +123,15 @@ export async function login(input: { email: string; password: string; rememberMe
   // The password alone is not enough when the account has a second factor, or
   // when the company's policy says it must have one. Nothing is issued (no
   // tokens, no cookie) and the failure counters stay untouched until the
-  // second step succeeds.
+  // second step succeeds — unless this browser was trusted at a previous
+  // code entry and that trust has not expired. The password is still required.
   const mfa = evaluateMfa(user, roleName, row.company?.mfaPolicy);
-  if (user.mfaEnabled) return { mfaRequired: true as const, mfaToken: signMfaToken(user.id, "verify", user.tokenVersion) };
+  if (user.mfaEnabled) {
+    if (await useTrustedDevice(user.id, input.trustedDeviceToken)) {
+      return completeLogin(user, roleName, row.company, null, input.rememberMe === true);
+    }
+    return { mfaRequired: true as const, mfaToken: signMfaToken(user.id, "verify", user.tokenVersion) };
+  }
   if (mfa.state === "blocked") return { mfaEnrollmentRequired: true as const, mfaToken: signMfaToken(user.id, "enroll", user.tokenVersion) };
   if (mfa.required && !user.mfaRequiredSince) await markMfaRequired(user.id);
 
@@ -166,7 +173,7 @@ async function loginContext(userId: number) {
 }
 
 /** Second step of a sign-in: the authenticator (or recovery) code. Wrong codes count toward the same lockout as wrong passwords. */
-export async function verifyMfaLogin(mfaToken: string, code: string, rememberMe = false) {
+export async function verifyMfaLogin(mfaToken: string, code: string, rememberMe = false, trustDevice = false, userAgent?: string) {
   const userId = await verifyMfaToken(mfaToken, "verify");
   const ctx = await loginContext(userId);
   const kind = await checkSecondFactor(userId, code);
@@ -177,7 +184,9 @@ export async function verifyMfaLogin(mfaToken: string, code: string, rememberMe 
   if (kind === "recovery") {
     await recordAuditTrail(db, { entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_recovery_code_used" }, performedBy: userId }).catch((err) => logger.error("Failed to audit a recovery-code sign-in", { userId, err }));
   }
-  return completeLogin(ctx.user, ctx.roleName, ctx.company, null, rememberMe);
+  const session = await completeLogin(ctx.user, ctx.roleName, ctx.company, null, rememberMe);
+  const trustedDeviceToken = trustDevice ? (await issueTrustedDevice(userId, userAgent)).raw : undefined;
+  return { ...session, trustedDeviceToken };
 }
 
 /** Enrollment that is forced at sign-in (the company's policy requires MFA and the grace period is over): the challenge token stands in for a session. */
@@ -187,7 +196,7 @@ export async function startEnrollmentWithToken(mfaToken: string) {
   return startEnrollment(userId, ctx.user.email);
 }
 
-export async function confirmEnrollmentWithToken(mfaToken: string, code: string, rememberMe = false) {
+export async function confirmEnrollmentWithToken(mfaToken: string, code: string, rememberMe = false, trustDevice = false, userAgent?: string) {
   const userId = await verifyMfaToken(mfaToken, "enroll");
   const ctx = await loginContext(userId);
   let recoveryCodes: string[];
@@ -200,7 +209,9 @@ export async function confirmEnrollmentWithToken(mfaToken: string, code: string,
   await recordAuditTrail(db, { entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_enabled" }, performedBy: userId }).catch((err) => logger.error("Failed to audit MFA enrollment", { userId, err }));
 
   const [fresh] = await db.select().from(users).where(eq(users.id, userId));
-  return { ...(await completeLogin(fresh ?? ctx.user, ctx.roleName, ctx.company, null, rememberMe)), recoveryCodes };
+  const session = await completeLogin(fresh ?? ctx.user, ctx.roleName, ctx.company, null, rememberMe);
+  const trustedDeviceToken = trustDevice ? (await issueTrustedDevice(userId, userAgent)).raw : undefined;
+  return { ...session, recoveryCodes, trustedDeviceToken };
 }
 
 /**
@@ -453,6 +464,7 @@ export async function resetPassword(rawToken: string, newPassword: string): Prom
   }).catch((err) => logger.error("Failed to audit a password reset", { userId: tokenRow.userId, err }));
 
   await revokeAllRefreshTokens(tokenRow.userId);
+  await revokeAllTrustedDevices(tokenRow.userId, "password_reset", tokenRow.userId);
   await db.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, tokenRow.id));
 }
 
@@ -523,12 +535,13 @@ async function reverify(userId: number, password: string, code: string) {
 }
 
 export async function disableMfa(userId: number, password: string, code: string) {
-  const user = await reverify(userId, password, code);
+  await reverify(userId, password, code);
   const full = await userWithRole(userId);
   if (full && evaluateMfa({ mfaEnabled: false, mfaRequiredSince: full.mfaRequiredSince }, full.roleName, full.companyMfaPolicy).required) {
     throw AppError.forbidden("Your organization requires multi-factor authentication, so it can't be turned off.");
   }
   await clearMfa(userId);
+  await revokeAllTrustedDevices(userId, "mfa_disabled", userId);
   await recordAuditTrail(db, { entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_disabled" }, performedBy: userId }).catch((err) => logger.error("Failed to audit MFA being turned off", { userId, err }));
 
 }
