@@ -1,0 +1,23 @@
+#!/bin/sh
+# Sourced by the official nginx entrypoint (the *.envsh suffix) before
+# 20-envsubst-on-templates.sh. A plain *.sh would be executed as its own
+# process, and an export there would not be visible to envsubst.
+set -eu
+
+if [ -z "${API_UPSTREAM_URL:-}" ]; then
+  API_UPSTREAM_URL=http://api:3000
+fi
+# Origin only. A trailing slash would make the proxied path //health.
+API_UPSTREAM_URL=${API_UPSTREAM_URL%/}
+export API_UPSTREAM_URL
+
+# Empty stays empty. nginx omits a proxy_set_header whose value is "".
+export CF_ACCESS_CLIENT_ID="${CF_ACCESS_CLIENT_ID:-}"
+export CF_ACCESS_CLIENT_SECRET="${CF_ACCESS_CLIENT_SECRET:-}"
+
+# 15-local-resolvers.envsh (enabled by NGINX_ENTRYPOINT_LOCAL_RESOLVERS)
+# already exported NGINX_LOCAL_RESOLVERS from /etc/resolv.conf. NGINX_RESOLVER
+# replaces that when set (for example 1.1.1.1).
+if [ -n "${NGINX_RESOLVER:-}" ]; then
+  export NGINX_LOCAL_RESOLVERS="$NGINX_RESOLVER"
+fi

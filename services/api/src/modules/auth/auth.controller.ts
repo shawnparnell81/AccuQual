@@ -14,15 +14,14 @@ import * as authService from "./auth.service.js";
 //
 // path MUST be "/" rather than a narrower "/auth" — confirmed live against
 // this repo's own docker-compose stack, not just reasoned about: apps/web's
-// nginx.conf proxies "/api/*" to this service with the "/api" prefix
+// nginx template proxies "/api/*" to this service with the "/api" prefix
 // stripped, so the browser's own view of the login/refresh URL is
 // "/api/auth/login", not "/auth/login". A Path=/auth cookie only ever
 // matches a browser-visible path starting with "/auth" — under that proxy
-// it silently never gets sent back on the very next refresh call. Render's
-// production topology (render.yaml) puts the API on its own separate
-// origin with no such prefix, where "/auth" would have looked correct, but
-// scoping the cookie to work under BOTH topologies is worth the small extra
-// exposure (still httpOnly + Secure in production either way).
+// it silently never gets sent back on the very next refresh call. The
+// private Render deploy keeps the same browser path (VITE_API_BASE_URL=/api)
+// via the static-site rewrite, and docker-compose still uses the nginx
+// template, so "/" is the path that works in both places.
 export const REFRESH_COOKIE_NAME = "accuqual_rt";
 
 /** `remember` (the "Remember me" tick) makes it a persistent cookie; without it the cookie ends when the browser closes. */
@@ -30,12 +29,13 @@ export function setRefreshCookie(res: Response, refreshToken: string, remember =
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
-    // Real deployment is two separate Render origins (accuqual-api /
-    // accuqual-web — see render.yaml), which makes this a cross-site
-    // request in browser terms, so it needs SameSite=None (only valid
-    // paired with Secure, which production already sets above). Dev runs
-    // both over plain http on localhost, where SameSite=Lax still works
-    // and doesn't require https.
+    // SameSite=None (only valid with Secure, which production already sets)
+    // still sends the cookie on the same-origin /api path used by compose
+    // (nginx) and by the private Render deploy (static-site rewrite). It
+    // also keeps a credentialed call working if the browser ever talks to
+    // the API on its own origin.
+    // Dev runs both over plain http on localhost, where SameSite=Lax still
+    // works and doesn't require https.
     sameSite: env.NODE_ENV === "production" ? "none" : "lax",
     path: "/",
     ...(remember ? { maxAge: REMEMBER_ME_TTL_MS } : {}),

@@ -1,0 +1,142 @@
+# Not applied by Render. A Blueprint sync reads render.yaml only, and that
+# file is the private two-service deploy (accuqual-api and accuqual-web).
+# The blocks below are the Redis instance and background workers removed
+# from that blueprint, kept so they can be added back later.
+#
+# Do not point a Blueprint at this file by itself — it would describe only
+# these services. To bring them back, paste the list below into
+# render.yaml's `services:` list, set accuqual-api's MONITOR_EXPECTED_WORKERS
+# to workflow,ai,digital-twin, and paste the same DATABASE_URL and
+# AI_CONFIG_ENCRYPTION_KEY the API uses onto every worker (the encryption
+# key must match; do not generate a new one).
+#
+# `type: redis` is a deprecated alias of `keyvalue`. Confirm the field
+# names against https://render.com/docs/blueprint-spec before provisioning.
+# This wiring has not been applied to a live Render account. The worker
+# images themselves build in CI.
+
+services:
+  # Real Redis Streams event bus. A paid, metered Render resource — Render
+  # shows the plan and price before provisioning. `ipAllowList: []` keeps it
+  # unreachable from the public internet.
+  - type: redis
+    name: accuqual-redis
+    ipAllowList: []
+    plan: starter
+
+  - type: worker
+    name: accuqual-workflow-worker
+    # Deploy only after the GitHub checks (build, tests, security scan) pass - never straight from an unchecked commit.
+    autoDeployTrigger: checksPass
+    runtime: docker
+    dockerfilePath: ./workers/workflow-worker/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Paste the EXACT SAME value you gave accuqual-api — same real
+      # Supabase Session Pooler string, same database. Render has no
+      # built-in way to share one service's `sync: false` value with
+      # another, so this has to be entered manually in both places.
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: accuqual-redis
+          property: connectionString
+      # Never actually verified by this worker (it has no HTTP endpoint to
+      # authenticate requests against) — only required because this process
+      # transitively imports config/env.ts, which validates the full env
+      # schema at startup regardless of which fields a given process
+      # actually uses. A fresh random value per service is fine.
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      # Same real value as accuqual-api's, not a fresh one — this worker's
+      # ai_suggestion action handler decrypts company BYOK keys that were
+      # encrypted under accuqual-api's key; a different value here would
+      # make every decryption fail, not just be redundant.
+      - key: AI_CONFIG_ENCRYPTION_KEY
+        sync: false
+      # ZeptoMail (agent qms_transactional) Send Mail token — the preferred
+      # delivery path; takes precedence over SMTP_* below. Same value as
+      # accuqual-api's.
+      - key: ZEPTOMAIL_SEND_TOKEN
+        sync: false
+      # Optional — only used if a workflow definition's send_email action
+      # fires. Same values as accuqual-api's SMTP_* — leave blank to keep
+      # those sends in log-only stub mode instead.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      # Optional — the platform-wide fallback key an ai_suggestion action
+      # uses when the triggering company has no BYOK key of its own
+      # configured. Same values as accuqual-api's, if set there.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+
+  - type: worker
+    name: accuqual-ai-worker
+    # Deploy only after the GitHub checks (build, tests, security scan) pass - never straight from an unchecked commit.
+    autoDeployTrigger: checksPass
+    runtime: docker
+    dockerfilePath: ./workers/ai-worker/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: accuqual-redis
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: AI_CONFIG_ENCRYPTION_KEY
+        sync: false
+      # embedding-engine.ts always calls OpenAI's embeddings API
+      # specifically, regardless of a company's own LLM_PROVIDER choice —
+      # unset means this worker logs a warning and falls back to a
+      # deterministic pseudo-embedding (fine for dev, not real semantic
+      # search in production).
+      - key: OPENAI_API_KEY
+        sync: false
+
+  - type: worker
+    name: accuqual-digital-twin-worker
+    # Deploy only after the GitHub checks (build, tests, security scan) pass - never straight from an unchecked commit.
+    autoDeployTrigger: checksPass
+    runtime: docker
+    dockerfilePath: ./workers/digital-twin-worker/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: accuqual-redis
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: AI_CONFIG_ENCRYPTION_KEY
+        sync: false
