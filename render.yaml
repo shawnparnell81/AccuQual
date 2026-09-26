@@ -15,6 +15,8 @@ services:
     # instance type, and a service with a disk cannot scale past one instance.
     # The 1 GB disk is $0.25/month.
     plan: starter
+    # Must stay /health. The handler returns within a few seconds even when
+    # REDIS_URL is unset; a hung probe here fails the deploy.
     healthCheckPath: /health
     disk:
       name: uploads

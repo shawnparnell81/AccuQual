@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app.js";
-import { checkReadiness, sendAlert, startHealthMonitor, stopHealthMonitor } from "../src/modules/monitoring/healthMonitor.js";
+import { checkReadiness, clearRedisUrlOverrideForTests, sendAlert, setRedisUrlOverrideForTests, startHealthMonitor, stopHealthMonitor } from "../src/modules/monitoring/healthMonitor.js";
 import { pool } from "../src/db/index.js";
 
 const app = createApp();
@@ -16,8 +16,40 @@ describe("GET /health", () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ service: "accuqual-api", status: "ok" });
     expect(res.body.database).toMatchObject({ status: "ok" });
-    expect(res.body.redis.status).toMatch(/ok|critical/); // real Redis reachability, not asserted as always up
+    expect(res.body.redis.status).toMatch(/ok|critical|not configured/); // real Redis reachability, not asserted as always up
     expect(res.body.checkedAt).toBeTruthy();
+  });
+
+  it("responds within a few seconds when Redis is unreachable, and stays 200", async () => {
+    // Closed port: the failure mode that used to hang. node-redis retries
+    // ECONNREFUSED forever unless reconnectStrategy is false, and connectTimeout
+    // does not reject that loop. 127.0.0.1:1 is nothing, same as Render with
+    // no Redis on localhost.
+    setRedisUrlOverrideForTests("redis://127.0.0.1:1");
+    const started = Date.now();
+    try {
+      const res = await request(app).get("/health");
+      expect(Date.now() - started).toBeLessThan(5_000);
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("ok");
+      expect(res.body.database.status).toBe("ok");
+      expect(res.body.redis.status).toBe("critical");
+    } finally {
+      clearRedisUrlOverrideForTests();
+    }
+  });
+
+  it("reports Redis as not configured when REDIS_URL is unset, without opening a socket", async () => {
+    setRedisUrlOverrideForTests(null);
+    const started = Date.now();
+    try {
+      const res = await request(app).get("/health");
+      expect(Date.now() - started).toBeLessThan(5_000);
+      expect(res.status).toBe(200);
+      expect(res.body.redis).toMatchObject({ status: "not configured", detail: "not configured" });
+    } finally {
+      clearRedisUrlOverrideForTests();
+    }
   });
 });
 

@@ -46,7 +46,10 @@ const envSchema = z.object({
   ONLYOFFICE_API_BASE_URL: z.string().url().optional().or(z.literal("").transform(() => undefined)),
   ONLYOFFICE_JWT_SECRET: z.string().min(1).optional().or(z.literal("").transform(() => undefined)),
 
-  REDIS_URL: z.string().default("redis://localhost:6379"),
+  // No localhost default. Unset (or "") means Redis is not part of this
+  // deploy. Filling in redis://localhost:6379 made /health call node-redis
+  // against a port nothing listens on, and the client retries that forever.
+  REDIS_URL: z.string().min(1).optional().or(z.literal("").transform(() => undefined)),
 
   STORAGE_DRIVER: z.enum(["local", "azure"]).default("local"),
   STORAGE_LOCAL_PATH: z.string().default("./uploads"),
