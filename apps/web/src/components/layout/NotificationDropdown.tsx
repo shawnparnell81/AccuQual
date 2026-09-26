@@ -16,13 +16,9 @@ export function NotificationDropdown() {
 
   return (
     <div className="relative">
-      <button onClick={() => setOpen((o) => !o)} title="Notifications" className="relative flex items-center rounded-md p-1.5 text-muted-foreground hover:bg-secondary">
+      <button onClick={() => setOpen((o) => !o)} title="Notifications" aria-label="Notifications" className="aq-icon-btn">
         <Bell size={16} />
-        {unreadCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent px-1 text-[9px] font-medium text-accent-foreground">
-            {unreadCount > 9 ? "9+" : unreadCount}
-          </span>
-        )}
+        {unreadCount > 0 && <span className="aq-dotn">{unreadCount > 9 ? "9+" : unreadCount}</span>}
       </button>
       {open && (
         <>

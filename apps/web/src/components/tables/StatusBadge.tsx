@@ -130,11 +130,11 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
 
 /** Exported so non-status UI (e.g. Calendar day cells) can color by bucket directly, without inventing a fake status string just to route through StatusBadge's value prop. */
 export const BUCKET_CLASSES: Record<StatusBucket, string> = {
-  muted: "bg-muted text-muted-foreground",
-  info: "bg-info/15 text-info",
-  warning: "bg-warning/15 text-warning",
-  success: "bg-success/15 text-success",
-  destructive: "bg-destructive/15 text-destructive",
+  muted: "border border-border bg-muted text-muted-foreground",
+  info: "border border-info/40 bg-info/10 text-info",
+  warning: "border border-warning/40 bg-warning/10 text-warning",
+  success: "border border-success/40 bg-success/10 text-success",
+  destructive: "border border-destructive/40 bg-destructive/10 text-destructive",
 };
 
 export function StatusBadge({ value, label }: { value: string | null | undefined; label?: string }) {

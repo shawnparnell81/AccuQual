@@ -14,19 +14,15 @@ export function SiteSwitcher() {
   if (!current) return null;
 
   if (choices.length < 2) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Plant <span className="font-medium text-foreground">{current.name}</span>
-      </p>
-    );
+    return <p className="aq-hide-sm max-w-[10rem] truncate text-xs text-muted-foreground">{current.name}</p>;
   }
 
   return (
-    <label className="flex items-center gap-2 text-sm text-muted-foreground">
-      Plant
+    <label className="aq-sel">
+      <span className="sr-only">Plant</span>
       <select
         aria-label="Plant"
-        className="rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+        className="aq-select"
         value={current.id}
         disabled={switchPlant.isPending}
         onChange={(e) => {

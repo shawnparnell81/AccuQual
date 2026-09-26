@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, LogOut, Settings } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import { useCurrentCompany, useCurrentUser, useLogout } from "../../hooks/useAuth";
 import { rolePhrase } from "../../lib/opsLanguage";
 
@@ -37,10 +37,9 @@ export function UserMenu() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-label="Account menu"
-        className="flex items-center gap-1.5 rounded-full border border-border py-1 pl-1 pr-2 hover:bg-secondary"
+        className="aq-icon-btn"
       >
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">{initial}</span>
-        <ChevronDown size={13} className="text-muted-foreground" />
+        <span className="aq-avatar">{initial}</span>
       </button>
       {open && (
         <div className="absolute right-0 top-full z-40 mt-2 w-64 rounded-lg border border-border bg-card p-2 shadow-xl">

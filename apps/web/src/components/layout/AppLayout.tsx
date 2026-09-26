@@ -30,9 +30,11 @@ function SupplierPortalShell() {
   const logout = useLogout();
   return (
     <div className="flex h-screen w-full flex-col">
-      <header className="flex items-center justify-between border-b border-border bg-card px-6 py-3">
-        <h1 className="text-lg font-semibold">Supplier Portal</h1>
-        <button onClick={() => logout.mutate()} className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-secondary">
+      <header className="flex h-[62px] items-center justify-between border-b border-border bg-[hsl(var(--brand-header))] px-4 text-white">
+        <span className="font-display text-base font-extrabold tracking-[0.06em]">
+          ACCU<span className="text-primary">QUAL</span>
+        </span>
+        <button onClick={() => logout.mutate()} className="rounded-md border border-white/20 px-3 py-1.5 text-sm hover:bg-white/10">
           Log Out
         </button>
       </header>
@@ -64,6 +66,12 @@ export function AppLayout() {
   useGlobalHotkey(() => {
     if (!isSupplierPortal) setPaletteOpen(true);
   });
+  useEffect(() => {
+    if (isSupplierPortal) return;
+    const open = () => setPaletteOpen(true);
+    window.addEventListener("accuqual-open-palette", open);
+    return () => window.removeEventListener("accuqual-open-palette", open);
+  }, [isSupplierPortal]);
 
   // A file dropped anywhere that ISN'T an upload area would make the browser
   // navigate away to open it, throwing the whole session's page state away.
@@ -107,21 +115,25 @@ export function AppLayout() {
   }
 
   return (
-    <div className="flex h-screen w-full flex-col print:block print:h-auto">
+    <div className="app-shell print:block print:h-auto print:overflow-visible">
       {/* print:hidden — a printable page (e.g. QmsFormRecordPage's Print button) shows only
           <main>'s own content; the app chrome has no place on a printed QMS record. */}
       <div className="print:hidden">
         <NavigationShell />
-        <TabBar />
-        <MfaGraceBanner />
       </div>
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 print:overflow-visible print:p-0">
-        <div key={location.pathname} className="page-enter h-full">
-          <Outlet />
+      <div className="app-main print:block print:h-auto">
+        <div className="print:hidden">
+          <TabBar />
+          <MfaGraceBanner />
         </div>
-      </main>
-      <div className="border-t border-border bg-card px-4 py-1 text-center print:hidden">
-        <StandardsDisclaimer />
+        <main id="main-content" className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-7 print:overflow-visible print:p-0">
+          <div key={location.pathname} className="page-enter mx-auto h-full max-w-[1500px]">
+            <Outlet />
+          </div>
+        </main>
+        <div className="border-t border-border bg-card px-4 py-1 text-center print:hidden">
+          <StandardsDisclaimer />
+        </div>
       </div>
       <div className="print:hidden">
         <WindowContainer />

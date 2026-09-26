@@ -59,7 +59,7 @@ export function ScanToFindDialog() {
       <button
         onClick={() => setOpen(true)}
         title="Scan to find (lot #, serial #, or SKU)"
-        className="hidden md:flex shrink-0 p-2 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
+        className="aq-icon-btn aq-hide-sm"
       >
         <ScanLine size={18} />
       </button>

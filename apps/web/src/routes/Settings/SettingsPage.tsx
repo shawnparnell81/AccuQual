@@ -78,7 +78,7 @@ export function SettingsPage() {
           <div className="rounded-lg border border-border bg-card p-4">
             <h3 className="mb-2 text-sm font-medium">Navigation</h3>
             <p className="text-sm text-muted-foreground">
-              Which department dropdowns and modules show up in the top nav is its own real setting —{" "}
+              Which modules show up in the sidebar is its own real setting —{" "}
               <button onClick={() => setTab("Navigation")} className="text-accent hover:underline">
                 open the Navigation tab
               </button>
