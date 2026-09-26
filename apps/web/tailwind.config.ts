@@ -7,6 +7,11 @@ export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["Inter", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        display: ["Montserrat", "system-ui", "sans-serif"],
+        mono: ["JetBrains Mono", "ui-monospace", "Consolas", "monospace"],
+      },
       colors: {
         border: "hsl(var(--border))",
         background: "hsl(var(--background))",
@@ -50,9 +55,11 @@ export default {
         },
       },
       borderRadius: {
-        lg: "0.75rem",
-        md: "0.5rem",
-        sm: "0.25rem",
+        lg: "14px",
+        md: "10px",
+        sm: "8px",
+        xl: "14px",
+        "2xl": "16px",
       },
     },
   },

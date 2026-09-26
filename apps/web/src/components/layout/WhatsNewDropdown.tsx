@@ -24,7 +24,7 @@ export function WhatsNewDropdown() {
           if (next) markSeenAsCurrent();
         }}
         title="What's new"
-        className="relative flex items-center rounded-md p-1.5 text-muted-foreground hover:bg-secondary"
+        className="aq-icon-btn aq-hide-sm"
       >
         <Megaphone size={16} />
         {hasUnseen && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-accent" />}

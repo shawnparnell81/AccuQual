@@ -78,7 +78,7 @@ export function Modal({ title, isOpen, onClose, children, wide = false }: ModalP
     >
       <div
         ref={cardRef}
-        className={clsx("flex max-h-[85vh] w-full flex-col rounded-xl border border-border bg-card shadow-2xl", wide ? "max-w-3xl" : "max-w-lg")}
+        className={clsx("flex max-h-[85vh] w-full flex-col rounded-2xl border border-border bg-card shadow-2xl ring-1 ring-primary/10", wide ? "max-w-3xl" : "max-w-lg")}
         style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
         onClick={(e) => e.stopPropagation()}
       >

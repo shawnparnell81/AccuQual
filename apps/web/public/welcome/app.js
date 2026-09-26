@@ -322,25 +322,4 @@
     lb.addEventListener("click",function(e){ if(e.target!==lbImg) closeLb(); });
     document.addEventListener("keydown",function(e){ if(e.key==="Escape"&&!lb.hidden) closeLb(); });
   }
-
-  /* ---------- early access form: posts to the AccuQual API's public /contact endpoint ---------- */
-  /* config.js (generated at build time from the app's VITE_API_BASE_URL) says where the API lives. */
-  var API=typeof window.AQ_API==="string"?window.AQ_API:"/api";
-  var form=$("#eaForm");
-  if(form) form.addEventListener("submit",function(e){
-    e.preventDefault();
-    var email=$("#eaEmail"), err=$("#eaErr"), v=email.value.trim();
-    if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)){ err.textContent="Please enter a valid work email."; email.setAttribute("aria-invalid","true"); email.focus(); return; }
-    email.removeAttribute("aria-invalid"); err.textContent="";
-    var name=$("#eaName").value.trim(), company=$("#eaCo").value.trim();
-    var btn=form.querySelector("button[type=submit]"); btn.disabled=true;
-    fetch(API.replace(/\/$/,"")+"/contact",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name||undefined,email:v,company:company,website:($("#eaWebsite")||{}).value||""})})
-      .then(function(r){ return r.json().catch(function(){return {};}).then(function(b){ if(!r.ok) throw new Error(b.message||"We couldn't send that. Please try again."); }); })
-      .then(function(){
-        $("#eaThanksName").textContent=name?", "+name:""; $("#eaThanksEmail").textContent=v;
-        var sb=btn.getBoundingClientRect(); if(window.AQFX) window.AQFX.burst(sb.left+sb.width/2,sb.top+sb.height/2,"#00FF9D",50);
-        form.hidden=true; var t=$("#eaThanks"); t.hidden=false; t.focus();
-      })
-      .catch(function(ex){ err.textContent=ex.message||"We couldn't send that. Please try again."; btn.disabled=false; });
-  });
 })();

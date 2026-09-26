@@ -17,15 +17,10 @@ export function HomeButton({ onNavigate }: { onNavigate?: () => void }) {
       title="Home"
       end
       onClick={onNavigate}
-      className={({ isActive }) =>
-        clsx(
-          "flex items-center gap-2 rounded-md px-2.5 py-2 text-sm whitespace-nowrap",
-          isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-secondary"
-        )
-      }
+      className={({ isActive }) => clsx("aq-nav-link", isActive && "active")}
     >
       <Home size={18} />
-      <span className={onNavigate ? "" : "hidden min-[1400px]:inline"}>Home</span>
+      <span className="aq-nav-label">Home</span>
     </NavLink>
   );
 }

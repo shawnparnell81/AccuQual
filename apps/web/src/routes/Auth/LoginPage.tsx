@@ -19,19 +19,21 @@ function Card({ subtitle, children, onSubmit }: { subtitle: string; children: Re
   const inner = (
     <>
       <div className="mb-1 flex items-center gap-3">
-        <img src="/branding/logo-mark.png" alt="" className="h-10 w-10 rounded-lg object-cover" />
+        <img src="/branding/logo-mark.png" alt="" className="h-10 w-auto" style={{ filter: "drop-shadow(0 0 10px hsl(var(--primary) / 0.55))" }} />
         <div>
-          <h1 className="text-xl font-semibold tracking-wide text-foreground">ACCUQUAL QMS</h1>
-          <p className="text-[10px] tracking-widest text-muted-foreground">QUALITY MANAGEMENT SYSTEM</p>
+          <h1 className="font-display text-xl font-extrabold tracking-[0.06em] text-foreground">
+            ACCU<span className="text-primary">QUAL</span>
+          </h1>
+          <p className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground">QUALITY MANAGEMENT SYSTEM</p>
         </div>
       </div>
       <p className="mb-6 mt-3 text-sm text-muted-foreground">{subtitle}</p>
       {children}
     </>
   );
-  const cls = "w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-sm";
+  const cls = "w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl ring-1 ring-primary/10";
   return (
-    <div className="flex h-screen items-center justify-center overflow-y-auto bg-background">
+    <div className="flex h-screen items-center justify-center overflow-y-auto px-4">
       <StandardsDisclaimer className="fixed inset-x-0 bottom-3 px-4 text-center" />
       {onSubmit ? (
         <form onSubmit={onSubmit} className={cls}>

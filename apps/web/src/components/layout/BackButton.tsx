@@ -36,10 +36,7 @@ export function BackButton() {
       disabled={!canGoBack}
       title="Go back"
       aria-label="Go back"
-      className={clsx(
-        "flex items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap",
-        canGoBack ? "text-muted-foreground hover:bg-secondary" : "text-muted-foreground/30 cursor-not-allowed"
-      )}
+      className={clsx("aq-icon-btn aq-hide-sm", !canGoBack && "opacity-40")}
     >
       <ArrowLeft size={18} />
     </button>

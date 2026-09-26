@@ -107,7 +107,7 @@ export function DataTable<T>({
   return (
     <div className="overflow-x-auto rounded-xl border border-border bg-card">
       <table className="w-full min-w-[36rem] text-sm">
-        <thead className="bg-muted/60 text-[11px] uppercase tracking-wider text-muted-foreground">
+        <thead className="bg-muted/40 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
           <tr>
             {selectable && (
               <th className="w-8 px-4 py-2">
