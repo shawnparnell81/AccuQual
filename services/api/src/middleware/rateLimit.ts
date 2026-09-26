@@ -1,5 +1,7 @@
-import rateLimit from "express-rate-limit";
+import type { Request } from "express";
+import rateLimit, { MemoryStore } from "express-rate-limit";
 import { env } from "../config/env.js";
+import { verifyRefreshToken } from "../utils/jwt.js";
 
 const DEVICE_INGEST_PATH = "/digital-twin/device-ingest";
 
@@ -20,8 +22,57 @@ export const authRateLimiter = rateLimit({
   limit: env.NODE_ENV === "test" ? 100_000 : 20,
   standardHeaders: true,
   legacyHeaders: false,
+  // Own in-memory counter. This deploy has no Redis; the Render API is one instance.
+  store: new MemoryStore(),
   message: { error: "TooManyRequests", message: "Too many auth attempts, try again later" },
 });
+
+/**
+ * How often one person may renew a session. Separate from the sign-in limit:
+ * an active browser renews on its own, and a whole office used to share one
+ * address-wide budget with password guesses. 60 per 15 minutes is far above
+ * normal use (about once per access-token lifetime) and still stops a loop.
+ */
+export const REFRESH_RATE_LIMIT_MAX = 60;
+export const REFRESH_RATE_WINDOW_MS = 15 * 60 * 1000;
+
+const REFRESH_COOKIE = "accuqual_rt";
+
+/**
+ * Count renewals per person, not per IP address. The user id is taken from a
+ * signature check — a forged cookie cannot pick its own bucket. A missing or
+ * invalid cookie falls back to the caller's address. The id is the user, not
+ * the token id: each successful renewal rotates that id, and keying on it
+ * would hand every renewal a fresh budget.
+ */
+export function refreshRateLimitKey(req: Request): string {
+  const raw = req.cookies?.[REFRESH_COOKIE];
+  if (typeof raw === "string" && raw.length > 0) {
+    try {
+      const sub = verifyRefreshToken(raw).sub;
+      if (sub) return `refresh-user-${sub}`;
+    } catch {
+      // unsigned, expired, or tampered
+    }
+  }
+  return `refresh-ip-${req.ip ?? "unknown"}`;
+}
+
+export function createRefreshRateLimiter(options?: { limit?: number; windowMs?: number }) {
+  return rateLimit({
+    windowMs: options?.windowMs ?? REFRESH_RATE_WINDOW_MS,
+    limit: options?.limit ?? (env.NODE_ENV === "test" ? 100_000 : REFRESH_RATE_LIMIT_MAX),
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => refreshRateLimitKey(req),
+    // A new MemoryStore per limiter. express-rate-limit refuses a shared store,
+    // and nothing here talks to Redis (this deploy does not run one).
+    store: new MemoryStore(),
+    message: { error: "TooManyRequests", message: "Too many session renewals, try again shortly" },
+  });
+}
+
+export const refreshRateLimiter = createRefreshRateLimiter();
 
 /** Per device (the id half of X-Device-Key): 120 readings/minute, i.e. one every 500 ms. */
 export const deviceIngestRateLimiter = rateLimit({

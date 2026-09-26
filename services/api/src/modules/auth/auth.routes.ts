@@ -2,7 +2,7 @@ import { Router } from "express";
 import { validate } from "../../middleware/validate.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireCsrfHeader } from "../../middleware/csrf.js";
-import { authRateLimiter } from "../../middleware/rateLimit.js";
+import { authRateLimiter, refreshRateLimiter } from "../../middleware/rateLimit.js";
 import { loginSchema, forgotPasswordSchema, resetPasswordSchema, mfaVerifySchema, mfaEnrollStartSchema, mfaEnrollConfirmSchema, mfaEnableSchema, mfaReverifySchema } from "./auth.validation.js";
 import { loginHandler, refreshHandler, logoutHandler, meHandler, forgotPasswordHandler, resetPasswordHandler, mfaVerifyHandler, mfaEnrollStartHandler, mfaEnrollConfirmHandler, mfaStatusHandler, mfaSetupHandler, mfaEnableHandler, mfaDisableHandler, mfaRecoveryCodesHandler } from "./auth.controller.js";
 
@@ -14,7 +14,9 @@ authRouter.post("/login", authRateLimiter, validate(loginSchema), loginHandler);
 // requireCsrfHeader (security-audit finding): this is the one endpoint
 // authenticated purely by an ambient cookie with no Authorization header
 // to also forge, making it the real CSRF exposure in this app.
-authRouter.post("/refresh", authRateLimiter, requireCsrfHeader, refreshHandler);
+// Its own limiter, counted per person — not the sign-in limiter, which is
+// tight on purpose and used to be shared with every renewal from one address.
+authRouter.post("/refresh", refreshRateLimiter, requireCsrfHeader, refreshHandler);
 authRouter.post("/logout", requireAuth, logoutHandler);
 authRouter.get("/me", requireAuth, meHandler);
 // Same rate limiter as login — this is the one other unauthenticated,

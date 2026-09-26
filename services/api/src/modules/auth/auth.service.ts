@@ -14,6 +14,15 @@ import { passwordResetTokens } from "../../drizzle/schema/passwordResetTokens.js
 import { refreshTokens } from "../../drizzle/schema/refreshTokens.js";
 import { AppError } from "../../utils/appError.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken, REFRESH_TOKEN_TTL_MS, REMEMBER_ME_TTL_MS } from "../../utils/jwt.js";
+
+/**
+ * Two renewals that leave the browser at the same moment both present the
+ * token that was just rotated. That overlap is not theft. A presentation of
+ * the immediately previous token inside this window continues the session
+ * instead of revoking it. Anything older, or a token whose replacement was
+ * already used, still revokes the whole session.
+ */
+export const REFRESH_REUSE_GRACE_MS = 30_000;
 import { sendEmail } from "../notifications/notification.service.js";
 import { renderTemplate } from "../notifications/templates.js";
 import { logger } from "../../utils/logger.js";
@@ -263,15 +272,13 @@ export async function refresh(refreshToken: string) {
 
   // Security-audit finding (medium): reuse detection. `jti` is only absent
   // on a token minted before this feature existed (graceful degrade — an
-  // old in-flight session isn't force-logged-out by this deploy). For every
-  // token that has one, a second redemption after it was already marked
-  // used means this exact token was replayed — either a client race (rare,
-  // and treated the same as theft on purpose: better a false-positive
-  // logout than silently trusting a replayed credential) or a stolen
-  // token being used after the legitimate client already rotated past it.
-  // Either way the correct response is the same one logout()/resetPassword()
-  // already use: revoke the whole account's session via tokenVersion, not
-  // just this one token.
+  // old in-flight session isn't force-logged-out by this deploy). The claim
+  // below is one conditional update, so two overlapping renewals cannot both
+  // believe they were first. The loser is a benign overlap when it presents
+  // the immediately previous token inside REFRESH_REUSE_GRACE_MS and that
+  // token's replacement has not itself been used. A later replay, or a replay
+  // of a token the session has already moved past, revokes the whole session
+  // the same way logout()/resetPassword() do.
   if (payload.jti) {
     const [tokenRow] = await db.select().from(refreshTokens).where(eq(refreshTokens.jti, payload.jti));
     if (!tokenRow || tokenRow.revokedAt) {
@@ -285,20 +292,48 @@ export async function refresh(refreshToken: string) {
       await revokeRefreshTokenRows(full.id);
       throw AppError.unauthorized("Your session ended after a period of inactivity. Please sign in again.");
     }
-    if (tokenRow.usedAt) {
-      logger.warn(`Refresh token reuse detected for user ${full.id} (jti ${payload.jti}) — revoking the account's session.`);
-      await revokeAllRefreshTokens(full.id);
-      await db.update(users).set({ tokenVersion: full.tokenVersion + 1 }).where(eq(users.id, full.id));
-      throw AppError.unauthorized("Refresh token has already been used — session revoked for safety");
+
+    const [claimed] = await db
+      .update(refreshTokens)
+      .set({ usedAt: new Date() })
+      .where(and(eq(refreshTokens.id, tokenRow.id), isNull(refreshTokens.usedAt), isNull(refreshTokens.revokedAt)))
+      .returning({ id: refreshTokens.id });
+
+    if (!claimed) {
+      const [latest] = await db.select().from(refreshTokens).where(eq(refreshTokens.id, tokenRow.id));
+      if (!latest || latest.revokedAt) throw AppError.unauthorized("Refresh token has been revoked");
+      if (!(await reuseIsBenign(latest))) {
+        logger.warn(`Refresh token reuse detected for user ${full.id} (jti ${payload.jti}) — revoking the account's session.`);
+        await revokeAllRefreshTokens(full.id);
+        await db.update(users).set({ tokenVersion: full.tokenVersion + 1 }).where(eq(users.id, full.id));
+        throw AppError.unauthorized("Refresh token has already been used — session revoked for safety");
+      }
+      logger.info(`Refresh token for user ${full.id} was presented again within the grace window — continuing the session.`);
     }
-    await db.update(refreshTokens).set({ usedAt: new Date() }).where(eq(refreshTokens.id, tokenRow.id));
   }
 
   const tokens = await issueTokens(full, payload.rm === true);
   if (payload.jti) {
-    await db.update(refreshTokens).set({ replacedByJti: tokens.refreshJti }).where(eq(refreshTokens.jti, payload.jti));
+    // Keep the first replacement. A grace-window sibling must not overwrite
+    // the chain, or a later replay could no longer tell which token came next.
+    await db
+      .update(refreshTokens)
+      .set({ replacedByJti: tokens.refreshJti })
+      .where(and(eq(refreshTokens.jti, payload.jti), isNull(refreshTokens.replacedByJti)));
   }
   return { user: sanitize(full), company: await companyInfo(), ...tokens };
+}
+
+/** The overlapping renewal of the token that was just rotated — not a stolen token used after the session moved on. */
+async function reuseIsBenign(row: { usedAt: Date | null; replacedByJti: string | null; revokedAt: Date | null }): Promise<boolean> {
+  if (row.revokedAt || !row.usedAt) return false;
+  if (Date.now() - row.usedAt.getTime() > REFRESH_REUSE_GRACE_MS) return false;
+  if (!row.replacedByJti) return true;
+  const [successor] = await db
+    .select({ usedAt: refreshTokens.usedAt, revokedAt: refreshTokens.revokedAt })
+    .from(refreshTokens)
+    .where(eq(refreshTokens.jti, row.replacedByJti));
+  return !!successor && !successor.usedAt && !successor.revokedAt;
 }
 
 /** Marks every not-yet-revoked refresh token row for this user as revoked — logout()/resetPassword() call this alongside their own tokenVersion bump for real, itemizable revocation instead of relying on tokenVersion alone. */
@@ -319,7 +354,7 @@ async function revokeAllRefreshTokens(userId: number): Promise<void> {
  * into an "authenticated but contextless" session: a real accessToken with
  * no company anywhere in the client, so some screens would fail instead of
  * the client ever having a chance to rebuild it. `useAuthBootstrap` only
- * calls `refreshAccessToken()` (client.ts), which only ever consumed the
+ * calls `refreshSession()` (client.ts), which only ever consumed the
  * response's `accessToken` — updated alongside this to also apply `user`/
  * `company` from the same response, so a bootstrap-refresh is self-
  * sufficient on its own, the way an httpOnly-cookie session is supposed to be.
