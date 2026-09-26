@@ -1,4 +1,4 @@
-import { createClient } from "redis";
+import { connectRedis, openRedis } from "./redis-consumer.js";
 
 /**
  * Tells the API's monitor this worker is alive: sets a short-lived Redis key every 30 seconds. If the worker dies or
@@ -8,11 +8,11 @@ import { createClient } from "redis";
 const PREFIX = "accuqual:heartbeat:";
 
 export function startHeartbeat(name: string, redisUrl: string, onError: (err: unknown) => void = () => undefined): () => void {
-  const client = createClient({ url: redisUrl });
-  client.on("error", () => undefined); // node-redis reconnects by itself; a failed beat is simply skipped
+  const client = openRedis(redisUrl);
+  client.on("error", () => undefined); // a failed beat is skipped; reconnectStrategy is off so connect rejects
   const beat = async () => {
     try {
-      if (!client.isOpen) await client.connect();
+      if (!client.isOpen) await connectRedis(client);
       await client.set(PREFIX + name, String(Date.now()), { EX: 120 });
     } catch (err) {
       onError(err);

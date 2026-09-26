@@ -1,10 +1,10 @@
-import { createClient } from "redis";
 import { pool } from "../../db/index.js";
 import { env } from "../../config/env.js";
+import { configuredRedisUrl, createBoundedRedisClient, DEPENDENCY_TIMEOUT_MS, disconnectQuiet, withTimeout } from "../../lib/redisConnect.js";
 import { logger } from "../../utils/logger.js";
 import { monitorTick, resetAlertState } from "./alerts.js";
 
-export type DependencyStatus = "ok" | "critical";
+export type DependencyStatus = "ok" | "critical" | "not configured";
 
 export interface DependencyCheck {
   status: DependencyStatus;
@@ -35,7 +35,7 @@ export interface ReadinessReport {
 async function pingDatabase(): Promise<DependencyCheck> {
   const start = Date.now();
   try {
-    await pool.query("SELECT 1");
+    await withTimeout(pool.query("SELECT 1"), DEPENDENCY_TIMEOUT_MS, "Database");
     return { status: "ok", latencyMs: Date.now() - start, detail: "Reachable" };
   } catch (err) {
     return { status: "critical", latencyMs: Date.now() - start, detail: `Unreachable: ${(err as Error).message}` };
@@ -43,24 +43,61 @@ async function pingDatabase(): Promise<DependencyCheck> {
 }
 
 /**
+ * Tests only. `null` probes as if REDIS_URL were unset. A string is used
+ * instead of the env value, so a suite can point at a closed port without
+ * stopping the Redis CI actually uses.
+ */
+let redisUrlOverride: string | null | undefined;
+let redisUrlOverrideActive = false;
+
+export function setRedisUrlOverrideForTests(url: string | null): void {
+  redisUrlOverrideActive = true;
+  redisUrlOverride = url;
+}
+
+export function clearRedisUrlOverrideForTests(): void {
+  redisUrlOverrideActive = false;
+  redisUrlOverride = undefined;
+}
+
+function redisUrlForProbe(): string | undefined {
+  if (redisUrlOverrideActive) return redisUrlOverride ?? undefined;
+  return configuredRedisUrl();
+}
+
+/**
  * A short-lived, dedicated connection for this one ping — deliberately NOT
  * lib/eventBus.ts's shared, lazily-connected singleton client, so a Redis
  * outage here can never be confused with, or itself disrupt, that separate,
- * longer-lived publish path. A short connect timeout means an unreachable
- * Redis fails this check promptly instead of hanging the request.
+ * longer-lived publish path.
+ *
+ * node-redis retries forever unless `reconnectStrategy` is false, and
+ * `connectTimeout` only bounds one attempt — `connect()` itself never
+ * rejects while those retries run. That is what hung Render's GET /health.
+ * The strategy is off, and the whole probe is raced against a 3s timeout.
  */
 async function pingRedis(): Promise<DependencyCheck> {
+  const url = redisUrlForProbe();
+  if (!url) {
+    return { status: "not configured", latencyMs: 0, detail: "not configured" };
+  }
   const start = Date.now();
-  const client = createClient({ url: env.REDIS_URL, socket: { connectTimeout: 3000 } });
+  const client = createBoundedRedisClient(url);
   client.on("error", () => undefined); // surfaced via the catch below, not this handler
   try {
-    await client.connect();
-    await client.ping();
+    await withTimeout(
+      (async () => {
+        await client.connect();
+        await client.ping();
+      })(),
+      DEPENDENCY_TIMEOUT_MS,
+      "Redis"
+    );
     return { status: "ok", latencyMs: Date.now() - start, detail: "Reachable" };
   } catch (err) {
     return { status: "critical", latencyMs: Date.now() - start, detail: `Unreachable: ${(err as Error).message}` };
   } finally {
-    await client.quit().catch(() => undefined);
+    await disconnectQuiet(client);
   }
 }
 

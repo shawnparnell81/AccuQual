@@ -1,5 +1,29 @@
 import { createClient, type RedisClientType } from "redis";
 
+const REDIS_CONNECT_TIMEOUT_MS = 3_000;
+
+/** node-redis retries forever unless reconnectStrategy is false. connectTimeout alone never rejects that loop. */
+export function openRedis(url: string): RedisClientType {
+  return createClient({
+    url,
+    socket: { connectTimeout: REDIS_CONNECT_TIMEOUT_MS, reconnectStrategy: false },
+  });
+}
+
+export async function connectRedis(client: RedisClientType): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      client.connect(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Redis connect timed out after ${REDIS_CONNECT_TIMEOUT_MS}ms`)), REDIS_CONNECT_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 /**
  * Small Redis Streams consumer-group helper — see /workers/README.md.
  *
@@ -20,8 +44,8 @@ export async function consumeStream(
   consumerName: string,
   handler: (fields: Record<string, string>) => Promise<void>
 ): Promise<void> {
-  const client: RedisClientType = createClient({ url: redisUrl });
-  await client.connect();
+  const client = openRedis(redisUrl);
+  await connectRedis(client);
 
   try {
     await client.xGroupCreate(stream, group, "0", { MKSTREAM: true });

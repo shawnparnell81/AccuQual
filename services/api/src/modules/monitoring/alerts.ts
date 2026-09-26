@@ -1,6 +1,6 @@
-import { createClient } from "redis";
 import { pool } from "../../db/index.js";
 import { env } from "../../config/env.js";
+import { configuredRedisUrl, createBoundedRedisClient, DEPENDENCY_TIMEOUT_MS, disconnectQuiet, withTimeout } from "../../lib/redisConnect.js";
 import { logger } from "../../utils/logger.js";
 import { metrics } from "./metrics.js";
 import { sendAlert } from "./healthMonitor.js";
@@ -68,23 +68,25 @@ export const HEARTBEAT_STALE_MS = 90_000;
 export const defaultDeps: RuleDeps = {
   async pingDatabase() {
     try {
-      await pool.query("SELECT 1");
+      await withTimeout(pool.query("SELECT 1"), DEPENDENCY_TIMEOUT_MS, "Database");
       return { ok: true, detail: "Reachable" };
     } catch (err) {
       return { ok: false, detail: (err as Error).message };
     }
   },
   async readHeartbeats(names) {
-    const client = createClient({ url: env.REDIS_URL, socket: { connectTimeout: 3000 } });
+    const url = configuredRedisUrl();
+    if (!url) return { beats: new Map(), error: "not configured" };
+    const client = createBoundedRedisClient(url);
     client.on("error", () => undefined);
     try {
-      await client.connect();
-      const values = await client.mGet(names.map((n) => HEARTBEAT_PREFIX + n));
+      await withTimeout(client.connect(), DEPENDENCY_TIMEOUT_MS, "Redis");
+      const values = await withTimeout(client.mGet(names.map((n) => HEARTBEAT_PREFIX + n)), DEPENDENCY_TIMEOUT_MS, "Redis");
       return { beats: new Map(names.map((n, i) => [n, values[i] ? Number(values[i]) : null])) };
     } catch (err) {
       return { beats: new Map(), error: (err as Error).message };
     } finally {
-      await client.quit().catch(() => undefined);
+      await disconnectQuiet(client);
     }
   },
   async countFailedWorkflowRuns(sinceMs) {

@@ -26,7 +26,9 @@ async function readAllMessages(client: RedisClientType, stream: string) {
 }
 
 describe("eventBus.publishEvent", () => {
-  const readerClient = createClient({ url: env.REDIS_URL });
+  const redisUrl = env.REDIS_URL;
+  if (!redisUrl) throw new Error("REDIS_URL is required for this test");
+  const readerClient = createClient({ url: redisUrl });
 
   afterAll(async () => {
     await readerClient.del(TEST_STREAM).catch(() => undefined);

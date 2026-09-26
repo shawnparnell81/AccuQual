@@ -134,11 +134,12 @@ migrations, and the first administrator are in
 Run the smoke test in [Private Render + Cloudflare Access](#private-render-cloudflare-access) below (upload, reset email, `/api/health`).
 What `/health` returns:
 
-- `curl https://api.accuqualqms.com/health` → `{"status":"ok","database":{"status":"ok",...},"redis":{"status":"critical",...},...}`
+- `curl https://api.accuqualqms.com/health` → `{"status":"ok","database":{"status":"ok",...},"redis":{"status":"not configured",...},...}`
   — a real readiness check, not a bare liveness ping (see "Monitoring &
   alerting" below). `status` is 503 only when the database itself is
-  unreachable. `redis` is `critical` on this blueprint because Redis is
-  not deployed; that does not cause a 503. See that section for why.
+  unreachable. `redis` is `not configured` on this blueprint because
+  `REDIS_URL` is unset; that does not cause a 503, and the check still
+  returns within a few seconds. See that section for why.
 - Open https://app.accuqualqms.com (through Cloudflare Access), sign in
   with the administrator created from the Render Shell, and confirm a
   page that hits the API (for example the NCR list) loads without a CORS
@@ -305,7 +306,7 @@ Optional: `--admin-name "Full Name"`. A temporary password is printed once to th
 
 1. **Upload survives a redeploy.** Sign in, upload a file on a record (a small PDF is enough), redeploy `accuqual-api`, and open the file again. It lives on the disk at `/var/data/uploads`. Anything written outside `/var/data` is gone after the deploy.
 2. **Reset email arrives.** Use Forgot password for the administrator. The message arrives only after `ZEPTOMAIL_SEND_TOKEN` (or all of `SMTP_*`) is set; otherwise the send is logged and not delivered.
-3. **Health is ok, and the API is closed.** `curl -fsS https://api.accuqualqms.com/health` returns HTTP 200 with `"status":"ok"` and `"database":{"status":"ok",...}` and no Access token. `"redis":{"status":"critical"}` is expected until Redis is deployed, and it does not fail the check. After `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are set, `curl -s -o /dev/null -w '%{http_code}' https://api.accuqualqms.com/auth/me` is `403`. A browser that has passed Access on `app.accuqualqms.com` can still load a page that calls `/api`. Do not point an external monitor at `https://app.accuqualqms.com/api/health`: Access answers that URL with a login redirect before the rewrite runs.
+3. **Health is ok, and the API is closed.** `curl -fsS https://api.accuqualqms.com/health` returns HTTP 200 with `"status":"ok"` and `"database":{"status":"ok",...}` and no Access token. `"redis":{"status":"not configured"}` is expected until Redis is deployed (`REDIS_URL` unset), and it does not fail the check. After `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are set, `curl -s -o /dev/null -w '%{http_code}' https://api.accuqualqms.com/auth/me` is `403`. A browser that has passed Access on `app.accuqualqms.com` can still load a page that calls `/api`. Do not point an external monitor at `https://app.accuqualqms.com/api/health`: Access answers that URL with a login redirect before the rewrite runs.
 
 ## Monitoring & alerting
 
@@ -379,8 +380,11 @@ a supervisor that should restart a *hung* process but never one that merely can'
 **Why `/health` still doesn't fail over a Redis outage**: the private blueprint
 does not deploy Redis or the workers (`render.workers.yaml` holds those
 definitions for later). `/health` would otherwise stay on 503 and Render
-would restart a working API. `redis` in the JSON is informational. Promoting
-it to a hard dependency in `checkReadiness()`
+would restart a working API. With `REDIS_URL` unset, `redis.status` is
+`not configured` and no socket is opened. With a URL set, an unreachable
+Redis is `critical` and the probe gives up after about 3 seconds (node-redis
+must not retry the connect). Either way `redis` in the JSON is informational.
+Promoting it to a hard dependency in `checkReadiness()`
 (`services/api/src/modules/monitoring/healthMonitor.ts`) is safe only after
 Redis and all three workers are actually deployed.
 
