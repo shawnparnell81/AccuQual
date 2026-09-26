@@ -6,7 +6,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { TextField } from "../../components/forms/Field";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { deriveThemeVars, resolveMode } from "../../lib/theme";
-import type { TenantBranding, UserThemePreferences } from "../../api/types";
+import type { CompanyBranding, UserThemePreferences } from "../../api/types";
 
 const MODES: Array<{ value: NonNullable<UserThemePreferences["mode"]>; label: string }> = [
   { value: "light", label: "Light" },
@@ -31,10 +31,10 @@ export function ThemeSettingsSection() {
   const queryClient = useQueryClient();
   const user = useCurrentUser();
   const { data: prefs, isLoading } = useMyTheme();
-  const { data: branding } = useQuery<TenantBranding>({
-    queryKey: ["tenant/branding"],
-    queryFn: async () => (await apiClient.get("/tenant/branding")).data,
-    enabled: user?.tenantId != null,
+  const { data: branding } = useQuery<CompanyBranding>({
+    queryKey: ["company/branding"],
+    queryFn: async () => (await apiClient.get("/company/branding")).data,
+    enabled: user != null,
   });
   const [primaryColor, setPrimaryColor] = useState("");
   const [accentColor, setAccentColor] = useState("");

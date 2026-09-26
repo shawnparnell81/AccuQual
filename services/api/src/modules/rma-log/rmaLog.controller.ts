@@ -9,7 +9,7 @@ import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail, recordAuditTrailStandalone } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { pool } from "../../db/index.js";
 
 /** A fixed, linear lifecycle matching the field list's own natural progression — see rmaLog.validation.ts's own comment. completed (closed) is terminal. */
@@ -30,26 +30,26 @@ function generateRmaLogNumber(id: number): string {
 const LINK_FIELDS = ["warrantyId", "supplierRmaRequestId", "qualityId"] as const;
 
 function isAdmin(req: Request): boolean {
-  return req.user?.roleName === "admin" || req.user?.roleName === "platform_admin";
+  return req.user?.roleName === "admin";
 }
 
 async function loadRmaLog(req: Request, id: number) {
-  const [row] = await req.db!.select().from(rmaLogRecords).where(and(eq(rmaLogRecords.id, id), eq(rmaLogRecords.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(rmaLogRecords).where(and(eq(rmaLogRecords.id, id)));
   if (!row) throw AppError.notFound("RmaLog");
   return row;
 }
 
 async function validateLinks(req: Request, body: Record<string, unknown>) {
   if (body.warrantyId !== undefined && body.warrantyId !== null) {
-    const [w] = await req.db!.select({ id: warrantyClaims.id }).from(warrantyClaims).where(and(eq(warrantyClaims.id, body.warrantyId as number), eq(warrantyClaims.tenantId, req.tenantId!)));
+    const [w] = await req.db!.select({ id: warrantyClaims.id }).from(warrantyClaims).where(and(eq(warrantyClaims.id, body.warrantyId as number)));
     if (!w) throw AppError.badRequest(`Warranty claim #${body.warrantyId} not found`);
   }
   if (body.supplierRmaRequestId !== undefined && body.supplierRmaRequestId !== null) {
-    const [s] = await req.db!.select({ id: supplierRmaRequests.id }).from(supplierRmaRequests).where(and(eq(supplierRmaRequests.id, body.supplierRmaRequestId as number), eq(supplierRmaRequests.tenantId, req.tenantId!)));
+    const [s] = await req.db!.select({ id: supplierRmaRequests.id }).from(supplierRmaRequests).where(and(eq(supplierRmaRequests.id, body.supplierRmaRequestId as number)));
     if (!s) throw AppError.badRequest(`Supplier RMA Request #${body.supplierRmaRequestId} not found`);
   }
   if (body.qualityId !== undefined && body.qualityId !== null) {
-    const [n] = await req.db!.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, body.qualityId as number), eq(ncr.tenantId, req.tenantId!)));
+    const [n] = await req.db!.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, body.qualityId as number)));
     if (!n) throw AppError.badRequest(`NCR #${body.qualityId} not found`);
   }
 }
@@ -57,7 +57,7 @@ async function validateLinks(req: Request, body: Record<string, unknown>) {
 /** GET /rma-log?status=&partNumber=&customerName=&dateFrom=&dateTo=&q= (q searches rmaNumber). */
 export const listRmaLogHandler = asyncHandler(async (req: Request, res: Response) => {
   const { status, partNumber, customerName, dateFrom, dateTo, q } = req.query as Record<string, string | undefined>;
-  const conditions: SQL[] = [eq(rmaLogRecords.tenantId, req.tenantId!)];
+  const conditions: SQL[] = [];
   if (status) conditions.push(eq(rmaLogRecords.status, status));
   if (partNumber) conditions.push(ilike(rmaLogRecords.partNumber, `%${partNumber}%`));
   if (customerName) conditions.push(ilike(rmaLogRecords.customerName, `%${customerName}%`));
@@ -92,11 +92,11 @@ export const createRmaLogHandler = asyncHandler(async (req: Request, res: Respon
 
   const [created] = await req
     .db!.insert(rmaLogRecords)
-    .values({ tenantId: req.tenantId!, rmaNumber: `RMA-PENDING-${Date.now()}`, dateIssued: (body.dateIssued as Date) ?? new Date(), ...body, createdByUserId: req.user?.id })
+    .values({ rmaNumber: `RMA-PENDING-${Date.now()}`, dateIssued: (body.dateIssued as Date) ?? new Date(), ...body, createdByUserId: req.user?.id })
     .returning();
   const [numbered] = await req.db!.update(rmaLogRecords).set({ rmaNumber: generateRmaLogNumber(created!.id) }).where(eq(rmaLogRecords.id, created!.id)).returning();
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "RmaLog", entityId: numbered!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "RmaLog", entityId: numbered!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(numbered);
 });
 
@@ -130,10 +130,9 @@ export const updateRmaLogHandler = asyncHandler(async (req: Request, res: Respon
 
   const touchesLinkFields = LINK_FIELDS.some((f) => f in req.body);
   if (touchesLinkFields && !isAdmin(req)) {
-    const linkageLevel = await getUserAccessLevel(req.db! as TenantDb, req.tenantId!, req.user!, "rma_log_linkage");
+    const linkageLevel = await getUserAccessLevel(req.db! as Db, req.user!, "rma_log_linkage");
     if (linkageLevel !== "edit") {
       await recordAuditTrailStandalone(pool, {
-        tenantId: req.tenantId!,
         entityType: "RmaLog",
         entityId: record.id,
         action: "permission_denied",
@@ -151,7 +150,7 @@ export const updateRmaLogHandler = asyncHandler(async (req: Request, res: Respon
     .set({ ...req.body, updatedAt: new Date() })
     .where(eq(rmaLogRecords.id, record.id))
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "RmaLog", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "RmaLog", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -174,10 +173,9 @@ export const transitionRmaLogHandler = asyncHandler(async (req: Request, res: Re
   }
 
   if (!isAdmin(req)) {
-    const statusLevel = await getUserAccessLevel(req.db! as TenantDb, req.tenantId!, req.user!, "rma_log_status");
+    const statusLevel = await getUserAccessLevel(req.db! as Db, req.user!, "rma_log_status");
     if (statusLevel !== "edit") {
       await recordAuditTrailStandalone(pool, {
-        tenantId: req.tenantId!,
         entityType: "RmaLog",
         entityId: record.id,
         action: "permission_denied",
@@ -195,14 +193,13 @@ export const transitionRmaLogHandler = asyncHandler(async (req: Request, res: Re
   const [updated] = await req.db!.update(rmaLogRecords).set(patch).where(eq(rmaLogRecords.id, record.id)).returning();
 
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "RmaLog",
     entityId: record.id,
     action: "status_change",
     changes: { oldStatus: record.status, newStatus, userId: req.user?.id },
     performedBy: req.user?.id,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "rma_log", event: newStatus, entityId: record.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "rma_log", event: newStatus, entityId: record.id });
 
   res.json(updated);
 });

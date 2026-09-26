@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { AdminTenantAiConfigPage } from "./AdminTenantAiConfigPage";
+import { AdminCompanyAiConfigPage } from "./AdminCompanyAiConfigPage";
 import { AdminAiUsagePage } from "./AdminAiUsagePage";
 
 const TABS = ["Configuration", "Usage"] as const;
 type Tab = (typeof TABS)[number];
 
 /**
- * Consolidates the two pre-existing AI admin pages (AdminTenantAiConfigPage,
+ * Consolidates the two pre-existing AI admin pages (AdminCompanyAiConfigPage,
  * AdminAiUsagePage — each already a complete, AdminOnlyGuard'd page with its
  * own real endpoint) into one "AI Settings" console section as tabs, rather
  * than reimplementing either. Each tab renders the real, unmodified page.
@@ -27,7 +27,7 @@ export function AdminAiSettingsPage() {
           </button>
         ))}
       </div>
-      {tab === "Configuration" && <AdminTenantAiConfigPage />}
+      {tab === "Configuration" && <AdminCompanyAiConfigPage />}
       {tab === "Usage" && <AdminAiUsagePage />}
     </div>
   );

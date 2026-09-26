@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { listErpSyncErrorsQuerySchema } from "./erpSyncErrors.validation.js";
 import { listErrorsHandler, getErrorHandler, resolveErrorHandler, retryErrorHandler } from "./erpSyncErrors.controller.js";
@@ -15,7 +15,7 @@ import { listErrorsHandler, getErrorHandler, resolveErrorHandler, retryErrorHand
  * would wrongly gate erpRouter's unrelated /erp/* routes too).
  */
 export const erpSyncErrorsRouter = Router();
-const gate = [requireAuth, withTenantDb, requireRole("admin")];
+const gate = [requireAuth, withDb, requireRole("admin")];
 
 erpSyncErrorsRouter.get("/errors", ...gate, validate(listErpSyncErrorsQuerySchema, "query"), listErrorsHandler);
 erpSyncErrorsRouter.get("/errors/:id", ...gate, getErrorHandler);

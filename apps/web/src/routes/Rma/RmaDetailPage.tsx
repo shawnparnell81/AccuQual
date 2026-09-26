@@ -177,7 +177,7 @@ export function RmaDetailPage() {
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !record) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
-  const isAdmin = currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin";
+  const isAdmin = currentUser?.roleName === "admin";
   const department = currentUser?.department;
   // Notes and NCR/CAPA linkage — "quality can link NCR/CAPA, can add notes"
   // plus purchasing/material_management's "full RMA access".

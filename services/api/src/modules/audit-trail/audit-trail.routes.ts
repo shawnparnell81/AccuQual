@@ -4,24 +4,24 @@ import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmentAccess.js";
 import { withResolvedActors, attachFieldChanges } from "./audit-trail.service.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 export const auditTrailRouter = Router();
 
-auditTrailRouter.use(requireAuth, withTenantDb);
+auditTrailRouter.use(requireAuth, withDb);
 
 /**
  * entityType (exactly as passed to recordAuditTrail's own `entityType`, or
  * crudFactory's `entityName`, across every real call site in this app) ->
  * the ResourceKey that already gates that entity's own module. Closes
  * Full-System Audit finding H1: this endpoint had no RBAC at all — any
- * authenticated tenant user could read any other department's full
- * change/decision history just by knowing or guessing an entityId (tenant
- * scoping itself was already correct; this was an intra-tenant
- * information-disclosure gap, not a cross-tenant one).
+ * authenticated company user could read any other department's full
+ * change/decision history just by knowing or guessing an entityId (company
+ * scoping itself was already correct; this was an intra-company
+ * information-disclosure gap, not a one).
  *
  * Deliberately does NOT cover every entityType ever recorded — two real
  * categories are left out on purpose, not missed:
@@ -34,13 +34,13 @@ auditTrailRouter.use(requireAuth, withTenantDb);
  *      Forms used to belong on this list too (Full-System Audit findings
  *      C2/C3), but both later gained a real requireDepartmentAccess gate
  *      on their own routes — leaving their entityTypes off this map after
- *      that would have re-opened exactly the intra-tenant disclosure gap
+ *      that would have re-opened exactly the intra-company disclosure gap
  *      this fix exists to close, so TrainingAssignment/QmsForm are mapped
  *      below instead. SCAR Forms is still genuinely ungated at the route
  *      level; revisit it here if that ever changes too.
- *   2. Genuinely system/permission-level types (Tenant, User, department
+ *   2. Genuinely system/permission-level types (Company, User, department
  *      and role permission grants) — no single business department owns
- *      these, so they require admin/platform_admin outright instead of a
+ *      these, so they require admin outright instead of a
  *      ResourceKey lookup.
  */
 const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
@@ -109,15 +109,15 @@ const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   audit_finding: "audit", // same inconsistent-casing situation as warranty_claim above
 };
 
-/** No business department owns these — admin/platform_admin only, not a ResourceKey lookup. */
-const ADMIN_ONLY_ENTITY_TYPES = new Set(["Tenant", "User", "DepartmentPermission", "PermissionRole", "UserPermissionRole"]);
+/** No business department owns these — admin only, not a ResourceKey lookup. */
+const ADMIN_ONLY_ENTITY_TYPES = new Set(["Company", "Company", "User", "DepartmentPermission", "PermissionRole", "UserPermissionRole"]);
 
 /** History for a single entity, e.g. GET /audit-trail/ncr/42 */
 auditTrailRouter.get(
   "/:entityType/:entityId",
   asyncHandler(async (req, res) => {
     const role = req.user?.roleName;
-    const isAdmin = role === "admin" || role === "platform_admin";
+    const isAdmin = role === "admin";
     const entityType = req.params.entityType!;
 
     if (!isAdmin) {
@@ -126,7 +126,7 @@ auditTrailRouter.get(
       }
       const resourceKey = ENTITY_TYPE_TO_RESOURCE[entityType];
       if (resourceKey) {
-        const level = await getUserAccessLevel(req.db! as TenantDb, req.tenantId!, req.user!, resourceKey);
+        const level = await getUserAccessLevel(req.db! as Db, req.user!, resourceKey);
         if (level === "none") throw AppError.forbidden(`No access to '${entityType}' history for your department`);
       }
       // No map entry at all: this entityType's own module has no
@@ -137,9 +137,9 @@ auditTrailRouter.get(
     const rows = await req
       .db!.select()
       .from(auditTrail)
-      .where(and(eq(auditTrail.entityId, Number(req.params.entityId)), eq(auditTrail.tenantId, req.tenantId!)));
+      .where(and(eq(auditTrail.entityId, Number(req.params.entityId))));
     const filtered = rows.filter((r) => r.entityType === entityType);
-    const withActors = await withResolvedActors(req.db! as TenantDb, filtered);
-    res.json(await attachFieldChanges(req.db! as TenantDb, req.tenantId!, withActors));
+    const withActors = await withResolvedActors(req.db! as Db, filtered);
+    res.json(await attachFieldChanges(req.db! as Db, withActors));
   })
 );

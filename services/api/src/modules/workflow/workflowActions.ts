@@ -1,4 +1,4 @@
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { registerActionHandler } from "./workflow-engine.js";
 import { sendEmail, notifyDepartment } from "../notifications/notification.service.js";
 import { notificationLog } from "../../drizzle/schema/notifications.js";
@@ -27,11 +27,9 @@ import { triggerErpSync } from "../settings/settings.erpSync.js";
  * keys before calling runWorkflow — a deliberate convention (not a new
  * parameter on runWorkflow itself, which stays a pure, DB-agnostic
  * function) so the SAME engine code works whether it's called from the API
- * process (a real `TenantDb` inside a request transaction) or the
- * workflow-worker process (its own plain pool connection, tenant-filtered
- * explicitly — see workers/workflow-worker/src/db.ts):
- *   __db: TenantDb-compatible query interface for this tenant
- *   __tenantId: number
+ * process (a real `Db` inside a request transaction) or the
+ * workflow-worker process (its own plain pool connection — see workers/workflow-worker/src/db.ts):
+ *   __db: Db-compatible query interface
  *   __performedBy: number | undefined — the user who triggered this run,
  *     or undefined for a worker-driven run with no human actor (audit
  *     trail's own `performedBy` is already nullable for exactly this case
@@ -62,7 +60,7 @@ function recordActionRun(context: Record<string, unknown>, kind: string, detail:
 }
 
 function cleanContext(context: Record<string, unknown>): Record<string, unknown> {
-  const { __db: _db, __tenantId: _tenantId, __performedBy: _performedBy, ...rest } = context;
+  const { __db: _db, __performedBy: _performedBy, ...rest } = context;
   return rest;
 }
 
@@ -88,9 +86,8 @@ registerActionHandler("send_email", async (node, context, dryRun) => {
   }
 
   const status = await sendEmail({ to, subject, body });
-  const db = context.__db as TenantDb | undefined;
-  const tenantId = context.__tenantId as number | undefined;
-  if (db && tenantId) await db.insert(notificationLog).values({ tenantId, channel: "email", recipient: to, subject, body, status, relatedEntityType: "WorkflowRun" });
+  const db = context.__db as Db | undefined;
+  if (db) await db.insert(notificationLog).values({ channel: "email", recipient: to, subject, body, status, relatedEntityType: "WorkflowRun" });
   recordActionRun(context, "send_email", { to, subject, status });
 });
 
@@ -107,22 +104,20 @@ registerActionHandler("notify_department", async (node, context, dryRun) => {
     recordActionRun(context, "notify_department", { simulated: true, department: config.department, subject });
     return;
   }
-  const db = context.__db as TenantDb | undefined;
-  const tenantId = context.__tenantId as number | undefined;
-  if (!db || !tenantId) {
-    recordActionRun(context, "notify_department", { skipped: true, reason: "no tenant database context available" });
+  const db = context.__db as Db | undefined;
+  if (!db) {
+    recordActionRun(context, "notify_department", { skipped: true, reason: "no database context available" });
     return;
   }
-  const recipientCount = await notifyDepartment(db, { tenantId, department: config.department, subject, body });
+  const recipientCount = await notifyDepartment(db, { department: config.department, subject, body });
   recordActionRun(context, "notify_department", { department: config.department, subject, recipientCount });
 });
 
 registerActionHandler("notify_supplier", async (node, context, dryRun) => {
   const config = node.config as { subject?: string; body?: string };
   const supplierId = toNumber(context.supplierId);
-  const db = context.__db as TenantDb | undefined;
-  const tenantId = context.__tenantId as number | undefined;
-  if (!supplierId || !db || !tenantId) {
+  const db = context.__db as Db | undefined;
+  if (!supplierId || !db) {
     recordActionRun(context, "notify_supplier", { skipped: true, reason: "no supplierId in this event's context" });
     return;
   }
@@ -135,13 +130,13 @@ registerActionHandler("notify_supplier", async (node, context, dryRun) => {
     return;
   }
 
-  const [supplier] = await db.select({ contactEmail: suppliers.contactEmail }).from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, tenantId)));
+  const [supplier] = await db.select({ contactEmail: suppliers.contactEmail }).from(suppliers).where(and(eq(suppliers.id, supplierId)));
   if (!supplier?.contactEmail) {
     recordActionRun(context, "notify_supplier", { skipped: true, reason: "supplier has no contact email on file" });
     return;
   }
   const status = await sendEmail({ to: supplier.contactEmail, subject, body });
-  await db.insert(notificationLog).values({ tenantId, channel: "email", recipient: supplier.contactEmail, subject, body, status, relatedEntityType: "Supplier", relatedEntityId: supplierId });
+  await db.insert(notificationLog).values({ channel: "email", recipient: supplier.contactEmail, subject, body, status, relatedEntityType: "Supplier", relatedEntityId: supplierId });
   recordActionRun(context, "notify_supplier", { supplierId, subject, status });
 });
 
@@ -154,17 +149,15 @@ registerActionHandler("create_ncr", async (node, context, dryRun) => {
     recordActionRun(context, "create_ncr", { simulated: true, title, severity: config.severity ?? null });
     return;
   }
-  const db = context.__db as TenantDb | undefined;
-  const tenantId = context.__tenantId as number | undefined;
-  if (!db || !tenantId) {
-    recordActionRun(context, "create_ncr", { skipped: true, reason: "no tenant database context available" });
+  const db = context.__db as Db | undefined;
+  if (!db) {
+    recordActionRun(context, "create_ncr", { skipped: true, reason: "no database context available" });
     return;
   }
 
   const [created] = await db
     .insert(ncr)
     .values({
-      tenantId,
       title,
       description,
       severity: config.severity,
@@ -175,14 +168,13 @@ registerActionHandler("create_ncr", async (node, context, dryRun) => {
     .returning();
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "NCR",
     entityId: created!.id,
     action: "create",
     changes: { message: "NCR auto-created by workflow action", workflowNode: node.id },
     performedBy: context.__performedBy as number | undefined,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "ncr", event: "created", entityId: created!.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "ncr", event: "created", entityId: created!.id });
   recordActionRun(context, "create_ncr", { ncrId: created!.id, title });
 });
 
@@ -195,17 +187,15 @@ registerActionHandler("escalate_capa", async (node, context, dryRun) => {
     recordActionRun(context, "escalate_capa", { simulated: true, rootCause, ncrId: ncrId ?? null });
     return;
   }
-  const db = context.__db as TenantDb | undefined;
-  const tenantId = context.__tenantId as number | undefined;
-  if (!db || !tenantId) {
-    recordActionRun(context, "escalate_capa", { skipped: true, reason: "no tenant database context available" });
+  const db = context.__db as Db | undefined;
+  if (!db) {
+    recordActionRun(context, "escalate_capa", { skipped: true, reason: "no database context available" });
     return;
   }
 
   const [created] = await db
     .insert(capa)
     .values({
-      tenantId,
       ncrId,
       rootCause,
       status: "open",
@@ -215,14 +205,13 @@ registerActionHandler("escalate_capa", async (node, context, dryRun) => {
     .returning();
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "CAPA",
     entityId: created!.id,
     action: "create",
     changes: { message: "CAPA escalation triggered by workflow action", workflowNode: node.id },
     performedBy: context.__performedBy as number | undefined,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "capa", event: "escalated", entityId: created!.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "capa", event: "escalated", entityId: created!.id });
   recordActionRun(context, "escalate_capa", { capaId: created!.id });
 });
 
@@ -240,17 +229,15 @@ registerActionHandler("assign_user", async (node, context, dryRun) => {
     recordActionRun(context, "assign_user", { simulated: true, module: config.module, entityId, userId });
     return;
   }
-  const db = context.__db as TenantDb | undefined;
-  const tenantId = context.__tenantId as number | undefined;
-  if (!db || !tenantId) {
-    recordActionRun(context, "assign_user", { skipped: true, reason: "no tenant database context available" });
+  const db = context.__db as Db | undefined;
+  if (!db) {
+    recordActionRun(context, "assign_user", { skipped: true, reason: "no database context available" });
     return;
   }
 
   const table = assignable.table;
-  await db.update(table).set({ [assignable.column]: userId } as never).where(and(eq(table.id, entityId), eq(table.tenantId, tenantId)));
+  await db.update(table).set({ [assignable.column]: userId } as never).where(and(eq(table.id, entityId)));
   await recordAuditTrail(db, {
-    tenantId,
     entityType: config.module === "ncr" ? "NCR" : "CAPA",
     entityId,
     action: "update",
@@ -265,22 +252,21 @@ registerActionHandler("ai_suggestion", async (node, context, dryRun) => {
     recordActionRun(context, "ai_suggestion", { simulated: true, note: "would call the AI pipeline — skipped in simulation to avoid spending real usage quota" });
     return;
   }
-  const db = context.__db as TenantDb | undefined;
-  const tenantId = context.__tenantId as number | undefined;
-  if (!db || !tenantId) {
-    recordActionRun(context, "ai_suggestion", { skipped: true, reason: "no tenant database context available" });
+  const db = context.__db as Db | undefined;
+  if (!db) {
+    recordActionRun(context, "ai_suggestion", { skipped: true, reason: "no database context available" });
     return;
   }
 
   const input = cleanContext(context);
-  const { suggestion, output } = await runPipelineAndRecord(db, tenantId, context.__performedBy as number | undefined, "workflow", "workflow_ai_note", input, "AI-generated workflow note", (opts) =>
+  const { suggestion, output } = await runPipelineAndRecord(db, context.__performedBy as number | undefined, "workflow", "workflow_ai_note", input, "AI-generated workflow note", (opts) =>
     runWorkflowAiNotePipeline(input, opts)
   );
   recordActionRun(context, "ai_suggestion", { suggestionId: suggestion.id, output });
 });
 
-// Integration node: hand the tenant's configured ERP sync a nudge — the same
-// triggerErpSync() the "Trigger Sync Now" button calls, so it obeys the tenant's
+// Integration node: hand the company's configured ERP sync a nudge — the same
+// triggerErpSync() the "Trigger Sync Now" button calls, so it obeys the company's
 // own webhook, enabled modules, presets and error log. Reports "skipped" (not
 // "sent") when no webhook is configured, exactly as the button does.
 registerActionHandler("erp_sync", async (_node, context, dryRun) => {
@@ -288,12 +274,11 @@ registerActionHandler("erp_sync", async (_node, context, dryRun) => {
     recordActionRun(context, "erp_sync", { simulated: true, note: "would trigger the configured ERP sync" });
     return;
   }
-  const db = context.__db as TenantDb | undefined;
-  const tenantId = context.__tenantId as number | undefined;
-  if (!db || !tenantId) {
-    recordActionRun(context, "erp_sync", { skipped: true, reason: "no tenant database context available" });
+  const db = context.__db as Db | undefined;
+  if (!db) {
+    recordActionRun(context, "erp_sync", { skipped: true, reason: "no database context available" });
     return;
   }
-  const result = await triggerErpSync(db, tenantId, context.__performedBy as number | undefined);
+  const result = await triggerErpSync(db, context.__performedBy as number | undefined);
   recordActionRun(context, "erp_sync", { status: result.status, message: result.message });
 });

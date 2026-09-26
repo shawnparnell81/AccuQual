@@ -2,13 +2,13 @@ import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
 import { validate } from "../../middleware/validate.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { createUserSchema, updateUserSchema, updateMyThemeSchema, updateMyChangelogSeenSchema, updateMySavedViewsSchema } from "./users.validation.js";
 import { listUsers, getUser, createUser, updateUser, deleteUser, unlockUser, resetUserMfa, getMyTheme, updateMyTheme, getMyChangelogSeen, updateMyChangelogSeen, getMySavedViews, updateMySavedViews } from "./users.controller.js";
 
 export const usersRouter = Router();
 
-usersRouter.use(requireAuth, withTenantDb);
+usersRouter.use(requireAuth, withDb);
 
 usersRouter.get("/", requireRole("admin", "quality_manager"), listUsers);
 usersRouter.post("/", requireRole("admin"), validate(createUserSchema), createUser);

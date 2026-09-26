@@ -33,7 +33,7 @@ export const updateUserSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-/** A user's own theme override — see users.themePreferences. "" clears a color back to following the tenant/default theme, same convention as tenant.validation.ts's updateBrandingSchema. */
+/** A user's own theme override — see users.themePreferences. "" clears a color back to following the company/default theme, same convention as company.validation.ts's updateBrandingSchema. */
 export const updateMyThemeSchema = z.object({
   mode: z.enum(["light", "dark", "system"]).optional(),
   primaryColor: z

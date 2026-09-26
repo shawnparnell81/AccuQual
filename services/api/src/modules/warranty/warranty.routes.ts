@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createWarrantyClaimSchema, updateWarrantyClaimSchema, transitionWarrantyClaimSchema, createWarrantyCostSchema } from "./warranty.validation.js";
@@ -23,7 +23,7 @@ export const warrantyRouter = Router();
 // per-action restrictions (create: customer_service+quality only; each
 // status transition gated to its own department set) are inline in
 // warranty.controller.ts, same pattern as rma.controller.ts.
-warrantyRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("warranty"));
+warrantyRouter.use(requireAuth, withDb, requireDepartmentAccess("warranty"));
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 

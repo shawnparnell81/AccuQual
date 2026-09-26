@@ -40,7 +40,7 @@ const validationRuleSchema = z
   .refine((rule) => !rule.pattern || isValidRegex(rule.pattern), { message: "pattern is not a valid regular expression", path: ["pattern"] })
   // applyValidation runs this pattern synchronously against real records on
   // every sync — a catastrophic-backtracking pattern would hang the single
-  // Node process for every tenant sharing it, not just this one. Rejecting
+  // Node process for every company sharing it, not just this one. Rejecting
   // the classic nested-quantifier shape at save time (rather than trying to
   // fix it at match time) keeps the match-time code a plain `.test()` call.
   .refine((rule) => !rule.pattern || !hasCatastrophicBacktrackingShape(rule.pattern), { message: "pattern has a nested repetition operator that can cause catastrophic backtracking (e.g. (a+)+) — simplify it", path: ["pattern"] });

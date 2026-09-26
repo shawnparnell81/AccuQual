@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, numeric, boolean } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 import { inventoryItems } from "./inventory.js";
 import { ncr } from "./ncr.js";
@@ -36,7 +35,6 @@ import { ncr } from "./ncr.js";
  */
 export const workOrders = pgTable("work_orders", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   itemId: integer("item_id").references(() => inventoryItems.id).notNull(),
   quantityPlanned: numeric("quantity_planned").notNull(),
   quantityCompleted: numeric("quantity_completed").notNull().default("0"),
@@ -67,7 +65,6 @@ export const workOrders = pgTable("work_orders", {
  */
 export const workOrderOperations = pgTable("work_order_operations", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   workOrderId: integer("work_order_id").references(() => workOrders.id).notNull(),
   opNumber: integer("op_number").notNull(),
   description: text("description").notNull(),

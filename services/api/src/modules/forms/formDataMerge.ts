@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { formData } from "../../drizzle/schema/forms.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 /**
  * Targeted merge into one record's form_data row — used to keep a record's
@@ -15,14 +15,13 @@ import type { TenantDb } from "../../lib/tenantScope.js";
  * A no-op merge (nothing would change) writes nothing.
  */
 export async function mergeFormData(
-  db: TenantDb,
-  tenantId: number,
+  db: Db,
   opts: { formType: string; entityType: string; entityId: number; patch?: Record<string, unknown>; defaults?: Record<string, unknown>; createdBy?: number }
 ): Promise<void> {
   const [existing] = await db
     .select()
     .from(formData)
-    .where(and(eq(formData.tenantId, tenantId), eq(formData.formType, opts.formType), eq(formData.entityId, opts.entityId)))
+    .where(and(eq(formData.formType, opts.formType), eq(formData.entityId, opts.entityId)))
     .orderBy(desc(formData.id));
 
   const data: Record<string, unknown> = { ...(existing?.data ?? {}) };
@@ -36,6 +35,6 @@ export async function mergeFormData(
     if (JSON.stringify(existing.data ?? {}) === JSON.stringify(data)) return;
     await db.update(formData).set({ data, updatedAt: new Date() }).where(eq(formData.id, existing.id));
   } else {
-    await db.insert(formData).values({ tenantId, formType: opts.formType, entityType: opts.entityType, entityId: opts.entityId, data, version: 1, createdBy: opts.createdBy });
+    await db.insert(formData).values({ formType: opts.formType, entityType: opts.entityType, entityId: opts.entityId, data, version: 1, createdBy: opts.createdBy });
   }
 }

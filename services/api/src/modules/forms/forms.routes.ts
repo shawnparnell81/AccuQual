@@ -4,7 +4,7 @@ import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
 import { AppError } from "../../utils/appError.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { saveFormSchema, FORM_TYPES } from "./forms.validation.js";
@@ -13,7 +13,7 @@ import { listTemplatesHandler, uploadTemplateHandler, downloadTemplateHandler, d
 import type { ResourceKey } from "../../middleware/departmentAccess.js";
 
 export const formsRouter = Router();
-formsRouter.use(requireAuth, withTenantDb);
+formsRouter.use(requireAuth, withDb);
 
 // memoryStorage: files are small (PDF forms), and uploadTemplateHandler
 // decides the on-disk path itself — same convention as document-folders'
@@ -69,7 +69,7 @@ const FORM_TYPE_TO_RESOURCE: Partial<Record<(typeof FORM_TYPES)[number], Resourc
 /**
  * Write-path only (POST save/version), matching this finding's own scope
  * and the pre-existing production_log gate's own scope — reads stay open
- * to any authenticated tenant user, unchanged, same as before this fix.
+ * to any authenticated company user, unchanged, same as before this fix.
  */
 function gateKnownFormTypes(req: Request, res: Response, next: NextFunction) {
   const resourceKey = req.params.type ? FORM_TYPE_TO_RESOURCE[req.params.type as (typeof FORM_TYPES)[number]] : undefined;

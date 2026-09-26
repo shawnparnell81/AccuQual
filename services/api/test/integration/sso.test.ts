@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test.
 // OpenID Connect single sign-on, end to end against a small in-process identity
 // provider (discovery document, JWKS, signed ID tokens, PKCE-checking token
 // endpoint) so the real `openid-client` validation runs. DNS is the one thing
@@ -19,7 +20,7 @@ vi.mock("../../src/modules/sso/dnsVerify.js", () => ({
 
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { roles } from "../../src/drizzle/schema/roles.js";
 import { refreshTokens } from "../../src/drizzle/schema/refreshTokens.js";
@@ -131,9 +132,8 @@ class FakeIdp {
 // ---- Fixtures ---------------------------------------------------------------------------------------------------------------------------------
 
 const idp = new FakeIdp();
-let tenantId: number;
-let otherTenantId: number;
-let tenantCode: string;
+let companyId: number;
+
 let adminToken: string;
 let workerRoleId: number;
 let adminRoleId: number;
@@ -152,17 +152,17 @@ async function ensureRole(name: string): Promise<number> {
   return (await db.select().from(roles).where(eq(roles.name, name)))[0]!.id;
 }
 
-async function makeUser(label: string, tenant: number, extra: Partial<typeof users.$inferInsert> = {}) {
+async function makeUser(label: string, co: number, extra: Partial<typeof users.$inferInsert> = {}) {
   const email = `${label}-${suffix}@${DOMAIN}`;
-  const [u] = await db.insert(users).values({ tenantId: tenant, email, passwordHash: await bcrypt.hash(PASSWORD, 4), ...extra }).returning();
+  const [u] = await db.insert(users).values({ email, passwordHash: await bcrypt.hash(PASSWORD, 4), ...extra }).returning();
   userIds.push(u!.id);
   return { id: u!.id, email };
 }
 
 /** Runs one full browser round trip: /auth/sso/start -> provider -> callback. Returns where the app sent the browser and, if a session began, the user it began for. */
-async function ssoSignIn(claims: Record<string, unknown>, opts: { aud?: string; expired?: boolean; state?: string; tenant?: string } = {}) {
+async function ssoSignIn(claims: Record<string, unknown>, opts: { aud?: string; expired?: boolean; state?: string } = {}) {
   const agent = request.agent(app);
-  const start = await agent.get(`/auth/sso/start?tenant=${opts.tenant ?? tenantCode}`);
+  const start = await agent.get("/auth/sso/start");
   if (start.status !== 302 || !String(start.headers.location).startsWith(idp.issuer)) return { start, location: String(start.headers.location ?? ""), session: null as null | { id: number; email: string } };
   const callback = await agent.get(idp.authorize(start.headers.location as string, claims, opts));
   const location = String(callback.headers.location ?? "");
@@ -181,42 +181,26 @@ const claimsFor = (email: string, extra: Record<string, unknown> = {}) => ({ sub
 describe("OpenID Connect single sign-on (real DB + real openid-client)", () => {
   beforeAll(async () => {
     await idp.start();
-    const [t] = await db.insert(tenants).values({ name: `SSO Test ${suffix}`, code: `sso-${suffix}` }).returning();
-    const [o] = await db.insert(tenants).values({ name: `SSO Other ${suffix}`, code: `sso-other-${suffix}` }).returning();
-    tenantId = t!.id;
-    otherTenantId = o!.id;
-    tenantCode = t!.code;
+    const t = await ensureTestCompany();
+    
+    companyId = t!.id;
+    
     adminRoleId = await ensureRole("admin");
     workerRoleId = await ensureRole(`sso-worker-${suffix}`);
-    const admin = await makeUser("sso-admin", tenantId, { roleId: adminRoleId });
-    adminToken = await signAccessToken({ sub: String(admin.id), tenantId, roleId: adminRoleId, roleName: "admin", department: null });
+    const admin = await makeUser("sso-admin", companyId, { roleId: adminRoleId });
+    adminToken = await signAccessToken({ sub: String(admin.id), roleId: adminRoleId, roleName: "admin", department: null });
   });
 
   afterAll(async () => {
     idp.stop();
     await new Promise((r) => setTimeout(r, 300));
-    const tenantIds = [tenantId, otherTenantId];
-    await db.delete(userIdentities).where(inArray(userIdentities.tenantId, tenantIds));
-    await db.delete(ssoConnections).where(inArray(ssoConnections.tenantId, tenantIds));
-    await db.delete(ssoDomains).where(inArray(ssoDomains.tenantId, tenantIds));
-    for (const t of tenantIds) {
-      await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, t));
-      await db.delete(auditTrail).where(eq(auditTrail.tenantId, t));
-    }
-    await db.delete(refreshTokens).where(inArray(refreshTokens.userId, userIds));
-    await db.delete(users).where(inArray(users.id, userIds));
-    if (createdRoleIds.length) await db.delete(roles).where(inArray(roles.id, createdRoleIds));
-    for (const t of tenantIds) {
-      await db.delete(tenants).where(eq(tenants.id, t));
-      await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, t));
-    }
     await pool.end();
   });
 
-  describe("setup by a tenant admin", () => {
+  describe("setup by an administrator", () => {
     it("only admins can configure SSO", async () => {
-      const worker = await makeUser("sso-nonadmin", tenantId);
-      const token = await signAccessToken({ sub: String(worker.id), tenantId, roleId: null, roleName: null, department: null });
+      const worker = await makeUser("sso-nonadmin", companyId);
+      const token = await signAccessToken({ sub: String(worker.id), roleId: null, roleName: null, department: null });
       expect((await request(app).get("/sso").set(bearer(token))).status).toBe(403);
     });
 
@@ -244,16 +228,7 @@ describe("OpenID Connect single sign-on (real DB + real openid-client)", () => {
       expect(ok.body.verified).toBe(true);
     });
 
-    it("another organization cannot verify a domain that is already taken", async () => {
-      const [other] = await db.insert(ssoDomains).values({ tenantId: otherTenantId, domain: DOMAIN, verificationToken: "abc123" }).returning();
-      const otherUser = await makeUser("sso-other-admin", otherTenantId, { roleId: adminRoleId });
-      const otherToken = await signAccessToken({ sub: String(otherUser.id), tenantId: otherTenantId, roleId: adminRoleId, roleName: "admin", department: null });
-      dns.records.set(`_accuqual-verify.${DOMAIN}`, [...(dns.records.get(`_accuqual-verify.${DOMAIN}`) ?? []), "accuqual-verify=abc123"]);
-      const res = await request(app).post(`/sso/domains/${other!.id}/verify`).set(bearer(otherToken));
-      expect(res.status).toBe(400);
-      expect(res.body.message).toMatch(/another organization/);
-      await db.delete(ssoDomains).where(eq(ssoDomains.id, other!.id));
-    });
+    ;
 
     it("saves the connection with the secret encrypted and never returns it", async () => {
       const res = await request(app).put("/sso").set(bearer(adminToken)).send({ displayName: "Test IdP", issuer: idp.issuer, clientId: CLIENT_ID, clientSecret: CLIENT_SECRET, enabled: true });
@@ -261,7 +236,7 @@ describe("OpenID Connect single sign-on (real DB + real openid-client)", () => {
       expect(JSON.stringify(res.body)).not.toContain(CLIENT_SECRET);
       expect(res.body.clientSecretEncrypted).toBeUndefined();
 
-      const [row] = await db.select().from(ssoConnections).where(eq(ssoConnections.tenantId, tenantId));
+      const [row] = await db.select().from(ssoConnections);
       expect(row!.clientSecretEncrypted).not.toContain(CLIENT_SECRET);
       const got = await request(app).get("/sso").set(bearer(adminToken));
       expect(JSON.stringify(got.body)).not.toContain(CLIENT_SECRET);
@@ -288,14 +263,13 @@ describe("OpenID Connect single sign-on (real DB + real openid-client)", () => {
     });
 
     it("tells the login page whether an organization uses SSO, and nothing else", async () => {
-      expect((await request(app).get(`/auth/sso/discover?tenant=${tenantCode}`)).body).toEqual({ enabled: true, displayName: "Test IdP" });
-      expect((await request(app).get("/auth/sso/discover?tenant=no-such-tenant")).body).toEqual({ enabled: false, displayName: null });
+      expect((await request(app).get("/auth/sso/discover")).body).toEqual({ enabled: true, displayName: "Test IdP" });
     });
   });
 
   describe("signing in", () => {
     it("links an existing account on its verified email, then recognizes it by the provider subject", async () => {
-      const u = await makeUser("sso-existing", tenantId);
+      const u = await makeUser("sso-existing", companyId);
       const first = await ssoSignIn(claimsFor(u.email));
       expect(first.location).toBe("http://localhost:5183/");
       expect(first.session).toMatchObject({ id: u.id, email: u.email });
@@ -316,7 +290,7 @@ describe("OpenID Connect single sign-on (real DB + real openid-client)", () => {
     });
 
     it("refuses an email the provider has not verified", async () => {
-      const u = await makeUser("sso-unverified", tenantId);
+      const u = await makeUser("sso-unverified", companyId);
       const res = await ssoSignIn(claimsFor(u.email, { email_verified: false }));
       expect(errorOf(res.location)).toBe("email_not_verified");
       expect(res.session).toBeNull();
@@ -324,26 +298,20 @@ describe("OpenID Connect single sign-on (real DB + real openid-client)", () => {
     });
 
     it("trusts an unverified claim only when the admin turned the check off", async () => {
-      const u = await makeUser("sso-entra", tenantId);
+      const u = await makeUser("sso-entra", companyId);
       await request(app).put("/sso").set(bearer(adminToken)).send({ displayName: "Test IdP", issuer: idp.issuer, clientId: CLIENT_ID, enabled: true, requireVerifiedEmail: false });
       const res = await ssoSignIn({ sub: "entra-sub-1", email: u.email });
       expect(res.session?.id).toBe(u.id);
       await request(app).put("/sso").set(bearer(adminToken)).send({ displayName: "Test IdP", issuer: idp.issuer, clientId: CLIENT_ID, enabled: true, requireVerifiedEmail: true });
     });
 
-    it("refuses an email outside the tenant's verified domains", async () => {
+    it("refuses an email outside the verified domains", async () => {
       const res = await ssoSignIn(claimsFor(`stranger@unverified-${suffix}.example`));
       expect(errorOf(res.location)).toBe("domain_not_allowed");
       expect(res.session).toBeNull();
     });
 
-    it("never links an email that belongs to another organization", async () => {
-      const foreign = await makeUser("sso-foreign", otherTenantId);
-      const res = await ssoSignIn(claimsFor(foreign.email));
-      expect(errorOf(res.location)).toBe("email_in_other_organization");
-      expect(res.session).toBeNull();
-      expect(await db.select().from(userIdentities).where(eq(userIdentities.userId, foreign.id))).toHaveLength(0);
-    });
+    ;
 
     it("does not create accounts unless auto-provisioning is on", async () => {
       const email = `newcomer-${suffix}@${DOMAIN}`;
@@ -359,27 +327,27 @@ describe("OpenID Connect single sign-on (real DB + real openid-client)", () => {
       expect(res.session?.email).toBe(email);
       const [created] = await db.select().from(users).where(eq(users.email, email));
       userIds.push(created!.id);
-      expect(created).toMatchObject({ tenantId, roleId: workerRoleId, name: "Pat Provisioned" });
+      expect(created).toMatchObject({ roleId: workerRoleId, name: "Pat Provisioned" });
       expect(created!.passwordHash).toBeTruthy();
       // The random password is unusable: nobody knows it.
       expect((await request(app).post("/auth/login").send({ email, password: "anything-at-all-123" })).status).toBe(401);
 
       // Point the default role at an admin role directly in the DB (bypassing the API check): use still refuses.
-      await db.update(ssoConnections).set({ defaultRoleId: adminRoleId }).where(eq(ssoConnections.tenantId, tenantId));
+      await db.update(ssoConnections).set({ defaultRoleId: adminRoleId });
       const blocked = await ssoSignIn(claimsFor(`second-${suffix}@${DOMAIN}`));
       expect(errorOf(blocked.location)).toBe("no_account");
-      await db.update(ssoConnections).set({ autoProvision: false, defaultRoleId: null }).where(eq(ssoConnections.tenantId, tenantId));
+      await db.update(ssoConnections).set({ autoProvision: false, defaultRoleId: null });
     });
 
     it("refuses a deactivated account", async () => {
-      const u = await makeUser("sso-disabled", tenantId, { isActive: false });
+      const u = await makeUser("sso-disabled", companyId, { isActive: false });
       const res = await ssoSignIn(claimsFor(u.email));
       expect(errorOf(res.location)).toBe("account_disabled");
       expect(res.session).toBeNull();
     });
 
-    it("records refused attempts in the tenant's audit trail", async () => {
-      const entries = await db.select().from(auditTrail).where(eq(auditTrail.tenantId, tenantId));
+    it("records refused attempts in the audit trail", async () => {
+      const entries = await db.select().from(auditTrail);
       const denied = entries.filter((e) => (e.changes as { action?: string } | null)?.action === "sso_login_denied");
       expect(denied.length).toBeGreaterThan(0);
       expect(denied.map((e) => (e.changes as { reason: string }).reason)).toContain("domain_not_allowed");
@@ -388,7 +356,7 @@ describe("OpenID Connect single sign-on (real DB + real openid-client)", () => {
 
   describe("protocol checks (all done by openid-client)", () => {
     it("rejects a mismatched state, an ID token for another audience, and an expired one", async () => {
-      const u = await makeUser("sso-protocol", tenantId);
+      const u = await makeUser("sso-protocol", companyId);
       expect(errorOf((await ssoSignIn(claimsFor(u.email), { state: "not-the-state" })).location)).toBe("provider_error");
       expect(errorOf((await ssoSignIn(claimsFor(u.email), { aud: "someone-elses-client" })).location)).toBe("provider_error");
       expect(errorOf((await ssoSignIn(claimsFor(u.email), { expired: true })).location)).toBe("provider_error");
@@ -397,7 +365,7 @@ describe("OpenID Connect single sign-on (real DB + real openid-client)", () => {
 
     it("a callback without the browser's flow cookie (or after it was used) is refused", async () => {
       const agent = request.agent(app);
-      const start = await agent.get(`/auth/sso/start?tenant=${tenantCode}`);
+      const start = await agent.get("/auth/sso/start");
       const cb = idp.authorize(start.headers.location as string, claimsFor(`x-${suffix}@${DOMAIN}`));
       expect(errorOf(String((await request(app).get(cb)).headers.location))).toBe("session_expired");
       // The flow cookie is single-use: the first callback consumes it, so a replay finds none.
@@ -405,18 +373,13 @@ describe("OpenID Connect single sign-on (real DB + real openid-client)", () => {
       expect(errorOf(String((await agent.get(cb)).headers.location))).toBe("session_expired");
     });
 
-    it("an unknown or SSO-less tenant is sent back to the login page", async () => {
-      const res = await request(app).get("/auth/sso/start?tenant=no-such-tenant");
-      expect(res.status).toBe(302);
-      expect(errorOf(String(res.headers.location))).toBe("not_configured");
-    });
   });
 
   describe("requiring SSO", () => {
     it("blocks password sign-in for everyone except admins", async () => {
       await request(app).put("/sso").set(bearer(adminToken)).send({ displayName: "Test IdP", issuer: idp.issuer, clientId: CLIENT_ID, enabled: true, enforceSso: true });
-      const worker = await makeUser("sso-enforced-worker", tenantId);
-      const adminUser = await makeUser("sso-enforced-admin", tenantId, { roleId: adminRoleId, mfaRequiredSince: new Date() });
+      const worker = await makeUser("sso-enforced-worker", companyId);
+      const adminUser = await makeUser("sso-enforced-admin", companyId, { roleId: adminRoleId, mfaRequiredSince: new Date() });
 
       const blocked = await request(app).post("/auth/login").send({ email: worker.email, password: PASSWORD });
       expect(blocked.status).toBe(403);
@@ -434,7 +397,7 @@ describe("OpenID Connect single sign-on (real DB + real openid-client)", () => {
 
     it("a disabled connection stops SSO sign-in", async () => {
       await request(app).put("/sso").set(bearer(adminToken)).send({ displayName: "Test IdP", issuer: idp.issuer, clientId: CLIENT_ID, enabled: false });
-      const res = await request(app).get(`/auth/sso/start?tenant=${tenantCode}`);
+      const res = await request(app).get("/auth/sso/start");
       expect(errorOf(String(res.headers.location))).toBe("not_configured");
     });
   });

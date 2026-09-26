@@ -11,12 +11,12 @@ import { toWorkflowPayload, workflowAdapter } from "../versioning/adapters.js";
 import { recordAuditTrail, withResolvedActors, attachFieldChanges } from "../audit-trail/audit-trail.service.js";
 import { RESOURCE_KEYS } from "../../middleware/departmentAccess.js";
 import { WORKFLOW_TEMPLATES } from "./workflow.templates.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 const VERSION_HISTORY_CAP = 20;
 
 export const listHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await req.db!.select().from(workflowDefinitions).where(eq(workflowDefinitions.tenantId, req.tenantId!)));
+  res.json(await req.db!.select().from(workflowDefinitions));
 });
 
 /**
@@ -29,23 +29,23 @@ export const createHandler = asyncHandler(async (req: Request, res: Response) =>
   const payload = toWorkflowPayload({ nodes: definition?.nodes, edges: definition?.edges, metadata: { ...(metadata ?? {}), name, ...(module ? { module } : {}) } });
   const [created] = await req
     .db!.insert(workflowDefinitions)
-    .values({ name, module, tenantId: req.tenantId!, createdBy: req.user?.id, isActive: "false", definition: payload as unknown as Record<string, unknown>, version: 1, versionHistory: [] })
+    .values({ name, module, createdBy: req.user?.id, isActive: "false", definition: payload as unknown as Record<string, unknown>, version: 1, versionHistory: [] })
     .returning();
   if (!created) throw new AppError("Failed to create workflow", 500);
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkflowDefinition", entityId: created.id, action: "create", changes: { name, module: module ?? null }, performedBy: req.user?.id });
-  const draft = await createInitialDraft(req.db as TenantDb, workflowAdapter, req.tenantId!, created.id, { id: req.user!.id, roleName: req.user!.roleName }, payload as unknown as Record<string, unknown>);
+  await recordAuditTrail(req.db!, { entityType: "WorkflowDefinition", entityId: created.id, action: "create", changes: { name, module: module ?? null }, performedBy: req.user?.id });
+  const draft = await createInitialDraft(req.db as Db, workflowAdapter, created.id, { id: req.user!.id, roleName: req.user!.roleName }, payload as unknown as Record<string, unknown>);
   res.status(201).json({ ...created, draftVersionId: draft.id });
 });
 
 /** GET /workflow/:id — the workflow, what is in force, and what is being worked on. */
 export const getHandler = asyncHandler(async (req: Request, res: Response) => {
   const workflow = await loadDefinition(req, Number(req.params.id));
-  const current = await getCurrent(req.db as TenantDb, workflowAdapter, req.tenantId!, workflow.id);
+  const current = await getCurrent(req.db as Db, workflowAdapter, workflow.id);
   res.json({ ...workflow, ...current });
 });
 
 async function loadDefinition(req: Request, id: number): Promise<WorkflowDefinitionRow> {
-  const [row] = await req.db!.select().from(workflowDefinitions).where(and(eq(workflowDefinitions.id, id), eq(workflowDefinitions.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(workflowDefinitions).where(and(eq(workflowDefinitions.id, id)));
   if (!row) throw AppError.notFound("Workflow");
   return row;
 }
@@ -73,7 +73,6 @@ export const updateHandler = asyncHandler(async (req: Request, res: Response) =>
 
   const [updated] = await req.db!.update(workflowDefinitions).set(patch).where(eq(workflowDefinitions.id, id)).returning();
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "WorkflowDefinition",
     entityId: id,
     action: "update",
@@ -87,12 +86,12 @@ export const deleteHandler = asyncHandler(async (req: Request, res: Response) =>
   const id = Number(req.params.id);
   const existing = await loadDefinition(req, id);
   // A workflow with published versions is a controlled record: those versions can never be deleted, so neither can it. Deactivate it instead.
-  const [published] = await req.db!.select({ id: controlledVersions.id }).from(controlledVersions).where(and(eq(controlledVersions.tenantId, req.tenantId!), eq(controlledVersions.subjectType, "workflow"), eq(controlledVersions.subjectId, id), inArray(controlledVersions.status, ["published", "archived"]))).limit(1);
+  const [published] = await req.db!.select({ id: controlledVersions.id }).from(controlledVersions).where(and(eq(controlledVersions.subjectType, "workflow"), eq(controlledVersions.subjectId, id), inArray(controlledVersions.status, ["published", "archived"]))).limit(1);
   if (published) throw new AppError("This workflow has published versions, which are kept for the record, so it can't be deleted. Deactivate it instead.", 409);
-  await req.db!.delete(controlledVersions).where(and(eq(controlledVersions.tenantId, req.tenantId!), eq(controlledVersions.subjectType, "workflow"), eq(controlledVersions.subjectId, id)));
-  await req.db!.delete(workflowRuns).where(and(eq(workflowRuns.workflowId, id), eq(workflowRuns.tenantId, req.tenantId!)));
+  await req.db!.delete(controlledVersions).where(and(eq(controlledVersions.subjectType, "workflow"), eq(controlledVersions.subjectId, id)));
+  await req.db!.delete(workflowRuns).where(and(eq(workflowRuns.workflowId, id)));
   await req.db!.delete(workflowDefinitions).where(eq(workflowDefinitions.id, id));
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WorkflowDefinition", entityId: id, action: "delete", changes: { name: existing.name }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "WorkflowDefinition", entityId: id, action: "delete", changes: { name: existing.name }, performedBy: req.user?.id });
   res.status(204).send();
 });
 
@@ -107,8 +106,8 @@ export const deleteHandler = asyncHandler(async (req: Request, res: Response) =>
  * only" audit entry on the WorkflowDefinition itself, never on whatever
  * real record the context happens to reference.
  *
- * Also fixes a real bug: `__db`/`__tenantId`/`__performedBy` (injected so
- * workflowActions.ts's real handlers can reach a live DB/tenant/actor — see
+ * Also fixes a real bug: `__db`/`__performedBy` (injected so
+ * workflowActions.ts's real handlers can reach a live DB/actor — see
  * that file's own comment) are NOT JSON-serializable and must never be
  * persisted into workflowRuns.context.
  */
@@ -119,15 +118,15 @@ export const runHandler = asyncHandler(async (req: Request, res: Response) => {
   const { context: inputContext, simulate } = req.body as { context?: Record<string, unknown>; simulate?: boolean };
   const [run] = await req
     .db!.insert(workflowRuns)
-    .values({ workflowId: id, tenantId: req.tenantId!, context: inputContext, status: "running", simulated: !!simulate, definitionVersion: workflow.version })
+    .values({ workflowId: id, context: inputContext, status: "running", simulated: !!simulate, definitionVersion: workflow.version })
     .returning();
   if (!run) throw new AppError("Failed to start workflow run", 500);
 
-  const runContext = { ...(inputContext ?? {}), __db: req.db, __tenantId: req.tenantId, __performedBy: req.user?.id };
+  const runContext = { ...(inputContext ?? {}), __db: req.db, __performedBy: req.user?.id };
 
   try {
     const execution = await executeWorkflow(workflow.definition as unknown as WorkflowDefinition, runContext, { dryRun: !!simulate });
-    const { __db: _db, __tenantId: _tenantId, __performedBy: _performedBy, ...persistable } = execution.context;
+    const { __db: _db, __performedBy: _performedBy, ...persistable } = execution.context;
 
     // A run that reached an approval node stays open, with its position saved, until someone decides (POST /workflow/runs/:id/decision).
     const waiting = execution.status === "waiting_approval";
@@ -139,7 +138,6 @@ export const runHandler = asyncHandler(async (req: Request, res: Response) => {
 
     if (simulate) {
       await recordAuditTrail(req.db!, {
-        tenantId: req.tenantId!,
         entityType: "WorkflowDefinition",
         entityId: id,
         action: "update",
@@ -201,11 +199,11 @@ export const historyHandler = asyncHandler(async (req: Request, res: Response) =
   const rows = await req
     .db!.select()
     .from(auditTrail)
-    .where(and(eq(auditTrail.entityId, Number(recordId)), eq(auditTrail.entityType, entityType), eq(auditTrail.tenantId, req.tenantId!)));
+    .where(and(eq(auditTrail.entityId, Number(recordId)), eq(auditTrail.entityType, entityType)));
 
   const sorted = [...rows].sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
-  const withActors = await withResolvedActors(req.db! as TenantDb, sorted);
-  res.json(await attachFieldChanges(req.db! as TenantDb, req.tenantId!, withActors));
+  const withActors = await withResolvedActors(req.db! as Db, sorted);
+  res.json(await attachFieldChanges(req.db! as Db, withActors));
 });
 
 /** GET /workflow/templates — Phase 9 task 6's starter templates (real, static graphs mirroring each module's own real states/events — see workflow.templates.ts). Loading one into the builder still requires an explicit Save; nothing here has any side effect. */
@@ -248,14 +246,14 @@ interface DefinitionHealth {
  * one real implementation instead of the system-health summary silently
  * drifting from what this page itself reports.
  */
-export async function buildWorkflowHealthReport(db: TenantDb, tenantId: number) {
-  const definitions = await db.select().from(workflowDefinitions).where(eq(workflowDefinitions.tenantId, tenantId));
+export async function buildWorkflowHealthReport(db: Db) {
+  const definitions = await db.select().from(workflowDefinitions);
   const registeredKinds = new Set(getRegisteredActionKinds());
   const knownModules = new Set(RESOURCE_KEYS as string[]);
 
   const results: DefinitionHealth[] = [];
   for (const def of definitions) {
-    const runs = await db.select().from(workflowRuns).where(and(eq(workflowRuns.workflowId, def.id), eq(workflowRuns.tenantId, tenantId), eq(workflowRuns.simulated, false)));
+    const runs = await db.select().from(workflowRuns).where(and(eq(workflowRuns.workflowId, def.id), eq(workflowRuns.simulated, false)));
     const completed = runs.filter((r) => r.status === "completed").sort((a, b) => new Date(b.finishedAt ?? 0).getTime() - new Date(a.finishedAt ?? 0).getTime());
     const failed = runs.filter((r) => r.status === "failed").sort((a, b) => new Date(b.finishedAt ?? 0).getTime() - new Date(a.finishedAt ?? 0).getTime());
 
@@ -292,5 +290,5 @@ export async function buildWorkflowHealthReport(db: TenantDb, tenantId: number) 
 }
 
 export const healthHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await buildWorkflowHealthReport(req.db! as TenantDb, req.tenantId!));
+  res.json(await buildWorkflowHealthReport(req.db! as Db));
 });

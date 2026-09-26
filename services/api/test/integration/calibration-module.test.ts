@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Full-System Audit finding H7: calibration had zero test coverage at all —
 // no RBAC, and no coverage of createCalibrationEvent's real due-date
 // calculation (nextDueAt = performedAt + calibrationIntervalDays). Also
@@ -8,7 +9,7 @@ import { eq } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { equipment, calibrations } from "../../src/drizzle/schema/calibration.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
@@ -19,15 +20,15 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 const userIds: number[] = [];
 let qualityToken: string;
 let engineeringToken: string;
 
 async function makeUser(department: string | null) {
-  const [user] = await db.insert(users).values({ tenantId, email: `calibration-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+  const [user] = await db.insert(users).values({ email: `calibration-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName: "operator", department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department });
 }
 
 async function createEquipment(token: string, overrides: Record<string, unknown> = {}) {
@@ -38,9 +39,9 @@ async function createEquipment(token: string, overrides: Record<string, unknown>
 
 describe("Calibration module (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Calibration Test Tenant ${suffix}`, code: `calibration-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    await seedDefaultPermissions(tenantId);
+    const co = await ensureTestCompany();
+    companyId = co!.id;
+    await seedDefaultPermissions(companyId);
 
     qualityToken = await makeUser("quality");
     engineeringToken = await makeUser("engineering"); // calibration's default permissions are quality-only
@@ -48,12 +49,6 @@ describe("Calibration module (real DB + real HTTP path)", () => {
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(calibrations).where(eq(calibrations.tenantId, tenantId));
-    await db.delete(equipment).where(eq(equipment.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 

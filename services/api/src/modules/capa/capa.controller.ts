@@ -18,7 +18,7 @@ export const listHandler = asyncHandler(async (req: Request, res: Response) => {
     res.json([]);
     return;
   }
-  const rows = await req.db!.select().from(capa).where(and(eq(capa.tenantId, req.tenantId!), eq(capa.siteId, req.siteId), eq(capa.supplierId, Number(supplierId))));
+  const rows = await req.db!.select().from(capa).where(and(eq(capa.siteId, req.siteId), eq(capa.supplierId, Number(supplierId))));
   res.json(rows);
 });
 
@@ -44,7 +44,7 @@ const ALLOWED_NEXT: Record<string, string> = {
 };
 
 async function loadCapa(req: Request, id: number) {
-  const [row] = await req.db!.select().from(capa).where(and(eq(capa.id, id), eq(capa.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(capa).where(and(eq(capa.id, id)));
   if (!row) throw AppError.notFound("CAPA");
   assertRecordOnAllowedSite(row.siteId, req.allowedSiteIds, "CAPA");
   return row;
@@ -58,19 +58,17 @@ function assertTransition(currentStatus: string, newStatus: string) {
 
 export const startHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const tenantId = req.tenantId!;
   const current = await loadCapa(req, id);
   assertTransition(current.status, "in_progress");
 
   const [updated] = await req.db!.update(capa).set({ status: "in_progress", updatedAt: new Date() }).where(eq(capa.id, id)).returning();
-  await recordAuditTrail(req.db!, { tenantId, entityType: "CAPA", entityId: id, action: "status_change", changes: { action: "start" }, performedBy: req.user?.id });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "capa", event: "start", entityId: id });
+  await recordAuditTrail(req.db!, { entityType: "CAPA", entityId: id, action: "status_change", changes: { action: "start" }, performedBy: req.user?.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "capa", event: "start", entityId: id });
   res.json(updated);
 });
 
 export const verifyHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const tenantId = req.tenantId!;
   const current = await loadCapa(req, id);
   assertTransition(current.status, "verifying");
 
@@ -81,21 +79,20 @@ export const verifyHandler = asyncHandler(async (req: Request, res: Response) =>
     .returning();
   // "CAPA" — must match crudFactory's entityName above exactly; see the QA
   // sweep review on why a casing mismatch here made this history invisible.
-  await recordAuditTrail(req.db!, { tenantId, entityType: "CAPA", entityId: id, action: "status_change", changes: { action: "verify" }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "CAPA", entityId: id, action: "status_change", changes: { action: "verify" }, performedBy: req.user?.id });
   // Extends the Workflow Engine trigger already used by NCR (see the Outputs
   // Dictionary's compatibility check) — same one-line pattern, new module.
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "capa", event: "verify", entityId: id });
+  await publishEvent(WORKFLOW_STREAM, { module: "capa", event: "verify", entityId: id });
   res.json(updated);
 });
 
 export const closeHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const tenantId = req.tenantId!;
   const current = await loadCapa(req, id);
   assertTransition(current.status, "closed");
 
   const [updated] = await req.db!.update(capa).set({ status: "closed", closedAt: new Date() }).where(eq(capa.id, id)).returning();
-  await recordAuditTrail(req.db!, { tenantId, entityType: "CAPA", entityId: id, action: "status_change", changes: { action: "close" }, performedBy: req.user?.id });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "capa", event: "close", entityId: id });
+  await recordAuditTrail(req.db!, { entityType: "CAPA", entityId: id, action: "status_change", changes: { action: "close" }, performedBy: req.user?.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "capa", event: "close", entityId: id });
   res.json(updated);
 });

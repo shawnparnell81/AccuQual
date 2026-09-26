@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, numeric, timestamp } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { customers } from "./customers.js";
 
 /**
@@ -21,7 +20,6 @@ import { customers } from "./customers.js";
  */
 export const customerScorecards = pgTable("customer_scorecards", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   customerId: integer("customer_id").references(() => customers.id).notNull(),
   period: text("period"), // e.g. "2026-Q1"
   qualityScore: numeric("quality_score"),

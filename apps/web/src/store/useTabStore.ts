@@ -9,12 +9,12 @@ export interface TabInstance {
 }
 
 interface TabState {
-  tenantId: string | null;
+  ownerId: string | null;
   tabs: TabInstance[];
   activeId: string | null;
-  /** Called once on login/app load — restores only this tenant's own tabs, same isolation guarantee as the existing window-manager (useWindowStore). */
-  loadForTenant: (tenantId: string) => void;
-  /** Called on logout — cross-tenant tab leakage must be impossible. */
+  /** Called once on login/app load — restores only this company's own tabs, same isolation guarantee as the existing window-manager (useWindowStore). */
+  loadForUser: (ownerId: string) => void;
+  /** Called on logout — tab leakage must be impossible. */
   clear: () => void;
   /**
    * The one real "new tab" entry point (global search results, an explicit
@@ -41,22 +41,22 @@ interface TabState {
   closeTab: (id: string) => string | null;
 }
 
-function storageKey(tenantId: string) {
-  return `accuqual_tabs_${tenantId}`;
+function storageKey(ownerId: string) {
+  return `accuqual_tabs_${ownerId}`;
 }
 
-function persist(tenantId: string | null, tabs: TabInstance[], activeId: string | null) {
-  if (!tenantId) return;
+function persist(ownerId: string | null, tabs: TabInstance[], activeId: string | null) {
+  if (!ownerId) return;
   try {
-    localStorage.setItem(storageKey(tenantId), JSON.stringify({ tabs, activeId }));
+    localStorage.setItem(storageKey(ownerId), JSON.stringify({ tabs, activeId }));
   } catch {
     // localStorage unavailable (private mode, quota, ...) — tabs just won't survive a refresh.
   }
 }
 
-function restore(tenantId: string): { tabs: TabInstance[]; activeId: string | null } {
+function restore(ownerId: string): { tabs: TabInstance[]; activeId: string | null } {
   try {
-    const raw = localStorage.getItem(storageKey(tenantId));
+    const raw = localStorage.getItem(storageKey(ownerId));
     if (!raw) return { tabs: [], activeId: null };
     const parsed = JSON.parse(raw) as { tabs: TabInstance[]; activeId: string | null };
     return { tabs: parsed.tabs ?? [], activeId: parsed.activeId ?? null };
@@ -71,60 +71,60 @@ function newTabId() {
 }
 
 export const useTabStore = create<TabState>((set, get) => ({
-  tenantId: null,
+  ownerId: null,
   tabs: [],
   activeId: null,
 
-  loadForTenant: (tenantId) => {
-    const { tabs, activeId } = restore(tenantId);
-    set({ tenantId, tabs, activeId });
+  loadForUser: (ownerId) => {
+    const { tabs, activeId } = restore(ownerId);
+    set({ ownerId, tabs, activeId });
   },
 
-  clear: () => set({ tenantId: null, tabs: [], activeId: null }),
+  clear: () => set({ ownerId: null, tabs: [], activeId: null }),
 
   openTab: ({ path, title, icon }) => {
-    const { tenantId, tabs } = get();
+    const { ownerId, tabs } = get();
     const existing = tabs.find((t) => t.path === path);
     if (existing) {
-      persist(tenantId, tabs, existing.id);
+      persist(ownerId, tabs, existing.id);
       set({ activeId: existing.id });
       return existing.id;
     }
     const tab: TabInstance = { id: newTabId(), path, title, icon };
     const nextTabs = [...tabs, tab];
-    persist(tenantId, nextTabs, tab.id);
+    persist(ownerId, nextTabs, tab.id);
     set({ tabs: nextTabs, activeId: tab.id });
     return tab.id;
   },
 
   syncActiveTabLocation: (path, title, icon) => {
-    const { tenantId, tabs, activeId } = get();
+    const { ownerId, tabs, activeId } = get();
     const active = tabs.find((t) => t.id === activeId);
     if (active?.path === path) return; // already showing this path — e.g. openTab's own navigate() just landed here
 
     const existing = tabs.find((t) => t.path === path);
     if (existing) {
-      persist(tenantId, tabs, existing.id);
+      persist(ownerId, tabs, existing.id);
       set({ activeId: existing.id });
       return;
     }
     const tab: TabInstance = { id: newTabId(), path, title, icon };
     const nextTabs = [...tabs, tab];
-    persist(tenantId, nextTabs, tab.id);
+    persist(ownerId, nextTabs, tab.id);
     set({ tabs: nextTabs, activeId: tab.id });
   },
 
   activateTab: (id) => {
-    const { tenantId, tabs } = get();
+    const { ownerId, tabs } = get();
     const tab = tabs.find((t) => t.id === id);
     if (!tab) return null;
-    persist(tenantId, tabs, id);
+    persist(ownerId, tabs, id);
     set({ activeId: id });
     return tab.path;
   },
 
   closeTab: (id) => {
-    const { tenantId, tabs, activeId } = get();
+    const { ownerId, tabs, activeId } = get();
     const idx = tabs.findIndex((t) => t.id === id);
     if (idx === -1) return activeId ? (tabs.find((t) => t.id === activeId)?.path ?? null) : null;
 
@@ -134,7 +134,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       const neighbor = nextTabs[idx - 1] ?? nextTabs[idx] ?? null;
       nextActiveId = neighbor?.id ?? null;
     }
-    persist(tenantId, nextTabs, nextActiveId);
+    persist(ownerId, nextTabs, nextActiveId);
     set({ tabs: nextTabs, activeId: nextActiveId });
     return nextTabs.find((t) => t.id === nextActiveId)?.path ?? null;
   },

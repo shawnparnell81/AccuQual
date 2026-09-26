@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createItemSchema, updateItemSchema, movementSchema, adjustSchema, checkMinMaxSchema, reorderRequestNotesSchema, reserveSchema, releaseSchema, cycleCountSchema } from "./inventory.validation.js";
@@ -38,7 +38,7 @@ export const inventoryRouter = Router();
 // (consume: production-only, adjust: material_management-only, reorder/
 // on-order: purchasing-only, deactivate: admin-only) are inline in the
 // controller, the same way supplier.controller.ts guards its terminal state.
-inventoryRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("inventory"));
+inventoryRouter.use(requireAuth, withDb, requireDepartmentAccess("inventory"));
 
 // Fixed literal paths ("/alerts", "/check-minmax") before ":id"-shaped ones,
 // same convention workflow.routes.ts uses for "/history/...".
@@ -71,7 +71,7 @@ inventoryRouter.post("/items/:id/mark-reorder-pending", markReorderPendingHandle
 inventoryRouter.post("/items/:id/mark-on-order", markOnOrderHandler);
 inventoryRouter.get("/items/:id/history", historyHandler);
 // Phase 8 — real per-lot/serial traceability (task 4). "/lots" (fixed
-// literal, tenant-wide search) before "/lots/:id/trace" (param-shaped),
+// literal, company-wide search) before "/lots/:id/trace" (param-shaped),
 // same literal-before-param convention as "/alerts"/"/check-minmax" above.
 inventoryRouter.get("/lots", searchLotsHandler);
 inventoryRouter.get("/items/:id/lots", listItemLotsHandler);

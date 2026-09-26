@@ -36,7 +36,7 @@ export function QualityInspectionReportDetailPage() {
   const reportId = Number(id);
   const navigate = useNavigate();
   const toast = useToast();
-  const logoUrl = useAuthStore((s) => s.tenant?.branding?.logoUrl);
+  const logoUrl = useAuthStore((s) => s.company?.branding?.logoUrl);
   const { data: report, isLoading, isError } = reportHooks.useOne(reportId);
   const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);

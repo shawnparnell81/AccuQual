@@ -7,8 +7,8 @@ import { AppError } from "../../utils/appError.js";
 
 /**
  * Roles are platform-wide constants (admin, quality_manager, ...), not
- * tenant data — so unlike every other module this one intentionally uses
- * the plain, unscoped `db` singleton rather than `req.db`/`req.tenantId`.
+ * company data — so unlike every other module this one intentionally uses
+ * the plain `db` singleton rather than `req.db`.
  */
 export const listRoles = asyncHandler(async (_req: Request, res: Response) => {
   res.json(await db.select().from(roles));

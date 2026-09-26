@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment
 // for why this category exists). Covers the two new real modules built for
 // AI Work Order Planning / AI PR Justification (see the AI modules
 // review): Work Orders' department gate + status lifecycle + the real
@@ -10,7 +11,7 @@ import request from "supertest";
 import { eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { suppliers } from "../../src/drizzle/schema/supplier.js";
 import { inventoryItems, inventoryMovements, inventoryStock } from "../../src/drizzle/schema/inventory.js";
@@ -24,7 +25,7 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let supplierId: number;
 let itemId: number;
 let workOrderId: number;
@@ -45,26 +46,26 @@ let engineeringToken: string;
 let customerServiceToken: string;
 
 async function makeUser(department: string) {
-  const [user] = await db.insert(users).values({ tenantId, email: `wopr-test-${department}-${suffix}@test.local`, passwordHash: "unused" }).returning();
+  const [user] = await db.insert(users).values({ email: `wopr-test-${department}-${suffix}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
   return user!.id;
 }
 
 function tokenFor(userId: number, department: string | null) {
-  return signAccessToken({ sub: String(userId), tenantId, roleId: null, roleName: "operator", department });
+  return signAccessToken({ sub: String(userId), roleId: null, roleName: "operator", department });
 }
 
 describe("Work Orders + Purchase Requisitions (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `WO/PR Test Tenant ${suffix}`, code: `wopr-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
 
-    await seedDefaultPermissions(tenantId);
+    await seedDefaultPermissions(companyId);
 
-    const [supplier] = await db.insert(suppliers).values({ tenantId, name: `WO/PR Test Supplier ${suffix}` }).returning();
+    const [supplier] = await db.insert(suppliers).values({ name: `WO/PR Test Supplier ${suffix}` }).returning();
     supplierId = supplier!.id;
 
-    const [item] = await db.insert(inventoryItems).values({ tenantId, sku: `WOPR-${suffix}`, minLevel: "5", defaultSupplierId: supplierId }).returning();
+    const [item] = await db.insert(inventoryItems).values({ sku: `WOPR-${suffix}`, minLevel: "5", defaultSupplierId: supplierId }).returning();
     itemId = item!.id;
 
     productionUserId = await makeUser("production");
@@ -85,21 +86,6 @@ describe("Work Orders + Purchase Requisitions (real DB + real HTTP path)", () =>
     // fire-and-forget logFailedTransition can still be writing its own
     // audit_trail row for a just-completed 403/400 test.
     await new Promise((r) => setTimeout(r, 200));
-    await db.delete(auditTrail).where(inArray(auditTrail.performedBy, userIds));
-    if (workOrderId) await db.delete(workOrders).where(eq(workOrders.id, workOrderId));
-    if (requisitionId) await db.delete(erpPurchaseRequisitions).where(eq(erpPurchaseRequisitions.id, requisitionId));
-    if (purchaseOrderId) {
-      await db.delete(erpPoLineItems).where(eq(erpPoLineItems.purchaseOrderId, purchaseOrderId));
-      await db.delete(erpPurchaseOrders).where(eq(erpPurchaseOrders.id, purchaseOrderId));
-    }
-    await db.delete(inventoryMovements).where(eq(inventoryMovements.itemId, itemId));
-    await db.delete(inventoryStock).where(eq(inventoryStock.itemId, itemId));
-    await db.delete(inventoryItems).where(eq(inventoryItems.id, itemId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(suppliers).where(eq(suppliers.id, supplierId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 

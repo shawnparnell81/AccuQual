@@ -1,6 +1,5 @@
 import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
-import { tenants } from "./tenants.js";
 import { erpConnectorPresets } from "./erpPresets.js";
 
 export const ERP_ERROR_TYPES = ["mappingError", "validationError", "transformError", "triggerError", "erpApiError", "unexpectedError"] as const;
@@ -23,8 +22,7 @@ export interface ErpSyncErrorPayloadSnapshot {
  * left by erpMappingEngine.ts's buildErpPayload, which already computes
  * real per-record validation errors but never persisted them anywhere
  * (they only rode along inside the outbound webhook payload). Always
- * tenant-owned (no "global" concept, unlike erp_connector_presets) — a
- * standard RLS tenant table, no special nullable-tenantId policy needed.
+ * company-owned (no built-in rows, unlike erp_connector_presets).
  *
  * payloadSnapshot is deliberately narrow: the failing record's id plus only
  * the specific field(s) that actually failed, never the entire mapped
@@ -34,7 +32,6 @@ export interface ErpSyncErrorPayloadSnapshot {
  */
 export const erpSyncErrors = pgTable("erp_sync_errors", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   module: text("module").notNull(),
   presetId: integer("preset_id").references(() => erpConnectorPresets.id),
   presetVersion: integer("preset_version"),

@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Covers the Production Work Order traveler — the bespoke, standalone
 // shop-floor document (deliberately NOT built through the shared FormLayout
 // engine, see workOrders.ts's schema comment): the operations routing
@@ -14,7 +15,7 @@ import request from "supertest";
 import { eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { inventoryItems } from "../../src/drizzle/schema/inventory.js";
 import { workOrders, workOrderOperations } from "../../src/drizzle/schema/workOrders.js";
@@ -26,7 +27,7 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let itemId: number;
 let workOrderId: number;
 let operationId: number;
@@ -36,38 +37,30 @@ let customerServiceToken: string;
 let qualityToken: string;
 
 async function makeUser(department: string | null, roleName = "operator") {
-  const [user] = await db.insert(users).values({ tenantId, email: `wot-test-${department ?? "none"}-${suffix}@test.local`, passwordHash: "unused" }).returning();
+  const [user] = await db.insert(users).values({ email: `wot-test-${department ?? "none"}-${suffix}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName, department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
 }
 
 describe("Production Work Order traveler (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `WO Traveler Test Tenant ${suffix}`, code: `wot-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
 
-    await seedDefaultPermissions(tenantId);
+    await seedDefaultPermissions(companyId);
 
-    const [item] = await db.insert(inventoryItems).values({ tenantId, sku: `WOT-${suffix}`, minLevel: "0" }).returning();
+    const [item] = await db.insert(inventoryItems).values({ sku: `WOT-${suffix}`, minLevel: "0" }).returning();
     itemId = item!.id;
 
     customerServiceToken = await makeUser("customer_service");
     qualityToken = await makeUser("quality"); // read-only per PERMISSION_MATRIX.work_orders
 
-    const [wo] = await db.insert(workOrders).values({ tenantId, itemId, quantityPlanned: "100" }).returning();
+    const [wo] = await db.insert(workOrders).values({ itemId, quantityPlanned: "100" }).returning();
     workOrderId = wo!.id;
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(inArray(auditTrail.performedBy, userIds));
-    await db.delete(workOrderOperations).where(eq(workOrderOperations.workOrderId, workOrderId));
-    await db.delete(workOrders).where(eq(workOrders.id, workOrderId));
-    await db.delete(inventoryItems).where(eq(inventoryItems.id, itemId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 

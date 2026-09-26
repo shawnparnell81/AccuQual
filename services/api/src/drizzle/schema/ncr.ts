@@ -1,15 +1,13 @@
 import { pgTable, serial, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
-import { tenants } from "./tenants.js";
 import { suppliers } from "./supplier.js";
 import { sites } from "./sites.js";
 
 export const ncr = pgTable("ncr", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   // Plant this issue belongs to. Nullable in the type so inserts that omit
   // it still compile; the database column is NOT NULL and a BEFORE INSERT
-  // trigger fills the tenant's default plant when the caller doesn't (see
+  // trigger fills the company's default plant when the caller doesn't (see
   // 0070_sites.sql). Request creates stamp the current plant explicitly.
   siteId: integer("site_id").references(() => sites.id),
   title: text("title").notNull(),
@@ -46,7 +44,6 @@ export const ncr = pgTable("ncr", {
 
 export const ncrAttachments = pgTable("ncr_attachments", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   ncrId: integer("ncr_id").references(() => ncr.id).notNull(),
   fileUrl: text("file_url").notNull(),
   uploadedBy: integer("uploaded_by").references(() => users.id),

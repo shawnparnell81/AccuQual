@@ -26,9 +26,9 @@ jobs:
           POSTGRES_USER: accuqual
           POSTGRES_PASSWORD: accuqual
           # Must contain "test" — test/setup.ts's testDataGuard.ts refuses to
-          # run integration tests (which create/delete real tenants) against
+          # run integration tests (which create/delete real companies) against
           # any database whose name doesn't, precisely to stop this exact
-          # class of accident (see that file's own comment on the 27-tenant
+          # class of accident (see that file's own comment on the 27-company
           # pollution incident this guard was added to prevent).
           POSTGRES_DB: accuqual_test
         ports: ["5432:5432"]

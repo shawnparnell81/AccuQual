@@ -21,16 +21,16 @@ default:
   its own (a workflow's `status` column, say), map it onto
   `"published" | "draft" | "in_review"` instead of trusting the engine's
   own tracking naively.
-- `guardDraft(db, tenantId, subjectId)` — throw to block a new draft (e.g.
+- `guardDraft(db, companyId, subjectId)` — throw to block a new draft (e.g.
   a document mid-review already).
 - `seedDraft(payload, ctx)` — what a *new* draft starts from when revising
   a published version (usually just the published payload verbatim; a
   subject can strip fields that shouldn't carry forward).
-- `checkPayload(db, tenantId, subjectId, versionNumber, payload, stage)` —
+- `checkPayload(db, companyId, subjectId, versionNumber, payload, stage)` —
   validation that only applies at a given stage (`"save" | "submit" |
   "publish"`) — e.g. a document can be saved half-filled but not
   published that way.
-- `onTransition(db, tenantId, subjectId, event)` — side effects (an
+- `onTransition(db, companyId, subjectId, event)` — side effects (an
   audit-trail row, a notification) on `draft_created`, `submitted`,
   `published`, etc.
 - `notifyReviewLifecycle` — whether the generic reviewer-notification

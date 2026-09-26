@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 
 /**
  * Shared by any module, not inventory-specific. There is no real email
@@ -10,7 +9,6 @@ import { tenants } from "./tenants.js";
  */
 export const notificationLog = pgTable("notification_log", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   channel: text("channel").notNull().default("email"),
   recipient: text("recipient").notNull(),
   subject: text("subject").notNull(),

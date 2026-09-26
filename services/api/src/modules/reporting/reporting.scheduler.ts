@@ -1,7 +1,7 @@
 import { and, eq, lte } from "drizzle-orm";
 import { db, pool } from "../../db/index.js";
 import { reportSchedules } from "../../drizzle/schema/reporting.js";
-import { tenants } from "../../drizzle/schema/tenants.js";
+import { company } from "../../drizzle/schema/company.js";
 import { notificationLog } from "../../drizzle/schema/notifications.js";
 import { sendEmail } from "../notifications/notification.service.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -45,16 +45,15 @@ export async function runReportSchedule(scheduleId: number): Promise<void> {
   const [schedule] = await db.select().from(reportSchedules).where(eq(reportSchedules.id, scheduleId));
   if (!schedule) return;
 
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, schedule.tenantId));
-  const tenantName = tenant?.name ?? `Tenant #${schedule.tenantId}`;
+  const [co] = await db.select().from(company);
+  const companyName = co?.name ?? "AccuQual";
 
   try {
-    const { subject, body } = await buildReportEmail(db, schedule.tenantId, schedule.reportType as ReportType, tenantName);
+    const { subject, body } = await buildReportEmail(db, schedule.reportType as ReportType, companyName);
 
     const statuses = await Promise.all(schedule.recipients.map((to) => sendEmail({ to, subject, body })));
     for (const [i, status] of statuses.entries()) {
       await db.insert(notificationLog).values({
-        tenantId: schedule.tenantId,
         channel: "email",
         recipient: schedule.recipients[i]!,
         subject,
@@ -74,7 +73,6 @@ export async function runReportSchedule(scheduleId: number): Promise<void> {
       .where(eq(reportSchedules.id, schedule.id));
 
     await recordAuditTrail(db, {
-      tenantId: schedule.tenantId,
       entityType: "ReportSchedule",
       entityId: schedule.id,
       action: "update",

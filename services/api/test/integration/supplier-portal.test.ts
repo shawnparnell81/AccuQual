@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Covers the Supplier Portal's two real audiences: an external supplier
 // login (roleName:"supplier", auto-scoped server-side to its own
 // supplierId — the actual "strict RBAC isolation" the module needs) and
@@ -14,7 +15,7 @@ import request from "supertest";
 import { eq, and } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { suppliers, supplierScorecards } from "../../src/drizzle/schema/supplier.js";
 import { ensureSupplierRole } from "../../src/modules/supplier/supplier.controller.js";
@@ -36,7 +37,7 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let supplierAId: number;
 let supplierBId: number;
 let supplierAToken: string;
@@ -53,16 +54,16 @@ let onboardingDocId: number;
 async function makeInternalUser(department: string, roleName = "operator") {
   const [user] = await db
     .insert(users)
-    .values({ tenantId, email: `sp-test-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department })
+    .values({ email: `sp-test-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department })
     .returning();
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName, department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
 }
 
 // Self-heals the role instead of assuming db/seed.ts has run — CI's fresh
 // database only runs migrations, never the separate seed step (see
 // ensureSupplierRole's own comment). `db` here is the plain, unscoped
-// singleton (this file never opens its own tenant transaction), which
-// ensureSupplierRole accepts fine since `roles` isn't tenant-scoped.
+// singleton (this file never opens its own company transaction), which
+// ensureSupplierRole accepts fine since `roles` isn't company-scoped.
 async function getSupplierRoleId(): Promise<number> {
   return (await ensureSupplierRole(db)).id;
 }
@@ -71,54 +72,39 @@ async function makeSupplierLogin(supplierId: number) {
   const roleId = await getSupplierRoleId();
   const [user] = await db
     .insert(users)
-    .values({ tenantId, email: `sp-login-${suffix}-${supplierId}@test.local`, passwordHash: "unused", department: null, roleId, supplierId })
+    .values({ email: `sp-login-${suffix}-${supplierId}@test.local`, passwordHash: "unused", department: null, roleId, supplierId })
     .returning();
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId, roleName: "supplier", department: null, supplierId });
+  return signAccessToken({ sub: String(user!.id), roleId, roleName: "supplier", department: null, supplierId });
 }
 
 describe("Supplier Portal (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Supplier Portal Test Tenant ${suffix}`, code: `sp-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
 
-    await seedDefaultPermissions(tenantId);
+    await seedDefaultPermissions(companyId);
 
     qualityToken = await makeInternalUser("quality");
     purchasingToken = await makeInternalUser("purchasing");
     engineeringToken = await makeInternalUser("engineering");
 
-    const [supplierA] = await db.insert(suppliers).values({ tenantId, name: `Supplier A ${suffix}`, contactEmail: "a@supplier.test" }).returning();
-    const [supplierB] = await db.insert(suppliers).values({ tenantId, name: `Supplier B ${suffix}`, contactEmail: "b@supplier.test" }).returning();
+    const [supplierA] = await db.insert(suppliers).values({ name: `Supplier A ${suffix}`, contactEmail: "a@supplier.test" }).returning();
+    const [supplierB] = await db.insert(suppliers).values({ name: `Supplier B ${suffix}`, contactEmail: "b@supplier.test" }).returning();
     supplierAId = supplierA!.id;
     supplierBId = supplierB!.id;
     supplierAToken = await makeSupplierLogin(supplierAId);
     supplierBToken = await makeSupplierLogin(supplierBId);
 
-    const [ncrRow] = await db.insert(ncr).values({ tenantId, title: `Supplier Portal Test NCR ${suffix}`, status: "open" }).returning();
+    const [ncrRow] = await db.insert(ncr).values({ title: `Supplier Portal Test NCR ${suffix}`, status: "open" }).returning();
     ncrId = ncrRow!.id;
     // Real link: an RMA against Supplier A referencing this NCR — the
     // derivation supplierNcrListHandler reads (see its own comment).
-    await db.insert(rma).values({ tenantId, rmaNumber: `RMA-SPTEST-${suffix}`, supplierId: supplierAId, linkedNcrId: ncrId });
+    await db.insert(rma).values({ rmaNumber: `RMA-SPTEST-${suffix}`, supplierId: supplierAId, linkedNcrId: ncrId });
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(supplierMessages).where(eq(supplierMessages.tenantId, tenantId));
-    await db.delete(supplier8dResponses).where(eq(supplier8dResponses.tenantId, tenantId));
-    await db.delete(supplierCorrectiveActions).where(eq(supplierCorrectiveActions.tenantId, tenantId));
-    await db.delete(supplierPpapSubmissions).where(eq(supplierPpapSubmissions.tenantId, tenantId));
-    await db.delete(supplierDocuments).where(eq(supplierDocuments.tenantId, tenantId));
-    await db.delete(supplierOnboardingDocuments).where(eq(supplierOnboardingDocuments.tenantId, tenantId));
-    await db.delete(rma).where(eq(rma.tenantId, tenantId));
-    await db.delete(ncr).where(eq(ncr.tenantId, tenantId));
-    await db.delete(supplierScorecards).where(eq(supplierScorecards.tenantId, tenantId));
     // users before suppliers — users.supplierId (Supplier Portal logins) FKs into it.
-    await db.delete(users).where(eq(users.tenantId, tenantId));
-    await db.delete(suppliers).where(eq(suppliers.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
@@ -137,8 +123,8 @@ describe("Supplier Portal (real DB + real HTTP path)", () => {
 
   it("a misconfigured supplier login (no supplierId) is rejected by the portal gate", async () => {
     const roleId = await getSupplierRoleId();
-    const [orphan] = await db.insert(users).values({ tenantId, email: `orphan-${suffix}@test.local`, passwordHash: "unused", roleId, department: null }).returning();
-    const orphanToken = signAccessToken({ sub: String(orphan!.id), tenantId, roleId, roleName: "supplier", department: null, supplierId: null });
+    const [orphan] = await db.insert(users).values({ email: `orphan-${suffix}@test.local`, passwordHash: "unused", roleId, department: null }).returning();
+    const orphanToken = signAccessToken({ sub: String(orphan!.id), roleId, roleName: "supplier", department: null, supplierId: null });
     const res = await request(app).get("/supplier-portal/documents/list").set("Authorization", `Bearer ${orphanToken}`);
     expect(res.status).toBe(403);
   });
@@ -269,7 +255,7 @@ describe("Supplier Portal (real DB + real HTTP path)", () => {
   });
 
   it("scorecard + performance read real data scoped to the caller's own supplier", async () => {
-    await db.insert(supplierScorecards).values({ tenantId, supplierId: supplierAId, period: "2026-Q1", qualityScore: "92", deliveryScore: "88", overallScore: "90" });
+    await db.insert(supplierScorecards).values({ supplierId: supplierAId, period: "2026-Q1", qualityScore: "92", deliveryScore: "88", overallScore: "90" });
     const scorecard = await request(app).get("/supplier-portal/scorecard").set("Authorization", `Bearer ${supplierAToken}`);
     expect(scorecard.status).toBe(200);
     expect(scorecard.body).toHaveLength(1);
@@ -293,7 +279,7 @@ describe("Supplier Portal (real DB + real HTTP path)", () => {
     expect(res.status).toBe(201);
     expect(res.body.overallScore).toBe("90");
 
-    const trail = await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "SupplierScorecard"), eq(auditTrail.entityId, res.body.id)));
+    const trail = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "SupplierScorecard"), eq(auditTrail.entityId, res.body.id)));
     expect(trail.some((t) => t.action === "create")).toBe(true);
 
     const portalRead = await request(app).get("/supplier-portal/scorecard").set("Authorization", `Bearer ${supplierAToken}`);
@@ -336,7 +322,7 @@ describe("Supplier Portal (real DB + real HTTP path)", () => {
   });
 
   it("real audit trail entries exist for the review actions (status_change)", async () => {
-    const rows = await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.action, "status_change")));
+    const rows = await db.select().from(auditTrail).where(and(eq(auditTrail.action, "status_change")));
     const entityTypes = rows.map((r) => r.entityType);
     expect(entityTypes).toContain("SupplierOnboardingDocument");
     expect(entityTypes).toContain("SupplierPpapSubmission");

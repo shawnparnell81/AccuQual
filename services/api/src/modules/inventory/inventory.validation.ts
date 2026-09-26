@@ -63,7 +63,7 @@ export const movementSchema = z
     toLocation: z.string().optional(),
     reason: z.string().optional(),
     // Settings → Inventory Module expansion — optional: omitted on
-    // receive/produce means "auto-generate if the tenant has that on", see
+    // receive/produce means "auto-generate if the company has that on", see
     // inventory.service.ts's applyMovement.
     lotNumber: z.string().max(100).optional(),
     serialNumber: z.string().max(100).optional(),
@@ -94,7 +94,7 @@ export const adjustSchema = z.object({
 });
 
 export const checkMinMaxSchema = z.object({
-  itemId: z.coerce.number().int().optional(), // omit to recompute every item for the tenant
+  itemId: z.coerce.number().int().optional(), // omit to recompute every item for the company
 });
 
 export const reorderRequestNotesSchema = z.object({

@@ -186,7 +186,7 @@ async function drive(
   let currentNodeId: string | null = state.waitingNodeId;
 
   // Push children so the FIRST transition is visited first (and its whole subtree before the next) — the depth-first order
-  // this engine has always had. Full-System Audit finding C5: a tenant-authored cycle used to recurse forever and crash the
+  // this engine has always had. Full-System Audit finding C5: a company-authored cycle used to recurse forever and crash the
   // shared worker; the visited set below (each node runs once per run) is what makes that impossible.
   const push = (ids: string[]) => {
     for (let i = ids.length - 1; i >= 0; i--) stack.push(ids[i]!);

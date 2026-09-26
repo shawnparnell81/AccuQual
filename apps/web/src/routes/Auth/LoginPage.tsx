@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Navigate, Link, useSearchParams } from "react-router-dom";
 import { apiClient } from "../../api/client";
 import { isSession, mfaApi, useLogin, useStartSession, type AuthResponse } from "../../hooks/useAuth";
@@ -52,47 +53,27 @@ const SSO_ERRORS: Record<string, string> = {
   email_in_other_organization: "That email address belongs to a different organization.",
   no_account: "You don't have an AccuQual account yet. Ask your administrator to add you.",
   account_disabled: "Your account is deactivated. Contact your administrator.",
-  not_configured: "Single sign-on isn't turned on for that organization.",
+  not_configured: "Single sign-on isn't turned on.",
 };
 
-/** Organization code -> the API's SSO start URL (a full-page redirect: the provider's login page is not something to fetch in the background). */
+/** Shown only when the company has turned single sign-on on. A full-page redirect: the provider's login page is not something to fetch in the background. */
 function SsoSignIn() {
-  const [open, setOpen] = useState(false);
-  const [org, setOrg] = useState("");
-  const go = () => {
-    if (org.trim()) window.location.href = `${apiClient.defaults.baseURL}/auth/sso/start?tenant=${encodeURIComponent(org.trim())}`;
-  };
-  if (!open) {
-    return (
-      <button type="button" onClick={() => setOpen(true)} className="mt-3 w-full rounded-md border border-border py-2 text-sm hover:bg-muted">
-        Sign in with single sign-on
-      </button>
-    );
-  }
+  const { data } = useQuery<{ enabled: boolean; displayName: string | null }>({
+    queryKey: ["sso/discover"],
+    queryFn: async () => (await apiClient.get("/auth/sso/discover")).data,
+    staleTime: 5 * 60_000,
+  });
+  if (!data?.enabled) return null;
   return (
-    <div className="mt-3 flex flex-col gap-2 rounded-md border border-border p-3">
-      <TextField
-        label="Organization code"
-        placeholder="e.g. acme"
-        value={org}
-        onChange={(e) => setOrg(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault(); // this sits inside the password form — Enter here means "continue with SSO", not "sign in"
-            go();
-          }
-        }}
-        autoFocus
-      />
-      <button
-        type="button"
-        disabled={!org.trim()}
-        onClick={go}
-        className="w-full rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
-      >
-        Continue
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={() => {
+        window.location.href = `${apiClient.defaults.baseURL}/auth/sso/start`;
+      }}
+      className="mt-3 w-full rounded-md border border-border py-2 text-sm hover:bg-muted"
+    >
+      Sign in with {data.displayName ?? "single sign-on"}
+    </button>
   );
 }
 
@@ -243,12 +224,6 @@ export function LoginPage() {
 
       <SsoSignIn />
 
-      <p className="mt-4 text-center text-sm text-muted-foreground">
-        No account?{" "}
-        <Link to="/register" className="text-primary">
-          Register
-        </Link>
-      </p>
     </Card>
   );
 }

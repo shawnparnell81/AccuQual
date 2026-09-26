@@ -7,7 +7,7 @@ import { suppliers } from "../../drizzle/schema/supplier.js";
 import { audits } from "../../drizzle/schema/audits.js";
 import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { erpAutomationPrompt } from "../ai/prompts.js";
-import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
+import { checkUsageLimit, loadCompanyLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
 
 function parseSuggestions(raw: string): unknown {
   try {
@@ -29,25 +29,23 @@ function parseSuggestions(raw: string): unknown {
  * never creates or changes anything but its own ai_suggestions audit row.
  */
 export const erpAutomationSuggestionsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!, tenantId);
-  const limitError = await checkUsageLimit(req.db!, tenantId, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const { co, llmOptions } = await loadCompanyLlmOptions(req.db!);
+  const limitError = await checkUsageLimit(req.db!, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
   const belowMinItems = await req
     .db!.select({ id: inventoryItems.id, sku: inventoryItems.sku, description: inventoryItems.description, minLevel: inventoryItems.minLevel, defaultSupplierId: inventoryItems.defaultSupplierId })
     .from(inventoryItems)
-    .where(and(eq(inventoryItems.tenantId, tenantId), eq(inventoryItems.state, "below_min")));
+    .where(and(eq(inventoryItems.state, "below_min")));
 
   const riskySuppliers = await req
     .db!.select({ id: suppliers.id, name: suppliers.name, status: suppliers.status, riskLevel: suppliers.riskLevel })
     .from(suppliers)
-    .where(and(eq(suppliers.tenantId, tenantId), inArray(suppliers.status, ["probation", "disqualified", "active"])));
+    .where(and(inArray(suppliers.status, ["probation", "disqualified", "active"])));
 
   const recentAudits = await req
     .db!.select({ id: audits.id, name: audits.name, type: audits.type, status: audits.status })
     .from(audits)
-    .where(eq(audits.tenantId, tenantId))
     .orderBy(desc(audits.id))
     .limit(20);
 
@@ -56,7 +54,6 @@ export const erpAutomationSuggestionsHandler = asyncHandler(async (req: Request,
   const output = parseSuggestions(result.text);
 
   const saved = await recordAiSuggestion(req.db!, {
-    tenantId,
     module: "erp",
     pipeline: "erp_automation",
     input: inputData,

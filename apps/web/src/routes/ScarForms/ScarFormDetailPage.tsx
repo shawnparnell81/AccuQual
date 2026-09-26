@@ -26,7 +26,7 @@ export function ScarFormDetailPage() {
   const scarId = Number(id);
   const navigate = useNavigate();
   const toast = useToast();
-  const logoUrl = useAuthStore((s) => s.tenant?.branding?.logoUrl);
+  const logoUrl = useAuthStore((s) => s.company?.branding?.logoUrl);
   const { data: scar, isLoading, isError } = scarHooks.useOne(scarId);
   const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);

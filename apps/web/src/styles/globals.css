@@ -15,7 +15,7 @@
  * secondary/accent/form-field/button are new tokens this round adds; each
  * defaults to an alias of an existing, already-audited token (secondary→
  * muted, accent→primary, form-field→border, button→primary) so nothing
- * existing changes appearance until a tenant/user actually customizes one.
+ * existing changes appearance until a company/user actually customizes one.
  */
 :root {
   /* Tells the browser itself this page is dark by default — without it,
@@ -176,7 +176,7 @@ body {
 /*
  * Dashboard / home motion + depth kit (components/dashboard/kit.tsx).
  * Everything reads the same theme tokens as the rest of the app, so a
- * tenant's Primary/Accent colors tint it automatically. Motion is opt-out
+ * company's Primary/Accent colors tint it automatically. Motion is opt-out
  * for anyone whose OS asks for reduced motion.
  */
 @keyframes fade-up {

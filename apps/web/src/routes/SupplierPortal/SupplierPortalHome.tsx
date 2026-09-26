@@ -62,7 +62,7 @@ const TAB_KEYS = new Set<string>(TABS.map((t) => t.key));
 export function SupplierPortalHome() {
   const currentUser = useCurrentUser();
   const isSupplier = currentUser?.roleName === "supplier";
-  const isReviewer = !isSupplier && (currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin" || currentUser?.department === "quality" || currentUser?.department === "purchasing");
+  const isReviewer = !isSupplier && (currentUser?.roleName === "admin" || currentUser?.department === "quality" || currentUser?.department === "purchasing");
   const { data: suppliers = [] } = useQuery<Supplier[]>({
     queryKey: ["suppliers"],
     queryFn: async () => (await apiClient.get("/suppliers")).data,

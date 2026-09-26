@@ -36,11 +36,11 @@ describe("eventBus.publishEvent", () => {
 
   it("writes a real, readable entry onto the given Redis stream", async () => {
     await readerClient.connect();
-    await publishEvent(TEST_STREAM, { tenantId: 42, module: "ncr", event: "closed", entityId: 7 });
+    await publishEvent(TEST_STREAM, { module: "ncr", event: "closed", entityId: 7 });
 
     const messages = await readAllMessages(readerClient, TEST_STREAM);
     expect(messages).toHaveLength(1);
-    expect(messages[0]).toMatchObject({ tenantId: "42", module: "ncr", event: "closed", entityId: "7" });
+    expect(messages[0]).toMatchObject({ module: "ncr", event: "closed", entityId: "7" });
     expect(messages[0]?.publishedAt).toBeTruthy();
   });
 

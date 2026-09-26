@@ -2,7 +2,7 @@ import "dotenv/config";
 import { eq, and } from "drizzle-orm";
 import { db, pool } from "./index.js";
 import { logger } from "../utils/logger.js";
-import { tenants } from "../drizzle/schema/tenants.js";
+import { company } from "../drizzle/schema/company.js";
 import { users } from "../drizzle/schema/users.js";
 import { suppliers } from "../drizzle/schema/supplier.js";
 import { inventoryItems, inventoryStock, inventoryMovements } from "../drizzle/schema/inventory.js";
@@ -23,7 +23,7 @@ import { transitionReceivingLineItem } from "../modules/erp/receivingWorkflow.js
 import { receiveIntoLot } from "../modules/inventory/inventoryLots.service.js";
 import { recomputeSupplierRiskScore } from "../modules/supplier/supplier.qualityRisk.js";
 import { closeEventBusClient } from "../lib/eventBus.js";
-import type { TenantDb } from "../lib/tenantScope.js";
+import type { Db } from "../lib/requestDb.js";
 
 /**
  * Phase 11 task 3/13 — demo-friendly seed data telling ONE coherent story
@@ -38,9 +38,9 @@ import type { TenantDb } from "../lib/tenantScope.js";
  * carry the exact same audit trail / form-sync / workflow-event side effects
  * a real user's actions would have produced — and so the CAPA escalation and
  * supplier risk score are the real automation actually firing on real data,
- * not hand-picked numbers. Deliberately does NOT flip any tenant-wide
+ * not hand-picked numbers. Deliberately does NOT flip any company-wide
  * automation toggle (e.g. receivingSettings.autoCreateNcrOnQuarantine) to
- * get there — that would change real automated behavior for this tenant
+ * get there — that would change real automated behavior for this company
  * going forward as a side effect of seeding some sample rows, so the demo
  * NCR is created directly instead of by not relying on that toggle being on.
  *
@@ -56,19 +56,18 @@ const HEALTHY_SUPPLIER_NAME = "Meridian Fasteners LLC";
 async function main() {
   logger.info("Seeding AccuQual demo story data...");
 
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.code, "demo"));
-  if (!tenant) throw new Error('Demo tenant not found — run "npm run db:seed" first.');
-  const tenantId = tenant.id;
-  const tdb = db as unknown as TenantDb;
+  const [demoCompany] = await db.select().from(company);
+  if (!demoCompany) throw new Error('No company yet — run "npm run db:seed" first.');
+  const tdb = db as unknown as Db;
 
-  const [existing] = await tdb.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.tenantId, tenantId), eq(suppliers.name, DEMO_SUPPLIER_NAME)));
+  const [existing] = await tdb.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.name, DEMO_SUPPLIER_NAME)));
   if (existing) {
     logger.info(`Demo story already seeded (supplier "${DEMO_SUPPLIER_NAME}" exists, id ${existing.id}) — run "npm run db:reset-demo-story" to re-seed. Exiting.`);
     await pool.end();
     return;
   }
 
-  const [admin] = await tdb.select({ id: users.id }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.email, "admin@accuqual.local")));
+  const [admin] = await tdb.select({ id: users.id }).from(users).where(and(eq(users.email, "admin@accuqual.local")));
   const performedBy = admin?.id;
 
   const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
@@ -76,19 +75,19 @@ async function main() {
   // ---------------------------------------------------------------------
   // Suppliers
   // ---------------------------------------------------------------------
-  const [titan] = await tdb.insert(suppliers).values({ tenantId, name: DEMO_SUPPLIER_NAME, contactEmail: "quality@titancomponents.example", status: "active" }).returning();
-  const [meridian] = await tdb.insert(suppliers).values({ tenantId, name: HEALTHY_SUPPLIER_NAME, contactEmail: "sales@meridianfasteners.example", status: "active" }).returning();
+  const [titan] = await tdb.insert(suppliers).values({ name: DEMO_SUPPLIER_NAME, contactEmail: "quality@titancomponents.example", status: "active" }).returning();
+  const [meridian] = await tdb.insert(suppliers).values({ name: HEALTHY_SUPPLIER_NAME, contactEmail: "sales@meridianfasteners.example", status: "active" }).returning();
 
   // ---------------------------------------------------------------------
   // Inventory items
   // ---------------------------------------------------------------------
   const [bracket] = await tdb
     .insert(inventoryItems)
-    .values({ tenantId, sku: "TC-4400-BRKT", description: "Titan Bracket Assembly 4400", itemType: "raw_material", unitOfMeasure: "ea", defaultSupplierId: titan!.id, minLevel: "50", unitCost: "12.50" })
+    .values({ sku: "TC-4400-BRKT", description: "Titan Bracket Assembly 4400", itemType: "raw_material", unitOfMeasure: "ea", defaultSupplierId: titan!.id, minLevel: "50", unitCost: "12.50" })
     .returning();
   const [gasket] = await tdb
     .insert(inventoryItems)
-    .values({ tenantId, sku: "MF-2200-GSKT", description: "Meridian Gasket 2200", itemType: "raw_material", unitOfMeasure: "ea", defaultSupplierId: meridian!.id, minLevel: "100", unitCost: "1.75" })
+    .values({ sku: "MF-2200-GSKT", description: "Meridian Gasket 2200", itemType: "raw_material", unitOfMeasure: "ea", defaultSupplierId: meridian!.id, minLevel: "100", unitCost: "1.75" })
     .returning();
 
   // ---------------------------------------------------------------------
@@ -107,13 +106,13 @@ async function main() {
   for (const outcome of receivingOutcomes) {
     const [po] = await tdb
       .insert(erpPurchaseOrders)
-      .values({ tenantId, supplierId: titan!.id, createdBy: performedBy, status: "received", expectedDeliveryDate: daysAgo(outcome.daysAgo + 5) })
+      .values({ supplierId: titan!.id, createdBy: performedBy, status: "received", expectedDeliveryDate: daysAgo(outcome.daysAgo + 5) })
       .returning();
-    const [poLine] = await tdb.insert(erpPoLineItems).values({ tenantId, purchaseOrderId: po!.id, itemId: bracket!.id, quantity: outcome.qty, unitCost: "12.50" }).returning();
-    const [doc] = await tdb.insert(erpReceivingDocuments).values({ tenantId, purchaseOrderId: po!.id, createdBy: performedBy }).returning();
-    const [line] = await tdb.insert(erpReceivingLineItems).values({ tenantId, receivingDocumentId: doc!.id, poLineItemId: poLine!.id, quantityReceived: outcome.qty, lotNumber: `TC-LOT-${outcome.daysAgo}` }).returning();
+    const [poLine] = await tdb.insert(erpPoLineItems).values({ purchaseOrderId: po!.id, itemId: bracket!.id, quantity: outcome.qty, unitCost: "12.50" }).returning();
+    const [doc] = await tdb.insert(erpReceivingDocuments).values({ purchaseOrderId: po!.id, createdBy: performedBy }).returning();
+    const [line] = await tdb.insert(erpReceivingLineItems).values({ receivingDocumentId: doc!.id, poLineItemId: poLine!.id, quantityReceived: outcome.qty, lotNumber: `TC-LOT-${outcome.daysAgo}` }).returning();
 
-    await receiveIntoLot(tdb, tenantId, {
+    await receiveIntoLot(tdb, {
       itemId: bracket!.id,
       lotNumber: `TC-LOT-${outcome.daysAgo}`,
       supplierId: titan!.id,
@@ -121,32 +120,32 @@ async function main() {
       receivingLineItemId: line!.id,
       quantity: outcome.qty,
     });
-    await tdb.insert(inventoryMovements).values({ tenantId, itemId: bracket!.id, movementType: "receive", quantity: String(outcome.qty), lotNumber: `TC-LOT-${outcome.daysAgo}`, referenceType: "receiving", referenceId: String(doc!.id), performedBy, performedAt: daysAgo(outcome.daysAgo) });
+    await tdb.insert(inventoryMovements).values({ itemId: bracket!.id, movementType: "receive", quantity: String(outcome.qty), lotNumber: `TC-LOT-${outcome.daysAgo}`, referenceType: "receiving", referenceId: String(doc!.id), performedBy, performedAt: daysAgo(outcome.daysAgo) });
 
-    const transitionOpts = { department: "quality", isAdminOrPlatformAdmin: true, performedBy, notes: "Dimensional check failed — bracket mounting holes out of tolerance" };
-    await transitionReceivingLineItem(tdb, tenantId, line!.id, "pending_inspection", transitionOpts);
-    await transitionReceivingLineItem(tdb, tenantId, line!.id, "inspected", transitionOpts);
-    await transitionReceivingLineItem(tdb, tenantId, line!.id, outcome.disposition, transitionOpts);
+    const transitionOpts = { department: "quality", isAdmin: true, performedBy, notes: "Dimensional check failed — bracket mounting holes out of tolerance" };
+    await transitionReceivingLineItem(tdb, line!.id, "pending_inspection", transitionOpts);
+    await transitionReceivingLineItem(tdb, line!.id, "inspected", transitionOpts);
+    await transitionReceivingLineItem(tdb, line!.id, outcome.disposition, transitionOpts);
 
     if (outcome.disposition === "quarantined" && firstQuarantinedLineId === null) firstQuarantinedLineId = line!.id;
   }
 
   // A clean receiving event for the healthy supplier, for dashboard contrast.
   {
-    const [po] = await tdb.insert(erpPurchaseOrders).values({ tenantId, supplierId: meridian!.id, createdBy: performedBy, status: "received", expectedDeliveryDate: daysAgo(15) }).returning();
-    const [poLine] = await tdb.insert(erpPoLineItems).values({ tenantId, purchaseOrderId: po!.id, itemId: gasket!.id, quantity: 500, unitCost: "1.75" }).returning();
-    const [doc] = await tdb.insert(erpReceivingDocuments).values({ tenantId, purchaseOrderId: po!.id, createdBy: performedBy }).returning();
-    const [line] = await tdb.insert(erpReceivingLineItems).values({ tenantId, receivingDocumentId: doc!.id, poLineItemId: poLine!.id, quantityReceived: 500, lotNumber: "MF-LOT-20" }).returning();
-    await receiveIntoLot(tdb, tenantId, { itemId: gasket!.id, lotNumber: "MF-LOT-20", supplierId: meridian!.id, purchaseOrderId: po!.id, receivingLineItemId: line!.id, quantity: 500 });
-    await tdb.insert(inventoryMovements).values({ tenantId, itemId: gasket!.id, movementType: "receive", quantity: "500", lotNumber: "MF-LOT-20", referenceType: "receiving", referenceId: String(doc!.id), performedBy, performedAt: daysAgo(20) });
-    const cleanOpts = { department: "quality", isAdminOrPlatformAdmin: true, performedBy };
-    await transitionReceivingLineItem(tdb, tenantId, line!.id, "pending_inspection", cleanOpts);
-    await transitionReceivingLineItem(tdb, tenantId, line!.id, "inspected", cleanOpts);
-    await transitionReceivingLineItem(tdb, tenantId, line!.id, "accepted", cleanOpts);
+    const [po] = await tdb.insert(erpPurchaseOrders).values({ supplierId: meridian!.id, createdBy: performedBy, status: "received", expectedDeliveryDate: daysAgo(15) }).returning();
+    const [poLine] = await tdb.insert(erpPoLineItems).values({ purchaseOrderId: po!.id, itemId: gasket!.id, quantity: 500, unitCost: "1.75" }).returning();
+    const [doc] = await tdb.insert(erpReceivingDocuments).values({ purchaseOrderId: po!.id, createdBy: performedBy }).returning();
+    const [line] = await tdb.insert(erpReceivingLineItems).values({ receivingDocumentId: doc!.id, poLineItemId: poLine!.id, quantityReceived: 500, lotNumber: "MF-LOT-20" }).returning();
+    await receiveIntoLot(tdb, { itemId: gasket!.id, lotNumber: "MF-LOT-20", supplierId: meridian!.id, purchaseOrderId: po!.id, receivingLineItemId: line!.id, quantity: 500 });
+    await tdb.insert(inventoryMovements).values({ itemId: gasket!.id, movementType: "receive", quantity: "500", lotNumber: "MF-LOT-20", referenceType: "receiving", referenceId: String(doc!.id), performedBy, performedAt: daysAgo(20) });
+    const cleanOpts = { department: "quality", isAdmin: true, performedBy };
+    await transitionReceivingLineItem(tdb, line!.id, "pending_inspection", cleanOpts);
+    await transitionReceivingLineItem(tdb, line!.id, "inspected", cleanOpts);
+    await transitionReceivingLineItem(tdb, line!.id, "accepted", cleanOpts);
   }
 
-  await tdb.insert(inventoryStock).values({ tenantId, itemId: bracket!.id, onHand: "530", lastAdjustedAt: daysAgo(10), lastAdjustedBy: performedBy });
-  await tdb.insert(inventoryStock).values({ tenantId, itemId: gasket!.id, onHand: "500", lastAdjustedAt: daysAgo(20), lastAdjustedBy: performedBy });
+  await tdb.insert(inventoryStock).values({ itemId: bracket!.id, onHand: "530", lastAdjustedAt: daysAgo(10), lastAdjustedBy: performedBy });
+  await tdb.insert(inventoryStock).values({ itemId: gasket!.id, onHand: "500", lastAdjustedAt: daysAgo(20), lastAdjustedBy: performedBy });
 
   // ---------------------------------------------------------------------
   // NCR — created directly (autoCreateNcrOnQuarantine is off by default and
@@ -156,7 +155,6 @@ async function main() {
   const [demoNcr] = await tdb
     .insert(ncr)
     .values({
-      tenantId,
       title: "Bracket dimensional out-of-spec — Titan Components lot TC-LOT-75",
       description: "Mounting holes on Titan Bracket Assembly 4400 measured outside drawing tolerance (+0.015in). Lot quarantined pending disposition.",
       severity: "high",
@@ -166,32 +164,32 @@ async function main() {
       createdAt: daysAgo(75),
     })
     .returning();
-  await recordAuditTrail(tdb, { tenantId, entityType: "NCR", entityId: demoNcr!.id, action: "create", changes: { message: "Demo story seed" }, performedBy });
+  await recordAuditTrail(tdb, { entityType: "NCR", entityId: demoNcr!.id, action: "create", changes: { message: "Demo story seed" }, performedBy });
 
-  await setContainment(tdb, tenantId, demoNcr!.id, "Lot TC-LOT-75 quarantined in receiving inspection cage; production notified to hold any in-process assemblies using this lot.", performedBy);
-  await setRootCause(tdb, tenantId, demoNcr!.id, "Supplier's stamping die (Die #7) has worn beyond tolerance, producing mounting holes 0.010-0.015in oversized. Confirmed via Titan's own CMM report submitted with their 8D response.", performedBy);
-  await setCorrectiveAction(tdb, tenantId, demoNcr!.id, "Titan Components to replace Die #7 and requalify with a 30-piece first-article inspection before resuming shipment. AccuQual to increase incoming inspection sample size to 100% for the next 3 lots.", performedBy);
-  await closeNcr(tdb, tenantId, demoNcr!.id, performedBy);
+  await setContainment(tdb, demoNcr!.id, "Lot TC-LOT-75 quarantined in receiving inspection cage; production notified to hold any in-process assemblies using this lot.", performedBy);
+  await setRootCause(tdb, demoNcr!.id, "Supplier's stamping die (Die #7) has worn beyond tolerance, producing mounting holes 0.010-0.015in oversized. Confirmed via Titan's own CMM report submitted with their 8D response.", performedBy);
+  await setCorrectiveAction(tdb, demoNcr!.id, "Titan Components to replace Die #7 and requalify with a 30-piece first-article inspection before resuming shipment. AccuQual to increase incoming inspection sample size to 100% for the next 3 lots.", performedBy);
+  await closeNcr(tdb, demoNcr!.id, performedBy);
 
   // ---------------------------------------------------------------------
   // CAPA — let the real receiving automation's escalation stand if it
-  // fired; otherwise (e.g. this tenant's thresholds were customized) fall
+  // fired; otherwise (e.g. this company's thresholds were customized) fall
   // back to a direct insert so the demo story still completes.
   // ---------------------------------------------------------------------
-  let [demoCapa] = await tdb.select().from(capa).where(and(eq(capa.tenantId, tenantId), eq(capa.supplierId, titan!.id), eq(capa.escalationSource, "receiving_recurrence")));
+  let [demoCapa] = await tdb.select().from(capa).where(and(eq(capa.supplierId, titan!.id), eq(capa.escalationSource, "receiving_recurrence")));
   if (!demoCapa) {
     [demoCapa] = await tdb
       .insert(capa)
-      .values({ tenantId, ncrId: demoNcr!.id, rootCause: "Recurring receiving quarantines/rejections from Titan Components — 3 qualifying events in the last 90 days.", status: "open", escalationSource: "receiving_recurrence", supplierId: titan!.id, createdAt: daysAgo(10) })
+      .values({ ncrId: demoNcr!.id, rootCause: "Recurring receiving quarantines/rejections from Titan Components — 3 qualifying events in the last 90 days.", status: "open", escalationSource: "receiving_recurrence", supplierId: titan!.id, createdAt: daysAgo(10) })
       .returning();
-    await recordAuditTrail(tdb, { tenantId, entityType: "CAPA", entityId: demoCapa!.id, action: "create", changes: { message: "Demo story seed (fallback — automation didn't fire)" }, performedBy });
+    await recordAuditTrail(tdb, { entityType: "CAPA", entityId: demoCapa!.id, action: "create", changes: { message: "Demo story seed (fallback — automation didn't fire)" }, performedBy });
   }
   await tdb.update(capa).set({ ncrId: demoCapa!.ncrId ?? demoNcr!.id, actionPlan: "Supplier corrective action: replace worn stamping die and requalify. Internal: raise incoming inspection to 100% for 3 lots.", ownerId: performedBy, status: "in_progress" }).where(eq(capa.id, demoCapa!.id));
-  await recordAuditTrail(tdb, { tenantId, entityType: "CAPA", entityId: demoCapa!.id, action: "status_change", changes: { action: "in_progress" }, performedBy });
+  await recordAuditTrail(tdb, { entityType: "CAPA", entityId: demoCapa!.id, action: "status_change", changes: { action: "in_progress" }, performedBy });
   await tdb.update(capa).set({ verification: "First-article inspection of Die #7's requalification run (30 pcs) passed with zero dimensional nonconformances.", status: "verifying", verifiedBy: performedBy, verifiedAt: daysAgo(3) }).where(eq(capa.id, demoCapa!.id));
-  await recordAuditTrail(tdb, { tenantId, entityType: "CAPA", entityId: demoCapa!.id, action: "status_change", changes: { action: "verify" }, performedBy });
+  await recordAuditTrail(tdb, { entityType: "CAPA", entityId: demoCapa!.id, action: "status_change", changes: { action: "verify" }, performedBy });
   await tdb.update(capa).set({ status: "closed", closedAt: daysAgo(1) }).where(eq(capa.id, demoCapa!.id));
-  await recordAuditTrail(tdb, { tenantId, entityType: "CAPA", entityId: demoCapa!.id, action: "status_change", changes: { action: "close" }, performedBy });
+  await recordAuditTrail(tdb, { entityType: "CAPA", entityId: demoCapa!.id, action: "status_change", changes: { action: "close" }, performedBy });
 
   // ---------------------------------------------------------------------
   // 8D — internal working record + Titan's own submitted response.
@@ -199,7 +197,6 @@ async function main() {
   const [demo8d] = await tdb
     .insert(eightD)
     .values({
-      tenantId,
       ncrId: demoNcr!.id,
       currentStep: 8,
       data: {
@@ -217,7 +214,6 @@ async function main() {
     .returning();
 
   await tdb.insert(supplier8dResponses).values({
-    tenantId,
     supplierId: titan!.id,
     linkedNcrId: demoNcr!.id,
     linkedEightDId: demo8d!.id,
@@ -244,13 +240,12 @@ async function main() {
   // ---------------------------------------------------------------------
   const [customer] = await tdb
     .insert(customers)
-    .values({ tenantId, legalName: "Northfield Industries", primaryContactName: "Dana Ruiz", primaryContactEmail: "dana.ruiz@northfield.example", customerType: "OEM", status: "activated" })
+    .values({ legalName: "Northfield Industries", primaryContactName: "Dana Ruiz", primaryContactEmail: "dana.ruiz@northfield.example", customerType: "OEM", status: "activated" })
     .returning();
 
   const [claimDraft] = await tdb
     .insert(warrantyClaims)
     .values({
-      tenantId,
       claimNumber: "WC-PENDING",
       status: "new",
       customerId: customer!.id,
@@ -268,14 +263,14 @@ async function main() {
     .returning();
   const claimNumber = `WC-${String(claimDraft!.id).padStart(6, "0")}`;
   const [claim] = await tdb.update(warrantyClaims).set({ claimNumber }).where(eq(warrantyClaims.id, claimDraft!.id)).returning();
-  await tdb.insert(warrantyClaimWorkflow).values({ tenantId, claimId: claim!.id, fromStatus: null, toStatus: "new", performedByUserId: performedBy, createdAt: daysAgo(20) });
-  await recordAuditTrail(tdb, { tenantId, entityType: "WarrantyClaim", entityId: claim!.id, action: "create", changes: { message: "Demo story seed" }, performedBy });
+  await tdb.insert(warrantyClaimWorkflow).values({ claimId: claim!.id, fromStatus: null, toStatus: "new", performedByUserId: performedBy, createdAt: daysAgo(20) });
+  await recordAuditTrail(tdb, { entityType: "WarrantyClaim", entityId: claim!.id, action: "create", changes: { message: "Demo story seed" }, performedBy });
 
   async function transitionWarranty(toStatus: string, note: string, when: Date) {
     const [current] = await tdb.select().from(warrantyClaims).where(eq(warrantyClaims.id, claim!.id));
     await tdb.update(warrantyClaims).set({ status: toStatus, updatedAt: when }).where(eq(warrantyClaims.id, claim!.id));
-    await tdb.insert(warrantyClaimWorkflow).values({ tenantId, claimId: claim!.id, fromStatus: current!.status, toStatus, note, performedByUserId: performedBy, createdAt: when });
-    await recordAuditTrail(tdb, { tenantId, entityType: "WarrantyClaim", entityId: claim!.id, action: "status_change", changes: { oldStatus: current!.status, newStatus: toStatus, note }, performedBy });
+    await tdb.insert(warrantyClaimWorkflow).values({ claimId: claim!.id, fromStatus: current!.status, toStatus, note, performedByUserId: performedBy, createdAt: when });
+    await recordAuditTrail(tdb, { entityType: "WarrantyClaim", entityId: claim!.id, action: "status_change", changes: { oldStatus: current!.status, newStatus: toStatus, note }, performedBy });
   }
   await transitionWarranty("inspection", "Failed bracket received and logged for inspection.", daysAgo(18));
   await tdb.update(warrantyClaims).set({ inspectionNotes: "Fracture surface consistent with an oversized mounting hole causing stress concentration — matches the Die #7 defect.", inspectedByUserId: performedBy, inspectionDate: daysAgo(16) }).where(eq(warrantyClaims.id, claim!.id));
@@ -286,8 +281,8 @@ async function main() {
   await tdb.update(warrantyClaims).set({ dispositionNotes: "Replacement shipped under warranty; cost billed back to Titan Components per supplier agreement." }).where(eq(warrantyClaims.id, claim!.id));
   await transitionWarranty("closed", "Customer confirmed replacement resolved the issue.", daysAgo(5));
 
-  await tdb.insert(warrantyClaimCosts).values({ tenantId, claimId: claim!.id, costType: "replacement_unit", amount: "340.00", notes: "Replacement bracket assembly", recordedByUserId: performedBy, createdAt: daysAgo(8) });
-  await tdb.insert(warrantyClaimCosts).values({ tenantId, claimId: claim!.id, costType: "labor", amount: "120.00", notes: "Field technician swap labor", recordedByUserId: performedBy, createdAt: daysAgo(8) });
+  await tdb.insert(warrantyClaimCosts).values({ claimId: claim!.id, costType: "replacement_unit", amount: "340.00", notes: "Replacement bracket assembly", recordedByUserId: performedBy, createdAt: daysAgo(8) });
+  await tdb.insert(warrantyClaimCosts).values({ claimId: claim!.id, costType: "labor", amount: "120.00", notes: "Field technician swap labor", recordedByUserId: performedBy, createdAt: daysAgo(8) });
   await tdb.update(warrantyClaims).set({ warrantyActualCost: "460.00" }).where(eq(warrantyClaims.id, claim!.id));
 
   // ---------------------------------------------------------------------
@@ -297,7 +292,6 @@ async function main() {
   const [rmaDraft] = await tdb
     .insert(rmaLogRecords)
     .values({
-      tenantId,
       status: "open",
       rmaNumber: "RMA-PENDING",
       dateIssued: daysAgo(19),
@@ -315,7 +309,7 @@ async function main() {
     .returning();
   const rmaNumber = `RMA-${new Date().getFullYear()}-${String(rmaDraft!.id).padStart(4, "0")}`;
   await tdb.update(rmaLogRecords).set({ rmaNumber }).where(eq(rmaLogRecords.id, rmaDraft!.id));
-  await recordAuditTrail(tdb, { tenantId, entityType: "RmaLog", entityId: rmaDraft!.id, action: "create", changes: { message: "Demo story seed" }, performedBy });
+  await recordAuditTrail(tdb, { entityType: "RmaLog", entityId: rmaDraft!.id, action: "create", changes: { message: "Demo story seed" }, performedBy });
 
   async function transitionRma(toStatus: string, extra: Record<string, unknown> = {}) {
     const [current] = await tdb.select().from(rmaLogRecords).where(eq(rmaLogRecords.id, rmaDraft!.id));
@@ -323,7 +317,7 @@ async function main() {
     if (toStatus === "received" && !current!.dateReceived) patch.dateReceived = daysAgo(17);
     if (toStatus === "closed" && !current!.dateClosed) patch.dateClosed = daysAgo(4);
     await tdb.update(rmaLogRecords).set(patch).where(eq(rmaLogRecords.id, rmaDraft!.id));
-    await recordAuditTrail(tdb, { tenantId, entityType: "RmaLog", entityId: rmaDraft!.id, action: "status_change", changes: { oldStatus: current!.status, newStatus: toStatus }, performedBy });
+    await recordAuditTrail(tdb, { entityType: "RmaLog", entityId: rmaDraft!.id, action: "status_change", changes: { oldStatus: current!.status, newStatus: toStatus }, performedBy });
   }
   await transitionRma("received");
   await transitionRma("under_review", { qualityTeamFindings: "Confirmed dimensional defect matching NCR — root cause traced to Titan Components Die #7." });
@@ -335,11 +329,10 @@ async function main() {
   // ---------------------------------------------------------------------
   const [demoAudit] = await tdb
     .insert(audits)
-    .values({ tenantId, name: "Q3 Supplier Quality Audit — Titan Components", type: "supplier", auditorId: performedBy, status: "completed", scheduledAt: daysAgo(50), completedAt: daysAgo(45) })
+    .values({ name: "Q3 Supplier Quality Audit — Titan Components", type: "supplier", auditorId: performedBy, status: "completed", scheduledAt: daysAgo(50), completedAt: daysAgo(45) })
     .returning();
   await tdb.insert(auditItems).values([
     {
-      tenantId,
       auditId: demoAudit!.id,
       question: "Does the supplier's process control plan address known wear items on tooling?",
       finding: "Die #7's wear was not on a preventive maintenance schedule at the time of the Q3 incident — added post-CAPA.",
@@ -347,7 +340,6 @@ async function main() {
       evidence: `Referenced NCR #${demoNcr!.id}, CAPA #${demoCapa!.id}.`,
     },
     {
-      tenantId,
       auditId: demoAudit!.id,
       question: "Are first-article inspection records retained for tooling requalification?",
       finding: "First-article CMM report for the Die #7 rebuild was on file and complete.",
@@ -358,8 +350,8 @@ async function main() {
   // ---------------------------------------------------------------------
   // Real, computed supplier quality risk scores — not hand-picked numbers.
   // ---------------------------------------------------------------------
-  const titanScore = await recomputeSupplierRiskScore(tdb, tenantId, titan!.id, performedBy);
-  const meridianScore = await recomputeSupplierRiskScore(tdb, tenantId, meridian!.id, performedBy);
+  const titanScore = await recomputeSupplierRiskScore(tdb, titan!.id, performedBy);
+  const meridianScore = await recomputeSupplierRiskScore(tdb, meridian!.id, performedBy);
 
   // ---------------------------------------------------------------------
   // Workflow Inbox demo data — a handful of currently-OPEN items assigned
@@ -371,7 +363,6 @@ async function main() {
   const [inboxNcr] = await tdb
     .insert(ncr)
     .values({
-      tenantId,
       title: "Gasket seal leak reported on Meridian Fasteners lot MF-LOT-20",
       description: "Field report of a minor seal leak; awaiting containment review.",
       severity: "medium",
@@ -381,20 +372,20 @@ async function main() {
       createdAt: daysAgo(2),
     })
     .returning();
-  await recordAuditTrail(tdb, { tenantId, entityType: "NCR", entityId: inboxNcr!.id, action: "create", changes: { message: "Demo story seed (Workflow Inbox)" }, performedBy });
+  await recordAuditTrail(tdb, { entityType: "NCR", entityId: inboxNcr!.id, action: "create", changes: { message: "Demo story seed (Workflow Inbox)" }, performedBy });
 
   const [inboxCapa] = await tdb
     .insert(capa)
-    .values({ tenantId, ncrId: inboxNcr!.id, rootCause: "Under investigation.", status: "in_progress", ownerId: performedBy, supplierId: meridian!.id, createdAt: daysAgo(1) })
+    .values({ ncrId: inboxNcr!.id, rootCause: "Under investigation.", status: "in_progress", ownerId: performedBy, supplierId: meridian!.id, createdAt: daysAgo(1) })
     .returning();
-  await recordAuditTrail(tdb, { tenantId, entityType: "CAPA", entityId: inboxCapa!.id, action: "create", changes: { message: "Demo story seed (Workflow Inbox)" }, performedBy });
+  await recordAuditTrail(tdb, { entityType: "CAPA", entityId: inboxCapa!.id, action: "create", changes: { message: "Demo story seed (Workflow Inbox)" }, performedBy });
 
-  await tdb.insert(audits).values({ tenantId, name: "Q4 Internal Process Audit — Receiving", type: "internal", auditorId: performedBy, status: "scheduled", scheduledAt: daysAgo(-14) });
+  await tdb.insert(audits).values({ name: "Q4 Internal Process Audit — Receiving", type: "internal", auditorId: performedBy, status: "scheduled", scheduledAt: daysAgo(-14) });
 
-  const [inboxCourse] = await tdb.insert(trainingCourses).values({ tenantId, title: "Annual Quality System Refresher" }).returning();
-  await tdb.insert(trainingAssignments).values({ tenantId, courseId: inboxCourse!.id, userId: performedBy!, status: "assigned", dueAt: daysAgo(5), assignedBy: performedBy });
+  const [inboxCourse] = await tdb.insert(trainingCourses).values({ title: "Annual Quality System Refresher" }).returning();
+  await tdb.insert(trainingAssignments).values({ courseId: inboxCourse!.id, userId: performedBy!, status: "assigned", dueAt: daysAgo(5), assignedBy: performedBy });
 
-  await tdb.insert(documents).values({ tenantId, title: "SOP-114 Incoming Inspection (Rev C)", category: "SOP", status: "in_review", ownerId: performedBy, createdAt: daysAgo(3) });
+  await tdb.insert(documents).values({ title: "SOP-114 Incoming Inspection (Rev C)", category: "SOP", status: "in_review", ownerId: performedBy, createdAt: daysAgo(3) });
 
   logger.info("Demo story seed complete.");
   logger.info(`  Supplier "${DEMO_SUPPLIER_NAME}" (id ${titan!.id}): risk score ${titanScore.score} (${titanScore.band})`);

@@ -9,12 +9,11 @@ import { users } from "./users.js";
  * (training_assignments, supplier_scorecards, ...) rather than crowding the
  * user row with transient, security-sensitive state.
  *
- * Not in rls-policies.sql's tenant_tables array, on purpose — like `users`/
- * `roles`/`tenants` themselves, this is only ever queried via the unscoped
- * `db` singleton (see auth.service.ts's own comment on why login/register
- * do the same): the whole point of "forgot password" is that the caller
- * isn't authenticated into a tenant yet, so there's no `req.tenantId` to
- * scope by, and no tenantId column on this table to scope with.
+ * Never touched through a request's `req.db`, on purpose — like `users`/
+ * `roles`, this is only ever queried via the plain `db` singleton (see
+ * auth.service.ts's own comment on why login does the same): the whole point
+ * of "forgot password" is that the caller isn't signed in yet, so there is no
+ * request transaction or user to work from. Deny-all under RLS for the app role.
  *
  * tokenHash, never the raw token — same principle as users.passwordHash;
  * the raw token only ever exists in the emailed link and the request that

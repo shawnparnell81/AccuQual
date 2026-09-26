@@ -13,7 +13,7 @@ type TabKey = (typeof TABS)[number]["key"];
 
 /**
  * The self-service Roles & Permissions module — replaces the hardcoded
- * PERMISSION_MATRIX in departmentAccess.ts with real, tenant-configurable
+ * PERMISSION_MATRIX in departmentAccess.ts with real, company-configurable
  * rows (department_permissions / permission_roles / permission_role_modules
  * / user_permission_roles), enforced live on every request by
  * getUserAccessLevel. See that file's own comment for the full design.

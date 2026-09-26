@@ -22,10 +22,10 @@ function useSupplierRiskSettings() {
 /**
  * Settings → Supplier Risk (Phase 7) — weights for the Supplier Quality
  * Risk Score's 7 factors (see supplier.qualityRisk.ts). Deliberately
- * placed here rather than on PlatformAdminPage — see tenants.ts's own
- * schema comment on why: that page is platform_admin/cross-tenant
- * tenant-provisioning only, with no precedent for per-tenant module
- * config, while every other tenant-scoped "config a human occasionally
+ * placed here rather than on PlatformAdminPage — see company.ts's own
+ * schema comment on why: that page is platform_admin/cross-company
+ * company-provisioning only, with no precedent for module
+ * config, while every other company-scoped "config a human occasionally
  * edits" (Feasibility/Inventory/ERP Sync) already lives in Settings.
  */
 export function SupplierRiskSettingsPanel() {

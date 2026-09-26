@@ -5,10 +5,10 @@ import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { WorkflowTrendChart } from "../../components/charts/WorkflowTrendChart";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { SelectField } from "../../components/forms/Field";
-import type { TenantAiUsage, AiSuggestionHistoryResponse } from "../../api/types";
+import type { CompanyAiUsage, AiSuggestionHistoryResponse } from "../../api/types";
 
 function useAiUsage() {
-  return useQuery<TenantAiUsage>({ queryKey: ["tenant/ai-usage"], queryFn: async () => (await apiClient.get("/tenant/ai-usage")).data });
+  return useQuery<CompanyAiUsage>({ queryKey: ["company/ai-usage"], queryFn: async () => (await apiClient.get("/company/ai-usage")).data });
 }
 
 // The real, complete set of `module` values any ai_suggestions row can ever
@@ -50,7 +50,7 @@ const currency = (n: number) => `$${n.toLocaleString(undefined, { minimumFractio
  * call — see ai.assistant.ts); the daily chart and per-module breakdown
  * come from real audit_trail history over the last 30 days, the exact same
  * data the monthly limit itself is enforced against (see
- * tenant.controller.ts's getAiUsageHandler) — this page and the limit
+ * company.controller.ts's getAiUsageHandler) — this page and the limit
  * that blocks usage are reading the same real numbers, not two different
  * "totals" that could ever disagree.
  */
@@ -143,8 +143,8 @@ function UsageDashboard() {
 /**
  * Real, browsable AI suggestion history — previously ai_suggestions could
  * only ever be inspected one row at a time (the accept/reject dialog, at
- * the moment it's generated) or as a cross-tenant aggregate count on
- * Platform Admin's own AI Overview panel. This is the first place a tenant
+ * the moment it's generated) or as an aggregate count.
+ * This is the first place an
  * admin can actually see what the AI has produced over time, filter it,
  * and see whether each suggestion was accepted or rejected.
  */

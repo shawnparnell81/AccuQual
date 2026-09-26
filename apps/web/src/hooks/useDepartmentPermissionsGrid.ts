@@ -6,7 +6,7 @@ import type { AccessLevel, Department } from "../components/layout/navConfig";
 
 /**
  * The full department x module grid (GET /permissions/department-permissions,
- * admin only). Used by TopNav.tsx so an admin/platform_admin's nav preview of
+ * admin only). Used by TopNav.tsx so an admin's nav preview of
  * OTHER departments' dropdowns (they see every department's group, not just
  * their own) reflects live grants too — the viewer's OWN department instead
  * reads useEffectivePermissions, which already covers custom-role grants a

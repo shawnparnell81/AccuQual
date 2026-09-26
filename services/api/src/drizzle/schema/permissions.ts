@@ -1,15 +1,14 @@
 import { pgTable, serial, text, integer, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
 /**
  * The self-service Roles & Permissions module — replaces the hardcoded
  * PERMISSION_MATRIX object in departmentAccess.ts as the real source of
  * truth for module access, without touching the app's existing, unrelated
- * global `roles` table (roles.ts — platform_admin/admin/quality_manager/etc,
- * a fixed system-role list shared across every tenant, used for the
+ * global `roles` table (roles.ts — admin/quality_manager/etc,
+ * a fixed system-role list shared across every company, used for the
  * roleName-based admin bypass and requireRole() gates everywhere). That
- * table stays exactly as-is; this file is a new, ADDITIVE layer, tenant-
+ * table stays exactly as-is; this file is a new, ADDITIVE layer, company-
  * scoped end to end.
  *
  * Two independent ways a user can gain access to a module, both computed
@@ -19,14 +18,14 @@ import { users } from "./users.js";
  * into the JWT at login and only refresh then):
  *
  *   1. departmentPermissions — the direct replacement for PERMISSION_MATRIX.
- *      One row per (tenant, departmentName, moduleName) => accessLevel. A
+ *      One row per (company, departmentName, moduleName) => accessLevel. A
  *      missing row falls back to the ORIGINAL hardcoded matrix (kept in code
  *      as DEFAULT_PERMISSION_MATRIX) rather than "none" — see that file's
  *      own comment. This is what makes "Customer Service now needs RMA Log
  *      access" a database write instead of a deploy.
  *
  *   2. permissionRoles + permissionRoleModules + userPermissionRoles — a
- *      tenant can additionally define its own named roles (e.g. "Line
+ *      company can additionally define its own named roles (e.g. "Line
  *      Lead"), each carrying its own per-module access level, and assign
  *      them to specific users. This is ADDITIVE ONLY (a role can only grant
  *      access on top of a user's department baseline, never revoke it) —
@@ -39,7 +38,7 @@ import { users } from "./users.js";
  * existing convention for auditTrail.entityType/action — see that schema's
  * own comment) but are constrained at the API boundary to the real
  * ResourceKey/Department unions via Zod (permissions.validation.ts) — "no
- * fictional modules," a tenant can only configure access to modules that
+ * fictional modules," a company can only configure access to modules that
  * actually exist and are actually wired to requireDepartmentAccess.
  *
  * accessLevel uses this app's existing "none"|"read"|"edit" vocabulary
@@ -54,14 +53,13 @@ export const permissionRoles = pgTable(
   "permission_roles",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     roleName: text("role_name").notNull(),
     description: text("description"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at"),
   },
   (table) => ({
-    tenantRoleNameUnique: uniqueIndex("permission_roles_tenant_name_idx").on(table.tenantId, table.roleName),
+    roleNameUnique: uniqueIndex("permission_roles_name_idx").on(table.roleName),
   })
 );
 
@@ -80,7 +78,6 @@ export const permissionRoleModules = pgTable(
   "permission_role_modules",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     roleId: integer("role_id").references(() => permissionRoles.id, { onDelete: "cascade" }).notNull(),
     moduleName: text("module_name").notNull(),
     accessLevel: text("access_level").notNull().default("none"),
@@ -88,7 +85,7 @@ export const permissionRoleModules = pgTable(
     updatedAt: timestamp("updated_at"),
   },
   (table) => ({
-    tenantRoleModuleUnique: uniqueIndex("permission_role_modules_tenant_role_module_idx").on(table.tenantId, table.roleId, table.moduleName),
+    roleModuleUnique: uniqueIndex("permission_role_modules_role_module_idx").on(table.roleId, table.moduleName),
   })
 );
 
@@ -103,13 +100,12 @@ export const userPermissionRoles = pgTable(
   "user_permission_roles",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     userId: integer("user_id").references(() => users.id).notNull(),
     roleId: integer("role_id").references(() => permissionRoles.id, { onDelete: "cascade" }).notNull(),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => ({
-    tenantUserRoleUnique: uniqueIndex("user_permission_roles_tenant_user_role_idx").on(table.tenantId, table.userId, table.roleId),
+    userRoleUnique: uniqueIndex("user_permission_roles_user_role_idx").on(table.userId, table.roleId),
   })
 );
 
@@ -117,7 +113,6 @@ export const departmentPermissions = pgTable(
   "department_permissions",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     departmentName: text("department_name").notNull(),
     moduleName: text("module_name").notNull(),
     accessLevel: text("access_level").notNull().default("none"),
@@ -125,7 +120,7 @@ export const departmentPermissions = pgTable(
     updatedAt: timestamp("updated_at"),
   },
   (table) => ({
-    tenantDeptModuleUnique: uniqueIndex("department_permissions_tenant_dept_module_idx").on(table.tenantId, table.departmentName, table.moduleName),
+    deptModuleUnique: uniqueIndex("department_permissions_dept_module_idx").on(table.departmentName, table.moduleName),
   })
 );
 

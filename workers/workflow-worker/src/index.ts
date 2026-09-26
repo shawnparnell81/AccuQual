@@ -25,23 +25,21 @@ const WORKFLOW_STREAM = "accuqual:workflow-events";
 /**
  * Consumes NCR/CAPA/audit lifecycle events published by the API (see
  * services/api/src/lib/eventBus.ts) and runs every active workflow whose
- * `module` matches the event AND belongs to the same tenant as the event
- * (every event carries `tenantId` — see crudFactory.ts / *.service.ts),
- * using the event's `event` field as the trigger kind (a workflow's trigger
+ * `module` matches the event, using the event's `event` field as the trigger kind (a workflow's trigger
  * node `kind` should match it, e.g. "closed").
  */
 async function handleEvent(fields: Record<string, string>) {
-  const { module, event, entityId, tenantId } = fields;
-  if (!module || !event || !tenantId) return;
+  const { module, event, entityId } = fields;
+  if (!module || !event) return;
 
-  // Phase 9 fix — previously matched ANY definition for {module, tenantId}
-  // regardless of isActive, so a definition a tenant had deliberately
+  // Phase 9 fix — previously matched ANY definition for {module}
+  // regardless of isActive, so a definition someone had deliberately
   // toggled off would still fire for real (a genuine live bug: isActive
   // exists on the schema and the builder UI implies it does something).
   const definitions = await db
     .select()
     .from(workflowDefinitions)
-    .where(and(eq(workflowDefinitions.module, module), eq(workflowDefinitions.tenantId, Number(tenantId)), eq(workflowDefinitions.isActive, "true")));
+    .where(and(eq(workflowDefinitions.module, module), eq(workflowDefinitions.isActive, "true")));
 
   for (const definition of definitions) {
     // Real, previously-latent bug found live: node-redis v4's xReadGroup
@@ -53,20 +51,20 @@ async function handleEvent(fields: Record<string, string>) {
     // Spreading into a plain object (same as runContext below) fixes it.
     const [run] = await db
       .insert(workflowRuns)
-      .values({ workflowId: definition.id, tenantId: Number(tenantId), context: { ...fields }, status: "running", simulated: false, definitionVersion: definition.version })
+      .values({ workflowId: definition.id, context: { ...fields }, status: "running", simulated: false, definitionVersion: definition.version })
       .returning();
     if (!run) continue;
 
-    // Phase 9 — real action handlers need DB/tenant/actor context (see
+    // Phase 9 — real action handlers need DB/actor context (see
     // workflowActions.ts's own comment on this __-prefixed convention).
     // This worker has no human actor — a real system-triggered run, not a
     // user's own request — so __performedBy stays undefined (audit trail's
     // existing "System" fallback already handles a null performer).
-    const runContext = { ...fields, entityId, __db: db, __tenantId: Number(tenantId), __performedBy: undefined };
+    const runContext = { ...fields, entityId, __db: db, __performedBy: undefined };
 
     try {
       const result = await executeWorkflow(definition.definition as unknown as WorkflowDefinition, runContext, { triggerKind: event, dryRun: false });
-      const { __db: _db, __tenantId: _tenantId, __performedBy: _performedBy, ...persistable } = result.context;
+      const { __db: _db, __performedBy: _performedBy, ...persistable } = result.context;
       // A run that reached an approval node stays open (saved position included) until a person decides — see POST /workflow/runs/:id/decision.
       await db
         .update(workflowRuns)

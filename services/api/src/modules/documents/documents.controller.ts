@@ -10,7 +10,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import * as engine from "../versioning/versioning.service.js";
 import { blankDocumentPayload } from "./documentPayload.js";
-import { documentAdapter, isInsideTenantStorage } from "./documentVersioning.js";
+import { documentAdapter, isInsideStorage } from "./documentVersioning.js";
 
 export const baseHandlers = crudFactory(documents, { entityName: "Document", idColumn: "id", softDelete: true });
 
@@ -21,17 +21,16 @@ export const baseHandlers = crudFactory(documents, { entityName: "Document", idC
  */
 export const createDocumentHandler = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
-  const tenantId = req.tenantId!;
   const { title, category } = req.body as { title: string; category?: string };
   const actor = { id: req.user!.id, roleName: req.user!.roleName };
 
   const [doc] = await db
     .insert(documents)
-    .values({ tenantId, title: title.trim(), category: category?.trim() || null, status: "draft", currentVersion: 0, ownerId: actor.id })
+    .values({ title: title.trim(), category: category?.trim() || null, status: "draft", currentVersion: 0, ownerId: actor.id })
     .returning();
   if (!doc) throw new AppError("Failed to create the document", 500);
-  const draft = await engine.createInitialDraft(db, documentAdapter, tenantId, doc.id, actor, { ...blankDocumentPayload(), title: doc.title, category: doc.category ?? null } as unknown as Record<string, unknown>);
-  await recordAuditTrail(db, { tenantId, entityType: "Document", entityId: doc.id, action: "create", changes: { title: doc.title, category: doc.category }, performedBy: actor.id });
+  const draft = await engine.createInitialDraft(db, documentAdapter, doc.id, actor, { ...blankDocumentPayload(), title: doc.title, category: doc.category ?? null } as unknown as Record<string, unknown>);
+  await recordAuditTrail(db, { entityType: "Document", entityId: doc.id, action: "create", changes: { title: doc.title, category: doc.category }, performedBy: actor.id });
   res.status(201).json({ ...doc, openVersionId: draft.id });
 });
 
@@ -55,9 +54,8 @@ export const retiredRevisionHandler = asyncHandler(async (_req: Request, _res: R
  */
 export const obsoleteHandler = asyncHandler(async (req: Request, res: Response) => {
   const documentId = Number(req.params.id);
-  const tenantId = req.tenantId!;
 
-  const [doc] = await req.db!.select().from(documents).where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId)));
+  const [doc] = await req.db!.select().from(documents).where(and(eq(documents.id, documentId)));
   if (!doc) throw AppError.notFound("Document");
   if (doc.status !== "approved") {
     throw AppError.badRequest(`Cannot obsolete a document from status "${doc.status}" — must be "approved".`);
@@ -66,26 +64,25 @@ export const obsoleteHandler = asyncHandler(async (req: Request, res: Response) 
   const [open] = await req
     .db!.select({ n: controlledVersions.versionNumber })
     .from(controlledVersions)
-    .where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, "document"), eq(controlledVersions.subjectId, documentId), eq(controlledVersions.status, "draft")));
+    .where(and(eq(controlledVersions.subjectType, "document"), eq(controlledVersions.subjectId, documentId), eq(controlledVersions.status, "draft")));
   const [inReview] = await req
     .db!.select({ n: controlledVersions.versionNumber })
     .from(controlledVersions)
-    .where(and(eq(controlledVersions.tenantId, tenantId), eq(controlledVersions.subjectType, "document"), eq(controlledVersions.subjectId, documentId), eq(controlledVersions.status, "in_review")));
+    .where(and(eq(controlledVersions.subjectType, "document"), eq(controlledVersions.subjectId, documentId), eq(controlledVersions.status, "in_review")));
   const pending = open ?? inReview;
   if (pending) throw new AppError(`Version ${pending.n} of this document is still being worked on. Discard it or finish it before retiring the document.`, 409);
 
   // Same M3 defense-in-depth fix as approveHandler above.
-  const [updated] = await req.db!.update(documents).set({ status: "obsolete", updatedAt: new Date() }).where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId))).returning();
+  const [updated] = await req.db!.update(documents).set({ status: "obsolete", updatedAt: new Date() }).where(and(eq(documents.id, documentId))).returning();
 
   await recordAuditTrail(req.db!, {
-    tenantId,
     entityType: "Document",
     entityId: documentId,
     action: "status_change",
     changes: { action: "obsolete", status: "obsolete" },
     performedBy: req.user?.id,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "documents", event: "obsolete", entityId: documentId });
+  await publishEvent(WORKFLOW_STREAM, { module: "documents", event: "obsolete", entityId: documentId });
 
   res.json(updated);
 });
@@ -96,12 +93,11 @@ export const obsoleteHandler = asyncHandler(async (req: Request, res: Response) 
  * to point where it should.
  */
 export const downloadVersionHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const versionId = Number(req.params.versionId);
 
-  const [version] = await req.db!.select().from(documentVersions).where(and(eq(documentVersions.id, versionId), eq(documentVersions.tenantId, tenantId)));
+  const [version] = await req.db!.select().from(documentVersions).where(and(eq(documentVersions.id, versionId)));
   if (!version) throw AppError.notFound("Document version");
-  if (!version.fileUrl || /^https?:\/\//i.test(version.fileUrl) || !isInsideTenantStorage(tenantId, version.fileUrl) || !existsSync(version.fileUrl)) {
+  if (!version.fileUrl || /^https?:\/\//i.test(version.fileUrl) || !isInsideStorage(version.fileUrl) || !existsSync(version.fileUrl)) {
     throw AppError.notFound("Uploaded file for this version");
   }
 
@@ -115,7 +111,7 @@ export const historyHandler = asyncHandler(async (req: Request, res: Response) =
   const versions = await req
     .db!.select()
     .from(documentVersions)
-    .where(and(eq(documentVersions.documentId, Number(req.params.id)), eq(documentVersions.tenantId, req.tenantId!)));
+    .where(and(eq(documentVersions.documentId, Number(req.params.id))));
   res.json(versions);
 });
 
@@ -134,7 +130,7 @@ export function expirationStatus(doc: Pick<Document, "expirationDate" | "expirat
 }
 
 export const listExpiringHandler = asyncHandler(async (req: Request, res: Response) => {
-  const rows = await req.db!.select().from(documents).where(eq(documents.tenantId, req.tenantId!));
+  const rows = await req.db!.select().from(documents);
   const expiring = rows
     .map((doc) => ({ ...doc, expirationStatus: expirationStatus(doc) }))
     .filter((doc) => doc.expirationStatus !== null);
@@ -166,11 +162,10 @@ function decideRetention(doc: Document, currentVersion?: Pick<DocumentVersion, "
   return { eligible: true, action: doc.retentionAction === "delete" ? "deleted" : "archived" };
 }
 
-/** Runs retention synchronously for every obsolete, aged-out document in the tenant — no worker, triggered on demand (POST /documents/retention/apply). */
+/** Runs retention synchronously for every obsolete, aged-out document in the company — no worker, triggered on demand (POST /documents/retention/apply). */
 export const applyRetentionHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const db = req.db!;
-  const obsolete = await db.select().from(documents).where(and(eq(documents.tenantId, tenantId), eq(documents.status, "obsolete")));
+  const obsolete = await db.select().from(documents).where(and(eq(documents.status, "obsolete")));
 
   const results: { documentId: number; action: string }[] = [];
 
@@ -178,23 +173,20 @@ export const applyRetentionHandler = asyncHandler(async (req: Request, res: Resp
     const [currentVersion] = await db
       .select()
       .from(documentVersions)
-      .where(and(eq(documentVersions.documentId, doc.id), eq(documentVersions.tenantId, tenantId), eq(documentVersions.version, doc.currentVersion)));
+      .where(and(eq(documentVersions.documentId, doc.id), eq(documentVersions.version, doc.currentVersion)));
 
     const decision = decideRetention(doc, currentVersion);
     if (!decision.eligible) continue;
 
-    // M3: same defense-in-depth tenantId predicate as approve/obsolete above —
-    // `obsolete` was already loaded scoped to this tenant, so this doesn't
-    // change which documents are affected, only matches convention.
+    // M3: same guard as approve/obsolete above.
     if (decision.action === "deleted") {
-      await db.update(documents).set({ isDeleted: true, updatedAt: new Date() }).where(and(eq(documents.id, doc.id), eq(documents.tenantId, tenantId)));
+      await db.update(documents).set({ isDeleted: true, updatedAt: new Date() }).where(and(eq(documents.id, doc.id)));
     } else {
-      await db.update(documents).set({ retentionState: "archived", updatedAt: new Date() }).where(and(eq(documents.id, doc.id), eq(documents.tenantId, tenantId)));
+      await db.update(documents).set({ retentionState: "archived", updatedAt: new Date() }).where(and(eq(documents.id, doc.id)));
     }
     results.push({ documentId: doc.id, action: decision.action! });
 
     await recordAuditTrail(db, {
-      tenantId,
       entityType: "Document",
       entityId: doc.id,
       action: "update",
@@ -210,18 +202,17 @@ export const applyRetentionHandler = asyncHandler(async (req: Request, res: Resp
  * On-demand, single-document version of applyRetentionHandler — real, new
  * (see Phase 6's endpoint list: "archive"). Same eligibility rule as the
  * bulk sweep, just for one obsolete document instead of waiting for someone
- * to run the tenant-wide pass.
+ * to run the company-wide pass.
  */
 export const archiveHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const documentId = Number(req.params.id);
-  const [doc] = await req.db!.select().from(documents).where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId)));
+  const [doc] = await req.db!.select().from(documents).where(and(eq(documents.id, documentId)));
   if (!doc) throw AppError.notFound("Document");
 
   const [currentVersion] = await req
     .db!.select()
     .from(documentVersions)
-    .where(and(eq(documentVersions.documentId, doc.id), eq(documentVersions.tenantId, tenantId), eq(documentVersions.version, doc.currentVersion)));
+    .where(and(eq(documentVersions.documentId, doc.id), eq(documentVersions.version, doc.currentVersion)));
 
   const decision = decideRetention(doc, currentVersion);
   if (!decision.eligible) throw AppError.badRequest(`Cannot archive this document: ${decision.reason}`);
@@ -229,11 +220,10 @@ export const archiveHandler = asyncHandler(async (req: Request, res: Response) =
   // Same M3 defense-in-depth fix as applyRetentionHandler above.
   const [updated] =
     decision.action === "deleted"
-      ? await req.db!.update(documents).set({ isDeleted: true, updatedAt: new Date() }).where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId))).returning()
-      : await req.db!.update(documents).set({ retentionState: "archived", updatedAt: new Date() }).where(and(eq(documents.id, documentId), eq(documents.tenantId, tenantId))).returning();
+      ? await req.db!.update(documents).set({ isDeleted: true, updatedAt: new Date() }).where(and(eq(documents.id, documentId))).returning()
+      : await req.db!.update(documents).set({ retentionState: "archived", updatedAt: new Date() }).where(and(eq(documents.id, documentId))).returning();
 
   await recordAuditTrail(req.db!, {
-    tenantId,
     entityType: "Document",
     entityId: documentId,
     action: "update",

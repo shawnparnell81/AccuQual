@@ -1,6 +1,6 @@
 import { NavLink, Outlet, Link } from "react-router-dom";
 import clsx from "clsx";
-import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, Plug, AlertTriangle, KeyRound, DatabaseBackup, Factory, CreditCard, type LucideIcon } from "lucide-react";
+import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, Plug, AlertTriangle, KeyRound, DatabaseBackup, Factory, type LucideIcon } from "lucide-react";
 
 interface ConsoleSection {
   key: string;
@@ -32,8 +32,7 @@ const SECTIONS: ConsoleSection[] = [
   { key: "api_docs", label: "API Reference", icon: FileCode2, path: "api-docs", description: "Interactive request/response docs generated from the app's own validation schemas" },
   { key: "sso", label: "Single Sign-On", icon: KeyRound, path: "sso", description: "Sign in with your company identity provider (OpenID Connect): domains, provider, and rules" },
   { key: "data_export", label: "Data Export", icon: DatabaseBackup, path: "data-export", description: "Download everything your organization keeps in AccuQual as a ZIP" },
-  { key: "billing", label: "Billing", icon: CreditCard, path: "billing", description: "Your plan, payment and invoices" },
-  { key: "tenant", label: "Tenant Settings", icon: Building2, path: "tenant-settings", description: "Organization name, logo, timezone, and contact info" },
+  { key: "company", label: "Company Settings", icon: Building2, path: "company-settings", description: "Organization name, logo, timezone, and contact info" },
 ];
 
 export { SECTIONS as ADMIN_CONSOLE_SECTIONS };
@@ -41,9 +40,9 @@ export { SECTIONS as ADMIN_CONSOLE_SECTIONS };
 /**
  * Phase 10 — the "Platform Admin Console" the roadmap asks for. Deliberately
  * NOT the same thing as the pre-existing /platform page (that's a different,
- * cross-tenant SaaS-operator tool — tenant provisioning + a cross-tenant AI
+ * SaaS-operator tool — company provisioning + a AI
  * overview, gated to the special platform_admin role). This shell is for a
- * TENANT's own admin configuring their own tenant, unifying navigation only:
+ * COMPANY's own admin configuring their own company, unifying navigation only:
  * each section below reuses its already-built, already-RBAC'd component
  * as-is (Roles & Permissions, the Supplier/Quality/Receiving-Inventory
  * settings panels, the AI config/usage pages, ...) — this layout imposes NO

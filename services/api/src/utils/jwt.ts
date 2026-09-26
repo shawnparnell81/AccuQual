@@ -3,7 +3,6 @@ import { env } from "../config/env.js";
 
 export interface AccessTokenPayload {
   sub: string;
-  tenantId: number | null; // null only for platform admins (see modules/platform)
   roleId: number | null;
   roleName: string | null;
   department: string | null;

@@ -22,7 +22,7 @@ export function FeasibilityDetailPage() {
   const { data: review, isLoading, isError } = feasibilityHooks.useOne(reviewId);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const isAdmin = user?.roleName === "admin" || user?.roleName === "platform_admin";
+  const isAdmin = user?.roleName === "admin";
   const canEditRecord = isAdmin || user?.department === "engineering";
 
   const finalize = feasibilityHooks.useAction("finalize");

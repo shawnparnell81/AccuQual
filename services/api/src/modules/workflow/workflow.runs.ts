@@ -5,7 +5,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
-import { withTenantDb, type TenantDb } from "../../lib/tenantScope.js";
+import { withDb, type Db } from "../../lib/requestDb.js";
 import { workflowDefinitions, workflowRuns, type WorkflowRun } from "../../drizzle/schema/workflow.js";
 import { controlledVersions } from "../../drizzle/schema/versioning.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -18,7 +18,7 @@ import { resumeWorkflow, WorkflowNodeError, type WorkflowDefinition, type Workfl
  * here; admins can always decide.
  */
 export const workflowRunsRouter = Router();
-workflowRunsRouter.use(requireAuth, withTenantDb);
+workflowRunsRouter.use(requireAuth, withDb);
 
 interface PendingApproval {
   nodeId: string;
@@ -29,7 +29,7 @@ interface PendingApproval {
 }
 
 function canDecide(user: { roleName: string | null; department: string | null }, pending: PendingApproval): boolean {
-  if (user.roleName === "admin" || user.roleName === "platform_admin") return true;
+  if (user.roleName === "admin") return true;
   if (pending.approverRole && user.roleName === pending.approverRole) return true;
   if (pending.approverDepartment && user.department === pending.approverDepartment) return true;
   return false;
@@ -45,7 +45,7 @@ workflowRunsRouter.get(
       .db!.select({ run: workflowRuns, workflowName: workflowDefinitions.name })
       .from(workflowRuns)
       .innerJoin(workflowDefinitions, eq(workflowDefinitions.id, workflowRuns.workflowId))
-      .where(and(eq(workflowRuns.tenantId, req.tenantId!), eq(workflowRuns.status, "waiting_approval")))
+      .where(and(eq(workflowRuns.status, "waiting_approval")))
       .orderBy(desc(workflowRuns.startedAt));
     res.json(
       rows
@@ -66,7 +66,7 @@ workflowRunsRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const runId = Number(req.params.runId);
     const { decision, notes } = req.body as z.infer<typeof decisionSchema>;
-    const [run] = await req.db!.select().from(workflowRuns).where(and(eq(workflowRuns.id, runId), eq(workflowRuns.tenantId, req.tenantId!)));
+    const [run] = await req.db!.select().from(workflowRuns).where(and(eq(workflowRuns.id, runId)));
     if (!run) throw AppError.notFound("Workflow run");
     if (run.status !== "waiting_approval" || !run.runState) throw new AppError("This run isn't waiting for an approval.", 409);
 
@@ -78,27 +78,26 @@ workflowRunsRouter.post(
       ? await req
           .db!.select({ payload: controlledVersions.payload })
           .from(controlledVersions)
-          .where(and(eq(controlledVersions.tenantId, req.tenantId!), eq(controlledVersions.subjectType, "workflow"), eq(controlledVersions.subjectId, run.workflowId), eq(controlledVersions.versionNumber, run.definitionVersion)))
+          .where(and(eq(controlledVersions.subjectType, "workflow"), eq(controlledVersions.subjectId, run.workflowId), eq(controlledVersions.versionNumber, run.definitionVersion)))
       : [];
-    const [workflow] = await req.db!.select().from(workflowDefinitions).where(and(eq(workflowDefinitions.id, run.workflowId), eq(workflowDefinitions.tenantId, req.tenantId!)));
+    const [workflow] = await req.db!.select().from(workflowDefinitions).where(and(eq(workflowDefinitions.id, run.workflowId)));
     if (!workflow) throw AppError.notFound("Workflow");
     const graph = (pinned?.payload ?? workflow.definition) as unknown as WorkflowDefinition;
 
     const previous = (run.context ?? {}) as Record<string, unknown>;
     const approvals = [...((previous.approvals as unknown[]) ?? []), { node: pending.nodeId, decision, by: req.user!.id, notes: notes ?? null, at: new Date().toISOString() }];
-    const context = { ...previous, approvals, __db: req.db, __tenantId: req.tenantId, __performedBy: req.user!.id } as Record<string, unknown>;
+    const context = { ...previous, approvals, __db: req.db, __performedBy: req.user!.id } as Record<string, unknown>;
 
     try {
       const execution = await resumeWorkflow(graph, run.runState as WorkflowRunState, context, decision);
-      const { __db: _db, __tenantId: _tenantId, __performedBy: _performedBy, ...persistable } = execution.context;
+      const { __db: _db, __performedBy: _performedBy, ...persistable } = execution.context;
       const waiting = execution.status === "waiting_approval";
       const [updated] = await req
         .db!.update(workflowRuns)
         .set({ status: waiting ? "waiting_approval" : "completed", context: persistable, currentNodeId: execution.currentNodeId, runState: waiting ? execution.state : null, finishedAt: waiting ? null : new Date() })
         .where(eq(workflowRuns.id, run.id))
         .returning();
-      await recordAuditTrail(req.db as TenantDb, {
-        tenantId: req.tenantId!,
+      await recordAuditTrail(req.db as Db, {
         entityType: "WorkflowRun",
         entityId: run.id,
         action: "status_change",
@@ -120,7 +119,7 @@ workflowRunsRouter.post(
 workflowRunsRouter.get(
   "/:runId",
   asyncHandler(async (req: Request, res: Response) => {
-    const [run] = await req.db!.select().from(workflowRuns).where(and(eq(workflowRuns.id, Number(req.params.runId)), eq(workflowRuns.tenantId, req.tenantId!)));
+    const [run] = await req.db!.select().from(workflowRuns).where(and(eq(workflowRuns.id, Number(req.params.runId))));
     if (!run) throw AppError.notFound("Workflow run");
     res.json(run);
   }),

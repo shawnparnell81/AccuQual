@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createRmaLogSchema, updateRmaLogSchema, transitionRmaLogSchema } from "./rmaLog.validation.js";
@@ -13,7 +13,7 @@ export const rmaLogRouter = Router();
 // base level (rma_log.status.write, rma_log.linkage.write) is enforced
 // inline in rmaLog.controller.ts, same "matrix grants edit, controller
 // narrows" pattern as every other module in this app.
-rmaLogRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("rma_log"));
+rmaLogRouter.use(requireAuth, withDb, requireDepartmentAccess("rma_log"));
 
 rmaLogRouter.get("/", listRmaLogHandler);
 rmaLogRouter.post("/", validate(createRmaLogSchema), createRmaLogHandler);

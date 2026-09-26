@@ -2,14 +2,14 @@ import type { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { getUserAccessLevel, RESOURCE_KEYS, type ResourceKey } from "../../middleware/departmentAccess.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { onboardingPrompt } from "../ai/prompts.js";
-import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
+import { checkUsageLimit, loadCompanyLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
 
 /**
  * Real, honest descriptions of what each module actually does today — no
- * "enabled modules per tenant" concept exists anywhere in this schema (see
+ * "enabled modules per company" concept exists anywhere in this schema (see
  * the AI Onboarding review), so this is grounded on the one real signal
  * available: getUserAccessLevel, walked for every real module to find which
  * ResourceKeys this specific user can actually reach (their own department
@@ -43,12 +43,11 @@ const MODULE_DESCRIPTIONS: Partial<Record<ResourceKey, { label: string; descript
  * the user mark items via PATCH /onboarding/progress/:moduleKey.
  */
 export const onboardingAiGenerateHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
-  const db = req.db! as TenantDb;
+  const db = req.db! as Db;
   const user = { id: req.user!.id, roleName: req.user?.roleName ?? null, department: req.user?.department ?? null };
 
   const moduleKeys = RESOURCE_KEYS;
-  const levels = await Promise.all(moduleKeys.map((key) => getUserAccessLevel(db, tenantId, user, key)));
+  const levels = await Promise.all(moduleKeys.map((key) => getUserAccessLevel(db, user, key)));
   const accessibleModules = moduleKeys
     .filter((_key, i) => levels[i] !== "none")
     .map((key) => ({ moduleKey: key, ...(MODULE_DESCRIPTIONS[key] ?? { label: key, description: "" }) }));
@@ -57,11 +56,11 @@ export const onboardingAiGenerateHandler = asyncHandler(async (req: Request, res
     throw AppError.badRequest("No department is set on your account yet — an admin needs to assign one before onboarding can suggest anything.");
   }
 
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!, tenantId);
-  const limitError = await checkUsageLimit(req.db!, tenantId, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const { co, llmOptions } = await loadCompanyLlmOptions(req.db!);
+  const limitError = await checkUsageLimit(req.db!, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
-  const isAdmin = user.roleName === "admin" || user.roleName === "platform_admin";
+  const isAdmin = user.roleName === "admin";
   const inputData = { department: user.department ?? (isAdmin ? "admin" : null), accessibleModules };
   const result = await callLlmDetailed(onboardingPrompt(inputData), { system: "You are AccuQual's onboarding assistant.", ...llmOptions });
 
@@ -73,7 +72,6 @@ export const onboardingAiGenerateHandler = asyncHandler(async (req: Request, res
   }
 
   const saved = await recordAiSuggestion(req.db!, {
-    tenantId,
     module: "onboarding",
     pipeline: "onboarding",
     input: inputData,

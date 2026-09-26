@@ -150,9 +150,9 @@ export function AiAssistantPanel() {
   );
 }
 
-/** Only renders once a tenant-scoped user is logged in — POST /ai/assistant and GET /tenant/assistant-name both require req.tenantId, which platform_admin (no tenant) never has. */
+/** Only renders once a user is signed in — POST /ai/assistant and GET /company/assistant-name both require a signed-in user. */
 export function AiAssistantPanelGate() {
-  const userTenantId = useAuthStore((s) => s.user?.tenantId);
-  if (userTenantId == null) return null;
+  const signedIn = useAuthStore((s) => s.user != null);
+  if (!signedIn) return null;
   return <AiAssistantPanel />;
 }

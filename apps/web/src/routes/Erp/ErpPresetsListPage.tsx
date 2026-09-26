@@ -129,7 +129,7 @@ function ErpPresetsListPageBody() {
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{preset.name}</span>
                       {preset.isActive && <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${BUCKET_CLASSES.success}`}>Active</span>}
-                      {preset.tenantId === null && <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">Global</span>}
+                      {preset.isBuiltin && <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">Built-in</span>}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {MODULE_LABELS[preset.module] ?? preset.module} · v{preset.version}
@@ -139,7 +139,7 @@ function ErpPresetsListPageBody() {
                     <button onClick={() => setPreview(preset)} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
                       Preview
                     </button>
-                    {preset.tenantId === null ? (
+                    {preset.isBuiltin ? (
                       <button onClick={() => clone.mutate(preset.id)} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
                         Customize
                       </button>
@@ -148,7 +148,7 @@ function ErpPresetsListPageBody() {
                         Edit
                       </button>
                     )}
-                    {preset.tenantId !== null && !preset.isActive && (
+                    {!preset.isBuiltin && !preset.isActive && (
                       <button onClick={() => activate.mutate(preset.id)} className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground">
                         Activate
                       </button>

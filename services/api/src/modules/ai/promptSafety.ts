@@ -1,7 +1,7 @@
 /**
  * Prompt-injection hardening — every one of the 20 prompt-building
  * functions in prompts.ts (and ai.assistant.ts's flattened chat transcript)
- * interpolates real, free-text data a tenant user typed (an NCR
+ * interpolates real, free-text data a company user typed (an NCR
  * description, an audit finding, a chat message, ...) directly into a
  * prompt string with no prior defense anywhere in this codebase — confirmed
  * by grep across the whole ai/ module before writing this file: zero

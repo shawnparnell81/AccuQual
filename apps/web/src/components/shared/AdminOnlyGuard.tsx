@@ -7,7 +7,7 @@ export function AdminOnlyGuard({ children }: { children: ReactNode }) {
   if (user?.roleName !== "admin") {
     return (
       <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-        This page is limited to Admin accounts. Ask a tenant admin if you need a change here.
+        This page is limited to Admin accounts. Ask an administrator if you need a change here.
       </div>
     );
   }

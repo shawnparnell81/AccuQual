@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createScarFormSchema, updateScarFormSchema } from "./scarForms.validation.js";
@@ -11,11 +11,11 @@ export const scarFormsRouter = Router();
 // ungated by citing QMS Forms as a sibling with the same "deliberately
 // open" convention — but QMS Forms was fixed earlier in this same audit
 // series (requireDepartmentAccess("qms_forms")) specifically so it would
-// be real and tenant-configurable instead of invisible to the permission
+// be real and company-configurable instead of invisible to the permission
 // system. SCAR gets the same treatment now, same all-departments-edit
 // default (defaultPermissions.ts) so this is zero-behavior-change from
 // today, just makes it real and configurable.
-scarFormsRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("scar"));
+scarFormsRouter.use(requireAuth, withDb, requireDepartmentAccess("scar"));
 
 scarFormsRouter.get("/", listScarFormsHandler);
 scarFormsRouter.post("/", validate(createScarFormSchema), createScarFormHandler);

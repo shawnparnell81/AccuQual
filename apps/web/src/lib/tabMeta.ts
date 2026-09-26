@@ -47,7 +47,6 @@ const ROUTE_PATTERNS: RoutePattern[] = [
   { test: /^\/ppap/, icon: "default", title: () => "PPAP" },
   { test: /^\/settings/, icon: "settings", title: () => "Settings" },
   { test: /^\/admin/, icon: "admin", title: () => "Admin" },
-  { test: /^\/platform/, icon: "admin", title: () => "Platform Admin" },
   { test: /^\/$/, icon: "dashboard", title: () => "Dashboard" },
   { test: /^\/home\/?$/, icon: "dashboard", title: () => "Home" },
   { test: /^\/calendar\/?$/, icon: "dashboard", title: () => "Calendar" },

@@ -10,7 +10,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { hasPermission } from "../../middleware/requirePermission.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import * as service from "./calibration.service.js";
 
 export const baseHandlers = crudFactory(equipment, { entityName: "Equipment", idColumn: "id" });
@@ -30,7 +30,7 @@ export const baseHandlers = crudFactory(equipment, { entityName: "Equipment", id
  */
 export const removeEquipmentHandler = asyncHandler(async (req: Request, res: Response, next) => {
   const equipmentId = Number(req.params.id);
-  const existing = await req.db!.select({ id: calibrations.id }).from(calibrations).where(and(eq(calibrations.equipmentId, equipmentId), eq(calibrations.tenantId, req.tenantId!))).limit(1);
+  const existing = await req.db!.select({ id: calibrations.id }).from(calibrations).where(and(eq(calibrations.equipmentId, equipmentId))).limit(1);
   if (existing.length > 0) {
     throw AppError.badRequest("This equipment has recorded calibration history and cannot be deleted. Remove its calibration records first if it must go.");
   }
@@ -44,11 +44,11 @@ export const removeEquipmentHandler = asyncHandler(async (req: Request, res: Res
  * see the same answer the screen shows.
  */
 export const listWithStatus = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await service.listEquipmentWithSummary(req.db!, req.tenantId!));
+  res.json(await service.listEquipmentWithSummary(req.db!));
 });
 
 export const getEquipmentHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await service.getEquipmentWithSummary(req.db!, req.tenantId!, Number(req.params.id)));
+  res.json(await service.getEquipmentWithSummary(req.db!, Number(req.params.id)));
 });
 
 export interface CalibrationEventInput {
@@ -64,52 +64,52 @@ export interface CalibrationEventInput {
  * Completes the equipment's scheduled calibration when there is one; a failed result takes the equipment out of service and a
  * passing one returns it (see calibration.service.ts).
  */
-export async function createCalibrationEvent(db: TenantDb, tenantId: number, equipmentId: number, input: CalibrationEventInput, performedBy?: number): Promise<Calibration> {
-  return service.recordCompletedCalibration(db, tenantId, equipmentId, input, performedBy);
+export async function createCalibrationEvent(db: Db, equipmentId: number, input: CalibrationEventInput, performedBy?: number): Promise<Calibration> {
+  return service.recordCompletedCalibration(db, equipmentId, input, performedBy);
 }
 
 export const addCalibrationHandler = asyncHandler(async (req: Request, res: Response) => {
   const equipmentId = Number(req.params.id);
   const body = req.body as { scheduledAt?: Date; performedAt?: Date; result?: string; results?: Record<string, unknown>; technicianName?: string; notes?: string };
   if (body.performedAt) {
-    const calibration = await service.recordCompletedCalibration(req.db!, req.tenantId!, equipmentId, { performedAt: body.performedAt, result: body.result, results: body.results, technicianName: body.technicianName, notes: body.notes }, req.user?.id);
+    const calibration = await service.recordCompletedCalibration(req.db!, equipmentId, { performedAt: body.performedAt, result: body.result, results: body.results, technicianName: body.technicianName, notes: body.notes }, req.user?.id);
     return void res.status(201).json(calibration);
   }
-  const scheduled = await service.scheduleCalibration(req.db!, req.tenantId!, equipmentId, { scheduledAt: body.scheduledAt!, notes: body.notes }, req.user?.id);
+  const scheduled = await service.scheduleCalibration(req.db!, equipmentId, { scheduledAt: body.scheduledAt!, notes: body.notes }, req.user?.id);
   res.status(201).json(scheduled);
 });
 
 export const completeCalibrationHandler = asyncHandler(async (req: Request, res: Response) => {
   const body = req.body as { performedAt?: Date; result: "pass" | "fail" | "adjusted"; results?: Record<string, unknown>; technicianName?: string; notes?: string };
-  const done = await service.completeCalibration(req.db!, req.tenantId!, Number(req.params.calibrationId), { performedAt: body.performedAt ?? new Date(), result: body.result, results: body.results, technicianName: body.technicianName, notes: body.notes }, req.user?.id);
+  const done = await service.completeCalibration(req.db!, Number(req.params.calibrationId), { performedAt: body.performedAt ?? new Date(), result: body.result, results: body.results, technicianName: body.technicianName, notes: body.notes }, req.user?.id);
   res.json(done);
 });
 
 export const cancelScheduleHandler = asyncHandler(async (req: Request, res: Response) => {
-  await service.cancelScheduledCalibration(req.db!, req.tenantId!, Number(req.params.calibrationId), req.user?.id);
+  await service.cancelScheduledCalibration(req.db!, Number(req.params.calibrationId), req.user?.id);
   res.status(204).send();
 });
 
 export const changeStatusHandler = asyncHandler(async (req: Request, res: Response) => {
   const { status, reason } = req.body as { status: "active" | "inactive" | "out_of_service"; reason?: string };
-  const override = await hasPermission(req.db!, req.tenantId!, req.user!, "equipment.override");
-  const updated = await service.changeEquipmentStatus(req.db!, req.tenantId!, Number(req.params.id), status, { reason, canOverride: override.allowed }, req.user?.id);
+  const override = await hasPermission(req.db!, req.user!, "equipment.override");
+  const updated = await service.changeEquipmentStatus(req.db!, Number(req.params.id), status, { reason, canOverride: override.allowed }, req.user?.id);
   res.json(updated);
 });
 
 export const attentionHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await service.attention(req.db!, req.tenantId!));
+  res.json(await service.attention(req.db!));
 });
 
 export const notifyDueHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await service.notifyDue(req.db!, req.tenantId!));
+  res.json(await service.notifyDue(req.db!));
 });
 
 export const listCalibrationsHandler = asyncHandler(async (req: Request, res: Response) => {
   const items = await req
     .db!.select()
     .from(calibrations)
-    .where(and(eq(calibrations.equipmentId, Number(req.params.id)), eq(calibrations.tenantId, req.tenantId!)));
+    .where(and(eq(calibrations.equipmentId, Number(req.params.id))));
   res.json(items);
 });
 
@@ -120,16 +120,15 @@ export const listCalibrationsHandler = asyncHandler(async (req: Request, res: Re
  * uploadTemplate, just scoped to calibration certificates instead.
  */
 export const uploadCertificateHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const calibrationId = Number(req.params.calibrationId);
   const file = req.file;
   if (!file) throw AppError.badRequest("No file uploaded");
   if (file.mimetype !== "application/pdf") throw AppError.badRequest("Only PDF files are accepted");
 
-  const [calibration] = await req.db!.select().from(calibrations).where(and(eq(calibrations.id, calibrationId), eq(calibrations.tenantId, tenantId)));
+  const [calibration] = await req.db!.select().from(calibrations).where(and(eq(calibrations.id, calibrationId)));
   if (!calibration) throw AppError.notFound("Calibration event");
 
-  const dir = `${env.STORAGE_LOCAL_PATH}/tenants/${tenantId}/forms/custom/calibration-certs`;
+  const dir = `${env.STORAGE_LOCAL_PATH}/forms/custom/calibration-certs`;
   await mkdir(dir, { recursive: true });
   const path = `${dir}/${calibrationId}-${Date.now()}.pdf`;
   await writeFile(path, file.buffer);
@@ -138,14 +137,13 @@ export const uploadCertificateHandler = asyncHandler(async (req: Request, res: R
     await unlink(calibration.certificatePath).catch((err) => logger.warn(`Could not remove replaced certificate file ${calibration.certificatePath}`, err));
   }
 
-  const [updated] = await req.db!.update(calibrations).set({ certificatePath: path }).where(and(eq(calibrations.id, calibrationId), eq(calibrations.tenantId, tenantId))).returning();
+  const [updated] = await req.db!.update(calibrations).set({ certificatePath: path }).where(and(eq(calibrations.id, calibrationId))).returning();
 
   // Was missing entirely (see the Outputs Dictionary) — createCalibrationEvent
   // logs the event itself, but attaching/replacing a certificate afterwards
   // left no trace. entityType "Equipment" matches every other calibration
   // audit entry, scoped by equipmentId rather than the calibration row.
   await recordAuditTrail(req.db!, {
-    tenantId,
     entityType: "Equipment",
     entityId: calibration.equipmentId,
     action: "update",
@@ -158,10 +156,9 @@ export const uploadCertificateHandler = asyncHandler(async (req: Request, res: R
 
 /** Streams the attached certificate back for viewing/download. */
 export const downloadCertificateHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const calibrationId = Number(req.params.calibrationId);
 
-  const [calibration] = await req.db!.select().from(calibrations).where(and(eq(calibrations.id, calibrationId), eq(calibrations.tenantId, tenantId)));
+  const [calibration] = await req.db!.select().from(calibrations).where(and(eq(calibrations.id, calibrationId)));
   if (!calibration) throw AppError.notFound("Calibration event");
   if (!calibration.certificatePath || !existsSync(calibration.certificatePath)) throw AppError.notFound("Certificate file");
 

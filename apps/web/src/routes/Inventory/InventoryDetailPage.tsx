@@ -243,7 +243,7 @@ export function InventoryDetailPage() {
   const { data: item, isLoading, isError } = itemHooks.useOne(itemId);
   useSetAssistantContext("inventory", itemId, item ? `Item ${item.sku}` : `Item #${itemId}`);
   const { data: movements = [] } = useMovementHistory(itemId);
-  // Alert history for this item — the whole tenant's alerts are one small
+  // Alert history for this item — the whole company's alerts are one small
   // list (same "fetch-and-filter" convention as listItemsHandler), so this
   // is a client-side filter rather than a second endpoint.
   const { data: allAlerts = [] } = alertHooks.useList();
@@ -253,7 +253,7 @@ export function InventoryDetailPage() {
   const { data: costing } = useItemCosting(itemId);
   const { data: lots = [] } = useItemLots(itemId);
   const currentUser = useCurrentUser();
-  const canManageReorder = currentUser?.roleName === "admin" || currentUser?.roleName === "platform_admin" || currentUser?.department === "purchasing";
+  const canManageReorder = currentUser?.roleName === "admin" || currentUser?.department === "purchasing";
   const updateItem = itemHooks.useUpdate();
   const [editingSupplier, setEditingSupplier] = useState(false);
   const [editingCost, setEditingCost] = useState(false);

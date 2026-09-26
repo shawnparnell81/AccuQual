@@ -12,9 +12,9 @@
 // and migrate it). This is a deliberate fix, not the original design: this
 // file used to load the real .env first, so test/integration/*.test.ts —
 // which DOES connect to a real Postgres, deliberately, see its own header
-// comment — silently wrote its tenants into the exact same database
+// comment — silently wrote its companies into the exact same database
 // `npm run dev` and any demo used, which is how that database ended up with
-// dozens of leftover "... Test Tenant ..." rows still marked Active. Real
+// dozens of leftover "... Test Company ..." rows still marked Active. Real
 // .env values still load second, for every other required var (JWT
 // secrets, encryption key, etc.) that has no reason to differ in tests. In
 // CI there is no .env or .env.test file (both imports are then a no-op) and
@@ -43,15 +43,15 @@ process.env.JWT_REFRESH_SECRET ??= "test-refresh-secret";
 // block, or a future config change nobody thought to check against this
 // file — the database name itself must contain "test". This is what
 // actually prevents test/integration/*.test.ts (which creates and deletes
-// real tenants) from ever writing into a shared demo/prod database again,
+// real companies) from ever writing into a shared demo/prod database again,
 // regardless of *why* the env ended up misconfigured. Loud and immediate:
-// better a hard-failed test run than a silent tenant leak.
+// better a hard-failed test run than a silent company leak.
 const databaseName = new URL(process.env.DATABASE_URL).pathname.replace(/^\//, "");
 if (!databaseName.includes("test")) {
   throw new Error(
     `Refusing to run tests against database "${databaseName}" — its name doesn't contain "test". ` +
-      "Integration tests create and delete real tenants; running them against a shared demo/prod " +
-      "database is exactly how it ended up full of leftover test tenants before. Point DATABASE_URL " +
+      "Integration tests create and delete real companies; running them against a shared demo/prod " +
+      "database is exactly how it ended up full of leftover test companies before. Point DATABASE_URL " +
       "(in .env.test) at a dedicated test database instead — see .env.test's own comment."
   );
 }

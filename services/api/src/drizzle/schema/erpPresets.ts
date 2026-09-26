@@ -1,6 +1,5 @@
 import { pgTable, serial, text, integer, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
-import { tenants } from "./tenants.js";
 
 export const ERP_PRESET_VENDORS = ["sap", "oracle", "netsuite", "epicor", "dynamics", "custom"] as const;
 export type ErpPresetVendor = (typeof ERP_PRESET_VENDORS)[number];
@@ -8,7 +7,7 @@ export type ErpPresetVendor = (typeof ERP_PRESET_VENDORS)[number];
 // Deliberately a superset of ErpSyncSettings.modulesEnabled (settings.erpSync.ts):
 // inventory/suppliers/purchaseOrders/workOrders are the ERP-native modules a
 // sync can actually enable today; ncr/capa/training/audits/documentControl are
-// QMS modules a tenant may want to push into an ERP's own quality/HR module
+// QMS modules a company may want to push into an ERP's own quality/HR module
 // (e.g. SAP QM) — a preset can target any of these, but the mapping engine
 // (erpMappingEngine.ts) only has real per-record data wired for suppliers and
 // purchaseOrders in this pass; the rest are explicitly deferred, not silently
@@ -81,11 +80,11 @@ export interface ErpPresetVersionEntry {
 const EMPTY_MAPPING_CONFIG: ErpPresetMappingConfig = { fieldMappings: [], triggers: [], validationRules: [] };
 
 /**
- * A tenant-selectable (or AccuQual-provided, tenantId null) ERP integration
+ * A selectable (or AccuQual-provided built-in) ERP integration
  * preset: which vendor, which AccuQual module, and the field mappings/
  * transforms/triggers/validation rules `erpMappingEngine.ts` applies when
  * building an outbound sync payload for that module. Exactly one preset can
- * be `isActive` per (tenantId, module) pair — enforced in application code
+ * be `isActive` per module — enforced in application code
  * (erpPresets.service.ts's activatePreset, one transaction), same "no DB
  * constraint, app-enforced" convention `workflowDefinitions.isActive`
  * already uses for its own per-module activation.
@@ -96,14 +95,13 @@ const EMPTY_MAPPING_CONFIG: ErpPresetMappingConfig = { fieldMappings: [], trigge
  * `isDeleted` from ncr.ts/documents.ts, `version`/`versionHistory` (bump
  * only on a real mappingConfig change, 20-entry cap — see
  * workflow.controller.ts's updateHandler) from workflowDefinitions, and
- * jsonb-config-per-row from tenants.erpSyncSettings.
+ * jsonb-config-per-row from company.erpSyncSettings.
  */
 export const erpConnectorPresets = pgTable("erp_connector_presets", {
   id: serial("id").primaryKey(),
-  // null = a global, AccuQual-provided preset (seedErpPresets.ts) — visible
-  // to every tenant but not directly editable; "Customize" clones it into a
-  // real tenant-owned row instead.
-  tenantId: integer("tenant_id").references(() => tenants.id),
+  // true = an AccuQual-provided starter preset (seedErpPresets.ts): visible
+  // but not directly editable; "Customize" clones it into an editable row instead.
+  isBuiltin: boolean("is_builtin").notNull().default(false),
   vendor: text("vendor").notNull(),
   module: text("module").notNull(),
   name: text("name").notNull(),

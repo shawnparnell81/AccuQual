@@ -14,7 +14,7 @@ initErrorTracking();
 // Stamps the last-known mode before React even mounts, so the very first
 // frame matches the previous session instead of flashing dark-then-light
 // (or vice versa) once useThemeSync's real data loads. AppLayout.tsx's
-// useThemeSync takes over from here with the tenant/user's real theme.
+// useThemeSync takes over from here with the company/user's real theme.
 document.documentElement.setAttribute("data-theme", getStoredMode() ?? "dark");
 applyStoredThemeVars();
 

@@ -6,9 +6,9 @@ import { AppError } from "../../utils/appError.js";
 
 const VALID_STATUSES = ["not_started", "in_progress", "completed"];
 
-/** GET /onboarding/progress — this user's own checklist state across every module they've touched so far. Not crudFactory-based: rows are keyed by (tenantId, userId, moduleKey), not a single numeric id. */
+/** GET /onboarding/progress — this user's own checklist state across every module they've touched so far. Not crudFactory-based: rows are keyed by (userId, moduleKey), not a single numeric id. */
 export const listOnboardingProgressHandler = asyncHandler(async (req: Request, res: Response) => {
-  const rows = await req.db!.select().from(onboardingProgress).where(and(eq(onboardingProgress.tenantId, req.tenantId!), eq(onboardingProgress.userId, req.user!.id)));
+  const rows = await req.db!.select().from(onboardingProgress).where(and(eq(onboardingProgress.userId, req.user!.id)));
   res.json(rows);
 });
 
@@ -22,7 +22,7 @@ export const updateOnboardingProgressHandler = asyncHandler(async (req: Request,
   const [existing] = await req
     .db!.select()
     .from(onboardingProgress)
-    .where(and(eq(onboardingProgress.tenantId, req.tenantId!), eq(onboardingProgress.userId, req.user!.id), eq(onboardingProgress.moduleKey, moduleKey)));
+    .where(and(eq(onboardingProgress.userId, req.user!.id), eq(onboardingProgress.moduleKey, moduleKey)));
 
   if (existing) {
     const [updated] = await req.db!.update(onboardingProgress).set({ status, updatedAt: new Date() }).where(eq(onboardingProgress.id, existing.id)).returning();
@@ -32,7 +32,7 @@ export const updateOnboardingProgressHandler = asyncHandler(async (req: Request,
 
   const [created] = await req
     .db!.insert(onboardingProgress)
-    .values({ tenantId: req.tenantId!, userId: req.user!.id, moduleKey, status })
+    .values({ userId: req.user!.id, moduleKey, status })
     .returning();
   res.status(201).json(created);
 });

@@ -1,11 +1,11 @@
 import "dotenv/config";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, pool } from "./index.js";
 import { erpConnectorPresets, type ErpPresetMappingConfig } from "../drizzle/schema/erpPresets.js";
 import { logger } from "../utils/logger.js";
 
 /**
- * ERP Connector Presets v1 — 4 global (tenantId null) starter presets, real
+ * ERP Connector Presets v1 — 4 built-in starter presets, real
  * researched field names, 2 vendors x 2 modules (the only two modules the
  * mapping engine has real per-record data wired for — see
  * erpMappingEngine.ts). Safe to re-run: checks by (vendor, module, name)
@@ -85,17 +85,17 @@ const netsuitePurchaseOrderPreset = {
 const GLOBAL_PRESETS = [sapSupplierPreset, netsuiteSupplierPreset, sapPurchaseOrderPreset, netsuitePurchaseOrderPreset];
 
 async function main() {
-  logger.info("Seeding ERP Connector Presets (global)...");
+  logger.info("Seeding ERP Connector Presets (built-in)...");
   for (const preset of GLOBAL_PRESETS) {
     const [existing] = await db
       .select()
       .from(erpConnectorPresets)
-      .where(and(isNull(erpConnectorPresets.tenantId), eq(erpConnectorPresets.vendor, preset.vendor), eq(erpConnectorPresets.module, preset.module), eq(erpConnectorPresets.name, preset.name)));
+      .where(and(eq(erpConnectorPresets.isBuiltin, true), eq(erpConnectorPresets.vendor, preset.vendor), eq(erpConnectorPresets.module, preset.module), eq(erpConnectorPresets.name, preset.name)));
     if (existing) {
       logger.info(`Already seeded: ${preset.vendor} / ${preset.module} / "${preset.name}"`);
       continue;
     }
-    await db.insert(erpConnectorPresets).values({ tenantId: null, ...preset, version: 1, versionHistory: [] });
+    await db.insert(erpConnectorPresets).values({ ...preset, isBuiltin: true, version: 1, versionHistory: [] });
     logger.info(`Seeded: ${preset.vendor} / ${preset.module} / "${preset.name}"`);
   }
   logger.info("ERP Connector Presets seed complete.");

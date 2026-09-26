@@ -12,7 +12,7 @@ export const updateBrandingSchema = z.object({
   primaryColor: hexColor(),
   pdfHeader: z.string().max(500).optional().or(z.literal("")),
   pdfFooter: z.string().max(500).optional().or(z.literal("")),
-  // Theme colors — see the schema comment on tenants.branding. All optional:
+  // Theme colors — see the schema comment on companies.branding. All optional:
   // an unset field just means the frontend theme engine keeps the built-in
   // default for it instead of overriding.
   secondaryColor: hexColor(),
@@ -38,7 +38,7 @@ export const updateAiConfigSchema = z.object({
   temperature: z.coerce.number().min(0).max(2).optional(),
   maxTokens: z.coerce.number().int().positive().optional(),
   assistantName: z.string().max(80).optional().or(z.literal("")), // "" clears it back to the default label
-  // BYOK usage limit — see tenants.aiMonthlyLimit's own schema comment for
+  // BYOK usage limit — see companies.aiMonthlyLimit's own schema comment for
   // why this is enforced against real audit trail history, not a stored
   // counter. null clears the limit back to "no limit set" (unlike the
   // ""-clears-a-string convention above, this is a real integer field).
@@ -47,13 +47,13 @@ export const updateAiConfigSchema = z.object({
 });
 
 /**
- * PATCH /tenant/profile — Admin Console "Tenant Settings". `name` is the
- * real top-level `tenants.name` column; `logoUrl` merges into the existing
- * `branding` jsonb (same field AdminTenantBrandingPage already edits, not a
+ * PATCH /company/profile — Admin Console "Company Settings". `name` is the
+ * real top-level `companies.name` column; `logoUrl` merges into the existing
+ * `branding` jsonb (same field AdminCompanyBrandingPage already edits, not a
  * duplicate); the rest are new `profile` jsonb fields. All optional/patchy,
  * same "" clears convention as updateBrandingSchema above.
  */
-export const updateTenantProfileSchema = z.object({
+export const updateCompanyProfileSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   logoUrl: z.string().url().optional().or(z.literal("")),
   timezone: z.string().max(100).optional().or(z.literal("")),
@@ -62,7 +62,7 @@ export const updateTenantProfileSchema = z.object({
   contactPhone: z.string().max(50).optional().or(z.literal("")),
 });
 
-export const updateTenantSecuritySchema = z.object({
+export const updateCompanySecuritySchema = z.object({
   mfaPolicy: z.enum(["optional", "admins", "all"]),
 });
 

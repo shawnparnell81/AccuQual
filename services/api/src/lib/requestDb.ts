@@ -5,66 +5,46 @@ import { pool } from "../db/index.js";
 import * as schema from "../drizzle/schema/index.js";
 import { AppError } from "../utils/appError.js";
 import { logger } from "../utils/logger.js";
-import { enrichRequestContext } from "../modules/monitoring/requestContext.js";
 // Importing this (even just for its type) pulls its `declare global` Request.user
 // augmentation into any program that includes this file — needed because the
-// workers import this module directly for the TenantDb type, in a separate
+// workers import this module directly for the Db type, in a separate
 // tsc program that never otherwise sees middleware/auth.ts.
 import type { AuthenticatedUser } from "../middleware/auth.js";
 
-export type TenantDb = NodePgDatabase<typeof schema>;
+export type Db = NodePgDatabase<typeof schema>;
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
-      /** Per-request, transaction-scoped Drizzle instance with `app.current_tenant_id` set for RLS. */
-      db?: TenantDb;
-      tenantId?: number;
+      /** Per-request, transaction-scoped Drizzle instance. */
+      db?: Db;
       /** Plant the caller is working in. Set by withSiteContext (modules/sites). */
       siteId?: number | null;
-      /** Plants this caller may open records in. Admins get every plant in the tenant. */
+      /** Plants this caller may open records in. Admins get every plant. */
       allowedSiteIds?: number[];
     }
   }
 }
 
 /**
- * Opens one Postgres transaction per request, switches into the restricted
- * `accuqual_app` role and sets `app.current_tenant_id` (both via `SET
- * LOCAL` — real for the lifetime of this transaction only, never leaks to
- * another request on the same pooled connection), and hands the
- * transaction-bound Drizzle instance to the route as `req.db`. Commits on a
- * successful response, rolls back otherwise. Must run after `requireAuth`.
- *
- * Every module's queries still filter by `req.tenantId` explicitly — that
- * stays the primary, always-active guarantee. The role switch is what makes
- * the RLS policies in rls-policies.sql an actual second, DB-level layer
- * instead of a decorative one: the connection's own login role is the table
- * owner (needed for migrations/platform-admin), and Postgres exempts owners
- * and superusers from RLS regardless of policy — `accuqual_app` has neither
- * property, so a query that somehow forgot its own tenantId filter still
- * can't see another tenant's rows.
+ * Opens one Postgres transaction per request and hands the transaction-bound
+ * Drizzle instance to the route as `req.db`. Commits on a successful
+ * response, rolls back otherwise. Must run after `requireAuth`.
  */
-export function withTenantDb(req: Request, res: Response, next: NextFunction) {
+export function withDb(req: Request, res: Response, next: NextFunction) {
   const user: AuthenticatedUser | undefined = req.user;
-  if (!user?.tenantId) {
-    return next(AppError.unauthorized("Missing tenant context"));
+  if (!user) {
+    return next(AppError.unauthorized("Not signed in"));
   }
-
-  const tenantId = user.tenantId;
-  enrichRequestContext({ tenantId });
 
   pool
     .connect()
     .then(async (client: PoolClient) => {
       await client.query("BEGIN");
-      await client.query("SET LOCAL ROLE accuqual_app");
-      await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [String(tenantId)]);
       // Read by the audit_row_change() trigger (see post-migrate/audit-triggers.sql) so every field-level change records who made it.
       await client.query("SELECT set_config('app.current_user_id', $1, true)", [String(user.id)]);
 
-      req.tenantId = tenantId;
       req.db = drizzle(client, { schema });
 
       let settled = false;
@@ -88,7 +68,7 @@ export function withTenantDb(req: Request, res: Response, next: NextFunction) {
           await client.query(wasSuccess ? "COMMIT" : "ROLLBACK");
           return true;
         } catch (err) {
-          logger.error("Failed to finalize tenant transaction", err);
+          logger.error("Failed to finalize request transaction", err);
           // A failed ROLLBACK on an already-error response isn't a new
           // problem for the client; a failed COMMIT on what looked like a
           // success response means the write did NOT happen — the client
@@ -104,13 +84,13 @@ export function withTenantDb(req: Request, res: Response, next: NextFunction) {
       res.json = ((body?: unknown) => {
         finalize()
           .then((ok) => originalJson(ok ? body : { error: "InternalServerError", message: "Failed to save changes" }))
-          .catch((err) => logger.error("Unexpected error finalizing tenant transaction", err));
+          .catch((err) => logger.error("Unexpected error finalizing request transaction", err));
         return res;
       }) as typeof res.json;
       res.send = ((body?: unknown) => {
         finalize()
           .then((ok) => originalSend(ok ? body : undefined))
-          .catch((err) => logger.error("Unexpected error finalizing tenant transaction", err));
+          .catch((err) => logger.error("Unexpected error finalizing request transaction", err));
         return res;
       }) as typeof res.send;
 
@@ -123,19 +103,11 @@ export function withTenantDb(req: Request, res: Response, next: NextFunction) {
         settled = true;
         client
           .query("ROLLBACK")
-          .catch((err) => logger.error("Failed to roll back an abandoned tenant transaction", err))
+          .catch((err) => logger.error("Failed to roll back an abandoned request transaction", err))
           .finally(() => client.release());
       });
 
       next();
     })
     .catch((err) => next(err));
-}
-
-/** For the small number of platform-admin routes that are inherently cross-tenant. */
-export function requirePlatformAdmin(req: Request, _res: Response, next: NextFunction) {
-  if (!req.user || req.user.roleName !== "platform_admin") {
-    return next(AppError.forbidden("Requires platform admin"));
-  }
-  next();
 }

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createCustomerSchema, updateCustomerSchema, addCustomerScorecardSchema } from "./customers.validation.js";
@@ -25,7 +25,7 @@ export const customersRouter = Router();
 // its own sales_accounts pipeline); quality/engineering get "read" — see
 // departmentAccess.ts PERMISSION_MATRIX.customers. Delete is admin-only, no
 // department at all, enforced inline in customers.controller.ts's assertAdmin.
-customersRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("customers"));
+customersRouter.use(requireAuth, withDb, requireDepartmentAccess("customers"));
 
 customersRouter.get("/", listCustomersHandler);
 customersRouter.post("/", validate(createCustomerSchema), createCustomerHandler);

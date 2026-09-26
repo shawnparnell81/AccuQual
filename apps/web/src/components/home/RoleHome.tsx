@@ -30,7 +30,7 @@ function useModuleList<T>(resource: string, enabled: boolean, siteKey: number | 
 
 /**
  * Home content for the three jobs this app already seeds: quality lead and
- * tenant admin share the plant view, auditors get reviews, everyone else
+ * administrator share the plant view, auditors get reviews, everyone else
  * (operators and other departments) gets their own assignments. The shell
  * around this page does not change.
  */
@@ -41,7 +41,7 @@ export function RoleHome() {
   const plantName = plants?.sites.find((site) => site.id === (siteId ?? plants.currentSiteId))?.name;
   const kind = homeKind(user?.roleName);
   const { effective, isLoading: permsLoading } = useEffectivePermissions();
-  const bypass = user?.roleName === "admin" || user?.roleName === "platform_admin";
+  const bypass = user?.roleName === "admin";
   const ready = bypass || !permsLoading;
   const can = (key: string) => ready && (bypass || (!!effective && effective[key] !== undefined && effective[key] !== "none"));
 

@@ -28,7 +28,7 @@ export function SecurityRolesSection() {
   if (!canManage) {
     return (
       <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-        User and role management is limited to Admin and Quality Manager accounts. Ask a tenant admin if you need a change here.
+        User and role management is limited to Admin and Quality Manager accounts. Ask an administrator if you need a change here.
       </div>
     );
   }

@@ -2,9 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Building2, ChevronDown, Library, Lock, Menu, MoreHorizontal, Search, Settings, X, type LucideIcon } from "lucide-react";
+import { ChevronDown, Library, Lock, Menu, MoreHorizontal, Search, Settings, X, type LucideIcon } from "lucide-react";
 import { apiClient } from "../../api/client";
-import { useCurrentTenant, useCurrentUser } from "../../hooks/useAuth";
+import { useCurrentCompany, useCurrentUser } from "../../hooks/useAuth";
 import { HomeButton } from "./HomeButton";
 import { CalendarButton } from "./CalendarButton";
 import { BackButton } from "./BackButton";
@@ -21,7 +21,6 @@ import {
   DASHBOARD_LEAF,
   DEPARTMENTS,
   KPI_COUNT_KEYS,
-  PLATFORM_LEAF,
   type AccessLevel,
   type Department,
   type DepartmentMeta,
@@ -47,7 +46,7 @@ const CLOSE_GRACE_MS = 150;
  * leaf. Order matters here: the everyday tools a quality-team user actually
  * opens daily come first, admin configuration second, and "advanced" last —
  * which in practice is usually empty/hidden entirely, since those three
- * items are hidden by default for every tenant (see
+ * items are hidden by default for every company (see
  * db/defaultNavPreferences.ts) unless an admin has explicitly turned one
  * back on from Settings > Navigation.
  */
@@ -113,9 +112,8 @@ function effectiveAccess(leaf: NavLeaf, department: Department, bypass: boolean,
 // result without a second copy of this logic.
 
 export function TopNav() {
-  const tenant = useCurrentTenant();
+  const company = useCurrentCompany();
   const user = useCurrentUser();
-  const isPlatformAdmin = user?.roleName === "platform_admin";
   const isAdmin = user?.roleName === "admin";
   const userDept = user?.department as Department | null | undefined;
   const { effective: myEffective } = useEffectivePermissions();
@@ -166,7 +164,7 @@ export function TopNav() {
   }, []);
 
   // visibleGroups/allVisibleLeaves: which department dropdowns this viewer
-  // gets at all (admin/own-department + the tenant's own hidden-nav
+  // gets at all (admin/own-department + the company's own hidden-nav
   // customization) and the flat, live-granted-inclusive leaf list derived
   // from them — moved to navVisibility.ts so CommandPalette.tsx computes
   // the exact same "what can this viewer see right now" result.
@@ -179,35 +177,10 @@ export function TopNav() {
   const searchResults = needle ? allVisibleLeaves.filter((leaf) => navSearchText(leaf.key, leaf.label).includes(needle)) : [];
   const primaryLeaves = PRIMARY_NAV.map((item) => allVisibleLeaves.find((leaf) => leaf.key === item.key)).filter((leaf): leaf is NavLeaf => leaf != null);
 
-  if (isPlatformAdmin) {
-    return (
-      <header className="border-b border-border bg-card">
-        <div className="h-14 flex items-center gap-4 px-4">
-          <BrandMark tenant={tenant} />
-          <NavLink
-            to={PLATFORM_LEAF.path}
-            className={({ isActive }) =>
-              clsx(
-                "flex items-center gap-2 rounded-md px-3 py-2 text-sm",
-                isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-secondary"
-              )
-            }
-          >
-            <Building2 size={18} />
-            <span>Platform Admin</span>
-          </NavLink>
-          <div className="ml-auto">
-            <UserMenu />
-          </div>
-        </div>
-      </header>
-    );
-  }
-
   return (
     <header className="relative border-b border-border bg-card" ref={navRef}>
       <div className="flex h-14 items-center gap-3 px-4">
-        <BrandMark tenant={tenant} />
+        <BrandMark company={company} />
 
         {/* Everyday work sits on the bar; everything else is one grouped More menu.
             Below ~1400px the labels drop to icons (names stay as tooltips) so the
@@ -551,14 +524,14 @@ function PlainLeafLink({ item, onNavigate }: { item: NavLeaf; onNavigate: () => 
   );
 }
 
-function BrandMark({ tenant }: { tenant: { name: string } | null }) {
+function BrandMark({ company }: { company: { name: string } | null }) {
   return (
     <div className="flex items-center gap-2 shrink-0">
       <span className="h-8 w-1 shrink-0 rounded-full bg-accent" aria-hidden />
       <img src="/branding/logo-mark.png" alt="" className="h-8 w-8 rounded-md object-cover" />
       <div className="hidden flex-col items-start justify-center sm:flex">
         <span className="font-semibold leading-tight tracking-wide text-foreground">ACCUQUAL</span>
-        {tenant && <span className="max-w-[9rem] truncate text-[11px] leading-tight text-muted-foreground">{tenant.name}</span>}
+        {company && <span className="max-w-[9rem] truncate text-[11px] leading-tight text-muted-foreground">{company.name}</span>}
       </div>
     </div>
   );

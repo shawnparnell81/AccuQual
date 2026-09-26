@@ -19,11 +19,11 @@ otherwise. It is a quality management system built around ISO 9001 / IATF 16949-
 | Machine data | Readings from connected devices, if the customer uses that feature | Database |
 | AI activity | Inputs and outputs of AI suggestions, and monthly usage counters | Database |
 
-## Separation between customers
+## One company per installation
 
-Every customer organization ("tenant") is separated in two independent ways: every query filters by the tenant, and
-the database itself enforces row-level security so that a session belonging to one tenant cannot read another's rows
-even if a query forgot to filter. This is covered by automated tests that run on every change.
+Each installation serves exactly one company; its data is never mixed with anyone else's because no one else's data is
+in it. Requests run under a restricted database role that can only append to the audit log, and Supabase's public
+roles are locked out of every table. This is covered by automated tests that run on every change.
 
 ## Sign-in and access
 
@@ -32,8 +32,8 @@ even if a query forgot to filter. This is covered by automated tests that run on
 - Accounts lock for 15 minutes after 5 wrong passwords in 15 minutes; the owner is emailed and the event is audited.
 - Sessions end after 60 minutes idle. Disabling a user or changing their role ends their sessions on the next request.
 - Two-step sign-in (authenticator app) with one-time recovery codes. Administrators are required to use it by default;
-  an organization may require it for everyone. Platform administrators always need it.
-- Single sign-on (OpenID Connect) is available per organization, restricted to email domains the organization has
+  the company may require it for everyone.
+- Single sign-on (OpenID Connect) is available, restricted to email domains the company has
   proven it owns by publishing a DNS record.
 - Access to each module is controlled by department and by custom roles that the organization's own administrator
   manages. External supplier logins are confined to that supplier's own data.
@@ -53,7 +53,7 @@ even if a query forgot to filter. This is covered by automated tests that run on
 - Published versions of workflows, the Management Review and the Context of the Organization cannot be edited or
   deleted (enforced in the database), only superseded by a reviewed newer version.
 - This is protection against accidental and application-level tampering. It does not, by itself, protect against a
-  person with administrative access to the database server (a per-tenant hash chain would be needed for that; it is not built).
+  person with administrative access to the database server (a tamper-evident hash chain would be needed for that; it is not built).
 
 ## Data in transit and at rest
 
@@ -65,7 +65,7 @@ even if a query forgot to filter. This is covered by automated tests that run on
 
 ## Logging and monitoring
 
-- Application logs record request method, path, status, timing, and numeric tenant and user ids — not request
+- Application logs record request method, path, status, timing, and numeric user ids — not request
   bodies, form contents or passwords. Every request has a reference id that appears in logs and error messages.
 - Optional error tracking (Sentry) receives error details and ids only. Request bodies, cookies, authorization headers,
   query strings, email addresses and IP addresses are stripped before sending.
@@ -77,7 +77,7 @@ even if a query forgot to filter. This is covered by automated tests that run on
 - A written backup and recovery procedure exists ([../operations/backup-and-restore.md](../operations/backup-and-restore.md)).
   On 2026-09-20 a full logical backup of the live database was restored into a new, empty database server and
   verified: the structure, the security policies, and the row count of every table matched the original, and the
-  application ran correctly against the restored copy, including tenant isolation and the append-only audit log.
+  application ran correctly against the restored copy, including the append-only audit log.
 - **Not yet done:** restoring from the database host's own backups has not been tested; the drill used a small
   dataset, so recovery time at production size is unmeasured; and the skipped-night alert and a backup of the uploaded-files folder are not in place yet.
 
@@ -86,7 +86,7 @@ even if a query forgot to filter. This is covered by automated tests that run on
 - **Export:** an organization's administrator can download everything the organization holds — records, history and
   uploaded files — as a ZIP (JSON Lines or CSV) from Admin Console → Data Export. The administrator must re-enter
   their password (and authenticator code) first; each export is audited. Credentials are never included.
-- **Ending an account:** the platform administrator deactivates the organization, which blocks all sign-in.
+- **Ending an account:** an administrator deactivates the user, which blocks that person's sign-in.
 - **Permanent deletion:** currently a manual operator procedure carried out on written request; there is no
   self-service deletion yet. **[decide and state the deletion time frame, e.g. within 30 days of the request]**
 - **Individual users:** people are deactivated, not deleted, so that the audit history stays intact and attributable.
@@ -98,7 +98,7 @@ See [subprocessors.md](subprocessors.md).
 ## Known gaps (stated plainly)
 
 1. Restore from the database host's own backups is untested, and the uploaded-files folder is not part of the nightly backup (above).
-2. Permanent deletion of an organization is manual.
+2. Permanent deletion of the company's data is manual.
 3. The database certificate is not verified unless `DATABASE_SSL_CA` is set.
 4. Mid-session enforcement of two-step sign-in is at sign-in and token refresh (within about 15 minutes), not every request.
 5. Alert counters live in the API process and assume a single API instance.

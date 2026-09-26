@@ -4,7 +4,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { callLlmDetailed } from "./llm-gateway.js";
 import { estimateCost } from "./pricing.js";
-import { checkUsageLimit, loadTenantLlmOptions } from "./ai.usage.js";
+import { checkUsageLimit, loadCompanyLlmOptions } from "./ai.usage.js";
 import { wrapUntrustedData } from "./promptSafety.js";
 
 /**
@@ -22,7 +22,7 @@ const ASSISTANT_MODULE_AI_STATE: Record<string, string> = {
   capa_effectiveness: "AI-drafted CAPA content",
   supplier_risk: "AI-assisted risk score",
 };
-import { tenants } from "../../drizzle/schema/tenants.js";
+import { company } from "../../drizzle/schema/company.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { inventoryItems, inventoryStock, inventoryMovements } from "../../drizzle/schema/inventory.js";
@@ -40,7 +40,7 @@ import { computeSupplierPerformance } from "../supplier/supplier.performance.js"
 import { computeCostingSummary } from "../inventory/inventory.costing.js";
 import { findSimilar } from "./embedding-engine.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 /**
  * The one hard safety guarantee here is structural, not the system prompt:
@@ -66,33 +66,33 @@ const SAFETY_PREAMBLE =
  * assistance round). Any other module name still gets passed through as a
  * plain label, honestly, rather than silently dropped or faked.
  */
-async function loadContextSummary(db: TenantDb, tenantId: number, module: string, recordId?: number): Promise<string | null> {
+async function loadContextSummary(db: Db, module: string, recordId?: number): Promise<string | null> {
   if (recordId === undefined) return `The user is currently viewing the ${module} module (no specific record selected).`;
 
   if (module === "ncr") {
-    const [row] = await db.select().from(ncr).where(and(eq(ncr.id, recordId), eq(ncr.tenantId, tenantId)));
+    const [row] = await db.select().from(ncr).where(and(eq(ncr.id, recordId)));
     if (!row) return null;
     return `The user is viewing NCR #${row.id}: ${wrapUntrustedData(row.title, "ncr_title")}. Status: ${row.status}. Severity: ${row.severity ?? "not set"}. Description: ${wrapUntrustedData(row.description ?? "none", "ncr_description")}.`;
   }
   if (module === "capa") {
-    const [row] = await db.select().from(capa).where(and(eq(capa.id, recordId), eq(capa.tenantId, tenantId)));
+    const [row] = await db.select().from(capa).where(and(eq(capa.id, recordId)));
     if (!row) return null;
     return `The user is viewing CAPA #${row.id} (linked NCR #${row.ncrId ?? "none"}). Status: ${row.status}. Root cause: ${wrapUntrustedData(row.rootCause ?? "not documented yet", "capa_root_cause")}. Action plan: ${wrapUntrustedData(row.actionPlan ?? "not documented yet", "capa_action_plan")}.`;
   }
   if (module === "inventory") {
-    const [row] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, recordId), eq(inventoryItems.tenantId, tenantId)));
+    const [row] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, recordId)));
     if (!row) return null;
     return `The user is viewing inventory item "${row.sku}" (${wrapUntrustedData(row.description ?? "no description", "item_description")}). State: ${row.state}. Min level: ${row.minLevel}. Max level: ${row.maxLevel ?? "not set"}.`;
   }
   if (module === "supplier") {
-    const [row] = await db.select().from(suppliers).where(and(eq(suppliers.id, recordId), eq(suppliers.tenantId, tenantId)));
+    const [row] = await db.select().from(suppliers).where(and(eq(suppliers.id, recordId)));
     if (!row) return null;
     return `The user is viewing Supplier "${row.name}" (status: ${row.status}, recorded risk level: ${row.riskLevel ?? "not set"}). Contact: ${row.contactEmail ?? "none"}.`;
   }
   if (module === "training") {
-    const [row] = await db.select().from(trainingCourses).where(and(eq(trainingCourses.id, recordId), eq(trainingCourses.tenantId, tenantId)));
+    const [row] = await db.select().from(trainingCourses).where(and(eq(trainingCourses.id, recordId)));
     if (!row) return null;
-    const assignments = await db.select().from(trainingAssignments).where(and(eq(trainingAssignments.courseId, recordId), eq(trainingAssignments.tenantId, tenantId)));
+    const assignments = await db.select().from(trainingAssignments).where(and(eq(trainingAssignments.courseId, recordId)));
     const completed = assignments.filter((a) => a.status === "completed").length;
     const overdue = assignments.filter((a) => a.status === "overdue").length;
     const inProgress = assignments.filter((a) => a.status === "in_progress").length;
@@ -106,13 +106,13 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
     // Distinct from "training" (one course, every employee) — this is one
     // employee, every course, the data behind EmployeeTrainingHistoryPage /
     // GET /training/employee/:userId/history.
-    const [user] = await db.select().from(users).where(and(eq(users.id, recordId), eq(users.tenantId, tenantId)));
+    const [user] = await db.select().from(users).where(and(eq(users.id, recordId)));
     if (!user) return null;
     const rows = await db
       .select({ status: trainingAssignments.status, courseTitle: trainingCourses.title })
       .from(trainingAssignments)
       .leftJoin(trainingCourses, eq(trainingAssignments.courseId, trainingCourses.id))
-      .where(and(eq(trainingAssignments.userId, recordId), eq(trainingAssignments.tenantId, tenantId)));
+      .where(and(eq(trainingAssignments.userId, recordId)));
     const completed = rows.filter((r) => r.status === "completed").length;
     const overdue = rows.filter((r) => r.status === "overdue").length;
     const inProgress = rows.filter((r) => r.status === "in_progress").length;
@@ -125,20 +125,20 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
     );
   }
   if (module === "training_builder") {
-    const [row] = await db.select().from(trainingCourses).where(and(eq(trainingCourses.id, recordId), eq(trainingCourses.tenantId, tenantId)));
+    const [row] = await db.select().from(trainingCourses).where(and(eq(trainingCourses.id, recordId)));
     if (!row) return null;
     let materialSummary = "No controlled document is linked as this course's material yet.";
     if (row.documentId !== null) {
-      const [doc] = await db.select().from(documents).where(and(eq(documents.id, row.documentId), eq(documents.tenantId, tenantId)));
+      const [doc] = await db.select().from(documents).where(and(eq(documents.id, row.documentId)));
       if (doc) materialSummary = `Linked material document: "${doc.title}" (category: ${doc.category ?? "not set"}, status: ${doc.status}).`;
     }
     return `The user is building training content for Course "${row.title}". Existing description: ${wrapUntrustedData(row.description ?? "none", "course_description")}. ${materialSummary}`;
   }
   if (module === "sop_generator") {
-    const [row] = await db.select().from(documents).where(and(eq(documents.id, recordId), eq(documents.tenantId, tenantId)));
+    const [row] = await db.select().from(documents).where(and(eq(documents.id, recordId)));
     if (!row) return null;
     const related = row.category
-      ? await db.select().from(documents).where(and(eq(documents.category, row.category), eq(documents.tenantId, tenantId), ne(documents.id, recordId)))
+      ? await db.select().from(documents).where(and(eq(documents.category, row.category), ne(documents.id, recordId)))
       : [];
     return (
       `The user is drafting SOP content for Document #${row.id} "${row.title}" (category: ${row.category ?? "not set"}, status: ${row.status}, ` +
@@ -149,9 +149,9 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
     );
   }
   if (module === "calibration") {
-    const [row] = await db.select().from(equipment).where(and(eq(equipment.id, recordId), eq(equipment.tenantId, tenantId)));
+    const [row] = await db.select().from(equipment).where(and(eq(equipment.id, recordId)));
     if (!row) return null;
-    const events = await db.select().from(calibrations).where(and(eq(calibrations.equipmentId, recordId), eq(calibrations.tenantId, tenantId)));
+    const events = await db.select().from(calibrations).where(and(eq(calibrations.equipmentId, recordId)));
     const finished = events.filter((e) => e.status !== "scheduled" && e.performedAt);
     const scheduled = events.find((e) => e.status === "scheduled" && e.scheduledAt);
     const latest = finished.length > 0 ? finished.reduce((a, b) => (new Date(a.performedAt!) > new Date(b.performedAt!) ? a : b)) : null;
@@ -165,9 +165,9 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
     );
   }
   if (module === "audit_finding") {
-    const [row] = await db.select().from(audits).where(and(eq(audits.id, recordId), eq(audits.tenantId, tenantId)));
+    const [row] = await db.select().from(audits).where(and(eq(audits.id, recordId)));
     if (!row) return null;
-    const items = await db.select().from(auditItems).where(and(eq(auditItems.auditId, recordId), eq(auditItems.tenantId, tenantId)));
+    const items = await db.select().from(auditItems).where(and(eq(auditItems.auditId, recordId)));
     const findings = items.filter((i) => i.finding).map((i) => `[${i.severity ?? "observation"}] ${wrapUntrustedData(i.finding, "audit_finding_text")}`);
     return (
       `The user is classifying a new finding before adding it to Audit #${row.id} "${row.name}" (type: ${row.type ?? "not set"}). ` +
@@ -178,9 +178,9 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
     );
   }
   if (module === "audit") {
-    const [row] = await db.select().from(audits).where(and(eq(audits.id, recordId), eq(audits.tenantId, tenantId)));
+    const [row] = await db.select().from(audits).where(and(eq(audits.id, recordId)));
     if (!row) return null;
-    const items = await db.select().from(auditItems).where(and(eq(auditItems.auditId, recordId), eq(auditItems.tenantId, tenantId)));
+    const items = await db.select().from(auditItems).where(and(eq(auditItems.auditId, recordId)));
     const findings = items.filter((i) => i.finding).map((i) => `[${i.severity ?? "observation"}] ${wrapUntrustedData(i.finding, "audit_finding_text")}`);
     return (
       `The user is viewing Audit #${row.id} "${row.name}" (type: ${row.type ?? "not set"}). Status: ${row.status}. ` +
@@ -192,9 +192,9 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
     // recordId here is a digital_twin_simulations id (a saved simulation
     // run), not a model id — that's the real "record" a simulation-results
     // view is showing.
-    const [sim] = await db.select().from(digitalTwinSimulations).where(and(eq(digitalTwinSimulations.id, recordId), eq(digitalTwinSimulations.tenantId, tenantId)));
+    const [sim] = await db.select().from(digitalTwinSimulations).where(and(eq(digitalTwinSimulations.id, recordId)));
     if (!sim) return null;
-    const [model] = await db.select().from(digitalTwinModels).where(and(eq(digitalTwinModels.id, sim.modelId), eq(digitalTwinModels.tenantId, tenantId)));
+    const [model] = await db.select().from(digitalTwinModels).where(and(eq(digitalTwinModels.id, sim.modelId)));
     const results = sim.results as {
       predictedDefectRatePct?: number;
       bottleneck?: { nodeId: string; utilizationPct: number } | null;
@@ -211,11 +211,11 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
   }
 
   if (module === "capa_effectiveness") {
-    const [row] = await db.select().from(capa).where(and(eq(capa.id, recordId), eq(capa.tenantId, tenantId)));
+    const [row] = await db.select().from(capa).where(and(eq(capa.id, recordId)));
     if (!row) return null;
     let ncrSummary = "no linked NCR.";
     if (row.ncrId !== null) {
-      const [ncrRow] = await db.select().from(ncr).where(and(eq(ncr.id, row.ncrId), eq(ncr.tenantId, tenantId)));
+      const [ncrRow] = await db.select().from(ncr).where(and(eq(ncr.id, row.ncrId)));
       if (ncrRow) {
         ncrSummary =
           `NCR #${ncrRow.id} "${ncrRow.title}" (severity: ${ncrRow.severity ?? "not set"}, status: ${ncrRow.status}). ` +
@@ -226,7 +226,7 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
     // NCR "reopened" state, no category/root-cause code to group by) — the
     // one real recurrence signal available is whether more than one CAPA
     // was ever opened against the same NCR.
-    const siblingCapas = row.ncrId !== null ? await db.select().from(capa).where(and(eq(capa.ncrId, row.ncrId), eq(capa.tenantId, tenantId))) : [];
+    const siblingCapas = row.ncrId !== null ? await db.select().from(capa).where(and(eq(capa.ncrId, row.ncrId))) : [];
     return (
       `The user is scoring the effectiveness of CAPA #${row.id}. Linked NCR: ${ncrSummary} ` +
       `CAPA status: ${row.status}. Root cause: ${wrapUntrustedData(row.rootCause ?? "not documented", "capa_root_cause")}. Action plan: ${wrapUntrustedData(row.actionPlan ?? "not documented", "capa_action_plan")}. ` +
@@ -239,10 +239,10 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
     );
   }
   if (module === "supplier_risk") {
-    const [row] = await db.select().from(suppliers).where(and(eq(suppliers.id, recordId), eq(suppliers.tenantId, tenantId)));
+    const [row] = await db.select().from(suppliers).where(and(eq(suppliers.id, recordId)));
     if (!row) return null;
-    const performance = await computeSupplierPerformance(db, tenantId, recordId);
-    const costing = await computeCostingSummary(db, tenantId, 30);
+    const performance = await computeSupplierPerformance(db, recordId);
+    const costing = await computeCostingSummary(db, 30);
     const costEntry = costing.supplierCostDistribution.find((c) => c.supplierId === recordId);
     return (
       `The user is assessing risk for Supplier "${row.name}" (status: ${row.status}, current recorded risk level: ${row.riskLevel ?? "not set"}). ` +
@@ -257,16 +257,16 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
     );
   }
   if (module === "inventory_forecast") {
-    const [item] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, recordId), eq(inventoryItems.tenantId, tenantId)));
+    const [item] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.id, recordId)));
     if (!item) return null;
-    const stockRows = await db.select().from(inventoryStock).where(and(eq(inventoryStock.itemId, recordId), eq(inventoryStock.tenantId, tenantId)));
+    const stockRows = await db.select().from(inventoryStock).where(and(eq(inventoryStock.itemId, recordId)));
     const onHand = stockRows.reduce((sum, r) => sum + Number(r.onHand), 0);
     const windowDays = 30;
     const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
     const movements = await db
       .select()
       .from(inventoryMovements)
-      .where(and(eq(inventoryMovements.itemId, recordId), eq(inventoryMovements.tenantId, tenantId), gte(inventoryMovements.performedAt, since)));
+      .where(and(eq(inventoryMovements.itemId, recordId), gte(inventoryMovements.performedAt, since)));
     const sumType = (type: string) => movements.filter((m) => m.movementType === type).reduce((s, m) => s + Number(m.quantity), 0);
     const consumed = sumType("consume");
     const received = sumType("receive");
@@ -289,7 +289,7 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
   }
 
   if (module === "feasibility") {
-    const [row] = await db.select().from(feasibilityReviews).where(and(eq(feasibilityReviews.id, recordId), eq(feasibilityReviews.tenantId, tenantId)));
+    const [row] = await db.select().from(feasibilityReviews).where(and(eq(feasibilityReviews.id, recordId)));
     if (!row) return null;
     const areaSummary = (["design", "equipment", "supplyChain", "quality", "capacity", "regulatory", "financial"] as const)
       .map((area) => {
@@ -309,11 +309,11 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
   }
 
   if (module === "sales_account") {
-    const [row] = await db.select().from(salesAccounts).where(and(eq(salesAccounts.id, recordId), eq(salesAccounts.tenantId, tenantId)));
+    const [row] = await db.select().from(salesAccounts).where(and(eq(salesAccounts.id, recordId)));
     if (!row) return null;
-    const activities = await db.select().from(salesActivities).where(and(eq(salesActivities.accountId, recordId), eq(salesActivities.tenantId, tenantId)));
-    const quotes = await db.select().from(salesQuotes).where(and(eq(salesQuotes.accountId, recordId), eq(salesQuotes.tenantId, tenantId)));
-    const contracts = await db.select().from(salesContracts).where(and(eq(salesContracts.accountId, recordId), eq(salesContracts.tenantId, tenantId)));
+    const activities = await db.select().from(salesActivities).where(and(eq(salesActivities.accountId, recordId)));
+    const quotes = await db.select().from(salesQuotes).where(and(eq(salesQuotes.accountId, recordId)));
+    const contracts = await db.select().from(salesContracts).where(and(eq(salesContracts.accountId, recordId)));
     const activitySummary =
       activities.length > 0
         ? activities
@@ -331,7 +331,7 @@ async function loadContextSummary(db: TenantDb, tenantId: number, module: string
   }
 
   if (module === "customer") {
-    const [row] = await db.select().from(customers).where(and(eq(customers.id, recordId), eq(customers.tenantId, tenantId)));
+    const [row] = await db.select().from(customers).where(and(eq(customers.id, recordId)));
     if (!row) return null;
     return (
       `The user is working on Customer Onboarding case "${row.legalName}"${row.dbaName ? ` (dba ${row.dbaName})` : ""} (status: ${row.status}, type: ${row.customerType ?? "not set"}, industry: ${row.industry ?? "not set"}). ` +
@@ -366,14 +366,14 @@ function flattenConversation(messages: AssistantMessage[]): string {
  * a DB row lookup like loadContextSummary's other cases. Best-effort: a
  * failed/slow embedding lookup should never block the assistant response.
  */
-async function loadSimilarAuditFindings(db: TenantDb, tenantId: number, queryText: string): Promise<string | null> {
+async function loadSimilarAuditFindings(db: Db, queryText: string): Promise<string | null> {
   if (!queryText.trim()) return null;
   try {
-    const matches = await findSimilar(db, tenantId, "audit_finding", queryText, 3);
+    const matches = await findSimilar(db, "audit_finding", queryText, 3);
     if (matches.length === 0) return null;
 
     const itemIds = matches.map((m) => m.entityId);
-    const relatedItems = await db.select().from(auditItems).where(and(inArray(auditItems.id, itemIds), eq(auditItems.tenantId, tenantId)));
+    const relatedItems = await db.select().from(auditItems).where(and(inArray(auditItems.id, itemIds)));
     const byId = new Map(relatedItems.map((i) => [i.id, i]));
 
     const lines = matches.map((m) => {
@@ -390,30 +390,29 @@ async function loadSimilarAuditFindings(db: TenantDb, tenantId: number, queryTex
 
 /**
  * POST /ai/assistant — the one endpoint with no department gate at all
- * (just requireAuth + withTenantDb), per "the assistant must work for ANY
- * user in ANY department". Uses the tenant's own configured provider/key
- * when set (see tenant.controller.ts's updateAiConfigHandler), falling
+ * (just requireAuth + withDb), per "the assistant must work for ANY
+ * user in ANY department". Uses the company's own configured provider/key
+ * when set (see company.controller.ts's updateAiConfigHandler), falling
  * back to the platform's global env config exactly like every other AI
  * pipeline — including the honest stub response when neither has a key.
  */
 export const assistantHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const { messages, context } = req.body as { messages: AssistantMessage[]; context?: { module: string; recordId?: number } };
 
   // Was its own inline db.select + decryptSecret call with no try/catch —
-  // the one AI endpoint that missed the fix ai.usage.ts's loadTenantLlmOptions
+  // the one AI endpoint that missed the fix ai.usage.ts's loadCompanyLlmOptions
   // already applies everywhere else: a stored key that fails to decrypt
-  // (e.g. after a TENANT_AI_CONFIG_ENCRYPTION_KEY rotation) must degrade to
+  // (e.g. after a AI_CONFIG_ENCRYPTION_KEY rotation) must degrade to
   // the stub like every other "no key configured" path, never crash the
   // request (Full-System Audit finding C4).
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db! as TenantDb, tenantId);
+  const { co, llmOptions } = await loadCompanyLlmOptions(req.db! as Db);
 
-  const limitError = await checkUsageLimit(req.db!, tenantId, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const limitError = await checkUsageLimit(req.db!, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
-  const contextSummary = context ? await loadContextSummary(req.db!, tenantId, context.module, context.recordId) : null;
+  const contextSummary = context ? await loadContextSummary(req.db!, context.module, context.recordId) : null;
   const lastUserMessage = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
-  const similarFindings = context?.module === "audit_finding" ? await loadSimilarAuditFindings(req.db!, tenantId, lastUserMessage) : null;
+  const similarFindings = context?.module === "audit_finding" ? await loadSimilarAuditFindings(req.db!, lastUserMessage) : null;
   const system = [SAFETY_PREAMBLE, contextSummary, similarFindings].filter(Boolean).join("\n\n");
 
   const result = await callLlmDetailed(flattenConversation(messages), {
@@ -422,33 +421,31 @@ export const assistantHandler = asyncHandler(async (req: Request, res: Response)
   });
 
   // Only a real provider response has real usage to bill/track — the
-  // honest no-key stub (result.usage === null) never touches the tenant's
+  // honest no-key stub (result.usage === null) never touches the company's
   // BYOK counters, same as it never touches a real provider either.
   const cost = result.usage ? estimateCost(result.model, result.usage.inputTokens, result.usage.outputTokens) : 0;
   const totalTokens = result.usage ? result.usage.inputTokens + result.usage.outputTokens : null;
 
   if (result.usage) {
     // Atomic column increments (col = col + $1), not a read-modify-write of
-    // the whole tenant row — see tenants.aiUsageTokens's own schema comment
+    // the whole company row — see companies.aiUsageTokens's own schema comment
     // on why these two fields are real columns instead of living in the
     // aiConfig jsonb: two concurrent AI calls must never lose one's count
     // to the other's write.
     await req
-      .db!.update(tenants)
-      .set({ aiUsageTokens: sql`${tenants.aiUsageTokens} + ${totalTokens}`, aiUsageCost: sql`${tenants.aiUsageCost} + ${cost}` })
-      .where(eq(tenants.id, tenantId));
+      .db!.update(company)
+      .set({ aiUsageTokens: sql`${company.aiUsageTokens} + ${totalTokens}`, aiUsageCost: sql`${company.aiUsageCost} + ${cost}` });
   }
 
   // No dedicated chat-message table exists (no persistence, per this
-  // module's scope) — entityId is the tenant, same convention the AI
+  // module's scope) — entityId is the company, same convention the AI
   // config change entries already use, since there's no other real owning
   // record for "one assistant usage event" to key on. performedBy is the
   // real invoking user either way. tokens/tokensIn/tokensOut/cost are what
   // both checkUsageLimit and the usage dashboard read back from later.
   await recordAuditTrail(req.db!, {
-    tenantId,
     entityType: "AiAssistantMessage",
-    entityId: tenantId,
+    entityId: 1,
     action: "create",
     changes: {
       usedModel: result.model,

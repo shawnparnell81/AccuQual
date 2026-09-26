@@ -14,12 +14,12 @@ import { env } from "../../config/env.js";
 import { recordAuditTrail, resolveUserNames } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 /** Same inline-guard style as rma.controller.ts/inventory.controller.ts's assertDepartment — used for the one thing left that's a real fixed business rule (which stage of the workflow belongs to whom) rather than a tunable access level. */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin" || role === "platform_admin") return;
+  if (role === "admin") return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -27,7 +27,7 @@ function assertDepartment(req: Request, allowed: string[]) {
 }
 
 function isAdmin(req: Request): boolean {
-  return req.user?.roleName === "admin" || req.user?.roleName === "platform_admin";
+  return req.user?.roleName === "admin";
 }
 
 /**
@@ -47,7 +47,7 @@ async function assertWarrantyContentWrite(req: Request) {
   if (req.user?.department === "purchasing") {
     throw AppError.forbidden("Purchasing may only record cost entries on a warranty claim, not create or edit its content");
   }
-  const level = await getUserAccessLevel(req.db! as TenantDb, req.tenantId!, req.user!, "warranty");
+  const level = await getUserAccessLevel(req.db! as Db, req.user!, "warranty");
   if (level !== "edit") {
     throw AppError.forbidden("This action requires edit access to Warranty (warranty.write)");
   }
@@ -81,14 +81,14 @@ function generateClaimNumber(id: number): string {
 }
 
 async function loadClaim(req: Request, id: number) {
-  const [row] = await req.db!.select().from(warrantyClaims).where(and(eq(warrantyClaims.id, id), eq(warrantyClaims.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(warrantyClaims).where(and(eq(warrantyClaims.id, id)));
   if (!row) throw AppError.notFound("WarrantyClaim");
   return row;
 }
 
 export const listWarrantyClaimsHandler = asyncHandler(async (req: Request, res: Response) => {
   const { status, customerId, supplierId, dateFrom, dateTo, q } = req.query as Record<string, string | undefined>;
-  const conditions: SQL[] = [eq(warrantyClaims.tenantId, req.tenantId!)];
+  const conditions: SQL[] = [];
   if (status) conditions.push(eq(warrantyClaims.status, status));
   if (customerId) conditions.push(eq(warrantyClaims.customerId, Number(customerId)));
   if (supplierId) conditions.push(eq(warrantyClaims.supplierId, Number(supplierId)));
@@ -139,30 +139,29 @@ export const createWarrantyClaimHandler = asyncHandler(async (req: Request, res:
   };
 
   if (body.customerId !== undefined) {
-    const [row] = await req.db!.select({ id: customers.id }).from(customers).where(and(eq(customers.id, body.customerId), eq(customers.tenantId, req.tenantId!)));
+    const [row] = await req.db!.select({ id: customers.id }).from(customers).where(and(eq(customers.id, body.customerId)));
     if (!row) throw AppError.badRequest(`Customer #${body.customerId} not found`);
   }
   if (body.productId !== undefined) {
-    const [row] = await req.db!.select({ id: inventoryItems.id }).from(inventoryItems).where(and(eq(inventoryItems.id, body.productId), eq(inventoryItems.tenantId, req.tenantId!)));
+    const [row] = await req.db!.select({ id: inventoryItems.id }).from(inventoryItems).where(and(eq(inventoryItems.id, body.productId)));
     if (!row) throw AppError.badRequest(`Product #${body.productId} not found`);
   }
   if (body.supplierId !== undefined) {
-    const [row] = await req.db!.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.id, body.supplierId), eq(suppliers.tenantId, req.tenantId!)));
+    const [row] = await req.db!.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.id, body.supplierId)));
     if (!row) throw AppError.badRequest(`Supplier #${body.supplierId} not found`);
   }
   if (body.linkedNcrId !== undefined) {
-    const [row] = await req.db!.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, body.linkedNcrId), eq(ncr.tenantId, req.tenantId!)));
+    const [row] = await req.db!.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, body.linkedNcrId)));
     if (!row) throw AppError.badRequest(`NCR #${body.linkedNcrId} not found`);
   }
   if (body.linkedWorkOrderId !== undefined) {
-    const [row] = await req.db!.select({ id: workOrders.id }).from(workOrders).where(and(eq(workOrders.id, body.linkedWorkOrderId), eq(workOrders.tenantId, req.tenantId!)));
+    const [row] = await req.db!.select({ id: workOrders.id }).from(workOrders).where(and(eq(workOrders.id, body.linkedWorkOrderId)));
     if (!row) throw AppError.badRequest(`Work Order #${body.linkedWorkOrderId} not found`);
   }
 
   const [created] = await req
     .db!.insert(warrantyClaims)
     .values({
-      tenantId: req.tenantId!,
       // Placeholder — real value written right after, same reasoning as
       // rma.ts's generateRmaNumber (derived from the row's own post-insert
       // id, nothing to race between two concurrent creates).
@@ -175,8 +174,8 @@ export const createWarrantyClaimHandler = asyncHandler(async (req: Request, res:
 
   const [withNumber] = await req.db!.update(warrantyClaims).set({ claimNumber: generateClaimNumber(created!.id) }).where(eq(warrantyClaims.id, created!.id)).returning();
 
-  await req.db!.insert(warrantyClaimWorkflow).values({ tenantId: req.tenantId!, claimId: withNumber!.id, fromStatus: null, toStatus: "new", performedByUserId: req.user?.id });
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WarrantyClaim", entityId: withNumber!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  await req.db!.insert(warrantyClaimWorkflow).values({ claimId: withNumber!.id, fromStatus: null, toStatus: "new", performedByUserId: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "WarrantyClaim", entityId: withNumber!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(withNumber);
 });
 
@@ -187,12 +186,12 @@ export const getWarrantyClaimHandler = asyncHandler(async (req: Request, res: Re
   const [supplier] = record.supplierId ? await req.db!.select().from(suppliers).where(eq(suppliers.id, record.supplierId)) : [null];
   const [linkedNcr] = record.linkedNcrId ? await req.db!.select().from(ncr).where(eq(ncr.id, record.linkedNcrId)) : [null];
   const [linkedWorkOrder] = record.linkedWorkOrderId ? await req.db!.select().from(workOrders).where(eq(workOrders.id, record.linkedWorkOrderId)) : [null];
-  const costs = await req.db!.select().from(warrantyClaimCosts).where(and(eq(warrantyClaimCosts.claimId, record.id), eq(warrantyClaimCosts.tenantId, req.tenantId!))).orderBy(desc(warrantyClaimCosts.createdAt));
-  const workflowRows = await req.db!.select().from(warrantyClaimWorkflow).where(and(eq(warrantyClaimWorkflow.claimId, record.id), eq(warrantyClaimWorkflow.tenantId, req.tenantId!))).orderBy(desc(warrantyClaimWorkflow.createdAt));
+  const costs = await req.db!.select().from(warrantyClaimCosts).where(and(eq(warrantyClaimCosts.claimId, record.id))).orderBy(desc(warrantyClaimCosts.createdAt));
+  const workflowRows = await req.db!.select().from(warrantyClaimWorkflow).where(and(eq(warrantyClaimWorkflow.claimId, record.id))).orderBy(desc(warrantyClaimWorkflow.createdAt));
   // Phase 0 audit-trail fix: performedByUserId was always captured here but
   // never resolved to a name — the claim detail page's History list showed
   // no actor at all. Same resolver every other module's history view uses.
-  const actorNames = await resolveUserNames(req.db! as TenantDb, workflowRows.map((w) => w.performedByUserId));
+  const actorNames = await resolveUserNames(req.db! as Db, workflowRows.map((w) => w.performedByUserId));
   const workflow = workflowRows.map((w) => ({ ...w, performedByName: w.performedByUserId === null ? null : (actorNames.get(w.performedByUserId) ?? null) }));
 
   res.json({
@@ -218,7 +217,7 @@ export const updateWarrantyClaimHandler = asyncHandler(async (req: Request, res:
     .set({ ...req.body, updatedAt: new Date() })
     .where(eq(warrantyClaims.id, record.id))
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WarrantyClaim", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "WarrantyClaim", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -237,18 +236,17 @@ export const transitionWarrantyClaimHandler = asyncHandler(async (req: Request, 
     .where(eq(warrantyClaims.id, record.id))
     .returning();
 
-  await req.db!.insert(warrantyClaimWorkflow).values({ tenantId: req.tenantId!, claimId: record.id, fromStatus: record.status, toStatus: newStatus, note, performedByUserId: req.user?.id });
+  await req.db!.insert(warrantyClaimWorkflow).values({ claimId: record.id, fromStatus: record.status, toStatus: newStatus, note, performedByUserId: req.user?.id });
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "WarrantyClaim",
     entityId: record.id,
     action: "status_change",
     changes: { oldStatus: record.status, newStatus, note, userId: req.user?.id },
     performedBy: req.user?.id,
   });
-  // Opt-in only: lets a tenant build automation on warranty events in the
+  // Opt-in only: lets a company build automation on warranty events in the
   // existing Workflow Builder, same as rma/inventory/erp already allow.
-  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "warranty", event: newStatus, entityId: record.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "warranty", event: newStatus, entityId: record.id });
 
   res.json(updated);
 });
@@ -267,7 +265,7 @@ export const uploadWarrantyDocumentHandler = asyncHandler(async (req: Request, r
   const category = (req.body.category as string | undefined) === "failure_image" ? "failure_image" : "document";
   const caption = req.body.caption as string | undefined;
 
-  const dir = `${env.STORAGE_LOCAL_PATH}/tenants/${req.tenantId}/warranty`;
+  const dir = `${env.STORAGE_LOCAL_PATH}/warranty`;
   await mkdir(dir, { recursive: true });
   const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `${dir}/${record.id}-${Date.now()}-${safeName}`;
@@ -276,7 +274,6 @@ export const uploadWarrantyDocumentHandler = asyncHandler(async (req: Request, r
   const [attachment] = await req
     .db!.insert(attachments)
     .values({
-      tenantId: req.tenantId!,
       entityType: "warranty_claim",
       entityId: record.id,
       fileName: file.originalname,
@@ -297,7 +294,6 @@ export const uploadWarrantyDocumentHandler = asyncHandler(async (req: Request, r
     .returning();
 
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "WarrantyClaim",
     entityId: record.id,
     action: "update",
@@ -309,7 +305,7 @@ export const uploadWarrantyDocumentHandler = asyncHandler(async (req: Request, r
 
 export const listWarrantyCostsHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadClaim(req, Number(req.params.id));
-  const rows = await req.db!.select().from(warrantyClaimCosts).where(and(eq(warrantyClaimCosts.claimId, record.id), eq(warrantyClaimCosts.tenantId, req.tenantId!))).orderBy(desc(warrantyClaimCosts.createdAt));
+  const rows = await req.db!.select().from(warrantyClaimCosts).where(and(eq(warrantyClaimCosts.claimId, record.id))).orderBy(desc(warrantyClaimCosts.createdAt));
   res.json(rows);
 });
 
@@ -323,23 +319,22 @@ export const createWarrantyCostHandler = asyncHandler(async (req: Request, res: 
 
   const [created] = await req
     .db!.insert(warrantyClaimCosts)
-    .values({ tenantId: req.tenantId!, claimId: record.id, costType, amount: String(amount), notes, recordedByUserId: req.user?.id })
+    .values({ claimId: record.id, costType, amount: String(amount), notes, recordedByUserId: req.user?.id })
     .returning();
 
   const [totalRow] = await req
     .db!.select({ total: sql<string>`coalesce(sum(${warrantyClaimCosts.amount}), 0)` })
     .from(warrantyClaimCosts)
-    .where(and(eq(warrantyClaimCosts.claimId, record.id), eq(warrantyClaimCosts.tenantId, req.tenantId!)));
+    .where(and(eq(warrantyClaimCosts.claimId, record.id)));
   await req.db!.update(warrantyClaims).set({ warrantyActualCost: totalRow?.total ?? "0", updatedAt: new Date() }).where(eq(warrantyClaims.id, record.id));
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "WarrantyClaim", entityId: record.id, action: "update", changes: { addedCost: created }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "WarrantyClaim", entityId: record.id, action: "update", changes: { addedCost: created }, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
 /** GET /warranty/analytics — powers WarrantyDashboard.tsx: counts by status, total/average cost, and average days spent in each state (from the workflow timeline). */
 export const warrantyAnalyticsHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
-  const claims = await req.db!.select().from(warrantyClaims).where(eq(warrantyClaims.tenantId, tenantId));
+  const claims = await req.db!.select().from(warrantyClaims);
 
   const byStatus: Record<string, number> = {};
   let totalEstimate = 0;
@@ -350,7 +345,7 @@ export const warrantyAnalyticsHandler = asyncHandler(async (req: Request, res: R
     totalActual += c.warrantyActualCost ? Number(c.warrantyActualCost) : 0;
   }
 
-  const workflowRows = await req.db!.select().from(warrantyClaimWorkflow).where(eq(warrantyClaimWorkflow.tenantId, tenantId)).orderBy(warrantyClaimWorkflow.claimId, warrantyClaimWorkflow.createdAt);
+  const workflowRows = await req.db!.select().from(warrantyClaimWorkflow).orderBy(warrantyClaimWorkflow.claimId, warrantyClaimWorkflow.createdAt);
   const daysInStatus: Record<string, { totalDays: number; count: number }> = {};
   const byClaimId = new Map<number, typeof workflowRows>();
   for (const row of workflowRows) {

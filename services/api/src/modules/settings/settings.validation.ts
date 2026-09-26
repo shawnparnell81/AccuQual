@@ -10,7 +10,7 @@ export const updateFeasibilitySettingsSchema = z.object({
   defaultRiskLevel: z.enum(RISK_LEVELS).optional(),
   autoAssignOwner: z.boolean().optional(),
   // Controlled-document ids (documents.id), not free-text names. Existence,
-  // tenant access, and duplicates are checked in the settings controller.
+  // company access, and duplicates are checked in the settings controller.
   requiredDocuments: z.array(z.string().regex(REQUIRED_DOCUMENT_ID, "Must be an existing document id")).optional(),
   notificationsEnabled: z.boolean().optional(),
 });
@@ -68,9 +68,9 @@ export const updateErpSyncSettingsSchema = z.object({
       backoffSeconds: z.coerce.number().int().min(0).max(10).optional(),
     })
     .optional(),
-  webhookUrl: z.string().url().optional().or(z.literal("")), // "" clears it, same convention as tenant.validation.ts's hexColor()
+  webhookUrl: z.string().url().optional().or(z.literal("")), // "" clears it, same convention as company.validation.ts's hexColor()
   // Plaintext in the request only — encrypted before it ever touches the
-  // database, same convention as tenant.validation.ts's updateAiConfigSchema.
+  // database, same convention as company.validation.ts's updateAiConfigSchema.
   webhookSecret: z.string().min(1).optional(),
 });
 
@@ -78,7 +78,7 @@ export const updateErpSyncSettingsSchema = z.object({
  * Settings → Supplier Risk (Phase 7) — weights for the Supplier Quality
  * Risk Score's 7 factors (see modules/supplier/supplier.qualityRisk.ts).
  * Non-negative, uncapped — the score normalizes by the sum of whatever
- * weights are set, so a tenant emphasizing one factor doesn't need every
+ * weights are set, so a company emphasizing one factor doesn't need every
  * other one rebalanced by hand.
  */
 export const updateSupplierRiskSettingsSchema = z.object({

@@ -94,11 +94,11 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   replaced: "success",
   repaired: "success",
 
-  // Phase 4 AI Enablement — per-tenant AI mode on the Platform Admin AI Overview panel.
+  // Phase 4 AI Enablement — AI mode on the Platform Admin AI Overview panel.
   live: "success",
   degraded: "warning",
   disabled: "muted",
-  stub: "info", // key configured (platform or tenant), but no real attempt has landed yet this window
+  stub: "info", // key configured (platform or company), but no real attempt has landed yet this window
 
   // Supplier Portal review states not covered above.
   accepted: "success",
@@ -116,10 +116,10 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   error: "destructive",
 
   // ERP Sync Error Dashboard's errorType (erpMappingEngine.ts's
-  // categorizeError) — config-shaped issues a tenant admin can fix
+  // categorizeError) — config-shaped issues an administrator can fix
   // themselves (a bad mapping/validation rule) read as "warning", while
   // triggerError/erpApiError/unexpectedError are real failures external to
-  // the tenant's own preset config, read as "destructive".
+  // the company's own preset config, read as "destructive".
   mappingError: "warning",
   validationError: "warning",
   transformError: "warning",

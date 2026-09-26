@@ -107,8 +107,8 @@ export function AiFieldAssistant({ module, recordId, buildInitialPrompt, onInser
             <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
               <TriangleAlert size={14} className="mt-0.5 shrink-0" />
               <span>
-                No AI provider is configured for this tenant — the text below is a placeholder, not a real answer, and can&apos;t be
-                inserted into this record. Configure a provider under Settings &rarr; Tenant AI Config to get real responses.
+                No AI provider is configured for this company — the text below is a placeholder, not a real answer, and can&apos;t be
+                inserted into this record. Configure a provider under Settings &rarr; Company AI Config to get real responses.
               </span>
             </div>
           )}

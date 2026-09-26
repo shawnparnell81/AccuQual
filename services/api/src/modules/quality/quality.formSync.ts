@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { discrepancyInvestigations, type DiscrepancyInvestigation } from "../../drizzle/schema/quality.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { mergeFormData } from "../forms/formDataMerge.js";
 
@@ -31,7 +31,7 @@ function reverseLookup(labels: Record<string, string>, label: unknown): string |
  * something a user already typed into the form. The source reference is a
  * one-time seed for auto-created investigations.
  */
-export async function syncDiRecordToForm(db: TenantDb, tenantId: number, di: DiscrepancyInvestigation, createdBy?: number): Promise<void> {
+export async function syncDiRecordToForm(db: Db, di: DiscrepancyInvestigation, createdBy?: number): Promise<void> {
   const patch: Record<string, unknown> = {
     status: STATUS_LABELS[di.status] ?? di.status,
     disposition: [{ value: di.disposition && DISPOSITION_LABELS[di.disposition] ? { [DISPOSITION_LABELS[di.disposition]!]: true } : {} }],
@@ -45,7 +45,7 @@ export async function syncDiRecordToForm(db: TenantDb, tenantId: number, di: Dis
     defaults.sourceReference = di.sourceAuditItemId ? `Audit #${di.sourceAuditId} — Finding #${di.sourceAuditItemId}` : `Audit #${di.sourceAuditId}`;
   }
 
-  await mergeFormData(db, tenantId, { formType: DI_FORM_TYPE, entityType: ENTITY_TYPE, entityId: di.id, patch, defaults, createdBy });
+  await mergeFormData(db, { formType: DI_FORM_TYPE, entityType: ENTITY_TYPE, entityId: di.id, patch, defaults, createdBy });
 }
 
 /**
@@ -56,11 +56,11 @@ export async function syncDiRecordToForm(db: TenantDb, tenantId: number, di: Dis
  * closed investigation is immutable, so a late form edit is ignored rather
  * than rewriting a closed record.
  */
-export async function syncDiFormToRecord(db: TenantDb, tenantId: number, diId: number, data: Record<string, unknown>, performedBy?: number): Promise<void> {
+export async function syncDiFormToRecord(db: Db, diId: number, data: Record<string, unknown>, performedBy?: number): Promise<void> {
   const [record] = await db
     .select()
     .from(discrepancyInvestigations)
-    .where(and(eq(discrepancyInvestigations.id, diId), eq(discrepancyInvestigations.tenantId, tenantId)));
+    .where(and(eq(discrepancyInvestigations.id, diId)));
   if (!record || record.status === "closed") return;
 
   const update: Partial<typeof discrepancyInvestigations.$inferInsert> = {};
@@ -91,7 +91,6 @@ export async function syncDiFormToRecord(db: TenantDb, tenantId: number, diId: n
   if (Object.keys(update).length === 0) return;
   await db.update(discrepancyInvestigations).set({ ...update, updatedAt: new Date() }).where(eq(discrepancyInvestigations.id, diId));
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "Discrepancy investigation",
     entityId: diId,
     action: "update",

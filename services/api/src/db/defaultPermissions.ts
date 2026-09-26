@@ -11,16 +11,16 @@ import type { AccessLevel, Department, ResourceKey } from "../middleware/departm
  * This data still exists — as a SEED fixture, not a runtime fallback. Two
  * consumers, both one-time/setup-time, never per-request:
  *   1. db/backfillDepartmentPermissions.ts — inserts a real
- *      department_permissions row for every existing tenant, for every
- *      (department, module) pair defined here, so every tenant that
+ *      department_permissions row for every existing company, for every
+ *      (department, module) pair defined here, so every company that
  *      existed before this rewrite keeps behaving EXACTLY as it did under
  *      the old hardcoded matrix, with real rows now on file instead of an
  *      implicit fallback.
- *   2. modules/platform/platform.service.ts's createTenant() — seeds the
- *      same rows for a brand-new tenant at creation time, so "no
+ *   2. modules/platform/platform.service.ts's createCompany() — seeds the
+ *      same rows for a brand-new company at creation time, so "no
  *      permissions configured yet" never means "silently locked out of
- *      everything" for a fresh tenant either.
- * Once seeded, a tenant admin's own department_permissions rows (via the
+ *      everything" for a fresh company either.
+ * Once seeded, a company admin's own department_permissions rows (via the
  * Roles & Permissions admin UI) are the only thing getUserAccessLevel ever
  * reads — this file is never consulted again after that point.
  *
@@ -79,7 +79,7 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // lifecycle (create/start/complete/cancel, enforced inline in
   // workOrders.controller.ts's assertDepartment) — Production was
   // downgraded to read-only. "General Manager" full access is covered by
-  // the existing tenant-admin bypass (isAdmin short-circuits every
+  // the existing company-admin bypass (isAdmin short-circuits every
   // assertDepartment call), not a new department — there is no distinct
   // "general_manager" department in this app. material_management/
   // purchasing/quality keep read visibility since they each care about
@@ -211,7 +211,7 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // Phase 9 — the Workflow Builder (`/workflow`) previously had NO RBAC gate
   // at all beyond requireAuth: any authenticated user of any department
   // could create/run a workflow definition that fires real actions
-  // (send an email, auto-create an NCR/CAPA) against this tenant's data.
+  // (send an email, auto-create an NCR/CAPA) against this company's data.
   // Quality owns editing (same "quality owns process/workflow config"
   // reasoning as every other module's disposition-authority role);
   // Engineering gets read visibility since several templates target
@@ -249,7 +249,7 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // customer liaison, per explicit user direction on this module) and
   // Quality (owns the linked NCR/Complaint side a conversation is often
   // about) both get full edit; every other department gets read, so a
-  // conversation logged against a customer stays visible tenant-wide
+  // conversation logged against a customer stays visible company-wide
   // without letting an unrelated department log entries on someone else's
   // behalf.
   customer_communications: {
@@ -301,7 +301,7 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // already use for a module with no single owner, and zero-behavior-change
   // from today (every employee already could create/edit any of them) so
   // this doesn't newly lock anyone out of a form type they use today — it
-  // just makes the module real and tenant-configurable in Roles &
+  // just makes the module real and company-configurable in Roles &
   // Permissions instead of invisible to that system entirely.
   qms_forms: {
     quality: "edit",
@@ -315,7 +315,7 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // Same reasoning as qms_forms above: a SCAR can originate from any
   // department dealing with a supplier, so every department gets edit —
   // zero-behavior-change from today (scarForms.routes.ts was previously
-  // entirely ungated), just makes it real and tenant-configurable instead
+  // entirely ungated), just makes it real and company-configurable instead
   // of invisible to Roles & Permissions (security-audit finding).
   scar: {
     quality: "edit",

@@ -5,12 +5,12 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { notifyDepartment } from "../notifications/notification.service.js";
-import { loadTenantForSettings, getFeasibilitySettings, requiredDocumentDisplayNames } from "../settings/settings.service.js";
+import { loadCompanyForSettings, getFeasibilitySettings, requiredDocumentDisplayNames } from "../settings/settings.service.js";
 
 /** Full-record edit — engineering owns this document; same pattern as risk/workOrders/erp/rma.controller.ts's assertDepartment. */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin" || role === "platform_admin") return;
+  if (role === "admin") return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -35,7 +35,7 @@ const SIGNOFF_OWNER: Record<string, string> = {
  */
 function assertSignoffFieldsAllowed(req: Request, body: Record<string, unknown>) {
   const role = req.user?.roleName;
-  if (role === "admin" || role === "platform_admin") return;
+  if (role === "admin") return;
   const department = req.user?.department;
   if (department === "engineering") return;
 
@@ -49,14 +49,14 @@ function assertSignoffFieldsAllowed(req: Request, body: Record<string, unknown>)
 }
 
 async function loadFeasibility(req: Request, id: number) {
-  const [row] = await req.db!.select().from(feasibilityReviews).where(and(eq(feasibilityReviews.id, id), eq(feasibilityReviews.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(feasibilityReviews).where(and(eq(feasibilityReviews.id, id)));
   if (!row) throw AppError.notFound("Feasibility review");
   return row;
 }
 
 export const listFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
   const { status, customerId } = req.query as Record<string, string | undefined>;
-  const conditions = [eq(feasibilityReviews.tenantId, req.tenantId!)];
+  const conditions = [];
   if (status) conditions.push(eq(feasibilityReviews.status, status));
   if (customerId) conditions.push(eq(feasibilityReviews.customerId, Number(customerId)));
 
@@ -68,13 +68,13 @@ export const listFeasibilityHandler = asyncHandler(async (req: Request, res: Res
 export const createFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
   assertDepartment(req, ["engineering", "sales_and_marketing"]);
 
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
-  const settings = getFeasibilitySettings(tenant);
+  const co = await loadCompanyForSettings(req.db!);
+  const settings = getFeasibilitySettings(co);
   const ownerId = req.body.ownerId ?? (settings.autoAssignOwner ? req.user?.id : undefined);
 
   // defaultRiskLevel seeds every one of the 7 fixed assessment rows — the
   // old model had one riskLevel field for the whole record; this one has 7,
-  // so "apply the tenant default" now means "start every row at that level"
+  // so "apply the company default" now means "start every row at that level"
   // rather than skip the setting.
   const areaDefaults: Record<string, string> = {};
   if (settings.defaultRiskLevel) {
@@ -85,9 +85,9 @@ export const createFeasibilityHandler = asyncHandler(async (req: Request, res: R
 
   const [created] = await req
     .db!.insert(feasibilityReviews)
-    .values({ ...areaDefaults, ...req.body, ownerId, tenantId: req.tenantId!, createdBy: req.user?.id })
+    .values({ ...areaDefaults, ...req.body, ownerId, createdBy: req.user?.id })
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
@@ -107,7 +107,7 @@ export const updateFeasibilityHandler = asyncHandler(async (req: Request, res: R
     .where(eq(feasibilityReviews.id, record.id))
     .returning();
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: record.id, action: "update", changes: { fieldsChanged: Object.keys(req.body) }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: record.id, action: "update", changes: { fieldsChanged: Object.keys(req.body) }, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -135,7 +135,7 @@ export const updateSignoffHandler = asyncHandler(async (req: Request, res: Respo
   }
 
   const [updated] = await req.db!.update(feasibilityReviews).set(patch).where(eq(feasibilityReviews.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: record.id, action: "update", changes: { subAction: "signoff", fieldsChanged: Object.keys(req.body) }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: record.id, action: "update", changes: { subAction: "signoff", fieldsChanged: Object.keys(req.body) }, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -150,22 +150,21 @@ export const finalizeFeasibilityHandler = asyncHandler(async (req: Request, res:
   const record = await loadFeasibility(req, Number(req.params.id));
   if (record.status === "final") throw AppError.badRequest("Already finalized.");
 
-  const tenant = await loadTenantForSettings(req.db!, req.tenantId!);
-  const settings = getFeasibilitySettings(tenant);
+  const co = await loadCompanyForSettings(req.db!);
+  const settings = getFeasibilitySettings(co);
   const required = settings.requiredDocuments ?? [];
   const provided = new Set((record.providedDocuments ?? []).map((doc) => String(doc)));
   const missing = required.filter((doc) => !provided.has(doc));
   if (missing.length > 0) {
-    const labels = await requiredDocumentDisplayNames(req.db!, req.tenantId!, missing);
+    const labels = await requiredDocumentDisplayNames(req.db!, missing);
     throw AppError.badRequest(`Cannot finalize — missing required document(s): ${labels.join(", ")}. Mark them provided first.`);
   }
 
   const [updated] = await req.db!.update(feasibilityReviews).set({ status: "final", finalizedAt: new Date(), updatedAt: new Date() }).where(eq(feasibilityReviews.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: record.id, action: "status_change", changes: { oldStatus: record.status, newStatus: "final" }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: record.id, action: "status_change", changes: { oldStatus: record.status, newStatus: "final" }, performedBy: req.user?.id });
 
   if (settings.notificationsEnabled) {
     await notifyDepartment(req.db!, {
-      tenantId: req.tenantId!,
       department: "quality",
       subject: `Feasibility Review #${record.id} finalized`,
       body: `"${record.partProjectName ?? record.customerName ?? "Untitled"}" has been finalized.`,
@@ -182,7 +181,7 @@ export const deleteFeasibilityHandler = asyncHandler(async (req: Request, res: R
   assertDepartment(req, ["engineering"]);
   const record = await loadFeasibility(req, Number(req.params.id));
 
-  await req.db!.delete(feasibilityReviews).where(and(eq(feasibilityReviews.id, record.id), eq(feasibilityReviews.tenantId, req.tenantId!)));
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "FeasibilityReview", entityId: record.id, action: "delete", changes: { partProjectName: record.partProjectName, status: record.status }, performedBy: req.user?.id });
+  await req.db!.delete(feasibilityReviews).where(and(eq(feasibilityReviews.id, record.id)));
+  await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: record.id, action: "delete", changes: { partProjectName: record.partProjectName, status: record.status }, performedBy: req.user?.id });
   res.status(204).send();
 });

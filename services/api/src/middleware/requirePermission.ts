@@ -2,13 +2,13 @@ import type { NextFunction, Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { AppError } from "../utils/appError.js";
 import { pool } from "../db/index.js";
-import type { TenantDb } from "../lib/tenantScope.js";
+import type { Db } from "../lib/requestDb.js";
 import { recordAuditTrailStandalone } from "../modules/audit-trail/audit-trail.service.js";
 import { getUserAccessLevel, type AccessLevel, type ResourceKey } from "./departmentAccess.js";
 
 /**
  * `requirePermission("workflow.edit")` — a "<subject>.<action>" permission
- * name resolved onto this app's real, tenant-configurable access model rather
+ * name resolved onto this app's real, company-configurable access model rather
  * than a second, parallel permission system:
  *
  *   view     -> "read" access to the subject's resource (Roles & Permissions)
@@ -16,7 +16,7 @@ import { getUserAccessLevel, type AccessLevel, type ResourceKey } from "./depart
  *   review   -> "edit" access AND a reviewer role (admin or quality_manager)
  *   publish  -> "edit" access AND a reviewer role (admin or quality_manager)
  *
- * So a tenant admin still controls who may edit a workflow through the
+ * So a company admin still controls who may edit a workflow through the
  * Roles & Permissions screen; "review" and "publish" additionally require the
  * reviewer role, so drafting rights alone can never put a change into force.
  * Customers and suppliers (external logins) are always refused.
@@ -38,7 +38,7 @@ export type PermissionSubject = keyof typeof PERMISSION_SUBJECTS;
 export type PermissionAction = "view" | "edit" | "review" | "publish" | "manage" | "calibrate" | "override" | "release" | "manageCourses" | "manageSessions" | "evaluate";
 export type PermissionName = `${PermissionSubject}.${PermissionAction}`;
 
-export const REVIEWER_ROLES = new Set(["admin", "platform_admin", "quality_manager"]);
+export const REVIEWER_ROLES = new Set(["admin", "quality_manager"]);
 const EXTERNAL_ROLES = new Set(["customer", "supplier"]);
 
 const NEEDED_LEVEL: Record<PermissionAction, AccessLevel> = { view: "read", edit: "edit", review: "edit", publish: "edit", manage: "edit", calibrate: "edit", override: "edit", release: "edit", manageCourses: "edit", manageSessions: "edit", evaluate: "edit" };
@@ -52,15 +52,14 @@ export function parsePermission(name: string): { subject: PermissionSubject; act
 
 /** The decision itself, separate from Express so it is unit-testable and reusable inside services. */
 export async function hasPermission(
-  db: TenantDb,
-  tenantId: number,
+  db: Db,
   user: { id: number; roleName: string | null; department: string | null },
   name: PermissionName,
 ): Promise<{ allowed: boolean; reason?: string }> {
   const { subject, action } = parsePermission(name);
   if (user.roleName && EXTERNAL_ROLES.has(user.roleName)) return { allowed: false, reason: "External accounts cannot use this feature" };
 
-  const level = await getUserAccessLevel(db, tenantId, user, PERMISSION_SUBJECTS[subject].resource);
+  const level = await getUserAccessLevel(db, user, PERMISSION_SUBJECTS[subject].resource);
   if (RANK[level] < RANK[NEEDED_LEVEL[action]]) return { allowed: false, reason: `Requires ${NEEDED_LEVEL[action]} access to ${PERMISSION_SUBJECTS[subject].resource}` };
   if ((action === "review" || action === "publish" || action === "override" || action === "release") && !(user.roleName && REVIEWER_ROLES.has(user.roleName))) {
     return { allowed: false, reason: action === "override" ? "Overriding a failed calibration requires an admin or quality manager" : action === "release" ? "Releasing or destroying quarantined material requires an admin or quality manager" : "Reviewing and publishing require an admin or quality manager" };
@@ -72,14 +71,13 @@ export async function hasPermission(
 export function requirePermission(name: PermissionName) {
   const { subject } = parsePermission(name);
   return asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
-    if (!req.user || !req.db || req.tenantId === undefined) return next(AppError.forbidden("Missing tenant context"));
-    const verdict = await hasPermission(req.db as TenantDb, req.tenantId, req.user, name);
+    if (!req.user || !req.db) return next(AppError.forbidden("Not signed in"));
+    const verdict = await hasPermission(req.db as Db, req.user, name);
     if (verdict.allowed) return next();
 
     // Standalone connection: the request transaction is rolled back on a 403, which would take the record with it.
     const idFromPath = Number(req.params.id);
     await recordAuditTrailStandalone(pool, {
-      tenantId: req.tenantId,
       entityType: PERMISSION_SUBJECTS[subject].entityType,
       entityId: Number.isFinite(idFromPath) && idFromPath > 0 ? idFromPath : 0,
       action: "permission_denied",

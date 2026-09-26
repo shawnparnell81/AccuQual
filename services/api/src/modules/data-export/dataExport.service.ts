@@ -23,7 +23,6 @@ export interface ExportOptions {
 }
 
 export interface ExportActor {
-  tenantId: number;
   userId: number;
   email: string;
 }
@@ -34,18 +33,14 @@ export const DEFAULT_MAX_FILE_BYTES = 1024 * 1024 * 1024;
 export const DEFAULT_MAX_SINGLE_FILE_BYTES = 100 * 1024 * 1024;
 
 /**
- * One consistent, read-only, tenant-scoped snapshot. `REPEATABLE READ` means every table is read as of the same
- * instant (an export taken while people are working is still internally consistent), and the switch into the
- * restricted `accuqual_app` role means Postgres row-level security — not just our WHERE clause — keeps every row to
- * this tenant. Uses its own connection because the request-scoped one (lib/tenantScope.ts) commits on res.json/send,
- * which a streamed download never calls.
+ * One consistent, read-only snapshot. `REPEATABLE READ` means every table is read as of the same instant (an export
+ * taken while people are working is still internally consistent). Uses its own connection because the
+ * request-scoped one (lib/requestDb.ts) commits on res.json/send, which a streamed download never calls.
  */
-async function withSnapshot<T>(tenantId: number, fn: (client: PoolClient) => Promise<T>): Promise<T> {
+async function withSnapshot<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
-    await client.query("SET LOCAL ROLE accuqual_app");
-    await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [String(tenantId)]);
     return await fn(client);
   } finally {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -64,12 +59,12 @@ export interface ExportDescription {
 }
 
 /** What an export would contain right now, with row counts — shown to the administrator before they ask for one. */
-export async function describeExport(tenantId: number): Promise<ExportDescription> {
-  return withSnapshot(tenantId, async (client) => {
+export async function describeExport(): Promise<ExportDescription> {
+  return withSnapshot(async (client) => {
     const plan = await buildPlan(client);
     const tables: ExportDescription["tables"] = [];
     for (const t of plan.tables) {
-      const { rows } = await client.query(`SELECT count(*)::int AS n FROM ${q(t.table)} WHERE ${q(t.scopeColumn)} = $1`, [tenantId]);
+      const { rows } = await client.query(`SELECT count(*)::int AS n FROM ${q(t.table)}`);
       tables.push({ table: t.table, rows: Number(rows[0]?.n ?? 0), omittedColumns: t.omittedColumns });
     }
     return { tables, excluded: plan.excluded, totalRows: tables.reduce((s, t) => s + t.rows, 0) };
@@ -95,18 +90,18 @@ function csvField(value: unknown): string {
   return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
-async function* readTable(client: PoolClient, plan: TablePlan, tenantId: number, cap: number): AsyncGenerator<{ rows: Record<string, unknown>[]; truncated: boolean }> {
+async function* readTable(client: PoolClient, plan: TablePlan, cap: number): AsyncGenerator<{ rows: Record<string, unknown>[]; truncated: boolean }> {
   const cols = plan.columns.map(q).join(", ");
   let sent = 0;
   if (!plan.hasId) {
-    const { rows } = await client.query(`SELECT ${cols} FROM ${q(plan.table)} WHERE ${q(plan.scopeColumn)} = $1 LIMIT ${cap + 1}`, [tenantId]);
+    const { rows } = await client.query(`SELECT ${cols} FROM ${q(plan.table)} LIMIT ${cap + 1}`);
     yield { rows: rows.slice(0, cap), truncated: rows.length > cap };
     return;
   }
   let after = 0;
   for (;;) {
     const limit = Math.min(BATCH, cap - sent + 1);
-    const { rows } = await client.query(`SELECT ${cols} FROM ${q(plan.table)} WHERE ${q(plan.scopeColumn)} = $1 AND id > $2 ORDER BY id LIMIT ${limit}`, [tenantId, after]);
+    const { rows } = await client.query(`SELECT ${cols} FROM ${q(plan.table)} WHERE id > $1 ORDER BY id LIMIT ${limit}`, [after]);
     if (rows.length === 0) return;
     const overCap = sent + rows.length > cap;
     const usable = overCap ? rows.slice(0, cap - sent) : rows;
@@ -142,14 +137,14 @@ const write = (out: PassThrough, chunk: string): Promise<void> => (out.write(chu
 
 // ---- Files ------------------------------------------------------------------------------------------------------------------------------------
 
-/** The only place uploaded files may be read from for this tenant. */
-export function tenantStorageRoot(tenantId: number): string {
-  return path.resolve(env.STORAGE_LOCAL_PATH, "tenants", String(tenantId));
+/** The only place uploaded files may be read from. */
+export function storageRoot(): string {
+  return path.resolve(env.STORAGE_LOCAL_PATH);
 }
 
-/** Resolves a stored file path and refuses anything that is not inside the tenant's own folder (relative paths, `..`, other tenants' folders, absolute system paths). */
-export function resolveTenantFile(tenantId: number, stored: string): string | null {
-  const root = tenantStorageRoot(tenantId);
+/** Resolves a stored file path and refuses anything that is not inside the storage folder (`..`, absolute system paths). */
+export function resolveStoredFile(stored: string): string | null {
+  const root = storageRoot();
   const resolved = path.isAbsolute(stored) ? path.resolve(stored) : path.resolve(env.STORAGE_LOCAL_PATH, stored.replace(/^\/+/, ""));
   return resolved === root || resolved.startsWith(root + path.sep) ? resolved : null;
 }
@@ -159,7 +154,7 @@ export function resolveTenantFile(tenantId: number, stored: string): string | nu
 export interface ExportManifest {
   exportedAt: string;
   format: ExportFormat;
-  tenant: { id: number; name: string | null; code: string | null };
+  company: { name: string | null };
   exportedBy: { id: number; email: string };
   appVersion: string;
   includeFiles: boolean;
@@ -169,10 +164,10 @@ export interface ExportManifest {
   totalRows: number;
 }
 
-const README = (m: { tenantName: string; format: ExportFormat; includeFiles: boolean }) => `AccuQual data export — ${m.tenantName}
+const README = (m: { companyName: string; format: ExportFormat; includeFiles: boolean }) => `AccuQual data export — ${m.companyName}
 ${"=".repeat(60)}
 
-This archive holds the records your organization keeps in AccuQual.
+This archive holds the records your company keeps in AccuQual.
 
   manifest.json   what is in here: every table with its row count, anything left out and why
   data/           one ${m.format === "json" ? "JSON Lines (.jsonl — one record per line)" : "CSV (.csv)"} file per table
@@ -188,25 +183,25 @@ Notes
 
 /**
  * Writes the export into `archive` (which the caller has piped to the response). Streams table by table so memory
- * stays flat however large the tenant is. Returns the manifest (also written into the archive as manifest.json).
+ * stays flat however large the company is. Returns the manifest (also written into the archive as manifest.json).
  */
-export async function writeTenantExport(archive: Archiver, actor: ExportActor, opts: ExportOptions): Promise<ExportManifest> {
+export async function writeCompanyExport(archive: Archiver, actor: ExportActor, opts: ExportOptions): Promise<ExportManifest> {
   const rowCap = opts.rowCap ?? DEFAULT_ROW_CAP;
   const maxFileBytes = opts.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
   const maxSingleFileBytes = opts.maxSingleFileBytes ?? DEFAULT_MAX_SINGLE_FILE_BYTES;
 
-  return withSnapshot(actor.tenantId, async (client) => {
+  return withSnapshot(async (client) => {
     const plan: ExportPlan = await buildPlan(client);
-    const { rows: tenantRows } = await client.query("SELECT name, code FROM tenants WHERE id = $1", [actor.tenantId]);
-    const tenantName = (tenantRows[0]?.name as string | undefined) ?? null;
+    const { rows: companyRows } = await client.query("SELECT name FROM company LIMIT 1");
+    const companyName = (companyRows[0]?.name as string | undefined) ?? null;
     const ext = opts.format === "json" ? "jsonl" : "csv";
 
-    archive.append(README({ tenantName: tenantName ?? `tenant ${actor.tenantId}`, format: opts.format, includeFiles: opts.includeFiles }), { name: "README.txt" });
+    archive.append(README({ companyName: companyName ?? "your company", format: opts.format, includeFiles: opts.includeFiles }), { name: "README.txt" });
 
     const manifest: ExportManifest = {
       exportedAt: new Date().toISOString(),
       format: opts.format,
-      tenant: { id: actor.tenantId, name: tenantName, code: (tenantRows[0]?.code as string | undefined) ?? null },
+      company: { name: companyName },
       exportedBy: { id: actor.userId, email: actor.email },
       appVersion: env.APP_VERSION,
       includeFiles: opts.includeFiles,
@@ -224,7 +219,7 @@ export async function writeTenantExport(archive: Archiver, actor: ExportActor, o
       const file = `data/${t.table}.${ext}`;
       await appendStreamed(archive, file, async (out) => {
         if (opts.format === "csv") await write(out, `${t.columns.map((c) => csvField(c)).join(",")}\n`);
-        for await (const batch of readTable(client, t, actor.tenantId, rowCap)) {
+        for await (const batch of readTable(client, t, rowCap)) {
           truncated ||= batch.truncated;
           let chunk = "";
           for (const row of batch.rows) {
@@ -242,9 +237,9 @@ export async function writeTenantExport(archive: Archiver, actor: ExportActor, o
     if (opts.includeFiles) {
       let n = 0;
       for (const { table, stored } of fileRefs.values()) {
-        const resolved = resolveTenantFile(actor.tenantId, stored);
+        const resolved = resolveStoredFile(stored);
         if (!resolved) {
-          manifest.files.skipped.push({ path: stored, reason: "not one of this organization's uploaded files (built-in template or outside its storage folder)" });
+          manifest.files.skipped.push({ path: stored, reason: "not one of your uploaded files (built-in template or outside the storage folder)" });
           continue;
         }
         try {

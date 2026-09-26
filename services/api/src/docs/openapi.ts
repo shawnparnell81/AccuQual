@@ -35,7 +35,7 @@ function registerCrud(tag: string, basePath: string, createSchema: z.ZodTypeAny,
     method: "get",
     path: basePath,
     tags: [tag],
-    summary: `List ${tag} records for your tenant`,
+    summary: `List ${tag} records for your company`,
     responses: { 200: genericResponses[200] },
   });
   registry.registerPath({
@@ -199,7 +199,7 @@ export function buildOpenApiDocument() {
       version: "1.0.0",
       description:
         "Generated directly from this app's own Zod request-validation schemas (see each module's `*.validation.ts` / `*.routes.ts`) — not hand-written, so it can't drift from the real routes. " +
-        "Every endpoint requires `Authorization: Bearer <access token>`, scoped to your tenant and department the same way the app itself is. " +
+        "Every endpoint requires `Authorization: Bearer <access token>`, scoped to your company and department the same way the app itself is. " +
         "Starting coverage: NCR, CAPA, Documents, Training — the same four modules as the approved API Availability scope.",
     },
     servers: [{ url: "/api", description: "Same host as the app, under the /api prefix" }],

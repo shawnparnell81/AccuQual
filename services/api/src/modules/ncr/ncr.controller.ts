@@ -19,7 +19,6 @@ export const baseHandlers = crudFactory(ncr, {
     const row = created as { id: number; description: string | null; severity: string | null; createdAt: Date | string };
     await syncNcrFormData(
       req.db!,
-      req.tenantId!,
       row.id,
       {
         ncrNumber: `NCR-${row.id}`,
@@ -33,16 +32,16 @@ export const baseHandlers = crudFactory(ncr, {
   },
   afterUpdate: async (updated, req) => {
     const row = updated as { id: number; description: string | null; severity: string | null };
-    const patch: Parameters<typeof syncNcrFormData>[3] = {};
+    const patch: Parameters<typeof syncNcrFormData>[2] = {};
     if ("description" in req.body) patch.nonconformanceDescription = row.description ?? undefined;
     if ("severity" in req.body) patch.ncrClassification = mapSeverityToClassification(row.severity);
-    if (Object.keys(patch).length > 0) await syncNcrFormData(req.db!, req.tenantId!, row.id, patch, req.user?.id);
+    if (Object.keys(patch).length > 0) await syncNcrFormData(req.db!, row.id, patch, req.user?.id);
   },
 });
 
 /**
  * GET /ncr — Phase 8 adds optional `?receivingLineItemId=`/`?supplierId=`
- * filters on top of baseHandlers.list's plain "every NCR for this tenant"
+ * filters on top of baseHandlers.list's plain "every NCR for this company"
  * (the traceability chain — receiving → inventory → NCR → CAPA → warranty
  * — needs a real way to ask "which NCR(s) came from this receiving
  * event/supplier" without a client fetching every NCR and filtering
@@ -57,7 +56,7 @@ export const listHandler = asyncHandler(async (req: Request, res: Response) => {
     res.json([]);
     return;
   }
-  const conditions = [eq(ncr.tenantId, req.tenantId!), eq(ncr.isDeleted, false), eq(ncr.siteId, req.siteId)];
+  const conditions = [eq(ncr.isDeleted, false), eq(ncr.siteId, req.siteId)];
   if (receivingLineItemId) conditions.push(eq(ncr.receivingLineItemId, Number(receivingLineItemId)));
   if (supplierId) conditions.push(eq(ncr.supplierId, Number(supplierId)));
   const rows = await req.db!.select().from(ncr).where(and(...conditions));
@@ -65,26 +64,26 @@ export const listHandler = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const assignHandler = asyncHandler(async (req: Request, res: Response) => {
-  const updated = await ncrService.assign(req.db!, req.tenantId!, Number(req.params.id), req.body.assignedTo, req.user?.id, req.allowedSiteIds);
+  const updated = await ncrService.assign(req.db!, Number(req.params.id), req.body.assignedTo, req.user?.id, req.allowedSiteIds);
   res.json(updated);
 });
 
 export const containmentHandler = asyncHandler(async (req: Request, res: Response) => {
-  const updated = await ncrService.setContainment(req.db!, req.tenantId!, Number(req.params.id), req.body.containment, req.user?.id, req.allowedSiteIds);
+  const updated = await ncrService.setContainment(req.db!, Number(req.params.id), req.body.containment, req.user?.id, req.allowedSiteIds);
   res.json(updated);
 });
 
 export const rootCauseHandler = asyncHandler(async (req: Request, res: Response) => {
-  const updated = await ncrService.setRootCause(req.db!, req.tenantId!, Number(req.params.id), req.body.rootCause, req.user?.id, req.allowedSiteIds);
+  const updated = await ncrService.setRootCause(req.db!, Number(req.params.id), req.body.rootCause, req.user?.id, req.allowedSiteIds);
   res.json(updated);
 });
 
 export const correctiveActionHandler = asyncHandler(async (req: Request, res: Response) => {
-  const updated = await ncrService.setCorrectiveAction(req.db!, req.tenantId!, Number(req.params.id), req.body.correctiveAction, req.user?.id, req.allowedSiteIds);
+  const updated = await ncrService.setCorrectiveAction(req.db!, Number(req.params.id), req.body.correctiveAction, req.user?.id, req.allowedSiteIds);
   res.json(updated);
 });
 
 export const closeHandler = asyncHandler(async (req: Request, res: Response) => {
-  const updated = await ncrService.close(req.db!, req.tenantId!, Number(req.params.id), req.user?.id, req.allowedSiteIds);
+  const updated = await ncrService.close(req.db!, Number(req.params.id), req.user?.id, req.allowedSiteIds);
   res.json(updated);
 });

@@ -1,11 +1,11 @@
 import { Router } from "express";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { uploadAttachmentHandler, listAttachmentsHandler, downloadAttachmentHandler, deleteAttachmentHandler } from "./attachments.controller.js";
 
 export const attachmentsRouter = Router();
-attachmentsRouter.use(requireAuth, withTenantDb);
+attachmentsRouter.use(requireAuth, withDb);
 
 // memoryStorage: attachmentsController decides the on-disk path itself —
 // same convention as forms' template upload and calibration's certificate

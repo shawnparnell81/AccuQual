@@ -5,7 +5,7 @@ import { getRequestContext } from "./requestContext.js";
 /**
  * Error tracking (opt-in). With SENTRY_DSN unset every function here is a no-op, so nothing changes for a deployment
  * that doesn't use it. Set it and unhandled errors, failed 5xx requests and crashes arrive in Sentry with the request
- * id, tenant id and user id attached — ids only. Request bodies, headers, cookies and query strings never leave the
+ * id and user id attached — ids only. Request bodies, headers, cookies and query strings never leave the
  * server: a quality system's payloads are customers' records, and a stack trace is enough to fix a bug.
  */
 let enabled = false;
@@ -47,7 +47,6 @@ export function captureError(err: unknown, extra: Record<string, unknown> = {}):
     const ctx = getRequestContext();
     Sentry.withScope((scope) => {
       if (ctx?.requestId) scope.setTag("request_id", ctx.requestId);
-      if (ctx?.tenantId !== undefined) scope.setTag("tenant_id", String(ctx.tenantId));
       if (ctx?.userId !== undefined) scope.setUser({ id: String(ctx.userId) });
       scope.setExtras(extra);
       Sentry.captureException(err);

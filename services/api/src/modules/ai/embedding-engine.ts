@@ -2,27 +2,27 @@ import { and, eq, sql } from "drizzle-orm";
 import { aiEmbeddings } from "../../drizzle/schema/ai.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 /**
  * Generates a text embedding and upserts it into the pgvector-backed
  * `ai_embeddings` table so records (NCRs, CAPA actions, audit findings,
  * supplier issues, training materials, documents) can be retrieved by
- * semantic similarity for the AI pipelines below. Always tenant-scoped —
- * per the Multi-Tenant Patch Pack, embeddings and retrieval must never mix
- * data across tenants.
+ * semantic similarity for the AI pipelines below. Always company-scoped —
+ * per the Multi-Company Patch Pack, embeddings and retrieval must never mix
+ * data across companies.
  */
-export async function embedAndStore(db: TenantDb, tenantId: number, entityType: string, entityId: number, content: string): Promise<void> {
+export async function embedAndStore(db: Db, entityType: string, entityId: number, content: string): Promise<void> {
   const embedding = await generateEmbedding(content);
-  await db.insert(aiEmbeddings).values({ tenantId, entityType, entityId, content, embedding });
+  await db.insert(aiEmbeddings).values({ entityType, entityId, content, embedding });
 }
 
-export async function findSimilar(db: TenantDb, tenantId: number, entityType: string, content: string, limit = 5) {
+export async function findSimilar(db: Db, entityType: string, content: string, limit = 5) {
   const embedding = await generateEmbedding(content);
   return db
     .select()
     .from(aiEmbeddings)
-    .where(and(eq(aiEmbeddings.tenantId, tenantId), sql`${aiEmbeddings.entityType} = ${entityType}`))
+    .where(and(sql`${aiEmbeddings.entityType} = ${entityType}`))
     .orderBy(sql`${aiEmbeddings.embedding} <-> ${JSON.stringify(embedding)}`)
     .limit(limit);
 }

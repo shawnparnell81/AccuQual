@@ -22,7 +22,7 @@ services:
       # 64 hex chars (32 bytes) — generate with `openssl rand -hex 32`.
       # The boot guard in config/env.ts refuses to start in production on
       # the schema default, so this MUST be set to a real value here.
-      - key: TENANT_AI_CONFIG_ENCRYPTION_KEY
+      - key: AI_CONFIG_ENCRYPTION_KEY
         sync: false
       - key: ALLOWED_ORIGINS
         fromService:
@@ -158,10 +158,10 @@ services:
       - key: JWT_REFRESH_SECRET
         generateValue: true
       # Same real value as accuqual-api's, not a fresh one — this worker's
-      # ai_suggestion action handler decrypts tenant BYOK keys that were
+      # ai_suggestion action handler decrypts company BYOK keys that were
       # encrypted under accuqual-api's key; a different value here would
       # make every decryption fail, not just be redundant.
-      - key: TENANT_AI_CONFIG_ENCRYPTION_KEY
+      - key: AI_CONFIG_ENCRYPTION_KEY
         sync: false
       # ZeptoMail (agent qms_transactional) Send Mail token — the preferred
       # delivery path; takes precedence over SMTP_* below. Same value as
@@ -182,7 +182,7 @@ services:
       - key: SMTP_FROM
         sync: false
       # Optional — the platform-wide fallback key an ai_suggestion action
-      # uses when the triggering tenant has no BYOK key of its own
+      # uses when the triggering company has no BYOK key of its own
       # configured. Same values as accuqual-api's, if set there.
       - key: ANTHROPIC_API_KEY
         sync: false
@@ -210,10 +210,10 @@ services:
         generateValue: true
       - key: JWT_REFRESH_SECRET
         generateValue: true
-      - key: TENANT_AI_CONFIG_ENCRYPTION_KEY
+      - key: AI_CONFIG_ENCRYPTION_KEY
         sync: false
       # embedding-engine.ts always calls OpenAI's embeddings API
-      # specifically, regardless of a tenant's own LLM_PROVIDER choice —
+      # specifically, regardless of a company's own LLM_PROVIDER choice —
       # unset means this worker logs a warning and falls back to a
       # deterministic pseudo-embedding (fine for dev, not real semantic
       # search in production).
@@ -241,5 +241,5 @@ services:
         generateValue: true
       - key: JWT_REFRESH_SECRET
         generateValue: true
-      - key: TENANT_AI_CONFIG_ENCRYPTION_KEY
+      - key: AI_CONFIG_ENCRYPTION_KEY
         sync: false

@@ -6,12 +6,12 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { runPipelineAndRecord } from "../ai/ai.usage.js";
 import * as pipelines from "../ai/ai.pipelines.js";
 import { reportSchedules } from "../../drizzle/schema/reporting.js";
-import { tenants } from "../../drizzle/schema/tenants.js";
+import { company } from "../../drizzle/schema/company.js";
 import { users } from "../../drizzle/schema/users.js";
 import * as reportingService from "./reporting.service.js";
 import { computeNextRunAt, runReportSchedule } from "./reporting.scheduler.js";
 import { toCsv, toExcel, toPdf, type ExportableReport } from "./reporting.export.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import type { DateRange } from "./reporting.service.js";
 
 function parseRange(req: Request): DateRange {
@@ -21,51 +21,50 @@ function parseRange(req: Request): DateRange {
 }
 
 export const ncrMetricsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getNcrMetrics(req.db! as TenantDb, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getNcrMetrics(req.db! as Db, parseRange(req)));
 });
 
 export const capaMetricsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getCapaMetrics(req.db! as TenantDb, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getCapaMetrics(req.db! as Db, parseRange(req)));
 });
 
 export const supplierPerformanceReportHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getSupplierPerformanceReport(req.db! as TenantDb, req.tenantId!));
+  res.json(await reportingService.getSupplierPerformanceReport(req.db! as Db));
 });
 
 export const warrantyTrendsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getWarrantyTrends(req.db! as TenantDb, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getWarrantyTrends(req.db! as Db, parseRange(req)));
 });
 
 export const receivingTrendsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getReceivingTrends(req.db! as TenantDb, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getReceivingTrends(req.db! as Db, parseRange(req)));
 });
 
 export const inventoryQualityTrendsHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getInventoryQualityTrends(req.db! as TenantDb, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getInventoryQualityTrends(req.db! as Db, parseRange(req)));
 });
 
 export const workflowCycleTimeHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await reportingService.getWorkflowCycleTimeMetrics(req.db! as TenantDb, req.tenantId!, parseRange(req)));
+  res.json(await reportingService.getWorkflowCycleTimeMetrics(req.db! as Db, parseRange(req)));
 });
 
 // ---------------------------------------------------------------------------
 // AI-assisted report summaries — always a suggestion over already-real,
 // already-aggregated data; never written back into any stored report.
 // ---------------------------------------------------------------------------
-const SUMMARY_INPUT_LOADERS: Record<string, (db: TenantDb, tenantId: number) => Promise<unknown>> = {
-  quality_trends: (db, tenantId) => reportingService.getNcrMetrics(db, tenantId),
-  supplier_risk_changes: (db, tenantId) => reportingService.getSupplierPerformanceReport(db, tenantId),
-  warranty_patterns: (db, tenantId) => reportingService.getWarrantyTrends(db, tenantId),
-  production_deviations: (db, tenantId) => reportingService.getInventoryQualityTrends(db, tenantId),
+const SUMMARY_INPUT_LOADERS: Record<string, (db: Db) => Promise<unknown>> = {
+  quality_trends: (db) => reportingService.getNcrMetrics(db),
+  supplier_risk_changes: (db) => reportingService.getSupplierPerformanceReport(db),
+  warranty_patterns: (db) => reportingService.getWarrantyTrends(db),
+  production_deviations: (db) => reportingService.getInventoryQualityTrends(db),
 };
 
 export const reportSummaryHandler = asyncHandler(async (req: Request, res: Response) => {
   const { kind } = req.body as { kind: string };
-  const db = req.db! as TenantDb;
-  const tenantId = req.tenantId!;
-  const input = await SUMMARY_INPUT_LOADERS[kind]!(db, tenantId);
+  const db = req.db! as Db;
+  const input = await SUMMARY_INPUT_LOADERS[kind]!(db, );
 
-  const { suggestion, output } = await runPipelineAndRecord(db, tenantId, req.user?.id, "reporting", `report_summary_${kind}`, { kind, input }, "AI-generated report summary", (opts) =>
+  const { suggestion, output } = await runPipelineAndRecord(db, req.user?.id, "reporting", `report_summary_${kind}`, { kind, input }, "AI-generated report summary", (opts) =>
     pipelines.runReportSummaryPipeline(kind, input, opts)
   );
   res.json({ ...suggestion, output });
@@ -75,7 +74,7 @@ export const reportSummaryHandler = asyncHandler(async (req: Request, res: Respo
 // Scheduled reports — CRUD + manual "Send Now" dispatch.
 // ---------------------------------------------------------------------------
 export const listReportSchedulesHandler = asyncHandler(async (req: Request, res: Response) => {
-  const rows = await req.db!.select().from(reportSchedules).where(eq(reportSchedules.tenantId, req.tenantId!));
+  const rows = await req.db!.select().from(reportSchedules);
   res.json(rows);
 });
 
@@ -83,15 +82,15 @@ export const createReportScheduleHandler = asyncHandler(async (req: Request, res
   const { reportType, frequency, recipients, enabled } = req.body as { reportType: string; frequency: "daily" | "weekly" | "monthly"; recipients: string[]; enabled?: boolean };
   const [created] = await req
     .db!.insert(reportSchedules)
-    .values({ tenantId: req.tenantId!, reportType, frequency, recipients, enabled: enabled ?? true, nextRunAt: computeNextRunAt(frequency), createdBy: req.user?.id })
+    .values({ reportType, frequency, recipients, enabled: enabled ?? true, nextRunAt: computeNextRunAt(frequency), createdBy: req.user?.id })
     .returning();
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "ReportSchedule", entityId: created!.id, action: "create", changes: { reportType, frequency, recipients }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "ReportSchedule", entityId: created!.id, action: "create", changes: { reportType, frequency, recipients }, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
 async function loadSchedule(req: Request, id: number) {
-  const [row] = await req.db!.select().from(reportSchedules).where(and(eq(reportSchedules.id, id), eq(reportSchedules.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(reportSchedules).where(and(eq(reportSchedules.id, id)));
   if (!row) throw AppError.notFound("ReportSchedule");
   return row;
 }
@@ -107,14 +106,14 @@ export const updateReportScheduleHandler = asyncHandler(async (req: Request, res
     .where(eq(reportSchedules.id, existing.id))
     .returning();
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "ReportSchedule", entityId: existing.id, action: "update", changes: patch, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "ReportSchedule", entityId: existing.id, action: "update", changes: patch, performedBy: req.user?.id });
   res.json(updated);
 });
 
 export const deleteReportScheduleHandler = asyncHandler(async (req: Request, res: Response) => {
   const existing = await loadSchedule(req, Number(req.params.id));
   await req.db!.delete(reportSchedules).where(eq(reportSchedules.id, existing.id));
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "ReportSchedule", entityId: existing.id, action: "delete", changes: { reportType: existing.reportType }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "ReportSchedule", entityId: existing.id, action: "delete", changes: { reportType: existing.reportType }, performedBy: req.user?.id });
   res.status(204).send();
 });
 
@@ -131,33 +130,33 @@ export const sendReportScheduleNowHandler = asyncHandler(async (req: Request, re
 // the underlying data (see reporting.routes.ts), and every format carries
 // the same audit-metadata line ("Ensure exports include audit metadata").
 // ---------------------------------------------------------------------------
-const EXPORT_BUILDERS: Record<string, (db: TenantDb, tenantId: number, range: DateRange) => Promise<Omit<ExportableReport, "generatedAt" | "generatedBy" | "tenantName">>> = {
-  "ncr-metrics": async (db, tenantId, range) => {
-    const m = await reportingService.getNcrMetrics(db, tenantId, range);
+const EXPORT_BUILDERS: Record<string, (db: Db, range: DateRange) => Promise<Omit<ExportableReport, "generatedAt" | "generatedBy" | "companyName">>> = {
+  "ncr-metrics": async (db, range) => {
+    const m = await reportingService.getNcrMetrics(db, range);
     return { title: "NCR Summary", columns: ["Status", "Count"], rows: m.byStatus.map((s) => [s.status, s.count]) };
   },
-  "capa-metrics": async (db, tenantId, range) => {
-    const m = await reportingService.getCapaMetrics(db, tenantId, range);
+  "capa-metrics": async (db, range) => {
+    const m = await reportingService.getCapaMetrics(db, range);
     return { title: "CAPA Summary", columns: ["Status", "Count"], rows: m.byStatus.map((s) => [s.status, s.count]) };
   },
-  "supplier-performance": async (db, tenantId) => {
-    const r = await reportingService.getSupplierPerformanceReport(db, tenantId);
+  "supplier-performance": async (db) => {
+    const r = await reportingService.getSupplierPerformanceReport(db);
     return {
       title: "Supplier Scorecard",
       columns: ["Supplier", "Risk", "Avg Delivery (days)", "Accuracy (%)"],
       rows: r.suppliers.map((s) => [s.name, s.riskScore, s.onTimeAvgDays ?? "n/a", s.accuracyAvgPercent ?? "n/a"]),
     };
   },
-  "warranty-trends": async (db, tenantId, range) => {
-    const m = await reportingService.getWarrantyTrends(db, tenantId, range);
+  "warranty-trends": async (db, range) => {
+    const m = await reportingService.getWarrantyTrends(db, range);
     return { title: "Warranty / RMA Summary", columns: ["Status", "Count"], rows: m.byStatus.map((s) => [s.status, s.count]) };
   },
-  "receiving-trends": async (db, tenantId, range) => {
-    const m = await reportingService.getReceivingTrends(db, tenantId, range);
+  "receiving-trends": async (db, range) => {
+    const m = await reportingService.getReceivingTrends(db, range);
     return { title: "Receiving Inspection Summary", columns: ["Final Status", "Count"], rows: m.byFinalStatus.map((s) => [s.status, s.count]) };
   },
-  "inventory-quality-trends": async (db, tenantId, range) => {
-    const m = await reportingService.getInventoryQualityTrends(db, tenantId, range);
+  "inventory-quality-trends": async (db, range) => {
+    const m = await reportingService.getInventoryQualityTrends(db, range);
     const scrapByMonth = new Map(m.scrapByMonth.map((s) => [s.month, s.quantity]));
     const consumptionByMonth = new Map(m.consumptionByMonth.map((s) => [s.month, s.quantity]));
     const months = [...new Set([...scrapByMonth.keys(), ...consumptionByMonth.keys()])].sort();
@@ -175,23 +174,21 @@ export const exportReportHandler = asyncHandler(async (req: Request, res: Respon
   const builder = EXPORT_BUILDERS[reportKey];
   if (!builder) throw AppError.badRequest(`Unknown report "${reportKey}"`);
 
-  const db = req.db! as TenantDb;
-  const tenantId = req.tenantId!;
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+  const db = req.db! as Db;
+  const [co] = await db.select().from(company);
   const [performer] = req.user?.id ? await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, req.user.id)) : [undefined];
 
-  const partial = await builder(db, tenantId, parseRange(req));
+  const partial = await builder(db, parseRange(req));
   const report: ExportableReport = {
     ...partial,
     generatedAt: new Date(),
     generatedBy: performer?.name || performer?.email || `User #${req.user?.id}`,
-    tenantName: tenant?.name ?? `Tenant #${tenantId}`,
+    companyName: co?.name ?? "AccuQual",
   };
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "ReportExport",
-    entityId: tenantId,
+    entityId: 1,
     action: "create",
     changes: { reportKey, format, rowCount: report.rows.length },
     performedBy: req.user?.id,

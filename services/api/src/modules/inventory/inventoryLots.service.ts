@@ -1,5 +1,5 @@
 import { and, eq, desc } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { inventoryLots, type InventoryLot } from "../../drizzle/schema/inventoryLots.js";
 import { inventoryItems, inventoryMovements } from "../../drizzle/schema/inventory.js";
 import { erpReceivingLineItems, erpPoLineItems, erpPurchaseOrders } from "../../drizzle/schema/erp.js";
@@ -23,17 +23,17 @@ export interface ReceiveLotInput {
 /**
  * The one real per-lot ledger write path — called from erp.service.ts's
  * createReceivingDocument (see that file's own comment) whenever a
- * receiving line item carries a lot number. Upserts by (tenantId, itemId,
+ * receiving line item carries a lot number. Upserts by (itemId,
  * lotNumber): a second receipt against the SAME lot number (a real case —
  * a partial shipment split across two receiving documents) adds to the
  * existing lot's received/remaining quantity rather than creating a
  * confusing second row for the same physical lot.
  */
-export async function receiveIntoLot(db: TenantDb, tenantId: number, input: ReceiveLotInput): Promise<InventoryLot> {
+export async function receiveIntoLot(db: Db, input: ReceiveLotInput): Promise<InventoryLot> {
   const [existing] = await db
     .select()
     .from(inventoryLots)
-    .where(and(eq(inventoryLots.tenantId, tenantId), eq(inventoryLots.itemId, input.itemId), eq(inventoryLots.lotNumber, input.lotNumber)));
+    .where(and(eq(inventoryLots.itemId, input.itemId), eq(inventoryLots.lotNumber, input.lotNumber)));
 
   if (existing) {
     const [updated] = await db
@@ -60,14 +60,13 @@ export async function receiveIntoLot(db: TenantDb, tenantId: number, input: Rece
     // Same "module: inventory" convention inventory.service.ts's own
     // state-change events already use, new event name for the lot-specific
     // hop.
-    await publishEvent(WORKFLOW_STREAM, { tenantId, module: "inventory", event: "lot-received", entityId: updated!.id });
+    await publishEvent(WORKFLOW_STREAM, { module: "inventory", event: "lot-received", entityId: updated!.id });
     return updated!;
   }
 
   const [created] = await db
     .insert(inventoryLots)
     .values({
-      tenantId,
       itemId: input.itemId,
       lotNumber: input.lotNumber,
       serialNumber: input.serialNumber,
@@ -80,7 +79,7 @@ export async function receiveIntoLot(db: TenantDb, tenantId: number, input: Rece
       remainingQty: String(input.quantity),
     })
     .returning();
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "inventory", event: "lot-received", entityId: created!.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "inventory", event: "lot-received", entityId: created!.id });
   return created!;
 }
 
@@ -93,8 +92,8 @@ export async function receiveIntoLot(db: TenantDb, tenantId: number, input: Rece
  * movement — the underlying inventory_stock on-hand check is still the
  * real gate on whether this movement is allowed at all).
  */
-export async function consumeFromLot(db: TenantDb, tenantId: number, lotId: number, quantity: number): Promise<void> {
-  const [lot] = await db.select().from(inventoryLots).where(and(eq(inventoryLots.id, lotId), eq(inventoryLots.tenantId, tenantId)));
+export async function consumeFromLot(db: Db, lotId: number, quantity: number): Promise<void> {
+  const [lot] = await db.select().from(inventoryLots).where(and(eq(inventoryLots.id, lotId)));
   if (!lot) throw AppError.badRequest(`Lot #${lotId} not found`);
   // Second layer behind applyMovement's own check: never draw down units that are on quarantine hold.
   if (Number(lot.heldQty) > 0 && Number(lot.remainingQty) - Number(lot.heldQty) < quantity) {
@@ -109,15 +108,15 @@ export async function consumeFromLot(db: TenantDb, tenantId: number, lotId: numb
   // lot (its own real, distinct state change), and "lot-consumed" for every
   // other partial draw, so a workflow definition can distinguish the two
   // without re-deriving remainingQty itself.
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "inventory", event: nextStatus === "consumed" ? "lot-exhausted" : "lot-consumed", entityId: lotId });
+  await publishEvent(WORKFLOW_STREAM, { module: "inventory", event: nextStatus === "consumed" ? "lot-exhausted" : "lot-consumed", entityId: lotId });
 }
 
-export async function getItemLots(db: TenantDb, tenantId: number, itemId: number): Promise<InventoryLot[]> {
-  return db.select().from(inventoryLots).where(and(eq(inventoryLots.tenantId, tenantId), eq(inventoryLots.itemId, itemId))).orderBy(desc(inventoryLots.createdAt));
+export async function getItemLots(db: Db, itemId: number): Promise<InventoryLot[]> {
+  return db.select().from(inventoryLots).where(and(eq(inventoryLots.itemId, itemId))).orderBy(desc(inventoryLots.createdAt));
 }
 
-async function loadLot(db: TenantDb, tenantId: number, lotId: number): Promise<InventoryLot> {
-  const [lot] = await db.select().from(inventoryLots).where(and(eq(inventoryLots.id, lotId), eq(inventoryLots.tenantId, tenantId)));
+async function loadLot(db: Db, lotId: number): Promise<InventoryLot> {
+  const [lot] = await db.select().from(inventoryLots).where(and(eq(inventoryLots.id, lotId)));
   if (!lot) throw AppError.notFound("InventoryLot");
   return lot;
 }
@@ -134,11 +133,11 @@ async function loadLot(db: TenantDb, tenantId: number, lotId: number): Promise<I
  * to complete the chain, keeping this query from having to know about every
  * downstream module.
  */
-export async function getLotTraceability(db: TenantDb, tenantId: number, lotId: number) {
-  const lot = await loadLot(db, tenantId, lotId);
+export async function getLotTraceability(db: Db, lotId: number) {
+  const lot = await loadLot(db, lotId);
 
   const [movements, receivingLine, supplier, [item]] = await Promise.all([
-    db.select().from(inventoryMovements).where(and(eq(inventoryMovements.tenantId, tenantId), eq(inventoryMovements.lotId, lotId))).orderBy(desc(inventoryMovements.performedAt)),
+    db.select().from(inventoryMovements).where(and(eq(inventoryMovements.lotId, lotId))).orderBy(desc(inventoryMovements.performedAt)),
     lot.receivingLineItemId
       ? db
           .select({
@@ -148,10 +147,10 @@ export async function getLotTraceability(db: TenantDb, tenantId: number, lotId: 
             poLineItemId: erpReceivingLineItems.poLineItemId,
           })
           .from(erpReceivingLineItems)
-          .where(and(eq(erpReceivingLineItems.id, lot.receivingLineItemId), eq(erpReceivingLineItems.tenantId, tenantId)))
+          .where(and(eq(erpReceivingLineItems.id, lot.receivingLineItemId)))
       : Promise.resolve([]),
     lot.supplierId ? db.select({ id: suppliers.id, name: suppliers.name }).from(suppliers).where(eq(suppliers.id, lot.supplierId)) : Promise.resolve([]),
-    db.select({ id: inventoryItems.id, sku: inventoryItems.sku, description: inventoryItems.description, itemType: inventoryItems.itemType }).from(inventoryItems).where(and(eq(inventoryItems.id, lot.itemId), eq(inventoryItems.tenantId, tenantId))),
+    db.select({ id: inventoryItems.id, sku: inventoryItems.sku, description: inventoryItems.description, itemType: inventoryItems.itemType }).from(inventoryItems).where(and(eq(inventoryItems.id, lot.itemId))),
   ]);
 
   const receivingLineItem = receivingLine[0];
@@ -159,16 +158,16 @@ export async function getLotTraceability(db: TenantDb, tenantId: number, lotId: 
   let purchaseOrder = null;
   let inspectionReport = null;
   if (receivingLineItem) {
-    const [poLine] = await db.select().from(erpPoLineItems).where(and(eq(erpPoLineItems.id, receivingLineItem.poLineItemId), eq(erpPoLineItems.tenantId, tenantId)));
+    const [poLine] = await db.select().from(erpPoLineItems).where(and(eq(erpPoLineItems.id, receivingLineItem.poLineItemId)));
     poLineItem = poLine ?? null;
     if (poLine) {
-      const [po] = await db.select().from(erpPurchaseOrders).where(and(eq(erpPurchaseOrders.id, poLine.purchaseOrderId), eq(erpPurchaseOrders.tenantId, tenantId)));
+      const [po] = await db.select().from(erpPurchaseOrders).where(and(eq(erpPurchaseOrders.id, poLine.purchaseOrderId)));
       purchaseOrder = po ?? null;
     }
     const [report] = await db
       .select()
       .from(qualityInspectionReports)
-      .where(and(eq(qualityInspectionReports.receivingLineItemId, receivingLineItem.id), eq(qualityInspectionReports.tenantId, tenantId)));
+      .where(and(eq(qualityInspectionReports.receivingLineItemId, receivingLineItem.id)));
     inspectionReport = report ?? null;
   }
 

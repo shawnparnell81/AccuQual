@@ -5,8 +5,8 @@ import { createClient, type RedisClientType } from "redis";
  *
  * A single bad message must never take down the whole worker — found live
  * (not in review) when this exact thing happened: an integration test
- * creates a tenant, queues an embed job for a record in it, then deletes
- * the tenant in its own cleanup before the worker got to the job, and the
+ * creates a company, queues an embed job for a record in it, then deletes
+ * the company in its own cleanup before the worker got to the job, and the
  * resulting FK violation propagated straight out of this function and
  * crashed the process (nothing else consumed AI jobs again until someone
  * noticed and restarted it by hand). The message is still ack'd either way

@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Covers the two things settings-module.test.ts's own ERP Sync section
 // doesn't: trigger-rule filtering (an `event` on POST /settings/erp-sync/trigger
 // deciding which enabled modules' active preset actually gets mapped this
@@ -12,7 +13,7 @@ import request from "supertest";
 import { eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { suppliers } from "../../src/drizzle/schema/supplier.js";
 import { erpConnectorPresets } from "../../src/drizzle/schema/erpPresets.js";
@@ -22,18 +23,18 @@ import { signAccessToken } from "../../src/utils/jwt.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let adminToken: string;
 const userIds: number[] = [];
 const presetIds: number[] = [];
 
 async function makeAdmin() {
-  const [user] = await db.insert(users).values({ tenantId, email: `erp-sync-triggers-${suffix}@test.local`, passwordHash: "unused" }).returning();
+  const [user] = await db.insert(users).values({ email: `erp-sync-triggers-${suffix}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName: "admin", department: null });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName: "admin", department: null });
 }
 
-/** Starts a real local HTTP server standing in for the tenant's configured webhook — same pattern as settings-module.test.ts's own ERP Sync test. */
+/** Starts a real local HTTP server standing in for the company's configured webhook — same pattern as settings-module.test.ts's own ERP Sync test. */
 async function startWebhookServer() {
   const received: unknown[] = [];
   const server = createServer((req, res) => {
@@ -56,11 +57,11 @@ describe("ERP Sync trigger filtering + preset cache freshness (real DB + real HT
   let presetBId: number;
 
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `ERP Sync Triggers Tenant ${suffix}`, code: `erp-sync-triggers-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
     adminToken = await makeAdmin();
 
-    await db.insert(suppliers).values({ tenantId, name: "Trigger Test Supplier", status: "active" });
+    await db.insert(suppliers).values({ name: "Trigger Test Supplier", status: "active" });
 
     webhook = await startWebhookServer();
     await request(app)
@@ -85,11 +86,6 @@ describe("ERP Sync trigger filtering + preset cache freshness (real DB + real HT
   afterAll(async () => {
     await webhook.close();
     await new Promise((r) => setTimeout(r, 300)); // same fire-and-forget audit-trail race settings-module.test.ts's own afterAll works around
-    await db.delete(auditTrail).where(inArray(auditTrail.performedBy, userIds));
-    for (const id of presetIds) await db.delete(erpConnectorPresets).where(eq(erpConnectorPresets.id, id));
-    await db.delete(suppliers).where(eq(suppliers.tenantId, tenantId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 

@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Saved list-view search filters: GET/PATCH /users/me/saved-views — self-only, merge-patch per page key (mirrors
 // /users/me/theme's merge-patch shape exactly, just keyed by page id instead of a fixed theme field).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -6,7 +7,7 @@ import { eq } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
@@ -14,22 +15,22 @@ import { signAccessToken } from "../../src/utils/jwt.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let userAId: number;
 let userBId: number;
 let tokenA: string;
 let tokenB: string;
 
 async function makeUser(label: string) {
-  const [user] = await db.insert(users).values({ tenantId, email: `saved-views-${label}-${suffix}@test.local`, passwordHash: "unused" }).returning();
-  const token = await signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName: "operator", department: null });
+  const [user] = await db.insert(users).values({ email: `saved-views-${label}-${suffix}@test.local`, passwordHash: "unused" }).returning();
+  const token = await signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department: null });
   return { id: user!.id, token };
 }
 
 describe("Saved list-view filters (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Saved Views Test ${suffix}`, code: `saved-views-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
     const a = await makeUser("a");
     const b = await makeUser("b");
     userAId = a.id;
@@ -39,10 +40,6 @@ describe("Saved list-view filters (real DB + real HTTP path)", () => {
   });
 
   afterAll(async () => {
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(users).where(eq(users.id, userAId));
-    await db.delete(users).where(eq(users.id, userBId));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
@@ -81,7 +78,7 @@ describe("Saved list-view filters (real DB + real HTTP path)", () => {
     expect(patch.body["ncr-list"]).toEqual([{ label: "Open, mine", searchText: "open" }]);
   });
 
-  it("is scoped to the caller's own row — a different user in the same tenant sees none of it", async () => {
+  it("is scoped to the caller's own row — a different user in the same company sees none of it", async () => {
     const res = await request(app).get("/users/me/saved-views").set("Authorization", `Bearer ${tokenB}`);
     expect(res.body).toEqual({});
   });

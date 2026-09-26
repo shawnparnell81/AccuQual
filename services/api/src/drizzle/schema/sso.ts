@@ -1,15 +1,13 @@
 import { pgTable, serial, integer, text, boolean, timestamp, unique } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 import { roles } from "./roles.js";
 
 /**
- * A tenant's single-sign-on connection (OpenID Connect). One per tenant.
- * The client secret is AES-256-GCM ciphertext (tenant/crypto.ts), never returned by any GET.
+ * A company's single-sign-on connection (OpenID Connect). One per company.
+ * The client secret is AES-256-GCM ciphertext (company/crypto.ts), never returned by any GET.
  */
 export const ssoConnections = pgTable("sso_connections", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull().unique(),
   displayName: text("display_name").notNull().default("Single sign-on"),
   issuer: text("issuer").notNull(),
   clientId: text("client_id").notNull(),
@@ -28,21 +26,20 @@ export const ssoConnections = pgTable("sso_connections", {
 });
 
 /**
- * An email domain the tenant has proven it controls (DNS TXT record). SSO only
+ * An email domain the company has proven it controls (DNS TXT record). SSO only
  * accepts identities whose email is on a verified domain, so a misconfigured or
- * hostile identity provider cannot vouch for an address the tenant does not own.
+ * hostile identity provider cannot vouch for an address the company does not own.
  */
 export const ssoDomains = pgTable(
   "sso_domains",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     domain: text("domain").notNull(),
     verificationToken: text("verification_token").notNull(),
     verifiedAt: timestamp("verified_at"),
     createdAt: timestamp("created_at").defaultNow(),
   },
-  (t) => ({ uniqueDomainPerTenant: unique("sso_domains_tenant_domain_uq").on(t.tenantId, t.domain) }),
+  (t) => ({ uniqueDomain: unique("sso_domains_domain_uq").on(t.domain) }),
 );
 
 /** Links a local user to their identity at the provider (the stable `sub`, not the mutable email). */
@@ -50,7 +47,6 @@ export const userIdentities = pgTable(
   "user_identities",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     userId: integer("user_id").references(() => users.id).notNull(),
     connectionId: integer("connection_id").references(() => ssoConnections.id, { onDelete: "cascade" }).notNull(),
     subject: text("subject").notNull(),

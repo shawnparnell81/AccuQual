@@ -32,7 +32,7 @@ const envSchema = z.object({
   LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().min(1).default(15),
   // Rejects passwords found in known breaches via the Have I Been Pwned range API (k-anonymity: only the first 5 hex chars of the SHA-1 leave the server). Fails open if the service is unreachable. Defaults to on, except under test.
   PASSWORD_BREACH_CHECK: z.enum(["true", "false"]).optional(),
-  // How long a user whose tenant policy newly requires MFA may keep signing in before they must enroll. platform_admin accounts get none.
+  // How long a user whose company policy newly requires MFA may keep signing in before they must enroll.
   MFA_ENROLLMENT_GRACE_DAYS: z.coerce.number().int().min(0).default(7),
   // Public base URL of this API as the browser sees it — where the identity provider sends users back after SSO sign-in (`<this>/auth/sso/callback`). Defaults to FRONTEND_URL + "/api", which is how the bundled nginx proxies it; set it when the API lives on its own origin (e.g. Render).
   API_PUBLIC_URL: z.string().optional(),
@@ -58,13 +58,13 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   LLM_MODEL: z.string().default("claude-haiku-4-5-20251001"),
 
-  // AES-256-GCM key for encrypting a tenant's own stored AI provider API key
-  // at rest (see modules/tenant/crypto.ts) — real encryption, not a fictional
+  // AES-256-GCM key for encrypting a company's own stored AI provider API key
+  // at rest (see modules/company/crypto.ts) — real encryption, not a fictional
   // "external key management service". Must be exactly 32 bytes; generate
   // with `openssl rand -hex 32`. Defaulted only so a fresh dev checkout
   // doesn't hard-fail before anyone has set one — never rely on the default
   // outside local dev.
-  TENANT_AI_CONFIG_ENCRYPTION_KEY: z
+  AI_CONFIG_ENCRYPTION_KEY: z
     .string()
     .length(64, "must be 64 hex chars (32 bytes) — generate with `openssl rand -hex 32`")
     .default("00".repeat(32)),
@@ -101,16 +101,6 @@ const envSchema = z.object({
   // then to log-only. Accepts the token with or without the
   // "Zoho-enczapikey " prefix ZeptoMail's dashboard shows.
   ZEPTOMAIL_SEND_TOKEN: z.string().optional(),
-
-  // Stripe billing (modules/billing) — all optional. With no STRIPE_SECRET_KEY the Billing page says billing is not set up
-  // instead of pretending; nothing else in the app depends on these. STRIPE_WEBHOOK_SECRET is the signing secret of the
-  // webhook endpoint pointing at <api>/billing/webhook. Each STRIPE_PRICE_* is the Stripe price id for that plan; a plan whose
-  // price id is unset cannot be bought yet (pricing is decided in Stripe, not in code).
-  STRIPE_SECRET_KEY: z.string().optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().optional(),
-  STRIPE_PRICE_FOUNDATION: z.string().optional(),
-  STRIPE_PRICE_OPERATIONS: z.string().optional(),
-  STRIPE_PRICE_ENTERPRISE: z.string().optional(),
   // Where the public website contact form delivers. Unset = the form answers "not switched on" instead of pretending to send.
   CONTACT_INBOX_EMAIL: z.string().email().optional(),
 
@@ -150,16 +140,16 @@ const DEFAULT_ENCRYPTION_KEY = "00".repeat(32);
 /**
  * Boot-time guard (Inspection Report SEC-01 / R02): the encryption key
  * defaulting to a well-known, published value is equivalent to no
- * encryption at all for every tenant's stored BYOK API key. Fatal outside
+ * encryption at all for every company's stored BYOK API key. Fatal outside
  * development — never let this reach a shared/staging/production
  * environment silently. A loud warning (not fatal) in development/test so
  * local checkouts and CI keep working without anyone having to generate a
  * key just to run the app.
  */
-if (env.TENANT_AI_CONFIG_ENCRYPTION_KEY === DEFAULT_ENCRYPTION_KEY) {
+if (env.AI_CONFIG_ENCRYPTION_KEY === DEFAULT_ENCRYPTION_KEY) {
   const message =
-    "TENANT_AI_CONFIG_ENCRYPTION_KEY is still the hardcoded default (00×32) — " +
-    "every tenant's stored AI provider API key would be encrypted with a key anyone reading " +
+    "AI_CONFIG_ENCRYPTION_KEY is still the hardcoded default (00×32) — " +
+    "every company's stored AI provider API key would be encrypted with a key anyone reading " +
     "this codebase already knows. Generate a real one with `openssl rand -hex 32`.";
   if (env.NODE_ENV === "production") {
     throw new Error(`❌ Refusing to start in production: ${message}`);

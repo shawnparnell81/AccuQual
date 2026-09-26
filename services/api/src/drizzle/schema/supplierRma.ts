@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
 import { rma } from "./rma.js";
@@ -21,7 +20,6 @@ import { rma } from "./rma.js";
  */
 export const supplierRmaRequests = pgTable("supplier_rma_requests", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
   status: text("status").notNull().default("submitted"),
 
@@ -47,7 +45,7 @@ export const supplierRmaRequests = pgTable("supplier_rma_requests", {
 /**
  * A dedicated, Quality/Customer-Service-facing feed of the supplier-RMA
  * pipeline's own lifecycle events — deliberately separate from the
- * general-purpose, tenant-wide `audit_trail` table (which already logs
+ * general-purpose, company-wide `audit_trail` table (which already logs
  * every create/update on every entity type, but isn't a business-readable
  * "here's every RMA request and what happened to it" report on its own).
  * One row per real event: request submitted, RMA auto-created + numbered,
@@ -63,7 +61,6 @@ export const supplierRmaRequests = pgTable("supplier_rma_requests", {
  */
 export const rmaActivityLog = pgTable("rma_activity_log", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   rmaId: integer("rma_id").references(() => rma.id),
   supplierRmaRequestId: integer("supplier_rma_request_id").references(() => supplierRmaRequests.id),
   event: text("event").notNull(),

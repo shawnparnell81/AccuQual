@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, numeric, jsonb, date, unique } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { suppliers } from "./supplier.js";
 import { users } from "./users.js";
 
@@ -26,7 +25,6 @@ export const supplierQualityRiskScores = pgTable(
   "supplier_quality_risk_scores",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
     scoreDate: date("score_date").notNull(),
     score: numeric("score").notNull(), // 0-100, higher = riskier

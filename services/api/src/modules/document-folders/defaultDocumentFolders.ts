@@ -1,5 +1,5 @@
 /**
- * Default document folder taxonomy -- 7 departments, seeded for every tenant
+ * Default document folder taxonomy -- 7 departments, seeded for every company
  * the first time GET /document-folders finds none yet (see document-folders.controller.ts).
  * Derived from the user's own 7 uploaded department folder/subfolder lists; every
  * subfolder that had no documents in the source was dropped rather than kept as an

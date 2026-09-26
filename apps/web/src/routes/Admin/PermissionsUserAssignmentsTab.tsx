@@ -4,7 +4,7 @@ import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { DEPARTMENTS } from "../../components/layout/navConfig";
-import type { PermissionRole, TenantUser, UserEffectivePermissions, UserPermissionRoleAssignment } from "../../api/types";
+import type { PermissionRole, CompanyUser, UserEffectivePermissions, UserPermissionRoleAssignment } from "../../api/types";
 
 /**
  * Which department each user belongs to (PATCH /users/:id — a pre-existing
@@ -20,8 +20,8 @@ export function PermissionsUserAssignmentsTab() {
   const queryClient = useQueryClient();
   const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
 
-  const { data: tenantUsers = [], isLoading } = useQuery<TenantUser[]>({
-    queryKey: ["permissions", "tenant-users"],
+  const { data: companyUsers = [], isLoading } = useQuery<CompanyUser[]>({
+    queryKey: ["permissions", "company-users"],
     queryFn: async () => (await apiClient.get("/users")).data,
   });
   const { data: roles = [] } = useQuery<PermissionRole[]>({
@@ -42,7 +42,7 @@ export function PermissionsUserAssignmentsTab() {
   const setDepartment = useMutation({
     mutationFn: async ({ userId, department }: { userId: number; department: string }) => (await apiClient.patch(`/users/${userId}`, { department: department || null })).data,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["permissions", "tenant-users"] });
+      queryClient.invalidateQueries({ queryKey: ["permissions", "company-users"] });
       toast.success("Department updated — takes effect the next time they sign in.");
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't update that user's department.")),
@@ -64,7 +64,7 @@ export function PermissionsUserAssignmentsTab() {
 
   return (
     <div className="flex flex-col gap-3">
-      {tenantUsers.map((u) => {
+      {companyUsers.map((u) => {
         const userAssignments = assignments.filter((a) => a.userId === u.id);
         const assignedRoleIds = new Set(userAssignments.map((a) => a.roleId));
         const availableRoles = roles.filter((r) => !assignedRoleIds.has(r.id));

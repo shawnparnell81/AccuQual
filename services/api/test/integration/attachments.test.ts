@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Covers the ONE generic attachments system (see attachments.ts's own
 // schema comment) — real disk upload/download/delete, evidence attached to
 // an existing record vs. the shared "General Uploads" bin, and the
@@ -8,7 +9,7 @@ import request from "supertest";
 import { eq, and } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { attachments } from "../../src/drizzle/schema/attachments.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
@@ -19,7 +20,7 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let uploaderToken: string;
 let otherUserToken: string;
 let adminToken: string;
@@ -27,16 +28,16 @@ let generalUploadId: number;
 let evidenceUploadId: number;
 
 async function makeUser(roleName = "operator") {
-  const [user] = await db.insert(users).values({ tenantId, email: `attach-test-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
-  return { id: user!.id, token: signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName, department: null }) };
+  const [user] = await db.insert(users).values({ email: `attach-test-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+  return { id: user!.id, token: signAccessToken({ sub: String(user!.id), roleId: null, roleName, department: null }) };
 }
 
 describe("Attachments module — generic upload/list/download/delete (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Attachments Test Tenant ${suffix}`, code: `attach-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
 
-    await seedDefaultPermissions(tenantId);
+    await seedDefaultPermissions(companyId);
 
     const uploader = await makeUser();
     uploaderToken = uploader.token;
@@ -46,12 +47,6 @@ describe("Attachments module — generic upload/list/download/delete (real DB + 
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(attachments).where(eq(attachments.tenantId, tenantId));
-    await db.delete(users).where(eq(users.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 

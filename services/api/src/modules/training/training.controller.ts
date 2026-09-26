@@ -10,25 +10,25 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import * as service from "./training.service.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 // Distinct from "Document" and "DocumentFolder" — see those modules' own
 // comments on why each entity keeps its own entityType.
 const AUDIT_ENTITY_TYPE = "TrainingAssignment";
 
 export const listCourses = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await req.db!.select().from(trainingCourses).where(eq(trainingCourses.tenantId, req.tenantId!)));
+  res.json(await req.db!.select().from(trainingCourses));
 });
 
 export const createCourse = asyncHandler(async (req: Request, res: Response) => {
-  const [created] = await req.db!.insert(trainingCourses).values({ ...req.body, tenantId: req.tenantId! }).returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "TrainingCourse", entityId: created!.id, action: "create", changes: { title: created!.title }, performedBy: req.user?.id });
+  const [created] = await req.db!.insert(trainingCourses).values({ ...req.body, }).returning();
+  await recordAuditTrail(req.db!, { entityType: "TrainingCourse", entityId: created!.id, action: "create", changes: { title: created!.title }, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
 export const getCourse = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  const [course] = await req.db!.select().from(trainingCourses).where(and(eq(trainingCourses.id, id), eq(trainingCourses.tenantId, req.tenantId!)));
+  const [course] = await req.db!.select().from(trainingCourses).where(and(eq(trainingCourses.id, id)));
   if (!course) throw AppError.notFound("Training course");
   res.json(course);
 });
@@ -37,9 +37,9 @@ export const getCourse = asyncHandler(async (req: Request, res: Response) => {
 export const updateCourse = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const patch: Record<string, unknown> = { ...(req.body as Record<string, unknown>), updatedAt: new Date() };
-  const [updated] = await req.db!.update(trainingCourses).set(patch).where(and(eq(trainingCourses.id, id), eq(trainingCourses.tenantId, req.tenantId!))).returning();
+  const [updated] = await req.db!.update(trainingCourses).set(patch).where(and(eq(trainingCourses.id, id))).returning();
   if (!updated) throw AppError.notFound("Training course");
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "TrainingCourse", entityId: id, action: "update", changes: req.body as Record<string, unknown>, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "TrainingCourse", entityId: id, action: "update", changes: req.body as Record<string, unknown>, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -70,14 +70,14 @@ export const listAssignmentsForCourse = asyncHandler(async (req: Request, res: R
     })
     .from(trainingAssignments)
     .leftJoin(users, eq(trainingAssignments.userId, users.id))
-    .where(and(eq(trainingAssignments.courseId, courseId), eq(trainingAssignments.tenantId, req.tenantId!)));
+    .where(and(eq(trainingAssignments.courseId, courseId)));
   res.json(rows.map(withEffectiveStatus));
 });
 
 /** Assigns a course to one or more employees at once — one audit entry and one notice per person; anyone who already has it open is skipped, and every person must belong to this organization. */
 export const assignHandler = asyncHandler(async (req: Request, res: Response) => {
   const { userIds, dueAt } = req.body as { userIds: number[]; dueAt?: Date };
-  res.status(201).json(await service.assignCourse(req.db!, req.tenantId!, Number(req.params.id), userIds, { dueAt }, req.user?.id));
+  res.status(201).json(await service.assignCourse(req.db!, Number(req.params.id), userIds, { dueAt }, req.user?.id));
 });
 
 /**
@@ -95,27 +95,26 @@ export interface CompleteAssignmentInput {
 }
 
 /** Used by the dedicated endpoint and the "Training Record" form's save hook (forms.controller.ts); the rules live in training.service.ts. */
-export function completeTrainingAssignment(db: TenantDb, tenantId: number, assignmentId: number, input: CompleteAssignmentInput, performedBy?: number): Promise<TrainingAssignment> {
-  return service.completeAssignment(db, tenantId, assignmentId, input, performedBy);
+export function completeTrainingAssignment(db: Db, assignmentId: number, input: CompleteAssignmentInput, performedBy?: number): Promise<TrainingAssignment> {
+  return service.completeAssignment(db, assignmentId, input, performedBy);
 }
 
 export const completeAssignmentHandler = asyncHandler(async (req: Request, res: Response) => {
   const { trainerName, notes } = req.body as { trainerName?: string; notes?: string };
-  const updated = await completeTrainingAssignment(req.db!, req.tenantId!, Number(req.params.assignmentId), { completedAt: new Date(), trainerName, notes }, req.user?.id);
+  const updated = await completeTrainingAssignment(req.db!, Number(req.params.assignmentId), { completedAt: new Date(), trainerName, notes }, req.user?.id);
   res.json(updated);
 });
 
 export const uploadCertificateHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const assignmentId = Number(req.params.assignmentId);
   const file = req.file;
   if (!file) throw AppError.badRequest("No file uploaded");
   if (file.mimetype !== "application/pdf") throw AppError.badRequest("Only PDF files are accepted");
 
-  const [assignment] = await req.db!.select().from(trainingAssignments).where(and(eq(trainingAssignments.id, assignmentId), eq(trainingAssignments.tenantId, tenantId)));
+  const [assignment] = await req.db!.select().from(trainingAssignments).where(and(eq(trainingAssignments.id, assignmentId)));
   if (!assignment) throw AppError.notFound("Training assignment");
 
-  const dir = `${env.STORAGE_LOCAL_PATH}/tenants/${tenantId}/forms/custom/training-certs`;
+  const dir = `${env.STORAGE_LOCAL_PATH}/forms/custom/training-certs`;
   await mkdir(dir, { recursive: true });
   const path = `${dir}/${assignmentId}-${Date.now()}.pdf`;
   await writeFile(path, file.buffer);
@@ -127,7 +126,6 @@ export const uploadCertificateHandler = asyncHandler(async (req: Request, res: R
   const [updated] = await req.db!.update(trainingAssignments).set({ certificatePath: path }).where(eq(trainingAssignments.id, assignmentId)).returning();
 
   await recordAuditTrail(req.db!, {
-    tenantId,
     entityType: AUDIT_ENTITY_TYPE,
     entityId: assignmentId,
     action: "update",
@@ -139,9 +137,8 @@ export const uploadCertificateHandler = asyncHandler(async (req: Request, res: R
 });
 
 export const downloadCertificateHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const assignmentId = Number(req.params.assignmentId);
-  const [assignment] = await req.db!.select().from(trainingAssignments).where(and(eq(trainingAssignments.id, assignmentId), eq(trainingAssignments.tenantId, tenantId)));
+  const [assignment] = await req.db!.select().from(trainingAssignments).where(and(eq(trainingAssignments.id, assignmentId)));
   if (!assignment) throw AppError.notFound("Training assignment");
   if (!assignment.certificatePath || !existsSync(assignment.certificatePath)) throw AppError.notFound("Certificate file");
 
@@ -169,15 +166,15 @@ export const employeeHistoryHandler = asyncHandler(async (req: Request, res: Res
     })
     .from(trainingAssignments)
     .leftJoin(trainingCourses, eq(trainingAssignments.courseId, trainingCourses.id))
-    .where(and(eq(trainingAssignments.userId, userId), eq(trainingAssignments.tenantId, req.tenantId!)));
+    .where(and(eq(trainingAssignments.userId, userId)));
   res.json(rows.map(withEffectiveStatus));
 });
 
-/** Employees for the assignment picker (TrainingAssignmentModal) — every active user in the tenant. */
+/** Employees for the assignment picker (TrainingAssignmentModal) — every active user in the company. */
 export const listEmployeesHandler = asyncHandler(async (req: Request, res: Response) => {
   const rows = await req
     .db!.select({ id: users.id, name: users.name, email: users.email })
     .from(users)
-    .where(and(eq(users.tenantId, req.tenantId!), eq(users.isActive, true)));
+    .where(and(eq(users.isActive, true)));
   res.json(rows);
 });

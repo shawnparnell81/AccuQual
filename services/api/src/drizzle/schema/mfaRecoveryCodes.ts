@@ -5,7 +5,7 @@ import { users } from "./users.js";
  * One-time backup codes for a user's authenticator app (shown once at
  * enrollment). Only a SHA-256 hash of each code is stored — the codes are
  * random and high-entropy, so a fast hash is fine, same reasoning as
- * passwordResetTokens.ts. Not tenant-scoped and deny-all under RLS, like the
+ * passwordResetTokens.ts. Not and deny-all under RLS, like the
  * other auth token tables: only sign-in code on the owner connection reads it.
  */
 export const mfaRecoveryCodes = pgTable("mfa_recovery_codes", {

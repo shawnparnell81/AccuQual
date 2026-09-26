@@ -33,7 +33,7 @@ import type { WorkOrder, WorkOrderOperation } from "../../api/types";
 export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrder }) {
   const toast = useToast();
   const queryClient = useQueryClient();
-  const logoUrl = useAuthStore((s) => s.tenant?.branding?.logoUrl);
+  const logoUrl = useAuthStore((s) => s.company?.branding?.logoUrl);
   const canEdit = useCanEditWorkflow("work_orders");
 
   const canEditPlanning = canEdit && workOrder.status === "planned";

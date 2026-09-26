@@ -14,18 +14,18 @@ export const listErrorsHandler = asyncHandler(async (req: Request, res: Response
     limit?: number;
     offset?: number;
   };
-  const result = await erpSyncErrorsService.listErrors(req.db!, req.tenantId!, { module, errorType, presetVersion, resolved, since, until }, { limit, offset });
+  const result = await erpSyncErrorsService.listErrors(req.db!, { module, errorType, presetVersion, resolved, since, until }, { limit, offset });
   res.json(result);
 });
 
 export const getErrorHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await erpSyncErrorsService.getError(req.db!, req.tenantId!, Number(req.params.id)));
+  res.json(await erpSyncErrorsService.getError(req.db!, Number(req.params.id)));
 });
 
 export const resolveErrorHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await erpSyncErrorsService.resolveError(req.db!, req.tenantId!, Number(req.params.id), req.user?.id));
+  res.json(await erpSyncErrorsService.resolveError(req.db!, Number(req.params.id), req.user?.id));
 });
 
 export const retryErrorHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await erpSyncErrorsService.retryError(req.db!, req.tenantId!, Number(req.params.id), req.user?.id));
+  res.json(await erpSyncErrorsService.retryError(req.db!, Number(req.params.id), req.user?.id));
 });

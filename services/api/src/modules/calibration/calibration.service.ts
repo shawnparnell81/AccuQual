@@ -1,5 +1,5 @@
 import { and, eq, inArray, gte, like } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { db as ownerDb } from "../../db/index.js";
 import { equipment, calibrations, type Calibration, type Equipment, type EquipmentStatus } from "../../drizzle/schema/calibration.js";
 import { notificationLog } from "../../drizzle/schema/notifications.js";
@@ -70,26 +70,26 @@ export function summarize(items: Equipment[], cals: Calibration[], now: Date = n
   return out;
 }
 
-async function loadEquipment(db: TenantDb, tenantId: number, id: number): Promise<Equipment> {
-  const [item] = await db.select().from(equipment).where(and(eq(equipment.id, id), eq(equipment.tenantId, tenantId)));
+async function loadEquipment(db: Db, id: number): Promise<Equipment> {
+  const [item] = await db.select().from(equipment).where(and(eq(equipment.id, id)));
   if (!item) throw AppError.notFound("Equipment");
   return item;
 }
 
-async function emit(tenantId: number, event: string, equipmentId: number, extra: Record<string, unknown> = {}) {
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "calibration", event, entityId: equipmentId, ...extra });
+async function emit(event: string, equipmentId: number, extra: Record<string, unknown> = {}) {
+  await publishEvent(WORKFLOW_STREAM, { module: "calibration", event, entityId: equipmentId, ...extra });
 }
 
-export async function listEquipmentWithSummary(db: TenantDb, tenantId: number) {
-  const items = await db.select().from(equipment).where(eq(equipment.tenantId, tenantId));
-  const cals = await db.select().from(calibrations).where(eq(calibrations.tenantId, tenantId));
+export async function listEquipmentWithSummary(db: Db) {
+  const items = await db.select().from(equipment);
+  const cals = await db.select().from(calibrations);
   const summaries = summarize(items, cals);
   return items.map((item) => ({ ...item, ...summaries.get(item.id)! }));
 }
 
-export async function getEquipmentWithSummary(db: TenantDb, tenantId: number, id: number) {
-  const item = await loadEquipment(db, tenantId, id);
-  const cals = await db.select().from(calibrations).where(and(eq(calibrations.equipmentId, id), eq(calibrations.tenantId, tenantId)));
+export async function getEquipmentWithSummary(db: Db, id: number) {
+  const item = await loadEquipment(db, id);
+  const cals = await db.select().from(calibrations).where(and(eq(calibrations.equipmentId, id)));
   return { ...item, ...summarize([item], cals).get(id)! };
 }
 
@@ -110,8 +110,8 @@ const MIN_REASON = 5;
  *  - Returning equipment that a FAILED calibration took out of service (without a passing calibration since) is an override:
  *    it needs the override permission, and is recorded as one.
  */
-export async function changeEquipmentStatus(db: TenantDb, tenantId: number, id: number, target: EquipmentStatus, opts: StatusChangeOptions, actor?: number): Promise<Equipment> {
-  const item = await loadEquipment(db, tenantId, id);
+export async function changeEquipmentStatus(db: Db, id: number, target: EquipmentStatus, opts: StatusChangeOptions, actor?: number): Promise<Equipment> {
+  const item = await loadEquipment(db, id);
   if (item.status === target) throw AppError.badRequest(`This equipment is already ${target.replace("_", " ")}.`);
   const reason = opts.reason?.trim() ?? "";
   const leavingOutOfService = item.status === "out_of_service";
@@ -123,7 +123,7 @@ export async function changeEquipmentStatus(db: TenantDb, tenantId: number, id: 
   if (failureHold && !opts.canOverride) {
     throw AppError.forbidden("A failed calibration took this equipment out of service. It returns to service when a calibration passes; only an admin or quality manager can override that.");
   }
-  if (target === "active") await assertNoUnresolvedFailure(db, tenantId, id, opts.canOverride);
+  if (target === "active") await assertNoUnresolvedFailure(db, id, opts.canOverride);
 
   const [updated] = await db
     .update(equipment)
@@ -134,48 +134,47 @@ export async function changeEquipmentStatus(db: TenantDb, tenantId: number, id: 
       statusChangedAt: new Date(),
       statusChangedBy: actor ?? null,
     })
-    .where(and(eq(equipment.id, id), eq(equipment.tenantId, tenantId)))
+    .where(and(eq(equipment.id, id)))
     .returning();
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "Equipment",
     entityId: id,
     action: "status_change",
     changes: { event: failureHold ? "failure_override" : "equipment_status_changed", from: item.status, to: target, reason: reason || null, cause: opts.cause ?? (target === "out_of_service" ? "manual" : null) },
     performedBy: actor,
   });
-  await emit(tenantId, target === "out_of_service" ? "out_of_service" : target === "active" ? "returned_to_service" : "inactivated", id, { reason: reason || undefined });
+  await emit(target === "out_of_service" ? "out_of_service" : target === "active" ? "returned_to_service" : "inactivated", id, { reason: reason || undefined });
   return updated!;
 }
 
 /** Equipment whose latest calibration FAILED can't simply be set active by anyone. */
-async function assertNoUnresolvedFailure(db: TenantDb, tenantId: number, id: number, canOverride: boolean) {
+async function assertNoUnresolvedFailure(db: Db, id: number, canOverride: boolean) {
   if (canOverride) return;
-  const cals = await db.select().from(calibrations).where(and(eq(calibrations.equipmentId, id), eq(calibrations.tenantId, tenantId)));
+  const cals = await db.select().from(calibrations).where(and(eq(calibrations.equipmentId, id)));
   const done = cals.filter((c) => c.status !== "scheduled" && c.performedAt).sort((a, b) => b.performedAt!.getTime() - a.performedAt!.getTime() || b.id - a.id);
   if (done[0]?.status === "failed") throw AppError.forbidden("The latest calibration of this equipment failed. It needs a passing calibration, or an override by an admin or quality manager.");
 }
 
 // ---- Scheduling and completing ---------------------------------------------------------------------------------------------------------
 
-export async function scheduleCalibration(db: TenantDb, tenantId: number, equipmentId: number, input: { scheduledAt: Date; notes?: string }, actor?: number): Promise<Calibration> {
-  const item = await loadEquipment(db, tenantId, equipmentId);
+export async function scheduleCalibration(db: Db, equipmentId: number, input: { scheduledAt: Date; notes?: string }, actor?: number): Promise<Calibration> {
+  const item = await loadEquipment(db, equipmentId);
   if (item.status === "inactive") throw AppError.badRequest("This equipment is inactive. Make it active before scheduling a calibration.");
-  const [open] = await db.select().from(calibrations).where(and(eq(calibrations.equipmentId, equipmentId), eq(calibrations.tenantId, tenantId), eq(calibrations.status, "scheduled")));
+  const [open] = await db.select().from(calibrations).where(and(eq(calibrations.equipmentId, equipmentId), eq(calibrations.status, "scheduled")));
   if (open) throw new AppError(`A calibration is already scheduled for ${open.scheduledAt?.toISOString().slice(0, 10) ?? "this equipment"}. Complete or cancel it first.`, 409);
 
-  const [created] = await db.insert(calibrations).values({ tenantId, equipmentId, status: "scheduled", scheduledAt: input.scheduledAt, scheduledBy: actor ?? null, notes: input.notes }).returning();
-  await recordAuditTrail(db, { tenantId, entityType: "Equipment", entityId: equipmentId, action: "create", changes: { event: "calibration_scheduled", calibrationId: created!.id, scheduledAt: input.scheduledAt }, performedBy: actor });
-  await emit(tenantId, "scheduled", equipmentId, { calibrationId: created!.id });
+  const [created] = await db.insert(calibrations).values({ equipmentId, status: "scheduled", scheduledAt: input.scheduledAt, scheduledBy: actor ?? null, notes: input.notes }).returning();
+  await recordAuditTrail(db, { entityType: "Equipment", entityId: equipmentId, action: "create", changes: { event: "calibration_scheduled", calibrationId: created!.id, scheduledAt: input.scheduledAt }, performedBy: actor });
+  await emit("scheduled", equipmentId, { calibrationId: created!.id });
   return created!;
 }
 
-export async function cancelScheduledCalibration(db: TenantDb, tenantId: number, calibrationId: number, actor?: number): Promise<void> {
-  const [cal] = await db.select().from(calibrations).where(and(eq(calibrations.id, calibrationId), eq(calibrations.tenantId, tenantId)));
+export async function cancelScheduledCalibration(db: Db, calibrationId: number, actor?: number): Promise<void> {
+  const [cal] = await db.select().from(calibrations).where(and(eq(calibrations.id, calibrationId)));
   if (!cal) throw AppError.notFound("Calibration");
   if (cal.status !== "scheduled") throw new AppError("Only a scheduled calibration can be cancelled — a completed one is part of the record.", 409);
-  await db.delete(calibrations).where(and(eq(calibrations.id, calibrationId), eq(calibrations.tenantId, tenantId)));
-  await recordAuditTrail(db, { tenantId, entityType: "Equipment", entityId: cal.equipmentId, action: "delete", changes: { event: "calibration_schedule_cancelled", calibrationId, scheduledAt: cal.scheduledAt }, performedBy: actor });
+  await db.delete(calibrations).where(and(eq(calibrations.id, calibrationId)));
+  await recordAuditTrail(db, { entityType: "Equipment", entityId: cal.equipmentId, action: "delete", changes: { event: "calibration_schedule_cancelled", calibrationId, scheduledAt: cal.scheduledAt }, performedBy: actor });
 }
 
 export interface CompletionInput {
@@ -187,29 +186,28 @@ export interface CompletionInput {
 }
 
 /** What follows any finished calibration: the due date, the failure hold or return to service, the audit entry, the event, the notice. */
-async function applyOutcome(db: TenantDb, tenantId: number, item: Equipment, cal: Calibration, actor?: number) {
+async function applyOutcome(db: Db, item: Equipment, cal: Calibration, actor?: number) {
   const failed = cal.status === "failed";
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "Equipment",
     entityId: item.id,
     action: "status_change",
     changes: { event: failed ? "calibration_failed" : "calibration_completed", calibrationId: cal.id, result: cal.result, technicianName: cal.technicianName, nextDueAt: cal.nextDueAt },
     performedBy: actor,
   });
-  await emit(tenantId, failed ? "failed" : "completed", item.id, { calibrationId: cal.id, result: cal.result ?? undefined });
+  await emit(failed ? "failed" : "completed", item.id, { calibrationId: cal.id, result: cal.result ?? undefined });
 
   if (failed) {
     if (item.status !== "out_of_service") {
-      await db.update(equipment).set({ status: "out_of_service", statusReason: `Failed calibration #${cal.id}`, statusCause: "calibration_failure", statusChangedAt: new Date(), statusChangedBy: actor ?? null }).where(and(eq(equipment.id, item.id), eq(equipment.tenantId, tenantId)));
-      await recordAuditTrail(db, { tenantId, entityType: "Equipment", entityId: item.id, action: "status_change", changes: { event: "equipment_status_changed", from: item.status, to: "out_of_service", reason: `Failed calibration #${cal.id}`, cause: "calibration_failure" }, performedBy: actor });
-      await emit(tenantId, "out_of_service", item.id, { reason: "calibration_failure", calibrationId: cal.id });
+      await db.update(equipment).set({ status: "out_of_service", statusReason: `Failed calibration #${cal.id}`, statusCause: "calibration_failure", statusChangedAt: new Date(), statusChangedBy: actor ?? null }).where(and(eq(equipment.id, item.id)));
+      await recordAuditTrail(db, { entityType: "Equipment", entityId: item.id, action: "status_change", changes: { event: "equipment_status_changed", from: item.status, to: "out_of_service", reason: `Failed calibration #${cal.id}`, cause: "calibration_failure" }, performedBy: actor });
+      await emit("out_of_service", item.id, { reason: "calibration_failure", calibrationId: cal.id });
     }
-    await notifyDepartment(db, { tenantId, department: "quality", subject: `Calibration failed: ${item.name}`, body: `${item.name}${item.serialNumber ? ` (${item.serialNumber})` : ""} failed calibration and has been taken out of service. Product measured with it since its last good calibration may need review.`, relatedEntityType: "Equipment", relatedEntityId: item.id }).catch((err) => logger.error("Calibration failure notice failed", { err: String(err) }));
+    await notifyDepartment(db, { department: "quality", subject: `Calibration failed: ${item.name}`, body: `${item.name}${item.serialNumber ? ` (${item.serialNumber})` : ""} failed calibration and has been taken out of service. Product measured with it since its last good calibration may need review.`, relatedEntityType: "Equipment", relatedEntityId: item.id }).catch((err) => logger.error("Calibration failure notice failed", { err: String(err) }));
   } else if (item.status === "out_of_service" && item.statusCause === "calibration_failure") {
-    await db.update(equipment).set({ status: "active", statusReason: null, statusCause: null, statusChangedAt: new Date(), statusChangedBy: actor ?? null }).where(and(eq(equipment.id, item.id), eq(equipment.tenantId, tenantId)));
-    await recordAuditTrail(db, { tenantId, entityType: "Equipment", entityId: item.id, action: "status_change", changes: { event: "returned_to_service", from: "out_of_service", to: "active", reason: `Passed calibration #${cal.id}`, cause: "calibration_pass" }, performedBy: actor });
-    await emit(tenantId, "returned_to_service", item.id, { calibrationId: cal.id });
+    await db.update(equipment).set({ status: "active", statusReason: null, statusCause: null, statusChangedAt: new Date(), statusChangedBy: actor ?? null }).where(and(eq(equipment.id, item.id)));
+    await recordAuditTrail(db, { entityType: "Equipment", entityId: item.id, action: "status_change", changes: { event: "returned_to_service", from: "out_of_service", to: "active", reason: `Passed calibration #${cal.id}`, cause: "calibration_pass" }, performedBy: actor });
+    await emit("returned_to_service", item.id, { calibrationId: cal.id });
   }
 }
 
@@ -229,13 +227,13 @@ function outcomeFields(item: Equipment, input: CompletionInput) {
 }
 
 /** Completes a scheduled calibration. */
-export async function completeCalibration(db: TenantDb, tenantId: number, calibrationId: number, input: CompletionInput, actor?: number): Promise<Calibration> {
-  const [cal] = await db.select().from(calibrations).where(and(eq(calibrations.id, calibrationId), eq(calibrations.tenantId, tenantId)));
+export async function completeCalibration(db: Db, calibrationId: number, input: CompletionInput, actor?: number): Promise<Calibration> {
+  const [cal] = await db.select().from(calibrations).where(and(eq(calibrations.id, calibrationId)));
   if (!cal) throw AppError.notFound("Calibration");
   if (cal.status !== "scheduled") throw new AppError("This calibration is already finished.", 409);
-  const item = await loadEquipment(db, tenantId, cal.equipmentId);
-  const [updated] = await db.update(calibrations).set({ ...outcomeFields(item, input), performedBy: actor ?? null }).where(and(eq(calibrations.id, calibrationId), eq(calibrations.tenantId, tenantId))).returning();
-  await applyOutcome(db, tenantId, item, updated!, actor);
+  const item = await loadEquipment(db, cal.equipmentId);
+  const [updated] = await db.update(calibrations).set({ ...outcomeFields(item, input), performedBy: actor ?? null }).where(and(eq(calibrations.id, calibrationId))).returning();
+  await applyOutcome(db, item, updated!, actor);
   return updated!;
 }
 
@@ -244,14 +242,14 @@ export async function completeCalibration(db: TenantDb, tenantId: number, calibr
  * performed date). If a calibration was scheduled for this equipment, that one is completed rather than a second row created, so a
  * schedule never lingers after the work is logged.
  */
-export async function recordCompletedCalibration(db: TenantDb, tenantId: number, equipmentId: number, input: CompletionInput, actor?: number): Promise<Calibration> {
-  const item = await loadEquipment(db, tenantId, equipmentId);
-  const [open] = await db.select().from(calibrations).where(and(eq(calibrations.equipmentId, equipmentId), eq(calibrations.tenantId, tenantId), eq(calibrations.status, "scheduled")));
-  if (open) return completeCalibration(db, tenantId, open.id, input, actor);
-  const [created] = await db.insert(calibrations).values({ tenantId, equipmentId, scheduledAt: input.performedAt, ...outcomeFields(item, input), performedBy: actor ?? null }).returning();
+export async function recordCompletedCalibration(db: Db, equipmentId: number, input: CompletionInput, actor?: number): Promise<Calibration> {
+  const item = await loadEquipment(db, equipmentId);
+  const [open] = await db.select().from(calibrations).where(and(eq(calibrations.equipmentId, equipmentId), eq(calibrations.status, "scheduled")));
+  if (open) return completeCalibration(db, open.id, input, actor);
+  const [created] = await db.insert(calibrations).values({ equipmentId, scheduledAt: input.performedAt, ...outcomeFields(item, input), performedBy: actor ?? null }).returning();
   if (!created) throw new AppError("Failed to record calibration event", 500);
-  await recordAuditTrail(db, { tenantId, entityType: "Equipment", entityId: equipmentId, action: "create", changes: { calibrationId: created.id, technicianName: input.technicianName, result: input.result, nextDueAt: created.nextDueAt }, performedBy: actor });
-  await applyOutcome(db, tenantId, item, created, actor);
+  await recordAuditTrail(db, { entityType: "Equipment", entityId: equipmentId, action: "create", changes: { calibrationId: created.id, technicianName: input.technicianName, result: input.result, nextDueAt: created.nextDueAt }, performedBy: actor });
+  await applyOutcome(db, item, created, actor);
   return created;
 }
 
@@ -269,8 +267,8 @@ export interface AttentionItem {
 }
 
 /** Equipment a person should look at: out of service, failed, overdue, due within 30 days, or with a calibration that should have happened by now. */
-export async function attention(db: TenantDb, tenantId: number): Promise<AttentionItem[]> {
-  const rows = await listEquipmentWithSummary(db, tenantId);
+export async function attention(db: Db): Promise<AttentionItem[]> {
+  const rows = await listEquipmentWithSummary(db);
   const out: AttentionItem[] = [];
   for (const r of rows) {
     if (r.status === "inactive") continue;
@@ -284,40 +282,30 @@ export async function attention(db: TenantDb, tenantId: number): Promise<Attenti
 const DIGEST_SUBJECT = "Calibration due";
 
 /** One digest to the Quality department listing what is overdue / due soon / out of service. Returns how many items it covered. */
-export async function notifyDue(db: TenantDb, tenantId: number, opts: { dedupeHours?: number } = {}): Promise<{ items: number; notified: number; skipped: boolean }> {
-  const items = await attention(db, tenantId);
+export async function notifyDue(db: Db, opts: { dedupeHours?: number } = {}): Promise<{ items: number; notified: number; skipped: boolean }> {
+  const items = await attention(db);
   if (items.length === 0) return { items: 0, notified: 0, skipped: false };
   if (opts.dedupeHours) {
     const since = new Date(Date.now() - opts.dedupeHours * 3_600_000);
-    const [recent] = await db.select({ id: notificationLog.id }).from(notificationLog).where(and(eq(notificationLog.tenantId, tenantId), like(notificationLog.subject, `${DIGEST_SUBJECT}%`), gte(notificationLog.createdAt, since))).limit(1);
+    const [recent] = await db.select({ id: notificationLog.id }).from(notificationLog).where(and(like(notificationLog.subject, `${DIGEST_SUBJECT}%`), gte(notificationLog.createdAt, since))).limit(1);
     if (recent) return { items: items.length, notified: 0, skipped: true };
   }
   const label: Record<AttentionItem["reason"], string> = { out_of_service: "OUT OF SERVICE", failed: "FAILED calibration", overdue: "OVERDUE", schedule_overdue: "scheduled calibration not done", due_soon: "due within 30 days" };
   const lines = items.slice(0, 40).map((i) => `- ${i.name}${i.serialNumber ? ` (${i.serialNumber})` : ""}: ${label[i.reason]}${i.nextDueAt ? `, due ${i.nextDueAt.toISOString().slice(0, 10)}` : ""}`);
   const overdue = items.filter((i) => i.reason === "overdue" || i.reason === "failed" || i.reason === "out_of_service").length;
-  const notified = await notifyDepartment(db, { tenantId, department: "quality", subject: `${DIGEST_SUBJECT}: ${items.length} item${items.length === 1 ? "" : "s"} need attention${overdue ? ` (${overdue} overdue or out of service)` : ""}`, body: `${lines.join("\n")}${items.length > 40 ? `\n…and ${items.length - 40} more` : ""}`, relatedEntityType: "Equipment" });
+  const notified = await notifyDepartment(db, { department: "quality", subject: `${DIGEST_SUBJECT}: ${items.length} item${items.length === 1 ? "" : "s"} need attention${overdue ? ` (${overdue} overdue or out of service)` : ""}`, body: `${lines.join("\n")}${items.length > 40 ? `\n…and ${items.length - 40} more` : ""}`, relatedEntityType: "Equipment" });
   return { items: items.length, notified, skipped: false };
 }
 
-/** Runs notifyDue for every organization that has equipment (used by the daily timer). Never throws. */
-export async function sweepDueCalibrations(): Promise<{ tenants: number; notified: number }> {
-  let tenantsSwept = 0;
-  let notified = 0;
+/** Sends the calibration-due digest (used by the timer). Never throws. */
+export async function sweepDueCalibrations(): Promise<{ notified: number }> {
   try {
-    const ids = await ownerDb.selectDistinct({ tenantId: equipment.tenantId }).from(equipment).where(inArray(equipment.status, ["active", "out_of_service"]));
-    for (const { tenantId } of ids) {
-      try {
-        const r = await notifyDue(ownerDb as unknown as TenantDb, tenantId, { dedupeHours: 20 });
-        tenantsSwept += 1;
-        notified += r.notified;
-      } catch (err) {
-        logger.error("Calibration due sweep failed for a tenant", { tenantId, err: String(err) });
-      }
-    }
+    const r = await notifyDue(ownerDb as unknown as Db, { dedupeHours: 20 });
+    return { notified: r.notified };
   } catch (err) {
     logger.error("Calibration due sweep failed", { err: String(err) });
+    return { notified: 0 };
   }
-  return { tenants: tenantsSwept, notified };
 }
 
 let sweepHandle: ReturnType<typeof setInterval> | null = null;

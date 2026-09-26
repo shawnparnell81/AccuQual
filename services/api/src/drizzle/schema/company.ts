@@ -1,26 +1,19 @@
 import { pgTable, serial, text, jsonb, timestamp, boolean, integer, numeric } from "drizzle-orm/pg-core";
 
 /**
- * A tenant is a company/plant/division/customer (see Tenant Onboarding Flow Spec).
- * Every tenant-owned table carries a `tenantId` FK to this table and is
- * RLS-protected (see drizzle/post-migrate/rls-policies.sql) plus explicitly
- * filtered by `tenantId` in every query (see lib/tenantScope.ts) — the two
- * layers are intentionally redundant (defense in depth for a compliance-oriented
- * QMS), not either/or.
+ * The one company this installation belongs to: a single row (id 1). It holds the company's name and every company-wide
+ * setting (theme, AI, plants and module rules) that used to live per organization.
  */
-export const tenants = pgTable("tenants", {
+export const company = pgTable("company", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  code: text("code").notNull().unique(),
-  status: text("status").notNull().default("active"), // active, inactive (soft-deleted)
   // Who must use multi-factor authentication: "optional" (nobody is forced),
-  // "admins" (default), or "all" users of the tenant. platform_admin accounts
-  // always need it regardless of this value.
+  // "admins" (default), or "all" users of the company. 
   mfaPolicy: text("mfa_policy").notNull().default("admins"),
   /**
    * Theme colors (secondaryColor..borderColor) extend this same object
-   * rather than a parallel "theme" jsonb — they're all one tenant-branding
-   * config a tenant admin edits together, same reasoning as folding
+   * rather than a parallel "theme" jsonb — they're all one company-branding
+   * config a company admin edits together, same reasoning as folding
    * assistantName into aiConfig rather than a new column. All hex strings;
    * the frontend theme engine (apps/web/src/lib/theme.ts) converts each to
    * the HSL triplet globals.css's CSS custom properties expect. A primary
@@ -45,14 +38,14 @@ export const tenants = pgTable("tenants", {
     borderColor?: string;
   }>().default({}),
   /**
-   * Per-tenant AI settings. apiKeyEncrypted is real AES-256-GCM ciphertext
-   * (see tenant/crypto.ts) — never plaintext, never returned by any GET.
+   * AI settings. apiKeyEncrypted is real AES-256-GCM ciphertext
+   * (see company/crypto.ts) — never plaintext, never returned by any GET.
    * assistantName is the one field with no default meaning in the LLM
    * gateway itself — it only ever labels the floating Assistant UI (see
    * AiAssistantPanel.tsx). As of the AI Assistant module, llm-gateway.ts's
    * callLlm() DOES use provider/apiKeyEncrypted/modelName for real calls
    * when set (see ai.assistant.ts) — falling back to the global env config
-   * when a tenant hasn't configured its own, same honest-stub fallback the
+   * when a company hasn't configured its own, same honest-stub fallback the
    * gateway already had.
    */
   aiConfig: jsonb("ai_config").$type<{
@@ -62,7 +55,7 @@ export const tenants = pgTable("tenants", {
     temperature?: number;
     maxTokens?: number;
     assistantName?: string;
-    /** Phase 4 AI guardrails: "standard" runs every pipeline as today; "strict" rejects any output that fails its schema check instead of falling back to a raw/degraded save (see ai.guardrails.ts's classifyOutput). Tenant-configurable, defaults to "standard" when unset. */
+    /** Phase 4 AI guardrails: "standard" runs every pipeline as today; "strict" rejects any output that fails its schema check instead of falling back to a raw/degraded save (see ai.guardrails.ts's classifyOutput). Company-configurable, defaults to "standard" when unset. */
     safetyMode?: "standard" | "strict";
   }>(),
   /**
@@ -86,7 +79,7 @@ export const tenants = pgTable("tenants", {
   /**
    * Settings → Feasibility Module integration. Same "rarely-changed config
    * a human edits" reasoning as branding/aiConfig above, not a separate
-   * tenant_settings table — see modules/settings/. Read by
+   * company_settings table — see modules/settings/. Read by
    * feasibility.controller.ts on create (defaultRiskLevel seeds all 7 fixed
    * assessment areas, autoAssignOwner) and on finalize (requiredDocuments
    * validation, notificationsEnabled routing) — see that file's own
@@ -122,7 +115,7 @@ export const tenants = pgTable("tenants", {
   }>().default({}),
   /**
    * Settings → ERP Sync Engine. webhookSecretEncrypted is real AES-256-GCM
-   * ciphertext via the same tenant/crypto.ts helpers aiConfig.apiKeyEncrypted
+   * ciphertext via the same company/crypto.ts helpers aiConfig.apiKeyEncrypted
    * uses — never plaintext, never returned by any GET. statusHistory is
    * capped at 20 entries by settings.erpSync.ts (a human-edited config blob
    * that also accumulates a short run log, not an unbounded ledger — see
@@ -147,12 +140,12 @@ export const tenants = pgTable("tenants", {
    * Supplier Quality Risk Score's 7 factors — see
    * modules/supplier/supplier.qualityRisk.ts, which reads this (falling
    * back to DEFAULT_SUPPLIER_RISK_WEIGHTS when unset) every time a score is
-   * recomputed. Same "rarely-changed config a human edits" jsonb-on-tenants
+   * recomputed. Same "rarely-changed config a human edits" jsonb-on-companies
    * precedent as feasibilitySettings/inventorySettings/erpSyncSettings
    * above — deliberately NOT placed on PlatformAdminPage (that page is
-   * platform_admin/cross-tenant tenant-provisioning only and holds no
-   * per-tenant module config anywhere today); this follows the Settings
-   * page's own established home for exactly this kind of tenant-scoped,
+   * platform_admin/company-provisioning only and holds no
+   * module config anywhere today); this follows the Settings
+   * page's own established home for exactly this kind of company-scoped,
    * module-specific configuration instead.
    */
   supplierRiskWeights: jsonb("supplier_risk_weights").$type<{
@@ -181,14 +174,14 @@ export const tenants = pgTable("tenants", {
     capaEscalationWindowDays?: number;
   }>().default({}),
   /**
-   * Phase 10 Admin Console — Tenant Settings. `name` and `branding.logoUrl`
+   * Phase 10 Admin Console — Company Settings. `name` and `branding.logoUrl`
    * already exist as their own column/field (see above) and are reused as-is
    * rather than duplicated here; this only adds the two things the schema
    * genuinely had no home for at all: timezone and a human contact. Same
-   * "rarely-changed config a human edits" jsonb-on-tenants precedent as
-   * every other settings blob on this table — see tenant.controller.ts's
+   * "rarely-changed config a human edits" jsonb-on-companies precedent as
+   * every other settings blob on this table — see company.controller.ts's
    * getProfileHandler/updateProfileHandler for the one endpoint that reads
-   * name+branding.logoUrl+this together as a single "tenant profile".
+   * name+branding.logoUrl+this together as a single "company profile".
    */
   profile: jsonb("profile").$type<{
     timezone?: string;
@@ -196,14 +189,13 @@ export const tenants = pgTable("tenants", {
     contactEmail?: string;
     contactPhone?: string;
   }>().default({}),
-  // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for a brand-new tenant's first admin.
-  // `dismissed: true` for every tenant that existed before this shipped (backfillOnboardingChecklist.ts) — an
-  // established company must never see a "new tenant" checklist; a genuinely new tenant starts with this unset,
+  // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for the company's first admin.
+  // `dismissed: true` for every company that existed before this shipped (backfillOnboardingChecklist.ts) — an
+  // established company must never see a "new company" checklist; a genuinely new company starts with this unset,
   // reads back as { dismissed: false, completedItems: [] } (see getOnboardingHandler).
   onboardingProgress: jsonb("onboarding_progress").$type<{ dismissed: boolean; completedItems: string[] }>(),
-  isDeleted: boolean("is_deleted").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export type Tenant = typeof tenants.$inferSelect;
-export type NewTenant = typeof tenants.$inferInsert;
+export type Company = typeof company.$inferSelect;
+export type NewCompany = typeof company.$inferInsert;

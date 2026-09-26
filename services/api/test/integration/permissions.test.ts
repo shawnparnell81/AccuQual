@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment
 // for why this category exists and what it needs). Uses RMA as the
 // representative module because it exercises both permission layers this
 // app has: the coarse department PERMISSION_MATRIX (middleware/
@@ -16,7 +17,7 @@ import request from "supertest";
 import { eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { suppliers } from "../../src/drizzle/schema/supplier.js";
 import { rma } from "../../src/drizzle/schema/rma.js";
@@ -28,7 +29,7 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let supplierId: number;
 let rmaId: number;
 const userIds: number[] = [];
@@ -44,23 +45,23 @@ let engineeringToken: string;
 let productionToken: string;
 
 async function makeUser(department: string) {
-  const [user] = await db.insert(users).values({ tenantId, email: `perm-test-${department}-${suffix}@test.local`, passwordHash: "unused" }).returning();
+  const [user] = await db.insert(users).values({ email: `perm-test-${department}-${suffix}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
   return user!.id;
 }
 
 function tokenFor(userId: number, department: string | null) {
-  return signAccessToken({ sub: String(userId), tenantId, roleId: null, roleName: "operator", department });
+  return signAccessToken({ sub: String(userId), roleId: null, roleName: "operator", department });
 }
 
 describe("department permissions (real DB + real HTTP path, via RMA)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Perm Test Tenant ${suffix}`, code: `perm-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
 
-    await seedDefaultPermissions(tenantId);
+    await seedDefaultPermissions(companyId);
 
-    const [supplier] = await db.insert(suppliers).values({ tenantId, name: `Perm Test Supplier ${suffix}` }).returning();
+    const [supplier] = await db.insert(suppliers).values({ name: `Perm Test Supplier ${suffix}` }).returning();
     supplierId = supplier!.id;
 
     purchasingUserId = await makeUser("purchasing");
@@ -80,19 +81,12 @@ describe("department permissions (real DB + real HTTP path, via RMA)", () => {
   });
 
   afterAll(async () => {
-    // Same grace period as tenant-isolation.test.ts's afterAll — several
+    // Same grace period as company-isolation.test.ts's afterAll — several
     // tests here trigger a 403/400 against a real "rma" route, and
     // errorHandler.ts's logFailedTransition (fire-and-forget, by design)
     // writes its own standalone audit_trail row for those slightly after
     // this test's own await already resolved.
     await new Promise((r) => setTimeout(r, 200));
-    await db.delete(auditTrail).where(inArray(auditTrail.performedBy, userIds));
-    if (rmaId) await db.delete(rma).where(eq(rma.id, rmaId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(suppliers).where(eq(suppliers.id, supplierId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 

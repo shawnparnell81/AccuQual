@@ -13,7 +13,7 @@ export interface AppUser {
   createdAt: string;
 }
 
-/** GET/POST/PATCH /roles — platform-wide constants, not tenant-scoped (see roles.controller.ts). */
+/** GET/POST/PATCH /roles — platform-wide constants, not company-scoped (see roles.controller.ts). */
 export interface AppRole {
   id: number;
   name: string;
@@ -30,7 +30,6 @@ export interface AppRole {
  */
 export interface WorkflowHistoryEntry {
   id: number;
-  tenantId: number;
   entityType: string;
   entityId: number;
   action: "create" | "update" | "delete" | "status_change" | "transition_failed";
@@ -281,7 +280,6 @@ export interface InventoryMovement {
 /** Phase 8 — the real per-lot/serial ledger (inventoryLots.ts). */
 export interface InventoryLot {
   id: number;
-  tenantId: number;
   itemId: number;
   lotNumber: string;
   serialNumber: string | null;
@@ -298,7 +296,7 @@ export interface InventoryLot {
   createdAt: string;
 }
 
-/** GET /inventory/lots — tenant-wide search result row (a lot joined with its own item's identifying fields, so a row is meaningful without a second lookup). */
+/** GET /inventory/lots — company-wide search result row (a lot joined with its own item's identifying fields, so a row is meaningful without a second lookup). */
 export interface InventoryLotSearchResult extends InventoryLot {
   sku: string;
   description: string | null;
@@ -571,13 +569,13 @@ export interface IotDriftAlert {
   createdAt: string;
 }
 
-/** GET/PATCH /tenant/branding — real tenants.branding jsonb field. */
-export interface TenantBranding {
+/** GET/PATCH /company/branding — real company.branding jsonb field. */
+export interface CompanyBranding {
   logoUrl?: string;
   primaryColor?: string;
   pdfHeader?: string;
   pdfFooter?: string;
-  // Theme colors — same object, see tenants.branding's schema comment.
+  // Theme colors — same object, see company.branding's schema comment.
   secondaryColor?: string;
   accentColor?: string;
   backgroundLight?: string;
@@ -589,15 +587,15 @@ export interface TenantBranding {
   borderColor?: string;
 }
 
-/** GET/PATCH /users/me/theme — any authenticated user, own row only. Unset fields mean "follow the tenant/default theme" for that field specifically, not an all-or-nothing override. */
+/** GET/PATCH /users/me/theme — any authenticated user, own row only. Unset fields mean "follow the company/default theme" for that field specifically, not an all-or-nothing override. */
 export interface UserThemePreferences {
   mode?: "light" | "dark" | "system";
   primaryColor?: string;
   accentColor?: string;
 }
 
-/** GET/PATCH /tenant/ai-config (admin only) — apiKey is never returned; maskedApiKey/hasApiKey only. Now live: the AI Assistant proxy (POST /ai/assistant) and the AI pipelines use this config's provider/key/model when set, falling back to the global env config otherwise. */
-export interface TenantAiConfig {
+/** GET/PATCH /company/ai-config (admin only) — apiKey is never returned; maskedApiKey/hasApiKey only. Now live: the AI Assistant proxy (POST /ai/assistant) and the AI pipelines use this config's provider/key/model when set, falling back to the global env config otherwise. */
+export interface CompanyAiConfig {
   provider: "anthropic" | "openai" | null;
   modelName: string | null;
   temperature: number | null;
@@ -607,17 +605,17 @@ export interface TenantAiConfig {
   assistantName: string | null;
   /** Phase 4 — "standard" runs every AI pipeline as normal; "strict" refuses to save any output that fails its own schema check (see ai.guardrails.ts) instead of showing a degraded/malformed result. */
   safetyMode: "standard" | "strict";
-  /** Phase 4 — "ready" when this tenant's own key or the platform default is present; "missing" otherwise. There's no "invalid" value: a bad key is rejected at save time (a 400 on PATCH), never stored. */
+  /** Phase 4 — "ready" when this company's own key or the platform default is present; "missing" otherwise. There's no "invalid" value: a bad key is rejected at save time (a 400 on PATCH), never stored. */
   keyStatus: "ready" | "missing";
-  // BYOK usage limit — see tenants.aiMonthlyLimit's schema comment for why
+  // BYOK usage limit — see company.aiMonthlyLimit's schema comment for why
   // enforcement itself is computed live from audit trail history, not a
   // stored counter.
   monthlyLimit: number | null;
   limitEnforced: boolean;
 }
 
-/** GET /tenant/ai-usage (admin only). dailyBreakdown/moduleBreakdown cover the last 30 days; totalTokens/totalCost are all-time. remainingTokens is null when no limit is enforced. */
-export interface TenantAiUsage {
+/** GET /company/ai-usage (admin only). dailyBreakdown/moduleBreakdown cover the last 30 days; totalTokens/totalCost are all-time. remainingTokens is null when no limit is enforced. */
+export interface CompanyAiUsage {
   totalTokens: number;
   totalCost: number;
   monthlyLimit: number | null;
@@ -649,8 +647,8 @@ export interface AiSuggestionHistoryResponse {
   offset: number;
 }
 
-/** GET/PATCH /tenant/profile — Admin Console "Tenant Settings" (Phase 10). name/logoUrl mirror the tenants.name column and branding.logoUrl (not a separate store); timezone/contact fields are new. */
-export interface TenantProfile {
+/** GET/PATCH /company/profile — Admin Console "Company Settings" (Phase 10). name/logoUrl mirror the company.name column and branding.logoUrl (not a separate store); timezone/contact fields are new. */
+export interface CompanyProfile {
   name: string;
   code: string;
   logoUrl: string | null;
@@ -689,7 +687,7 @@ export interface SystemHealthReport {
   };
 }
 
-/** GET /tenant/assistant-name — open to ANY authenticated user (not just admin), so the floating Assistant panel can label itself for everyone. */
+/** GET /company/assistant-name — open to ANY authenticated user (not just admin), so the floating Assistant panel can label itself for everyone. */
 export interface AssistantNameResponse {
   assistantName: string | null;
 }
@@ -699,7 +697,7 @@ export interface AssistantReply {
   content: string;
   model: string;
   usage: { inputTokens: number; outputTokens: number } | null;
-  /** True when no AI provider is configured for this tenant and `content` is the deterministic placeholder, never a real model response — see AiFieldAssistant.tsx, which refuses to let this be inserted into a real field. */
+  /** True when no AI provider is configured for this company and `content` is the deterministic placeholder, never a real model response — see AiFieldAssistant.tsx, which refuses to let this be inserted into a real field. */
   isStub: boolean;
 }
 
@@ -1267,7 +1265,7 @@ export interface ErpPresetVersionEntry {
 
 export interface ErpConnectorPreset {
   id: number;
-  tenantId: number | null;
+  isBuiltin: boolean;
   vendor: ErpPresetVendor;
   module: ErpPresetModule;
   name: string;
@@ -1291,7 +1289,6 @@ export interface ErpSyncErrorFailedField {
 
 export interface ErpSyncError {
   id: number;
-  tenantId: number;
   module: string;
   presetId: number | null;
   presetVersion: number | null;
@@ -2008,8 +2005,8 @@ export interface UserEffectivePermissionRow {
   effectiveLevel: ModuleAccessLevel;
 }
 
-/** GET /users row shape — this tenant's own user roster (the Roles & Permissions User Assignments tab reuses the existing users API, not a new one). */
-export interface TenantUser {
+/** GET /users row shape — this company's own user roster (the Roles & Permissions User Assignments tab reuses the existing users API, not a new one). */
+export interface CompanyUser {
   id: number;
   email: string;
   name: string | null;

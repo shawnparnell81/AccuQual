@@ -133,7 +133,7 @@ export const runHandler = asyncHandler(async (req: Request, res: Response) => {
     return { number: row.number, raw };
   });
 
-  const ctx: ImportContext = { db: req.db!, tenantId: req.tenantId!, userId: req.user?.id };
+  const ctx: ImportContext = { db: req.db!, userId: req.user?.id };
   const primary = entity.fields[0]!.key;
   const lookups = await entity.prepare(ctx, raws.map((r) => (r.raw[primary] ?? "").trim().toLowerCase()).filter(Boolean));
 

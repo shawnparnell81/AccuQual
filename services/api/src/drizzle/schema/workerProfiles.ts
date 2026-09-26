@@ -1,5 +1,4 @@
 import { pgTable, serial, integer, text, timestamp, jsonb, unique } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
 // Worker Runtime (the last of the four "Workforce & Operations Layer"
@@ -21,7 +20,6 @@ export const workerProfiles = pgTable(
   "worker_profiles",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     userId: integer("user_id").references(() => users.id).notNull(),
     jobTitle: text("job_title"),
     // Free text rather than an enum: shift naming (day/evening/night, or a
@@ -42,7 +40,7 @@ export const workerProfiles = pgTable(
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => ({
-    tenantUserUnique: unique("worker_profiles_tenant_user_unique").on(table.tenantId, table.userId),
+    userUnique: unique("worker_profiles_user_unique").on(table.userId),
   })
 );
 

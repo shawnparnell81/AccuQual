@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { createErpPresetSchema, updateErpPresetSchema } from "./erpPresets.validation.js";
 import {
@@ -35,12 +35,12 @@ import {
  * "/erp/purchase-orders"), since Express only skips it after all `.use()`
  * middleware for a mount point has already run. A blanket `.use()` here
  * would both wrongly force admin-only on erpRouter's own department-gated
- * routes AND open a second, never-finalized withTenantDb transaction for
+ * routes AND open a second, never-finalized withDb transaction for
  * every request that falls through to erpRouter — found live via a real
  * regression in erp-module.test.ts's own suite.
  */
 export const erpPresetsRouter = Router();
-const gate = [requireAuth, withTenantDb, requireRole("admin")];
+const gate = [requireAuth, withDb, requireRole("admin")];
 
 erpPresetsRouter.get("/active-preset/:module", ...gate, getActivePresetHandler);
 

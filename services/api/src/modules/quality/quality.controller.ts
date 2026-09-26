@@ -4,7 +4,7 @@ import { discrepancyInvestigations, type DiscrepancyInvestigation } from "../../
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
-import { assertTenantUser } from "../../utils/assertTenantUser.js";
+import { assertCompanyUser } from "../../utils/assertCompanyUser.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { syncDiRecordToForm } from "./quality.formSync.js";
@@ -16,7 +16,7 @@ export const baseHandlers = crudFactory(discrepancyInvestigations, {
   entityName: "Discrepancy investigation",
   idColumn: "id",
   afterCreate: async (created, req) => {
-    await syncDiRecordToForm(req.db!, req.tenantId!, created as unknown as DiscrepancyInvestigation, req.user?.id);
+    await syncDiRecordToForm(req.db!, created as unknown as DiscrepancyInvestigation, req.user?.id);
   },
 });
 
@@ -24,7 +24,7 @@ async function loadOwned(req: Request): Promise<DiscrepancyInvestigation> {
   const [row] = await req
     .db!.select()
     .from(discrepancyInvestigations)
-    .where(and(eq(discrepancyInvestigations.id, Number(req.params.id)), eq(discrepancyInvestigations.tenantId, req.tenantId!)));
+    .where(and(eq(discrepancyInvestigations.id, Number(req.params.id))));
   if (!row) throw AppError.notFound("Discrepancy investigation");
   return row;
 }
@@ -33,22 +33,21 @@ async function loadOwned(req: Request): Promise<DiscrepancyInvestigation> {
 export const updateHandler = asyncHandler(async (req: Request, res: Response) => {
   const current = await loadOwned(req);
   if (current.status === "closed") throw AppError.badRequest("A closed discrepancy investigation cannot be edited.");
-  if (req.body.assignedTo) await assertTenantUser(req.db!, req.tenantId!, req.body.assignedTo);
+  if (req.body.assignedTo) await assertCompanyUser(req.db!, req.body.assignedTo);
 
   const [updated] = await req
     .db!.update(discrepancyInvestigations)
     .set({ ...req.body, updatedAt: new Date() })
-    .where(and(eq(discrepancyInvestigations.id, current.id), eq(discrepancyInvestigations.tenantId, req.tenantId!)))
+    .where(and(eq(discrepancyInvestigations.id, current.id)))
     .returning();
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "Discrepancy investigation",
     entityId: current.id,
     action: "update",
     changes: req.body,
     performedBy: req.user?.id,
   });
-  await syncDiRecordToForm(req.db!, req.tenantId!, updated!, req.user?.id);
+  await syncDiRecordToForm(req.db!, updated!, req.user?.id);
   res.json(updated);
 });
 
@@ -59,7 +58,6 @@ export const updateHandler = asyncHandler(async (req: Request, res: Response) =>
  * history invisible).
  */
 async function transition(req: Request, res: Response, opts: { from: string; to: string; event: string; extra?: (current: DiscrepancyInvestigation) => Partial<typeof discrepancyInvestigations.$inferInsert> }) {
-  const tenantId = req.tenantId!;
   const current = await loadOwned(req);
   if (current.status !== opts.from) {
     throw AppError.badRequest(`Cannot ${opts.event} a discrepancy investigation from status "${current.status}" — must be "${opts.from}"`);
@@ -68,18 +66,17 @@ async function transition(req: Request, res: Response, opts: { from: string; to:
   const [updated] = await req
     .db!.update(discrepancyInvestigations)
     .set({ ...(opts.extra?.(current) ?? {}), status: opts.to, updatedAt: new Date() })
-    .where(and(eq(discrepancyInvestigations.id, current.id), eq(discrepancyInvestigations.tenantId, tenantId)))
+    .where(and(eq(discrepancyInvestigations.id, current.id)))
     .returning();
   await recordAuditTrail(req.db!, {
-    tenantId,
     entityType: "Discrepancy investigation",
     entityId: current.id,
     action: "status_change",
     changes: { action: opts.event, from: opts.from, to: opts.to },
     performedBy: req.user?.id,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId, module: "di", event: opts.event, entityId: current.id });
-  await syncDiRecordToForm(req.db!, tenantId, updated!, req.user?.id);
+  await publishEvent(WORKFLOW_STREAM, { module: "di", event: opts.event, entityId: current.id });
+  await syncDiRecordToForm(req.db!, updated!, req.user?.id);
   res.json(updated);
 }
 

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createFeasibilitySchema, updateFeasibilitySchema, updateSignoffSchema } from "./feasibility.validation.js";
@@ -28,7 +28,7 @@ export const feasibilityRouter = Router();
 // POST /ai/assistant (context.module = "feasibility"), not a bespoke
 // pipeline. See ai.assistant.ts's loadContextSummary for the "feasibility"
 // case.
-feasibilityRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("feasibility"));
+feasibilityRouter.use(requireAuth, withDb, requireDepartmentAccess("feasibility"));
 
 feasibilityRouter.get("/", listFeasibilityHandler);
 feasibilityRouter.post("/", validate(createFeasibilitySchema), createFeasibilityHandler);

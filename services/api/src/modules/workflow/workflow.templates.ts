@@ -18,7 +18,7 @@ export interface WorkflowTemplate {
  * alongside this template work so these two templates have something real
  * to react to). Loading a template into the builder (GET /workflow/templates)
  * pre-fills the node editor only — nothing is created or activated until
- * the tenant explicitly reviews and saves it as their own workflow_definitions
+ * the company explicitly reviews and saves it as their own workflow_definitions
  * row, same as hand-building one from scratch.
  */
 export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [

@@ -2,17 +2,17 @@ import type { Request, Response } from "express";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { aiRiskScores, aiSuggestions } from "../../drizzle/schema/ai.js";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
-import { tenants } from "../../drizzle/schema/tenants.js";
+import { company } from "../../drizzle/schema/company.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail, resolveUserNames } from "../audit-trail/audit-trail.service.js";
-import { runPipelineAndRecord, describeAiState, loadTenantLlmOptions, checkUsageLimit } from "./ai.usage.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import { runPipelineAndRecord, describeAiState, loadCompanyLlmOptions, checkUsageLimit } from "./ai.usage.js";
+import type { Db } from "../../lib/requestDb.js";
 import * as pipelines from "./ai.pipelines.js";
 
 /**
  * Phase 4 unification: every handler below now goes through
- * runPipelineAndRecord — the same tenant-BYOK-config + usage-limit-check +
+ * runPipelineAndRecord — the same company-BYOK-config + usage-limit-check +
  * audit-trail-with-aiState path ai.assistant.ts and the newer pipelines
  * (Work Order Planning, PR Justification, ERP Automation, Risk Register)
  * already used. Previously these 9 endpoints called their pipeline directly
@@ -24,8 +24,7 @@ import * as pipelines from "./ai.pipelines.js";
 export const analyzeRootCause = asyncHandler(async (req: Request, res: Response) => {
   const { ncrId, ncrData } = req.body;
   const { suggestion, output } = await runPipelineAndRecord(
-    req.db! as TenantDb,
-    req.tenantId!,
+    req.db! as Db,
     req.user?.id,
     "ncr",
     "root_cause",
@@ -39,8 +38,7 @@ export const analyzeRootCause = asyncHandler(async (req: Request, res: Response)
 export const generateCapa = asyncHandler(async (req: Request, res: Response) => {
   const { ncrId, rootCause, ncrData } = req.body;
   const { suggestion, output } = await runPipelineAndRecord(
-    req.db! as TenantDb,
-    req.tenantId!,
+    req.db! as Db,
     req.user?.id,
     "capa",
     "capa_generator",
@@ -54,8 +52,7 @@ export const generateCapa = asyncHandler(async (req: Request, res: Response) => 
 export const generateEightD = asyncHandler(async (req: Request, res: Response) => {
   const { ncrId, ncrData, capaData } = req.body;
   const { suggestion, output } = await runPipelineAndRecord(
-    req.db! as TenantDb,
-    req.tenantId!,
+    req.db! as Db,
     req.user?.id,
     "8d",
     "eight_d_generator",
@@ -80,24 +77,22 @@ export const generateEightD = asyncHandler(async (req: Request, res: Response) =
  */
 export const riskScore = asyncHandler(async (req: Request, res: Response) => {
   const { entityType, entityId, input } = req.body;
-  const db = req.db! as TenantDb;
-  const tenantId = req.tenantId!;
+  const db = req.db! as Db;
 
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
-  const limitError = await checkUsageLimit(db, tenantId, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const [co] = await db.select().from(company);
+  const limitError = await checkUsageLimit(db, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
-  const { llmOptions } = await loadTenantLlmOptions(db, tenantId);
+  const { llmOptions } = await loadCompanyLlmOptions(db);
 
   const { classified } = await pipelines.runRiskScoringPipeline(input, llmOptions);
   const output = classified.data as { score?: number };
 
   const [saved] = await db
     .insert(aiRiskScores)
-    .values({ tenantId, entityType, entityId, score: String(output.score ?? 0), details: output, status: classified.status, errorMessage: classified.errorMessage })
+    .values({ entityType, entityId, score: String(output.score ?? 0), details: output, status: classified.status, errorMessage: classified.errorMessage })
     .returning();
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "AiRiskScore",
     entityId: saved!.id,
     action: "create",
@@ -119,8 +114,7 @@ export const riskScore = asyncHandler(async (req: Request, res: Response) => {
 export const formSuggest = asyncHandler(async (req: Request, res: Response) => {
   const { formType, partialData } = req.body;
   const { suggestion, output } = await runPipelineAndRecord(
-    req.db! as TenantDb,
-    req.tenantId!,
+    req.db! as Db,
     req.user?.id,
     "form",
     "form_suggest",
@@ -134,8 +128,7 @@ export const formSuggest = asyncHandler(async (req: Request, res: Response) => {
 export const formAutofill = asyncHandler(async (req: Request, res: Response) => {
   const { formType, context } = req.body;
   const { suggestion, output } = await runPipelineAndRecord(
-    req.db! as TenantDb,
-    req.tenantId!,
+    req.db! as Db,
     req.user?.id,
     "form",
     "form_autofill",
@@ -161,7 +154,7 @@ export const analysis = asyncHandler(async (req: Request, res: Response) => {
   // audit_prep specifically; document_summary/predictive_quality aren't
   // named by any Phase 5 task, so they keep the generic default.
   const okVerb = kind === "audit_prep" ? "AI-generated audit summary" : "AI-suggested";
-  const { suggestion, output } = await runPipelineAndRecord(req.db! as TenantDb, req.tenantId!, req.user?.id, "analysis", kind, { input }, okVerb, runner);
+  const { suggestion, output } = await runPipelineAndRecord(req.db! as Db, req.user?.id, "analysis", kind, { input }, okVerb, runner);
   res.json({ ...suggestion, output });
 });
 
@@ -173,8 +166,7 @@ export const analysis = asyncHandler(async (req: Request, res: Response) => {
 export const ncrTriage = asyncHandler(async (req: Request, res: Response) => {
   const { ncrId, input } = req.body;
   const { suggestion, output } = await runPipelineAndRecord(
-    req.db! as TenantDb,
-    req.tenantId!,
+    req.db! as Db,
     req.user?.id,
     "ncr",
     "ncr_triage",
@@ -188,8 +180,7 @@ export const ncrTriage = asyncHandler(async (req: Request, res: Response) => {
 export const supplierMessageDraft = asyncHandler(async (req: Request, res: Response) => {
   const { supplierId, input } = req.body;
   const { suggestion, output } = await runPipelineAndRecord(
-    req.db! as TenantDb,
-    req.tenantId!,
+    req.db! as Db,
     req.user?.id,
     "supplier",
     "supplier_message_draft",
@@ -203,8 +194,7 @@ export const supplierMessageDraft = asyncHandler(async (req: Request, res: Respo
 export const warrantyTriage = asyncHandler(async (req: Request, res: Response) => {
   const { claimId, input } = req.body;
   const { suggestion, output } = await runPipelineAndRecord(
-    req.db! as TenantDb,
-    req.tenantId!,
+    req.db! as Db,
     req.user?.id,
     "warranty",
     "warranty_triage",
@@ -219,8 +209,7 @@ export const warrantyTriage = asyncHandler(async (req: Request, res: Response) =
 export const inspectionNotes = asyncHandler(async (req: Request, res: Response) => {
   const { reportId, input } = req.body;
   const { suggestion, output } = await runPipelineAndRecord(
-    req.db! as TenantDb,
-    req.tenantId!,
+    req.db! as Db,
     req.user?.id,
     "quality_inspection",
     "inspection_notes",
@@ -234,9 +223,9 @@ export const inspectionNotes = asyncHandler(async (req: Request, res: Response) 
 /**
  * Real browsable AI suggestion history — previously the ai_suggestions
  * table was only ever read back one row at a time (recordSuggestionDecision
- * below) or aggregated into a cross-tenant ok/stub/error COUNT for Platform
+ * below) or aggregated into a ok/stub/error COUNT for Platform
  * Admin's AI Overview (platform.service.ts's getAiOverview); nothing let a
- * tenant admin actually browse what the AI has produced. Tenant-scoped,
+ * company admin actually browse what the AI has produced. Company-scoped,
  * admin-gated (see ai.routes.ts), newest first, with optional `module`/
  * `status` filters and simple limit/offset paging (this table has no
  * expected-to-be-huge growth pattern that would need cursor pagination).
@@ -248,13 +237,12 @@ export const inspectionNotes = asyncHandler(async (req: Request, res: Response) 
  * changing that established recording shape.
  */
 export const listSuggestions = asyncHandler(async (req: Request, res: Response) => {
-  const db = req.db! as TenantDb;
-  const tenantId = req.tenantId!;
+  const db = req.db! as Db;
   const { module, status } = req.query as { module?: string; status?: string };
   const limit = Math.min(Number(req.query.limit) || 50, 200);
   const offset = Math.max(Number(req.query.offset) || 0, 0);
 
-  const conditions = [eq(aiSuggestions.tenantId, tenantId)];
+  const conditions = [];
   if (module) conditions.push(eq(aiSuggestions.module, module));
   if (status) conditions.push(eq(aiSuggestions.status, status));
 
@@ -269,7 +257,7 @@ export const listSuggestions = asyncHandler(async (req: Request, res: Response) 
     ? await db
         .select({ entityId: auditTrail.entityId, changes: auditTrail.changes, createdAt: auditTrail.createdAt })
         .from(auditTrail)
-        .where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "AiSuggestion"), eq(auditTrail.action, "decision"), inArray(auditTrail.entityId, suggestionIds)))
+        .where(and(eq(auditTrail.entityType, "AiSuggestion"), eq(auditTrail.action, "decision"), inArray(auditTrail.entityId, suggestionIds)))
     : [];
   // Keep the most recent decision per suggestion id — normally there's
   // exactly one, but a user re-opening and re-deciding an old suggestion
@@ -298,20 +286,18 @@ export const listSuggestions = asyncHandler(async (req: Request, res: Response) 
  * AiStructuredSuggestion consumer calls this exactly once per suggestion,
  * whether the user clicked Accept, clicked Reject, or closed the dialog
  * without deciding (treated as a reject — an unactioned suggestion is not
- * a silent accept). Tenant-scoped: a suggestion id from another tenant
+ * a silent accept). Company-scoped: a suggestion id from another company
  * 404s, never leaks whether it exists.
  */
 export const recordSuggestionDecision = asyncHandler(async (req: Request, res: Response) => {
   const suggestionId = Number(req.params.id);
   const { decision } = req.body as { decision: "accepted" | "rejected" };
-  const tenantId = req.tenantId!;
-  const db = req.db! as TenantDb;
+  const db = req.db! as Db;
 
-  const [existing] = await db.select().from(aiSuggestions).where(and(eq(aiSuggestions.id, suggestionId), eq(aiSuggestions.tenantId, tenantId)));
+  const [existing] = await db.select().from(aiSuggestions).where(and(eq(aiSuggestions.id, suggestionId)));
   if (!existing) throw AppError.notFound("AiSuggestion");
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "AiSuggestion",
     entityId: suggestionId,
     action: "decision",

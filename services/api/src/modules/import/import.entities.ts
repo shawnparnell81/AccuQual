@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { users } from "../../drizzle/schema/users.js";
@@ -25,8 +25,7 @@ export interface ImportField {
 }
 
 export interface ImportContext {
-  db: TenantDb;
-  tenantId: number;
+  db: Db;
   userId?: number;
 }
 
@@ -86,7 +85,7 @@ const supplierEntity: ImportEntity<SupplierValue> = {
     { key: "contactEmail", label: "Contact email", example: "sales@acmefasteners.com", aliases: ["email", "contact", "e-mail"] },
   ],
   async prepare(ctx) {
-    const rows = await ctx.db.select({ name: suppliers.name }).from(suppliers).where(eq(suppliers.tenantId, ctx.tenantId));
+    const rows = await ctx.db.select({ name: suppliers.name }).from(suppliers);
     return { existing: new Set(rows.map((r) => r.name.trim().toLowerCase())) };
   },
   validate(raw) {
@@ -99,8 +98,8 @@ const supplierEntity: ImportEntity<SupplierValue> = {
     return { errors, value: errors.length ? undefined : { name, contactEmail: contactEmail || undefined }, identity: name.toLowerCase() };
   },
   async insert(ctx, value) {
-    const [created] = await ctx.db.insert(suppliers).values({ tenantId: ctx.tenantId, name: value.name, contactEmail: value.contactEmail }).returning();
-    await recordAuditTrail(ctx.db, { tenantId: ctx.tenantId, entityType: "Supplier", entityId: created!.id, action: "create", changes: { ...value, source: "excel_import" }, performedBy: ctx.userId });
+    const [created] = await ctx.db.insert(suppliers).values({ name: value.name, contactEmail: value.contactEmail }).returning();
+    await recordAuditTrail(ctx.db, { entityType: "Supplier", entityId: created!.id, action: "create", changes: { ...value, source: "excel_import" }, performedBy: ctx.userId });
     return { id: created!.id, label: created!.name };
   },
 };
@@ -156,10 +155,10 @@ const itemEntity: ImportEntity<ItemValue, { suppliersByName: Map<string, number>
     for (let i = 0; i < identities.length; i += 500) {
       const chunk = identities.slice(i, i + 500);
       if (chunk.length === 0) continue;
-      const found = await ctx.db.select({ sku: inventoryItems.sku }).from(inventoryItems).where(and(eq(inventoryItems.tenantId, ctx.tenantId), inArray(sql`lower(${inventoryItems.sku})`, chunk)));
+      const found = await ctx.db.select({ sku: inventoryItems.sku }).from(inventoryItems).where(and(inArray(sql`lower(${inventoryItems.sku})`, chunk)));
       for (const row of found) existing.add(row.sku.trim().toLowerCase());
     }
-    const supplierRows = await ctx.db.select({ id: suppliers.id, name: suppliers.name }).from(suppliers).where(eq(suppliers.tenantId, ctx.tenantId));
+    const supplierRows = await ctx.db.select({ id: suppliers.id, name: suppliers.name }).from(suppliers);
     return { existing, suppliersByName: new Map(supplierRows.map((s) => [s.name.trim().toLowerCase(), s.id])) };
   },
   validate(raw, lookups) {
@@ -209,10 +208,10 @@ const itemEntity: ImportEntity<ItemValue, { suppliersByName: Map<string, number>
   async insert(ctx, value) {
     const [created] = await ctx.db
       .insert(inventoryItems)
-      .values({ ...value, minLevel: String(value.minLevel), maxLevel: value.maxLevel?.toString(), reorderQuantity: value.reorderQuantity?.toString(), unitCost: value.unitCost?.toString(), tenantId: ctx.tenantId })
+      .values({ ...value, minLevel: String(value.minLevel), maxLevel: value.maxLevel?.toString(), reorderQuantity: value.reorderQuantity?.toString(), unitCost: value.unitCost?.toString(), })
       .returning();
-    await recordAuditTrail(ctx.db, { tenantId: ctx.tenantId, entityType: "InventoryItem", entityId: created!.id, action: "create", changes: { ...value, source: "excel_import" }, performedBy: ctx.userId });
-    await recomputeState(ctx.db, ctx.tenantId, created!.id, ctx.userId);
+    await recordAuditTrail(ctx.db, { entityType: "InventoryItem", entityId: created!.id, action: "create", changes: { ...value, source: "excel_import" }, performedBy: ctx.userId });
+    await recomputeState(ctx.db, created!.id, ctx.userId);
     return { id: created!.id, label: created!.sku };
   },
 };
@@ -270,7 +269,7 @@ const peopleEntity: ImportEntity<PersonValue, { rolesByName: Map<string, number>
     if (roleText) {
       roleId = lookups.rolesByName.get(roleText.toLowerCase().replace(/\s+/g, "_")) ?? lookups.rolesByName.get(roleText.toLowerCase());
       if (roleId === undefined) errors.push(`Role "${roleText}" doesn't exist.`);
-      else if (["admin", "platform_admin"].includes(roleText.toLowerCase())) errors.push("Admin accounts can't be created by import. Add them one at a time.");
+      else if (["admin"].includes(roleText.toLowerCase())) errors.push("Admin accounts can't be created by import. Add them one at a time.");
     }
 
     let department: string | undefined;
@@ -290,9 +289,9 @@ const peopleEntity: ImportEntity<PersonValue, { rolesByName: Map<string, number>
     const passwordHash = await bcrypt.hash(temporaryPassword, 10);
     const [created] = await ctx.db
       .insert(users)
-      .values({ email: value.email, passwordHash, name: value.name, roleId: value.roleId, department: value.department, tenantId: ctx.tenantId, passwordChangedAt: new Date() })
+      .values({ email: value.email, passwordHash, name: value.name, roleId: value.roleId, department: value.department, passwordChangedAt: new Date() })
       .returning();
-    await recordAuditTrail(ctx.db, { tenantId: ctx.tenantId, entityType: "User", entityId: created!.id, action: "create", changes: { email: value.email, roleId: value.roleId, department: value.department, source: "excel_import" }, performedBy: ctx.userId });
+    await recordAuditTrail(ctx.db, { entityType: "User", entityId: created!.id, action: "create", changes: { email: value.email, roleId: value.roleId, department: value.department, source: "excel_import" }, performedBy: ctx.userId });
     return { id: created!.id, label: value.email, temporaryPassword };
   },
 };

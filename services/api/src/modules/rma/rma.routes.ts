@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createRmaSchema, updateRmaSchema, changeRmaStatusSchema, createRmaItemSchema, updateRmaItemSchema } from "./rma.validation.js";
@@ -23,7 +23,7 @@ export const rmaRouter = Router();
 // target status) are inline in rma.controller.ts, the same way
 // inventory.controller.ts/erp.controller.ts guard their own per-action
 // limits.
-rmaRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("rma"));
+rmaRouter.use(requireAuth, withDb, requireDepartmentAccess("rma"));
 
 rmaRouter.get("/", listRmaHandler);
 rmaRouter.post("/", validate(createRmaSchema), createRmaHandler);

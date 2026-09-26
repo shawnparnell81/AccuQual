@@ -42,7 +42,7 @@ export interface PendingItem {
  * derives every cross-module dashboard metric. Two fan-outs are real but
  * deliberately bounded: training assignments (one request per COURSE, not
  * per assignment) and audit findings (one request per AUDIT, not per
- * finding) — both counts are normally small for a QMS tenant; a bulk
+ * finding) — both counts are normally small for a QMS company; a bulk
  * "all assignments" or "all findings" endpoint doesn't exist and adding one
  * is out of scope (see the brief's "no new endpoints").
  */

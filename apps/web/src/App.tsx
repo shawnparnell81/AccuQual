@@ -2,7 +2,6 @@ import { Routes, Route } from "react-router-dom";
 import { AppLayout } from "./components/layout/AppLayout";
 import { ProtectedRoute } from "./components/layout/ProtectedRoute";
 import { LoginPage } from "./routes/Auth/LoginPage";
-import { RegisterPage } from "./routes/Auth/RegisterPage";
 import { ForgotPasswordPage } from "./routes/Auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "./routes/Auth/ResetPasswordPage";
 import { DashboardPage } from "./routes/Dashboard/DashboardPage";
@@ -65,7 +64,6 @@ import { WorkflowBuilderPage } from "./routes/Workflow/WorkflowBuilderPage";
 import { WorkflowCanvasPage } from "./routes/Workflow/WorkflowCanvasPage";
 import { AiInsightsPage } from "./routes/AI/AiInsightsPage";
 import { DigitalTwinPage } from "./routes/DigitalTwin/DigitalTwinPage";
-import { PlatformAdminPage } from "./routes/Platform/PlatformAdminPage";
 import { ReportingHubPage } from "./routes/Reporting/ReportingHubPage";
 import { NavigationSettingsPage } from "./routes/Settings/NavigationSettingsPage";
 import { SettingsPage } from "./routes/Settings/SettingsPage";
@@ -97,9 +95,9 @@ import { ErpPresetEditorPage } from "./routes/Erp/ErpPresetEditorPage";
 import { WorkOrderListPage } from "./routes/WorkOrders/WorkOrderListPage";
 import { WorkOrderDetailPage } from "./routes/WorkOrders/WorkOrderDetailPage";
 import { OnboardingPage } from "./routes/Onboarding/OnboardingPage";
-import { AdminTenantBrandingPage } from "./routes/Admin/AdminTenantBrandingPage";
-import { AdminTenantTemplatesPage } from "./routes/Admin/AdminTenantTemplatesPage";
-import { AdminTenantAiConfigPage } from "./routes/Admin/AdminTenantAiConfigPage";
+import { AdminCompanyBrandingPage } from "./routes/Admin/AdminCompanyBrandingPage";
+import { AdminCompanyTemplatesPage } from "./routes/Admin/AdminCompanyTemplatesPage";
+import { AdminCompanyAiConfigPage } from "./routes/Admin/AdminCompanyAiConfigPage";
 import { AdminAiUsagePage } from "./routes/Admin/AdminAiUsagePage";
 import { AdminDigitalTwinSetupPage } from "./routes/Admin/AdminDigitalTwinSetupPage";
 import { RolesPermissionsPage } from "./routes/Admin/RolesPermissionsPage";
@@ -113,9 +111,8 @@ import { AdminQualitySettingsPage } from "./routes/Admin/AdminQualitySettingsPag
 import { AdminReceivingInventorySettingsPage } from "./routes/Admin/AdminReceivingInventorySettingsPage";
 import { AdminSystemHealthPage } from "./routes/Admin/AdminSystemHealthPage";
 import { AdminApiDocsPage } from "./routes/Admin/AdminApiDocsPage";
-import { AdminTenantSettingsPage } from "./routes/Admin/AdminTenantSettingsPage";
+import { AdminCompanySettingsPage } from "./routes/Admin/AdminCompanySettingsPage";
 import { AdminSsoPage } from "./routes/Admin/AdminSsoPage";
-import { AdminBillingPage } from "./routes/Admin/AdminBillingPage";
 import { AdminDataExportPage } from "./routes/Admin/AdminDataExportPage";
 import { HomePage } from "./routes/Home/HomePage";
 import { homeKind } from "./lib/opsLanguage";
@@ -123,10 +120,7 @@ import { CalendarPage } from "./routes/Calendar/CalendarPage";
 import { useCurrentUser, useAuthBootstrap } from "./hooks/useAuth";
 
 function HomeRoute() {
-  // Platform admins have no tenant, so every tenant-data page 401s for them —
-  // send them straight to the console that's actually theirs.
   const user = useCurrentUser();
-  if (user?.roleName === "platform_admin") return <PlatformAdminPage />;
   // Quality leads and admins get the plant-wide pulse; everyone else lands on their own day.
   return homeKind(user?.roleName) === "lead" ? <DashboardPage /> : <HomePage />;
 }
@@ -136,7 +130,6 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
 
@@ -145,7 +138,6 @@ export function App() {
           <Route path="/" element={<HomeRoute />} />
           <Route path="/home" element={<HomePage />} />
           <Route path="/calendar" element={<CalendarPage />} />
-          <Route path="/platform" element={<PlatformAdminPage />} />
 
           <Route path="/ncr" element={<NcrListPage />} />
           <Route path="/ncr/:id" element={<NcrWorkspacePage />} />
@@ -251,10 +243,10 @@ export function App() {
           {/* Kept working as its own URL (embedded as SettingsPage's "Navigation" tab) — anyone with this link bookmarked shouldn't get a 404. */}
           <Route path="/settings/navigation" element={<NavigationSettingsPage />} />
           {/* Kept working as their own URLs — now also reachable/embedded via the Admin Console shell below, not replaced. */}
-          <Route path="/admin/tenant-ai" element={<AdminTenantAiConfigPage />} />
+          <Route path="/admin/company-ai" element={<AdminCompanyAiConfigPage />} />
           <Route path="/admin/ai-usage" element={<AdminAiUsagePage />} />
 
-          {/* Phase 10 — Admin Console: one shell nesting Roles & Permissions, Tenant Branding/Templates/Digital-Twin-Setup (all pre-existing, unchanged), and the new Users&Roles/AI Settings/Supplier/Quality/Receiving-Inventory/System Health/Tenant Settings sections. */}
+          {/* Phase 10 — Admin Console: one shell nesting Roles & Permissions, Company Branding/Templates/Digital-Twin-Setup (all pre-existing, unchanged), and the new Users&Roles/AI Settings/Supplier/Quality/Receiving-Inventory/System Health/Company Settings sections. */}
           <Route path="/admin" element={<AdminConsoleLayout />}>
             <Route index element={<AdminConsoleHomePage />} />
             <Route path="users" element={<AdminUsersRolesPage />} />
@@ -266,12 +258,11 @@ export function App() {
             <Route path="receiving-inventory-settings" element={<AdminReceivingInventorySettingsPage />} />
             <Route path="system-health" element={<AdminSystemHealthPage />} />
             <Route path="api-docs" element={<AdminApiDocsPage />} />
-            <Route path="tenant-settings" element={<AdminTenantSettingsPage />} />
+            <Route path="company-settings" element={<AdminCompanySettingsPage />} />
             <Route path="sso" element={<AdminSsoPage />} />
             <Route path="data-export" element={<AdminDataExportPage />} />
-            <Route path="billing" element={<AdminBillingPage />} />
-            <Route path="tenant-branding" element={<AdminTenantBrandingPage />} />
-            <Route path="tenant-templates" element={<AdminTenantTemplatesPage />} />
+            <Route path="company-branding" element={<AdminCompanyBrandingPage />} />
+            <Route path="company-templates" element={<AdminCompanyTemplatesPage />} />
             <Route path="digital-twin" element={<AdminDigitalTwinSetupPage />} />
           </Route>
 

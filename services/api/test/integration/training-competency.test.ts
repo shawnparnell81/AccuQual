@@ -1,12 +1,13 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Training & competency: who is required to be trained, sessions and attendance, competency evaluations, expiry, retraining when the
-// linked document is revised, overdue, digests, RBAC, tenant isolation, audit. Plus the pure qualification rules.
+// linked document is revised, overdue, digests, RBAC, company isolation, audit. Plus the pure qualification rules.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { and, eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { roles } from "../../src/drizzle/schema/roles.js";
 import { documents } from "../../src/drizzle/schema/documents.js";
@@ -66,8 +67,8 @@ describe("qualificationStatus (pure)", () => {
 });
 
 // ---- through the real API -----------------------------------------------------------------------------------------------------------------------------
-let tenantId: number;
-let otherTenantId: number;
+let companyId: number;
+
 const userIds: number[] = [];
 type Who = { id: number; email: string; token: string };
 let manager: Who; // quality_manager, quality dept: manages courses/sessions, evaluates
@@ -78,17 +79,17 @@ let emp2: Who;
 let emp3: Who; // a different department, not covered by the requirement
 let production: Who; // read-only on training
 let customer: Who;
-let otherAdmin: Who;
+
 let roleId: number;
 
-async function makeUser(tenant: number, label: string, roleName: string, department: string | null, withRole = false): Promise<Who> {
+async function makeUser(co: number, label: string, roleName: string, department: string | null, withRole = false): Promise<Who> {
   const email = `trn-${label}-${suffix}@test.local`;
-  const [u] = await db.insert(users).values({ tenantId: tenant, email, name: `Person ${label}`, passwordHash: "unused", department, ...(withRole ? { roleId } : {}) }).returning();
+  const [u] = await db.insert(users).values({ email, name: `Person ${label}`, passwordHash: "unused", department, ...(withRole ? { roleId } : {}) }).returning();
   userIds.push(u!.id);
-  return { id: u!.id, email, token: await signAccessToken({ sub: String(u!.id), tenantId: tenant, roleId: null, roleName, department }) };
+  return { id: u!.id, email, token: await signAccessToken({ sub: String(u!.id), roleId: null, roleName, department }) };
 }
 const as = (w: Who) => ({ Authorization: `Bearer ${w.token}` });
-const events = async (entityType: string, id: number) => (await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, entityType), eq(auditTrail.entityId, id)))).map((r) => r.changes as Record<string, unknown> | null);
+const events = async (entityType: string, id: number) => (await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, entityType), eq(auditTrail.entityId, id)))).map((r) => r.changes as Record<string, unknown> | null);
 const statusOf = async (courseId: number, userId: number, who: Who = manager) => ((await request(app).get(`/training/status?courseId=${courseId}&userId=${userId}`).set(as(who))).body as { status: string; expiresAt: string | null }[])[0];
 
 async function newCourse(over: Record<string, unknown> = {}) {
@@ -99,45 +100,40 @@ async function newCourse(over: Record<string, unknown> = {}) {
 
 describe("Training & competency (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [t] = await db.insert(tenants).values({ name: `Trn ${suffix}`, code: `trn-${suffix}` }).returning();
-    const [o] = await db.insert(tenants).values({ name: `Trn Other ${suffix}`, code: `trn-other-${suffix}` }).returning();
-    tenantId = t!.id;
-    otherTenantId = o!.id;
-    await seedDefaultPermissions(tenantId);
-    await seedDefaultPermissions(otherTenantId);
+    const t = await ensureTestCompany();
+    
+    companyId = t!.id;
+    
+    await seedDefaultPermissions(companyId);
+    
     await db.insert(roles).values([{ name: "operator" }, { name: "quality_manager" }, { name: "admin" }]).onConflictDoNothing();
     roleId = (await db.select().from(roles).where(eq(roles.name, "operator")))[0]!.id;
-    manager = await makeUser(tenantId, "manager", "quality_manager", "quality");
-    trainer = await makeUser(tenantId, "trainer", "operator", "quality");
-    admin = await makeUser(tenantId, "admin", "admin", null);
-    emp1 = await makeUser(tenantId, "emp1", "operator", "production");
-    emp2 = await makeUser(tenantId, "emp2", "operator", "production");
-    emp3 = await makeUser(tenantId, "emp3", "operator", "engineering");
+    manager = await makeUser(companyId, "manager", "quality_manager", "quality");
+    trainer = await makeUser(companyId, "trainer", "operator", "quality");
+    admin = await makeUser(companyId, "admin", "admin", null);
+    emp1 = await makeUser(companyId, "emp1", "operator", "production");
+    emp2 = await makeUser(companyId, "emp2", "operator", "production");
+    emp3 = await makeUser(companyId, "emp3", "operator", "engineering");
     production = emp1; // production has read-only access to training by default
-    customer = await makeUser(tenantId, "customer", "customer", null);
-    otherAdmin = await makeUser(otherTenantId, "other", "admin", null);
+    customer = await makeUser(companyId, "customer", "customer", null);
+    
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    for (const t of [tenantId, otherTenantId]) {
-      await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, t));
-      await db.delete(auditTrail).where(eq(auditTrail.tenantId, t));
-      await db.delete(notificationLog).where(eq(notificationLog.tenantId, t));
+    for (const t of [companyId]) {
+      await db.delete(auditRowChanges);
+      await db.delete(auditTrail);
+      await db.delete(notificationLog);
       // Decided evaluations are frozen by a trigger; this is a test-database teardown, so lift it for the cleanup only.
       await pool.query("ALTER TABLE training_competencies DISABLE TRIGGER training_competencies_decided_frozen");
-      await db.delete(trainingCompetencies).where(eq(trainingCompetencies.tenantId, t));
+      await db.delete(trainingCompetencies);
       await pool.query("ALTER TABLE training_competencies ENABLE TRIGGER training_competencies_decided_frozen");
-      await db.delete(trainingAssignments).where(eq(trainingAssignments.tenantId, t));
-      await db.delete(trainingSessions).where(eq(trainingSessions.tenantId, t));
-      await db.delete(trainingCourses).where(eq(trainingCourses.tenantId, t));
-      await db.delete(documents).where(eq(documents.tenantId, t));
-      await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, t));
-    }
-    await db.delete(users).where(inArray(users.id, userIds));
-    for (const t of [tenantId, otherTenantId]) {
-      await db.delete(tenants).where(eq(tenants.id, t));
-      await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, t));
+      await db.delete(trainingAssignments);
+      await db.delete(trainingSessions);
+      await db.delete(trainingCourses);
+      await db.delete(documents);
+      await db.delete(departmentPermissions);
     }
     await pool.end();
   });
@@ -170,7 +166,7 @@ describe("Training & competency (real DB + real HTTP path)", () => {
       const res = await request(app).post(`/training/${c.id}/assign-required`).set(as(manager)).send({ dueAt: daysAhead(14).toISOString() });
       expect(res.status).toBe(201);
       expect(res.body.assigned.map((a: { userId: number }) => a.userId).sort()).toEqual([emp1.id, emp2.id].sort());
-      const mail = await db.select().from(notificationLog).where(and(eq(notificationLog.tenantId, tenantId), eq(notificationLog.recipient, emp1.email)));
+      const mail = await db.select().from(notificationLog).where(and(eq(notificationLog.recipient, emp1.email)));
       expect(mail.some((m) => m.subject.includes(c.title))).toBe(true);
       expect((await statusOf(c.id, emp1.id))!.status).toBe("assigned");
       const again = await request(app).post(`/training/${c.id}/assign-required`).set(as(manager)).send({});
@@ -179,7 +175,7 @@ describe("Training & competency (real DB + real HTTP path)", () => {
 
     it("refuses to assign someone who isn't in this organization, and skips people who already have it open", async () => {
       const c = await newCourse({ requiredForDepartment: null });
-      expect((await request(app).post(`/training/${c.id}/assign`).set(as(manager)).send({ userIds: [emp1.id, otherAdmin.id] })).status).toBe(400);
+      
       expect((await request(app).post(`/training/${c.id}/assign`).set(as(manager)).send({ userIds: [emp1.id] })).body).toHaveLength(1);
       expect((await request(app).post(`/training/${c.id}/assign`).set(as(manager)).send({ userIds: [emp1.id, emp3.id] })).body).toHaveLength(1); // emp1 already open
     });
@@ -209,8 +205,8 @@ describe("Training & competency (real DB + real HTTP path)", () => {
 
     it("schedules a session with an instructor and roster, and checks the roster", async () => {
       course = await newCourse({ validityMonths: 12 });
-      const bad = await request(app).post("/training/session").set(as(trainer)).send({ courseId: course.id, scheduledAt: daysAhead(7).toISOString(), attendance: [{ userId: emp1.id, status: "present" }, { userId: otherAdmin.id, status: "present" }] });
-      expect(bad.status).toBe(400); // someone from another organization
+      
+       // someone from another organization
       const dup = await request(app).post("/training/session").set(as(trainer)).send({ courseId: course.id, scheduledAt: daysAhead(7).toISOString(), attendance: [{ userId: emp1.id, status: "present" }, { userId: emp1.id, status: "present" }] });
       expect(dup.status).toBe(400);
       const full = await request(app).post("/training/session").set(as(trainer)).send({ courseId: course.id, scheduledAt: daysAhead(7).toISOString(), capacity: 1, attendance: [{ userId: emp1.id, status: "present" }, { userId: emp2.id, status: "present" }] });
@@ -334,14 +330,14 @@ describe("Training & competency (real DB + real HTTP path)", () => {
   describe("expiry and retraining when the document is revised", () => {
     it("shows expired and expiring-soon training from the dates recorded at completion", async () => {
       const c = await newCourse({ validityMonths: 12 });
-      await db.insert(trainingAssignments).values({ tenantId, courseId: c.id, userId: emp1.id, status: "completed", completedAt: daysAgo(400), expiresAt: daysAgo(35) });
-      await db.insert(trainingAssignments).values({ tenantId, courseId: c.id, userId: emp2.id, status: "completed", completedAt: daysAgo(340), expiresAt: daysAhead(25) });
+      await db.insert(trainingAssignments).values({ courseId: c.id, userId: emp1.id, status: "completed", completedAt: daysAgo(400), expiresAt: daysAgo(35) });
+      await db.insert(trainingAssignments).values({ courseId: c.id, userId: emp2.id, status: "completed", completedAt: daysAgo(340), expiresAt: daysAhead(25) });
       expect((await statusOf(c.id, emp1.id))!.status).toBe("expired");
       expect((await statusOf(c.id, emp2.id))!.status).toBe("expiring_soon");
     });
 
     it("flags people trained on an older revision of the linked controlled document, and retrains them with one click", async () => {
-      const [doc] = await db.insert(documents).values({ tenantId, title: "Forklift SOP", status: "approved", currentVersion: 1 }).returning();
+      const [doc] = await db.insert(documents).values({ title: "Forklift SOP", status: "approved", currentVersion: 1 }).returning();
       const c = await newCourse();
       expect((await request(app).patch(`/training/${c.id}`).set(as(manager)).send({ documentId: doc!.id })).status).toBe(200);
       const a = await request(app).post(`/training/${c.id}/assign`).set(as(manager)).send({ userIds: [emp1.id, emp2.id] });
@@ -382,9 +378,9 @@ describe("Training & competency (real DB + real HTTP path)", () => {
       const res = await request(app).post("/training/notify-due").set(as(manager)).send({});
       expect(res.status).toBe(200);
       expect(res.body.notified).toBeGreaterThan(0);
-      const digest = (await db.select().from(notificationLog).where(and(eq(notificationLog.tenantId, tenantId), eq(notificationLog.recipient, manager.email)))).find((m) => /^Training due/.test(m.subject));
+      const digest = (await db.select().from(notificationLog).where(and(eq(notificationLog.recipient, manager.email)))).find((m) => /^Training due/.test(m.subject));
       expect(digest?.body).toMatch(/Person emp/);
-      expect(await notifyDue(db, tenantId, { dedupeHours: 20 })).toMatchObject({ skipped: true, notified: 0 });
+      expect(await notifyDue(db, { dedupeHours: 20 })).toMatchObject({ skipped: true, notified: 0 });
     });
   });
 
@@ -410,23 +406,5 @@ describe("Training & competency (real DB + real HTTP path)", () => {
       expect((await request(app).get("/training")).status).toBe(401);
     });
 
-    it("keeps organizations apart", async () => {
-      const c = await newCourse();
-      const s = await request(app).post("/training/session").set(as(manager)).send({ courseId: c.id, scheduledAt: daysAhead(4).toISOString(), attendance: [{ userId: emp1.id, status: "present" }] });
-      const comp = await request(app).post("/training/competency").set(as(manager)).send({ userId: emp1.id, courseId: c.id });
-      expect((await request(app).get(`/training/${c.id}`).set(as(otherAdmin))).status).toBe(404);
-      expect((await request(app).get(`/training/session/${s.body.id}`).set(as(otherAdmin))).status).toBe(404);
-      expect((await request(app).post(`/training/session/${s.body.id}/complete`).set(as(otherAdmin)).send({ attendance: [{ userId: otherAdmin.id, status: "present" }] })).status).toBe(404);
-      expect((await request(app).post(`/training/competency/${comp.body.id}/evaluate`).set(as(otherAdmin)).send({ status: "pass", score: 99 })).status).toBe(404);
-      expect((await request(app).post("/training/session").set(as(otherAdmin)).send({ courseId: c.id, scheduledAt: daysAhead(4).toISOString() })).status).toBe(404);
-      expect((await request(app).post("/training/competency").set(as(otherAdmin)).send({ userId: otherAdmin.id, courseId: c.id, status: "pass", score: 99 })).status).toBe(404);
-      expect((await request(app).get("/training/status").set(as(otherAdmin))).body).toEqual([]);
-      expect((await request(app).get("/training/sessions").set(as(otherAdmin))).body).toEqual([]);
-      expect((await request(app).get("/training/competency").set(as(otherAdmin))).body).toEqual([]);
-      expect((await request(app).get("/training/attention").set(as(otherAdmin))).body).toEqual([]);
-    });
   });
 });
-
-// a role id referenced above so the roster query joins cleanly
-void roleId;

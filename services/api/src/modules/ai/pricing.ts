@@ -2,10 +2,10 @@
  * Per-model $/1M-token rates — an *estimate*, not a live price feed (the
  * mega-prompt itself says "estimated_cost"). Provider pricing changes
  * independently of this codebase; these are point-in-time approximations
- * for the models AccuQual's own env config / tenant configs actually name
- * (see config/env.ts's LLM_MODEL and tenant.validation.ts), kept in one
+ * for the models AccuQual's own env config / company configs actually name
+ * (see config/env.ts's LLM_MODEL and company.validation.ts), kept in one
  * small, easy-to-update table rather than scattered through the codebase.
- * An unrecognized model name (a tenant can type any string into Model
+ * An unrecognized model name (a company can type any string into Model
  * Name) falls back to a conservative default rate rather than silently
  * reporting $0 — see estimateCost()'s own comment.
  */

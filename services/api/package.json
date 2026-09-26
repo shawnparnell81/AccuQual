@@ -14,12 +14,11 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:verify-restore": "tsx src/db/verifyRestore.ts",
     "db:seed": "tsx src/db/seed.ts",
+    "db:create-company": "tsx src/db/createCompany.ts",
     "db:seed-demo-story": "tsx src/db/seedDemoStory.ts",
     "db:seed-erp-presets": "tsx src/db/seedErpPresets.ts",
     "db:reset-demo-story": "tsx src/db/resetDemoStory.ts",
     "db:backfill-permissions": "tsx src/db/backfillDepartmentPermissions.ts",
-    "db:backfill-nav-preferences": "tsx src/db/backfillNavPreferences.ts",
-    "db:backfill-onboarding-checklist": "tsx src/db/backfillOnboardingChecklist.ts",
     "db:apply-timescale": "tsx src/db/applyTimescaleHypertables.ts"
   },
   "dependencies": {
@@ -42,7 +41,6 @@
     "pdf-lib": "^1.17.1",
     "pg": "^8.12.0",
     "redis": "^4.7.0",
-    "stripe": "^22.6.2",
     "winston": "^3.13.1",
     "zod": "^3.23.8"
   },

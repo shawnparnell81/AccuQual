@@ -5,10 +5,10 @@
 // standalone dashboards (ai, digitalTwin).
 export type WindowType = "form" | "document" | "audit" | "ai" | "digitalTwin";
 
-/** One open window in the multi-window workspace. Always tenant-scoped. */
+/** One open window in the multi-window workspace. Always company-scoped. */
 export interface WindowInstance {
   id: string;
-  tenantId: string;
+  ownerId: string;
   type: WindowType;
   entityId?: number;
   formType?: string;

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import {
   upsertDepartmentPermissionSchema,
@@ -30,15 +30,15 @@ import {
 } from "./permissions.controller.js";
 
 export const permissionsRouter = Router();
-permissionsRouter.use(requireAuth, withTenantDb);
+permissionsRouter.use(requireAuth, withDb);
 
-// Open to any authenticated tenant user — reading your OWN effective access
+// Open to any authenticated company user — reading your OWN effective access
 // (or the fixed module catalog) isn't a configuration action.
 permissionsRouter.get("/modules", listModulesHandler);
 permissionsRouter.get("/effective", getMyEffectivePermissionsHandler);
 
-// Everything below configures tenant-wide access control — admin only,
-// same as every other tenant-config surface in this app (settings.routes.ts,
+// Everything below configures company-wide access control — admin only,
+// same as every other company-config surface in this app (settings.routes.ts,
 // AdminOnlyGuard-backed pages).
 permissionsRouter.use(requireRole("admin"));
 

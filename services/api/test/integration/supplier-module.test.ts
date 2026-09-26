@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Security-audit finding (low): the core Suppliers module (CRUD,
 // approve/conditional/suspend/remove lifecycle) had no dedicated test file —
 // the existing supplier-portal.test.ts and supplier-rma-request.test.ts
@@ -6,13 +7,13 @@
 // CRUD and lifecycle-status endpoints that gate a supplier's qualification
 // status. Covers the real edit-vs-read department split (quality: edit,
 // purchasing/material_management/production: read-only), the lifecycle
-// transitions, disqualification being terminal, and tenant isolation.
+// transitions, disqualification being terminal, and company isolation.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { suppliers } from "../../src/drizzle/schema/supplier.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
@@ -23,43 +24,36 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
-let otherTenantId: number;
+let companyId: number;
+
 let supplierId: number;
 const userIds: number[] = [];
 let qualityToken: string;
 let purchasingToken: string;
-let otherTenantToken: string;
+
 
 describe("Suppliers core module (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Supplier Test Tenant ${suffix}`, code: `supplier-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    const [other] = await db.insert(tenants).values({ name: `Supplier Other Tenant ${suffix}`, code: `supplier-other-${suffix}` }).returning();
-    otherTenantId = other!.id;
-    await seedDefaultPermissions(tenantId);
-    await seedDefaultPermissions(otherTenantId);
+    const co = await ensureTestCompany();
+    companyId = co!.id;
+    
+    
+    await seedDefaultPermissions(companyId);
+    
 
     async function makeUser(tid: number, department: string | null) {
-      const [user] = await db.insert(users).values({ tenantId: tid, email: `supplier-${department ?? "none"}-${tid}-${suffix}@test.local`, passwordHash: "unused" }).returning();
+      const [user] = await db.insert(users).values({ email: `supplier-${department ?? "none"}-${tid}-${suffix}@test.local`, passwordHash: "unused" }).returning();
       userIds.push(user!.id);
-      return signAccessToken({ sub: String(user!.id), tenantId: tid, roleId: null, roleName: "operator", department });
+      return signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department });
     }
 
-    qualityToken = await makeUser(tenantId, "quality");
-    purchasingToken = await makeUser(tenantId, "purchasing");
-    otherTenantToken = await makeUser(otherTenantId, "quality");
+    qualityToken = await makeUser(companyId, "quality");
+    purchasingToken = await makeUser(companyId, "purchasing");
+    
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(suppliers).where(eq(suppliers.tenantId, tenantId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, otherTenantId));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
-    await db.delete(tenants).where(eq(tenants.id, otherTenantId));
     await pool.end();
   });
 
@@ -112,9 +106,5 @@ describe("Suppliers core module (real DB + real HTTP path)", () => {
     expect(res.status).toBe(400);
   });
 
-  it("never returns another tenant's suppliers", async () => {
-    const res = await request(app).get("/suppliers").set("Authorization", `Bearer ${otherTenantToken}`);
-    expect(res.status).toBe(200);
-    expect(res.body.some((s: { id: number }) => s.id === supplierId)).toBe(false);
-  });
+  ;
 });

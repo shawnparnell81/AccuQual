@@ -8,7 +8,7 @@ import { ncr } from "../../drizzle/schema/ncr.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { workOrderPlanPrompt } from "../ai/prompts.js";
-import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
+import { checkUsageLimit, loadCompanyLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
 
 function parseSuggestions(raw: string): unknown {
   try {
@@ -33,34 +33,32 @@ function parseSuggestions(raw: string): unknown {
  * suggestion, same "no autonomous action" guarantee as ai.assistant.ts.
  */
 export const workOrderAiPlanHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!, tenantId);
-  const limitError = await checkUsageLimit(req.db!, tenantId, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const { co, llmOptions } = await loadCompanyLlmOptions(req.db!);
+  const limitError = await checkUsageLimit(req.db!, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
-  const openNcrs = await req.db!.select({ id: ncr.id, title: ncr.title, status: ncr.status, severity: ncr.severity }).from(ncr).where(and(eq(ncr.tenantId, tenantId), ne(ncr.status, "closed")));
+  const openNcrs = await req.db!.select({ id: ncr.id, title: ncr.title, status: ncr.status, severity: ncr.severity }).from(ncr).where(and(ne(ncr.status, "closed")));
 
   const flaggedItems = await req
     .db!.select({ id: inventoryItems.id, sku: inventoryItems.sku, description: inventoryItems.description, state: inventoryItems.state, minLevel: inventoryItems.minLevel, maxLevel: inventoryItems.maxLevel })
     .from(inventoryItems)
-    .where(and(eq(inventoryItems.tenantId, tenantId), inArray(inventoryItems.state, ["below_min", "overstock"])));
+    .where(and(inArray(inventoryItems.state, ["below_min", "overstock"])));
 
   const riskySuppliers = await req
     .db!.select({ id: suppliers.id, name: suppliers.name, status: suppliers.status })
     .from(suppliers)
-    .where(and(eq(suppliers.tenantId, tenantId), inArray(suppliers.status, ["probation", "disqualified"])));
+    .where(and(inArray(suppliers.status, ["probation", "disqualified"])));
 
   const openWorkOrders = await req
     .db!.select({ id: workOrders.id, itemId: workOrders.itemId, status: workOrders.status, quantityPlanned: workOrders.quantityPlanned })
     .from(workOrders)
-    .where(and(eq(workOrders.tenantId, tenantId), inArray(workOrders.status, ["planned", "in_progress"])));
+    .where(and(inArray(workOrders.status, ["planned", "in_progress"])));
 
   const inputData = { openNcrs, flaggedInventoryItems: flaggedItems, riskySuppliers, openWorkOrders };
   const result = await callLlmDetailed(workOrderPlanPrompt(inputData), { system: "You are AccuQual's production planning engine.", ...llmOptions });
   const output = parseSuggestions(result.text);
 
   const saved = await recordAiSuggestion(req.db!, {
-    tenantId,
     module: "work_order",
     pipeline: "work_order_planning",
     input: inputData,

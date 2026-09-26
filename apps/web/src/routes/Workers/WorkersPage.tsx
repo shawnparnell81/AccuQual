@@ -14,7 +14,7 @@ function EmploymentStatusBadge({ status }: { status: EmploymentStatus }) {
 }
 
 /**
- * Worker Runtime's roster: every internal user of this tenant, department/role
+ * Worker Runtime's roster: every internal user of this company, department/role
  * from `users` itself alongside the small profile Worker Runtime adds (job
  * title, shift, employment status). No create button — a worker's account
  * is created the normal way (registration, SSO, an admin); this page only

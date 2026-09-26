@@ -13,7 +13,7 @@ interface TrainingCourse {
   active: boolean;
 }
 
-/** Competency Matrix is a tenant-wide roster of every operator's station qualifications, not tied to one course — so it's a fixed singleton document, same pattern as the Production Logs page. */
+/** Competency Matrix is a company-wide roster of every operator's station qualifications, not tied to one course — so it's a fixed singleton document, same pattern as the Production Logs page. */
 const COMPETENCY_MATRIX_ENTITY_ID = 1;
 
 export function TrainingPage() {

@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, numeric, boolean, jsonb } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
 
@@ -12,7 +11,6 @@ import { suppliers } from "./supplier.js";
  */
 export const inventoryItems = pgTable("inventory_items", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   sku: text("sku").notNull(),
   description: text("description"),
   itemType: text("item_type").notNull().default("raw_material"), // raw_material, wip, finished_good
@@ -33,7 +31,7 @@ export const inventoryItems = pgTable("inventory_items", {
   heldQty: numeric("held_qty").notNull().default("0"),
   active: boolean("active").notNull().default(true),
   notes: text("notes"),
-  // Settings → Inventory Module expansion (tenants.inventorySettings.
+  // Settings → Inventory Module expansion (companies.inventorySettings.
   // auditFrequency): the last time someone recorded a real cycle count
   // against this item (POST /inventory/items/:id/count). Null means "never
   // counted" — cycleCountDue is computed live from this + auditFrequency on
@@ -47,7 +45,6 @@ export const inventoryItems = pgTable("inventory_items", {
 /** One row per (item, location) — the hot-path quantity, split from the slower-changing item metadata (same split calibration.ts uses for equipment/calibrations). */
 export const inventoryStock = pgTable("inventory_stock", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   itemId: integer("item_id").references(() => inventoryItems.id).notNull(),
   location: text("location").notNull().default("default"),
   onHand: numeric("on_hand").notNull().default("0"),
@@ -76,7 +73,6 @@ export const inventoryStock = pgTable("inventory_stock", {
  */
 export const inventoryMovements = pgTable("inventory_movements", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   itemId: integer("item_id").references(() => inventoryItems.id).notNull(),
   movementType: text("movement_type").notNull(), // receive, consume, produce, adjust, scrap, transfer
   quantity: numeric("quantity").notNull(),
@@ -103,7 +99,6 @@ export const inventoryMovements = pgTable("inventory_movements", {
 
 export const inventoryAlerts = pgTable("inventory_alerts", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   itemId: integer("item_id").references(() => inventoryItems.id).notNull(),
   alertType: text("alert_type").notNull(), // below_min, overstock
   triggeredAt: timestamp("triggered_at").defaultNow(),
@@ -122,7 +117,6 @@ export const inventoryAlerts = pgTable("inventory_alerts", {
  */
 export const inventoryReorderRequests = pgTable("inventory_reorder_requests", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   itemId: integer("item_id").references(() => inventoryItems.id).notNull(),
   requestedQty: integer("requested_qty").notNull(),
   status: text("status").notNull().default("pending"), // pending, sent, ignored

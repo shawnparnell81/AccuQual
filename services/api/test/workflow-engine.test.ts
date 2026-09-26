@@ -94,10 +94,10 @@ describe("workflow-engine", () => {
     expect(fails.actionsRun).toBeUndefined();
   });
 
-  // Full-System Audit finding C5 — a tenant-authored graph with a cycle
+  // Full-System Audit finding C5 — a company-authored graph with a cycle
   // (buildable via the drag-and-drop builder, since the save-time schema
   // never checks graph structure) used to recurse forever here, crashing
-  // the shared workflow-worker process for every tenant. A short explicit
+  // the shared workflow-worker process for every company. A short explicit
   // test timeout (well under vitest's default) turns "hangs forever" into
   // a fast, unambiguous failure if this guard ever regresses, instead of
   // the whole suite stalling.

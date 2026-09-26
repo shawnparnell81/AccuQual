@@ -1,6 +1,5 @@
 import { pgTable, serial, text, integer, timestamp, jsonb, boolean, unique, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
 export const VERSION_STATUSES = ["draft", "in_review", "published", "archived"] as const;
@@ -28,9 +27,8 @@ export const controlledVersions = pgTable(
   "controlled_versions",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     subjectType: text("subject_type").$type<VersionSubject>().notNull(),
-    // workflow_definitions.id for workflows; the form_data entity id (1, the tenant singleton) for the two documents.
+    // workflow_definitions.id for workflows; the form_data entity id (1, the company singleton) for the two documents.
     subjectId: integer("subject_id").notNull(),
     versionNumber: integer("version_number").notNull(),
     status: text("status").$type<VersionStatus>().notNull().default("draft"),
@@ -54,10 +52,10 @@ export const controlledVersions = pgTable(
     publishedAt: timestamp("published_at"),
   },
   (t) => ({
-    uniqueNumber: unique("controlled_versions_subject_number_uq").on(t.tenantId, t.subjectType, t.subjectId, t.versionNumber),
+    uniqueNumber: unique("controlled_versions_subject_number_uq").on(t.subjectType, t.subjectId, t.versionNumber),
     // At most one open (draft or in-review) version per subject, so two people can't fork the same document.
     oneOpen: uniqueIndex("controlled_versions_one_open_uq")
-      .on(t.tenantId, t.subjectType, t.subjectId)
+      .on(t.subjectType, t.subjectId)
       .where(sql`status in ('draft', 'in_review')`),
   }),
 );

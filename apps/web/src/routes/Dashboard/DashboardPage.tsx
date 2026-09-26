@@ -643,17 +643,17 @@ export function DashboardPage() {
 
       {currentUser?.roleName === "admin" && (
         <div>
-          <h2 className="mb-3 text-lg font-semibold">Tenant Configuration</h2>
+          <h2 className="mb-3 text-lg font-semibold">Company Configuration</h2>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <Link to="/admin/tenant-branding" className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 hover:bg-muted/50">
+            <Link to="/admin/company-branding" className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 hover:bg-muted/50">
               <Palette size={18} className="text-muted-foreground" />
               <span className="text-sm font-medium">Branding</span>
             </Link>
-            <Link to="/admin/tenant-templates" className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 hover:bg-muted/50">
+            <Link to="/admin/company-templates" className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 hover:bg-muted/50">
               <FileUp size={18} className="text-muted-foreground" />
               <span className="text-sm font-medium">Templates</span>
             </Link>
-            <Link to="/admin/tenant-ai" className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 hover:bg-muted/50">
+            <Link to="/admin/company-ai" className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 hover:bg-muted/50">
               <Bot size={18} className="text-muted-foreground" />
               <span className="text-sm font-medium">AI Config</span>
             </Link>

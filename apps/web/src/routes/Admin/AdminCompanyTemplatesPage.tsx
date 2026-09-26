@@ -8,7 +8,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { FormTemplateStatus } from "../../api/types";
 import { FileDropZone } from "../../components/shared/FileDropZone";
 
-// The 9 form types this page is explicitly meant to manage (see the Tenant
+// The 9 form types this page is explicitly meant to manage (see the Company
 // Template Upload UI review) — a subset of forms.validation.ts's full
 // FORM_TYPES list, matching what was actually asked for. Any of the other
 // ~26 real types can be reached the same way via the backend if needed
@@ -140,10 +140,10 @@ function TemplatesTable() {
   );
 }
 
-export function AdminTenantTemplatesPage() {
+export function AdminCompanyTemplatesPage() {
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">Tenant Templates</h1>
+      <h1 className="text-2xl font-semibold">Company Templates</h1>
       <AdminOnlyGuard>
         <TemplatesTable />
       </AdminOnlyGuard>

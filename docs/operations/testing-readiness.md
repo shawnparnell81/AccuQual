@@ -15,7 +15,7 @@ What is deployed, what a tester can and cannot exercise, and the known limits. N
 
 - The test quarantine hold "deploy-check widget" was released (record kept as history; quarantine resolutions are append-only).
 - Two disabled test users remain: `deploy-check-0921@test.local`, `deploy-check-0921b@test.local`. They cannot sign in; their audit entries are permanent.
-- Demo tenant `demo` also holds the Phase 11 demo seed data.
+- Demo company `demo` also holds the Phase 11 demo seed data.
 
 ## What testing covers, and what to expect
 

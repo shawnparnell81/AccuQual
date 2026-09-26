@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, numeric, uniqueIndex } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 import { warrantyClaims } from "./warranty.js";
 import { supplierRmaRequests } from "./supplierRma.js";
@@ -31,7 +30,6 @@ export const rmaLogRecords = pgTable(
   "rma_log",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
     status: text("status").notNull().default("open"),
 
     rmaNumber: text("rma_number").notNull(),
@@ -65,7 +63,7 @@ export const rmaLogRecords = pgTable(
     updatedAt: timestamp("updated_at"),
   },
   (table) => ({
-    tenantRmaNumberUnique: uniqueIndex("rma_log_tenant_rma_number_idx").on(table.tenantId, table.rmaNumber),
+    rmaNumberUnique: uniqueIndex("rma_log_rma_number_idx").on(table.rmaNumber),
   })
 );
 

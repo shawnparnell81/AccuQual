@@ -1,13 +1,13 @@
 import { createHmac } from "node:crypto";
 import { eq } from "drizzle-orm";
-import type { TenantDb } from "../../lib/tenantScope.js";
-import { tenants } from "../../drizzle/schema/tenants.js";
-import { decryptSecret } from "../tenant/crypto.js";
+import type { Db } from "../../lib/requestDb.js";
+import { company } from "../../drizzle/schema/company.js";
+import { decryptSecret } from "../company/crypto.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { logger } from "../../utils/logger.js";
 import { assertSafeWebhookUrl } from "../../utils/ssrfGuard.js";
 import { env } from "../../config/env.js";
-import { loadTenantForSettings, getErpSyncSettings, type ErpSyncSettings } from "./settings.service.js";
+import { loadCompanyForSettings, getErpSyncSettings, type ErpSyncSettings } from "./settings.service.js";
 import { getActivePresetCached } from "../erp/erpPresets.service.js";
 import { buildErpPayload, evaluateTrigger, recordSyncError, type ErpPayloadResult } from "../erp/erpMappingEngine.js";
 import type { ErpTriggerRule } from "../../drizzle/schema/erpPresets.js";
@@ -37,7 +37,7 @@ export interface SyncResult {
  * against, not a fabricated call. No fake success: a missing webhookUrl is
  * reported as "skipped", never silently reported as sent.
  *
- * There is no background scheduler in this app (see tenants.erpSyncSettings'
+ * There is no background scheduler in this app (see companies.erpSyncSettings'
  * own schema comment) — `schedule` is stored config for a future worker to
  * read; today a sync only actually runs when this function is called, i.e.
  * from POST /settings/erp-sync/trigger.
@@ -49,13 +49,12 @@ export interface SyncResult {
  * preset is mapped unconditionally, exactly as before trigger rules existed.
  */
 export async function triggerErpSync(
-  db: TenantDb,
-  tenantId: number,
+  db: Db,
   performedBy: number | undefined,
   event?: { on: ErpTriggerRule["on"]; statusValue?: string }
 ): Promise<SyncResult> {
-  const tenant = await loadTenantForSettings(db, tenantId);
-  const config = getErpSyncSettings(tenant);
+  const co = await loadCompanyForSettings(db);
+  const config = getErpSyncSettings(co);
   const modules = config.modulesEnabled ?? [];
 
   let entry: SyncHistoryEntry;
@@ -68,7 +67,7 @@ export async function triggerErpSync(
     // mapping engine (see erpMappingEngine.ts — suppliers/purchaseOrders
     // only in this pass) AND an active preset, the outbound payload gets a
     // real per-record, vendor-field-mapped `mappedData` block alongside the
-    // existing envelope below — additive, not a replacement, so a tenant
+    // existing envelope below — additive, not a replacement, so a company
     // with no preset configured still gets exactly today's behavior.
     const mappedData: Record<string, ErpPayloadResult> = {};
     // Real resilience fix: one module's mapping throwing an uncaught
@@ -78,27 +77,27 @@ export async function triggerErpSync(
     // already implicit in how buildErpPayload handles a single bad record.
     for (const module of modules) {
       try {
-        const preset = await getActivePresetCached(db, tenantId, module);
+        const preset = await getActivePresetCached(db, module);
         if (!preset) continue;
         if (event && !evaluateTrigger(preset.mappingConfig.triggers, event)) {
-          logger.info("ERP preset skipped — no matching trigger rule for this event", { tenantId, module, presetId: preset.id, event: event.on });
+          logger.info("ERP preset skipped — no matching trigger rule for this event", { module, presetId: preset.id, event: event.on });
           continue;
         }
-        const result = await buildErpPayload(db, tenantId, module, preset);
+        const result = await buildErpPayload(db, module, preset);
         if (result) mappedData[module] = result;
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error mapping this module";
-        logger.error("ERP preset mapping threw — skipping this module, continuing the sync", { tenantId, module, message });
-        await recordSyncError(db, { tenantId, module, stage: undefined, message: `Mapping failed for module "${module}": ${message}` });
+        logger.error("ERP preset mapping threw — skipping this module, continuing the sync", { module, message });
+        await recordSyncError(db, { module, stage: undefined, message: `Mapping failed for module "${module}": ${message}` });
       }
     }
-    const payload = JSON.stringify({ tenantId, direction: config.direction ?? "push", modules, triggeredAt: new Date().toISOString(), ...(Object.keys(mappedData).length > 0 ? { mappedData } : {}) });
+    const payload = JSON.stringify({ direction: config.direction ?? "push", modules, triggeredAt: new Date().toISOString(), ...(Object.keys(mappedData).length > 0 ? { mappedData } : {}) });
     const maxRetries = Math.min(config.retryPolicy?.maxRetries ?? 0, MAX_RETRIES_CAP);
     const backoffSeconds = Math.min(config.retryPolicy?.backoffSeconds ?? 0, MAX_BACKOFF_SECONDS_CAP);
 
     let lastError: string | undefined;
     let delivered = false;
-    // Security-audit finding (S2, high): a tenant-configured webhookUrl was
+    // Security-audit finding (S2, high): a company-configured webhookUrl was
     // fetched server-side with no validation against internal/private
     // targets (e.g. the 169.254.169.254 cloud metadata endpoint) — checked
     // once before the retry loop, same "reject the config" treatment as an
@@ -113,7 +112,7 @@ export async function triggerErpSync(
         await assertSafeWebhookUrl(config.webhookUrl);
       } catch (err) {
         lastError = err instanceof Error ? err.message : "Webhook URL failed validation";
-        logger.error("ERP sync webhook rejected — unsafe target", { tenantId, message: lastError });
+        logger.error("ERP sync webhook rejected — unsafe target", { message: lastError });
       }
     }
     for (attempts = 1; attempts <= maxRetries + 1 && !delivered && !lastError; attempts++) {
@@ -143,14 +142,13 @@ export async function triggerErpSync(
       : { at: new Date().toISOString(), status: "failed", modules, message: lastError ?? "Webhook delivery failed." };
 
     if (!delivered) {
-      logger.error("ERP sync webhook delivery failed", { tenantId, attempts, lastError });
+      logger.error("ERP sync webhook delivery failed", { attempts, lastError });
       // One row per module that actually had data in the failed delivery —
       // not per retry attempt (matches statusHistory's own "final outcome
       // only" granularity) — so filtering the errors dashboard by module
       // surfaces a delivery failure that affected that module's data too.
       for (const module of Object.keys(mappedData)) {
         await recordSyncError(db, {
-          tenantId,
           module,
           stage: "erpApi",
           message: lastError ?? "Webhook delivery failed.",
@@ -162,12 +160,11 @@ export async function triggerErpSync(
 
   const history = [entry, ...(config.statusHistory ?? [])].slice(0, MAX_HISTORY_ENTRIES);
   const merged: ErpSyncSettings = { ...config, statusHistory: history };
-  await db.update(tenants).set({ erpSyncSettings: merged }).where(eq(tenants.id, tenantId));
+  await db.update(company).set({ erpSyncSettings: merged });
 
   await recordAuditTrail(db, {
-    tenantId,
     entityType: "ErpSyncSettings",
-    entityId: tenantId,
+    entityId: 1,
     action: "status_change",
     changes: { subAction: "sync_triggered", status: entry.status, modules, message: entry.message },
     performedBy,

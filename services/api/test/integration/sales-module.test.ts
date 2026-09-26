@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Covers the Sales & Marketing module: account CRUD + prospect -> active ->
 // dormant workflow with sales_and_marketing-only gating, the append-only
 // activity log (also the "Link to Sales Account" mechanism other modules
@@ -14,7 +15,7 @@ import request from "supertest";
 import { eq, inArray, and } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { salesAccounts, salesActivities, salesQuotes, salesContracts } from "../../src/drizzle/schema/sales.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
@@ -25,7 +26,7 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let accountId: number;
 let quoteId: number;
 let contractId: number;
@@ -38,17 +39,17 @@ let productionToken: string;
 let adminToken: string;
 
 async function makeUser(department: string | null, roleName = "operator") {
-  const [user] = await db.insert(users).values({ tenantId, email: `sales-test-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+  const [user] = await db.insert(users).values({ email: `sales-test-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName, department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
 }
 
 describe("Sales & Marketing module (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Sales Test Tenant ${suffix}`, code: `sales-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
 
-    await seedDefaultPermissions(tenantId);
+    await seedDefaultPermissions(companyId);
 
     salesToken = await makeUser("sales_and_marketing");
     qualityToken = await makeUser("quality");
@@ -59,17 +60,6 @@ describe("Sales & Marketing module (real DB + real HTTP path)", () => {
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(inArray(auditTrail.performedBy, userIds));
-    if (accountId) {
-      await db.delete(salesActivities).where(eq(salesActivities.accountId, accountId));
-      await db.delete(salesQuotes).where(eq(salesQuotes.accountId, accountId));
-      await db.delete(salesContracts).where(eq(salesContracts.accountId, accountId));
-      await db.delete(salesAccounts).where(eq(salesAccounts.id, accountId));
-    }
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
@@ -189,7 +179,7 @@ describe("Sales & Marketing module (real DB + real HTTP path)", () => {
     expect(res.status).toBe(200);
     expect(res.body.content).toBeTruthy();
 
-    const [row] = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "AiAssistantMessage"), eq(auditTrail.tenantId, tenantId)));
+    const [row] = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "AiAssistantMessage")));
     expect((row?.changes as { module?: string })?.module).toBe("sales_account");
   });
 

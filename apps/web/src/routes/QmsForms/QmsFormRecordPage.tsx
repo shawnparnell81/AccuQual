@@ -29,7 +29,7 @@ export function QmsFormRecordPage() {
   const formId = Number(id);
   const navigate = useNavigate();
   const toast = useToast();
-  const logoUrl = useAuthStore((s) => s.tenant?.branding?.logoUrl);
+  const logoUrl = useAuthStore((s) => s.company?.branding?.logoUrl);
   const definition = getQmsFormDefinition(formType!);
 
   const { data: record, isLoading, isError } = qmsFormHooks.useOne(formId);

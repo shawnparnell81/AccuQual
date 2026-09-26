@@ -8,7 +8,7 @@ import { suppliers } from "../../drizzle/schema/supplier.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { prJustificationPrompt } from "../ai/prompts.js";
-import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
+import { checkUsageLimit, loadCompanyLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
 import { computeSupplierPerformance } from "../supplier/supplier.performance.js";
 
 /**
@@ -21,18 +21,17 @@ import { computeSupplierPerformance } from "../supplier/supplier.performance.js"
  * every other AI pipeline in this app.
  */
 export const requisitionAiJustifyHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const id = Number(req.params.id);
-  const [requisition] = await req.db!.select().from(erpPurchaseRequisitions).where(and(eq(erpPurchaseRequisitions.id, id), eq(erpPurchaseRequisitions.tenantId, tenantId)));
+  const [requisition] = await req.db!.select().from(erpPurchaseRequisitions).where(and(eq(erpPurchaseRequisitions.id, id)));
   if (!requisition) throw AppError.notFound("PurchaseRequisition");
 
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!, tenantId);
-  const limitError = await checkUsageLimit(req.db!, tenantId, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const { co, llmOptions } = await loadCompanyLlmOptions(req.db!);
+  const limitError = await checkUsageLimit(req.db!, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
   const [item] = await req.db!.select().from(inventoryItems).where(eq(inventoryItems.id, requisition.itemId));
   const supplier = requisition.supplierId ? (await req.db!.select().from(suppliers).where(eq(suppliers.id, requisition.supplierId)))[0] : null;
-  const performance = requisition.supplierId ? await computeSupplierPerformance(req.db!, tenantId, requisition.supplierId) : null;
+  const performance = requisition.supplierId ? await computeSupplierPerformance(req.db!, requisition.supplierId) : null;
   const linkedNcr = requisition.linkedNcrId ? (await req.db!.select().from(ncr).where(eq(ncr.id, requisition.linkedNcrId)))[0] : null;
 
   const inputData = {
@@ -46,7 +45,6 @@ export const requisitionAiJustifyHandler = asyncHandler(async (req: Request, res
   const result = await callLlmDetailed(prJustificationPrompt(inputData), { system: "You are AccuQual's purchasing justification engine.", ...llmOptions });
 
   const saved = await recordAiSuggestion(req.db!, {
-    tenantId,
     module: "erp",
     pipeline: "pr_justification",
     input: { ...inputData, requisitionId: requisition.id },

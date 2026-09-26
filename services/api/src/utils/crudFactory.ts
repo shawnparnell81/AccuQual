@@ -5,7 +5,7 @@ import { asyncHandler } from "./asyncHandler.js";
 import { AppError } from "./appError.js";
 import { recordAuditTrail } from "../modules/audit-trail/audit-trail.service.js";
 import { publishEvent, AI_STREAM } from "../lib/eventBus.js";
-import type { TenantDb } from "../lib/tenantScope.js";
+import type { Db } from "../lib/requestDb.js";
 
 interface CrudOptions {
   entityName: string;
@@ -38,21 +38,21 @@ interface CrudOptions {
  * fields (so Zod's default "strip unknown keys" behavior removes them before
  * the request ever reaches here) — but a route that forgets to add a
  * `validate(...)` middleware would otherwise let a client's request body
- * silently reassign a row's tenant via `.set({...req.body})`. Never trust
+ * silently reassign a row's company via `.set({...req.body})`. Never trust
  * these fields from the client, validated or not.
  */
-const CLIENT_OWNED_FIELD_BLOCKLIST = ["id", "tenantId", "siteId", "createdAt", "createdBy"];
+const CLIENT_OWNED_FIELD_BLOCKLIST = ["id", "siteId", "createdAt", "createdBy"];
 
 /**
  * Phase 11 performance pass — this generic `list` had NO limit at all
  * (confirmed: 13 modules' list endpoints, and DashboardPage.tsx's own
- * `.useList()` calls, all fetch every row of every tenant-scoped table with
+ * `.useList()` calls, all fetch every row of every table with
  * no bound). A real pagination rewrite (new query params, a paginated
  * response envelope) would be a breaking change to every `useList()` caller
  * across the frontend — out of scope for a polish phase per "do not modify
  * architecture from earlier phases." This is a non-breaking safety net
  * instead: the response shape stays a plain array exactly as before, just
- * capped so a tenant that accumulates unusually many rows on one table
+ * capped so a company that accumulates unusually many rows on one table
  * can't turn one dashboard load into an unbounded query. High enough that
  * no real list page hits it under normal use.
  */
@@ -66,12 +66,9 @@ export function stripClientOwnedFields(body: Record<string, unknown>): Record<st
 
 /**
  * Generates standard list/get/create/update/remove handlers bound to a Drizzle table.
- * Every operation is scoped to `req.tenantId` (set by lib/tenantScope.ts, which must
- * run before these handlers) — this is AccuQual's primary, always-active tenant
- * isolation guarantee; RLS (rls-policies.sql) is the second, DB-level layer.
+ * `req.db` is set by lib/requestDb.ts, which must run before these handlers.
  * Bespoke per-module actions (assign, close, approve, ...) live in that module's
- * own controller and are composed alongside these, and must apply the same
- * `req.tenantId` predicate manually.
+ * own controller and are composed alongside these.
  *
  * Deliberately loosely typed (`db` used as `any` internally): a generic factory that
  * has to work across every module's table shape can't carry each table's exact column
@@ -79,7 +76,7 @@ export function stripClientOwnedFields(body: Record<string, unknown>): Record<st
  * Callers get full typing back from `table.$inferSelect` / `$inferInsert` at rest/rest.
  */
 export function crudFactory(table: PgTable, options: CrudOptions) {
-  const untypedDbOf = (db: TenantDb) =>
+  const untypedDbOf = (db: Db) =>
     db as unknown as {
       select: () => { from: (t: unknown) => { where: (w: unknown) => { limit: (n: number) => Promise<unknown[]> } & Promise<unknown[]> } & Promise<unknown[]> };
       insert: (t: unknown) => { values: (v: unknown) => { returning: () => Promise<unknown[]> } };
@@ -87,7 +84,6 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
       delete: (t: unknown) => { where: (w: unknown) => { returning: () => Promise<unknown[]> } };
     };
   const idCol = (table as unknown as Record<string, unknown>)[options.idColumn];
-  const tenantCol = (table as unknown as Record<string, unknown>).tenantId;
   const siteCol = (table as unknown as Record<string, unknown>).siteId;
 
   function siteListPredicate(req: Request) {
@@ -103,31 +99,31 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
     return inArray(siteCol as never, allowed);
   }
 
-  function requireTenantDb(req: Request): { db: ReturnType<typeof untypedDbOf>; tenantId: number } {
-    if (!req.db || req.tenantId === undefined) throw AppError.unauthorized("Missing tenant context");
-    return { db: untypedDbOf(req.db), tenantId: req.tenantId };
+  function requireDb(req: Request): { db: ReturnType<typeof untypedDbOf> } {
+    if (!req.db) throw AppError.unauthorized("Not signed in");
+    return { db: untypedDbOf(req.db) };
   }
 
   const list = asyncHandler(async (req: Request, res: Response) => {
-    const { db, tenantId } = requireTenantDb(req);
+    const { db } = requireDb(req);
     const sitePredicate = siteListPredicate(req);
     if (sitePredicate === null) {
       res.json([]);
       return;
     }
-    const where = sitePredicate ? and(eq(tenantCol as never, tenantId), sitePredicate) : eq(tenantCol as never, tenantId);
+    const where = sitePredicate ?? undefined;
     const rows = await db.select().from(table).where(where).limit(LIST_SAFETY_LIMIT);
     res.json(rows);
   });
 
   const getOne = asyncHandler(async (req: Request, res: Response) => {
-    const { db, tenantId } = requireTenantDb(req);
+    const { db } = requireDb(req);
     const id = Number(req.params.id);
     const sitePredicate = siteRecordPredicate(req);
     if (sitePredicate === null) throw AppError.notFound(options.entityName);
     const where = sitePredicate
-      ? and(eq(idCol as never, id), eq(tenantCol as never, tenantId), sitePredicate)
-      : and(eq(idCol as never, id), eq(tenantCol as never, tenantId));
+      ? and(eq(idCol as never, id), sitePredicate)
+      : eq(idCol as never, id);
     const rows = await db.select().from(table).where(where);
     const row = rows[0];
     if (!row) throw AppError.notFound(options.entityName);
@@ -135,15 +131,14 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
   });
 
   const create = asyncHandler(async (req: Request, res: Response) => {
-    const { db, tenantId } = requireTenantDb(req);
+    const { db } = requireDb(req);
     if (options.siteScoped && !req.siteId) throw AppError.forbidden("You aren't assigned to a plant, so you can't add records here.");
     const [created] = await db
       .insert(table)
-      .values({ ...stripClientOwnedFields(req.body), tenantId, createdBy: req.user?.id, ...(options.siteScoped ? { siteId: req.siteId } : {}) })
+      .values({ ...stripClientOwnedFields(req.body), createdBy: req.user?.id, ...(options.siteScoped ? { siteId: req.siteId } : {}) })
       .returning();
     const createdId = (created as { id: number }).id;
     await recordAuditTrail(req.db!, {
-      tenantId,
       entityType: options.entityName,
       entityId: createdId,
       action: "create",
@@ -154,7 +149,6 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
     // so it becomes retrievable by the AI pipelines' similarity search.
     await publishEvent(AI_STREAM, {
       job: "embed",
-      tenantId,
       entityType: options.entityName,
       entityId: createdId,
       content: JSON.stringify(req.body),
@@ -164,13 +158,13 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
   });
 
   const update = asyncHandler(async (req: Request, res: Response) => {
-    const { db, tenantId } = requireTenantDb(req);
+    const { db } = requireDb(req);
     const id = Number(req.params.id);
     const sitePredicate = siteRecordPredicate(req);
     if (sitePredicate === null) throw AppError.notFound(options.entityName);
     const where = sitePredicate
-      ? and(eq(idCol as never, id), eq(tenantCol as never, tenantId), sitePredicate)
-      : and(eq(idCol as never, id), eq(tenantCol as never, tenantId));
+      ? and(eq(idCol as never, id), sitePredicate)
+      : eq(idCol as never, id);
     const [updated] = await db
       .update(table)
       .set({ ...stripClientOwnedFields(req.body), updatedAt: new Date() })
@@ -178,7 +172,6 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
       .returning();
     if (!updated) throw AppError.notFound(options.entityName);
     await recordAuditTrail(req.db!, {
-      tenantId,
       entityType: options.entityName,
       entityId: id,
       action: "update",
@@ -190,22 +183,21 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
   });
 
   const remove = asyncHandler(async (req: Request, res: Response) => {
-    const { db, tenantId } = requireTenantDb(req);
+    const { db } = requireDb(req);
     const id = Number(req.params.id);
     const sitePredicate = siteRecordPredicate(req);
     if (sitePredicate === null) throw AppError.notFound(options.entityName);
-    const tenantPredicate = sitePredicate
-      ? and(eq(idCol as never, id), eq(tenantCol as never, tenantId), sitePredicate)
-      : and(eq(idCol as never, id), eq(tenantCol as never, tenantId));
+    const recordPredicate = sitePredicate
+      ? and(eq(idCol as never, id), sitePredicate)
+      : eq(idCol as never, id);
     if (options.softDelete) {
-      const [updated] = await db.update(table).set({ isDeleted: true }).where(tenantPredicate).returning();
+      const [updated] = await db.update(table).set({ isDeleted: true }).where(recordPredicate).returning();
       if (!updated) throw AppError.notFound(options.entityName);
     } else {
-      const deleted = await db.delete(table).where(tenantPredicate).returning();
+      const deleted = await db.delete(table).where(recordPredicate).returning();
       if (deleted.length === 0) throw AppError.notFound(options.entityName);
     }
     await recordAuditTrail(req.db!, {
-      tenantId,
       entityType: options.entityName,
       entityId: id,
       action: "delete",
@@ -226,15 +218,15 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
    * a style choice a single bulk SQL UPDATE could "optimize" away.
    *
    * Fail-closed, not partial-apply: the first id that doesn't exist (wrong
-   * tenant, already deleted, typo) throws before `res.json` is ever
-   * called — and since `withTenantDb` already wraps the whole request in
+   * company, already deleted, typo) throws before `res.json` is ever
+   * called — and since `withDb` already wraps the whole request in
    * one Postgres transaction (commit only on a < 400 response), every
    * update and every audit row written so far in this same request rolls
    * back with it. No new transaction handling needed here; it's already
    * the request's own.
    */
   const bulkUpdate = asyncHandler(async (req: Request, res: Response) => {
-    const { db, tenantId } = requireTenantDb(req);
+    const { db } = requireDb(req);
     const { ids, patch } = req.body as { ids: number[]; patch: Record<string, unknown> };
     const clean = stripClientOwnedFields(patch);
     const sitePredicate = siteRecordPredicate(req);
@@ -242,8 +234,8 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
     const updatedRows: unknown[] = [];
     for (const id of ids) {
       const where = sitePredicate
-        ? and(eq(idCol as never, id), eq(tenantCol as never, tenantId), sitePredicate)
-        : and(eq(idCol as never, id), eq(tenantCol as never, tenantId));
+        ? and(eq(idCol as never, id), sitePredicate)
+        : eq(idCol as never, id);
       const [updated] = await db
         .update(table)
         .set({ ...clean, updatedAt: new Date() })
@@ -251,7 +243,6 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
         .returning();
       if (!updated) throw AppError.notFound(`${options.entityName} #${id}`);
       await recordAuditTrail(req.db!, {
-        tenantId,
         entityType: options.entityName,
         entityId: id,
         action: "update",

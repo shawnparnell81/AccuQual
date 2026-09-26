@@ -135,7 +135,7 @@ function ConnectionPanel({ config }: { config: SsoConfig }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const { data: roles = [] } = useQuery<AppRole[]>({ queryKey: ["roles"], queryFn: async () => (await apiClient.get("/roles")).data });
-  const assignable = roles.filter((r) => r.name !== "admin" && r.name !== "platform_admin" && r.name !== "supplier");
+  const assignable = roles.filter((r) => r.name !== "admin" && r.name !== "supplier");
 
   const existing = config.connection;
   const [form, setForm] = useState({

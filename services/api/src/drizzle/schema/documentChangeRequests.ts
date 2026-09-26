@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
 /**
@@ -20,7 +19,7 @@ import { users } from "./users.js";
  *
  * Deliberately ungated (no requireDepartmentAccess) — same convention as
  * Document Control itself (documents.routes.ts's own comment): every
- * authenticated tenant user may raise/edit one, matching how QMS document
+ * authenticated company user may raise/edit one, matching how QMS document
  * revisions are typically proposed by whoever owns that document, not one
  * fixed department.
  *
@@ -32,7 +31,6 @@ import { users } from "./users.js";
  */
 export const documentChangeRequests = pgTable("document_change_requests", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   formNo: text("form_no"),
   revision: text("revision"),
   effectiveDate: timestamp("effective_date"),
@@ -48,7 +46,6 @@ export const documentChangeRequests = pgTable("document_change_requests", {
 /** The mockup's "Change Request" table — one row per document/process being changed. */
 export const documentChangeItems = pgTable("document_change_items", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   documentChangeRequestId: integer("document_change_request_id").references(() => documentChangeRequests.id).notNull(),
   changeId: text("change_id"),
   documentProcess: text("document_process"),
@@ -63,7 +60,6 @@ export const documentChangeItems = pgTable("document_change_items", {
 /** The mockup's "Review & Approval" table — one row per reviewer's decision. */
 export const documentChangeReviews = pgTable("document_change_reviews", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   documentChangeRequestId: integer("document_change_request_id").references(() => documentChangeRequests.id).notNull(),
   reviewer: text("reviewer"),
   comments: text("comments"),

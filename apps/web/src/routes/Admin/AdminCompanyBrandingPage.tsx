@@ -5,13 +5,13 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { TextField, TextAreaField } from "../../components/forms/Field";
-import type { TenantBranding } from "../../api/types";
+import type { CompanyBranding } from "../../api/types";
 
 function useBranding() {
-  return useQuery<TenantBranding>({ queryKey: ["tenant/branding"], queryFn: async () => (await apiClient.get("/tenant/branding")).data });
+  return useQuery<CompanyBranding>({ queryKey: ["company/branding"], queryFn: async () => (await apiClient.get("/company/branding")).data });
 }
 
-const EMPTY_FORM: TenantBranding = {
+const EMPTY_FORM: CompanyBranding = {
   logoUrl: "",
   primaryColor: "#3b82f6",
   pdfHeader: "",
@@ -41,13 +41,13 @@ function ColorField({ label, value, onChange }: { label: string; value: string |
 
 /**
  * Not the JSON-schema form engine — this is a live-bound settings form
- * prefilled from the tenant's actual current branding, the same kind of
+ * prefilled from the company's actual current branding, the same kind of
  * page every other module's real settings editing already is (Security &
  * Roles, item/supplier linking), not a fixed-schema printable document.
  *
  * The theme colors below are the same `branding` object as logo/PDF text,
- * not a separate "/admin/tenant-theme" endpoint or page — they're one
- * config a tenant admin edits together (see tenants.branding's schema
+ * not a separate "/admin/company-theme" endpoint or page — they're one
+ * config an administrator edits together (see company.branding's schema
  * comment), so this one page grew a "Theme Colors" section rather than
  * forking a second page over the exact same data.
  */
@@ -55,16 +55,16 @@ function BrandingForm() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const { data: branding, isLoading } = useBranding();
-  const [form, setForm] = useState<TenantBranding>(EMPTY_FORM);
+  const [form, setForm] = useState<CompanyBranding>(EMPTY_FORM);
 
   useEffect(() => {
     if (branding) setForm({ ...EMPTY_FORM, ...branding });
   }, [branding]);
 
   const save = useMutation({
-    mutationFn: async (body: TenantBranding) => (await apiClient.patch("/tenant/branding", body)).data,
+    mutationFn: async (body: CompanyBranding) => (await apiClient.patch("/company/branding", body)).data,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tenant/branding"] });
+      queryClient.invalidateQueries({ queryKey: ["company/branding"] });
       toast.success("Branding saved.");
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save branding.")),
@@ -125,10 +125,10 @@ function BrandingForm() {
   );
 }
 
-export function AdminTenantBrandingPage() {
+export function AdminCompanyBrandingPage() {
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">Tenant Branding</h1>
+      <h1 className="text-2xl font-semibold">Company Branding</h1>
       <AdminOnlyGuard>
         <BrandingForm />
       </AdminOnlyGuard>

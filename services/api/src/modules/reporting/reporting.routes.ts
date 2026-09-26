@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createReportScheduleSchema, updateReportScheduleSchema, reportSummarySchema } from "./reporting.validation.js";
@@ -25,14 +25,14 @@ import {
 /**
  * Phase 6 Reporting & Analytics Hub — RBAC deliberately reuses each report's
  * own underlying module's existing ResourceKey (requireDepartmentAccess),
- * never a new parallel "reporting" permission a tenant admin would have to
+ * never a new parallel "reporting" permission a company admin would have to
  * remember to configure separately. This is what the phase's own task 5
  * ("Quality roles see quality reports, Supplier roles see supplier
  * reports...") means in practice: whatever access level a user already has
  * to NCR data is exactly the access level they get to the NCR report — one
  * source of truth, no risk of the two drifting apart (see Phase 3's
  * findings on "declared but never enforced" permissions for why a second,
- * parallel key is a real risk, not a hypothetical one). admin/platform_admin
+ * parallel key is a real risk, not a hypothetical one). admin
  * bypass every one of these the same way they bypass the underlying module.
  *
  * Receiving inspection trends and Inventory quality trends both read from
@@ -43,7 +43,7 @@ import {
  * not a gap this phase introduced.
  */
 export const reportingRouter = Router();
-reportingRouter.use(requireAuth, withTenantDb);
+reportingRouter.use(requireAuth, withDb);
 
 reportingRouter.get("/ncr-metrics", requireDepartmentAccess("ncr"), ncrMetricsHandler);
 reportingRouter.get("/capa-metrics", requireDepartmentAccess("capa"), capaMetricsHandler);
@@ -76,11 +76,11 @@ reportingRouter.post("/summary", validate(reportSummarySchema), reportSummaryHan
 /**
  * Scheduled reports are admin-only (not the per-report ResourceKeys above):
  * a schedule's `recipients` list is an arbitrary set of email addresses the
- * creator chooses — sending a tenant's own real quality/supplier/warranty
+ * creator chooses — sending a company's own real quality/supplier/warranty
  * numbers to any inbox on a recurring basis is a materially different,
  * more sensitive action than just viewing the dashboard, and this app's own
  * established convention for "configures a recurring/external-facing
- * thing" (Settings → ERP Sync, tenant AI config, notification retry) is
+ * thing" (Settings → ERP Sync, company AI config, notification retry) is
  * already admin-only throughout.
  */
 reportingRouter.get("/schedules", requireRole("admin"), listReportSchedulesHandler);

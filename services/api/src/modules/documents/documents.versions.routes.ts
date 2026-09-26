@@ -7,7 +7,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { validate } from "../../middleware/validate.js";
 import { requirePermission } from "../../middleware/requirePermission.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 import { db as ownerDb, pool } from "../../db/index.js";
 import { documentFiles } from "../../drizzle/schema/documents.js";
 import { users } from "../../drizzle/schema/users.js";
@@ -19,7 +19,7 @@ import * as engine from "../versioning/versioning.service.js";
 import type { Actor } from "../versioning/versioning.service.js";
 import { registerVersionRoutes, saveDraftSchema } from "../versioning/versioning.routes.js";
 import { decisionSchema, requestReviewSchema } from "./documents.validation.js";
-import { documentsLinkedTo, documentAdapter, addAttachment, DOCUMENT_ENTITY_TYPE, FILE_LINK_SECONDS, isInsideTenantStorage, MAX_FILE_BYTES, removeAttachment, searchTargets, signFileToken, verifyFileToken } from "./documentVersioning.js";
+import { documentsLinkedTo, documentAdapter, addAttachment, DOCUMENT_ENTITY_TYPE, FILE_LINK_SECONDS, isInsideStorage, MAX_FILE_BYTES, removeAttachment, searchTargets, signFileToken, verifyFileToken } from "./documentVersioning.js";
 import { LINK_TYPES, LINK_TYPE_LABEL, normalizeDocumentPayload, type LinkType } from "./documentPayload.js";
 
 const idParam = (req: Request, name = "id") => {
@@ -28,7 +28,7 @@ const idParam = (req: Request, name = "id") => {
   return id;
 };
 const actorOf = (req: Request): Actor => ({ id: req.user!.id, roleName: req.user!.roleName });
-const dbOf = (req: Request) => req.db as TenantDb;
+const dbOf = (req: Request) => req.db as Db;
 const linkType = (raw: unknown): LinkType => {
   if (typeof raw !== "string" || !LINK_TYPES.includes(raw as LinkType)) throw AppError.badRequest(`type must be one of: ${LINK_TYPES.join(", ")}`);
   return raw as LinkType;
@@ -38,7 +38,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX
 
 /**
  * Everything version-related for controlled documents, added to the documents router (which already applies
- * requireAuth + withTenantDb + the Document Control department gate). The lifecycle rules themselves live once, in the
+ * requireAuth + withDb + the Document Control department gate). The lifecycle rules themselves live once, in the
  * shared engine; this file is the HTTP shape: the engine's standard endpoints, the URL shapes the document-versioning
  * specification names as aliases onto the same functions, attachments, and the link tools.
  */
@@ -54,7 +54,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     view,
     asyncHandler(async (req: Request, res: Response) => {
       const type = linkType(req.query.type);
-      res.json(await searchTargets(dbOf(req), req.tenantId!, type, typeof req.query.q === "string" ? req.query.q : ""));
+      res.json(await searchTargets(dbOf(req), type, typeof req.query.q === "string" ? req.query.q : ""));
     }),
   );
 
@@ -68,7 +68,7 @@ export function registerDocumentVersionRoutes(router: Router) {
         .select({ id: users.id, name: users.name, email: users.email, role: roles.name })
         .from(users)
         .innerJoin(roles, eq(users.roleId, roles.id))
-        .where(and(eq(users.tenantId, req.tenantId!), eq(users.isActive, true), inArray(roles.name, [...REVIEWER_ROLES])))
+        .where(and(eq(users.isActive, true), inArray(roles.name, [...REVIEWER_ROLES])))
         .orderBy(asc(users.name), asc(users.email));
       res.json(rows.filter((r) => r.id !== req.user!.id));
     }),
@@ -82,7 +82,7 @@ export function registerDocumentVersionRoutes(router: Router) {
       const type = linkType(req.query.type);
       const id = Number(req.query.id);
       if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("id must be a record id");
-      res.json(await documentsLinkedTo(dbOf(req), req.tenantId!, type, id));
+      res.json(await documentsLinkedTo(dbOf(req), type, id));
     }),
   );
 
@@ -96,7 +96,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     "/:id/version/:versionId",
     view,
     asyncHandler(async (req: Request, res: Response) => {
-      res.json(await engine.getVersion(dbOf(req), documentAdapter, req.tenantId!, idParam(req), idParam(req, "versionId")));
+      res.json(await engine.getVersion(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId")));
     }),
   );
 
@@ -105,7 +105,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     edit,
     validate(saveDraftSchema),
     asyncHandler(async (req: Request, res: Response) => {
-      res.json(await engine.saveDraft(dbOf(req), documentAdapter, req.tenantId!, idParam(req), idParam(req, "versionId"), actorOf(req), req.body as z.infer<typeof saveDraftSchema>));
+      res.json(await engine.saveDraft(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId"), actorOf(req), req.body as z.infer<typeof saveDraftSchema>));
     }),
   );
 
@@ -115,7 +115,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     validate(requestReviewSchema),
     asyncHandler(async (req: Request, res: Response) => {
       const body = req.body as z.infer<typeof requestReviewSchema>;
-      res.json(await engine.submitForReview(dbOf(req), documentAdapter, req.tenantId!, idParam(req), idParam(req, "versionId"), actorOf(req), body.notes, { reviewerId: body.reviewerId }));
+      res.json(await engine.submitForReview(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId"), actorOf(req), body.notes, { reviewerId: body.reviewerId }));
     }),
   );
 
@@ -125,7 +125,7 @@ export function registerDocumentVersionRoutes(router: Router) {
       review,
       validate(decisionSchema),
       asyncHandler(async (req: Request, res: Response) => {
-        res.json(await engine.reviewVersion(dbOf(req), documentAdapter, req.tenantId!, idParam(req), idParam(req, "versionId"), actorOf(req), decision === "approve" ? "approved" : "rejected", (req.body as z.infer<typeof decisionSchema>).notes));
+        res.json(await engine.reviewVersion(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId"), actorOf(req), decision === "approve" ? "approved" : "rejected", (req.body as z.infer<typeof decisionSchema>).notes));
       }),
     );
   }
@@ -134,7 +134,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     "/:id/version/:versionId/publish",
     publish,
     asyncHandler(async (req: Request, res: Response) => {
-      res.json(await engine.publishVersion(dbOf(req), documentAdapter, req.tenantId!, idParam(req), idParam(req, "versionId"), actorOf(req)));
+      res.json(await engine.publishVersion(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId"), actorOf(req)));
     }),
   );
 
@@ -143,8 +143,8 @@ export function registerDocumentVersionRoutes(router: Router) {
     "/:id/version/:versionId/rollback",
     edit,
     asyncHandler(async (req: Request, res: Response) => {
-      const target = await engine.getVersion(dbOf(req), documentAdapter, req.tenantId!, idParam(req), idParam(req, "versionId"));
-      res.status(201).json(await engine.rollbackTo(dbOf(req), documentAdapter, req.tenantId!, idParam(req), target.versionNumber, actorOf(req)));
+      const target = await engine.getVersion(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId"));
+      res.status(201).json(await engine.rollbackTo(dbOf(req), documentAdapter, idParam(req), target.versionNumber, actorOf(req)));
     }),
   );
 
@@ -156,7 +156,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     upload.single("file"),
     asyncHandler(async (req: Request, res: Response) => {
       if (!req.file) throw AppError.badRequest("No file uploaded");
-      res.status(201).json(await addAttachment(dbOf(req), req.tenantId!, idParam(req), idParam(req, "versionId"), actorOf(req), req.file));
+      res.status(201).json(await addAttachment(dbOf(req), idParam(req), idParam(req, "versionId"), actorOf(req), req.file));
     }),
   );
 
@@ -164,7 +164,7 @@ export function registerDocumentVersionRoutes(router: Router) {
     "/:id/version/:versionId/attachments/:attachmentId",
     edit,
     asyncHandler(async (req: Request, res: Response) => {
-      await removeAttachment(dbOf(req), req.tenantId!, idParam(req), idParam(req, "versionId"), idParam(req, "attachmentId"), actorOf(req));
+      await removeAttachment(dbOf(req), idParam(req), idParam(req, "versionId"), idParam(req, "attachmentId"), actorOf(req));
       res.status(204).send();
     }),
   );
@@ -174,10 +174,10 @@ export function registerDocumentVersionRoutes(router: Router) {
     "/:id/version/:versionId/attachments/:attachmentId/url",
     view,
     asyncHandler(async (req: Request, res: Response) => {
-      const v = await engine.getVersion(dbOf(req), documentAdapter, req.tenantId!, idParam(req), idParam(req, "versionId"));
+      const v = await engine.getVersion(dbOf(req), documentAdapter, idParam(req), idParam(req, "versionId"));
       const file = normalizeDocumentPayload(v.payload).attachments.find((a) => a.id === idParam(req, "attachmentId"));
       if (!file) throw AppError.notFound("Attachment");
-      res.json({ url: `/documents/files/download?token=${encodeURIComponent(signFileToken(req.tenantId!, file.id, req.user!.id))}`, expiresInSeconds: FILE_LINK_SECONDS, fileName: file.fileName, mimeType: file.mimeType });
+      res.json({ url: `/documents/files/download?token=${encodeURIComponent(signFileToken(file.id, req.user!.id))}`, expiresInSeconds: FILE_LINK_SECONDS, fileName: file.fileName, mimeType: file.mimeType });
     }),
   );
 
@@ -188,11 +188,11 @@ export function registerDocumentVersionRoutes(router: Router) {
     view,
     asyncHandler(async (req: Request, res: Response) => {
       const id = idParam(req);
-      await engine.ensureBootstrapped(dbOf(req), documentAdapter, req.tenantId!, id);
+      await engine.ensureBootstrapped(dbOf(req), documentAdapter, idParam(req));
       const rows = await dbOf(req)
         .select({ n: controlledVersions.versionNumber, status: controlledVersions.status, payload: controlledVersions.payload })
         .from(controlledVersions)
-        .where(and(eq(controlledVersions.tenantId, req.tenantId!), eq(controlledVersions.subjectType, "document"), eq(controlledVersions.subjectId, id)))
+        .where(and(eq(controlledVersions.subjectType, "document"), eq(controlledVersions.subjectId, id)))
         .orderBy(asc(controlledVersions.versionNumber));
       const history = new Map<string, { type: LinkType; id: number; label: string; typeLabel: string; firstVersion: number; lastVersion: number; inForce: boolean; versions: number[] }>();
       let newest = 0;
@@ -224,10 +224,10 @@ documentFilesRouter.get(
   "/download",
   asyncHandler(async (req: Request, res: Response) => {
     const t = verifyFileToken(String(req.query.token ?? ""));
-    const [file] = await ownerDb.select().from(documentFiles).where(and(eq(documentFiles.id, t.fileId), eq(documentFiles.tenantId, t.tenantId)));
-    if (!file || !isInsideTenantStorage(t.tenantId, file.filePath) || !existsSync(file.filePath)) throw AppError.notFound("File");
+    const [file] = await ownerDb.select().from(documentFiles).where(and(eq(documentFiles.id, t.fileId)));
+    if (!file || !isInsideStorage(file.filePath) || !existsSync(file.filePath)) throw AppError.notFound("File");
 
-    await recordAuditTrailStandalone(pool, { tenantId: t.tenantId, entityType: DOCUMENT_ENTITY_TYPE, entityId: file.documentId, action: "update", changes: { event: "file_downloaded", fileId: file.id, fileName: file.fileName }, performedBy: t.userId });
+    await recordAuditTrailStandalone(pool, { entityType: DOCUMENT_ENTITY_TYPE, entityId: file.documentId, action: "update", changes: { event: "file_downloaded", fileId: file.id, fileName: file.fileName }, performedBy: t.userId });
 
     const inline = file.mimeType === "application/pdf" || file.mimeType.startsWith("image/");
     res.setHeader("Content-Type", file.mimeType);

@@ -9,7 +9,7 @@ import { workOrders } from "../../drizzle/schema/workOrders.js";
 import { erpReceivingDocuments } from "../../drizzle/schema/erp.js";
 import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { riskAnalysisPrompt } from "../ai/prompts.js";
-import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
+import { checkUsageLimit, loadCompanyLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
 
 /**
  * POST /risk/:id/ai-analysis — read-only, mirrors requisitionAiJustifyHandler's
@@ -26,13 +26,12 @@ import { checkUsageLimit, loadTenantLlmOptions, recordAiSuggestion } from "../ai
  * per-record AI actions.
  */
 export const riskAiAnalysisHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const id = Number(req.params.id);
-  const [risk] = await req.db!.select().from(riskAssessments).where(and(eq(riskAssessments.id, id), eq(riskAssessments.tenantId, tenantId)));
+  const [risk] = await req.db!.select().from(riskAssessments).where(and(eq(riskAssessments.id, id)));
   if (!risk) throw AppError.notFound("Risk assessment");
 
-  const { tenant, llmOptions } = await loadTenantLlmOptions(req.db!, tenantId);
-  const limitError = await checkUsageLimit(req.db!, tenantId, tenant?.aiMonthlyLimit ?? null, tenant?.aiLimitEnforced ?? false);
+  const { co, llmOptions } = await loadCompanyLlmOptions(req.db!);
+  const limitError = await checkUsageLimit(req.db!, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
   let source: Record<string, unknown> | null = null;
@@ -70,7 +69,6 @@ export const riskAiAnalysisHandler = asyncHandler(async (req: Request, res: Resp
   }
 
   const saved = await recordAiSuggestion(req.db!, {
-    tenantId,
     module: "risk",
     pipeline: "risk_analysis",
     input: { ...inputData, riskAssessmentId: risk.id },

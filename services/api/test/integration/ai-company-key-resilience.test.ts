@@ -1,22 +1,23 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Regression test for a real bug found live while testing the rebuilt AI
 // Insights dashboard (apps/web/src/routes/AI/AiInsightsPage.tsx): a
-// tenant's stored aiConfig.apiKeyEncrypted value that can no longer be
-// authenticated under the current TENANT_AI_CONFIG_ENCRYPTION_KEY (a real,
+// company's stored aiConfig.apiKeyEncrypted value that can no longer be
+// authenticated under the current COMPANY_AI_CONFIG_ENCRYPTION_KEY (a real,
 // foreseeable state after any key rotation, not just corrupted test data)
-// crashed loadTenantLlmOptions with an unhandled "Unsupported state or
+// crashed loadCompanyLlmOptions with an unhandled "Unsupported state or
 // unable to authenticate data" error, turning into a 500 on every single
-// AI pipeline endpoint for that tenant — POST /reporting/summary,
+// AI pipeline endpoint for that company — POST /reporting/summary,
 // /ai/analysis, /ai/risk-score, all of them. Every other "no real key"
 // path in this app degrades to a clean stub instead of erroring; this one
-// didn't, until ai.usage.ts's loadTenantLlmOptions wrapped the decrypt in
+// didn't, until ai.usage.ts's loadCompanyLlmOptions wrapped the decrypt in
 // a try/catch and treated a failure the same as "no key configured."
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { eq } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { aiSuggestions, aiRiskScores } from "../../src/drizzle/schema/ai.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
@@ -27,41 +28,23 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let userId: number;
 let token: string;
 
-describe("AI pipelines degrade to a stub, never a 500, when a tenant's stored key can't be decrypted", () => {
+describe("AI pipelines degrade to a stub, never a 500, when a company's stored key can't be decrypted", () => {
   beforeAll(async () => {
-    const [tenant] = await db
-      .insert(tenants)
-      .values({
-        name: `AI Key Resilience Test Tenant ${suffix}`,
-        code: `ai-key-res-${suffix}`,
-        // A well-formed iv:authTag:ciphertext shape (so decryptSecret gets
-        // past its own "Malformed encrypted value" check) whose authTag
-        // can never validate against anything — the exact live-reproduced
-        // failure mode: authentication fails inside Decipheriv.final, not
-        // a shape/parsing error.
-        aiConfig: { provider: "anthropic", apiKeyEncrypted: `${"11".repeat(12)}:${"22".repeat(16)}:${"33".repeat(20)}` },
-      })
-      .returning();
-    tenantId = tenant!.id;
-    await seedDefaultPermissions(tenantId);
+    const co = await ensureTestCompany();
+    companyId = co!.id;
+    await seedDefaultPermissions(companyId);
 
-    const [user] = await db.insert(users).values({ tenantId, email: `ai-key-res-${suffix}@test.local`, passwordHash: "unused" }).returning();
+    const [user] = await db.insert(users).values({ email: `ai-key-res-${suffix}@test.local`, passwordHash: "unused" }).returning();
     userId = user!.id;
-    token = signAccessToken({ sub: String(userId), tenantId, roleId: null, roleName: "admin", department: null });
+    token = signAccessToken({ sub: String(userId), roleId: null, roleName: "admin", department: null });
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(aiSuggestions).where(eq(aiSuggestions.tenantId, tenantId));
-    await db.delete(aiRiskScores).where(eq(aiRiskScores.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    await db.delete(users).where(eq(users.id, userId));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
@@ -83,7 +66,7 @@ describe("AI pipelines degrade to a stub, never a 500, when a tenant's stored ke
   // Full-System Audit finding C4: this endpoint had its own inline
   // db.select + decryptSecret call with no try/catch, missing the fix
   // every other AI endpoint above already had — confirmed live-broken with
-  // a raw 500 before loadTenantLlmOptions replaced that inline call.
+  // a raw 500 before loadCompanyLlmOptions replaced that inline call.
   it("POST /ai/assistant (its own inline decrypt call, found missing the same fix) also degrades to a stub instead of crashing", async () => {
     const res = await request(app)
       .post("/ai/assistant")

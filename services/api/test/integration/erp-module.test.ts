@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Full-System Audit finding L2: ERP had zero dedicated test coverage — no
 // RBAC (purchasing/material_management edit, quality read-only per
 // departmentAccess.ts, plus send/cancel being purchasing-only specifically)
@@ -8,7 +9,7 @@ import { eq } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { suppliers } from "../../src/drizzle/schema/supplier.js";
 import { inventoryItems } from "../../src/drizzle/schema/inventory.js";
@@ -21,7 +22,7 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let supplierId: number;
 let itemId: number;
 const userIds: number[] = [];
@@ -29,9 +30,9 @@ let purchasingToken: string;
 let qualityToken: string;
 
 async function makeUser(department: string | null) {
-  const [user] = await db.insert(users).values({ tenantId, email: `erp-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+  const [user] = await db.insert(users).values({ email: `erp-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName: "operator", department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department });
 }
 
 async function createPo(token: string) {
@@ -45,29 +46,21 @@ async function createPo(token: string) {
 
 describe("ERP module (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `ERP Test Tenant ${suffix}`, code: `erp-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    await seedDefaultPermissions(tenantId);
+    const co = await ensureTestCompany();
+    companyId = co!.id;
+    await seedDefaultPermissions(companyId);
 
     purchasingToken = await makeUser("purchasing");
     qualityToken = await makeUser("quality");
 
-    const [supplier] = await db.insert(suppliers).values({ tenantId, name: "ERP Test Supplier" }).returning();
+    const [supplier] = await db.insert(suppliers).values({ name: "ERP Test Supplier" }).returning();
     supplierId = supplier!.id;
-    const [item] = await db.insert(inventoryItems).values({ tenantId, sku: `ERP-TEST-${suffix}` }).returning();
+    const [item] = await db.insert(inventoryItems).values({ sku: `ERP-TEST-${suffix}` }).returning();
     itemId = item!.id;
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(erpPoLineItems).where(eq(erpPoLineItems.tenantId, tenantId));
-    await db.delete(erpPurchaseOrders).where(eq(erpPurchaseOrders.tenantId, tenantId));
-    await db.delete(inventoryItems).where(eq(inventoryItems.tenantId, tenantId));
-    await db.delete(suppliers).where(eq(suppliers.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 

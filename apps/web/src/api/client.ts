@@ -1,5 +1,5 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
-import { useAuthStore, type AuthUser, type TenantContext } from "../store/authStore";
+import { useAuthStore, type AuthUser, type CompanyContext } from "../store/authStore";
 import { useSiteStore } from "../store/siteStore";
 
 export const apiClient = axios.create({
@@ -56,20 +56,20 @@ apiClient.interceptors.response.use(
 
 interface RefreshResponse {
   user: AuthUser;
-  tenant?: TenantContext | null;
+  company?: CompanyContext | null;
   accessToken: string;
 }
 
 /**
  * Exported for useAuthBootstrap — the app's initial silent-session check
- * runs through this same call. Applies the full `user`/`tenant` from the
+ * runs through this same call. Applies the full `user`/`company` from the
  * response via `setSession`, not just the accessToken: a browser whose
- * persisted `user`/`tenant` (authStore's partialize) is missing — a
+ * persisted `user`/`company` (authStore's partialize) is missing — a
  * genuinely new device, or storage cleared without logging out first —
- * would otherwise refresh into an accessToken with no tenant context
- * anywhere in the client, breaking every tenant-scoped action (e.g.
+ * would otherwise refresh into an accessToken with no company context
+ * anywhere in the client, breaking every action (e.g.
  * useWindowStore's openWindow) with no way to recover short of a real
- * re-login. auth.service.ts's `refresh()` was fixed to return `tenant` in
+ * re-login. auth.service.ts's `refresh()` was fixed to return `company` in
  * the same pass so this has something real to apply.
  */
 export async function refreshAccessToken(): Promise<string | null> {
@@ -83,7 +83,7 @@ export async function refreshAccessToken(): Promise<string | null> {
       // The value carries no secret; only its presence matters.
       { withCredentials: true, headers: { "X-AccuQual-Csrf": "1" } }
     );
-    useAuthStore.getState().setSession(data.user, data.accessToken, data.tenant);
+    useAuthStore.getState().setSession(data.user, data.accessToken, data.company);
     return data.accessToken;
   } catch {
     return null;

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createQmsFormSchema, updateQmsFormSchema, createQmsFormRowSchema, updateQmsFormRowSchema } from "./qmsForms.validation.js";
@@ -27,7 +27,7 @@ export const qmsFormsRouter = Router();
 // Change/Training above) has no single owning department, and why "every
 // department edit" is zero-behavior-change from today rather than a new
 // restriction.
-qmsFormsRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("qms_forms"));
+qmsFormsRouter.use(requireAuth, withDb, requireDepartmentAccess("qms_forms"));
 
 // Fixed literal path before ":id"-shaped ones, same convention used throughout this app.
 qmsFormsRouter.get("/types", listQmsFormTypesHandler);

@@ -1,10 +1,8 @@
 import { pgTable, serial, text, integer, timestamp, jsonb, unique } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
-import { tenants } from "./tenants.js";
 
 export const digitalTwinModels = pgTable("digital_twin_models", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   name: text("name").notNull(),
   description: text("description"),
   modelJson: jsonb("model_json").$type<Record<string, unknown>>().notNull(), // machines, processes, flow
@@ -14,7 +12,6 @@ export const digitalTwinModels = pgTable("digital_twin_models", {
 
 export const digitalTwinSimulations = pgTable("digital_twin_simulations", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   modelId: integer("model_id").references(() => digitalTwinModels.id).notNull(),
   inputParameters: jsonb("input_parameters").$type<Record<string, unknown>>(),
   results: jsonb("results").$type<Record<string, unknown>>(),
@@ -28,7 +25,6 @@ export const digitalTwinSimulations = pgTable("digital_twin_simulations", {
  */
 export const iotData = pgTable("iot_data", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   deviceId: text("device_id").notNull(),
   timestamp: timestamp("timestamp").notNull(),
   data: jsonb("data").$type<Record<string, unknown>>(), // sensor readings
@@ -38,9 +34,8 @@ export const iotDevices = pgTable(
   "iot_devices",
   {
     id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
-    // Device IDs are only guaranteed unique within a tenant, not globally
-    // (two tenants' shop floors can both have a "sensor-1").
+    // Device IDs are only guaranteed unique within a company, not globally
+    // (two companies' shop floors can both have a "sensor-1").
     deviceId: text("device_id").notNull(),
     name: text("name"),
     type: text("type"), // plc, sensor, inspection_equipment, environmental
@@ -53,7 +48,7 @@ export const iotDevices = pgTable(
     apiKeyCreatedAt: timestamp("api_key_created_at"),
     createdAt: timestamp("created_at").defaultNow(),
   },
-  (table) => [unique("iot_devices_tenant_device_unique").on(table.tenantId, table.deviceId)]
+  (table) => [unique("iot_devices_device_unique").on(table.deviceId)]
 );
 
 export type DigitalTwinModel = typeof digitalTwinModels.$inferSelect;

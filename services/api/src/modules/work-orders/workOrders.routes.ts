@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import {
@@ -38,7 +38,7 @@ export const workOrdersRouter = Router();
 // cancel) are inline in workOrders.controller.ts, the same assertDepartment
 // pattern every other module in this app uses. Admin/platform_admin
 // ("General Manager", for now) bypass this entirely.
-workOrdersRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("work_orders"));
+workOrdersRouter.use(requireAuth, withDb, requireDepartmentAccess("work_orders"));
 
 // Fixed literal path before ":id"-shaped ones, same convention used
 // throughout this app.

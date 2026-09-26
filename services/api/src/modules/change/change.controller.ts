@@ -17,17 +17,16 @@ export const approveHandler = asyncHandler(async (req: Request, res: Response) =
   const [updated] = await req
     .db!.update(changeRequests)
     .set({ status: "approved", approvedBy: req.user?.id, approvedAt: new Date() })
-    .where(and(eq(changeRequests.id, id), eq(changeRequests.tenantId, req.tenantId!)))
+    .where(and(eq(changeRequests.id, id)))
     .returning();
   if (!updated) throw AppError.notFound("Change request");
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "Change request",
     entityId: updated.id,
     action: "status_change",
     changes: { action: "approve", status: "approved" },
     performedBy: req.user?.id,
   });
-  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "change", event: "approved", entityId: updated.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "change", event: "approved", entityId: updated.id });
   res.json(updated);
 });

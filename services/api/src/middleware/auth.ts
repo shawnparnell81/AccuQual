@@ -8,7 +8,6 @@ import { enrichRequestContext } from "../modules/monitoring/requestContext.js";
 
 export interface AuthenticatedUser {
   id: number;
-  tenantId: number | null;
   roleId: number | null;
   roleName: string | null;
   department: string | null;
@@ -33,8 +32,7 @@ declare global {
  * The token's signature proves who issued it, not that the user is still
  * active or that their session wasn't revoked since. So each request also
  * reads the user's live `is_active` and `token_version` (one primary-key
- * lookup, on the owner connection because auth runs before any tenant
- * context exists): a deactivated user, or one whose sessions were revoked by
+ * lookup): a deactivated user, or one whose sessions were revoked by
  * logout / password reset / role change, is refused at once rather than
  * carrying on until the 15-minute token expires.
  */
@@ -60,13 +58,12 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
 
     req.user = {
       id: Number(payload.sub),
-      tenantId: payload.tenantId,
       roleId: payload.roleId,
       roleName: payload.roleName,
       department: payload.department,
       supplierId: payload.supplierId ?? null,
     };
-    enrichRequestContext({ userId: req.user.id, ...(req.user.tenantId ? { tenantId: req.user.tenantId } : {}) });
+    enrichRequestContext({ userId: req.user.id });
     next();
   } catch (err) {
     next(err);

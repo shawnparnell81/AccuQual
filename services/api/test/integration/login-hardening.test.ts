@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Login hardening: lockout after repeated wrong passwords (audited, cleared by
 // a good login / reset / admin unlock), the password policy, the idle
 // timeout, and session revocation when a user is disabled or has their role
@@ -9,7 +10,7 @@ import request from "supertest";
 import { and, eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { roles } from "../../src/drizzle/schema/roles.js";
 import { refreshTokens } from "../../src/drizzle/schema/refreshTokens.js";
@@ -25,7 +26,7 @@ const suffix = Date.now();
 const GOOD = "violet-lantern-quarry-88";
 const CSRF = { "X-AccuQual-Csrf": "1" };
 
-let tenantId: number;
+let companyId: number;
 let adminId: number;
 let adminToken: string;
 const roleIds: number[] = [];
@@ -34,7 +35,7 @@ const auth = () => ({ Authorization: `Bearer ${adminToken}` });
 
 async function makeUser(label: string, extra: Partial<typeof users.$inferInsert> = {}) {
   const email = `login-hard-${label}-${suffix}@test.local`;
-  const [u] = await db.insert(users).values({ tenantId, email, passwordHash: await bcrypt.hash(GOOD, 4), ...extra }).returning();
+  const [u] = await db.insert(users).values({ email, passwordHash: await bcrypt.hash(GOOD, 4), ...extra }).returning();
   userIds.push(u!.id);
   return { id: u!.id, email };
 }
@@ -42,25 +43,17 @@ const login = (email: string, password: string) => request(app).post("/auth/logi
 
 describe("Login hardening (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [t] = await db.insert(tenants).values({ name: `Login Hardening ${suffix}`, code: `login-hard-${suffix}` }).returning();
-    tenantId = t!.id;
+    const t = await ensureTestCompany();
+    companyId = t!.id;
     const inserted = await db.insert(roles).values([{ name: `login-hard-r1-${suffix}` }, { name: `login-hard-r2-${suffix}` }]).returning();
     roleIds.push(...inserted.map((r) => r.id));
     const admin = await makeUser("admin");
     adminId = admin.id;
-    adminToken = await signAccessToken({ sub: String(adminId), tenantId, roleId: null, roleName: "admin", department: null });
+    adminToken = await signAccessToken({ sub: String(adminId), roleId: null, roleName: "admin", department: null });
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, tenantId));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(refreshTokens).where(inArray(refreshTokens.userId, userIds));
-    await db.delete(passwordResetTokens).where(inArray(passwordResetTokens.userId, userIds));
-    await db.delete(users).where(inArray(users.id, userIds));
-    await db.delete(roles).where(inArray(roles.id, roleIds));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
-    await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, tenantId));
     await pool.end();
   });
 
@@ -77,7 +70,7 @@ describe("Login hardening (real DB + real HTTP path)", () => {
       const [row] = await db.select().from(users).where(eq(users.id, u.id));
       expect(row!.lockedUntil!.getTime()).toBeGreaterThan(Date.now());
 
-      const entries = await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "User"), eq(auditTrail.entityId, u.id)));
+      const entries = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "User"), eq(auditTrail.entityId, u.id)));
       const lockEntry = entries.find((e) => (e.changes as { action?: string } | null)?.action === "account_locked");
       expect(lockEntry).toBeTruthy();
       expect((lockEntry!.changes as { failedAttempts: number }).failedAttempts).toBe(env.LOGIN_MAX_FAILURES);
@@ -153,10 +146,7 @@ describe("Login hardening (real DB + real HTTP path)", () => {
       userIds.push(ok.body.id);
     });
 
-    it("registration and password reset enforce it too", async () => {
-      const reg = await request(app).post("/auth/register").send({ email: `login-hard-reg-${suffix}@test.local`, password: "qwertyuiop12", tenantCode: `login-hard-${suffix}` });
-      expect(reg.status).toBe(400);
-
+    it("password reset enforces it too", async () => {
       const u = await makeUser("resetpw", { lockedUntil: new Date(Date.now() + 10 * 60_000) });
       const { createHash } = await import("node:crypto");
       await db.insert(passwordResetTokens).values({ userId: u.id, tokenHash: createHash("sha256").update("tok-weak").digest("hex"), expiresAt: new Date(Date.now() + 60_000) });

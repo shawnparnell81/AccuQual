@@ -7,15 +7,15 @@ import { mfaRecoveryCodes } from "../../drizzle/schema/mfaRecoveryCodes.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../utils/appError.js";
 import { base32Encode, generateTotpSecret, otpauthUri, totpCounter, verifyTotp } from "../../utils/totp.js";
-import { decryptSecret, encryptSecret } from "../tenant/crypto.js";
+import { decryptSecret, encryptSecret } from "../company/crypto.js";
 
 export type MfaPolicy = "optional" | "admins" | "all";
 export const MFA_POLICIES: readonly MfaPolicy[] = ["optional", "admins", "all"];
 
 const RECOVERY_CODE_COUNT = 10;
 
-/** Roles the "admins" policy covers. platform_admin is always covered, whatever the tenant policy says. */
-const ADMIN_ROLES = new Set(["admin", "platform_admin"]);
+/** Roles the "admins" policy covers. */
+const ADMIN_ROLES = new Set(["admin"]);
 
 export interface MfaEvaluation {
   enabled: boolean;
@@ -25,18 +25,17 @@ export interface MfaEvaluation {
   graceEndsAt: Date | null;
 }
 
-export function mfaRequiredFor(roleName: string | null, tenantPolicy: string | null | undefined): boolean {
-  if (roleName === "platform_admin") return true;
-  if (tenantPolicy === "all") return true;
-  if (tenantPolicy === "optional") return false;
+export function mfaRequiredFor(roleName: string | null, companyPolicy: string | null | undefined): boolean {
+  if (companyPolicy === "all") return true;
+  if (companyPolicy === "optional") return false;
   return roleName !== null && ADMIN_ROLES.has(roleName); // "admins" — also the default for an unknown value, failing toward safer
 }
 
-export function evaluateMfa(user: { mfaEnabled: boolean; mfaRequiredSince: Date | null }, roleName: string | null, tenantPolicy: string | null | undefined, now: Date = new Date()): MfaEvaluation {
-  const required = mfaRequiredFor(roleName, tenantPolicy);
+export function evaluateMfa(user: { mfaEnabled: boolean; mfaRequiredSince: Date | null }, roleName: string | null, companyPolicy: string | null | undefined, now: Date = new Date()): MfaEvaluation {
+  const required = mfaRequiredFor(roleName, companyPolicy);
   if (user.mfaEnabled) return { enabled: true, required, state: "ok", graceEndsAt: null };
   if (!required) return { enabled: false, required: false, state: "ok", graceEndsAt: null };
-  if (roleName === "platform_admin" || env.MFA_ENROLLMENT_GRACE_DAYS === 0) return { enabled: false, required: true, state: "blocked", graceEndsAt: null };
+  if (env.MFA_ENROLLMENT_GRACE_DAYS === 0) return { enabled: false, required: true, state: "blocked", graceEndsAt: null };
   const since = user.mfaRequiredSince ?? now;
   const graceEndsAt = new Date(since.getTime() + env.MFA_ENROLLMENT_GRACE_DAYS * 86_400_000);
   return { enabled: false, required: true, state: graceEndsAt.getTime() > now.getTime() ? "grace" : "blocked", graceEndsAt };

@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
 import { ncr } from "./ncr.js";
@@ -28,7 +27,6 @@ export type ReviewStatus = "submitted" | "under_review" | "approved" | "rejected
  */
 export const supplierOnboardingDocuments = pgTable("supplier_onboarding_documents", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
   documentType: text("document_type").notNull(),
   fileName: text("file_name").notNull(),
@@ -50,7 +48,6 @@ export const supplierOnboardingDocuments = pgTable("supplier_onboarding_document
  */
 export const supplierDocuments = pgTable("supplier_documents", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
   name: text("name").notNull(),
   category: text("category"),
@@ -74,7 +71,6 @@ export const supplierDocuments = pgTable("supplier_documents", {
  */
 export const supplierPpapSubmissions = pgTable("supplier_ppap_submissions", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
   level: integer("level").notNull(), // 1-5
   partNumber: text("part_number"),
@@ -98,7 +94,6 @@ export const supplierPpapSubmissions = pgTable("supplier_ppap_submissions", {
  */
 export const supplierCorrectiveActions = pgTable("supplier_corrective_actions", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
   linkedNcrId: integer("linked_ncr_id").references(() => ncr.id),
   linkedCapaId: integer("linked_capa_id").references(() => capa.id),
@@ -128,7 +123,6 @@ export const supplierCorrectiveActions = pgTable("supplier_corrective_actions", 
  */
 export const supplier8dResponses = pgTable("supplier_8d_responses", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
   linkedNcrId: integer("linked_ncr_id").references(() => ncr.id),
   linkedEightDId: integer("linked_eight_d_id").references(() => eightD.id),
@@ -160,7 +154,6 @@ export const supplier8dResponses = pgTable("supplier_8d_responses", {
  */
 export const supplierMessages = pgTable("supplier_messages", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
   threadKey: text("thread_key").notNull().default("general"),
   senderRole: text("sender_role").notNull(), // internal | supplier

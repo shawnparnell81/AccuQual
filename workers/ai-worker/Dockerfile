@@ -35,15 +35,15 @@ COPY workers/ai-worker ./workers/ai-worker
 # TypeScript instantiate drizzle-orm's types twice (once per module format)
 # and fail with spurious "private property" incompatibility errors.
 COPY services/api/package.json ./services/api/package.json
-# services/api/src/utils/logger.ts (and the auth/tenant-scope helpers) read the per-request context from this one file.
+# services/api/src/utils/logger.ts (and the auth/company-scope helpers) read the per-request context from this one file.
 COPY services/api/src/modules/monitoring/requestContext.ts ./services/api/src/modules/monitoring/requestContext.ts
 COPY services/api/src/drizzle ./services/api/src/drizzle
 COPY services/api/src/modules/ai ./services/api/src/modules/ai
 COPY services/api/src/config ./services/api/src/config
 COPY services/api/src/utils ./services/api/src/utils
-# embedding-engine.ts imports the `TenantDb` *type* from lib/tenantScope.ts —
+# embedding-engine.ts imports the `Db` *type* from lib/requestDb.ts —
 # by design (see that file's own comment), so tsc must still fully resolve
-# tenantScope.ts's real imports (db/index.ts, middleware/auth.ts, and
+# requestDb.ts's real imports (db/index.ts, middleware/auth.ts, and
 # transitively express/jsonwebtoken/zod, added to this package's own
 # package.json) even though none of them run at this worker's runtime.
 COPY services/api/src/lib ./services/api/src/lib

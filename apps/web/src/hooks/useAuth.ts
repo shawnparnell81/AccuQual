@@ -1,17 +1,17 @@
 import { useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, refreshAccessToken } from "../api/client";
-import { useAuthStore, type AuthUser, type TenantContext } from "../store/authStore";
+import { useAuthStore, type AuthUser, type CompanyContext } from "../store/authStore";
 import { useWindowStore } from "../window-manager/useWindowStore";
 import { clearCurrentPlant } from "./useSites";
 
 export interface AuthResponse {
   user: AuthUser;
-  tenant?: TenantContext | null;
+  company?: CompanyContext | null;
   accessToken: string;
   // No refreshToken field — it now arrives only as the httpOnly accuqual_rt
   // cookie (see auth.controller.ts), never in a JSON body frontend JS can read.
-  /** Set while the tenant requires MFA but this user is still inside the enrollment grace period. */
+  /** Set while the company requires MFA but this user is still inside the enrollment grace period. */
   mfaGraceEndsAt?: string;
   /** Present once, right after enrollment — never retrievable again. */
   recoveryCodes?: string[];
@@ -31,7 +31,7 @@ export function useStartSession() {
   return (data: AuthResponse) => {
     queryClient.clear();
     clearCurrentPlant();
-    setSession(data.user, data.accessToken, data.tenant);
+    setSession(data.user, data.accessToken, data.company);
   };
 }
 
@@ -55,28 +55,13 @@ export function useLogin() {
   });
 }
 
-export function useRegister() {
-  const setSession = useAuthStore((s) => s.setSession);
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: { email: string; password: string; name?: string; tenantCode: string }) =>
-      (await apiClient.post<AuthResponse>("/auth/register", input)).data,
-    // Same reasoning as useLogin's onSuccess above.
-    onSuccess: (data) => {
-      queryClient.clear();
-      clearCurrentPlant();
-      setSession(data.user, data.accessToken, data.tenant);
-    },
-  });
-}
-
 export function useLogout() {
   const logout = useAuthStore((s) => s.logout);
   const clearWindows = useWindowStore((s) => s.clear);
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async () => apiClient.post("/auth/logout"),
-    // Cross-tenant window leakage must be impossible — never let a stale
+    // Window leakage must be impossible — never let a stale
     // window survive into the next login, even for the same browser tab.
     // The query cache holds the same class of sensitive data (NCRs,
     // suppliers, financials) and used to survive logout unchanged — see
@@ -94,8 +79,8 @@ export function useCurrentUser() {
   return useAuthStore((s) => s.user);
 }
 
-export function useCurrentTenant() {
-  return useAuthStore((s) => s.tenant);
+export function useCurrentCompany() {
+  return useAuthStore((s) => s.company);
 }
 
 /**
@@ -124,7 +109,7 @@ export function useAuthBootstrap() {
       // it would leave `bootstrapped` false forever (ProtectedRoute renders
       // nothing while waiting on a check that never runs) since nothing
       // else in the app would ever call setBootstrapped for it.
-      if (!token) logout(); // no valid cookie — drop any stale persisted user/tenant too
+      if (!token) logout(); // no valid cookie — drop any stale persisted user/company too
       setBootstrapped();
     });
     return () => {

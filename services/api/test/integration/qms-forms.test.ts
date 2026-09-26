@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Covers the generic QMS Simple Form engine — backs 22 of the "ACCUQUAL
 // Forms" batch's forms (see qmsFormDefinitions.ts's schema comment for why
 // the other 13 of the original 35 candidates were dropped in favor of
@@ -17,7 +18,7 @@ import request from "supertest";
 import { and, eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { qmsForms, qmsFormRows } from "../../src/drizzle/schema/qmsForms.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
@@ -28,7 +29,7 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let formId: number;
 let rowId: number;
 const userIds: number[] = [];
@@ -36,31 +37,22 @@ const userIds: number[] = [];
 let productionToken: string;
 
 async function makeUser(department: string | null) {
-  const [user] = await db.insert(users).values({ tenantId, email: `qmsforms-test-${department ?? "none"}-${suffix}@test.local`, passwordHash: "unused" }).returning();
+  const [user] = await db.insert(users).values({ email: `qmsforms-test-${department ?? "none"}-${suffix}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName: "operator", department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department });
 }
 
 describe("Generic QMS Simple Form engine (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `QMS Forms Test Tenant ${suffix}`, code: `qmsforms-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
 
-    await seedDefaultPermissions(tenantId);
+    await seedDefaultPermissions(companyId);
     productionToken = await makeUser("production"); // gets "edit" by default per the new qms_forms permission entry
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(inArray(auditTrail.performedBy, userIds));
-    if (formId) {
-      await db.delete(qmsFormRows).where(eq(qmsFormRows.formId, formId));
-      await db.delete(qmsForms).where(eq(qmsForms.id, formId));
-    }
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
@@ -175,7 +167,7 @@ describe("Generic QMS Simple Form engine (real DB + real HTTP path)", () => {
     await db
       .update(departmentPermissions)
       .set({ accessLevel: "none" })
-      .where(and(eq(departmentPermissions.tenantId, tenantId), eq(departmentPermissions.departmentName, "customer_service"), eq(departmentPermissions.moduleName, "qms_forms")));
+      .where(and(eq(departmentPermissions.departmentName, "customer_service"), eq(departmentPermissions.moduleName, "qms_forms")));
 
     const after = await request(app).post("/qms-forms").set("Authorization", `Bearer ${customerServiceToken}`).send({ formType: "record_retention_log" });
     expect(after.status).toBe(403);

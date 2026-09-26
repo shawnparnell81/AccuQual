@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
 /**
@@ -10,7 +9,6 @@ import { users } from "./users.js";
  */
 export const ppapPackages = pgTable("ppap_packages", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   partNumber: text("part_number").notNull(),
   partName: text("part_name"),
   customer: text("customer"),

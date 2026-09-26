@@ -14,7 +14,7 @@ describe("plant access", () => {
     expect(slugifyPlantCode("  ---  ")).toBe("plant");
   });
 
-  it("treats only tenant admins as able to manage every plant", () => {
+  it("treats only company admins as able to manage every plant", () => {
     expect(isSiteAdmin("admin")).toBe(true);
     expect(isSiteAdmin("quality_manager")).toBe(false);
     expect(isSiteAdmin("operator")).toBe(false);

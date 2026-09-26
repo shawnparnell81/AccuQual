@@ -1,11 +1,9 @@
 import { pgTable, serial, text, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
-import { tenants } from "./tenants.js";
 import { controlledVersions } from "./versioning.js";
 
 export const documents = pgTable("documents", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   title: text("title").notNull(),
   category: text("category"),
   currentVersion: integer("current_version").notNull().default(1),
@@ -37,7 +35,6 @@ export const documents = pgTable("documents", {
 
 export const documentVersions = pgTable("document_versions", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   documentId: integer("document_id").references(() => documents.id).notNull(),
   version: integer("version").notNull(),
   fileUrl: text("file_url"),
@@ -56,11 +53,10 @@ export const documentVersions = pgTable("document_versions", {
  * One uploaded file belonging to a controlled document. A row is immutable evidence (name, size, SHA-256 of the exact
  * bytes): versions reference files by id, so a file carried unchanged from revision to revision is stored once, and what a
  * published revision contained can always be proven. Rows are added when a file is uploaded to a draft; the bytes live in
- * the tenant's own storage folder. Because the path column is called file_path, tenant data export picks these up.
+ * the company's own storage folder. Because the path column is called file_path, company data export picks these up.
  */
 export const documentFiles = pgTable("document_files", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   documentId: integer("document_id").references(() => documents.id).notNull(),
   fileName: text("file_name").notNull(),
   mimeType: text("mime_type").notNull(),

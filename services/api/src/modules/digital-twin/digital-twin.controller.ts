@@ -13,7 +13,7 @@ import { generateDeviceKey, parseDeviceKey, deviceSecretMatches } from "./digita
 
 /**
  * A device as the API returns it: never the key hash (not reversible, but
- * there's no reason to hand it to every user in the tenant — device GETs are
+ * there's no reason to hand it to every user in the company — device GETs are
  * open to all of them), just whether a key has been issued.
  */
 function publicDevice(row: typeof iotDevices.$inferSelect) {
@@ -30,19 +30,19 @@ export const simulateDigitalTwin = asyncHandler(async (req: Request, res: Respon
   const [model] = await req
     .db!.select()
     .from(digitalTwinModels)
-    .where(and(eq(digitalTwinModels.id, modelId), eq(digitalTwinModels.tenantId, req.tenantId!)));
+    .where(and(eq(digitalTwinModels.id, modelId)));
   if (!model) throw AppError.notFound("Digital twin model");
 
   const results = runSimulation(model.modelJson as unknown as TwinModel, parameters);
 
   const [saved] = await req
     .db!.insert(digitalTwinSimulations)
-    .values({ tenantId: req.tenantId!, modelId, inputParameters: parameters, results: results as unknown as Record<string, unknown> })
+    .values({ modelId, inputParameters: parameters, results: results as unknown as Record<string, unknown> })
     .returning();
 
   // Was previously unaudited — model creation gets this for free via
   // crudFactory, but this handler bypasses that factory entirely.
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "DigitalTwinSimulation", entityId: saved!.id, action: "create", changes: { modelId }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "DigitalTwinSimulation", entityId: saved!.id, action: "create", changes: { modelId }, performedBy: req.user?.id });
 
   res.json(saved);
 });
@@ -51,7 +51,7 @@ export const getSimulation = asyncHandler(async (req: Request, res: Response) =>
   const [row] = await req
     .db!.select()
     .from(digitalTwinSimulations)
-    .where(and(eq(digitalTwinSimulations.id, Number(req.params.id)), eq(digitalTwinSimulations.tenantId, req.tenantId!)));
+    .where(and(eq(digitalTwinSimulations.id, Number(req.params.id))));
   if (!row) throw AppError.notFound("Simulation");
   res.json(row);
 });
@@ -59,25 +59,24 @@ export const getSimulation = asyncHandler(async (req: Request, res: Response) =>
 /** Real-time IoT ingestion — persisted for time-series analysis and pushed to the digital-twin worker. */
 export const ingestIot = asyncHandler(async (req: Request, res: Response) => {
   const { deviceId, timestamp, data } = req.body;
-  const tenantId = req.tenantId!;
 
-  await req.db!.insert(iotDevices).values({ tenantId, deviceId, lastSeenAt: new Date() }).onConflictDoUpdate({
-    target: [iotDevices.tenantId, iotDevices.deviceId],
+  await req.db!.insert(iotDevices).values({ deviceId, lastSeenAt: new Date() }).onConflictDoUpdate({
+    target: iotDevices.deviceId,
     set: { lastSeenAt: new Date() },
   });
 
   const [reading] = await req
     .db!.insert(iotData)
-    .values({ tenantId, deviceId, timestamp: timestamp ?? new Date(), data })
+    .values({ deviceId, timestamp: timestamp ?? new Date(), data })
     .returning();
 
-  await publishEvent(DIGITAL_TWIN_STREAM, { event: "iot_reading", tenantId, deviceId, data });
+  await publishEvent(DIGITAL_TWIN_STREAM, { event: "iot_reading", deviceId, data });
 
   res.status(201).json(reading);
 });
 
 export const listDevicesHandler = asyncHandler(async (req: Request, res: Response) => {
-  const devices = await req.db!.select().from(iotDevices).where(eq(iotDevices.tenantId, req.tenantId!));
+  const devices = await req.db!.select().from(iotDevices);
   res.json(devices.map(publicDevice));
 });
 
@@ -87,11 +86,10 @@ export const listDevicesHandler = asyncHandler(async (req: Request, res: Respons
  * This is the one real path that ever sets name/type/digitalTwinModelId.
  */
 export const registerDeviceHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const { deviceId, name, type, digitalTwinModelId } = req.body as { deviceId: string; name?: string; type?: string; digitalTwinModelId?: number };
 
   if (digitalTwinModelId !== undefined) {
-    const [model] = await req.db!.select().from(digitalTwinModels).where(and(eq(digitalTwinModels.id, digitalTwinModelId), eq(digitalTwinModels.tenantId, tenantId)));
+    const [model] = await req.db!.select().from(digitalTwinModels).where(and(eq(digitalTwinModels.id, digitalTwinModelId)));
     if (!model) throw AppError.notFound("Digital twin model");
   }
 
@@ -105,9 +103,9 @@ export const registerDeviceHandler = asyncHandler(async (req: Request, res: Resp
   // still updates it when one is, while `set` itself always has real keys.
   const [device] = await req
     .db!.insert(iotDevices)
-    .values({ tenantId, deviceId, name, type, digitalTwinModelId })
+    .values({ deviceId, name, type, digitalTwinModelId })
     .onConflictDoUpdate({
-      target: [iotDevices.tenantId, iotDevices.deviceId],
+      target: iotDevices.deviceId,
       set: {
         name: sql`coalesce(excluded.name, ${iotDevices.name})`,
         type: sql`coalesce(excluded.type, ${iotDevices.type})`,
@@ -116,12 +114,12 @@ export const registerDeviceHandler = asyncHandler(async (req: Request, res: Resp
     })
     .returning();
 
-  await recordAuditTrail(req.db!, { tenantId, entityType: "IotDevice", entityId: device!.id, action: "create", changes: { deviceId, name, type, digitalTwinModelId }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "IotDevice", entityId: device!.id, action: "create", changes: { deviceId, name, type, digitalTwinModelId }, performedBy: req.user?.id });
   res.status(201).json(publicDevice(device!));
 });
 
 async function loadDevice(req: Request, id: number) {
-  const [row] = await req.db!.select().from(iotDevices).where(and(eq(iotDevices.id, id), eq(iotDevices.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(iotDevices).where(and(eq(iotDevices.id, id)));
   if (!row) throw AppError.notFound("IoT device");
   return row;
 }
@@ -137,17 +135,16 @@ async function loadDevice(req: Request, id: number) {
  * ever keep-or-replace, never clear).
  */
 export const updateDeviceHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const record = await loadDevice(req, Number(req.params.id));
   const { digitalTwinModelId } = req.body as { digitalTwinModelId?: number | null };
 
   if (digitalTwinModelId) {
-    const [model] = await req.db!.select().from(digitalTwinModels).where(and(eq(digitalTwinModels.id, digitalTwinModelId), eq(digitalTwinModels.tenantId, tenantId)));
+    const [model] = await req.db!.select().from(digitalTwinModels).where(and(eq(digitalTwinModels.id, digitalTwinModelId)));
     if (!model) throw AppError.notFound("Digital twin model");
   }
 
   const [updated] = await req.db!.update(iotDevices).set(req.body).where(eq(iotDevices.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { tenantId, entityType: "IotDevice", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "IotDevice", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
   res.json(publicDevice(updated!));
 });
 
@@ -158,10 +155,9 @@ export const updateDeviceHandler = asyncHandler(async (req: Request, res: Respon
  * device row never cascades into or orphans its historical readings.
  */
 export const deleteDeviceHandler = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.tenantId!;
   const record = await loadDevice(req, Number(req.params.id));
   await req.db!.delete(iotDevices).where(eq(iotDevices.id, record.id));
-  await recordAuditTrail(req.db!, { tenantId, entityType: "IotDevice", entityId: record.id, action: "delete", changes: { deviceId: record.deviceId }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "IotDevice", entityId: record.id, action: "delete", changes: { deviceId: record.deviceId }, performedBy: req.user?.id });
   res.status(204).send();
 });
 
@@ -175,10 +171,10 @@ export const listAlertsHandler = asyncHandler(async (req: Request, res: Response
   const rows = await req
     .db!.select()
     .from(aiRiskScores)
-    .where(and(eq(aiRiskScores.tenantId, req.tenantId!), eq(aiRiskScores.entityType, "iot_device")))
+    .where(and(eq(aiRiskScores.entityType, "iot_device")))
     .orderBy(desc(aiRiskScores.createdAt))
     .limit(limit);
-  const devices = await req.db!.select().from(iotDevices).where(eq(iotDevices.tenantId, req.tenantId!));
+  const devices = await req.db!.select().from(iotDevices);
   const nameByDeviceId = new Map(devices.map((d) => [d.deviceId, d.name]));
 
   res.json(
@@ -209,24 +205,23 @@ export const rotateDeviceKeyHandler = asyncHandler(async (req: Request, res: Res
   const record = await loadDevice(req, Number(req.params.id));
   const { apiKey, hash } = generateDeviceKey(record.id);
   await req.db!.update(iotDevices).set({ apiKeyHash: hash, apiKeyCreatedAt: new Date() }).where(eq(iotDevices.id, record.id));
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "IotDevice", entityId: record.id, action: "update", changes: { action: "api_key_rotated" }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "IotDevice", entityId: record.id, action: "update", changes: { action: "api_key_rotated" }, performedBy: req.user?.id });
   res.status(201).json({ apiKey, deviceId: record.deviceId });
 });
 
 export const revokeDeviceKeyHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadDevice(req, Number(req.params.id));
   await req.db!.update(iotDevices).set({ apiKeyHash: null, apiKeyCreatedAt: null }).where(eq(iotDevices.id, record.id));
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "IotDevice", entityId: record.id, action: "update", changes: { action: "api_key_revoked" }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "IotDevice", entityId: record.id, action: "update", changes: { action: "api_key_revoked" }, performedBy: req.user?.id });
   res.status(204).send();
 });
 
 /**
  * Device-authenticated ingest (POST /digital-twin/device-ingest, no user
- * session): a PLC/sensor sends its key in X-Device-Key. The tenant and
- * deviceId come from the device's OWN row, never the request body, so a
+ * session): a PLC/sensor sends its key in X-Device-Key. The
+ * deviceId comes from the device's OWN row, never the request body, so a
  * device can only ever write to itself. Uses the unscoped connection (there
- * is no tenant context before the key is verified — same reason login does)
- * and always writes an explicit tenantId.
+ * is no signed-in user before the key is verified — same reason login does).
  */
 export const deviceIngestHandler = asyncHandler(async (req: Request, res: Response) => {
   const parsed = parseDeviceKey(req.header("x-device-key"));
@@ -237,7 +232,7 @@ export const deviceIngestHandler = asyncHandler(async (req: Request, res: Respon
 
   const { timestamp, data } = req.body as { timestamp?: Date; data: Record<string, unknown> };
   await rootDb.update(iotDevices).set({ lastSeenAt: new Date() }).where(eq(iotDevices.id, device.id));
-  const [reading] = await rootDb.insert(iotData).values({ tenantId: device.tenantId, deviceId: device.deviceId, timestamp: timestamp ?? new Date(), data }).returning();
-  await publishEvent(DIGITAL_TWIN_STREAM, { event: "iot_reading", tenantId: device.tenantId, deviceId: device.deviceId, data });
+  const [reading] = await rootDb.insert(iotData).values({ deviceId: device.deviceId, timestamp: timestamp ?? new Date(), data }).returning();
+  await publishEvent(DIGITAL_TWIN_STREAM, { event: "iot_reading", deviceId: device.deviceId, data });
   res.status(201).json({ id: reading!.id });
 });

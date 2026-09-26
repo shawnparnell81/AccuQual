@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { withTenantDb } from "../../lib/tenantScope.js";
+import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createQualityInspectionReportSchema, updateQualityInspectionReportSchema, createInspectionItemSchema, updateInspectionItemSchema } from "./qualityInspectionReports.validation.js";
@@ -19,7 +19,7 @@ export const qualityInspectionReportsRouter = Router();
 // Phase 8 — previously ungated ("same convention as the rest of this
 // batch"); a real gap, not a deliberate design (see defaultPermissions.ts's
 // own comment on the new "quality_inspection" ResourceKey this now uses).
-qualityInspectionReportsRouter.use(requireAuth, withTenantDb, requireDepartmentAccess("quality_inspection"));
+qualityInspectionReportsRouter.use(requireAuth, withDb, requireDepartmentAccess("quality_inspection"));
 
 qualityInspectionReportsRouter.get("/", listReportsHandler);
 qualityInspectionReportsRouter.post("/", validate(createQualityInspectionReportSchema), createReportHandler);

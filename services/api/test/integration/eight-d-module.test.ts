@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Full-System Audit finding H4: 8D had zero test references anywhere in the
 // suite — no RBAC check (this is also the module Phase 3's own audit found
 // had NO requireDepartmentAccess gate at all until it was added, see
@@ -9,7 +10,7 @@ import { eq } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { eightD } from "../../src/drizzle/schema/eightD.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
@@ -20,15 +21,15 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 const userIds: number[] = [];
 let qualityToken: string;
 let engineeringToken: string;
 
 async function makeUser(department: string | null) {
-  const [user] = await db.insert(users).values({ tenantId, email: `eight-d-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+  const [user] = await db.insert(users).values({ email: `eight-d-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName: "operator", department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department });
 }
 
 async function create8D(token: string) {
@@ -39,9 +40,9 @@ async function create8D(token: string) {
 
 describe("8D report module (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `8D Test Tenant ${suffix}`, code: `eight-d-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    await seedDefaultPermissions(tenantId);
+    const co = await ensureTestCompany();
+    companyId = co!.id;
+    await seedDefaultPermissions(companyId);
 
     qualityToken = await makeUser("quality");
     engineeringToken = await makeUser("engineering"); // eight_d's default permissions are quality-only
@@ -49,11 +50,6 @@ describe("8D report module (real DB + real HTTP path)", () => {
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(eightD).where(eq(eightD.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 

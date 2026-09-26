@@ -1,14 +1,15 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Bulk actions pilot (crudFactory.ts's bulkUpdate, wired only on NCR in this PR): the hard constraint carried over
 // from training's old bulk-complete-all removal is that every affected row still gets its own real audit-trail entry
 // — never one summary row for the whole batch — and the whole batch is fail-closed (one bad id rolls everything back,
-// via withTenantDb's existing one-transaction-per-request commit/rollback, not a new transaction of its own).
+// via withDb's existing one-transaction-per-request commit/rollback, not a new transaction of its own).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, and, inArray } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
@@ -20,15 +21,15 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 const userIds: number[] = [];
 let qualityToken: string;
 let engineeringToken: string;
 
 async function makeUser(department: string | null) {
-  const [user] = await db.insert(users).values({ tenantId, email: `ncr-bulk-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+  const [user] = await db.insert(users).values({ email: `ncr-bulk-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName: "operator", department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department });
 }
 
 async function createNcr(token: string, title: string) {
@@ -39,21 +40,15 @@ async function createNcr(token: string, title: string) {
 
 describe("NCR bulk actions (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `NCR Bulk Test Tenant ${suffix}`, code: `ncr-bulk-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    await seedDefaultPermissions(tenantId);
+    const co = await ensureTestCompany();
+    companyId = co!.id;
+    await seedDefaultPermissions(companyId);
     qualityToken = await makeUser("quality");
     engineeringToken = await makeUser("engineering"); // ncr's default permissions are quality-only — engineering has zero access
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(formData).where(and(eq(formData.tenantId, tenantId)));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(ncr).where(eq(ncr.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
@@ -70,7 +65,7 @@ describe("NCR bulk actions (real DB + real HTTP path)", () => {
     const rows = await db.select().from(ncr).where(inArray(ncr.id, [a, b, c]));
     expect(rows.every((r) => r.status === "contained")).toBe(true);
 
-    const updateEntries = await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "NCR"), eq(auditTrail.action, "update")));
+    const updateEntries = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "NCR"), eq(auditTrail.action, "update")));
     // One update-audit row per id, distinctly attributable to that id — not one row for the whole batch.
     for (const id of [a, b, c]) {
       expect(updateEntries.filter((r) => r.entityId === id)).toHaveLength(1);
@@ -89,7 +84,7 @@ describe("NCR bulk actions (real DB + real HTTP path)", () => {
     // Neither real NCR was changed, even though `a` was processed before the batch hit the bad id.
     expect(rows.every((r) => r.status === "open")).toBe(true);
 
-    const closedAudits = await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "NCR"), eq(auditTrail.action, "update"), inArray(auditTrail.entityId, [a, b])));
+    const closedAudits = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "NCR"), eq(auditTrail.action, "update"), inArray(auditTrail.entityId, [a, b])));
     expect(closedAudits).toHaveLength(0);
   });
 

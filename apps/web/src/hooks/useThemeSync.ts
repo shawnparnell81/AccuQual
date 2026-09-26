@@ -3,13 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { useCurrentUser } from "./useAuth";
 import { applyTheme } from "../lib/theme";
-import type { TenantBranding, UserThemePreferences } from "../api/types";
+import type { CompanyBranding, UserThemePreferences } from "../api/types";
 
 /**
  * Live theme sync — mounted once in AppLayout (see AiAssistantPanelGate for
  * the same "one gate component per authenticated feature" pattern). Reacts
- * to the real, current tenant branding and this user's own theme override,
- * not a stale snapshot from login, so a tenant admin's color change or this
+ * to the real, current company branding and this user's own theme override,
+ * not a stale snapshot from login, so an administrator's color change or this
  * user's own toggle takes effect for every open tab within staleTime
  * without a re-login. main.tsx's synchronous pre-mount stamp (localStorage)
  * covers the frame before this resolves — this hook waits until those
@@ -18,11 +18,11 @@ import type { TenantBranding, UserThemePreferences } from "../api/types";
  */
 export function useThemeSync() {
   const user = useCurrentUser();
-  const enabled = user?.tenantId != null;
+  const enabled = user != null;
 
-  const brandingQuery = useQuery<TenantBranding>({
-    queryKey: ["tenant/branding"],
-    queryFn: async () => (await apiClient.get("/tenant/branding")).data,
+  const brandingQuery = useQuery<CompanyBranding>({
+    queryKey: ["company/branding"],
+    queryFn: async () => (await apiClient.get("/company/branding")).data,
     enabled,
   });
 

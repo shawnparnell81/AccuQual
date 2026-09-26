@@ -12,7 +12,7 @@ import { useEffectivePermissions } from "./useEffectivePermissions";
 export function usePersonDirectory() {
   const user = useCurrentUser();
   const { effective, isLoading } = useEffectivePermissions();
-  const bypass = user?.roleName === "admin" || user?.roleName === "platform_admin";
+  const bypass = user?.roleName === "admin";
   const allowed = bypass || (!isLoading && !!effective && effective.training !== undefined && effective.training !== "none");
   const query = useQuery({
     queryKey: ["training", "people"],

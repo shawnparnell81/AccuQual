@@ -48,9 +48,9 @@ function SupplierPortalShell() {
 
 export function AppLayout() {
   const roleName = useAuthStore((s) => s.user?.roleName);
-  const userTenantId = useAuthStore((s) => s.user?.tenantId);
-  const loadWindowsForTenant = useWindowStore((s) => s.loadForTenant);
-  const loadTabsForTenant = useTabStore((s) => s.loadForTenant);
+  const userId = useAuthStore((s) => s.user?.id);
+  const loadWindowsForUser = useWindowStore((s) => s.loadForUser);
+  const loadTabsForUser = useTabStore((s) => s.loadForUser);
   const syncActiveTabLocation = useTabStore((s) => s.syncActiveTabLocation);
   const location = useLocation();
   const isSupplierPortal = roleName === "supplier";
@@ -81,17 +81,16 @@ export function AppLayout() {
     };
   }, []);
 
-  // Restores only the active tenant's saved windows/tabs, and re-runs
-  // (clearing the previous tenant's) if the logged-in tenant ever changes —
-  // see the Multi-Tenant Patch Pack §D "Clear windows when tenant changes";
-  // tabs (useTabStore) follow the exact same isolation rule. Skipped
+  // Restores only the signed-in user's saved windows/tabs, and re-runs
+  // (clearing the previous user's) if a different user signs in;
+  // tabs (useTabStore) follow the exact same rule. Skipped
   // entirely for a Supplier Portal login — floating windows/tabs are an
   // internal-app concept that login never touches.
   useEffect(() => {
-    if (isSupplierPortal || userTenantId == null) return;
-    loadWindowsForTenant(String(userTenantId));
-    loadTabsForTenant(String(userTenantId));
-  }, [isSupplierPortal, userTenantId, loadWindowsForTenant, loadTabsForTenant]);
+    if (isSupplierPortal || userId == null) return;
+    loadWindowsForUser(String(userId));
+    loadTabsForUser(String(userId));
+  }, [isSupplierPortal, userId, loadWindowsForUser, loadTabsForUser]);
 
   // Keeps the *active* tab's own path/title in sync with normal navigation
   // (existing nav links, back/forward) — see syncActiveTabLocation's own

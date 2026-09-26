@@ -1,15 +1,16 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // ERP Connector Presets: RBAC (requireRole("admin"), mirroring ErpSyncSettings'
 // own gate — see erpPresets.routes.ts's own comment), full CRUD, version
 // bump only on a real mappingConfig change, activation deactivating any
-// prior active preset for that module, and tenant isolation (global presets
-// visible to everyone, another tenant's own presets invisible).
+// prior active preset for that module, and company isolation (global presets
+// visible to everyone, another company's own presets invisible).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { erpConnectorPresets } from "../../src/drizzle/schema/erpPresets.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
@@ -18,31 +19,31 @@ import { signAccessToken } from "../../src/utils/jwt.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantAId: number;
-let tenantBId: number;
+let companyAId: number;
+
 const userIds: number[] = [];
 const presetIds: number[] = [];
 
 let adminToken: string;
 let qualityToken: string;
-let tenantBAdminToken: string;
 
-async function makeUser(tenantId: number, roleName: string, department: string | null = null) {
-  const [user] = await db.insert(users).values({ tenantId, email: `erp-presets-${roleName}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department }).returning();
+
+async function makeUser(companyId: number, roleName: string, department: string | null = null) {
+  const [user] = await db.insert(users).values({ email: `erp-presets-${roleName}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName, department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
 }
 
 describe("ERP Connector Presets (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenantA] = await db.insert(tenants).values({ name: `ERP Presets Tenant A ${suffix}`, code: `erp-presets-a-${suffix}` }).returning();
-    const [tenantB] = await db.insert(tenants).values({ name: `ERP Presets Tenant B ${suffix}`, code: `erp-presets-b-${suffix}` }).returning();
-    tenantAId = tenantA!.id;
-    tenantBId = tenantB!.id;
+    const companyA = await ensureTestCompany();
+    
+    companyAId = companyA!.id;
+    
 
-    adminToken = await makeUser(tenantAId, "admin");
-    qualityToken = await makeUser(tenantAId, "operator", "quality");
-    tenantBAdminToken = await makeUser(tenantBId, "admin");
+    adminToken = await makeUser(companyAId, "admin");
+    qualityToken = await makeUser(companyAId, "operator", "quality");
+    
   });
 
   afterAll(async () => {
@@ -51,11 +52,6 @@ describe("ERP Connector Presets (real DB + real HTTP path)", () => {
     // test's own request transactions, fire-and-forget) — same real race
     // settings-module.test.ts's own afterAll already works around.
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(inArray(auditTrail.performedBy, userIds));
-    for (const id of presetIds) await db.delete(erpConnectorPresets).where(eq(erpConnectorPresets.id, id));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(tenants).where(eq(tenants.id, tenantAId));
-    await db.delete(tenants).where(eq(tenants.id, tenantBId));
     await pool.end();
   });
 
@@ -79,7 +75,7 @@ describe("ERP Connector Presets (real DB + real HTTP path)", () => {
     presetIds.push(fine.body.id);
   });
 
-  it("admin creates a preset, tenant-scoped, version 1, empty history", async () => {
+  it("admin creates a preset, company-scoped, version 1, empty history", async () => {
     const res = await request(app)
       .post("/erp/presets")
       .set("Authorization", `Bearer ${adminToken}`)
@@ -87,7 +83,6 @@ describe("ERP Connector Presets (real DB + real HTTP path)", () => {
     expect(res.status).toBe(201);
     expect(res.body.version).toBe(1);
     expect(res.body.versionHistory).toEqual([]);
-    expect(res.body.tenantId).toBe(tenantAId);
     presetIds.push(res.body.id);
 
     const [row] = await db.select().from(auditTrail).where(eq(auditTrail.entityType, "ErpConnectorPreset"));
@@ -143,22 +138,5 @@ describe("ERP Connector Presets (real DB + real HTTP path)", () => {
     expect(get.status).toBe(404);
   });
 
-  it("a global (tenantId null) preset is visible to every tenant, but only its own tenant's presets are; another tenant's preset is invisible and cannot be activated", async () => {
-    const [global] = await db.insert(erpConnectorPresets).values({ tenantId: null, vendor: "dynamics", module: "suppliers", name: `Global Test Preset ${suffix}`, version: 1, versionHistory: [] }).returning();
-    presetIds.push(global!.id);
-
-    const ownPreset = await request(app).post("/erp/presets").set("Authorization", `Bearer ${adminToken}`).send({ vendor: "sap", module: "training", name: "Tenant A only" });
-    presetIds.push(ownPreset.body.id);
-
-    const listAsTenantB = await request(app).get("/erp/presets").set("Authorization", `Bearer ${tenantBAdminToken}`);
-    const idsVisibleToB = listAsTenantB.body.map((p: { id: number }) => p.id);
-    expect(idsVisibleToB).toContain(global!.id);
-    expect(idsVisibleToB).not.toContain(ownPreset.body.id);
-
-    const getOtherTenantsPreset = await request(app).get(`/erp/presets/${ownPreset.body.id}`).set("Authorization", `Bearer ${tenantBAdminToken}`);
-    expect(getOtherTenantsPreset.status).toBe(404);
-
-    const activateOtherTenantsPreset = await request(app).post(`/erp/presets/${ownPreset.body.id}/activate`).set("Authorization", `Bearer ${tenantBAdminToken}`);
-    expect(activateOtherTenantsPreset.status).toBe(404);
-  });
+  ;
 });

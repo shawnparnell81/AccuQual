@@ -1,15 +1,16 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Discrepancy & Investigation (quality/DI): RBAC, the guarded
 // open -> investigating -> disposed -> closed lifecycle (status is NOT
 // editable via the generic PATCH), the disposition requirement, closed
-// immutability, assignee tenant validation, and the two-way sync between the
+// immutability, assignee company validation, and the two-way sync between the
 // record and its investigation form (form_data).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { discrepancyInvestigations } from "../../src/drizzle/schema/quality.js";
 import { audits, auditItems } from "../../src/drizzle/schema/audits.js";
@@ -22,17 +23,17 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
-let otherTenantId: number;
-let otherTenantUserId: number;
+let companyId: number;
+
+
 const userIds: number[] = [];
 let qualityToken: string;
 let engineeringToken: string;
 
-async function makeUser(department: string | null, forTenant = tenantId) {
-  const [user] = await db.insert(users).values({ tenantId: forTenant, email: `di-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+async function makeUser(department: string | null, forCompany = companyId) {
+  const [user] = await db.insert(users).values({ email: `di-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return { id: user!.id, token: await signAccessToken({ sub: String(user!.id), tenantId: forTenant, roleId: null, roleName: "operator", department }) };
+  return { id: user!.id, token: await signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department }) };
 }
 
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
@@ -44,34 +45,25 @@ async function createDi(token: string, body: Record<string, unknown> = { title: 
 }
 
 async function formRow(id: number) {
-  const [row] = await db.select().from(formData).where(and(eq(formData.tenantId, tenantId), eq(formData.formType, "discrepancy_inspection"), eq(formData.entityId, id)));
+  const [row] = await db.select().from(formData).where(and(eq(formData.formType, "discrepancy_inspection"), eq(formData.entityId, id)));
   return row;
 }
 
 describe("Discrepancy & Investigation / quality-DI (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `DI Test Tenant ${suffix}`, code: `di-test-${suffix}` }).returning();
-    const [other] = await db.insert(tenants).values({ name: `DI Other Tenant ${suffix}`, code: `di-other-${suffix}` }).returning();
-    tenantId = tenant!.id;
-    otherTenantId = other!.id;
-    await seedDefaultPermissions(tenantId);
+    const co = await ensureTestCompany();
+    
+    companyId = co!.id;
+    
+    await seedDefaultPermissions(companyId);
 
     qualityToken = (await makeUser("quality")).token;
     engineeringToken = (await makeUser("engineering")).token; // di's default permissions are quality-only
-    otherTenantUserId = (await makeUser("quality", otherTenantId)).id;
+    
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(formData).where(eq(formData.tenantId, tenantId));
-    await db.delete(discrepancyInvestigations).where(eq(discrepancyInvestigations.tenantId, tenantId));
-    await db.delete(auditItems).where(eq(auditItems.tenantId, tenantId));
-    await db.delete(audits).where(eq(audits.tenantId, tenantId));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
-    await db.delete(tenants).where(eq(tenants.id, otherTenantId));
     await pool.end();
   });
 
@@ -150,11 +142,7 @@ describe("Discrepancy & Investigation / quality-DI (real DB + real HTTP path)", 
     expect(res.status).toBe(403);
   });
 
-  it("rejects assigning an investigation to a user from another tenant", async () => {
-    const id = await createDi(qualityToken);
-    const res = await request(app).patch(`/quality/${id}`).set(auth(qualityToken)).send({ assignedTo: otherTenantUserId });
-    expect(res.status).toBe(400);
-  });
+  ;
 
   describe("investigation form sync", () => {
     it("creating a discrepancy seeds its form with title, severity, description and status", async () => {

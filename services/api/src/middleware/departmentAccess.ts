@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { and, eq } from "drizzle-orm";
 import { AppError } from "../utils/appError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import type { TenantDb } from "../lib/tenantScope.js";
+import type { Db } from "../lib/requestDb.js";
 import { departmentPermissions, permissionRoleModules, userPermissionRoles } from "../drizzle/schema/permissions.js";
 
 export type AccessLevel = "none" | "read" | "edit";
@@ -25,7 +25,7 @@ export type ResourceKey =
   // (see the Department union above) — reusing it as a ResourceKey too
   // would create exactly the kind of same-string-different-type confusion
   // this finding is trying to prevent, not fix it. A rename would also
-  // break every existing tenant's already-persisted department_permissions
+  // break every existing company's already-persisted department_permissions
   // rows (moduleName = 'di' is real stored data, not just code) and touch
   // ~6 other call sites (defaultPermissions.ts, quality.routes.ts,
   // audit-trail's ENTITY_TYPE_TO_RESOURCE map, forms.routes.ts's
@@ -76,7 +76,7 @@ export type ResourceKey =
 
 export const DEPARTMENTS: Department[] = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management", "sales_and_marketing"];
 
-/** Friendly labels for the Roles & Permissions admin UI's modules list — the real, complete, fixed set ("no fictional modules": a tenant can only configure access to a module that actually has a requireDepartmentAccess/requireSupplierPortalAccess gate on it, never an invented name). */
+/** Friendly labels for the Roles & Permissions admin UI's modules list — the real, complete, fixed set ("no fictional modules": a company can only configure access to a module that actually has a requireDepartmentAccess/requireSupplierPortalAccess gate on it, never an invented name). */
 export const MODULE_LABELS: Record<ResourceKey, string> = {
   ncr: "NCR",
   capa: "CAPA",
@@ -136,26 +136,26 @@ function higherLevel(a: AccessLevel, b: AccessLevel): AccessLevel {
  * hardcoded fallback lives in this file anymore (see
  * db/defaultPermissions.ts's own comment on where that data went and why:
  * it's a one-time seed fixture consumed by db/backfillDepartmentPermissions.ts
- * and platform.service.ts's createTenant(), never read at request time). A
- * tenant with no row for this (department, module) pair simply has no
+ * and platform.service.ts's createCompany(), never read at request time). A
+ * company with no row for this (department, module) pair simply has no
  * access to it — "none" — full stop.
  */
-export async function getDepartmentAccessLevel(db: TenantDb, tenantId: number, department: Department | null, moduleName: ResourceKey): Promise<AccessLevel> {
+export async function getDepartmentAccessLevel(db: Db, department: Department | null, moduleName: ResourceKey): Promise<AccessLevel> {
   if (!department) return "none";
   const [row] = await db
     .select({ accessLevel: departmentPermissions.accessLevel })
     .from(departmentPermissions)
-    .where(and(eq(departmentPermissions.tenantId, tenantId), eq(departmentPermissions.departmentName, department), eq(departmentPermissions.moduleName, moduleName)));
+    .where(and(eq(departmentPermissions.departmentName, department), eq(departmentPermissions.moduleName, moduleName)));
   return row ? (row.accessLevel as AccessLevel) : "none";
 }
 
 /** Isolates source 2 alone (every custom permission-role grant this user holds for this module, at its highest level) — same reasoning as getDepartmentAccessLevel above. */
-export async function getRoleGrantedAccessLevel(db: TenantDb, tenantId: number, userId: number, moduleName: ResourceKey): Promise<AccessLevel> {
+export async function getRoleGrantedAccessLevel(db: Db, userId: number, moduleName: ResourceKey): Promise<AccessLevel> {
   const roleRows = await db
     .select({ accessLevel: permissionRoleModules.accessLevel })
     .from(userPermissionRoles)
     .innerJoin(permissionRoleModules, and(eq(permissionRoleModules.roleId, userPermissionRoles.roleId), eq(permissionRoleModules.moduleName, moduleName)))
-    .where(and(eq(userPermissionRoles.tenantId, tenantId), eq(userPermissionRoles.userId, userId)));
+    .where(and(eq(userPermissionRoles.userId, userId)));
   return roleRows.reduce<AccessLevel>((best, r) => higherLevel(best, r.accessLevel as AccessLevel), "none");
 }
 
@@ -172,23 +172,22 @@ export async function getRoleGrantedAccessLevel(db: TenantDb, tenantId: number, 
  *      permissionRoleModules row for any permissionRole this user is
  *      assigned to that names this moduleName.
  *
- * admin/platform_admin bypass both sources entirely and always get "edit".
+ * admin bypass both sources entirely and always get "edit".
  * This is a live DB read on every call (no caching) — unlike roleName/
  * department, which are baked into the JWT at login and only change on the
- * next token refresh, a tenant admin's permission change here takes effect
+ * next token refresh, a company admin's permission change here takes effect
  * on this user's very next request.
  */
 export async function getUserAccessLevel(
-  db: TenantDb,
-  tenantId: number,
+  db: Db,
   user: { id: number; roleName: string | null; department: string | null },
   moduleName: ResourceKey
 ): Promise<AccessLevel> {
-  if (user.roleName === "admin" || user.roleName === "platform_admin") return "edit";
+  if (user.roleName === "admin") return "edit";
 
   const [deptLevel, roleLevel] = await Promise.all([
-    getDepartmentAccessLevel(db, tenantId, user.department as Department | null, moduleName),
-    getRoleGrantedAccessLevel(db, tenantId, user.id, moduleName),
+    getDepartmentAccessLevel(db, user.department as Department | null, moduleName),
+    getRoleGrantedAccessLevel(db, user.id, moduleName),
   ]);
 
   return higherLevel(deptLevel, roleLevel);
@@ -198,16 +197,16 @@ export async function getUserAccessLevel(
  * Gate a route by department/role-granted access — the real, live check now
  * lives in getUserAccessLevel() above; this is just the same Express
  * middleware shape every route file already calls (zero call-site changes
- * anywhere in the app). platform_admin/admin bypass entirely, same as
+ * anywhere in the app). admin bypass entirely, same as
  * always. Wrapped in asyncHandler since this now needs a real DB read.
  */
 export function requireDepartmentAccess(resourceKey: ResourceKey) {
   return asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
     const role = req.user?.roleName;
-    if (role === "platform_admin" || role === "admin") return next();
-    if (!req.user || !req.db || req.tenantId === undefined) return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
+    if (role === "admin") return next();
+    if (!req.user || !req.db) return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
 
-    const level = await getUserAccessLevel(req.db as TenantDb, req.tenantId, req.user, resourceKey);
+    const level = await getUserAccessLevel(req.db as Db, req.user, resourceKey);
 
     if (level === "none") {
       return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
@@ -220,13 +219,13 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
 }
 
 /**
- * Gate a route to admin (platform_admin/admin) or one of a fixed list of
+ * Gate a route to admin (admin) or one of a fixed list of
  * departments, full stop — for settings-style endpoints that don't fit the
  * ResourceKey/getUserAccessLevel shape above (a resource other departments
  * can read/edit at *different levels*). Not part of the self-service Roles &
  * Permissions module at all (deliberately — these gates aren't keyed by a
  * ResourceKey/moduleName, just a fixed department list per endpoint, so
- * there's no per-module row for a tenant admin to configure). Tenant-wide
+ * there's no per-module row for a company admin to configure). Company-wide
  * config either belongs to
  * the department(s) that own it, or an admin — there's no "read-only"
  * tier. See modules/settings/settings.routes.ts for the concrete use
@@ -236,7 +235,7 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
 export function requireAnyDepartment(...departments: Department[]) {
   return (req: Request, _res: Response, next: NextFunction) => {
     const role = req.user?.roleName;
-    if (role === "platform_admin" || role === "admin") return next();
+    if (role === "admin") return next();
 
     const department = req.user?.department as Department | null | undefined;
     if (department && departments.includes(department)) return next();
@@ -255,13 +254,13 @@ export function requireAnyDepartment(...departments: Department[]) {
  *    real supplier-portal user).
  *  - internal staff, gated exactly like every other module via
  *    getUserAccessLevel(..., "supplier_portal") (Quality/Purchasing edit,
- *    Engineering read, by default — self-service configurable per tenant
+ *    Engineering read, by default — self-service configurable per company
  *    same as everything else now).
- * admin/platform_admin bypass both branches, same as everywhere else.
+ * admin bypass both branches, same as everywhere else.
  */
 export const requireSupplierPortalAccess = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
   const role = req.user?.roleName;
-  if (role === "platform_admin" || role === "admin") return next();
+  if (role === "admin") return next();
 
   if (role === "supplier") {
     if (!req.user?.supplierId) {
@@ -270,9 +269,9 @@ export const requireSupplierPortalAccess = asyncHandler(async (req: Request, _re
     return next();
   }
 
-  if (!req.user || !req.db || req.tenantId === undefined) return next(AppError.forbidden("No access to the Supplier Portal for your department"));
+  if (!req.user || !req.db) return next(AppError.forbidden("No access to the Supplier Portal for your department"));
 
-  const level = await getUserAccessLevel(req.db as TenantDb, req.tenantId, req.user, "supplier_portal");
+  const level = await getUserAccessLevel(req.db as Db, req.user, "supplier_portal");
   if (level === "none") {
     return next(AppError.forbidden("No access to the Supplier Portal for your department"));
   }

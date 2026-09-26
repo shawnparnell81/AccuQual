@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // In-app notification bell: GET/PATCH /notifications/me — self-only, matched by the caller's own email as
 // notification_log.recipient (req.user carries no email claim, so this proves the service really resolves it fresh
 // from `users`, not from anything client-supplied). Also proves the admin-only /notifications/retry-failed route
@@ -8,7 +9,7 @@ import { eq } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { notificationLog } from "../../src/drizzle/schema/notifications.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
@@ -16,7 +17,7 @@ import { signAccessToken } from "../../src/utils/jwt.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let userAId: number;
 let userBId: number;
 let adminId: number;
@@ -27,15 +28,15 @@ let adminToken: string;
 
 async function makeUser(label: string, roleName = "operator") {
   const email = `notif-${label}-${suffix}@test.local`;
-  const [user] = await db.insert(users).values({ tenantId, email, passwordHash: "unused" }).returning();
-  const token = await signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName, department: null });
+  const [user] = await db.insert(users).values({ email, passwordHash: "unused" }).returning();
+  const token = await signAccessToken({ sub: String(user!.id), roleId: null, roleName, department: null });
   return { id: user!.id, email, token };
 }
 
 describe("In-app notifications (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `Notif Test ${suffix}`, code: `notif-test-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
     const a = await makeUser("a");
     const b = await makeUser("b");
     const admin = await makeUser("admin", "admin");
@@ -48,18 +49,13 @@ describe("In-app notifications (real DB + real HTTP path)", () => {
     adminToken = admin.token;
 
     await db.insert(notificationLog).values([
-      { tenantId, channel: "email", recipient: emailA, subject: "Training due", body: "1 item needs attention", status: "sent" },
-      { tenantId, channel: "email", recipient: emailA, subject: "Older one", body: "already read", status: "sent", readAt: new Date(Date.now() - 60_000) },
-      { tenantId, channel: "email", recipient: b.email, subject: "Not yours", body: "belongs to user B", status: "sent" },
+      { channel: "email", recipient: emailA, subject: "Training due", body: "1 item needs attention", status: "sent" },
+      { channel: "email", recipient: emailA, subject: "Older one", body: "already read", status: "sent", readAt: new Date(Date.now() - 60_000) },
+      { channel: "email", recipient: b.email, subject: "Not yours", body: "belongs to user B", status: "sent" },
     ]);
   });
 
   afterAll(async () => {
-    await db.delete(notificationLog).where(eq(notificationLog.tenantId, tenantId));
-    await db.delete(users).where(eq(users.id, userAId));
-    await db.delete(users).where(eq(users.id, userBId));
-    await db.delete(users).where(eq(users.id, adminId));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
@@ -71,7 +67,7 @@ describe("In-app notifications (real DB + real HTTP path)", () => {
     expect(res.body.unreadCount).toBe(1);
   });
 
-  it("a different user in the same tenant sees none of user A's notifications", async () => {
+  it("a different user in the same company sees none of user A's notifications", async () => {
     const res = await request(app).get("/notifications/me").set("Authorization", `Bearer ${tokenB}`);
     expect(res.status).toBe(200);
     expect(res.body.notifications).toHaveLength(1);

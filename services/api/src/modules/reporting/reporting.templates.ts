@@ -1,5 +1,5 @@
 import * as reportingService from "./reporting.service.js";
-import type { TenantDb } from "../../lib/tenantScope.js";
+import type { Db } from "../../lib/requestDb.js";
 
 export const REPORT_TYPES = ["ncr_summary", "capa_summary", "supplier_scorecard", "warranty_summary", "receiving_summary"] as const;
 export type ReportType = (typeof REPORT_TYPES)[number];
@@ -21,14 +21,14 @@ export const REPORT_TYPE_LABELS: Record<ReportType, string> = {
  * Phase 5's AI-drafted supplier email used for not forcing drafted content
  * through that token system either).
  */
-export async function buildReportEmail(db: TenantDb, tenantId: number, reportType: ReportType, tenantName: string): Promise<{ subject: string; body: string }> {
+export async function buildReportEmail(db: Db, reportType: ReportType, companyName: string): Promise<{ subject: string; body: string }> {
   const today = new Date().toISOString().slice(0, 10);
 
   switch (reportType) {
     case "ncr_summary": {
-      const m = await reportingService.getNcrMetrics(db, tenantId);
+      const m = await reportingService.getNcrMetrics(db);
       return {
-        subject: `${tenantName} — NCR Summary (${today})`,
+        subject: `${companyName} — NCR Summary (${today})`,
         body:
           `NCR Summary as of ${today}\n\n` +
           `Open: ${m.totalOpen}\nClosed: ${m.totalClosed}\n` +
@@ -38,9 +38,9 @@ export async function buildReportEmail(db: TenantDb, tenantId: number, reportTyp
       };
     }
     case "capa_summary": {
-      const m = await reportingService.getCapaMetrics(db, tenantId);
+      const m = await reportingService.getCapaMetrics(db);
       return {
-        subject: `${tenantName} — CAPA Summary (${today})`,
+        subject: `${companyName} — CAPA Summary (${today})`,
         body:
           `CAPA Summary as of ${today}\n\n` +
           `Total: ${m.total}\nClosed: ${m.closed}\nEffectiveness (closure rate): ${m.effectivenessRate}%\n` +
@@ -49,9 +49,9 @@ export async function buildReportEmail(db: TenantDb, tenantId: number, reportTyp
       };
     }
     case "supplier_scorecard": {
-      const r = await reportingService.getSupplierPerformanceReport(db, tenantId);
+      const r = await reportingService.getSupplierPerformanceReport(db);
       return {
-        subject: `${tenantName} — Supplier Scorecard (${today})`,
+        subject: `${companyName} — Supplier Scorecard (${today})`,
         body:
           `Supplier Scorecard as of ${today}\n\n` +
           `Risk distribution:\n${r.riskDistribution.map((d) => `  ${d.riskScore}: ${d.count}`).join("\n")}\n\n` +
@@ -59,9 +59,9 @@ export async function buildReportEmail(db: TenantDb, tenantId: number, reportTyp
       };
     }
     case "warranty_summary": {
-      const m = await reportingService.getWarrantyTrends(db, tenantId);
+      const m = await reportingService.getWarrantyTrends(db);
       return {
-        subject: `${tenantName} — Warranty / RMA Summary (${today})`,
+        subject: `${companyName} — Warranty / RMA Summary (${today})`,
         body:
           `Warranty / RMA Summary as of ${today}\n\n` +
           `Total claims: ${m.total}\nTotal actual cost: $${m.totalActualCost.toFixed(2)}\n\n` +
@@ -69,9 +69,9 @@ export async function buildReportEmail(db: TenantDb, tenantId: number, reportTyp
       };
     }
     case "receiving_summary": {
-      const m = await reportingService.getReceivingTrends(db, tenantId);
+      const m = await reportingService.getReceivingTrends(db);
       return {
-        subject: `${tenantName} — Receiving Inspection Summary (${today})`,
+        subject: `${companyName} — Receiving Inspection Summary (${today})`,
         body:
           `Receiving Inspection Summary as of ${today}\n\n` +
           `Total incoming inspections: ${m.total}\nAccept rate: ${m.acceptRate ?? "n/a"}%\n\n` +

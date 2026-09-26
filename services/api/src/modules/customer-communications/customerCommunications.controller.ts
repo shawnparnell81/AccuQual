@@ -17,13 +17,12 @@ export const baseHandlers = crudFactory(customerCommunications, {
   idColumn: "id",
   afterCreate: async (created, req) => {
     const row = created as { id: number; customerId: number };
-    // Real Workflow Engine trigger — same {tenantId, module, event, entityId}
+    // Real Workflow Engine trigger — same {module, event, entityId}
     // shape every other Layer-2 module's own publishEvent call already uses
     // (see documents.controller.ts's approveHandler for the same pattern),
     // not a bespoke "communication.created" payload shape the engine has no
     // matcher for.
     await publishEvent(WORKFLOW_STREAM, {
-      tenantId: req.tenantId!,
       module: "customer_communications",
       event: "created",
       entityId: row.id,

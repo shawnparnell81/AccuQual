@@ -1,4 +1,5 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment
 // for why this category exists and what it needs). Covers the
 // backend-verifiable fixes from the full-app QA sweep review: Change
 // Management's missing GET /:id route, IoT device registration crashing
@@ -14,7 +15,7 @@ import request from "supertest";
 import { eq } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { changeRequests } from "../../src/drizzle/schema/change.js";
 import { iotDevices } from "../../src/drizzle/schema/digitalTwin.js";
@@ -31,28 +32,28 @@ import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
+let companyId: number;
 let adminUserId: number;
 let adminToken: string;
 const userIds: number[] = [];
 
 async function makeUser(department: string | null, roleName = "operator") {
-  const [user] = await db.insert(users).values({ tenantId, email: `qa-fix-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+  const [user] = await db.insert(users).values({ email: `qa-fix-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), tenantId, roleId: null, roleName, department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
 }
 
 describe("QA sweep fixes (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [tenant] = await db.insert(tenants).values({ name: `QA Fix Test Tenant ${suffix}`, code: `qa-fix-${suffix}` }).returning();
-    tenantId = tenant!.id;
+    const co = await ensureTestCompany();
+    companyId = co!.id;
 
-    await seedDefaultPermissions(tenantId);
+    await seedDefaultPermissions(companyId);
 
-    const [admin] = await db.insert(users).values({ tenantId, email: `qa-fix-admin-${suffix}@test.local`, passwordHash: "unused" }).returning();
+    const [admin] = await db.insert(users).values({ email: `qa-fix-admin-${suffix}@test.local`, passwordHash: "unused" }).returning();
     adminUserId = admin!.id;
     userIds.push(adminUserId);
-    adminToken = signAccessToken({ sub: String(adminUserId), tenantId, roleId: null, roleName: "admin", department: null });
+    adminToken = signAccessToken({ sub: String(adminUserId), roleId: null, roleName: "admin", department: null });
   });
 
   afterAll(async () => {
@@ -60,21 +61,6 @@ describe("QA sweep fixes (real DB + real HTTP path)", () => {
     // fire-and-forget logFailedTransition and the real ai-worker's async
     // embed jobs can still be landing after this file's own awaits resolve.
     await new Promise((r) => setTimeout(r, 300));
-    await db.delete(auditTrail).where(eq(auditTrail.tenantId, tenantId));
-    await db.delete(aiEmbeddings).where(eq(aiEmbeddings.tenantId, tenantId));
-    await db.delete(inventoryAlerts).where(eq(inventoryAlerts.tenantId, tenantId));
-    await db.delete(workOrders).where(eq(workOrders.tenantId, tenantId));
-    await db.delete(inventoryMovements).where(eq(inventoryMovements.tenantId, tenantId));
-    await db.delete(inventoryStock).where(eq(inventoryStock.tenantId, tenantId));
-    await db.delete(inventoryItems).where(eq(inventoryItems.tenantId, tenantId));
-    await db.delete(iotDevices).where(eq(iotDevices.tenantId, tenantId));
-    await db.delete(changeRequests).where(eq(changeRequests.tenantId, tenantId));
-    await db.delete(formData).where(eq(formData.tenantId, tenantId));
-    await db.delete(ncr).where(eq(ncr.tenantId, tenantId));
-    for (const id of userIds) await db.delete(users).where(eq(users.id, id));
-    await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, tenantId));
-
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
     await pool.end();
   });
 
@@ -126,8 +112,8 @@ describe("QA sweep fixes (real DB + real HTTP path)", () => {
 
   describe("Finding 11 — global search knows Work Orders exist", () => {
     it("a real work order is findable by its id", async () => {
-      const [item] = await db.insert(inventoryItems).values({ tenantId, sku: `QA-FIX-SEARCH-${suffix}`, minLevel: "0" }).returning();
-      const [wo] = await db.insert(workOrders).values({ tenantId, itemId: item!.id, quantityPlanned: "5" }).returning();
+      const [item] = await db.insert(inventoryItems).values({ sku: `QA-FIX-SEARCH-${suffix}`, minLevel: "0" }).returning();
+      const [wo] = await db.insert(workOrders).values({ itemId: item!.id, quantityPlanned: "5" }).returning();
 
       const res = await request(app).get(`/search?q=${wo!.id}`).set("Authorization", `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
@@ -137,7 +123,7 @@ describe("QA sweep fixes (real DB + real HTTP path)", () => {
 
   describe("Finding 7 — inventory alerts auto-acknowledge when stock recovers", () => {
     it("a below_min alert closes itself once a real movement brings stock back above min", async () => {
-      const [item] = await db.insert(inventoryItems).values({ tenantId, sku: `QA-FIX-ALERT-${suffix}`, minLevel: "10" }).returning();
+      const [item] = await db.insert(inventoryItems).values({ sku: `QA-FIX-ALERT-${suffix}`, minLevel: "10" }).returning();
 
       // Drive it below min — expect a real, open below_min alert.
       const consume = await request(app).post(`/inventory/items/${item!.id}/movement`).set("Authorization", `Bearer ${adminToken}`).send({ movementType: "receive", quantity: 5, toLocation: "default" });

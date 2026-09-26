@@ -1,10 +1,8 @@
 import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
-import { tenants } from "./tenants.js";
 
 export const complaints = pgTable("complaints", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   customerName: text("customer_name"),
   productAffected: text("product_affected"),
   description: text("description").notNull(),

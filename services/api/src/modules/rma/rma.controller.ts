@@ -13,7 +13,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 /** Same inline-guard style as inventory.controller.ts/erp.controller.ts's assertDepartment — the department PERMISSION_MATRIX entry is binary (read/edit) and can't express these per-action splits on its own. */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin" || role === "platform_admin") return;
+  if (role === "admin") return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -21,7 +21,7 @@ function assertDepartment(req: Request, allowed: string[]) {
 }
 
 function isAdmin(req: Request): boolean {
-  return req.user?.roleName === "admin" || req.user?.roleName === "platform_admin";
+  return req.user?.roleName === "admin";
 }
 
 /**
@@ -57,7 +57,7 @@ const ALLOWED_NEXT: Record<string, string[]> = {
 const QUALITY_EDITABLE_FIELDS = ["linkedNcrId", "linkedCapaId", "notes"];
 
 async function loadRma(req: Request, id: number) {
-  const [row] = await req.db!.select().from(rma).where(and(eq(rma.id, id), eq(rma.tenantId, req.tenantId!)));
+  const [row] = await req.db!.select().from(rma).where(and(eq(rma.id, id)));
   if (!row) throw AppError.notFound("Rma");
   return row;
 }
@@ -74,17 +74,17 @@ function generateRmaNumber(id: number): string {
 }
 
 async function itemsWithContext(req: Request, rmaId: number) {
-  const items = await req.db!.select().from(rmaItems).where(and(eq(rmaItems.rmaId, rmaId), eq(rmaItems.tenantId, req.tenantId!)));
+  const items = await req.db!.select().from(rmaItems).where(and(eq(rmaItems.rmaId, rmaId)));
   const itemIds = items.map((i) => i.itemId);
   if (itemIds.length === 0) return [];
-  const invItems = await req.db!.select().from(inventoryItems).where(eq(inventoryItems.tenantId, req.tenantId!));
+  const invItems = await req.db!.select().from(inventoryItems);
   const invById = new Map(invItems.map((i) => [i.id, i]));
   return items.map((i) => ({ ...i, sku: invById.get(i.itemId)?.sku ?? null }));
 }
 
 export const listRmaHandler = asyncHandler(async (req: Request, res: Response) => {
   const { status, supplierId, reasonCode, dateFrom, dateTo, q } = req.query as Record<string, string | undefined>;
-  const conditions: SQL[] = [eq(rma.tenantId, req.tenantId!)];
+  const conditions: SQL[] = [];
   if (status) conditions.push(eq(rma.status, status));
   if (supplierId) conditions.push(eq(rma.supplierId, Number(supplierId)));
   if (reasonCode) conditions.push(eq(rma.reasonCode, reasonCode));
@@ -130,21 +130,20 @@ export const createRmaHandler = asyncHandler(async (req: Request, res: Response)
   // violation) — found live while smoke-testing against a fresh database
   // with no seeded suppliers: an invalid supplierId previously surfaced as
   // an opaque 500 instead of a clean 400 naming the actual problem.
-  const [supplier] = await req.db!.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, req.tenantId!)));
+  const [supplier] = await req.db!.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.id, supplierId)));
   if (!supplier) throw AppError.badRequest(`Supplier #${supplierId} not found`);
   if (linkedNcrId !== undefined) {
-    const [linked] = await req.db!.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, linkedNcrId), eq(ncr.tenantId, req.tenantId!)));
+    const [linked] = await req.db!.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, linkedNcrId)));
     if (!linked) throw AppError.badRequest(`NCR #${linkedNcrId} not found`);
   }
   if (linkedCapaId !== undefined) {
-    const [linked] = await req.db!.select({ id: capa.id }).from(capa).where(and(eq(capa.id, linkedCapaId), eq(capa.tenantId, req.tenantId!)));
+    const [linked] = await req.db!.select({ id: capa.id }).from(capa).where(and(eq(capa.id, linkedCapaId)));
     if (!linked) throw AppError.badRequest(`CAPA #${linkedCapaId} not found`);
   }
 
   const [created] = await req
     .db!.insert(rma)
     .values({
-      tenantId: req.tenantId!,
       // Placeholder, real value written right after — rmaNumber is NOT NULL
       // UNIQUE and derived from the id this insert produces (see
       // generateRmaNumber's own comment), so it can't be known before insert.
@@ -160,7 +159,7 @@ export const createRmaHandler = asyncHandler(async (req: Request, res: Response)
 
   const [withNumber] = await req.db!.update(rma).set({ rmaNumber: generateRmaNumber(created!.id) }).where(eq(rma.id, created!.id)).returning();
 
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Rma", entityId: withNumber!.id, action: "create", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "Rma", entityId: withNumber!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(withNumber);
 });
 
@@ -185,7 +184,7 @@ export const updateRmaHandler = asyncHandler(async (req: Request, res: Response)
   const record = await loadRma(req, Number(req.params.id));
   const role = req.user?.roleName;
   const department = req.user?.department;
-  const isQuality = role !== "admin" && role !== "platform_admin" && department === "quality";
+  const isQuality = role !== "admin" && department === "quality";
 
   if (isQuality) {
     const disallowed = Object.keys(req.body).filter((k) => !QUALITY_EDITABLE_FIELDS.includes(k));
@@ -206,7 +205,7 @@ export const updateRmaHandler = asyncHandler(async (req: Request, res: Response)
     .set({ ...req.body, updatedAt: new Date() })
     .where(eq(rma.id, record.id))
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Rma", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "Rma", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
   res.json(updated);
 });
 
@@ -227,17 +226,16 @@ export const changeRmaStatusHandler = asyncHandler(async (req: Request, res: Res
 
   const [updated] = await req.db!.update(rma).set(patch).where(eq(rma.id, record.id)).returning();
   await recordAuditTrail(req.db!, {
-    tenantId: req.tenantId!,
     entityType: "Rma",
     entityId: record.id,
     action: "status_change",
     changes: { oldStatus: record.status, newStatus, userId: req.user?.id },
     performedBy: req.user?.id,
   });
-  // Opt-in only: lets a tenant build automation on RMA events in the existing
+  // Opt-in only: lets a company build automation on RMA events in the existing
   // Workflow Builder, exactly like supplier/inventory/erp already allow for
   // themselves — not a change to any workflow outside this module.
-  await publishEvent(WORKFLOW_STREAM, { tenantId: req.tenantId!, module: "rma", event: newStatus, entityId: record.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "rma", event: newStatus, entityId: record.id });
 
   res.json(updated);
 });
@@ -253,9 +251,9 @@ export const createRmaItemHandler = asyncHandler(async (req: Request, res: Respo
 
   const [created] = await req
     .db!.insert(rmaItems)
-    .values({ ...req.body, rmaId: record.id, tenantId: req.tenantId! })
+    .values({ ...req.body, rmaId: record.id, })
     .returning();
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Rma", entityId: record.id, action: "update", changes: { addedItem: created }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "Rma", entityId: record.id, action: "update", changes: { addedItem: created }, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
@@ -267,9 +265,9 @@ export const updateRmaItemHandler = asyncHandler(async (req: Request, res: Respo
   const [updated] = await req
     .db!.update(rmaItems)
     .set({ ...req.body, updatedAt: new Date() })
-    .where(and(eq(rmaItems.id, itemId), eq(rmaItems.rmaId, record.id), eq(rmaItems.tenantId, req.tenantId!)))
+    .where(and(eq(rmaItems.id, itemId), eq(rmaItems.rmaId, record.id)))
     .returning();
   if (!updated) throw AppError.notFound("RmaItem");
-  await recordAuditTrail(req.db!, { tenantId: req.tenantId!, entityType: "Rma", entityId: record.id, action: "update", changes: { updatedItemId: itemId, ...req.body }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "Rma", entityId: record.id, action: "update", changes: { updatedItemId: itemId, ...req.body }, performedBy: req.user?.id });
   res.json(updated);
 });

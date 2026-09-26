@@ -45,7 +45,7 @@ export function ControlledDocumentPage({ basePath, formType, title, noun, descri
   const other = useVersionPayload<Payload>(basePath, RECORD_ID, shownId !== null && !isSpecial ? shownId : null);
   const shown: VersionFull<Payload> | null | undefined = shownId === null ? null : shownId === openId ? current?.open : shownId === publishedId ? current?.published : other.data;
 
-  const isAdmin = user?.roleName === "admin" || user?.roleName === "platform_admin";
+  const isAdmin = user?.roleName === "admin";
   const mayEdit = isAdmin || user?.department === "quality" || user?.roleName === "quality_manager";
   const editable = !!shown && shown.status === "draft" && shown.id === openId && mayEdit;
 

@@ -16,7 +16,7 @@ export function useChangelogSeen() {
   const { data } = useQuery<{ lastSeenVersion: string | null }>({
     queryKey: ["users/me/changelog-seen"],
     queryFn: async () => (await apiClient.get("/users/me/changelog-seen")).data,
-    enabled: user?.tenantId != null,
+    enabled: user != null,
   });
 
   const markSeen = useMutation({

@@ -1,5 +1,4 @@
 import { pgTable, serial, text, integer, timestamp, numeric } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
 import { ncr } from "./ncr.js";
@@ -30,7 +29,6 @@ import { erpPurchaseOrders } from "./erp.js";
  */
 export const rma = pgTable("rma", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   rmaNumber: text("rma_number").notNull().unique(),
   status: text("status").notNull().default("draft"),
   supplierId: integer("supplier_id").references(() => suppliers.id).notNull(),
@@ -53,7 +51,6 @@ export const rma = pgTable("rma", {
 
 export const rmaItems = pgTable("rma_items", {
   id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
   rmaId: integer("rma_id").references(() => rma.id).notNull(),
   itemId: integer("item_id").references(() => inventoryItems.id).notNull(),
   description: text("description"),

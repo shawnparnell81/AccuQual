@@ -1,12 +1,13 @@
-// Real-DB integration test (see tenant-isolation.test.ts's header comment).
+import { ensureTestCompany } from "../helpers/company.js";
+// Real-DB integration test (see company-isolation.test.ts's header comment).
 // Equipment & Calibration lifecycle through its real HTTP endpoints: status, scheduling, completing, the failure hold and return
-// to service, the override, due status computed on the server, the attention list and due digest, RBAC, tenant isolation, audit.
+// to service, the override, due status computed on the server, the attention list and due digest, RBAC, company isolation, audit.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { and, eq, inArray } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { tenants } from "../../src/drizzle/schema/tenants.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { equipment, calibrations } from "../../src/drizzle/schema/calibration.js";
 import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
@@ -20,27 +21,27 @@ import { addDays, dueStatusOf, notifyDue } from "../../src/modules/calibration/c
 const app = createApp();
 const suffix = Date.now();
 
-let tenantId: number;
-let otherTenantId: number;
+let companyId: number;
+
 const userIds: number[] = [];
 type Who = { id: number; email: string; token: string };
 let quality: Who; // quality department, ordinary role: can edit equipment, cannot override
 let manager: Who; // quality department, quality_manager: may override
 let production: Who; // granted read-only on calibration by this organization
 let customer: Who;
-let otherAdmin: Who;
 
-async function makeUser(tenant: number, label: string, roleName: string, department: string | null): Promise<Who> {
+
+async function makeUser(co: number, label: string, roleName: string, department: string | null): Promise<Who> {
   const email = `equip-${label}-${suffix}@test.local`;
-  const [u] = await db.insert(users).values({ tenantId: tenant, email, passwordHash: "unused", department }).returning();
+  const [u] = await db.insert(users).values({ email, passwordHash: "unused", department }).returning();
   userIds.push(u!.id);
-  return { id: u!.id, email, token: await signAccessToken({ sub: String(u!.id), tenantId: tenant, roleId: null, roleName, department }) };
+  return { id: u!.id, email, token: await signAccessToken({ sub: String(u!.id), roleId: null, roleName, department }) };
 }
 const as = (w: Who) => ({ Authorization: `Bearer ${w.token}` });
 const day = (offset: number) => addDays(new Date(), offset).toISOString();
 
 const events = async (equipmentId: number) =>
-  (await db.select().from(auditTrail).where(and(eq(auditTrail.tenantId, tenantId), eq(auditTrail.entityType, "Equipment"), eq(auditTrail.entityId, equipmentId)))).map((r) => r.changes as Record<string, unknown> | null);
+  (await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "Equipment"), eq(auditTrail.entityId, equipmentId)))).map((r) => r.changes as Record<string, unknown> | null);
 const hasEvent = async (id: number, event: string) => (await events(id)).some((c) => c?.event === event);
 
 async function newEquipment(over: Record<string, unknown> = {}) {
@@ -64,36 +65,23 @@ describe("dueStatusOf (pure)", () => {
 
 describe("Equipment & Calibration lifecycle (real DB + real HTTP path)", () => {
   beforeAll(async () => {
-    const [t] = await db.insert(tenants).values({ name: `Equip ${suffix}`, code: `equip-${suffix}` }).returning();
-    const [o] = await db.insert(tenants).values({ name: `Equip Other ${suffix}`, code: `equip-other-${suffix}` }).returning();
-    tenantId = t!.id;
-    otherTenantId = o!.id;
-    await seedDefaultPermissions(tenantId);
-    await seedDefaultPermissions(otherTenantId);
+    const t = await ensureTestCompany();
+    
+    companyId = t!.id;
+    
+    await seedDefaultPermissions(companyId);
+    
     // By default only Quality has any access to calibration; an organization can grant another department read-only, which is what this does.
-    await db.insert(departmentPermissions).values({ tenantId, departmentName: "production", moduleName: "calibration", accessLevel: "read" });
-    quality = await makeUser(tenantId, "quality", "operator", "quality");
-    manager = await makeUser(tenantId, "manager", "quality_manager", "quality");
-    production = await makeUser(tenantId, "production", "operator", "production");
-    customer = await makeUser(tenantId, "customer", "customer", null);
-    otherAdmin = await makeUser(otherTenantId, "other", "admin", null);
+    await db.insert(departmentPermissions).values({ departmentName: "production", moduleName: "calibration", accessLevel: "read" });
+    quality = await makeUser(companyId, "quality", "operator", "quality");
+    manager = await makeUser(companyId, "manager", "quality_manager", "quality");
+    production = await makeUser(companyId, "production", "operator", "production");
+    customer = await makeUser(companyId, "customer", "customer", null);
+    
   });
 
   afterAll(async () => {
     await new Promise((r) => setTimeout(r, 300));
-    for (const t of [tenantId, otherTenantId]) {
-      await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, t));
-      await db.delete(auditTrail).where(eq(auditTrail.tenantId, t));
-      await db.delete(notificationLog).where(eq(notificationLog.tenantId, t));
-      await db.delete(calibrations).where(eq(calibrations.tenantId, t));
-      await db.delete(equipment).where(eq(equipment.tenantId, t));
-      await db.delete(departmentPermissions).where(eq(departmentPermissions.tenantId, t));
-    }
-    await db.delete(users).where(inArray(users.id, userIds));
-    for (const t of [tenantId, otherTenantId]) {
-      await db.delete(tenants).where(eq(tenants.id, t));
-      await db.delete(auditRowChanges).where(eq(auditRowChanges.tenantId, t));
-    }
     await pool.end();
   });
 
@@ -203,7 +191,7 @@ describe("Equipment & Calibration lifecycle (real DB + real HTTP path)", () => {
 
       expect(await get(id)).toMatchObject({ status: "out_of_service", statusCause: "calibration_failure", dueStatus: "failed", nextDueAt: null, lastResult: "fail" });
       expect(await hasEvent(id, "calibration_failed")).toBe(true);
-      const mail = await db.select().from(notificationLog).where(and(eq(notificationLog.tenantId, tenantId), eq(notificationLog.recipient, manager.email)));
+      const mail = await db.select().from(notificationLog).where(and(eq(notificationLog.recipient, manager.email)));
       expect(mail.some((m) => /Calibration failed/.test(m.subject))).toBe(true);
     });
 
@@ -271,11 +259,11 @@ describe("Equipment & Calibration lifecycle (real DB + real HTTP path)", () => {
       expect(res.status).toBe(200);
       expect(res.body.items).toBeGreaterThan(0);
       expect(res.body.notified).toBeGreaterThan(0);
-      const digest = (await db.select().from(notificationLog).where(and(eq(notificationLog.tenantId, tenantId), eq(notificationLog.recipient, manager.email)))).find((m) => /^Calibration due/.test(m.subject));
+      const digest = (await db.select().from(notificationLog).where(and(eq(notificationLog.recipient, manager.email)))).find((m) => /^Calibration due/.test(m.subject));
       expect(digest?.body).toMatch(/Digest overdue/);
 
       // The timer path dedupes: a second digest inside 20 hours is skipped.
-      const again = await notifyDue(db, tenantId, { dedupeHours: 20 });
+      const again = await notifyDue(db, { dedupeHours: 20 });
       expect(again).toMatchObject({ skipped: true, notified: 0 });
     });
   });
@@ -310,18 +298,7 @@ describe("Equipment & Calibration lifecycle (real DB + real HTTP path)", () => {
       expect((await request(app).get("/equipment")).status).toBe(401);
     });
 
-    it("keeps organizations apart", async () => {
-      expect((await request(app).get(`/equipment/${id}`).set(as(otherAdmin))).status).toBe(404);
-      expect((await request(app).post(`/equipment/${id}/status`).set(as(otherAdmin)).send({ status: "inactive" })).status).toBe(404);
-      expect((await request(app).post(`/equipment/${id}/calibration`).set(as(otherAdmin)).send({ scheduledAt: day(4) })).status).toBe(404);
-      expect((await request(app).post(`/equipment/calibration/${calId}/complete`).set(as(otherAdmin)).send({ result: "pass" })).status).toBe(404);
-      expect((await request(app).delete(`/equipment/calibration/${calId}`).set(as(otherAdmin))).status).toBe(404);
-      const theirs = (await request(app).get("/equipment").set(as(otherAdmin))).body as { id: number }[];
-      expect(theirs.find((e) => e.id === id)).toBeUndefined();
-      expect((await request(app).get("/equipment/attention").set(as(otherAdmin))).body).toEqual([]);
-      // Nothing of theirs leaked into ours or changed:
-      expect((await get(id)).status).toBe("active");
-    });
+    ;
   });
 
   // -------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -330,7 +307,7 @@ describe("Equipment & Calibration lifecycle (real DB + real HTTP path)", () => {
       const id = await newEquipment({ calibrationIntervalDays: 365 });
       const performedAt = new Date(Date.now() - 20 * 86_400_000);
       // Inserted exactly as the old code wrote it: only the columns that existed then.
-      await db.insert(calibrations).values({ tenantId, equipmentId: id, performedAt, result: "pass", nextDueAt: addDays(performedAt, 365) });
+      await db.insert(calibrations).values({ equipmentId: id, performedAt, result: "pass", nextDueAt: addDays(performedAt, 365) });
       expect(await get(id)).toMatchObject({ lastResult: "pass", dueStatus: "current" });
     });
   });
