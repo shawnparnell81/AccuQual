@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import {
   departmentPermissions,
   permissionRoles,
@@ -18,6 +18,7 @@ import {
   type Department,
   type ResourceKey,
 } from "../../middleware/departmentAccess.js";
+import { hierarchyLevelForRoleName, moveRank } from "../roles/roleHierarchy.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -120,7 +121,7 @@ export const deleteDepartmentPermissionHandler = asyncHandler(async (req: Reques
 
 /** GET /permissions/roles — every custom role this company has defined, with its module grants and how many users hold it. */
 export const listPermissionRolesHandler = asyncHandler(async (req: Request, res: Response) => {
-  const roles = await req.db!.select().from(permissionRoles);
+  const roles = await req.db!.select().from(permissionRoles).orderBy(asc(permissionRoles.hierarchyLevel), asc(permissionRoles.roleName));
   const moduleRows = await req.db!.select().from(permissionRoleModules);
   const memberCounts = await req
     .db!.select({ roleId: userPermissionRoles.roleId, count: sql<number>`count(*)::int` })
@@ -138,9 +139,9 @@ export const listPermissionRolesHandler = asyncHandler(async (req: Request, res:
 });
 
 export const createPermissionRoleHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { roleName, description } = req.body as { roleName: string; description?: string };
+  const { roleName, description, hierarchyLevel } = req.body as { roleName: string; description?: string; hierarchyLevel?: number };
 
-  const [created] = await req.db!.insert(permissionRoles).values({ roleName, description }).returning();
+  const [created] = await req.db!.insert(permissionRoles).values({ roleName, description, hierarchyLevel: hierarchyLevel ?? hierarchyLevelForRoleName(roleName) }).returning();
   await recordAuditTrail(req.db!, { entityType: "PermissionRole", entityId: created!.id, action: "create", changes: { roleName, description }, performedBy: req.user?.id });
   res.status(201).json({ ...created, modules: [], memberCount: 0 });
 });
@@ -162,13 +163,41 @@ export const updatePermissionRoleHandler = asyncHandler(async (req: Request, res
   res.json(updated);
 });
 
+export const movePermissionRoleHandler = asyncHandler(async (req: Request, res: Response) => {
+  const role = await loadPermissionRole(req, Number(req.params.id));
+  const { direction } = req.body as { direction: "up" | "down" };
+  const ordered = await req.db!.select({ id: permissionRoles.id, hierarchyLevel: permissionRoles.hierarchyLevel }).from(permissionRoles).orderBy(asc(permissionRoles.hierarchyLevel), asc(permissionRoles.roleName));
+  const changes = moveRank(ordered, role.id, direction);
+  for (const change of changes) {
+    await req.db!.update(permissionRoles).set({ hierarchyLevel: change.hierarchyLevel, updatedAt: new Date() }).where(eq(permissionRoles.id, change.id));
+  }
+  const updated = await loadPermissionRole(req, role.id);
+  await recordAuditTrail(req.db!, { entityType: "PermissionRole", entityId: role.id, action: "update", changes: { hierarchyLevel: updated.hierarchyLevel, moved: direction }, performedBy: req.user?.id });
+  res.json(updated);
+});
+
 export const deletePermissionRoleHandler = asyncHandler(async (req: Request, res: Response) => {
   const role = await loadPermissionRole(req, Number(req.params.id));
-  // permissionRoleModules/userPermissionRoles both reference this role with
-  // onDelete:"cascade" (see the schema's own comment) — one delete here
-  // cleans up every module grant and user assignment atomically.
+  const replacementRaw = (req.body as { replacementRoleId?: number } | undefined)?.replacementRoleId;
+  const replacementRoleId = replacementRaw != null ? Number(replacementRaw) : undefined;
+  const [countRow] = await req.db!.select({ count: sql<number>`count(*)::int` }).from(userPermissionRoles).where(eq(userPermissionRoles.roleId, role.id));
+  const holders = countRow?.count ?? 0;
+  if (holders > 0 && (replacementRoleId == null || !Number.isFinite(replacementRoleId))) {
+    const people = holders === 1 ? "1 person still has" : `${holders} people still have`;
+    throw new AppError(`${people} the "${role.roleName}" role. Choose another role for them before deleting it.`, 409, { userCount: holders, requiresReplacement: true });
+  }
+  if (replacementRoleId != null && holders > 0) {
+    if (replacementRoleId === role.id) throw AppError.badRequest("Choose a different role to move people to.");
+    const replacement = await loadPermissionRole(req, replacementRoleId);
+    const already = await req.db!.select({ userId: userPermissionRoles.userId }).from(userPermissionRoles).where(eq(userPermissionRoles.roleId, replacement.id));
+    const alreadyIds = new Set(already.map((row) => row.userId));
+    if (alreadyIds.size > 0) {
+      await req.db!.delete(userPermissionRoles).where(and(eq(userPermissionRoles.roleId, role.id), inArray(userPermissionRoles.userId, [...alreadyIds])));
+    }
+    await req.db!.update(userPermissionRoles).set({ roleId: replacement.id }).where(eq(userPermissionRoles.roleId, role.id));
+  }
   await req.db!.delete(permissionRoles).where(eq(permissionRoles.id, role.id));
-  await recordAuditTrail(req.db!, { entityType: "PermissionRole", entityId: role.id, action: "delete", changes: { roleName: role.roleName }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "PermissionRole", entityId: role.id, action: "delete", changes: { roleName: role.roleName, reassignedTo: replacementRoleId ?? null, userCount: holders }, performedBy: req.user?.id });
   res.status(204).send();
 });
 

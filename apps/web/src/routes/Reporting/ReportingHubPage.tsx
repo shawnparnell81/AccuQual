@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isFullAccessRole } from "../../lib/fullAccess";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useCurrentUser } from "../../hooks/useAuth";
@@ -438,7 +439,7 @@ const TABS = [
 
 export function ReportingHubPage() {
   const user = useCurrentUser();
-  const isAdmin = user?.roleName === "admin";
+  const isAdmin = isFullAccessRole(user?.roleName);
   const ncrAccess = useWorkflowAccessLevel("ncr");
   const supplierAccess = useWorkflowAccessLevel("suppliers");
   const warrantyAccess = useWorkflowAccessLevel("warranty");

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isFullAccessRole } from "../../lib/fullAccess";
 import { useParams, Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -58,7 +59,7 @@ export function CrarDetailPage() {
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !record) return <LoadingPlaceholder />;
 
-  const isAdmin = currentUser?.roleName === "admin";
+  const isAdmin = isFullAccessRole(currentUser?.roleName);
   const department = currentUser?.department;
   const isLinkOnly = !isAdmin && department != null && WARRANTY_LINK_ONLY_DEPARTMENTS.includes(department);
   const canEditContent = isAdmin || department === "quality";

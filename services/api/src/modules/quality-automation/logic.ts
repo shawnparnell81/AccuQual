@@ -1,4 +1,7 @@
 import { appRecordUrl } from "../../lib/recordLink.js";
+import { isFullAccessRole, isReviewerRole } from "../roles/roleAccess.js";
+
+const EXECUTIVE_APPROVER_STEPS = new Set(["quality_manager", "president", "vice_president"]);
 
 /** Defaults an admin can change. Remind 3 days before, on the due date, and escalate after 7 days overdue. */
 export const DEFAULT_QUALITY_AUTOMATION = {
@@ -113,10 +116,11 @@ export interface ApprovalPending {
   approverDepartment?: string;
 }
 
-/** Same rule the workflow approval inbox uses: admin, the named role, or the named department. */
+/** Same rule the workflow approval inbox uses: full access, the named role, an executive approver on an executive step, or the named department. */
 export function canDecideApproval(person: Pick<EscalationPerson, "roleName" | "department">, pending: ApprovalPending): boolean {
-  if (person.roleName === "admin") return true;
+  if (isFullAccessRole(person.roleName)) return true;
   if (pending.approverRole && person.roleName === pending.approverRole) return true;
+  if (isReviewerRole(person.roleName) && pending.approverRole != null && EXECUTIVE_APPROVER_STEPS.has(pending.approverRole)) return true;
   if (pending.approverDepartment && person.department === pending.approverDepartment) return true;
   return false;
 }

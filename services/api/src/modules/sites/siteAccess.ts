@@ -8,7 +8,7 @@ export interface SiteChoice {
 
 /** Company admins manage every plant. Everyone else is limited to membership. */
 export function isSiteAdmin(roleName: string | null | undefined): boolean {
-  return roleName === "admin";
+  return roleName === "admin" || roleName === "owner";
 }
 
 /** Short code stored on the plant. Callers may pass an explicit code instead. */

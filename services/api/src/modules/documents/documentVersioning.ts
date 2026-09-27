@@ -198,6 +198,11 @@ export const documentAdapter: SubjectAdapter = {
     if (doc.retentionState === "archived") throw new AppError("This document is archived and can't be revised.", 409);
   },
 
+  async guardAdvance(db, id) {
+    const doc = await loadDocument(db, id);
+    if (doc.status === "obsolete") throw new AppError("This document is obsolete and can't be published.", 409);
+  },
+
   seedDraft(payload, ctx) {
     const p = normalizeDocumentPayload(payload);
     const current = normalizeDocumentPayload(ctx.currentPayload ?? payload);
@@ -243,6 +248,9 @@ export const documentAdapter: SubjectAdapter = {
   },
 
   async onTransition(db, id, event) {
+    const doc = await loadDocument(db, id);
+    // A move into Obsolete / Archive must not be undone when an open draft is discarded or sent on.
+    if (doc.status === "obsolete") return;
     // While nothing has been released yet the document mirrors its open revision; once released, the released revision stays in force.
     if (event.hasPublished) return;
     const status = event.type === "submitted" || event.type === "approved" ? "in_review" : "draft";
@@ -250,6 +258,8 @@ export const documentAdapter: SubjectAdapter = {
   },
 
   async apply(db, id, payload, info) {
+    const existing = await loadDocument(db, id);
+    if (existing.status === "obsolete") throw new AppError("This document is obsolete and can't be published.", 409);
     const p = normalizeDocumentPayload(payload);
     const v = info.version;
     const effective = p.effectiveDate ? new Date(p.effectiveDate) : new Date();

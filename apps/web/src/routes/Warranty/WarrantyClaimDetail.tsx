@@ -1,4 +1,5 @@
 import { useParams, Link } from "react-router-dom";
+import { isFullAccessRole } from "../../lib/fullAccess";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { useWorkflowAccessLevel } from "../../hooks/useWorkflowAccess";
@@ -65,7 +66,7 @@ export function WarrantyClaimDetail() {
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !claim) return <LoadingPlaceholder />;
 
-  const isAdmin = currentUser?.roleName === "admin";
+  const isAdmin = isFullAccessRole(currentUser?.roleName);
   const department = currentUser?.department;
   // Field-edit access (inspection notes, supplier review notes, POST
   // .../update) — module-specific RBAC build (2026-09-16): a live,

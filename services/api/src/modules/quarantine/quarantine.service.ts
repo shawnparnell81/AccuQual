@@ -19,6 +19,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { notifyDepartment } from "../notifications/notification.service.js";
 import { holdableUnits, liftHold, placeHold, removeHeldStock, type HoldTarget } from "../inventory/inventoryHolds.service.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /**
  * Quarantine rules, in one place. A hold puts some quantity of something out of use until a person decides what happens to it:
@@ -302,7 +303,7 @@ export async function resolveQuarantine(db: Db, id: number, action: "release" | 
   if (!(quantity > 0) || quantity > held) throw AppError.badRequest(`Choose a quantity between 0 and ${held}.`);
 
   // Four eyes: whoever put material on hold does not also decide what happens to it (an admin excepted, and that is recorded).
-  const isAdmin = actor.roleName === "admin";
+  const isAdmin = isFullAccessRole(actor.roleName);
   const selfDecision = record.createdBy === actor.id;
   if (selfDecision && !isAdmin && !actor.skipFourEyes) throw AppError.forbidden("You put this on hold, so someone else has to decide what happens to it.");
 

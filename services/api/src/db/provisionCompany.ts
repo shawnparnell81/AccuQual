@@ -17,19 +17,11 @@ import { renderTemplate } from "../modules/notifications/templates.js";
 import { env } from "../config/env.js";
 import { logger } from "../utils/logger.js";
 import type { AccessLevel, Department, ResourceKey } from "../middleware/departmentAccess.js";
+import { ROLE_SEEDS } from "../modules/roles/roleHierarchy.js";
 
 /** The built-in system roles every installation has. */
-const SYSTEM_ROLES = [
-  { name: "admin", description: "Administrator — full access" },
-  { name: "quality_manager", description: "Manages NCR/CAPA/Audits/Suppliers" },
-  { name: "auditor", description: "Conducts audits and reviews findings" },
-  { name: "operator", description: "Shop-floor / production user" },
-  { name: "supplier", description: "External supplier portal access" },
-  { name: "customer", description: "External customer portal access" },
-] as const;
-
 export async function ensureSystemRoles(): Promise<void> {
-  for (const role of SYSTEM_ROLES) {
+  for (const role of ROLE_SEEDS) {
     await db.insert(roles).values(role).onConflictDoNothing({ target: roles.name });
   }
 }

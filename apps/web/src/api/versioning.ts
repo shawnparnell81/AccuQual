@@ -73,7 +73,7 @@ export interface ValidationReport {
 }
 
 /** Roles that may review and publish — mirrors REVIEWER_ROLES on the server, which is what actually enforces it. */
-export const REVIEWER_ROLES = ["admin", "quality_manager"];
+export const REVIEWER_ROLES = ["admin", "owner", "quality_manager", "president", "vice_president"];
 
 export function useVersioning<P = Record<string, unknown>>(basePath: string, id: number) {
   const queryClient = useQueryClient();

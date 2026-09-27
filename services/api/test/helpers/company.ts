@@ -15,10 +15,24 @@ async function wipeDatabase(): Promise<void> {
   try {
     const { rows } = await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'roles'");
     if (rows.length > 0) await client.query(`TRUNCATE ${rows.map((r: { tablename: string }) => `"${r.tablename}"`).join(", ")} RESTART IDENTITY CASCADE`);
-    await client.query("DELETE FROM roles WHERE name NOT IN ('admin', 'quality_manager', 'auditor', 'operator', 'supplier', 'customer')");
-    await client.query(
-      "INSERT INTO roles (name, description) VALUES ('admin', 'Administrator'), ('quality_manager', 'Quality manager'), ('auditor', 'Auditor'), ('operator', 'Operator'), ('supplier', 'Supplier portal'), ('customer', 'Customer portal') ON CONFLICT (name) DO NOTHING",
-    );
+    await client.query("DELETE FROM roles WHERE name NOT IN ('owner', 'admin', 'president', 'vice_president', 'quality_manager', 'auditor', 'operator', 'supplier', 'customer')");
+    await client.query(`
+      INSERT INTO roles (name, description, hierarchy_level, is_protected, permissions) VALUES
+        ('owner', 'Owner — full access to everything', 10, true, '["import_data", "restore_archived_documents"]'::jsonb),
+        ('admin', 'Administrator — full access', 15, true, '["import_data", "restore_archived_documents"]'::jsonb),
+        ('president', 'President — can view the quality system and approve work', 20, true, '[]'::jsonb),
+        ('vice_president', 'Vice President — can view the quality system and approve work', 30, true, '[]'::jsonb),
+        ('quality_manager', 'Manages NCR/CAPA/Audits/Suppliers', 50, true, '[]'::jsonb),
+        ('operator', 'Shop-floor / production user', 80, true, '[]'::jsonb),
+        ('auditor', 'Conducts audits and reviews findings', 92, true, '[]'::jsonb),
+        ('supplier', 'External supplier portal access', 95, true, '[]'::jsonb),
+        ('customer', 'External customer portal access', 100, true, '[]'::jsonb)
+      ON CONFLICT (name) DO UPDATE SET
+        hierarchy_level = EXCLUDED.hierarchy_level,
+        is_protected = EXCLUDED.is_protected,
+        description = EXCLUDED.description,
+        permissions = EXCLUDED.permissions
+    `);
   } finally {
     await client.end();
   }

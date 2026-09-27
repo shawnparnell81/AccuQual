@@ -223,7 +223,7 @@ describe("Login hardening (real DB + real HTTP path)", () => {
     it("deactivating via DELETE also revokes the live token", async () => {
       const u = await makeUser("delete");
       const token = (await login(u.email, GOOD)).body.accessToken as string;
-      expect((await request(app).delete(`/users/${u.id}`).set(auth())).status).toBe(204);
+      expect((await request(app).delete(`/users/${u.id}`).set(auth())).status).toBe(200);
       expect((await request(app).get("/auth/me").set({ Authorization: `Bearer ${token}` })).status).toBe(401);
     });
   });

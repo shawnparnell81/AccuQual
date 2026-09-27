@@ -1,0 +1,165 @@
+import { IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS } from "./roleAccess.js";
+
+/**
+ * Organizational ladder. A smaller number is higher and is listed first.
+ *
+ * 10 Owner
+ * 15 Administrator (the existing full-admin role)
+ * 20 President
+ * 30 Vice President
+ * 40 Director
+ * 50 Manager (quality manager, and custom manager titles)
+ * 60 Supervisor / Lead
+ * 70 Engineer / Specialist / Inspector
+ * 80 General staff (operator and other day-to-day roles)
+ * 90 Read-only / viewer
+ * 92 Auditor
+ * 95 Supplier (external)
+ * 100 Customer (external)
+ */
+export const LADDER: { level: number; label: string }[] = [
+  { level: 10, label: "Owner" },
+  { level: 15, label: "Administrator" },
+  { level: 20, label: "President" },
+  { level: 30, label: "Vice President" },
+  { level: 40, label: "Director" },
+  { level: 50, label: "Manager" },
+  { level: 60, label: "Supervisor / Lead" },
+  { level: 70, label: "Engineer / Specialist / Inspector" },
+  { level: 80, label: "Staff" },
+  { level: 90, label: "Read-only" },
+  { level: 92, label: "Auditor" },
+  { level: 95, label: "Supplier" },
+  { level: 100, label: "Customer" },
+];
+
+export interface RoleSeed {
+  name: string;
+  description: string;
+  hierarchyLevel: number;
+  isProtected: boolean;
+  permissions: string[];
+}
+
+/** Built-in roles. Names are what sign-in and the permission checks use, so they stay fixed. */
+export const ROLE_SEEDS: RoleSeed[] = [
+  { name: "owner", description: "Owner — full access to everything", hierarchyLevel: 10, isProtected: true, permissions: [IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS] },
+  { name: "admin", description: "Administrator — full access", hierarchyLevel: 15, isProtected: true, permissions: [IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS] },
+  { name: "president", description: "President — can view the quality system and approve work", hierarchyLevel: 20, isProtected: true, permissions: [] },
+  { name: "vice_president", description: "Vice President — can view the quality system and approve work", hierarchyLevel: 30, isProtected: true, permissions: [] },
+  { name: "quality_manager", description: "Manages NCR/CAPA/Audits/Suppliers", hierarchyLevel: 50, isProtected: true, permissions: [] },
+  { name: "operator", description: "Shop-floor / production user", hierarchyLevel: 80, isProtected: true, permissions: [] },
+  { name: "auditor", description: "Conducts audits and reviews findings", hierarchyLevel: 92, isProtected: true, permissions: [] },
+  { name: "supplier", description: "External supplier portal access", hierarchyLevel: 95, isProtected: true, permissions: [] },
+  { name: "customer", description: "External customer portal access", hierarchyLevel: 100, isProtected: true, permissions: [] },
+];
+
+export const PROTECTED_ROLE_NAMES = new Set(ROLE_SEEDS.map((role) => role.name));
+
+export function roleTokens(name: string): string[] {
+  return name
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+/** Where a role name sits on the ladder. First matching rule wins. */
+export function hierarchyLevelForRoleName(name: string): number {
+  const tokens = roleTokens(name);
+  const has = (word: string) => tokens.includes(word);
+  const adjacent = (left: string, right: string) => tokens.some((token, index) => token === left && tokens[index + 1] === right);
+
+  if (has("vp") || adjacent("vice", "president") || has("vicepresident")) return 30;
+  if (has("president")) return 20;
+  if (has("owner")) return 10;
+  if (has("admin") || has("administrator")) return 15;
+  if (has("director")) return 40;
+  if (has("manager")) return 50;
+  if (has("supervisor") || has("lead")) return 60;
+  if (has("engineer") || has("specialist") || has("inspector") || has("technician")) return 70;
+  if (has("auditor")) return 92;
+  if (has("supplier")) return 95;
+  if (has("customer")) return 100;
+  if (has("viewer") || has("readonly") || has("guest")) return 90;
+  return 80;
+}
+
+export function ladderLabel(level: number): string {
+  let best = LADDER[0]!;
+  for (const step of LADDER) {
+    if (Math.abs(step.level - level) < Math.abs(best.level - level)) best = step;
+  }
+  return best.label;
+}
+
+export function roleIsProtected(role: { name: string; isProtected?: boolean | null }): boolean {
+  if (role.isProtected) return true;
+  return PROTECTED_ROLE_NAMES.has(role.name.trim().toLowerCase());
+}
+
+export interface RankedRole {
+  id: number;
+  hierarchyLevel: number;
+}
+
+/**
+ * Move a role one place up (higher in the org, smaller rank) or down.
+ * Returns the rows to write. Empty when the role is already at that end.
+ */
+export function moveRank(sorted: RankedRole[], id: number, direction: "up" | "down"): { id: number; hierarchyLevel: number }[] {
+  const index = sorted.findIndex((role) => role.id === id);
+  const otherIndex = direction === "up" ? index - 1 : index + 1;
+  if (index < 0 || otherIndex < 0 || otherIndex >= sorted.length) return [];
+  const current = sorted[index]!;
+  const other = sorted[otherIndex]!;
+  if (current.hierarchyLevel !== other.hierarchyLevel) {
+    return [
+      { id: current.id, hierarchyLevel: other.hierarchyLevel },
+      { id: other.id, hierarchyLevel: current.hierarchyLevel },
+    ];
+  }
+  const next = current.hierarchyLevel + (direction === "up" ? -1 : 1);
+  return [{ id: current.id, hierarchyLevel: Math.min(1000, Math.max(1, next)) }];
+}
+
+export interface RoleDeletionInput {
+  roleName: string;
+  isProtected: boolean;
+  userCount: number;
+  replacementRoleId?: number | null;
+  replacementExists: boolean;
+  replacementIsSameRole: boolean;
+  roleIsFullAccess: boolean;
+  replacementIsFullAccess: boolean;
+  /** Active Owner or Administrator accounts that do not hold this role. */
+  otherActiveFullAccessUsers: number;
+}
+
+export function decideRoleDeletion(input: RoleDeletionInput): { ok: true; reassign: boolean } | { ok: false; status: number; message: string } {
+  if (input.isProtected) {
+    const label = input.roleName === "owner" ? "The Owner role" : "This role";
+    return { ok: false, status: 409, message: `${label} is built in and can't be deleted.` };
+  }
+  if (input.userCount > 0 && (input.replacementRoleId == null || input.replacementRoleId === 0)) {
+    const people = input.userCount === 1 ? "1 person still has" : `${input.userCount} people still have`;
+    return {
+      ok: false,
+      status: 409,
+      message: `${people} the "${input.roleName}" role. Choose another role for them before deleting it.`,
+    };
+  }
+  if (input.replacementRoleId != null && input.replacementRoleId !== 0) {
+    if (input.replacementIsSameRole) return { ok: false, status: 400, message: "Choose a different role to move people to." };
+    if (!input.replacementExists) return { ok: false, status: 400, message: "That replacement role doesn't exist." };
+    if (input.roleIsFullAccess && !input.replacementIsFullAccess && input.otherActiveFullAccessUsers === 0) {
+      return {
+        ok: false,
+        status: 409,
+        message: "Moving these people would leave no Owner or Administrator. Choose an Owner or Administrator role for them first.",
+      };
+    }
+    return { ok: true, reassign: true };
+  }
+  return { ok: true, reassign: false };
+}

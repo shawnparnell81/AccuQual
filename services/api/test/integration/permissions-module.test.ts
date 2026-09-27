@@ -218,8 +218,14 @@ describe("Roles & Permissions module (real DB + real HTTP path)", () => {
       expect(rmaLog.effectiveLevel).toBe("edit"); // ...but the custom role grant lifts it
     });
 
-    it("deleting the role cascades — removes the module grant and the user assignment, access reverts", async () => {
-      const del = await request(app).delete(`/permissions/roles/${roleId}`).set("Authorization", `Bearer ${adminToken}`);
+    it("deleting a role that people still hold asks for a replacement, then access reverts", async () => {
+      const blocked = await request(app).delete(`/permissions/roles/${roleId}`).set("Authorization", `Bearer ${adminToken}`);
+      expect(blocked.status).toBe(409);
+      expect(blocked.body.message).toMatch(/still has/i);
+
+      const spare = await request(app).post("/permissions/roles").set("Authorization", `Bearer ${adminToken}`).send({ roleName: `Spare ${suffix}` });
+      expect(spare.status).toBe(201);
+      const del = await request(app).delete(`/permissions/roles/${roleId}`).set("Authorization", `Bearer ${adminToken}`).send({ replacementRoleId: spare.body.id });
       expect(del.status).toBe(204);
 
       const effective = await request(app).get("/permissions/effective").set("Authorization", `Bearer ${productionToken}`);

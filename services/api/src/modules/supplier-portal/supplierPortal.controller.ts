@@ -28,6 +28,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { sendEmail } from "../notifications/notification.service.js";
 import { getSupplierNcrIds, getSupplierCapaIds } from "./supplierLinkage.js";
 import { getSupplierQualityFactors, getSupplierHealth, getSupplierRiskScoreWithTrend, exportSupplierScorecard } from "../supplier/supplier.qualityRisk.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /**
  * The one real rule this whole module exists to enforce: an external
@@ -65,7 +66,7 @@ function isInternalStaff(req: Request): boolean {
 /** Reviewing/approving a supplier's submission is Quality/Purchasing-or-admin only — Engineering's read-only PERMISSION_MATRIX.supplier_portal level already blocks it at the router; a supplier account is never internal staff at all. */
 function assertReviewer(req: Request) {
   const role = req.user?.roleName;
-  if (role === "admin") return;
+  if (isFullAccessRole(role)) return;
   const department = req.user?.department;
   if (!isInternalStaff(req) || !department || !["quality", "purchasing"].includes(department)) {
     throw AppError.forbidden("Only Quality or Purchasing may review a supplier submission");

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isFullAccessRole } from "../../lib/fullAccess";
 import { useParams, Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
@@ -176,7 +177,7 @@ export function RmaDetailPage() {
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !record) return <LoadingPlaceholder />;
 
-  const isAdmin = currentUser?.roleName === "admin";
+  const isAdmin = isFullAccessRole(currentUser?.roleName);
   const department = currentUser?.department;
   // Notes and NCR/CAPA linkage — "quality can link NCR/CAPA, can add notes"
   // plus purchasing/material_management's "full RMA access".

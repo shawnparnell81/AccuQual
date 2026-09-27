@@ -6,6 +6,7 @@ import { AppError } from "../../utils/appError.js";
 import { stripClientOwnedFields } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /**
  * Same inline-guard style as inventory/erp/rma/workOrders.controller.ts's
@@ -16,7 +17,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
  */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin") return;
+  if (isFullAccessRole(role)) return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -26,7 +27,7 @@ function assertDepartment(req: Request, allowed: string[]) {
 /** Admin-only, not a department at all — same convention as platform-admin-gated routes, just scoped to a single company-level action instead of a whole router. */
 function assertAdmin(req: Request) {
   const role = req.user?.roleName;
-  if (role !== "admin") {
+  if (!isFullAccessRole(role)) {
     throw AppError.forbidden("Only an admin can delete a risk.");
   }
 }

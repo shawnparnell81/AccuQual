@@ -17,6 +17,11 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "2026-09-27",
     date: "2026-09-27",
     items: [
+      "Roles are listed from the top of the organization down. An administrator can edit a role's name, description, rank, and permissions, and can remove a role after moving its people to another one.",
+      "An administrator can edit a person's name, email, role, department, and manager, and can remove an account. Someone with quality records is turned off instead of erased. Their name stays on history as inactive, and records they created or signed stay editable. Open work must be handed to someone else first.",
+      "Import data reads a CSV or Excel file into suppliers, customer contacts, parts, scorecards, certifications, inspections, lots, equipment, or users. Large files run in the background.",
+      "Audits has an Internal Audits folder for uploading files, with the same list and preview as the other audit folders.",
+      "Quality has an Obsolete / Archive folder. Moving a document there asks for a reason and a confirmation, then the document is read-only until an Owner or Administrator restores it. The move and the restore are written to the audit log.",
       "Due-date reminders and escalation for overdue or stuck NCRs, CAPAs, 8Ds, and approvals waiting too long.",
       "Repeat NCRs now suggest a CAPA, with one click to open it and link the group.",
       "A personal daily digest in Settings lists what is due and which approvals are waiting, with a link to each record.",

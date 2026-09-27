@@ -14,11 +14,12 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { pool } from "../../db/index.js";
 import type { Db } from "../../lib/requestDb.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /** Same inline-guard style as rma.controller.ts/warranty.controller.ts's assertDepartment — used for the one thing left that genuinely IS a fixed business rule rather than a tunable access level (which stage of the workflow belongs to whom — see STATUS_TRANSITION_DEPARTMENTS below). */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin") return;
+  if (isFullAccessRole(role)) return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -26,7 +27,7 @@ function assertDepartment(req: Request, allowed: string[]) {
 }
 
 function isAdmin(req: Request): boolean {
-  return req.user?.roleName === "admin";
+  return isFullAccessRole(req.user?.roleName);
 }
 
 /**
@@ -201,7 +202,7 @@ export const updateCrarHandler = asyncHandler(async (req: Request, res: Response
 
   const role = req.user?.roleName;
   const department = req.user?.department;
-  const isLinkOnly = role !== "admin" && department != null && WARRANTY_LINK_ONLY_DEPARTMENTS.includes(department);
+  const isLinkOnly = !isFullAccessRole(role) && department != null && WARRANTY_LINK_ONLY_DEPARTMENTS.includes(department);
 
   if (isLinkOnly) {
     const disallowed = Object.keys(req.body).filter((k) => !WARRANTY_LINK_FIELDS.includes(k));

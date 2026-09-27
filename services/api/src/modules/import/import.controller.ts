@@ -33,7 +33,7 @@ function entityOf(req: Request): AnyImportEntity {
 const normalizeHeader = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 /** Best column for each field: an exact match on the field's name or alias first, then a loose "contains" match. A column is never used twice. */
-function suggestMapping(entity: AnyImportEntity, headers: string[]): Record<string, number | null> {
+export function suggestMapping(entity: AnyImportEntity, headers: string[]): Record<string, number | null> {
   const normalized = headers.map(normalizeHeader);
   const used = new Set<number>();
   const mapping: Record<string, number | null> = {};

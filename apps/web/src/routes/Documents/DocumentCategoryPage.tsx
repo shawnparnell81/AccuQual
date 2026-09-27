@@ -6,13 +6,17 @@ import { apiClient } from "../../api/client";
 import { fetchDocumentAttachment, uploadAttachment, type DocumentPayload } from "../../api/documents";
 import type { CurrentState } from "../../api/versioning";
 import type { AccuQualDocument } from "../../api/types";
-import { DOCUMENT_FOLDER_PAGES } from "../../components/layout/sidebarStructure";
+import { DOCUMENT_FOLDER_PAGES, OBSOLETE_ARCHIVE_CATEGORY } from "../../components/layout/sidebarStructure";
+import { StatusBadge } from "../../components/tables/StatusBadge";
 import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { previewKind, saveBytes } from "../../lib/filePreview";
 import { formatDate } from "../../lib/dates";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { TextField } from "../../components/forms/Field";
+import { useCurrentUser } from "../../hooks/useAuth";
+import { ObsoleteArchiveDialog } from "./ObsoleteArchiveDialog";
 
 /**
  * A single document folder (Drawings, Master Tool List, Shipping, and the other
@@ -24,10 +28,16 @@ export function DocumentCategoryPage() {
   const { category = "" } = useParams();
   const page = DOCUMENT_FOLDER_PAGES[category];
   const toast = useToast();
+  const user = useCurrentUser();
+  const canRestore = user?.roleName === "admin" || user?.roleName === "owner";
   const queryClient = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [movingId, setMovingId] = useState<number | null>(null);
+  const [dialog, setDialog] = useState<{ mode: "archive" | "restore"; doc?: AccuQualDocument; file?: File } | null>(null);
   const [preview, setPreview] = useState<PreviewRequest | null>(null);
+  const [filter, setFilter] = useState("");
+  const isArchive = category === OBSOLETE_ARCHIVE_CATEGORY;
 
   const documents = useQuery<AccuQualDocument[]>({
     queryKey: ["documents", undefined],
@@ -39,9 +49,11 @@ export function DocumentCategoryPage() {
     return <p className="text-sm text-muted-foreground">This folder isn't part of the menu.</p>;
   }
 
-  const rows = (documents.data ?? []).filter((doc) => doc.category === category && doc.status !== "obsolete") as (AccuQualDocument & { createdAt?: string | null })[];
+  const rows = (documents.data ?? []).filter((doc) => (isArchive ? doc.category === category || doc.status === "obsolete" : doc.category === category && doc.status !== "obsolete")) as (AccuQualDocument & { createdAt?: string | null })[];
+  const needle = filter.trim().toLowerCase();
+  const visible = needle ? rows.filter((doc) => doc.title.toLowerCase().includes(needle)) : rows;
 
-  async function upload(file: File) {
+  async function upload(file: File, archiveReason?: string) {
     setBusy(true);
     try {
       const created = await apiClient.post<AccuQualDocument>("/documents", { title: file.name, category });
@@ -49,13 +61,45 @@ export function DocumentCategoryPage() {
       const versionId = current.data.open?.id;
       if (!versionId) throw new Error("No draft to attach the file to.");
       await uploadAttachment(created.data.id, versionId, file);
+      if (isArchive) {
+        await apiClient.post(`/documents/${created.data.id}/move-to-obsolete`, { reason: archiveReason, acknowledged: true, confirmation: file.name });
+      }
       await queryClient.invalidateQueries({ queryKey: ["documents"] });
-      toast.success("File uploaded.");
+      toast.success(isArchive ? "File archived." : "File uploaded.");
     } catch (err) {
       toast.error(extractErrorMessage(err, "Couldn't upload that file."));
     } finally {
       setBusy(false);
+      setDialog(null);
       if (input.current) input.current.value = "";
+    }
+  }
+
+  async function moveToArchive(doc: AccuQualDocument, reason: string) {
+    setMovingId(doc.id);
+    try {
+      await apiClient.post(`/documents/${doc.id}/move-to-obsolete`, { reason, acknowledged: true, confirmation: doc.title });
+      await queryClient.invalidateQueries({ queryKey: ["documents"] });
+      toast.success("Moved to Obsolete / Archive.");
+      setDialog(null);
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't move that document."));
+    } finally {
+      setMovingId(null);
+    }
+  }
+
+  async function restoreDoc(doc: AccuQualDocument, reason: string) {
+    setMovingId(doc.id);
+    try {
+      await apiClient.post(`/documents/${doc.id}/restore`, { reason, acknowledged: true });
+      await queryClient.invalidateQueries({ queryKey: ["documents"] });
+      toast.success("Document restored.");
+      setDialog(null);
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't restore that document."));
+    } finally {
+      setMovingId(null);
     }
   }
 
@@ -121,7 +165,9 @@ export function DocumentCategoryPage() {
             accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg,.gif,.webp"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) void upload(file);
+              if (!file) return;
+              if (isArchive) setDialog({ mode: "archive", file });
+              else void upload(file);
             }}
           />
           <button
@@ -145,6 +191,14 @@ export function DocumentCategoryPage() {
       )}
 
       {rows.length > 0 && (
+        <div className="max-w-sm">
+          <TextField label="Filter files" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search by file name" />
+        </div>
+      )}
+
+      {rows.length > 0 && visible.length === 0 && <p className="text-sm text-muted-foreground">No files match this filter.</p>}
+
+      {visible.length > 0 && (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-left text-sm">
             <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
@@ -156,16 +210,33 @@ export function DocumentCategoryPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((doc) => (
-                <tr key={doc.id} className="border-t border-border">
+              {visible.map((doc) => (
+                <tr key={doc.id} className={`border-t border-border ${doc.status === "obsolete" ? "bg-muted/40" : ""}`}>
                   <td className="px-3 py-2 font-medium">
                     <button type="button" onClick={() => void openPreview(doc)} className="text-left hover:underline">
                       {doc.title}
                     </button>
+                    {doc.status === "obsolete" && (
+                      <span className="ml-2 align-middle">
+                        <StatusBadge value="obsolete" label="Obsolete" />
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">{doc.createdAt || doc.updatedAt ? formatDate(doc.createdAt ?? doc.updatedAt) : ""}</td>
-                  <td className="px-3 py-2 capitalize text-muted-foreground">{doc.status.replace(/_/g, " ")}</td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {doc.status === "obsolete" ? <StatusBadge value="obsolete" label="Obsolete" /> : <span className="capitalize">{doc.status.replace(/_/g, " ")}</span>}
+                  </td>
                   <td className="px-3 py-2 text-right">
+                    {!isArchive && doc.status !== "obsolete" && (
+                      <button type="button" onClick={() => setDialog({ mode: "archive", doc })} disabled={movingId === doc.id} className="mr-3 inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-60">
+                        Move to Obsolete / Archive
+                      </button>
+                    )}
+                    {isArchive && canRestore && doc.status === "obsolete" && doc.category === category && (
+                      <button type="button" onClick={() => setDialog({ mode: "restore", doc })} disabled={movingId === doc.id} className="mr-3 inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-60">
+                        Restore
+                      </button>
+                    )}
                     <button type="button" onClick={() => void openPreview(doc)} className="mr-3 inline-flex items-center gap-1 text-primary hover:underline">
                       <Eye size={14} /> Preview
                     </button>
@@ -181,6 +252,24 @@ export function DocumentCategoryPage() {
       )}
 
       <InAppFilePreview request={preview} onClose={() => setPreview(null)} />
+      {dialog && (
+        <ObsoleteArchiveDialog
+          open
+          mode={dialog.mode}
+          documentId={dialog.doc?.id}
+          documentTitle={dialog.doc?.title ?? dialog.file?.name ?? ""}
+          busy={busy || movingId != null}
+          onClose={() => {
+            setDialog(null);
+            if (input.current) input.current.value = "";
+          }}
+          onConfirm={(reason) => {
+            if (dialog.mode === "restore" && dialog.doc) void restoreDoc(dialog.doc, reason);
+            else if (dialog.file) void upload(dialog.file, reason);
+            else if (dialog.doc) void moveToArchive(dialog.doc, reason);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -15,11 +15,12 @@ import { recordAuditTrail, resolveUserNames } from "../audit-trail/audit-trail.s
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import type { Db } from "../../lib/requestDb.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /** Same inline-guard style as rma.controller.ts/inventory.controller.ts's assertDepartment — used for the one thing left that's a real fixed business rule (which stage of the workflow belongs to whom) rather than a tunable access level. */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin") return;
+  if (isFullAccessRole(role)) return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -27,7 +28,7 @@ function assertDepartment(req: Request, allowed: string[]) {
 }
 
 function isAdmin(req: Request): boolean {
-  return req.user?.roleName === "admin";
+  return isFullAccessRole(req.user?.roleName);
 }
 
 /**

@@ -19,6 +19,8 @@ import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { OBSOLETE_ARCHIVE_CATEGORY } from "../../components/layout/sidebarStructure";
+import { ObsoleteArchiveDialog } from "./ObsoleteArchiveDialog";
 import { DOC_EDIT_REASON, DOC_LOOP, documentLoop, duePhrase, isPastDue, statusPhrase } from "../../lib/opsLanguage";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import type { TrainingCourse } from "../../api/types";
@@ -68,6 +70,8 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
   const current = v.current.data;
 
   const [tab, setTab] = useState<Tab>("details");
+  const [archiveDialog, setArchiveDialog] = useState<"archive" | "restore" | null>(null);
+  const [archiveBusy, setArchiveBusy] = useState(false);
   const [viewId, setViewId] = useState<number | null>(null);
   const [compareId, setCompareId] = useState<number | null>(null);
   const [againstId, setAgainstId] = useState<number | null>(null);
@@ -82,7 +86,9 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
 
   const isReviewer = !!user?.roleName && REVIEWER_ROLES.includes(user.roleName);
   const mayEdit = isReviewer || user?.department === "quality" || user?.department === "engineering";
-  const editable = !!shown && shown.status === "draft" && shown.id === openId && mayEdit;
+  const archived = doc?.status === "obsolete" && doc?.category === OBSOLETE_ARCHIVE_CATEGORY;
+  const canRestore = user?.roleName === "admin" || user?.roleName === "owner";
+  const editable = !!shown && shown.status === "draft" && shown.id === openId && mayEdit && !archived;
 
   // Local copy of the draft being typed into, autosaved a moment after the last change.
   const [values, setValues] = useState<DocumentPayload>(blankPayload());
@@ -210,6 +216,36 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
     }
   }
 
+  const canMoveToArchive = mayEdit && !archived;
+
+  async function moveToArchive(reason: string) {
+    setArchiveBusy(true);
+    try {
+      await apiClient.post(`/documents/${documentId}/move-to-obsolete`, { reason, acknowledged: true, confirmation: doc?.title ?? "" });
+      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      toast.success("Moved to Obsolete / Archive.");
+      setArchiveDialog(null);
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't move this document."));
+    } finally {
+      setArchiveBusy(false);
+    }
+  }
+
+  async function restoreDocument(reason: string) {
+    setArchiveBusy(true);
+    try {
+      await apiClient.post(`/documents/${documentId}/restore`, { reason, acknowledged: true });
+      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      toast.success("Document restored.");
+      setArchiveDialog(null);
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't restore this document."));
+    } finally {
+      setArchiveBusy(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <RecordGlance
@@ -220,7 +256,7 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
         stateLabel={statusPhrase(doc.status)}
         owner={personName(doc.ownerId)}
         ownerControl={
-          mayEdit && people.length > 0 ? (
+          mayEdit && !archived && people.length > 0 ? (
             <select
               aria-label="Owner"
               value={doc.ownerId ?? ""}
@@ -249,7 +285,7 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
                 {t}
               </span>
             ))}
-          {mayEdit && <AiFieldAssistant
+          {mayEdit && !archived && <AiFieldAssistant
             module="sop_generator"
             recordId={documentId}
             triggerLabel="Generate SOP"
@@ -265,16 +301,35 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
               Retire document
             </button>
           )}
+          {canMoveToArchive && (
+            <button onClick={() => setArchiveDialog("archive")} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+              Move to Obsolete / Archive
+            </button>
+          )}
+          {archived && canRestore && (
+            <button onClick={() => setArchiveDialog("restore")} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+              Restore
+            </button>
+          )}
           </>
         }
       />
+      {doc.status === "obsolete" && (
+        <p className="rounded-md border border-border bg-muted px-3 py-2 text-sm">
+          Marked <span className="font-medium">Obsolete</span>
+          {archived
+            ? ". This document is read-only. It can be opened, previewed, downloaded, and printed. An Owner or Administrator can restore it."
+            : ". Move it to Obsolete / Archive to file it with the other old documents."}{" "}
+          Revision history is unchanged.
+        </p>
+      )}
       <DocumentTrainingLoop status={doc.status} courses={linkedCourses} failed={courses.isError} />
 
       {current && (
         <LifecycleBar
           noun="document"
           state={current}
-          canEdit={mayEdit && doc.status !== "obsolete"}
+          canEdit={mayEdit && doc.status !== "obsolete" && !archived}
           blockedReason={firstError}
           warnings={report?.warnings}
           actions={actions}
@@ -423,6 +478,20 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
           <DocumentRetentionPanel document={doc} />
           <DocumentHistoryPanel documentId={documentId} />
         </div>
+      )}
+      {archiveDialog && (
+        <ObsoleteArchiveDialog
+          open
+          mode={archiveDialog}
+          documentId={documentId}
+          documentTitle={doc.title}
+          busy={archiveBusy}
+          onClose={() => setArchiveDialog(null)}
+          onConfirm={(reason) => {
+            if (archiveDialog === "restore") void restoreDocument(reason);
+            else void moveToArchive(reason);
+          }}
+        />
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { isFullAccessRole } from "../../lib/fullAccess";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Paperclip, Download, Trash2, Eye } from "lucide-react";
 import { apiClient } from "../../api/client";
@@ -78,7 +79,7 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
     saveBytes(res.data as Blob, file.fileName, file.mimeType ?? undefined);
   }
 
-  const isAdmin = user?.roleName === "admin";
+  const isAdmin = isFullAccessRole(user?.roleName);
 
   const [preview, setPreview] = useState<PreviewRequest | null>(null);
 
