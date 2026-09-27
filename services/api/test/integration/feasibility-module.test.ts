@@ -67,7 +67,7 @@ describe("Feasibility Review — bespoke document (real DB + real HTTP path)", (
     expect(res.status).toBe(403);
   });
 
-  it("quality cannot create a review — only engineering or sales_and_marketing", async () => {
+  it("quality cannot create a review — only engineering", async () => {
     const res = await request(app).post("/feasibility").set("Authorization", `Bearer ${qualityToken}`).send({});
     expect(res.status).toBe(403);
   });
@@ -108,7 +108,7 @@ describe("Feasibility Review — bespoke document (real DB + real HTTP path)", (
     expect(otherRow.status).toBe(403);
   });
 
-  it("production signs the Manufacturing / Operations row, purchasing and sales sign theirs", async () => {
+  it("production signs the Manufacturing / Operations row and purchasing signs its own; sales has no sign-off row", async () => {
     const manufacturing = await request(app).patch(`/feasibility/${reviewId}/signoff`).set("Authorization", `Bearer ${productionToken}`).send({ manufacturingSignoffName: "R. Diaz", manufacturingSignoffSignature: "R. Diaz" });
     expect(manufacturing.status).toBe(200);
 
@@ -116,7 +116,7 @@ describe("Feasibility Review — bespoke document (real DB + real HTTP path)", (
     expect(purchasing.status).toBe(200);
 
     const sales = await request(app).patch(`/feasibility/${reviewId}/signoff`).set("Authorization", `Bearer ${salesToken}`).send({ salesSignoffName: "M. Patel", salesSignoffSignature: "M. Patel" });
-    expect(sales.status).toBe(200);
+    expect(sales.status).toBe(403);
   });
 
   it("engineering signs its own row and sets the determination", async () => {

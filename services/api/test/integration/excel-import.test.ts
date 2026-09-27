@@ -186,17 +186,17 @@ describe("Excel / CSV import (real DB + real HTTP path)", () => {
     expect(login.body.user.mustChangePassword).toBe(true);
   });
 
-  it("understands department wording like \"Sales & Marketing\" and \"Material Mgmt\"", async () => {
+  it("understands \"Material Mgmt\" and rejects Sales & Marketing", async () => {
     const file = await xlsx([
       ["Email", "Department"],
       [`sales-${suffix}@test.local`, "Sales & Marketing"],
       [`material-${suffix}@test.local`, "Material Mgmt"],
     ]);
     const res = await upload("/import/people/run", adminToken, file, { mapping: JSON.stringify({ email: 0, name: null, role: null, department: 1 }), mode: "import" });
-    expect(res.body).toMatchObject({ created: 2, invalid: 0 });
+    expect(res.body).toMatchObject({ created: 1, invalid: 1 });
     const rows = await db.select().from(users).where(inArray(users.email, [`sales-${suffix}@test.local`, `material-${suffix}@test.local`]));
     userIds.push(...rows.map((r) => r.id));
-    expect(Object.fromEntries(rows.map((r) => [r.email.split("-")[0], r.department]))).toEqual({ sales: "sales_and_marketing", material: "material_management" });
+    expect(Object.fromEntries(rows.map((r) => [r.email.split("-")[0], r.department]))).toEqual({ material: "material_management" });
   });
 
   it("only lets people who can edit a module import into it, and only admins import people", async () => {

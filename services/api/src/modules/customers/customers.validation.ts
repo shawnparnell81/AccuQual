@@ -4,12 +4,11 @@ export const CUSTOMER_TYPES = ["OEM", "Tier 1", "Tier 2", "Distributor", "Other"
 export const CUSTOMER_STATUSES = ["draft", "submitted", "under_review", "approved", "activated", "rejected"] as const;
 
 /**
- * Where a Customer Onboarding case can originate from — same polymorphic
- * relatedSourceType/relatedSourceId idea as sales.ts's own SALES_RELATED_SOURCE_TYPES,
- * extended with Risk/Feasibility since a customer case can also start from
- * either of those (see customers.ts's own schema comment).
+ * Where a Customer Onboarding case can originate from — polymorphic
+ * relatedSourceType/relatedSourceId (see customers.ts's own schema comment).
+ * Sales accounts are not a source: that work lives in Oracle NetSuite.
  */
-export const CUSTOMER_RELATED_SOURCE_TYPES = ["NCR", "Supplier", "WorkOrder", "Requisition", "PO", "RMA", "Risk", "Feasibility", "SalesAccount"] as const;
+export const CUSTOMER_RELATED_SOURCE_TYPES = ["NCR", "Supplier", "WorkOrder", "Requisition", "PO", "RMA", "Risk", "Feasibility"] as const;
 
 export const createCustomerSchema = z.object({
   legalName: z.string().min(1),

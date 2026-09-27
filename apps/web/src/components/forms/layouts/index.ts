@@ -27,7 +27,6 @@ import { managementReviewMinutesLayout } from "./managementReviewMinutes";
 import { staffMeetingMinutesLayout } from "./staffMeetingMinutes";
 import { finalInspectionReleaseChecklistLayout } from "./finalInspectionReleaseChecklist";
 import { inventoryItemLayout } from "./inventoryItem";
-import { customerRequirementsLayout } from "./customerRequirements";
 import { auditChecklistLayout } from "./auditChecklist";
 
 /**
@@ -68,7 +67,6 @@ export const FORM_LAYOUTS: Record<string, FormLayout> = {
   staff_meeting_minutes: staffMeetingMinutesLayout,
   final_inspection_release_checklist: finalInspectionReleaseChecklistLayout,
   inventory_item: inventoryItemLayout,
-  customer_requirements: customerRequirementsLayout,
 };
 
 export function getFormLayout(formType: string): FormLayout | undefined {

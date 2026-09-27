@@ -22,7 +22,6 @@ const DEPARTMENT_PHRASES: Record<string, string> = {
   customer_service: "Customer service",
   purchasing: "Purchasing",
   material_management: "Material",
-  sales_and_marketing: "Sales",
 };
 
 /** Everyday nav labels. `standard` is the ISO/IATF term, shown smaller beside the plain name. */
@@ -75,8 +74,6 @@ const NAV_PLAIN: Record<string, { label: string; standard?: string }> = {
   rma_log: { label: "Return log" },
   rma_activity_log: { label: "Return activity" },
   production_log: { label: "Production log" },
-  sales_accounts: { label: "Accounts" },
-  customers: { label: "New customers" },
   ppap: { label: "PPAP / APQP" },
   feasibility: { label: "Feasibility" },
 };
@@ -121,7 +118,7 @@ export function rolePhrase(roleName: string | null | undefined): string {
 }
 
 export function departmentPhrase(department: string | null | undefined): string {
-  if (!department) return "";
+  if (!department || department === "sales_and_marketing") return "";
   return DEPARTMENT_PHRASES[department] ?? department.replace(/_/g, " ");
 }
 

@@ -145,7 +145,7 @@ export function RequirementsPanel({ course }: { course: CourseFull }) {
 
 function RequirementsModal({ course, onClose }: { course: CourseFull; onClose: () => void }) {
   const req = course.requirements ?? {};
-  const [dept, setDept] = useState(course.requiredForDepartment ?? "");
+  const [dept, setDept] = useState(course.requiredForDepartment && DEPARTMENTS.includes(course.requiredForDepartment) ? course.requiredForDepartment : "");
   const [months, setMonths] = useState(course.validityMonths ? String(course.validityMonths) : "");
   const [evaluation, setEvaluation] = useState(!!req.evaluationRequired);
   const [passing, setPassing] = useState(req.passingScore !== undefined ? String(req.passingScore) : "");

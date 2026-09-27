@@ -78,7 +78,7 @@ export function PermissionsUserAssignmentsTab() {
                 <p className="truncate text-xs text-muted-foreground">{u.email}</p>
               </div>
               <select
-                value={u.department ?? ""}
+                value={DEPARTMENTS.some((d) => d.key === u.department) ? (u.department ?? "") : ""}
                 onChange={(e) => setDepartment.mutate({ userId: u.id, department: e.target.value })}
                 className="rounded-md border border-border bg-transparent px-2 py-1.5 text-xs"
               >

@@ -74,6 +74,4 @@ export const updateSignoffSchema = z.object({
   manufacturingSignoffSignature: z.string().nullable().optional(),
   purchasingSignoffName: z.string().optional(),
   purchasingSignoffSignature: z.string().nullable().optional(),
-  salesSignoffName: z.string().optional(),
-  salesSignoffSignature: z.string().nullable().optional(),
 });

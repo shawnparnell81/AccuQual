@@ -76,6 +76,9 @@ export type ResourceKey =
 
 export const DEPARTMENTS: Department[] = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management", "sales_and_marketing"];
 
+/** Departments the product still offers. `sales_and_marketing` stays in DEPARTMENTS so existing user and permission rows keep a real value; catalogs, pickers, and new grants must not list it. */
+export const VISIBLE_DEPARTMENTS: Department[] = DEPARTMENTS.filter((department) => department !== "sales_and_marketing");
+
 /** Friendly labels for the Roles & Permissions admin UI's modules list — the real, complete, fixed set ("no fictional modules": a company can only configure access to a module that actually has a requireDepartmentAccess/requireSupplierPortalAccess gate on it, never an invented name). */
 export const MODULE_LABELS: Record<ResourceKey, string> = {
   ncr: "NCR",
@@ -97,7 +100,12 @@ export const MODULE_LABELS: Record<ResourceKey, string> = {
   purchase_requisitions: "Purchase Requisitions",
   risk: "Risk / FMEA",
   feasibility: "Feasibility Review",
+  // Stored permission key only. Sales accounts are not offered in the app
+  // (they live in Oracle NetSuite). VISIBLE_RESOURCE_KEYS omits this key
+  // from admin catalogs and onboarding so nothing asks for or shows it.
   sales: "Sales Accounts",
+  // Stored permission key only. Customer onboarding is not offered in the app.
+  // VISIBLE_RESOURCE_KEYS omits this key from admin catalogs.
   customers: "Customer Onboarding",
   warranty: "Warranty",
   supplier_portal: "Supplier Portal",
@@ -112,6 +120,8 @@ export const MODULE_LABELS: Record<ResourceKey, string> = {
   management_review: "Management Review",
   context_of_org: "Context of the Organization",
   documents: "Document Control",
+  // Stored permission key only. The communications log lived on a customer
+  // onboarding record. VISIBLE_RESOURCE_KEYS omits this key from catalogs.
   customer_communications: "Customer Communications",
   change: "Change / PCN Control",
   training: "Training",
@@ -121,6 +131,9 @@ export const MODULE_LABELS: Record<ResourceKey, string> = {
   worker_profile: "Worker Profiles",
 };
 export const RESOURCE_KEYS: ResourceKey[] = Object.keys(MODULE_LABELS) as ResourceKey[];
+
+/** Modules the product still offers. `sales`, `customers`, and `customer_communications` stay in RESOURCE_KEYS so existing permission rows keep a real key; catalogs must not list them. */
+export const VISIBLE_RESOURCE_KEYS: ResourceKey[] = RESOURCE_KEYS.filter((key) => key !== "sales" && key !== "customers" && key !== "customer_communications");
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 

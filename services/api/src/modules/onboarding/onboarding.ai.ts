@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
-import { getUserAccessLevel, RESOURCE_KEYS, type ResourceKey } from "../../middleware/departmentAccess.js";
+import { getUserAccessLevel, VISIBLE_RESOURCE_KEYS, type ResourceKey } from "../../middleware/departmentAccess.js";
 import type { Db } from "../../lib/requestDb.js";
 import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { onboardingPrompt } from "../ai/prompts.js";
@@ -46,7 +46,7 @@ export const onboardingAiGenerateHandler = asyncHandler(async (req: Request, res
   const db = req.db! as Db;
   const user = { id: req.user!.id, roleName: req.user?.roleName ?? null, department: req.user?.department ?? null };
 
-  const moduleKeys = RESOURCE_KEYS;
+  const moduleKeys = VISIBLE_RESOURCE_KEYS;
   const levels = await Promise.all(moduleKeys.map((key) => getUserAccessLevel(db, user, key)));
   const accessibleModules = moduleKeys
     .filter((_key, i) => levels[i] !== "none")

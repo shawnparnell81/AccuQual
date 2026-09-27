@@ -205,15 +205,12 @@ describe("Warranty module (real DB + real HTTP path)", () => {
       expect(res.status).toBe(403);
     });
 
-    it("admin grants sales_and_marketing 'edit' on warranty via the self-service API — it can now create a claim", async () => {
+    it("the permissions API does not accept a Sales & Marketing department grant", async () => {
       const grant = await request(app).patch("/permissions/department-permissions").set("Authorization", `Bearer ${adminToken}`).send({ departmentName: "sales_and_marketing", moduleName: "warranty", accessLevel: "edit" });
-      expect(grant.status).toBe(200);
+      expect(grant.status).toBe(400);
 
-      const res = await request(app).post("/warranty/claims").set("Authorization", `Bearer ${salesToken}`).send({ customerId, failureDescription: "New self-service capability" });
-      expect(res.status).toBe(201);
-
-      // clean up the grant so it doesn't leak into any test run after this file
-      await request(app).delete("/permissions/department-permissions").set("Authorization", `Bearer ${adminToken}`).send({ departmentName: "sales_and_marketing", moduleName: "warranty" });
+      const res = await request(app).post("/warranty/claims").set("Authorization", `Bearer ${salesToken}`).send({ customerId, failureDescription: "Still blocked" });
+      expect(res.status).toBe(403);
     });
 
     it("purchasing's real carve-out (cost entries only) is unaffected — still cannot create a claim even though it holds warranty edit by default", async () => {

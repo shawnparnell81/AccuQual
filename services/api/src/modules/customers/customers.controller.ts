@@ -33,24 +33,30 @@ async function loadCustomer(req: Request, id: number) {
   return row;
 }
 
+/** Sales-account links stay in the column. Responses do not surface them. */
+function hideSalesAccountLink<T extends { relatedSourceType: string | null; relatedSourceId: number | null }>(row: T): T {
+  if (row.relatedSourceType !== "SalesAccount") return row;
+  return { ...row, relatedSourceType: null, relatedSourceId: null };
+}
+
 export const listCustomersHandler = asyncHandler(async (req: Request, res: Response) => {
   const { status } = req.query as Record<string, string | undefined>;
   const conditions = [];
   if (status) conditions.push(eq(customers.status, status));
   const rows = await req.db!.select().from(customers).where(and(...conditions)).orderBy(desc(customers.createdAt));
-  res.json(rows);
+  res.json(rows.map(hideSalesAccountLink));
 });
 
 export const createCustomerHandler = asyncHandler(async (req: Request, res: Response) => {
   assertDepartment(req, ["sales_and_marketing"]);
   const [created] = await req.db!.insert(customers).values({ ...req.body, createdBy: req.user?.id }).returning();
   await recordAuditTrail(req.db!, { entityType: "Customer", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
-  res.status(201).json(created);
+  res.status(201).json(hideSalesAccountLink(created!));
 });
 
 export const getCustomerHandler = asyncHandler(async (req: Request, res: Response) => {
   const customer = await loadCustomer(req, Number(req.params.id));
-  res.json(customer);
+  res.json(hideSalesAccountLink(customer));
 });
 
 /**
@@ -115,7 +121,7 @@ export const updateCustomerHandler = asyncHandler(async (req: Request, res: Resp
     changes: aiSuggested ? { subAction: "ai_suggestion_accepted", ...body } : body,
     performedBy: req.user?.id,
   });
-  res.json(updated);
+  res.json(hideSalesAccountLink(updated!));
 });
 
 // draft -> submitted -> under_review -> approved -> activated
@@ -140,7 +146,7 @@ async function transitionCustomer(req: Request, id: number, newStatus: string) {
     .returning();
   await recordAuditTrail(req.db!, { entityType: "Customer", entityId: id, action: "status_change", changes: { oldStatus: customer.status, newStatus }, performedBy: req.user?.id });
   await publishEvent(WORKFLOW_STREAM, { module: "customers", event: newStatus, entityId: id });
-  return updated!;
+  return hideSalesAccountLink(updated!);
 }
 
 export const submitCustomerHandler = asyncHandler(async (req: Request, res: Response) => {

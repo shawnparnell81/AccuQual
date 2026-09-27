@@ -33,12 +33,6 @@ import { RiskDetailPage } from "./routes/Risk/RiskDetailPage";
 import { RiskDashboardPage } from "./routes/Risk/RiskDashboardPage";
 import { FeasibilityPage } from "./routes/Feasibility/FeasibilityPage";
 import { FeasibilityDetailPage } from "./routes/Feasibility/FeasibilityDetailPage";
-import { SalesAccountsPage } from "./routes/Sales/SalesAccountsPage";
-import { SalesAccountDetailPage } from "./routes/Sales/SalesAccountDetailPage";
-import { SalesDashboardPage } from "./routes/Sales/SalesDashboardPage";
-import { CustomersPage } from "./routes/Customers/CustomersPage";
-import { CustomerDetailPage } from "./routes/Customers/CustomerDetailPage";
-import { CustomerDashboardPage } from "./routes/Customers/CustomerDashboardPage";
 import { DocumentChangeRequestsPage } from "./routes/DocumentChangeRequests/DocumentChangeRequestsPage";
 import { DocumentChangeRequestDetailPage } from "./routes/DocumentChangeRequests/DocumentChangeRequestDetailPage";
 import { QmsFormsLibraryPage } from "./routes/QmsForms/QmsFormsLibraryPage";
@@ -165,12 +159,12 @@ export function App() {
           <Route path="/risk/:id" element={<RiskDetailPage />} />
           <Route path="/feasibility" element={<FeasibilityPage />} />
           <Route path="/feasibility/:id" element={<FeasibilityDetailPage />} />
-          <Route path="/sales" element={<SalesAccountsPage />} />
-          <Route path="/sales/dashboard" element={<SalesDashboardPage />} />
-          <Route path="/sales/:id" element={<SalesAccountDetailPage />} />
-          <Route path="/customers" element={<CustomersPage />} />
-          <Route path="/customers/dashboard" element={<CustomerDashboardPage />} />
-          <Route path="/customers/:id" element={<CustomerDetailPage />} />
+          <Route path="/sales" element={<Navigate to="/" replace />} />
+          <Route path="/sales/dashboard" element={<Navigate to="/" replace />} />
+          <Route path="/sales/:id" element={<Navigate to="/" replace />} />
+          <Route path="/customers" element={<Navigate to="/" replace />} />
+          <Route path="/customers/dashboard" element={<Navigate to="/" replace />} />
+          <Route path="/customers/:id" element={<Navigate to="/" replace />} />
           <Route path="/document-change-requests" element={<DocumentChangeRequestsPage />} />
           <Route path="/document-change-requests/:id" element={<DocumentChangeRequestDetailPage />} />
           <Route path="/qms-forms" element={<QmsFormsLibraryPage />} />

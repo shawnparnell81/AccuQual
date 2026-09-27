@@ -94,7 +94,7 @@ export function SettingsPage() {
               <dt className="text-muted-foreground">Role</dt>
               <dd className="capitalize">{user?.roleName?.replace(/_/g, " ") ?? "—"}</dd>
               <dt className="text-muted-foreground">Department</dt>
-              <dd className="capitalize">{user?.department ?? "—"}</dd>
+              <dd className="capitalize">{user?.department && user.department !== "sales_and_marketing" ? user.department.replace(/_/g, " ") : "—"}</dd>
             </dl>
             <p className="mt-3 text-xs text-muted-foreground">
               Name, role, and department, along with every other organization-wide setting (users &amp; roles, permissions, AI, supplier/quality/receiving settings, company profile), are managed in the{" "}

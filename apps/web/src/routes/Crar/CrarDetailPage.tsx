@@ -11,12 +11,11 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { SelectField } from "../../components/forms/Field";
 import { CrarFormRenderer } from "./CrarFormRenderer";
-import type { CrarClaim, CrarStatus, WarrantyClaim, RmaLogRecord, Customer } from "../../api/types";
+import type { CrarClaim, CrarStatus, WarrantyClaim, RmaLogRecord } from "../../api/types";
 
 const crarHooks = createResourceHooks<CrarClaim>("crar");
 const warrantyHooks = createResourceHooks<WarrantyClaim>("warranty/claims");
 const rmaLogHooks = createResourceHooks<RmaLogRecord>("rma-log");
-const customerHooks = createResourceHooks<Customer>("customers");
 
 /** Same allowed-next-status shape as crar.controller.ts's ALLOWED_NEXT — a fixed linear lifecycle, no branching. */
 const NEXT_STATUS: Record<CrarStatus, { status: CrarStatus; label: string } | null> = {
@@ -40,7 +39,6 @@ export function CrarDetailPage() {
   const { data: record, isLoading, isError } = crarHooks.useOne(crarId);
   const { data: warrantyClaims = [] } = warrantyHooks.useList();
   const { data: rmaLogRecords = [] } = rmaLogHooks.useList();
-  const { data: customers = [] } = customerHooks.useList();
   const currentUser = useCurrentUser();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -172,33 +170,6 @@ export function CrarDetailPage() {
               <p className="text-muted-foreground">No linked RMA Log entry.</p>
             )}
           </div>
-        </div>
-
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="mb-2 text-sm font-medium">Customer Contact</h3>
-          {canEditContent && (
-            <SelectField label="" value={draft.customerId ?? ""} onChange={(e) => setDraft({ ...draft, customerId: e.target.value ? Number(e.target.value) : null })}>
-              <option value="">None — inherit from linked Warranty claim</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.legalName}
-                </option>
-              ))}
-            </SelectField>
-          )}
-          {record.customer ? (
-            <div className="mt-2 flex flex-col gap-1 text-sm">
-              <p className="font-medium">{record.customer.legalName}</p>
-              <p className="text-muted-foreground">{record.customer.primaryContactEmail ?? "No email on file"}</p>
-              <p className="text-muted-foreground">{record.customer.primaryContactPhone ?? "No phone on file"}</p>
-            </div>
-          ) : (
-            !canEditContent && (
-              <p className="text-sm text-muted-foreground">
-                No customer linked — set via a linked Warranty claim, or attach an existing customer from the Customer Onboarding module.
-              </p>
-            )
-          )}
         </div>
       </div>
 

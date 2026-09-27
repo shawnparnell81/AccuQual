@@ -93,6 +93,8 @@ describe("Roles & Permissions module (real DB + real HTTP path)", () => {
       const modules = await request(app).get("/permissions/modules").set("Authorization", `Bearer ${qualityToken}`);
       expect(modules.status).toBe(200);
       expect(modules.body.some((m: { key: string }) => m.key === "ncr")).toBe(true);
+      expect(modules.body.some((m: { key: string; label: string }) => m.key === "sales" || /sales account/i.test(m.label))).toBe(false);
+      expect(modules.body.some((m: { key: string; label: string }) => m.key === "customers" || m.key === "customer_communications" || /customer onboarding/i.test(m.label))).toBe(false);
 
       const effective = await request(app).get("/permissions/effective").set("Authorization", `Bearer ${qualityToken}`);
       expect(effective.status).toBe(200);
@@ -115,6 +117,7 @@ describe("Roles & Permissions module (real DB + real HTTP path)", () => {
       expect(cell.accessLevel).toBe("read");
       expect(cell.isOverride).toBe(true); // a real seeded row — no more implicit fallback to be "not an override"
       expect(cell.id).not.toBeNull();
+      expect(res.body.some((r: { departmentName: string }) => r.departmentName === "sales_and_marketing")).toBe(false);
     });
 
     ;

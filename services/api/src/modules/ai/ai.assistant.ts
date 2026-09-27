@@ -34,8 +34,6 @@ import { equipment, calibrations } from "../../drizzle/schema/calibration.js";
 import { users } from "../../drizzle/schema/users.js";
 import { documents } from "../../drizzle/schema/documents.js";
 import { feasibilityReviews } from "../../drizzle/schema/feasibility.js";
-import { salesAccounts, salesActivities, salesQuotes, salesContracts } from "../../drizzle/schema/sales.js";
-import { customers } from "../../drizzle/schema/customers.js";
 import { computeSupplierPerformance } from "../supplier/supplier.performance.js";
 import { computeCostingSummary } from "../inventory/inventory.costing.js";
 import { findSimilar } from "./embedding-engine.js";
@@ -67,6 +65,8 @@ const SAFETY_PREAMBLE =
  * plain label, honestly, rather than silently dropped or faked.
  */
 async function loadContextSummary(db: Db, module: string, recordId?: number): Promise<string | null> {
+  if (module === "sales_account" || module === "sales_accounts" || module === "sales") return null;
+  if (module === "customer" || module === "customers" || module === "customer_onboarding" || module === "customer_communications") return null;
   if (recordId === undefined) return `The user is currently viewing the ${module} module (no specific record selected).`;
 
   if (module === "ncr") {
@@ -304,41 +304,7 @@ async function loadContextSummary(db: Db, module: string, recordId?: number): Pr
       `part/project "${row.partProjectName ?? "not set"}" (RFQ/Quote ${row.rfqQuoteNumber ?? "not set"}). Status: ${row.status}. ` +
       `Determination: ${row.determination ?? "not yet decided"} — one of feasible_as_quoted, feasible_with_conditions, not_feasible. ` +
       `Assessment areas so far — ${areaSummary || "none assessed yet"}. ` +
-      `This is a fixed 7-area, 1-department-owned document (Engineering) with a 5-row sign-off table (Engineering/Quality/Manufacturing/Purchasing/Sales) — not a weighted scoring system.`
-    );
-  }
-
-  if (module === "sales_account") {
-    const [row] = await db.select().from(salesAccounts).where(and(eq(salesAccounts.id, recordId)));
-    if (!row) return null;
-    const activities = await db.select().from(salesActivities).where(and(eq(salesActivities.accountId, recordId)));
-    const quotes = await db.select().from(salesQuotes).where(and(eq(salesQuotes.accountId, recordId)));
-    const contracts = await db.select().from(salesContracts).where(and(eq(salesContracts.accountId, recordId)));
-    const activitySummary =
-      activities.length > 0
-        ? activities
-            .slice(0, 10)
-            .map((a) => `[${a.activityType}] ${wrapUntrustedData(a.notes ?? "(no notes)", "activity_notes")}${a.nextSteps ? ` — next: ${wrapUntrustedData(a.nextSteps, "activity_next_steps")}` : ""}`)
-            .join("; ")
-        : "no activities logged yet";
-    return (
-      `The user is working on Sales Account "${row.customerName}" (status: ${row.status}, industry: ${row.industry ?? "not set"}). ` +
-      `Primary contact: ${row.primaryContactName ?? "not set"} (${row.primaryContactEmail ?? "no email"}). ` +
-      `Quotes: ${quotes.length} total (${quotes.map((q) => `${q.quoteNumber} — ${q.status}`).join(", ") || "none"}). ` +
-      `Contracts: ${contracts.length} total (${contracts.map((c) => `${c.contractType} — ${c.status}`).join(", ") || "none"}). ` +
-      `Recent activity: ${activitySummary}.`
-    );
-  }
-
-  if (module === "customer") {
-    const [row] = await db.select().from(customers).where(and(eq(customers.id, recordId)));
-    if (!row) return null;
-    return (
-      `The user is working on Customer Onboarding case "${row.legalName}"${row.dbaName ? ` (dba ${row.dbaName})` : ""} (status: ${row.status}, type: ${row.customerType ?? "not set"}, industry: ${row.industry ?? "not set"}). ` +
-      `Primary contact: ${row.primaryContactName ?? "not set"} (${row.primaryContactEmail ?? "no email"}). ` +
-      `NDA on file: ${row.ndaDocumentId ? `yes, Document #${row.ndaDocumentId}` : "no"}. ` +
-      `Linked source: ${row.relatedSourceType ? `${row.relatedSourceType} #${row.relatedSourceId}` : "none"}. ` +
-      `Real workflow is draft -> submitted -> under_review -> approved -> activated, or -> rejected from under_review — use only these six status values.`
+      `This is a fixed 7-area, 1-department-owned document (Engineering) with a 4-row sign-off table (Engineering/Quality/Manufacturing/Purchasing) — not a weighted scoring system.`
     );
   }
 
