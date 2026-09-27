@@ -18,7 +18,7 @@ interface CheckMinMaxResult {
  * check-minmax has no :id, unlike every other useWorkflowAction call site),
  * so this is its own small useMutation rather than a forced fit into that
  * hook's shape. There is no scheduled/cron re-check — AccuQual has no
- * time-triggered infrastructure (see the Min/Max Engine review) — so this
+ * time-triggered infrastructure — so this
  * button plus the automatic recompute after every movement are the only
  * two ways min/max ever gets evaluated.
  */

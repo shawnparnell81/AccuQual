@@ -3,11 +3,11 @@ import { users } from "./users.js";
 
 /**
  * The generic QMS Simple Form engine — backs 35 of the "ACCUQUAL Forms"
- * batch's 37 real forms (see the module review). Every one of those 35
+ * batch's 37 real forms. Every one of those 35
  * shares the exact same shape: one header (Form No./Revision/Effective
  * Date/Prepared By/Approved By/Status draft-active-obsolete) plus 1+ named,
  * freely-addable-row table sections, plus a free-text Additional Comments
- * block — confirmed by extracting all 37 source .docx/.pdf files, not
+ * block — confirmed by extracting all 37 source.docx/.pdf files, not
  * assumed. Rather than 35 near-identical bespoke schemas/controllers/pages
  * (the DocumentChangeRequest/WorkOrder precedent, appropriate for their own
  * genuinely distinct shapes and workflows), this is ONE real schema

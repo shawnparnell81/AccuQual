@@ -1,9 +1,9 @@
 import type { FormLayout } from "./types.js";
 
 /**
- * Derived 1:1 from the user-provided "Context of the Organization.pdf" (ISO
+ * Derived 1:1 from the source "Context of the Organization.pdf" (ISO
  * 9001 clause 4.1 SWOT-style analysis). The source groups items under
- * category headers (VALUES, CULTURE, ...) with no sub-header row concept in
+ * category headers (VALUES, CULTURE...) with no sub-header row concept in
  * this engine's table block, so each row's label is prefixed with its
  * category to preserve the grouping instead of losing it.
  */

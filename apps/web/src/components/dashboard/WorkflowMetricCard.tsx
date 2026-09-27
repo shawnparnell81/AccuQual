@@ -16,7 +16,7 @@ interface WorkflowMetricCardProps {
   value: number | string;
   /** Real-record-count-driven, not a per-module magic threshold — pass "destructive" for anything overdue/failed, "warning" for pending/awaiting, "success" for healthy, "muted" for a plain count. */
   bucket?: Bucket;
-  /** Deep link, per the brief's "clickable -> deep links to filtered module list" — scoped to the module's real list page (see the summary on why per-status query-param filtering wasn't added to 6 list pages in this pass). */
+  /** Deep link, per "clickable -> deep links to filtered module list" — scoped to the module's real list page (see the summary on why per-status query-param filtering wasn't added to 6 list pages in this pass). */
   to?: string;
 }
 

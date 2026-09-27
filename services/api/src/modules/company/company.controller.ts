@@ -214,7 +214,7 @@ export const updateAiConfigHandler = asyncHandler(async (req: Request, res: Resp
  * the dashboard and the enforcement it explains read the same real
  * numbers. Previously scoped to "AiAssistantMessage" only, which silently
  * left every other pipeline's real spend invisible here even though it
- * already counted against the limit — see the QA sweep review.
+ * already counted against the limit.
  */
 export const getAiUsageHandler = asyncHandler(async (req: Request, res: Response) => {
   const co = await loadCompany(req);

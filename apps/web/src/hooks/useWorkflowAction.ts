@@ -67,7 +67,7 @@ export async function extractErrorMessageAsync(err: unknown, fallback: string): 
 /**
  * Same shape as createResourceHooks().useAction(action), plus the toast
  * feedback every transition was missing (see the Workflow UI Components
- * brief, section 3/4) — a 400 from one of the new sequence guards, or a 403
+ * sequence guard) — a 400 from one of the new sequence guards, or a 403
  * from a department gate, used to fail completely silently in every module's
  * detail page. One shared place to fix that instead of copy-pasting an
  * onError into every mutate() call site.

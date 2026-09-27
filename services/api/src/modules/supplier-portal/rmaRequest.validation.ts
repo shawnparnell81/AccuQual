@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { reasonableDate } from "../../utils/validation.js";
 
-/** The Supplier RMA Request's own field list — the brief's "FINAL, CORRECTED LIST", no more, no less. */
+/** The Supplier RMA Request's own field list — "FINAL, CORRECTED LIST", no more, no less. */
 export const submitRmaRequestSchema = z.object({
   companyName: z.string().min(1),
   contactName: z.string().min(1),

@@ -323,7 +323,7 @@ function flattenConversation(messages: AssistantMessage[]): string {
 
 /**
  * Real semantic similarity search over the dormant ai_embeddings table
- * (embedding-engine.ts's findSimilar), populated for real as of this round
+ * (embedding-engine.ts's findSimilar), populated for real now
  * by audits.controller.ts's addItemHandler — every finding logged from now
  * on gets embedded, so this genuinely surfaces prior similar findings
  * rather than a fabricated "recurrence" signal. Uses the user's own latest

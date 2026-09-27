@@ -2,7 +2,7 @@ import type { FormLayout } from "./types";
 
 /**
  * Derived 1:1 from the "Daily Production & Quality Log" bundled inside the
- * user-provided "master cal log Template.csv.pdf" (pages 5-8) — a distinct
+ * source "master cal log Template.csv.pdf" (pages 5-8) — a distinct
  * per-shift traceability log from the Master Calibration Log sharing that
  * same source file, so it gets its own form type here.
  */

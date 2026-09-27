@@ -1,10 +1,10 @@
 import type { FormLayout } from "./types";
 
 /**
- * Derived 1:1 from the user-provided "Approved Vendor List Template.pdf".
+ * Derived 1:1 from the source "Approved Vendor List Template.pdf".
  * Performance Score is computed automatically from Defect Rate (PPM) and
  * Delivery Performance (%) — see formulas.ts's `avlPerformanceScore` for the
- * exact tier rule (confirmed with the user): Approved requires PPM<=25 AND
+ * exact tier rule (as follows): Approved requires PPM<=25 AND
  * Delivery>=98%; Conditional is PPM<=100 OR Delivery>=95%; otherwise Disqualified.
  */
 export const approvedVendorListLayout: FormLayout = {

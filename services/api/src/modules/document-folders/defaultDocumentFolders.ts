@@ -3,7 +3,7 @@
  * the first time GET /document-folders finds none yet (see document-folders.controller.ts).
  * Derived from the user's own 7 uploaded department folder/subfolder lists; every
  * subfolder that had no documents in the source was dropped rather than kept as an
- * empty stub, per the user's own instruction.
+ * empty stub.
  */
 export interface DefaultFolderSeed {
   name: string;

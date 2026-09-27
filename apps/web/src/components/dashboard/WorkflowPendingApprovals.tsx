@@ -11,11 +11,9 @@ const MODULE_LABELS: Record<PendingItem["module"], string> = {
 };
 
 /**
- * Cross-module "awaiting a decision" list. Deliberately narrower than the
- * brief's per-module wishlist (Calibration/Training/Audit approval, Supplier
- * pending-approval, NCR/CAPA closure summaries all appear in the brief but
- * none of those states exist in the real schema — see the Rules/Outputs/
- * Audit Trail Dictionaries) — only Documents' "in_review" and CAPA's
+ * Cross-module "awaiting a decision" list. Deliberately narrower than per-module wishlist (Calibration/Training/Audit approval, Supplier
+ * pending-approval, NCR/CAPA closure summaries all appear, but
+ * none of those states exist in the real schema" and CAPA's
  * "verifying" are real, so those are the only two shown here. Renamed from
  * "approvals" to "pending decisions" for the same reason: CAPA's step is a
  * verification, not a formal approval, and calling it one would overstate

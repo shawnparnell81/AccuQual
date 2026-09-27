@@ -9,9 +9,9 @@ export interface WorkflowTemplate {
 }
 
 /**
- * Phase 9 task 6 — starter templates for the 8 modules the brief names.
+ * Phase 9 task 6 — starter templates for the 8 modules listed here.
  * Every trigger `kind` below is a REAL event string one of these modules'
- * own `publishEvent(WORKFLOW_STREAM, {module, event, ...})` calls already
+ * own `publishEvent(WORKFLOW_STREAM, {module, event...})` calls already
  * emits today (verified directly against each module's own controller —
  * see this phase's own research and the two real gaps it closed:
  * eight_d/documents had no event at all before this phase, closed

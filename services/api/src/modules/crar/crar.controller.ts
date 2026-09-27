@@ -66,7 +66,7 @@ const ALLOWED_NEXT: Record<string, string[]> = {
 
 /**
  * quality_review/warranty_review are both Quality's own hand-offs (Quality
- * owns the review end to end, per the brief's "Quality: Full access to
+ * owns the review end to end, per "Quality: Full access to
  * CRAR"); completed is the one stage engineering/purchasing may also move
  * — AccuQual has no literal "Warranty" department (see
  * departmentAccess.ts's PERMISSION_MATRIX.crar comment), so "Warranty can
@@ -122,7 +122,7 @@ export const listCrarHandler = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const createCrarHandler = asyncHandler(async (req: Request, res: Response) => {
-  // Quality initiates a CRAR by default — matches the brief's own
+  // Quality initiates a CRAR by default — matches
   // "Integrated with Quality Department" as the primary owner. Now a live
   // DB check (crar.write) rather than hardcoded to quality alone — see
   // assertCrarContentWrite's own comment.
@@ -251,7 +251,7 @@ export const transitionCrarHandler = asyncHandler(async (req: Request, res: Resp
     // Two independent checks, both must pass: WHICH stage belongs to whom
     // stays a real, hardcoded workflow-ownership rule (unchanged); whether
     // this department can attempt a transition AT ALL is now the module-
-    // specific RBAC brief's own separate, self-service "crar.workflow.write"
+    // specific separate, self-service "crar.workflow.write"
     // lever (crar_workflow) layered on top — see db/defaultPermissions.ts's
     // own comment on why its seeded default matches today's real behavior
     // exactly (the union of every department in STATUS_TRANSITION_DEPARTMENTS).
@@ -271,7 +271,7 @@ export const transitionCrarHandler = asyncHandler(async (req: Request, res: Resp
 
   const [updated] = await req.db!.update(crarClaims).set({ status: newStatus, updatedAt: new Date() }).where(eq(crarClaims.id, record.id)).returning();
 
-  // "workflow_transition" per the brief's own words maps onto this app's
+  // "workflow_transition" maps onto this app's
   // real audit_trail action enum as "status_change" — the same category
   // every other module's transitions log under (see e.g.
   // warranty.controller.ts's own transition handler).

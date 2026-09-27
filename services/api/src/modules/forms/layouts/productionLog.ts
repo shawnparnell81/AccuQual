@@ -1,7 +1,7 @@
 import type { FormLayout } from "./types.js";
 
 /**
- * Derived 1:1 from the user-provided "production_log_template.pdf" (Master
+ * Derived 1:1 from the source "production_log_template.pdf" (Master
  * Production Log). The source spans 6 PDF pages purely because its table is
  * too wide to print in one column group (Order & Traceability | Planning &
  * Scheduling | Shop Floor Execution & Yield | Quality Control & Shipping,

@@ -17,7 +17,7 @@ const STATUSES: RmaLogStatus[] = ["open", "received", "under_review", "dispositi
  * (not the automated Supplier RMA Request event trail at
  * /rma-activity-log). "Add New" is RBAC-controlled: only visible with
  * rma_log.write (live, DB-driven — see useWorkflowAccessLevel), matching
- * the brief's own explicit button-behavior spec. Clicking it POSTs an
+ *  explicit button-behavior spec. Clicking it POSTs an
  * empty body — the backend auto-generates rmaNumber and defaults
  * dateIssued to today, then the user lands straight on the detail page to
  * fill in everything else.

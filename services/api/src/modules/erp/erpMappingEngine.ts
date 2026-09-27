@@ -397,8 +397,7 @@ export async function buildErpPayload(db: Db, module: string, preset: ErpConnect
   }
   // Structured, multi-company-safe summary — counts and preset identity only,
   // never field values (a mapped record can carry a customer/vendor name,
-  // email, or address; this app's own logging convention, confirmed earlier
-  // this session against every logger.* call site, never logs raw record
+  // email, or address; this app's own logging convention never logs raw record
   // content, only IDs/counts/metadata).
   logger.info("ERP preset mapping run complete", {
     module,

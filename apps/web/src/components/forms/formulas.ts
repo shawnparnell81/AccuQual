@@ -61,7 +61,7 @@ export const FORMULAS: Record<string, FormulaFn> = {
   },
 
   /**
-   * Calibration roster status, color-coded per the user's thresholds:
+   * Calibration roster status, color-coded using these thresholds:
    * overdue, due within 30 days, due within 60 days, otherwise current.
    * An explicit "Inactive" equipment status overrides all of the above.
    */
@@ -114,7 +114,7 @@ export const FORMULAS: Record<string, FormulaFn> = {
 
   /**
    * Approved Vendor List: Performance Score from Defect Rate (PPM) and
-   * On-Time Delivery (%), per the user's chosen tier rule —
+   * On-Time Delivery (%), using this tier rule —
    * Approved: PPM <=25 AND Delivery >=98%. Conditional: PPM <=100 OR Delivery >=95%.
    * Disqualified: worse than that.
    */

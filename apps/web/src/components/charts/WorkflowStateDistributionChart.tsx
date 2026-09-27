@@ -18,8 +18,7 @@ export interface StateDatum {
  * Cross-module state distribution — each bar colored by the exact same
  * bucket StatusBadge already uses for that status, so a bar chart here and a
  * badge on a record's own detail page always agree on what color a given
- * status is. This is what makes "supports cross-module comparison" (the
- * brief's phrase) actually true: an NCR's "open" and a Supplier's "active"
+ * status is. This is what makes "supports cross-module comparison" ( phrase) actually true: an NCR's "open" and a Supplier's "active"
  * read as the same kind of state (warning vs. success) at a glance, not
  * just visually distinct hues with no shared meaning.
  */

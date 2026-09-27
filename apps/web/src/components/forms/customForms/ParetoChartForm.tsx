@@ -13,7 +13,7 @@ interface ProblemRow {
 const INPUT_CLASS = "w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary";
 
 /**
- * Pareto chart, derived 1:1 from the user-provided "Pareto_Chart_Template.pdf".
+ * Pareto chart, derived 1:1 from the source "Pareto_Chart_Template.pdf".
  * Sort order and cumulative % are inherently whole-table computations (every
  * row's % depends on every other row's quantity and the sort order they
  * produce), which doesn't fit the row-by-row computed-column model the rest

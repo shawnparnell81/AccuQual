@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { reasonableDate } from "../../utils/validation.js";
 
-/** "Warranty, scrap, repair, replace, credit" — the brief's own literal list. */
+/** "Warranty, scrap, repair, replace, credit" — literal list. */
 export const DISPOSITION_ACTIONS = ["warranty", "scrap", "repair", "replace", "credit"] as const;
 
 /** open (issued) -> received -> under_review (Quality Team Findings) -> dispositioned (Disposition Action recorded) -> closed. A fixed, linear lifecycle matching the field list's own natural progression — see rmaLog.controller.ts's ALLOWED_NEXT. */

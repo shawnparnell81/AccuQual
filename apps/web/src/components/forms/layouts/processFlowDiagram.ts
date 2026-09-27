@@ -1,7 +1,7 @@
 import type { FormLayout } from "./types";
 
 /**
- * Derived from the user-provided "Process Flow Diagram.pdf". The source
+ * Derived from the source "Process Flow Diagram.pdf". The source
  * spans several PDF pages because it's a wide operation-sequence table plus
  * a page of drawing-toolbar shape symbols for hand-drawing connectors between
  * steps — that connector diagram is a freeform drawing exercise, not

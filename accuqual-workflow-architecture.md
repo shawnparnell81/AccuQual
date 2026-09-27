@@ -52,10 +52,10 @@ There is no `/workflow/transition` or `/workflow/rules/check`. The real routes (
 
 Registered action kinds today (`workflowActions.ts`): `send_email`, `notify_department`, `notify_supplier`, `create_ncr`, `escalate_capa`, `assign_user`, `ai_suggestion`.
 
-### 1.5 Real cross-module reflex documented elsewhere in this codebase (not invented for this doc)
+### 1.5 Cross-module behavior implemented outside the workflow engine
 - Receiving → NCR: `maybeAutoCreateNcr` (opt-in via `companies.receivingSettings.autoCreateNcrOnRejection/OnQuarantine`).
 - Receiving recurrence → CAPA: `checkCapaEscalation` (real threshold/window count, default 3 events / 90 days).
-- Internal Audit finding (severity ≠ observation) → auto-creates a Discrepancy Investigation row (**not** NCR/CAPA) — a fact this pass corrected against the brief's assumption that findings escalate to NCR.
+- Internal Audit finding (severity ≠ observation) → auto-creates a Discrepancy Investigation row (**not** NCR/CAPA) — findings do not escalate to an NCR.
 - Risk level does **not** push into any other module automatically — only the reverse (other modules can *create* a risk via `sourceType`/`sourceId`).
 
 ---
@@ -180,7 +180,7 @@ Supplier:  [submitted] --review--> [under_review] --review--> [accepted | reject
 **2. Transitions** — dedicated guarded one-hop endpoints (`start`: must be `scheduled`; `complete`: must be `in_progress`) **coexist** with the still-unguarded generic `PATCH /audits/:id` (which accepts a raw `status` and bypasses the sequence check).
 **3. Rules** — ResourceKey `audit`, default `quality: edit`, all else `none`.
 **4. Conditions** — audit `type` (`internal|supplier|customer|certification`) gates the auto-escalation condition below; item `severity` (`observation|minor|major|critical`) is the recurrence/severity condition.
-**5. Actions** — **real cross-module trigger**: adding a finding with `severity ≠ "observation"` on an `internal`-type audit auto-inserts a `discrepancy_investigations` row (`status:"open", autoCreated:true, sourceAuditId, sourceAuditItemId`) — corrected from the brief's assumption this would be an NCR. Finding text is also queued for AI embedding (`AI_STREAM`, `job:"embed"`).
+**5. Actions** — **real cross-module trigger**: adding a finding with `severity ≠ "observation"` on an `internal`-type audit auto-inserts a `discrepancy_investigations` row (`status:"open", autoCreated:true, sourceAuditId, sourceAuditItemId`) — this record is a Discrepancy Investigation, not an NCR. Finding text is also queued for AI embedding (`AI_STREAM`, `job:"embed"`).
 **6. Outputs** — audit trail; an auto-opened Discrepancy Investigation; embedding job.
 **7. Audit trail** — `entityType: "Audit"` for start/complete; `entityType: "Discrepancy investigation"` for the auto-created finding record, `changes:{autoCreated:true, sourceAuditId, sourceAuditItemId, severity}`.
 **8. Diagrams**
@@ -236,7 +236,7 @@ Escalation: internal audit finding (minor|major|critical) --auto--> Discrepancy 
 
 ## 2.8 Supplier Onboarding
 
-**Reality check (corrects the brief's framing):** there is **no** supplier-level approval gate before a supplier record becomes usable — `POST /suppliers` creates one immediately, active, with no qualification workflow. "Onboarding" in this codebase is a **document-collection sub-workflow**, entirely separate from the supplier's own active/probation/suspended/disqualified status lifecycle (§2.9).
+**Note:** there is **no** supplier-level approval gate before a supplier record becomes usable — `POST /suppliers` creates one immediately, active, with no qualification workflow. "Onboarding" in this codebase is a **document-collection sub-workflow**, entirely separate from the supplier's own active/probation/suspended/disqualified status lifecycle (§2.9).
 
 **1. States** — per-document (`supplier_onboarding_documents.status`): `submitted` (default) → `approved`|`rejected`. Resubmission inserts a new row (full history kept), not an overwrite.
 **2. Transitions** — no guard beyond the reviewer setting either terminal value directly.
@@ -499,7 +499,7 @@ Simulation Mode exists **only at Layer 2** (`POST /workflow/:id/run {simulate:tr
 | `create_ncr` / `escalate_capa` / `assign_user` | Real insert + audit trail + `publishEvent` | Records `{simulated:true, ...}`, no write |
 | `ai_suggestion` | Real LLM/stub call, recorded to `ai_suggestions` | Skipped entirely — "would call the AI pipeline, skipped in simulation to avoid spending real usage quota" |
 
-A simulation run is persisted (`workflow_runs.simulated = true`) but explicitly **excluded** from `/workflow/health`'s "last successful/failed run" signals, so a simulation can never be mistaken for a real system-health data point. Live-verified this session: a real simulate-mode run against a template returned a distinct, clearly-labeled JSON result with no real notification sent, confirmed against `notification_log` showing zero new rows.
+A simulation run is persisted (`workflow_runs.simulated = true`) but explicitly **excluded** from `/workflow/health`'s "last successful/failed run" signals, so a simulation can never be mistaken for a real system-health data point. A simulate-mode run is stored with a distinct result and does not send a notification.
 
 **No per-module (Layer 1) simulation exists.** There is no "simulate an NCR closure" or "simulate a Work Order completion" — every Layer 1 transition endpoint, when called, is a real, committed state change. This is a genuine scope boundary: Simulation Mode only covers the automation an admin builds in the Workflow Builder, never a module's own hard-coded lifecycle.
 

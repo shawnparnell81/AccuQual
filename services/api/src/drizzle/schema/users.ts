@@ -60,7 +60,7 @@ export const users = pgTable("users", {
   // When the user was first told their company policy requires MFA; the enrollment grace period counts from here.
   mfaRequiredSince: timestamp("mfa_required_since"),
   // This user's own theme overrides, layered on top of their company's theme
-  // (companies.branding) — see the Theme System review. mode is "light" |
+  // (companies.branding). mode is "light" |
   // "dark" | "system"; unset means "follow the company/default theme" for
   // every field independently, not an all-or-nothing override.
   themePreferences: jsonb("theme_preferences").$type<{ mode?: "light" | "dark" | "system"; primaryColor?: string; accentColor?: string }>(),

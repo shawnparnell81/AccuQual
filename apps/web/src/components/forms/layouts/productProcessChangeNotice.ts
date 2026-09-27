@@ -1,6 +1,6 @@
 import type { FormLayout } from "./types";
 
-/** Derived 1:1 from the user-provided "Product_Process_Change_Notice.pdf" (PCN). */
+/** Derived 1:1 from the source "Product_Process_Change_Notice.pdf" (PCN). */
 export const pcnLayout: FormLayout = {
   formType: "pcn",
   title: "PRODUCT / PROCESS CHANGE NOTICE (PCN)",

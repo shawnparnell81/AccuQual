@@ -89,7 +89,7 @@ export const supplierPpapSubmissions = pgTable("supplier_ppap_submissions", {
  * to a real internal NCR/CAPA this responds to (Supplier NCR/CAPA
  * visibility), but a genuinely separate record from that internal one: the
  * internal capa/ncr rows are never mutated by a supplier submission (no
- * workflow changes to existing modules, per the brief). `data` mirrors
+ * workflow changes to existing modules). `data` mirrors
  * eight_d.data's jsonb-for-structured-narrative convention.
  */
 export const supplierCorrectiveActions = pgTable("supplier_corrective_actions", {

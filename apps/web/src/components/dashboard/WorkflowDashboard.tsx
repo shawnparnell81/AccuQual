@@ -14,13 +14,12 @@ const TABS = ["Overview", "Calibration", "Documents", "Training", "Audit", "NCR 
 type Tab = (typeof TABS)[number];
 
 /**
- * The one workflow dashboard container — "filtering by module" (the
- * brief's section 1 ask) is this tab bar: each tab is a real module filter,
- * not a separate page (no new nav route was added — see the brief's "do not
+ * The one workflow dashboard container — "filtering by module" ( section 1 ask) is this tab bar: each tab is a real module filter,
+ * not a separate page (no new nav route was added — see "do not
  * create nav pages"; this lives inside the existing home Dashboard instead).
  * State/severity filtering happens within a tab (the pending-decisions list
  * has its own module filter; a distribution chart's bars are themselves a
- * breakdown by state). Date-range and user filtering are the two brief asks
+ * breakdown by state). Date-range and user filtering are the two filters
  * this pass didn't build — most modules don't expose a consistent "assigned
  * user" the way NCR does, and a real date-range picker across 6 differently-
  * shaped date fields felt like it deserved its own considered pass rather

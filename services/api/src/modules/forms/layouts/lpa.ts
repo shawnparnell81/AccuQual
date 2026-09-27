@@ -1,7 +1,7 @@
 import type { FormLayout, TableColumn } from "./types.js";
 
 /**
- * Derived 1:1 from the user-provided "LPA template.pdf" (Layered Process
+ * Derived 1:1 from the source "LPA template.pdf" (Layered Process
  * Audit). The source is a 15-question x 5-day x 3-shift compliance grid —
  * built here programmatically instead of hand-typing 15 near-identical day/
  * shift column definitions.

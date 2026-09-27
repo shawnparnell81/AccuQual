@@ -1,19 +1,19 @@
 # AccuQual Implementation Sequencing
 
-**Status:** Sequencing/planning only — no code, schema, or architecture changed to produce this document. Input: `accuqual-workflow-architecture.md` (treated as authoritative, per the brief's instruction).
+**Status:** Sequencing and planning only. No code, schema, or architecture changes. Source: `accuqual-workflow-architecture.md`.
 
 ---
 
 ## Part 0 — Scope reality check (read this before the rest)
 
-The brief asks for a "build order" / "sprint plan" / "final build plan" as if all 19 named workflows were still unbuilt. **They are not.** `accuqual-workflow-architecture.md` documents that every one of these modules is already implemented, live, RBAC-gated, and audit-trailed (Phases 0–11 of this same engagement). Sequencing a from-scratch build of things that already exist would produce a fictional document with no engineering value — exactly the kind of brief-vs-reality mismatch this whole engagement has consistently corrected rather than played along with.
+A from-scratch build order for all 19 workflows would not match the repository. `accuqual-workflow-architecture.md` documents that these modules are already implemented, with RBAC and an audit trail (Phases 0–11). Sequencing a rebuild of what already exists would not describe the system.
 
 This document therefore does the two things that are actually real and actually useful under "implementation sequencing":
 
 1. **The dependency graph** — genuinely valuable regardless of build status: it's the reference for (a) onboarding a new engineer, (b) safely extending or rebuilding any piece without breaking what it sits on, and (c) confirming the *historical* build order (Phases 0–11) was itself dependency-safe, which it was (see Part 2's "validated position" column).
 2. **Forward sequencing of the real, remaining work** — `accuqual-workflow-architecture.md`'s Part 5 maturity matrix documented concrete, named gaps (unguarded status fields on 4 modules, a missing audit trail on user/role changes, Supplier Onboarding's disconnection from supplier status, two frontend history-panel drifts, Inventory Traceability's zero Layer-2 event coverage, CAPA's one unguarded hop, Audit's PATCH-bypass). **That is the actual unfinished implementation work in this system**, and it is what the sprint plan (Part 10) and final build plan (Part 11) sequence.
 
-Every section below is organized to satisfy the brief's literal deliverable list, with this reframing applied consistently.
+The sections below follow that scope.
 
 ---
 
@@ -211,7 +211,7 @@ Sequencing the REAL remaining work (`accuqual-workflow-architecture.md` Part 5's
 - *Dependency justification:* both are purely additive with no risk of regressing existing behavior — correctly sequenced last since they unlock future capability rather than fix a present defect.
 
 ### Not sprinted (explicitly deferred, not forgotten)
-- Supplier Onboarding ↔ Supplier status linkage — a real product/design decision (should approving onboarding auto-activate a supplier? should disqualifying one reject pending onboarding docs?) requiring a decision from the user, not a mechanical fix. Flagged for a future design conversation, not scheduled into these sprints.
+- Supplier Onboarding ↔ Supplier status linkage — a product decision (should approving onboarding auto-activate a supplier? should disqualifying one reject pending onboarding docs?), not a mechanical fix. Deferred to a later design pass.
 - Part 9's conflict-resolution items (double-NCR-creation risk, parallel-record-type risk) — these are UX/product-warning features (warn an admin building a Workflow Builder definition that overlaps existing automation), not bugs, and were explicitly out of scope for a sequencing-only phase.
 
 ---

@@ -2,24 +2,23 @@ import type { AccessLevel, Department, ResourceKey } from "../middleware/departm
 
 /**
  * The ORIGINAL hardcoded PERMISSION_MATRIX — moved out of
- * departmentAccess.ts entirely per explicit user request ("Remove
- * dependency on hardcoded PERMISSION_MATRIX in departmentAccess.ts").
+ * departmentAccess.ts entirely.
  * departmentAccess.ts's runtime request path no longer imports or reads
  * this file at all; getUserAccessLevel() is pure database lookup now,
  * defaulting to "none" when no row exists.
  *
  * This data still exists — as a SEED fixture, not a runtime fallback. Two
  * consumers, both one-time/setup-time, never per-request:
- *   1. db/backfillDepartmentPermissions.ts — inserts a real
- *      department_permissions row for every existing company, for every
- *      (department, module) pair defined here, so every company that
- *      existed before this rewrite keeps behaving EXACTLY as it did under
- *      the old hardcoded matrix, with real rows now on file instead of an
- *      implicit fallback.
- *   2. modules/platform/platform.service.ts's createCompany() — seeds the
- *      same rows for a brand-new company at creation time, so "no
- *      permissions configured yet" never means "silently locked out of
- *      everything" for a fresh company either.
+ *  1. db/backfillDepartmentPermissions.ts — inserts a real
+ *  department_permissions row for every existing company, for every
+ *  (department, module) pair defined here, so every company that
+ *  existed before this rewrite keeps behaving EXACTLY as it did under
+ *  the old hardcoded matrix, with real rows now on file instead of an
+ *  implicit fallback.
+ *  2. modules/platform/platform.service.ts's createCompany() — seeds the
+ *  same rows for a brand-new company at creation time, so "no
+ *  permissions configured yet" never means "silently locked out of
+ *  everything" for a fresh company either.
  * Once seeded, a company admin's own department_permissions rows (via the
  * Roles & Permissions admin UI) are the only thing getUserAccessLevel ever
  * reads — this file is never consulted again after that point.
@@ -42,7 +41,7 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   pareto: { quality: "read" },
   // production added for Supplier Performance Analytics (read-only, same
   // level as purchasing/material_management — it had no access at all
-  // before this) — see the Supplier Performance Analytics review.
+  // before this).
   suppliers: { quality: "edit", purchasing: "read", material_management: "read", production: "read" },
   complaints: { quality: "edit", engineering: "edit", production: "read", customer_service: "edit" },
   ppap: { engineering: "edit" },
@@ -73,9 +72,7 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // assertDepartment for per-action nuance this matrix can't express.
   // engineering is read-only, matching the spec exactly.
   rma: { purchasing: "edit", material_management: "edit", quality: "edit", engineering: "read" },
-  // Not a sheet row — a new module (see the AI Work Order Planning / PR
-  // Justification / Onboarding / ERP Automation review). Per explicit user
-  // request (2026-09-15): Customer Service now owns the work order
+  // Not a sheet row — a new module. Customer Service now owns the work order
   // lifecycle (create/start/complete/cancel, enforced inline in
   // workOrders.controller.ts's assertDepartment) — Production was
   // downgraded to read-only. "General Manager" full access is covered by
@@ -103,8 +100,7 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // pattern as inventory/erp/rma/work_orders above. Deleting a risk is
   // admin-only, also enforced inline (not a department at all).
   risk: { quality: "edit", engineering: "edit", production: "edit", purchasing: "edit", material_management: "edit" },
-  // Not a sheet row — the Feasibility Review module. Rebuilt (per explicit
-  // request) as a bespoke document engineering owns; the other four
+  // Not a sheet row — the Feasibility Review module. Rebuilt as a bespoke document engineering owns; the other four
   // departments only get "edit" here because each owns exactly one fixed
   // sign-off row on the form (PATCH /:id/signoff) — the real narrower rule
   // (full-record edit: engineering only; each other department: its own
@@ -162,12 +158,12 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // function's own comment — there's no configurable "supplier read vs
   // write" tier, since a supplier acting on their own data has no
   // department to key an override off of; supplier_portal.read/write and
-  // .rma_request.read/write from the module-specific RBAC brief map onto
+  // .rma_request.read/write from the access matrix map onto
   // this existing identity-based gate, not a new database row).
   supplier_portal: { quality: "edit", purchasing: "edit", engineering: "read" },
   // The Customer Return Analysis Report. Quality owns the document end to
   // end (create through its own quality_review stage). Customer Service is
-  // read-only per the brief's own RBAC table. Engineering/purchasing (the
+  // read-only according to the RBAC table. Engineering/purchasing (the
   // two of those departments not already covered above) get "edit" here
   // too, so the linking route itself isn't blocked at this router-level
   // gate — but crar.controller.ts's own logic narrows what that actually
@@ -187,12 +183,11 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // automated, read-only event trail behind the Supplier Portal RMA Request
   // pipeline (see rmaActivityLog.controller.ts). "rma_log" itself now names
   // the real, manually-maintained customer-return register built in the
-  // module-specific RBAC brief — see below.
+  // access matrix — see below.
   rma_activity_log: { quality: "edit", customer_service: "read" },
   // The real RMA Log register (module-specific RBAC build, 2026-09-16) —
   // NOT the automated event trail above. Quality and Customer Service (the
-  // front-line customer liaison, per explicit user direction on Work
-  // Orders) jointly own it; Engineering/Purchasing/Material Management get
+  // front-line customer liaison) jointly own it; Engineering/Purchasing/Material Management get
   // read visibility since a customer return can implicate a part they
   // touch. rma_log.status.write and rma_log.linkage.write (below) are
   // separate, narrower levers on top of this base read/write split.
@@ -245,7 +240,7 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   },
   // Customer Contact & Communications Log — closes the Buyer Evaluation's
   // "no communication log" finding. Customer Service (the front-line
-  // customer liaison, per explicit user direction on this module) and
+  // customer liaison) and
   // Quality (owns the linked NCR/Complaint side a conversation is often
   // about) both get full edit; every other department gets read, so a
   // conversation logged against a customer stays visible company-wide

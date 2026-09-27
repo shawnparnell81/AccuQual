@@ -17,8 +17,7 @@ crarRouter.get("/", listCrarHandler);
 crarRouter.post("/", validate(createCrarSchema), createCrarHandler);
 crarRouter.get("/:id", getCrarHandler);
 crarRouter.patch("/:id", validate(updateCrarSchema), updateCrarHandler);
-// Not in the brief's own literal 4-route list, but a real transition
+// Not in literal 4-route list, but a real transition
 // mechanism is required by its own workflow requirement — same "the route
-// list is a floor, not a ceiling" precedent as every other module built
-// this session (e.g. Warranty's /costs, Supplier Portal's /review routes).
+// list is a floor, not a ceiling" precedent as every other module added alongside them (e.g. Warranty's /costs, Supplier Portal's /review routes).
 crarRouter.post("/:id/transition", validate(transitionCrarSchema), transitionCrarHandler);

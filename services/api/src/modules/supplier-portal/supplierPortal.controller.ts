@@ -496,7 +496,7 @@ export const performanceHandler = asyncHandler(async (req: Request, res: Respons
 // claims tied to this supplier, plus any corrective-action/8D response this
 // supplier already submitted against one), NOT a new supplierId column on
 // ncr/capa themselves (no workflow/schema changes to those existing
-// modules, per the brief).
+// modules).
 // ---------------------------------------------------------------------------
 
 export const supplierNcrListHandler = asyncHandler(async (req: Request, res: Response) => {

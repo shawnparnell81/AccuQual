@@ -1,7 +1,7 @@
 import type { FormLayout } from "./types.js";
 
 /**
- * Derived 1:1 from the user-provided "Management Review Template.pdf"
+ * Derived 1:1 from the source "Management Review Template.pdf"
  * (Management System Performance Evaluation Record). Modeled as a singleton
  * document (like the Production Logs) rather than a dated series of past
  * reviews — see ManagementSystemPage.tsx for the simplification note.

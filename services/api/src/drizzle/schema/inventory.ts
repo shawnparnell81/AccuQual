@@ -109,7 +109,7 @@ export const inventoryAlerts = pgTable("inventory_alerts", {
 
 /**
  * A minimal, forward-compatible ERP reorder stub — no ERP integration
- * exists (see the ERP Reorder Request review), so this is created and
+ * exists, so this is created and
  * resolved entirely by real Purchasing users, never an external system.
  * Created when Purchasing calls mark-reorder-pending (the only real path
  * to that state — see inventory.service.ts's recomputeState), not by any

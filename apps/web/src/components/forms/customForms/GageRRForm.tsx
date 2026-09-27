@@ -19,7 +19,7 @@ function fmt(n: number, digits = 3): string {
 }
 
 /**
- * Gage R&R (Average and Range method), derived 1:1 from the user-provided
+ * Gage R&R (Average and Range method), derived 1:1 from the source
  * "MSA Gauge R_R.pdf" — a full spreadsheet-style calculation (per-column
  * means/ranges across a 10-part x 2-operator x 2-trial grid, then several
  * study-wide derived values) that doesn't fit the row-by-row computed-column

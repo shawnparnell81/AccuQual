@@ -1,7 +1,7 @@
 import type { FormLayout } from "./types";
 
 /**
- * Derived 1:1 from the user-provided "Production Output Log.pdf" (Production
+ * Derived 1:1 from the source "Production Output Log.pdf" (Production
  * & Operational Output Log) — an hourly tracking matrix, distinct from the
  * work-order-based Master Production Log and the per-shift Daily Production
  * & Quality Log built earlier. Net Yield is computed automatically: Actual

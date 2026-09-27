@@ -2,7 +2,7 @@ import type { FormLayout } from "./types";
 
 /**
  * Derived 1:1 from Part A ("Operator Station Competency Verification
- * Matrix") of the user-provided "Competency Framework_Doc Control
+ * Matrix") of the source "Competency Framework_Doc Control
  * Template.pdf" — Part B (Document Control Master Index) is a distinct
  * document, see documentControlIndex.ts. Total Qualification % is computed
  * automatically from the 4 station levels (0-4 scale each).
