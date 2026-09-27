@@ -11,7 +11,6 @@ import { ncr } from "../drizzle/schema/ncr.js";
 import { capa } from "../drizzle/schema/capa.js";
 import { eightD } from "../drizzle/schema/eightD.js";
 import { supplier8dResponses } from "../drizzle/schema/supplierPortal.js";
-import { customers } from "../drizzle/schema/customers.js";
 import { warrantyClaims, warrantyClaimCosts, warrantyClaimWorkflow } from "../drizzle/schema/warranty.js";
 import { rmaLogRecords } from "../drizzle/schema/rmaLog.js";
 import { audits, auditItems } from "../drizzle/schema/audits.js";
@@ -238,17 +237,11 @@ async function main() {
   // Warranty claim — a customer's field failure traced back to the same
   // defective lot, walked through its real lifecycle.
   // ---------------------------------------------------------------------
-  const [customer] = await tdb
-    .insert(customers)
-    .values({ legalName: "Northfield Industries", primaryContactName: "Dana Ruiz", primaryContactEmail: "dana.ruiz@northfield.example", customerType: "OEM", status: "activated" })
-    .returning();
-
   const [claimDraft] = await tdb
     .insert(warrantyClaims)
     .values({
       claimNumber: "WC-PENDING",
       status: "new",
-      customerId: customer!.id,
       productId: bracket!.id,
       serialNumber: "SN-88214",
       purchaseDate: daysAgo(60),

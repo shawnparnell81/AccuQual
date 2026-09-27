@@ -16,7 +16,6 @@ import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { Modal } from "../../components/modals/Modal";
 import { RISK_CATEGORIES } from "../../components/shared/riskConstants";
-import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
 import type { RiskAssessment, RiskMitigation, FmeaItem } from "../../api/types";
 
 const riskHooks = createResourceHooks<RiskAssessment>("risk");
@@ -27,7 +26,6 @@ const SOURCE_LINK: Record<string, (id: number) => string> = {
   NCR: (id) => `/ncr/${id}`,
   Supplier: (id) => `/suppliers/${id}`,
   WorkOrder: (id) => `/work-orders/${id}`,
-  Customer: (id) => `/customers/${id}`,
 };
 
 /**
@@ -94,7 +92,6 @@ export function RiskDetailPage() {
           <button onClick={() => setAiOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             AI Risk Analysis
           </button>
-          <CreateCustomerButton sourceType="Risk" sourceId={risk.id} defaultLegalName={risk.title} />
           {canEdit && (
             <button onClick={() => setEditOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
               Edit

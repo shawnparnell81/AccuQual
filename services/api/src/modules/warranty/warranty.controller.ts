@@ -102,7 +102,6 @@ export const listWarrantyClaimsHandler = asyncHandler(async (req: Request, res: 
       claimNumber: warrantyClaims.claimNumber,
       status: warrantyClaims.status,
       customerId: warrantyClaims.customerId,
-      customerName: customers.legalName,
       serialNumber: warrantyClaims.serialNumber,
       failureDate: warrantyClaims.failureDate,
       warrantyCostEstimate: warrantyClaims.warrantyCostEstimate,
@@ -112,7 +111,6 @@ export const listWarrantyClaimsHandler = asyncHandler(async (req: Request, res: 
       updatedAt: warrantyClaims.updatedAt,
     })
     .from(warrantyClaims)
-    .leftJoin(customers, eq(warrantyClaims.customerId, customers.id))
     .where(and(...conditions))
     .orderBy(desc(warrantyClaims.createdAt));
   res.json(rows);
@@ -181,7 +179,6 @@ export const createWarrantyClaimHandler = asyncHandler(async (req: Request, res:
 
 export const getWarrantyClaimHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadClaim(req, Number(req.params.id));
-  const [customer] = record.customerId ? await req.db!.select().from(customers).where(eq(customers.id, record.customerId)) : [null];
   const [product] = record.productId ? await req.db!.select().from(inventoryItems).where(eq(inventoryItems.id, record.productId)) : [null];
   const [supplier] = record.supplierId ? await req.db!.select().from(suppliers).where(eq(suppliers.id, record.supplierId)) : [null];
   const [linkedNcr] = record.linkedNcrId ? await req.db!.select().from(ncr).where(eq(ncr.id, record.linkedNcrId)) : [null];
@@ -196,7 +193,7 @@ export const getWarrantyClaimHandler = asyncHandler(async (req: Request, res: Re
 
   res.json({
     ...record,
-    customer: customer ? { id: customer.id, legalName: customer.legalName } : null,
+    customer: null,
     product: product ? { id: product.id, sku: product.sku, description: product.description } : null,
     supplier: supplier ? { id: supplier.id, name: supplier.name, status: supplier.status } : null,
     linkedNcr: linkedNcr ? { id: linkedNcr.id, title: linkedNcr.title, status: linkedNcr.status } : null,

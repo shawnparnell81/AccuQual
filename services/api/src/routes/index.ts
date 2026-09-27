@@ -52,8 +52,6 @@ import { searchRouter } from "../modules/search/search.routes.js";
 import { rmaRouter } from "../modules/rma/rma.routes.js";
 import { workOrdersRouter } from "../modules/work-orders/workOrders.routes.js";
 import { feasibilityRouter } from "../modules/feasibility/feasibility.routes.js";
-import { customersRouter } from "../modules/customers/customers.routes.js";
-import { customerCommunicationsRouter } from "../modules/customer-communications/customerCommunications.routes.js";
 import { documentChangeRequestsRouter } from "../modules/document-change-requests/documentChangeRequests.routes.js";
 import { qmsFormsRouter } from "../modules/qms-forms/qmsForms.routes.js";
 import { scarFormsRouter } from "../modules/scar-forms/scarForms.routes.js";
@@ -138,8 +136,8 @@ apiRouter.use("/work-orders", workOrdersRouter);
 apiRouter.use("/feasibility", feasibilityRouter);
 // Sales accounts are not part of this app (they live in Oracle NetSuite).
 // The sales_* tables stay in place; this router is not mounted.
-apiRouter.use("/customers", customersRouter);
-apiRouter.use("/customer-communications", customerCommunicationsRouter);
+// Customer onboarding is not part of this app. The customers and
+// customer_communications tables stay in place; those routers are not mounted.
 apiRouter.use("/document-change-requests", documentChangeRequestsRouter);
 apiRouter.use("/qms-forms", qmsFormsRouter);
 apiRouter.use("/scar-forms", scarFormsRouter);

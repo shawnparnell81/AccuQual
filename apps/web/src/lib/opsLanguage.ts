@@ -75,7 +75,6 @@ const NAV_PLAIN: Record<string, { label: string; standard?: string }> = {
   rma_log: { label: "Return log" },
   rma_activity_log: { label: "Return activity" },
   production_log: { label: "Production log" },
-  customers: { label: "New customers" },
   ppap: { label: "PPAP / APQP" },
   feasibility: { label: "Feasibility" },
 };

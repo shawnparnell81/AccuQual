@@ -10,7 +10,6 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
-import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
 import { Modal } from "../../components/modals/Modal";
 import { TextField, SelectField, TextAreaField } from "../../components/forms/Field";
 import type { Rma, RmaItem, InventoryItem, Ncr, Capa, RmaStatus } from "../../api/types";
@@ -204,7 +203,6 @@ export function RmaDetailPage() {
               + Add Item
             </button>
           )}
-          <CreateCustomerButton sourceType="RMA" sourceId={record.id} defaultLegalName={record.rmaNumber} />
         </div>
       </div>
 

@@ -33,9 +33,6 @@ import { RiskDetailPage } from "./routes/Risk/RiskDetailPage";
 import { RiskDashboardPage } from "./routes/Risk/RiskDashboardPage";
 import { FeasibilityPage } from "./routes/Feasibility/FeasibilityPage";
 import { FeasibilityDetailPage } from "./routes/Feasibility/FeasibilityDetailPage";
-import { CustomersPage } from "./routes/Customers/CustomersPage";
-import { CustomerDetailPage } from "./routes/Customers/CustomerDetailPage";
-import { CustomerDashboardPage } from "./routes/Customers/CustomerDashboardPage";
 import { DocumentChangeRequestsPage } from "./routes/DocumentChangeRequests/DocumentChangeRequestsPage";
 import { DocumentChangeRequestDetailPage } from "./routes/DocumentChangeRequests/DocumentChangeRequestDetailPage";
 import { QmsFormsLibraryPage } from "./routes/QmsForms/QmsFormsLibraryPage";
@@ -165,9 +162,9 @@ export function App() {
           <Route path="/sales" element={<Navigate to="/" replace />} />
           <Route path="/sales/dashboard" element={<Navigate to="/" replace />} />
           <Route path="/sales/:id" element={<Navigate to="/" replace />} />
-          <Route path="/customers" element={<CustomersPage />} />
-          <Route path="/customers/dashboard" element={<CustomerDashboardPage />} />
-          <Route path="/customers/:id" element={<CustomerDetailPage />} />
+          <Route path="/customers" element={<Navigate to="/" replace />} />
+          <Route path="/customers/dashboard" element={<Navigate to="/" replace />} />
+          <Route path="/customers/:id" element={<Navigate to="/" replace />} />
           <Route path="/document-change-requests" element={<DocumentChangeRequestsPage />} />
           <Route path="/document-change-requests/:id" element={<DocumentChangeRequestDetailPage />} />
           <Route path="/qms-forms" element={<QmsFormsLibraryPage />} />

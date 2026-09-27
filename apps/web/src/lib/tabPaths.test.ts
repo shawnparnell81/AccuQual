@@ -18,6 +18,9 @@ describe("saved tabs for removed pages", () => {
       { id: "k", path: "/sales" },
       { id: "l", path: "/sales/dashboard" },
       { id: "m", path: "/sales/8" },
+      { id: "n", path: "/customers" },
+      { id: "o", path: "/customers/dashboard" },
+      { id: "p", path: "/customers/4" },
     ];
     const restored = selectRestoredTabs(saved, "c");
     assert.deepEqual(
@@ -32,5 +35,8 @@ describe("saved tabs for removed pages", () => {
     assert.equal(isLiveTabPath("/sales"), false);
     assert.equal(isLiveTabPath("/sales/dashboard"), false);
     assert.equal(isLiveTabPath("/sales/8"), false);
+    assert.equal(isLiveTabPath("/customers"), false);
+    assert.equal(isLiveTabPath("/customers/dashboard"), false);
+    assert.equal(isLiveTabPath("/customers/4"), false);
   });
 });

@@ -32,7 +32,6 @@ import {
   FileSignature,
   Compass,
   Megaphone,
-  UserPlus,
   FileEdit,
   LibraryBig,
   ShieldX,
@@ -326,20 +325,6 @@ export const PRODUCTION_LOG: NavLeaf = {
   notes: "Read-only in Production; editable in Customer Service",
 };
 
-// Not a sheet row — the Customer Onboarding module. Mirrors
-// departmentAccess.ts's PERMISSION_MATRIX.customers exactly:
-// sales_and_marketing owns it, quality/engineering are read-only.
-export const CUSTOMERS: NavLeaf = {
-  key: "customers",
-  label: "Customer Onboarding",
-  path: "/customers",
-  icon: UserPlus,
-  access: { sales_and_marketing: "edit", quality: "read", engineering: "read" },
-  kpi: false,
-  priority: 2,
-  notes: "Not in the department sheet — new qualification workflow (one consolidated customers table, see its own schema comment)",
-};
-
 // PPAP and APQP are two distinct rows in the sheet, but the app currently
 // ships one combined page for both — see ASSUMPTIONS. Phase 1 cleanup
 // (buyer evaluation finding "Unnecessary features"): these used to be two
@@ -402,7 +387,6 @@ export const NAV_STRUCTURE: NavGroup[] = [
       RMA,
       WORK_ORDERS,
       PURCHASE_REQUISITIONS,
-      CUSTOMERS,
       WARRANTY,
       SUPPLIER_PORTAL,
       CRAR,
@@ -412,7 +396,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "engineering",
-    items: [PPAP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, CUSTOMERS, FEASIBILITY, WARRANTY, SUPPLIER_PORTAL, CRAR, RMA_LOG],
+    items: [PPAP, COMPLAINTS, RMA, PURCHASE_REQUISITIONS, FEASIBILITY, WARRANTY, SUPPLIER_PORTAL, CRAR, RMA_LOG],
   },
   {
     department: "production",
@@ -432,7 +416,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
   },
   {
     department: "sales_and_marketing",
-    items: [CUSTOMERS],
+    items: [],
   },
   {
     // Not in the sheet — kept so nothing loses a working page. Access is
@@ -682,5 +666,5 @@ export function findNavLeaf(key: string): NavLeaf | undefined {
     const found = group.items.find((item) => item.key === key);
     if (found) return found;
   }
-  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, CUSTOMERS, CRAR, RMA_LOG, RMA_ACTIVITY_LOG].find((leaf) => leaf.key === key);
+  return [SUPPLIERS, COMPLAINTS, PRODUCTION_LOG, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, CRAR, RMA_LOG, RMA_ACTIVITY_LOG].find((leaf) => leaf.key === key);
 }

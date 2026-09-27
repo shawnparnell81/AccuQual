@@ -7,7 +7,6 @@ import { WorkflowActionButton } from "../../components/shared/WorkflowActionButt
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { TextField } from "../../components/forms/Field";
-import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
 import { ProductionWorkOrderTraveler } from "./ProductionWorkOrderTraveler";
 import type { WorkOrder, WorkOrderStatus } from "../../api/types";
 
@@ -47,7 +46,6 @@ export function WorkOrderDetailPage() {
           <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             Print
           </button>
-          <CreateCustomerButton sourceType="WorkOrder" sourceId={record.id} defaultLegalName={`Work Order #${record.id}`} />
         </div>
       </div>
 

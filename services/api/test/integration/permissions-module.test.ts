@@ -94,6 +94,7 @@ describe("Roles & Permissions module (real DB + real HTTP path)", () => {
       expect(modules.status).toBe(200);
       expect(modules.body.some((m: { key: string }) => m.key === "ncr")).toBe(true);
       expect(modules.body.some((m: { key: string; label: string }) => m.key === "sales" || /sales account/i.test(m.label))).toBe(false);
+      expect(modules.body.some((m: { key: string; label: string }) => m.key === "customers" || m.key === "customer_communications" || /customer onboarding/i.test(m.label))).toBe(false);
 
       const effective = await request(app).get("/permissions/effective").set("Authorization", `Bearer ${qualityToken}`);
       expect(effective.status).toBe(200);

@@ -9,7 +9,6 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { TextAreaField } from "../../components/forms/Field";
-import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import type { ErpPurchaseRequisition } from "../../api/types";
 
@@ -67,7 +66,6 @@ export function ErpRequisitionDetailPage() {
           <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             Print
           </button>
-          <CreateCustomerButton sourceType="Requisition" sourceId={record.id} defaultLegalName={`Requisition #${record.id}`} />
         </div>
       </div>
 

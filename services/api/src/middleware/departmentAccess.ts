@@ -101,6 +101,8 @@ export const MODULE_LABELS: Record<ResourceKey, string> = {
   // (they live in Oracle NetSuite). VISIBLE_RESOURCE_KEYS omits this key
   // from admin catalogs and onboarding so nothing asks for or shows it.
   sales: "Sales Accounts",
+  // Stored permission key only. Customer onboarding is not offered in the app.
+  // VISIBLE_RESOURCE_KEYS omits this key from admin catalogs.
   customers: "Customer Onboarding",
   warranty: "Warranty",
   supplier_portal: "Supplier Portal",
@@ -115,6 +117,8 @@ export const MODULE_LABELS: Record<ResourceKey, string> = {
   management_review: "Management Review",
   context_of_org: "Context of the Organization",
   documents: "Document Control",
+  // Stored permission key only. The communications log lived on a customer
+  // onboarding record. VISIBLE_RESOURCE_KEYS omits this key from catalogs.
   customer_communications: "Customer Communications",
   change: "Change / PCN Control",
   training: "Training",
@@ -125,8 +129,8 @@ export const MODULE_LABELS: Record<ResourceKey, string> = {
 };
 export const RESOURCE_KEYS: ResourceKey[] = Object.keys(MODULE_LABELS) as ResourceKey[];
 
-/** Modules the product still offers. `sales` stays in RESOURCE_KEYS so existing permission rows keep a real key; catalogs must not list it. */
-export const VISIBLE_RESOURCE_KEYS: ResourceKey[] = RESOURCE_KEYS.filter((key) => key !== "sales");
+/** Modules the product still offers. `sales`, `customers`, and `customer_communications` stay in RESOURCE_KEYS so existing permission rows keep a real key; catalogs must not list them. */
+export const VISIBLE_RESOURCE_KEYS: ResourceKey[] = RESOURCE_KEYS.filter((key) => key !== "sales" && key !== "customers" && key !== "customer_communications");
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 

@@ -14,7 +14,6 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { Modal } from "../../components/modals/Modal";
 import { TextField } from "../../components/forms/Field";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
-import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
 import type { ErpPurchaseOrder, ErpReceivingDocument, ErpReceivingLineItem, ReceivingLineItemStatus } from "../../api/types";
 
 const poHooks = createResourceHooks<ErpPurchaseOrder>("erp/purchase-orders");
@@ -276,7 +275,6 @@ export function ErpPurchaseOrderDetailPage() {
             </button>
           )}
           <WorkflowActionButton label="Cancel" navKey="erp" action={cancelAction} onClick={() => cancelAction.mutate({ id: poId })} visible={canCancel} />
-          <CreateCustomerButton sourceType="PO" sourceId={po.id} defaultLegalName={po.supplierName ?? `PO #${po.id}`} />
         </div>
       </div>
 

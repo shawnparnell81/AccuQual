@@ -4,27 +4,24 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { Modal } from "../../components/modals/Modal";
 import { TextField, SelectField, TextAreaField } from "../../components/forms/Field";
-import type { WarrantyClaim, Customer, InventoryItem, Supplier } from "../../api/types";
+import type { WarrantyClaim, InventoryItem, Supplier } from "../../api/types";
 
 const claimHooks = createResourceHooks<WarrantyClaim>("warranty/claims");
-const customerHooks = createResourceHooks<Customer>("customers");
 const productHooks = createResourceHooks<InventoryItem>("inventory/items");
 const supplierHooks = createResourceHooks<Supplier>("suppliers");
 
 /**
- * Customer Service/Quality intake — real dynamic customer/product/supplier
+ * Customer Service/Quality intake — real dynamic product/supplier
  * dropdowns, same reasoning NewRmaModal (RmaListPage.tsx) gives for not
  * using the generic JSON-schema quick-create form here.
  */
 export function WarrantyClaimCreateForm({ isOpen, onClose, onCreated }: { isOpen: boolean; onClose: () => void; onCreated: (claim: WarrantyClaim) => void }) {
   const toast = useToast();
-  const { data: customers = [] } = customerHooks.useList();
   const { data: products = [] } = productHooks.useList();
   const { data: suppliers = [] } = supplierHooks.useList();
   const createClaim = claimHooks.useCreate();
 
   const [form, setForm] = useState({
-    customerId: "",
     productId: "",
     serialNumber: "",
     purchaseDate: "",
@@ -35,7 +32,7 @@ export function WarrantyClaimCreateForm({ isOpen, onClose, onCreated }: { isOpen
   });
 
   const reset = () =>
-    setForm({ customerId: "", productId: "", serialNumber: "", purchaseDate: "", failureDate: "", failureDescription: "", warrantyCostEstimate: "", supplierId: "" });
+    setForm({ productId: "", serialNumber: "", purchaseDate: "", failureDate: "", failureDescription: "", warrantyCostEstimate: "", supplierId: "" });
 
   return (
     <Modal title="New Warranty Claim" isOpen={isOpen} onClose={onClose}>
@@ -45,7 +42,6 @@ export function WarrantyClaimCreateForm({ isOpen, onClose, onCreated }: { isOpen
           e.preventDefault();
           createClaim.mutate(
             {
-              customerId: form.customerId ? Number(form.customerId) : undefined,
               productId: form.productId ? Number(form.productId) : undefined,
               serialNumber: form.serialNumber || undefined,
               purchaseDate: form.purchaseDate || undefined,
@@ -66,14 +62,6 @@ export function WarrantyClaimCreateForm({ isOpen, onClose, onCreated }: { isOpen
           );
         }}
       >
-        <SelectField label="Customer" value={form.customerId} onChange={(e) => setForm({ ...form, customerId: e.target.value })}>
-          <option value="">Select a customer…</option>
-          {customers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.legalName}
-            </option>
-          ))}
-        </SelectField>
         <SelectField label="Product" value={form.productId} onChange={(e) => setForm({ ...form, productId: e.target.value })}>
           <option value="">Select a product…</option>
           {products.map((p) => (

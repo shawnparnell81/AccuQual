@@ -183,7 +183,6 @@ export const getCrarHandler = asyncHandler(async (req: Request, res: Response) =
   const [linkedRma] = record.linkedRmaId ? await req.db!.select().from(rma).where(eq(rma.id, record.linkedRmaId)) : [null];
   // Phase 2 fixes: RMA Log link + customer contact, both previously missing.
   const [linkedRmaLog] = record.rmaLogId ? await req.db!.select().from(rmaLogRecords).where(eq(rmaLogRecords.id, record.rmaLogId)) : [null];
-  const [customer] = record.customerId ? await req.db!.select().from(customers).where(eq(customers.id, record.customerId)) : [null];
 
   res.json({
     ...record,
@@ -192,7 +191,7 @@ export const getCrarHandler = asyncHandler(async (req: Request, res: Response) =
     supplierRequest: supplierRequest ? { id: supplierRequest.id, companyName: supplierRequest.companyName, status: supplierRequest.status } : null,
     linkedRma: linkedRma ? { id: linkedRma.id, rmaNumber: linkedRma.rmaNumber, status: linkedRma.status } : null,
     linkedRmaLog: linkedRmaLog ? { id: linkedRmaLog.id, rmaNumber: linkedRmaLog.rmaNumber, status: linkedRmaLog.status } : null,
-    customer: customer ? { id: customer.id, legalName: customer.legalName, primaryContactEmail: customer.primaryContactEmail, primaryContactPhone: customer.primaryContactPhone } : null,
+    customer: null,
   });
 });
 

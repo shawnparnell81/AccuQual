@@ -85,7 +85,6 @@ export function WarrantyClaimDetail() {
           <h1 className="text-2xl font-semibold">{claim.claimNumber}</h1>
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge value={claim.status} />
-            <span className="text-sm text-muted-foreground">{claim.customer?.legalName ?? "No customer on file"}</span>
           </div>
         </div>
         <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
@@ -96,7 +95,7 @@ export function WarrantyClaimDetail() {
       <div className="hidden print:block">
         <h1 className="text-2xl font-semibold">{claim.claimNumber}</h1>
         <p className="text-sm text-muted-foreground">
-          Status: {claim.status.replace(/_/g, " ")} — {claim.customer?.legalName ?? "No customer on file"}
+          Status: {claim.status.replace(/_/g, " ")}
         </p>
       </div>
 
