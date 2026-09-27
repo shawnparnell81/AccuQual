@@ -1,6 +1,6 @@
 # In-app Office editing
 
-Controlled-document Word (`.docx`) and Excel (`.xlsx`) files can be opened in the browser through a self-hosted [ONLYOFFICE Document Server](https://github.com/ONLYOFFICE/DocumentServer). The editor is optional. With the settings below unset, AccuQual runs exactly as before and the Open-in-editor action reports that editing is not configured.
+Controlled-document Word (`.docx`) and Excel (`.xlsx`) files can be opened in the browser through a self-hosted [ONLYOFFICE Document Server](https://github.com/ONLYOFFICE/DocumentServer). The editor is optional. With the settings below unset, the Edit action reports that editing is not configured. Previews still open in the browser: Word is drawn on the page, Excel (including `.xls` and `.csv`) as a read-only grid, and PowerPoint asks the person to download the file. Those previews read the file through the same signed-in download the rest of the app already uses. Nothing is sent to another server.
 
 Published revisions stay frozen. A person who can view the document gets a read-only editor. A person who can edit it, and only while the revision is still a draft, gets an editor that can save. Saving a draft that still shares its file with another revision copies the file onto the draft first, so the other revision's bytes do not change.
 
@@ -55,7 +55,8 @@ The callback link is not a user session. The signature is the credential, same a
 
 ## Limits
 
-- `.docx` and `.xlsx` only. PDF and images stay download-only.
+- The editor opens `.docx` and `.xlsx`. PowerPoint (`.pptx`) can be previewed there too. PDF and images stay on their own viewers.
+- When the document server is unset, `.docx` and spreadsheets preview in the browser. `.pptx` shows a download prompt. Files over about 15 MB show that notice instead of being drawn in the page.
 - 15 MB, the same cap as other controlled-document files.
 - The document server has to be one you run. AccuQual does not send files to ONLYOFFICE's cloud.
 - Community Edition allows 20 simultaneous connections. See the license note above.

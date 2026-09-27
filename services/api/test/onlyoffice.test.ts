@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { authorizeOfficeFile, decideOfficeAccess, type OfficeActor, type OfficeStoredFile } from "../src/modules/onlyoffice/access.js";
 import { resolveSavedFileUrl } from "../src/modules/onlyoffice/download.js";
 import { buildEditorConfig, editorDocumentKey, officeDocumentType } from "../src/modules/onlyoffice/editorConfig.js";
+import { officeEditorConfigured } from "../src/modules/onlyoffice/settings.js";
 import { readFileClaims, signOfficeToken, verifyOfficeToken } from "../src/modules/onlyoffice/token.js";
 import { AppError } from "../src/utils/appError.js";
 
@@ -79,6 +80,12 @@ describe("authorizeOfficeFile", () => {
 describe("decideOfficeAccess", () => {
   it("agrees with the helper for a draft the caller can edit", () => {
     expect(decideOfficeAccess({ allowed: true }, { allowed: true }, draftDocx)).toEqual({ ok: true, mode: "edit" });
+  });
+});
+
+describe("office editor availability", () => {
+  it("is off when the document server URL and secret are unset", () => {
+    expect(officeEditorConfigured()).toBe(false);
   });
 });
 

@@ -6,7 +6,7 @@ import { useToast } from "../shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { FileDropZone } from "../shared/FileDropZone";
 import { InAppFilePreview, type PreviewRequest } from "../shared/InAppFilePreview";
-import { previewKind, saveBytes } from "../../lib/filePreview";
+import { onlyOfficeFile, previewKind, saveBytes } from "../../lib/filePreview";
 import { OnlyOfficeEditor } from "./OnlyOfficeEditor";
 
 interface Props {
@@ -42,8 +42,9 @@ export function DocumentFilesPanel({ documentId, versionId, files, editable, onC
     setPreview({
       fileName: f.fileName,
       mimeType: f.mimeType,
+      byteSize: f.sizeBytes,
       loadBytes: async () => (await fetchDocumentAttachment(documentId, versionId, f.id)).bytes,
-      officeSource: kind === "office" ? { kind: "document", documentId, versionId, fileId: f.id, viewOnly: true } : undefined,
+      officeSource: onlyOfficeFile(f.fileName, f.mimeType) ? { kind: "document", documentId, versionId, fileId: f.id, viewOnly: true } : undefined,
       download: () => downloadFile(f),
     });
   }
@@ -128,7 +129,7 @@ export function DocumentFilesPanel({ documentId, versionId, files, editable, onC
           <button disabled={busy} onClick={() => input.current?.click()} className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-60">
             <Upload size={14} /> {busy ? "Working…" : "Attach files"}
           </button>
-          <p className="mt-1 text-xs text-muted-foreground">PDF, Word (.docx), Excel (.xlsx) or an image, up to 15 MB each. Word and Excel files can open in the editor while this server has ONLYOFFICE configured. Each file's checksum is recorded so the released revision can prove what it held.</p>
+          <p className="mt-1 text-xs text-muted-foreground">PDF, Word (.docx), Excel (.xlsx) or an image, up to 15 MB each. Word and Excel preview in the browser, and can open in the editor while this server has ONLYOFFICE configured. Each file's checksum is recorded so the released revision can prove what it held.</p>
         </div>
       )}
       <InAppFilePreview request={preview} onClose={() => setPreview(null)} />

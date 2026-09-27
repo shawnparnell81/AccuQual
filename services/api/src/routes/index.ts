@@ -9,7 +9,7 @@ import { sitesRouter } from "../modules/sites/sites.routes.js";
 import { rolesRouter } from "../modules/roles/roles.routes.js";
 import { documentsRouter } from "../modules/documents/documents.routes.js";
 import { documentFilesRouter } from "../modules/documents/documents.versions.routes.js";
-import { onlyOfficePublicRouter, onlyOfficeRouter } from "../modules/onlyoffice/onlyoffice.routes.js";
+import { onlyOfficePublicRouter, onlyOfficeRouter, onlyOfficeStatusRouter } from "../modules/onlyoffice/onlyoffice.routes.js";
 import { documentFoldersRouter } from "../modules/document-folders/document-folders.routes.js";
 import { ncrRouter } from "../modules/ncr/ncr.routes.js";
 import { capaRouter } from "../modules/capa/capa.routes.js";
@@ -86,6 +86,8 @@ apiRouter.use("/roles", rolesRouter);
 apiRouter.use("/documents/files", documentFilesRouter);
 // Document Server fetches the file and posts the save callback with a signed token, not a user session, so that router is mounted first.
 apiRouter.use("/onlyoffice", onlyOfficePublicRouter);
+// Before the documents-department router: preview needs this from any signed-in page, not only Documents.
+apiRouter.use("/onlyoffice", onlyOfficeStatusRouter);
 apiRouter.use("/onlyoffice", onlyOfficeRouter);
 apiRouter.use("/documents", documentsRouter);
 apiRouter.use("/document-folders", documentFoldersRouter);

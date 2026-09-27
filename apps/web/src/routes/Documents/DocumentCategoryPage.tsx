@@ -11,7 +11,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
-import { previewKind, saveBytes } from "../../lib/filePreview";
+import { onlyOfficeFile, previewKind, saveBytes } from "../../lib/filePreview";
 import { formatDate } from "../../lib/dates";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { TextField } from "../../components/forms/Field";
@@ -21,7 +21,7 @@ import { ObsoleteArchiveDialog } from "./ObsoleteArchiveDialog";
 /**
  * A single document folder (Drawings, Master Tool List, Shipping, and the other
  * entries that don't have their own module). Files are real controlled documents
- * in that category, with the same upload and ONLYOFFICE/PDF preview the document
+ * in that category, with the same upload and file preview the document
  * library already uses.
  */
 export function DocumentCategoryPage() {
@@ -138,8 +138,9 @@ export function DocumentCategoryPage() {
       setPreview({
         fileName: file.fileName,
         mimeType: file.mimeType,
+        byteSize: file.sizeBytes,
         loadBytes: async () => (await fetchDocumentAttachment(doc.id, versionId, file.id)).bytes,
-        officeSource: kind === "office" ? { kind: "document", documentId: doc.id, versionId, fileId: file.id, viewOnly: true } : undefined,
+        officeSource: onlyOfficeFile(file.fileName, file.mimeType) ? { kind: "document", documentId: doc.id, versionId, fileId: file.id, viewOnly: true } : undefined,
         download: async () => {
           const got = await fetchDocumentAttachment(doc.id, versionId, file.id);
           saveBytes(got.bytes, got.fileName || file.fileName, got.mimeType);
