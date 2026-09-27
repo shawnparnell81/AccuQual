@@ -32,9 +32,9 @@ function importsDir() {
 }
 
 function insideStorage(filePath: string): string {
-  const root = path.resolve(env.STORAGE_LOCAL_PATH);
+  const root = path.resolve(env.STORAGE_LOCAL_PATH) + path.sep;
   const resolved = path.resolve(filePath);
-  if (resolved !== root && !resolved.startsWith(root + path.sep)) throw AppError.notFound("File");
+  if (!resolved.startsWith(root)) throw AppError.notFound("File");
   return resolved;
 }
 
@@ -45,9 +45,8 @@ export const importUpload = multer({
         .then(() => cb(null, importsDir()))
         .catch((err: Error) => cb(err, importsDir()));
     },
-    filename: (_req, file, cb) => {
-      const safe = file.originalname.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-80);
-      cb(null, `${Date.now()}-${randomBytes(4).toString("hex")}-${safe}`);
+    filename: (_req, _file, cb) => {
+      cb(null, `${Date.now()}-${randomBytes(8).toString("hex")}`);
     },
   }),
   limits: { fileSize: env.IMPORT_MAX_BYTES, files: 1 },
@@ -210,20 +209,23 @@ export const uploadImport = asyncHandler(async (req: Request, res: Response) => 
   if (!entry) throw AppError.badRequest("Choose what kind of data this file is.");
   const file = req.file;
   if (!file) throw AppError.badRequest("Choose a CSV or Excel file to import.");
+  const stored = path.resolve(file.path);
+  const root = path.resolve(env.STORAGE_LOCAL_PATH) + path.sep;
+  if (!stored.startsWith(root)) throw AppError.badRequest("That file couldn't be uploaded. Use a CSV or Excel file.");
   const lower = file.originalname.toLowerCase();
   if (!lower.endsWith(".csv") && !lower.endsWith(".xlsx") && !lower.endsWith(".xls")) {
-    await unlink(file.path).catch(() => undefined);
+    await unlink(stored).catch(() => undefined);
     throw AppError.badRequest("Upload a CSV or Excel file (.csv, .xlsx, or .xls).");
   }
 
   const sample: string[][] = [];
   let scanned: { headers: string[]; totalRows: number };
   try {
-    scanned = await scanSpreadsheet(file.path, file.originalname, async (row) => {
+    scanned = await scanSpreadsheet(stored, file.originalname, async (row) => {
       if (sample.length < 5) sample.push(row.cells);
     });
   } catch (err) {
-    await unlink(file.path).catch(() => undefined);
+    await unlink(stored).catch(() => undefined);
     throw err;
   }
 
@@ -233,7 +235,7 @@ export const uploadImport = asyncHandler(async (req: Request, res: Response) => 
     .values({
       entityKey: entry.key,
       fileName: file.originalname,
-      filePath: file.path,
+      filePath: stored,
       fileSize: file.size,
       mimeType: file.mimetype,
       status: "uploaded",

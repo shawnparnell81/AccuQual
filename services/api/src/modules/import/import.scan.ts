@@ -1,7 +1,9 @@
 import { createReadStream } from "node:fs";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import ExcelJS from "exceljs";
 import * as XLSX from "xlsx";
+import { env } from "../../config/env.js";
 import { AppError } from "../../utils/appError.js";
 
 export const MAX_ADMIN_IMPORT_ROWS = 250_000;
@@ -27,7 +29,10 @@ function cellToString(value: unknown): string {
 
 /** Reads one CSV file without holding the whole sheet in memory. Quoted commas and line breaks stay inside the cell. */
 export async function readCsvRows(filePath: string, onRow: (row: ScannedRow) => Promise<void> | void): Promise<void> {
-  const stream = createReadStream(filePath, { encoding: "utf8" });
+  const root = path.resolve(env.STORAGE_LOCAL_PATH) + path.sep;
+  const stored = path.resolve(filePath);
+  if (!stored.startsWith(root)) throw AppError.badRequest("That file couldn't be read. Upload an Excel (.xlsx or .xls) or CSV file.");
+  const stream = createReadStream(stored, { encoding: "utf8" });
   let field = "";
   let cells: string[] = [];
   let inQuotes = false;
@@ -66,7 +71,10 @@ export async function readCsvRows(filePath: string, onRow: (row: ScannedRow) => 
 }
 
 async function readXlsxRows(filePath: string, onRow: (row: ScannedRow) => Promise<void> | void): Promise<void> {
-  const reader = new ExcelJS.stream.xlsx.WorkbookReader(filePath, {
+  const root = path.resolve(env.STORAGE_LOCAL_PATH) + path.sep;
+  const stored = path.resolve(filePath);
+  if (!stored.startsWith(root)) throw AppError.badRequest("That file couldn't be read. Upload an Excel (.xlsx or .xls) or CSV file.");
+  const reader = new ExcelJS.stream.xlsx.WorkbookReader(stored, {
     entries: "emit",
     sharedStrings: "cache",
     hyperlinks: "ignore",
@@ -87,7 +95,10 @@ async function readXlsxRows(filePath: string, onRow: (row: ScannedRow) => Promis
 
 /** Legacy .xls (BIFF). ExcelJS does not read that format. The dependency is the patched SheetJS build, not the unfixed copy on npm. */
 async function readXlsRows(filePath: string, onRow: (row: ScannedRow) => Promise<void> | void): Promise<void> {
-  const book = XLSX.read(await readFile(filePath), { type: "buffer", cellDates: true });
+  const root = path.resolve(env.STORAGE_LOCAL_PATH) + path.sep;
+  const stored = path.resolve(filePath);
+  if (!stored.startsWith(root)) throw AppError.badRequest("That file couldn't be read. Upload an Excel (.xlsx or .xls) or CSV file.");
+  const book = XLSX.read(await readFile(stored), { type: "buffer", cellDates: true });
   const name = book.SheetNames[0];
   if (!name) return;
   const sheet = book.Sheets[name];

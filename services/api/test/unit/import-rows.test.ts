@@ -1,46 +1,70 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
+import { env } from "../../src/config/env.js";
 import { classifyImportRow } from "../../src/modules/import/import.classify.js";
 import { IMPORT_ENTITIES } from "../../src/modules/import/import.entities.js";
 import { scanSpreadsheet } from "../../src/modules/import/import.scan.js";
 import { QUALITY_IMPORT_ENTITIES } from "../../src/modules/import/import.quality.js";
 
+async function importFile(name: string): Promise<{ dir: string; file: string }> {
+  await mkdir(env.STORAGE_LOCAL_PATH, { recursive: true });
+  const dir = await mkdtemp(path.join(env.STORAGE_LOCAL_PATH, "import-test-"));
+  return { dir, file: path.join(dir, name) };
+}
+
 describe("import rows", () => {
   it("reads a CSV in order, including a quoted comma", async () => {
+    const { dir, file } = await importFile("suppliers.csv");
+    try {
+      await writeFile(file, 'Supplier name,Contact email\n"Acme, Inc",a@b.com\nBolt Co,\n');
+      const rows: string[][] = [];
+      const scanned = await scanSpreadsheet(file, "suppliers.csv", async (row) => {
+        rows.push(row.cells);
+      });
+      expect(scanned.headers).toEqual(["Supplier name", "Contact email"]);
+      expect(scanned.totalRows).toBe(2);
+      expect(rows[0]).toEqual(["Acme, Inc", "a@b.com"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a spreadsheet that is not inside storage", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "import-"));
-    const file = path.join(dir, "suppliers.csv");
-    await writeFile(file, 'Supplier name,Contact email\n"Acme, Inc",a@b.com\nBolt Co,\n');
-    const rows: string[][] = [];
-    const scanned = await scanSpreadsheet(file, "suppliers.csv", async (row) => {
-      rows.push(row.cells);
-    });
-    expect(scanned.headers).toEqual(["Supplier name", "Contact email"]);
-    expect(scanned.totalRows).toBe(2);
-    expect(rows[0]).toEqual(["Acme, Inc", "a@b.com"]);
+    try {
+      const file = path.join(dir, "suppliers.csv");
+      await writeFile(file, "Supplier name\nAcme\n");
+      await expect(scanSpreadsheet(file, "suppliers.csv", async () => undefined)).rejects.toThrow(/couldn't be read/i);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it("reads a legacy .xls workbook", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "import-"));
-    const file = path.join(dir, "suppliers.xls");
-    const book = XLSX.utils.book_new();
-    const sheet = XLSX.utils.aoa_to_sheet([
-      ["Supplier name", "Contact email"],
-      ["Acme", "a@b.com"],
-    ]);
-    XLSX.utils.book_append_sheet(book, sheet, "Suppliers");
-    const bytes = XLSX.write(book, { bookType: "biff8", type: "buffer" }) as Uint8Array;
-    await writeFile(file, Buffer.from(bytes));
+    const { dir, file } = await importFile("suppliers.xls");
+    try {
+      const book = XLSX.utils.book_new();
+      const sheet = XLSX.utils.aoa_to_sheet([
+        ["Supplier name", "Contact email"],
+        ["Acme", "a@b.com"],
+      ]);
+      XLSX.utils.book_append_sheet(book, sheet, "Suppliers");
+      const bytes = XLSX.write(book, { bookType: "biff8", type: "buffer" }) as Uint8Array;
+      await writeFile(file, Buffer.from(bytes));
 
-    const rows: string[][] = [];
-    const scanned = await scanSpreadsheet(file, "suppliers.xls", async (row) => {
-      rows.push(row.cells);
-    });
-    expect(scanned.headers).toEqual(["Supplier name", "Contact email"]);
-    expect(scanned.totalRows).toBe(1);
-    expect(rows[0]?.slice(0, 2)).toEqual(["Acme", "a@b.com"]);
+      const rows: string[][] = [];
+      const scanned = await scanSpreadsheet(file, "suppliers.xls", async (row) => {
+        rows.push(row.cells);
+      });
+      expect(scanned.headers).toEqual(["Supplier name", "Contact email"]);
+      expect(scanned.totalRows).toBe(1);
+      expect(rows[0]?.slice(0, 2)).toEqual(["Acme", "a@b.com"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it("validates supplier rows and classifies duplicates for skip, update, and create-only", () => {
