@@ -1,4 +1,5 @@
 import { createReadStream } from "node:fs";
+import { readFile } from "node:fs/promises";
 import ExcelJS from "exceljs";
 import * as XLSX from "xlsx";
 import { AppError } from "../../utils/appError.js";
@@ -84,8 +85,9 @@ async function readXlsxRows(filePath: string, onRow: (row: ScannedRow) => Promis
   }
 }
 
+/** Legacy .xls (BIFF). ExcelJS does not read that format. The dependency is the patched SheetJS build, not the unfixed copy on npm. */
 async function readXlsRows(filePath: string, onRow: (row: ScannedRow) => Promise<void> | void): Promise<void> {
-  const book = XLSX.readFile(filePath, { cellDates: true });
+  const book = XLSX.read(await readFile(filePath), { type: "buffer", cellDates: true });
   const name = book.SheetNames[0];
   if (!name) return;
   const sheet = book.Sheets[name];

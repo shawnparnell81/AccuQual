@@ -2,6 +2,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import * as XLSX from "xlsx";
 import { classifyImportRow } from "../../src/modules/import/import.classify.js";
 import { IMPORT_ENTITIES } from "../../src/modules/import/import.entities.js";
 import { scanSpreadsheet } from "../../src/modules/import/import.scan.js";
@@ -19,6 +20,27 @@ describe("import rows", () => {
     expect(scanned.headers).toEqual(["Supplier name", "Contact email"]);
     expect(scanned.totalRows).toBe(2);
     expect(rows[0]).toEqual(["Acme, Inc", "a@b.com"]);
+  });
+
+  it("reads a legacy .xls workbook", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "import-"));
+    const file = path.join(dir, "suppliers.xls");
+    const book = XLSX.utils.book_new();
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ["Supplier name", "Contact email"],
+      ["Acme", "a@b.com"],
+    ]);
+    XLSX.utils.book_append_sheet(book, sheet, "Suppliers");
+    const bytes = XLSX.write(book, { bookType: "biff8", type: "buffer" }) as Uint8Array;
+    await writeFile(file, Buffer.from(bytes));
+
+    const rows: string[][] = [];
+    const scanned = await scanSpreadsheet(file, "suppliers.xls", async (row) => {
+      rows.push(row.cells);
+    });
+    expect(scanned.headers).toEqual(["Supplier name", "Contact email"]);
+    expect(scanned.totalRows).toBe(1);
+    expect(rows[0]?.slice(0, 2)).toEqual(["Acme", "a@b.com"]);
   });
 
   it("validates supplier rows and classifies duplicates for skip, update, and create-only", () => {
