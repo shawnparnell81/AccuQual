@@ -10,6 +10,7 @@ import { notifyDepartment, notifyRecipients, sendEmail } from "../notifications/
 import { env } from "../../config/env.js";
 import { appRecordUrl } from "../../lib/recordLink.js";
 import type { DiffResult } from "./diff.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 // The shared draft -> review -> publish engine behind workflows, the Management
 // Review record and the Context of the Organization analysis. Everything
@@ -319,7 +320,7 @@ export async function reviewVersion(db: Db, adapter: SubjectAdapter, subjectId: 
   const v = await getVersion(db, adapter, subjectId, versionId);
   if (v.status !== "in_review") throw conflict("Only a version that is in review can be reviewed.");
   const selfReview = v.submittedBy === actor.id;
-  if (selfReview && actor.roleName !== "admin") {
+  if (selfReview && !isFullAccessRole(actor.roleName)) {
     throw AppError.forbidden("You submitted this version, so someone else has to review it.");
   }
   if (decision === "rejected" && !notes?.trim()) throw AppError.badRequest("Say why it is being sent back, so the author knows what to fix.");

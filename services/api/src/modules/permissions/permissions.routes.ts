@@ -8,6 +8,7 @@ import {
   deleteDepartmentPermissionSchema,
   createPermissionRoleSchema,
   updatePermissionRoleSchema,
+  movePermissionRoleSchema,
   upsertRoleModuleSchema,
   createUserRoleSchema,
 } from "./permissions.validation.js";
@@ -20,6 +21,7 @@ import {
   listPermissionRolesHandler,
   createPermissionRoleHandler,
   updatePermissionRoleHandler,
+  movePermissionRoleHandler,
   deletePermissionRoleHandler,
   upsertRoleModuleHandler,
   deleteRoleModuleHandler,
@@ -49,6 +51,7 @@ permissionsRouter.delete("/department-permissions", validate(deleteDepartmentPer
 permissionsRouter.get("/roles", listPermissionRolesHandler);
 permissionsRouter.post("/roles", validate(createPermissionRoleSchema), createPermissionRoleHandler);
 permissionsRouter.patch("/roles/:id", validate(updatePermissionRoleSchema), updatePermissionRoleHandler);
+permissionsRouter.post("/roles/:id/move", validate(movePermissionRoleSchema), movePermissionRoleHandler);
 permissionsRouter.delete("/roles/:id", deletePermissionRoleHandler);
 permissionsRouter.patch("/roles/:id/modules", validate(upsertRoleModuleSchema), upsertRoleModuleHandler);
 permissionsRouter.delete("/roles/:id/modules/:moduleName", deleteRoleModuleHandler);

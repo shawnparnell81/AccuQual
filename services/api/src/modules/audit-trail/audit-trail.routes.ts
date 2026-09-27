@@ -8,6 +8,7 @@ import { withDb } from "../../lib/requestDb.js";
 import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmentAccess.js";
 import { withResolvedActors, attachFieldChanges } from "./audit-trail.service.js";
 import type { Db } from "../../lib/requestDb.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 export const auditTrailRouter = Router();
 
@@ -117,7 +118,7 @@ auditTrailRouter.get(
   "/:entityType/:entityId",
   asyncHandler(async (req, res) => {
     const role = req.user?.roleName;
-    const isAdmin = role === "admin";
+    const isAdmin = isFullAccessRole(role);
     const entityType = req.params.entityType!;
 
     if (!isAdmin) {

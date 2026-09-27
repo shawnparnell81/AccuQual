@@ -12,6 +12,7 @@ import { loadOfficeActor } from "../onlyoffice/access.js";
 import { onlyOfficeSettings } from "../onlyoffice/settings.js";
 import { signOfficeToken } from "../onlyoffice/token.js";
 import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /**
  * ONE generic upload/list/download/delete surface reused by every module —
@@ -114,7 +115,7 @@ export const deleteAttachmentHandler = asyncHandler(async (req: Request, res: Re
   if (!row) throw AppError.notFound("Attachment");
 
   const role = req.user?.roleName;
-  const isAdmin = role === "admin";
+  const isAdmin = isFullAccessRole(role);
   if (!isAdmin && row.uploadedBy !== req.user?.id) throw AppError.forbidden("Only the uploader or an admin can delete this attachment.");
 
   await req.db!.delete(attachments).where(eq(attachments.id, id));

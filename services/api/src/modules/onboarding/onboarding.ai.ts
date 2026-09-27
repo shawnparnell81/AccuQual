@@ -6,6 +6,7 @@ import type { Db } from "../../lib/requestDb.js";
 import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { onboardingPrompt } from "../ai/prompts.js";
 import { checkUsageLimit, loadCompanyLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /**
  * Real, honest descriptions of what each module actually does today — no
@@ -60,7 +61,7 @@ export const onboardingAiGenerateHandler = asyncHandler(async (req: Request, res
   const limitError = await checkUsageLimit(req.db!, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
-  const isAdmin = user.roleName === "admin";
+  const isAdmin = isFullAccessRole(user.roleName);
   const inputData = { department: user.department ?? (isAdmin ? "admin" : null), accessibleModules };
   const result = await callLlmDetailed(onboardingPrompt(inputData), { system: "You are AccuQual's onboarding assistant.", ...llmOptions });
 

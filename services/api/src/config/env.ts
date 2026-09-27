@@ -52,6 +52,8 @@ const envSchema = z.object({
 
   STORAGE_DRIVER: z.enum(["local", "azure"]).default("local"),
   STORAGE_LOCAL_PATH: z.string().default("./uploads"),
+  // Largest spreadsheet an administrator can import. The file is stored on disk and read in chunks.
+  IMPORT_MAX_BYTES: z.coerce.number().int().positive().default(50 * 1024 * 1024),
   AZURE_STORAGE_CONNECTION_STRING: z.string().optional(),
   AZURE_STORAGE_CONTAINER: z.string().default("accuqual-files"),
 

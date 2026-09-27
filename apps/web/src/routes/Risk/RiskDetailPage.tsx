@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isFullAccessRole } from "../../lib/fullAccess";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -43,7 +44,7 @@ export function RiskDetailPage() {
   const toast = useToast();
   const currentUser = useCurrentUser();
   const canEdit = useCanEditWorkflow("risk");
-  const isAdmin = currentUser?.roleName === "admin";
+  const isAdmin = isFullAccessRole(currentUser?.roleName);
 
   const { data: risk, isLoading, isError } = riskHooks.useOne(riskId);
   const historyKey: unknown[][] = [["workflow-history", "risk", riskId]];

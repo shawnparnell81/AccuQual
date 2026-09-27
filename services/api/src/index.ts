@@ -7,6 +7,7 @@ import { startHealthMonitor } from "./modules/monitoring/healthMonitor.js";
 import { startCalibrationSweep } from "./modules/calibration/calibration.service.js";
 import { startTrainingSweep } from "./modules/training/training.service.js";
 import { startQualityAutomationSweep } from "./modules/quality-automation/qualityAutomation.service.js";
+import { failInterruptedImports } from "./modules/import/import.job.js";
 
 // Before anything else can fail, so start-up errors are reported too.
 initSentry();
@@ -29,6 +30,7 @@ app.listen(env.PORT, () => {
   startTrainingSweep();
   // Due-soon, due-today, overdue, and stuck reminders for NCR, CAPA, 8D, and approvals, plus the personal daily digest.
   startQualityAutomationSweep();
+  void failInterruptedImports().catch((err) => logger.error("Could not close interrupted imports", err));
 });
 
 process.on("unhandledRejection", (reason) => {

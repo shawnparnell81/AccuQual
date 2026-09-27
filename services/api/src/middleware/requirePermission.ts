@@ -5,6 +5,7 @@ import { pool } from "../db/index.js";
 import type { Db } from "../lib/requestDb.js";
 import { recordAuditTrailStandalone } from "../modules/audit-trail/audit-trail.service.js";
 import { getUserAccessLevel, type AccessLevel, type ResourceKey } from "./departmentAccess.js";
+import { REVIEWER_ROLES } from "../modules/roles/roleAccess.js";
 
 /**
  * `requirePermission("workflow.edit")` — a "<subject>.<action>" permission
@@ -38,7 +39,7 @@ export type PermissionSubject = keyof typeof PERMISSION_SUBJECTS;
 export type PermissionAction = "view" | "edit" | "review" | "publish" | "manage" | "calibrate" | "override" | "release" | "manageCourses" | "manageSessions" | "evaluate";
 export type PermissionName = `${PermissionSubject}.${PermissionAction}`;
 
-export const REVIEWER_ROLES = new Set(["admin", "quality_manager"]);
+export { REVIEWER_ROLES };
 const EXTERNAL_ROLES = new Set(["customer", "supplier"]);
 
 const NEEDED_LEVEL: Record<PermissionAction, AccessLevel> = { view: "read", edit: "edit", review: "edit", publish: "edit", manage: "edit", calibrate: "edit", override: "edit", release: "edit", manageCourses: "edit", manageSessions: "edit", evaluate: "edit" };
@@ -62,7 +63,7 @@ export async function hasPermission(
   const level = await getUserAccessLevel(db, user, PERMISSION_SUBJECTS[subject].resource);
   if (RANK[level] < RANK[NEEDED_LEVEL[action]]) return { allowed: false, reason: `Requires ${NEEDED_LEVEL[action]} access to ${PERMISSION_SUBJECTS[subject].resource}` };
   if ((action === "review" || action === "publish" || action === "override" || action === "release") && !(user.roleName && REVIEWER_ROLES.has(user.roleName))) {
-    return { allowed: false, reason: action === "override" ? "Overriding a failed calibration requires an admin or quality manager" : action === "release" ? "Releasing or destroying quarantined material requires an admin or quality manager" : "Reviewing and publishing require an admin or quality manager" };
+    return { allowed: false, reason: action === "override" ? "Overriding a failed calibration requires an Owner, Administrator, or Quality Manager" : action === "release" ? "Releasing or destroying quarantined material requires an Owner, Administrator, or Quality Manager" : "Reviewing and publishing require an Owner, Administrator, President, Vice President, or Quality Manager" };
   }
   return { allowed: true };
 }

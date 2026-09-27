@@ -36,6 +36,11 @@ interface Validated<V> {
   identity?: string;
 }
 
+export interface ImportLookups {
+  existing: Set<string>;
+  ids: Map<string, number>;
+}
+
 export interface Created {
   id: number;
   label: string;
@@ -49,9 +54,13 @@ export interface ImportEntity<V = Record<string, unknown>, L = unknown> {
   description: string;
   fields: ImportField[];
   /** Loads what rows are checked against: names that already exist, supplier / role lookups. */
-  prepare(ctx: ImportContext, identities: string[]): Promise<L & { existing: Set<string> }>;
-  validate(raw: Record<string, string>, lookups: L & { existing: Set<string> }): Validated<V>;
-  insert(ctx: ImportContext, value: V, lookups: L & { existing: Set<string> }): Promise<Created>;
+  prepare(ctx: ImportContext, identities: string[]): Promise<L & ImportLookups>;
+  validate(raw: Record<string, string>, lookups: L & ImportLookups): Validated<V>;
+  insert(ctx: ImportContext, value: V, lookups: L & ImportLookups): Promise<Created>;
+  /** Upsert path used by the admin importer. The older import leaves an existing row as an error. */
+  update?(ctx: ImportContext, id: number, value: V, lookups: L & ImportLookups): Promise<Created>;
+  /** Natural key for a raw row. Defaults to the first column, lowercased. */
+  identityOf?(raw: Record<string, string>): string;
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -85,8 +94,11 @@ const supplierEntity: ImportEntity<SupplierValue> = {
     { key: "contactEmail", label: "Contact email", example: "sales@acmefasteners.com", aliases: ["email", "contact", "e-mail"] },
   ],
   async prepare(ctx) {
-    const rows = await ctx.db.select({ name: suppliers.name }).from(suppliers);
-    return { existing: new Set(rows.map((r) => r.name.trim().toLowerCase())) };
+    const rows = await ctx.db.select({ id: suppliers.id, name: suppliers.name }).from(suppliers);
+    return {
+      existing: new Set(rows.map((r) => r.name.trim().toLowerCase())),
+      ids: new Map(rows.map((r) => [r.name.trim().toLowerCase(), r.id])),
+    };
   },
   validate(raw) {
     const errors: string[] = [];
@@ -101,6 +113,13 @@ const supplierEntity: ImportEntity<SupplierValue> = {
     const [created] = await ctx.db.insert(suppliers).values({ name: value.name, contactEmail: value.contactEmail }).returning();
     await recordAuditTrail(ctx.db, { entityType: "Supplier", entityId: created!.id, action: "create", changes: { ...value, source: "excel_import" }, performedBy: ctx.userId });
     return { id: created!.id, label: created!.name };
+  },
+  async update(ctx, id, value) {
+    const patch: { contactEmail?: string } = {};
+    if (value.contactEmail !== undefined) patch.contactEmail = value.contactEmail;
+    await ctx.db.update(suppliers).set(patch).where(eq(suppliers.id, id));
+    await recordAuditTrail(ctx.db, { entityType: "Supplier", entityId: id, action: "update", changes: { ...patch, source: "data_import" }, performedBy: ctx.userId });
+    return { id, label: value.name };
   },
 };
 
@@ -152,14 +171,19 @@ const itemEntity: ImportEntity<ItemValue, { suppliersByName: Map<string, number>
   ],
   async prepare(ctx, identities) {
     const existing = new Set<string>();
+    const ids = new Map<string, number>();
     for (let i = 0; i < identities.length; i += 500) {
       const chunk = identities.slice(i, i + 500);
       if (chunk.length === 0) continue;
-      const found = await ctx.db.select({ sku: inventoryItems.sku }).from(inventoryItems).where(and(inArray(sql`lower(${inventoryItems.sku})`, chunk)));
-      for (const row of found) existing.add(row.sku.trim().toLowerCase());
+      const found = await ctx.db.select({ id: inventoryItems.id, sku: inventoryItems.sku }).from(inventoryItems).where(and(inArray(sql`lower(${inventoryItems.sku})`, chunk)));
+      for (const row of found) {
+        const key = row.sku.trim().toLowerCase();
+        existing.add(key);
+        ids.set(key, row.id);
+      }
     }
     const supplierRows = await ctx.db.select({ id: suppliers.id, name: suppliers.name }).from(suppliers);
-    return { existing, suppliersByName: new Map(supplierRows.map((s) => [s.name.trim().toLowerCase(), s.id])) };
+    return { existing, ids, suppliersByName: new Map(supplierRows.map((s) => [s.name.trim().toLowerCase(), s.id])) };
   },
   validate(raw, lookups) {
     const errors: string[] = [];
@@ -214,6 +238,27 @@ const itemEntity: ImportEntity<ItemValue, { suppliersByName: Map<string, number>
     await recomputeState(ctx.db, created!.id, ctx.userId);
     return { id: created!.id, label: created!.sku };
   },
+  async update(ctx, id, value) {
+    await ctx.db
+      .update(inventoryItems)
+      .set({
+        description: value.description,
+        itemType: value.itemType,
+        unitOfMeasure: value.unitOfMeasure,
+        defaultSupplierId: value.defaultSupplierId,
+        minLevel: String(value.minLevel),
+        maxLevel: value.maxLevel?.toString(),
+        reorderQuantity: value.reorderQuantity?.toString(),
+        leadTimeDays: value.leadTimeDays,
+        unitCost: value.unitCost?.toString(),
+        notes: value.notes,
+        updatedAt: new Date(),
+      })
+      .where(eq(inventoryItems.id, id));
+    await recordAuditTrail(ctx.db, { entityType: "InventoryItem", entityId: id, action: "update", changes: { sku: value.sku, source: "data_import" }, performedBy: ctx.userId });
+    await recomputeState(ctx.db, id, ctx.userId);
+    return { id, label: value.sku };
+  },
 };
 
 // ---------- People ----------
@@ -249,14 +294,19 @@ const peopleEntity: ImportEntity<PersonValue, { rolesByName: Map<string, number>
   ],
   async prepare(ctx, identities) {
     const existing = new Set<string>();
+    const ids = new Map<string, number>();
     for (let i = 0; i < identities.length; i += 500) {
       const chunk = identities.slice(i, i + 500);
       if (chunk.length === 0) continue;
-      const found = await ctx.db.select({ email: users.email }).from(users).where(inArray(sql`lower(${users.email})`, chunk));
-      for (const row of found) existing.add(row.email.toLowerCase());
+      const found = await ctx.db.select({ id: users.id, email: users.email }).from(users).where(inArray(sql`lower(${users.email})`, chunk));
+      for (const row of found) {
+        const key = row.email.toLowerCase();
+        existing.add(key);
+        ids.set(key, row.id);
+      }
     }
     const roleRows = await ctx.db.select({ id: roles.id, name: roles.name }).from(roles);
-    return { existing, rolesByName: new Map(roleRows.map((r) => [r.name.trim().toLowerCase(), r.id])) };
+    return { existing, ids, rolesByName: new Map(roleRows.map((r) => [r.name.trim().toLowerCase(), r.id])) };
   },
   validate(raw, lookups) {
     const errors: string[] = [];
@@ -269,7 +319,7 @@ const peopleEntity: ImportEntity<PersonValue, { rolesByName: Map<string, number>
     if (roleText) {
       roleId = lookups.rolesByName.get(roleText.toLowerCase().replace(/\s+/g, "_")) ?? lookups.rolesByName.get(roleText.toLowerCase());
       if (roleId === undefined) errors.push(`Role "${roleText}" doesn't exist.`);
-      else if (["admin"].includes(roleText.toLowerCase())) errors.push("Admin accounts can't be created by import. Add them one at a time.");
+      else if (["admin", "owner"].includes(roleText.toLowerCase().replace(/\s+/g, "_"))) errors.push("Owner and Admin accounts can't be created by import. Add them one at a time.");
     }
 
     let department: string | undefined;
@@ -294,19 +344,30 @@ const peopleEntity: ImportEntity<PersonValue, { rolesByName: Map<string, number>
     await recordAuditTrail(ctx.db, { entityType: "User", entityId: created!.id, action: "create", changes: { email: value.email, roleId: value.roleId, department: value.department, source: "excel_import" }, performedBy: ctx.userId });
     return { id: created!.id, label: value.email, temporaryPassword };
   },
+  async update(ctx, id, value) {
+    const patch: { name?: string; roleId?: number; department?: string; updatedAt: Date } = { updatedAt: new Date() };
+    if (value.name !== undefined) patch.name = value.name;
+    if (value.roleId !== undefined) patch.roleId = value.roleId;
+    if (value.department !== undefined) patch.department = value.department;
+    await ctx.db.update(users).set(patch).where(eq(users.id, id));
+    await recordAuditTrail(ctx.db, { entityType: "User", entityId: id, action: "update", changes: { email: value.email, roleId: value.roleId, department: value.department, source: "data_import" }, performedBy: ctx.userId });
+    return { id, label: value.email };
+  },
 };
 
-type Lookups = { existing: Set<string> } & Record<string, unknown>;
+type Lookups = ImportLookups & Record<string, unknown>;
 
 /** The shape the controller works with — each entity's own value/lookup types are internal to it. */
 export interface AnyImportEntity {
-  key: EntityKey;
+  key: string;
   label: string;
   description: string;
   fields: ImportField[];
   prepare(ctx: ImportContext, identities: string[]): Promise<Lookups>;
   validate(raw: Record<string, string>, lookups: Lookups): Validated<unknown>;
   insert(ctx: ImportContext, value: unknown, lookups: Lookups): Promise<Created>;
+  update?(ctx: ImportContext, id: number, value: unknown, lookups: Lookups): Promise<Created>;
+  identityOf?(raw: Record<string, string>): string;
 }
 
 export const IMPORT_ENTITIES: Record<EntityKey, AnyImportEntity> = {

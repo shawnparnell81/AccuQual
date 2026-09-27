@@ -6,11 +6,12 @@ import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { notifyDepartment } from "../notifications/notification.service.js";
 import { loadCompanyForSettings, getFeasibilitySettings, requiredDocumentDisplayNames } from "../settings/settings.service.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /** Full-record edit — engineering owns this document; same pattern as risk/workOrders/erp/rma.controller.ts's assertDepartment. */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin") return;
+  if (isFullAccessRole(role)) return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -34,7 +35,7 @@ const SIGNOFF_OWNER: Record<string, string> = {
  */
 function assertSignoffFieldsAllowed(req: Request, body: Record<string, unknown>) {
   const role = req.user?.roleName;
-  if (role === "admin") return;
+  if (isFullAccessRole(role)) return;
   const department = req.user?.department;
   if (department === "engineering") return;
 

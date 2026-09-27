@@ -15,7 +15,7 @@ export const MFA_POLICIES: readonly MfaPolicy[] = ["optional", "admins", "all"];
 const RECOVERY_CODE_COUNT = 10;
 
 /** Roles the "admins" policy covers. */
-const ADMIN_ROLES = new Set(["admin"]);
+const ADMIN_ROLES = new Set(["admin", "owner"]);
 
 export interface MfaEvaluation {
   enabled: boolean;

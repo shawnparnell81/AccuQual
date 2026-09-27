@@ -132,7 +132,7 @@ export async function login(input: { email: string; password: string; rememberMe
   }
 
   // When the company has made single sign-on mandatory, passwords no longer work — except for admins, who keep a break-glass way in if the identity provider is down or misconfigured.
-  if (roleName !== "admin") {
+  if (roleName !== "admin" && roleName !== "owner") {
     const [sso] = await db.select({ enabled: ssoConnections.enabled, enforce: ssoConnections.enforceSso }).from(ssoConnections);
     if (sso?.enabled && sso.enforce) throw AppError.forbidden("Your organization requires single sign-on. Use the Single sign-on option on the sign-in page.");
   }

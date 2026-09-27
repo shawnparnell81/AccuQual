@@ -55,6 +55,8 @@ export const permissionRoles = pgTable(
     id: serial("id").primaryKey(),
     roleName: text("role_name").notNull(),
     description: text("description"),
+    /** Smaller numbers are higher in the organization and are listed first. Same ladder as the system roles table. */
+    hierarchyLevel: integer("hierarchy_level").notNull().default(80),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at"),
   },

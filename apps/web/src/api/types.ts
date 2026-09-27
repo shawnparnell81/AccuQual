@@ -20,6 +20,11 @@ export interface AppRole {
   id: number;
   name: string;
   description: string | null;
+  /** Smaller numbers are higher in the organization and are listed first. */
+  hierarchyLevel?: number;
+  isProtected?: boolean;
+  permissions?: string[];
+  userCount?: number;
 }
 
 /**
@@ -1922,6 +1927,7 @@ export interface PermissionRole {
   id: number;
   roleName: string;
   description: string | null;
+  hierarchyLevel?: number;
   modules: PermissionRoleModuleGrant[];
   memberCount: number;
   createdAt: string;

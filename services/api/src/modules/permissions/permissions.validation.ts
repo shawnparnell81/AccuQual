@@ -20,11 +20,17 @@ export const deleteDepartmentPermissionSchema = z.object({
 export const createPermissionRoleSchema = z.object({
   roleName: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
+  hierarchyLevel: z.number().int().min(1).max(1000).optional(),
 });
 
 export const updatePermissionRoleSchema = z.object({
   roleName: z.string().min(1).max(100).optional(),
   description: z.string().max(500).nullable().optional(),
+  hierarchyLevel: z.number().int().min(1).max(1000).optional(),
+});
+
+export const movePermissionRoleSchema = z.object({
+  direction: z.enum(["up", "down"]),
 });
 
 export const upsertRoleModuleSchema = z.object({

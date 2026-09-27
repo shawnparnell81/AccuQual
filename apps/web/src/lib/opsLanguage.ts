@@ -107,7 +107,7 @@ export const DOC_EDIT_REASON = "Editing a draft is limited to quality, engineeri
 export const TRAINING_MANAGE_REASON = "Assigning training is limited to quality and reviewers.";
 
 export function homeKind(roleName: string | null | undefined): HomeKind {
-  if (roleName === "quality_manager" || roleName === "admin") return "lead";
+  if (roleName === "quality_manager" || roleName === "admin" || roleName === "owner" || roleName === "president" || roleName === "vice_president") return "lead";
   if (roleName === "auditor") return "auditor";
   return "floor";
 }

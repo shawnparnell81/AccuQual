@@ -4,6 +4,7 @@ import { AppError } from "../utils/appError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import type { Db } from "../lib/requestDb.js";
 import { departmentPermissions, permissionRoleModules, userPermissionRoles } from "../drizzle/schema/permissions.js";
+import { isBroadViewRole, isFullAccessRole } from "../modules/roles/roleAccess.js";
 
 export type AccessLevel = "none" | "read" | "edit";
 export type Department =
@@ -185,7 +186,8 @@ export async function getRoleGrantedAccessLevel(db: Db, userId: number, moduleNa
  *      permissionRoleModules row for any permissionRole this user is
  *      assigned to that names this moduleName.
  *
- * admin bypass both sources entirely and always get "edit".
+ * Owner and Administrator bypass both sources entirely and always get "edit".
+ * President and Vice President see every module at least as read.
  * This is a live DB read on every call (no caching) — unlike roleName/
  * department, which are baked into the JWT at login and only change on the
  * next token refresh, a company admin's permission change here takes effect
@@ -196,14 +198,16 @@ export async function getUserAccessLevel(
   user: { id: number; roleName: string | null; department: string | null },
   moduleName: ResourceKey
 ): Promise<AccessLevel> {
-  if (user.roleName === "admin") return "edit";
+  if (isFullAccessRole(user.roleName)) return "edit";
 
   const [deptLevel, roleLevel] = await Promise.all([
     getDepartmentAccessLevel(db, user.department as Department | null, moduleName),
     getRoleGrantedAccessLevel(db, user.id, moduleName),
   ]);
 
-  return higherLevel(deptLevel, roleLevel);
+  const level = higherLevel(deptLevel, roleLevel);
+  if (level === "none" && isBroadViewRole(user.roleName)) return "read";
+  return level;
 }
 
 /**
@@ -216,7 +220,7 @@ export async function getUserAccessLevel(
 export function requireDepartmentAccess(resourceKey: ResourceKey) {
   return asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
     const role = req.user?.roleName;
-    if (role === "admin") return next();
+    if (isFullAccessRole(role)) return next();
     if (!req.user || !req.db) return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
 
     const level = await getUserAccessLevel(req.db as Db, req.user, resourceKey);
@@ -248,7 +252,7 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
 export function requireAnyDepartment(...departments: Department[]) {
   return (req: Request, _res: Response, next: NextFunction) => {
     const role = req.user?.roleName;
-    if (role === "admin") return next();
+    if (isFullAccessRole(role)) return next();
 
     const department = req.user?.department as Department | null | undefined;
     if (department && departments.includes(department)) return next();
@@ -273,7 +277,7 @@ export function requireAnyDepartment(...departments: Department[]) {
  */
 export const requireSupplierPortalAccess = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
   const role = req.user?.roleName;
-  if (role === "admin") return next();
+  if (isFullAccessRole(role)) return next();
 
   if (role === "supplier") {
     if (!req.user?.supplierId) {

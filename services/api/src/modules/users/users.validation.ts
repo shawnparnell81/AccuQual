@@ -19,7 +19,8 @@ export const temporaryPasswordSchema = z.object({
 });
 
 export const updateUserSchema = z.object({
-  name: z.string().optional(),
+  name: z.string().max(200).optional(),
+  email: z.string().email().optional(),
   roleId: z.number().int().nullable().optional(),
   department: departmentSchema.nullable().optional(),
   isActive: z.boolean().optional(),

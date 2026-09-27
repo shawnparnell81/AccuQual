@@ -26,6 +26,7 @@ import {
   AdminSsoPage,
   AdminSupplierSettingsPage,
   AdminSystemHealthPage,
+  AdminImportPage,
   AdminUsersRolesPage,
   AiInsightsPage,
   AuditDetailPage,
@@ -217,6 +218,7 @@ export function App() {
           <Route path="/admin" element={<AdminConsoleLayout />}>
             <Route index element={<AdminConsoleHomePage />} />
             <Route path="users" element={<AdminUsersRolesPage />} />
+            <Route path="import" element={<AdminImportPage />} />
             <Route path="plants" element={<AdminPlantsPage />} />
             <Route path="roles-permissions" element={<RolesPermissionsPage />} />
             <Route path="ai-settings" element={<AdminAiSettingsPage />} />

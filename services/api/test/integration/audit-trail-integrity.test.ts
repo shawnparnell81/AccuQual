@@ -125,13 +125,30 @@ describe("Audit trail integrity (real DB + real HTTP path)", () => {
     });
   });
 
-  describe("deactivating a user", () => {
-    it("leaves an audit entry and a field-level is_active change", async () => {
-      const [target] = await db.insert(users).values({ email: `audit-int-leaver-${suffix}@test.local`, passwordHash: "unused" }).returning();
-      userIds.push(target!.id);
+  describe("removing a user", () => {
+    it("erases an account with no records and logs the delete", async () => {
+      const [target] = await db.insert(users).values({ email: `audit-int-leaver-${suffix}@test.local`, passwordHash: "unused", name: "No History" }).returning();
 
       const res = await request(app).delete(`/users/${target!.id}`).set(auth());
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
+      expect(res.body.outcome).toBe("deleted");
+      expect(await db.select().from(users).where(eq(users.id, target!.id))).toHaveLength(0);
+
+      const entries = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "User"), eq(auditTrail.entityId, target!.id)));
+      expect(entries.some((e) => e.action === "delete" && e.performedBy === adminId)).toBe(true);
+    });
+
+    it("turns off an account that already appears in the audit log and keeps the name", async () => {
+      const [target] = await db.insert(users).values({ email: `audit-int-historian-${suffix}@test.local`, passwordHash: "unused", name: "Has History" }).returning();
+      userIds.push(target!.id);
+      await db.insert(auditTrail).values({ entityType: "NCR", entityId: 1, action: "create", performedBy: target!.id });
+
+      const res = await request(app).delete(`/users/${target!.id}`).set(auth());
+      expect(res.status).toBe(200);
+      expect(res.body.outcome).toBe("deactivated");
+
+      const [still] = await db.select().from(users).where(eq(users.id, target!.id));
+      expect(still).toMatchObject({ isActive: false, name: "Has History" });
 
       const entries = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "User"), eq(auditTrail.entityId, target!.id)));
       expect(entries.some((e) => e.action === "status_change" && (e.changes as { action?: string } | null)?.action === "deactivate" && e.performedBy === adminId)).toBe(true);

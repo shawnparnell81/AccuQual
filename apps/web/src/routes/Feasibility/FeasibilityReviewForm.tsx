@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { isFullAccessRole } from "../../lib/fullAccess";
 import { apiClient } from "../../api/client";
 import { labelForRequiredDocument, useControlledDocuments } from "../../api/documents";
 import { useAuthStore } from "../../store/authStore";
@@ -54,7 +55,7 @@ export function FeasibilityReviewForm({ review }: { review: FeasibilityReview })
   const requiredDocuments = settings?.requiredDocuments ?? [];
   const { data: catalog = [] } = useControlledDocuments(requiredDocuments.length > 0);
 
-  const isAdmin = user?.roleName === "admin";
+  const isAdmin = isFullAccessRole(user?.roleName);
   const canEditRecord = isAdmin || user?.department === "engineering";
   const isFinal = review.status === "final";
 

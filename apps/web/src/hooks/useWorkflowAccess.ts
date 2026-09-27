@@ -26,7 +26,7 @@ export function useWorkflowAccessLevel(navKey: string): AccessLevel {
   const { effective, isLoading } = useEffectivePermissions();
   if (UNGATED_MODULES.has(navKey)) return "edit";
 
-  const isBypass = user?.roleName === "admin";
+  const isBypass = user?.roleName === "admin" || user?.roleName === "owner";
   // admin bypass the matrix entirely, same as
   // requireDepartmentAccess — checked BEFORE the "no nav leaf" fallback
   // below, since a real permission key can exist (and be used for a live

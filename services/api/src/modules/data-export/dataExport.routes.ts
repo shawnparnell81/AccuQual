@@ -17,6 +17,7 @@ import { authRateLimiter } from "../../middleware/rateLimit.js";
 import { confirmIdentity } from "../auth/auth.service.js";
 import { recordAuditTrailStandalone } from "../audit-trail/audit-trail.service.js";
 import { describeExport, newArchive, writeCompanyExport, type ExportFormat } from "./dataExport.service.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /**
  * Company data export. Two steps on purpose:
@@ -121,7 +122,7 @@ dataExportRouter.get(
       .from(users)
       .leftJoin(roles, eq(users.roleId, roles.id))
       .where(and(eq(users.id, Number(payload.sub))));
-    if (!row || !row.isActive || (row.roleName !== "admin")) throw AppError.forbidden("This account can no longer export data.");
+    if (!row || !row.isActive || (!isFullAccessRole(row.roleName))) throw AppError.forbidden("This account can no longer export data.");
     if (running.has(COMPANY_KEY)) throw new AppError("An export is already running.", 409);
 
     running.add(COMPANY_KEY);

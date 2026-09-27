@@ -98,6 +98,7 @@ export const RolesPermissionsPage = lazyNamed("/admin/roles-permissions", () => 
 export const AdminConsoleLayout = lazyNamed("/admin", () => import("./Admin/AdminConsoleLayout"), "AdminConsoleLayout");
 export const AdminConsoleHomePage = lazyNamed("/admin", () => import("./Admin/AdminConsoleHomePage"), "AdminConsoleHomePage");
 export const AdminUsersRolesPage = lazyNamed("/admin/users", () => import("./Admin/AdminUsersRolesPage"), "AdminUsersRolesPage");
+export const AdminImportPage = lazyNamed("/admin/import", () => import("./Admin/AdminImportPage"), "AdminImportPage");
 export const AdminPlantsPage = lazyNamed("/admin/plants", () => import("./Admin/AdminPlantsPage"), "AdminPlantsPage");
 export const AdminAiSettingsPage = lazyNamed("/admin/ai-settings", () => import("./Admin/AdminAiSettingsPage"), "AdminAiSettingsPage");
 export const AdminSupplierSettingsPage = lazyNamed("/admin/supplier-settings", () => import("./Admin/AdminSupplierSettingsPage"), "AdminSupplierSettingsPage");

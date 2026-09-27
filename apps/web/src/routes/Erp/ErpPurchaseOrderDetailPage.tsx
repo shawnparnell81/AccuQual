@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isFullAccessRole } from "../../lib/fullAccess";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -169,8 +170,8 @@ function ReceivingLineItemRow({ lineItem, po }: { lineItem: ErpReceivingLineItem
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const currentUser = useCurrentUser();
-  const isQuality = currentUser?.department === "quality" || currentUser?.roleName === "admin";
-  const isMaterialMgmt = currentUser?.department === "material_management" || currentUser?.roleName === "admin";
+  const isQuality = currentUser?.department === "quality" || isFullAccessRole(currentUser?.roleName);
+  const isMaterialMgmt = currentUser?.department === "material_management" || isFullAccessRole(currentUser?.roleName);
 
   const transition = useMutation({
     mutationFn: async (status: ReceivingLineItemStatus) => (await apiClient.post(`/erp/receiving-line-items/${lineItem.id}/status`, { status })).data,
@@ -241,7 +242,7 @@ export function ErpPurchaseOrderDetailPage() {
   const { data: po, isLoading, isError } = poHooks.useOne(poId);
   const { data: receivingDocs = [] } = useReceivingDocuments(poId);
   const currentUser = useCurrentUser();
-  const canReceive = currentUser?.roleName === "admin" || currentUser?.department === "material_management";
+  const canReceive = isFullAccessRole(currentUser?.roleName) || currentUser?.department === "material_management";
   const [receiptOpen, setReceiptOpen] = useState(false);
   const historyKey: unknown[][] = [["workflow-history", "erp", poId]];
 
