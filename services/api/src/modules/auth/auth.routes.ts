@@ -4,7 +4,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requireCsrfHeader } from "../../middleware/csrf.js";
 import { authRateLimiter, refreshRateLimiter } from "../../middleware/rateLimit.js";
 import { loginSchema, forgotPasswordSchema, resetPasswordSchema, mfaVerifySchema, mfaEnrollStartSchema, mfaEnrollConfirmSchema, mfaEnableSchema, mfaReverifySchema } from "./auth.validation.js";
-import { loginHandler, refreshHandler, logoutHandler, meHandler, forgotPasswordHandler, resetPasswordHandler, mfaVerifyHandler, mfaEnrollStartHandler, mfaEnrollConfirmHandler, mfaStatusHandler, mfaSetupHandler, mfaEnableHandler, mfaDisableHandler, mfaRecoveryCodesHandler } from "./auth.controller.js";
+import { loginHandler, refreshHandler, logoutHandler, meHandler, forgotPasswordHandler, resetPasswordHandler, mfaVerifyHandler, mfaEnrollStartHandler, mfaEnrollConfirmHandler, mfaStatusHandler, mfaSetupHandler, mfaEnableHandler, mfaDisableHandler, mfaRecoveryCodesHandler, listTrustedDevicesHandler, revokeTrustedDeviceHandler, revokeAllTrustedDevicesHandler } from "./auth.controller.js";
 
 export const authRouter = Router();
 
@@ -36,3 +36,7 @@ authRouter.post("/mfa/setup", requireAuth, mfaSetupHandler);
 authRouter.post("/mfa/enable", requireAuth, validate(mfaEnableSchema), mfaEnableHandler);
 authRouter.post("/mfa/disable", requireAuth, authRateLimiter, validate(mfaReverifySchema), mfaDisableHandler);
 authRouter.post("/mfa/recovery-codes", requireAuth, authRateLimiter, validate(mfaReverifySchema), mfaRecoveryCodesHandler);
+
+authRouter.get("/trusted-devices", requireAuth, listTrustedDevicesHandler);
+authRouter.post("/trusted-devices/forget-all", requireAuth, revokeAllTrustedDevicesHandler);
+authRouter.delete("/trusted-devices/:id", requireAuth, revokeTrustedDeviceHandler);

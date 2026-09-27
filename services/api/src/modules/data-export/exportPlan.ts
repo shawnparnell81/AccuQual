@@ -13,6 +13,7 @@ export const EXCLUDED_TABLES: Record<string, string> = {
   refresh_tokens: "Sign-in session bookkeeping. It only holds credentials and is not part of your records.",
   password_reset_tokens: "Password-reset bookkeeping. It only holds credentials and is not part of your records.",
   mfa_recovery_codes: "Two-step sign-in recovery codes. They are credentials and are never exported.",
+  trusted_devices: "Browsers trusted to skip the authenticator code. This only holds credentials and is not part of your records.",
 };
 
 /** Column names that could carry a credential. Withheld from every table, and their names listed in the manifest. */

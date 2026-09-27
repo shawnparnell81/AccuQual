@@ -28,37 +28,25 @@ export interface RefreshTokenPayload {
   // existed doesn't throw on a missing key — every new token this app
   // issues from here on always sets it.
   jti?: string;
-  // Set when the user ticked "Remember me" — the session lives (and may sit idle) for REMEMBER_ME_TTL instead of the normal limits.
+  // Older tokens may still carry this. It no longer changes how long a session lasts.
   rm?: boolean;
 }
+
+/** Fixed sign-in window for everyone. Activity does not extend it, and closing the browser does not end it early. */
+export const SESSION_MAX_MS = 12 * 60 * 60 * 1000;
 
 export function signAccessToken(payload: AccessTokenPayload): string {
   const options: SignOptions = { expiresIn: env.JWT_ACCESS_TTL as SignOptions["expiresIn"] };
   return jwt.sign(payload, env.JWT_ACCESS_SECRET, options);
 }
 
-export function signRefreshToken(payload: RefreshTokenPayload): string {
-  const options: SignOptions = { expiresIn: (payload.rm ? env.REMEMBER_ME_TTL : env.JWT_REFRESH_TTL) as SignOptions["expiresIn"] };
+/** `expiresAt` is the absolute end of the sign-in. Omitted only for callers that are not a real session (rate-limit tests); those get a token that dies in 12 hours. */
+export function signRefreshToken(payload: RefreshTokenPayload, expiresAt?: Date): string {
+  const end = expiresAt ?? new Date(Date.now() + SESSION_MAX_MS);
+  const seconds = Math.max(1, Math.floor((end.getTime() - Date.now()) / 1000));
+  const options: SignOptions = { expiresIn: seconds };
   return jwt.sign(payload, env.JWT_REFRESH_SECRET, options);
 }
-
-// jsonwebtoken's own `ms`-style vocabulary (env.ts's JWT_REFRESH_TTL) —
-// reused here so the refresh cookie's Max-Age tracks the same TTL as the
-// token it holds, without adding a dependency on the transitive `ms`
-// package. Falls back to 7 days on a format this doesn't recognize (e.g. a
-// bare "cookie" value some future TTL string might use) rather than
-// crashing the auth module over a cookie's UX-only expiry hint — the JWT's
-// own signature is still what actually enforces expiry.
-function parseDurationMs(ttl: string): number {
-  const match = /^(\d+)\s*(s|m|h|d)?$/i.exec(ttl.trim());
-  if (!match) return 7 * 24 * 60 * 60 * 1000;
-  const value = Number(match[1]);
-  const unitMs = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 }[match[2]?.toLowerCase() ?? "s"] ?? 1000;
-  return value * unitMs;
-}
-
-export const REFRESH_TOKEN_TTL_MS = parseDurationMs(env.JWT_REFRESH_TTL);
-export const REMEMBER_ME_TTL_MS = parseDurationMs(env.REMEMBER_ME_TTL);
 
 export function verifyAccessToken(token: string): AccessTokenPayload {
   return jwt.verify(token, env.JWT_ACCESS_SECRET) as AccessTokenPayload;
