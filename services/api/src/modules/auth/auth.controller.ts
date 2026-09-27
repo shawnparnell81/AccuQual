@@ -3,7 +3,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { env } from "../../config/env.js";
 import * as authService from "./auth.service.js";
-import { hashTrustedDeviceToken, listTrustedDevices, revokeAllTrustedDevices, revokeTrustedDevice, TRUSTED_DEVICE_TTL_MS } from "./trustedDevice.service.js";
+import { decryptDeviceCookie, encryptDeviceCookie, hashTrustedDeviceToken, listTrustedDevices, revokeAllTrustedDevices, revokeTrustedDevice, TRUSTED_DEVICE_TTL_MS } from "./trustedDevice.service.js";
 
 // Full-System Audit finding B2: the refresh token used to be a plain field
 // in the login/refresh JSON response, which the frontend then had
@@ -65,34 +65,30 @@ function clearRefreshCookie(res: Response) {
   res.clearCookie(CSRF_MARKER_COOKIE_NAME, sessionCookieOptions());
 }
 
-/**
- * Persistent for the same 30 days the server-side row expires. Not renewed on later sign-ins.
- * The value is a random bearer secret. The database stores only its SHA-256 hash, so a copy of
- * the database is not enough to skip the authenticator code. The cookie has to hold that secret
- * or the browser could not present it. Encrypting it would not help: whoever has the cookie can
- * still send it back, and the server would decrypt it. httpOnly is set on this call.
- * Secure is on in production. Local sign-in is plain HTTP, which cannot use the Secure flag.
- */
+/** Persistent for the same 30 days the server-side row expires. Not renewed on later sign-ins. The value written here is encrypted. SameSite is Lax because this cookie is only needed on this site's own sign-in request. */
 export function setTrustedDeviceCookie(res: Response, token: string) {
-  const sameSite = env.NODE_ENV === "production" ? "none" : "lax";
-  // codeql[js/clear-text-storage-of-sensitive-data]
-  // codeql[js/clear-text-cookie]
-  res.cookie(TRUSTED_DEVICE_COOKIE_NAME, token, {
+  res.cookie(TRUSTED_DEVICE_COOKIE_NAME, encryptDeviceCookie(token), {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
-    sameSite,
+    sameSite: "lax",
     path: "/",
     maxAge: TRUSTED_DEVICE_TTL_MS,
   });
 }
 
 function clearTrustedDeviceCookie(res: Response) {
-  res.clearCookie(TRUSTED_DEVICE_COOKIE_NAME, sessionCookieOptions());
+  res.clearCookie(TRUSTED_DEVICE_COOKIE_NAME, {
+    httpOnly: true,
+    secure: env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+  });
 }
 
 function trustedDeviceCookie(req: Request): string | undefined {
   const value = req.cookies?.[TRUSTED_DEVICE_COOKIE_NAME];
-  return typeof value === "string" && value.length > 0 ? value : undefined;
+  if (typeof value !== "string" || value.length === 0) return undefined;
+  return decryptDeviceCookie(value);
 }
 
 /**

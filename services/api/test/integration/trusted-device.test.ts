@@ -127,11 +127,13 @@ describe("trusted devices (real DB + real HTTP path)", () => {
     const lowered = cookie!.toLowerCase();
     expect(lowered).toContain("httponly");
     expect(lowered).toContain("path=/");
+    expect(lowered).toContain("samesite=lax");
     expect(lowered).not.toContain("domain=");
     expect(lowered).toContain("max-age=2592000");
     expect(lowered).not.toContain("secure");
     const raw = cookieValue(cookie!, TRUSTED_DEVICE_COOKIE_NAME);
     expect(raw.length).toBeGreaterThan(32);
+    expect(raw.split(".")).toHaveLength(3);
 
     const [stored] = await db.select().from(trustedDevices).where(eq(trustedDevices.userId, user.id));
     expect(stored!.tokenHash).not.toBe(raw);

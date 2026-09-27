@@ -1,5 +1,6 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { env } from "../../config/env.js";
 import { db } from "../../db/index.js";
 import { trustedDevices } from "../../drizzle/schema/trustedDevices.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -10,6 +11,31 @@ export const TRUSTED_DEVICE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export function hashTrustedDeviceToken(rawToken: string): string {
   return createHash("sha256").update(rawToken).digest("hex");
+}
+
+function deviceCookieKey(): Buffer {
+  return createHash("sha256").update(`accuqual-device-cookie:${env.JWT_REFRESH_SECRET}`).digest();
+}
+
+/** Ciphertext for the browser cookie. The database stores only a hash of the plaintext. A value that does not decrypt asks for the authenticator code again. */
+export function encryptDeviceCookie(plaintext: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", deviceCookieKey(), iv);
+  const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return `${iv.toString("base64url")}.${authTag.toString("base64url")}.${ciphertext.toString("base64url")}`;
+}
+
+export function decryptDeviceCookie(stored: string): string | undefined {
+  const [iv, authTag, ciphertext] = stored.split(".");
+  if (!iv || !authTag || !ciphertext) return undefined;
+  try {
+    const decipher = createDecipheriv("aes-256-gcm", deviceCookieKey(), Buffer.from(iv, "base64url"));
+    decipher.setAuthTag(Buffer.from(authTag, "base64url"));
+    return Buffer.concat([decipher.update(Buffer.from(ciphertext, "base64url")), decipher.final()]).toString("utf8");
+  } catch {
+    return undefined;
+  }
 }
 
 /** A short label for the settings list. The raw User-Agent string is not stored. */
