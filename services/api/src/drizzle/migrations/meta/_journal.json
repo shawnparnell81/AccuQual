@@ -526,6 +526,13 @@
       "when": 1790373928726,
       "tag": "0074_single_company",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1790460792124,
+      "tag": "0075_trusted_devices",
+      "breakpoints": true
     }
   ]
 }

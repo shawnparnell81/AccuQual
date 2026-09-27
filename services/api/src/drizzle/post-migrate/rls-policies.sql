@@ -32,7 +32,7 @@ BEGIN
 END $$;
 
 -- One policy per ordinary table. Left out on purpose: the audit tables (audit-triggers.sql gives them narrower ones),
--- roles (read-only, below) and the three credential tables (deny-all, below).
+-- roles (read-only, below) and the credential tables (deny-all, below).
 DO $$
 DECLARE
   t text;
@@ -40,7 +40,7 @@ BEGIN
   FOR t IN
     SELECT tablename FROM pg_tables
     WHERE schemaname = 'public'
-      AND tablename NOT IN ('audit_trail', 'audit_row_changes', 'roles', 'refresh_tokens', 'mfa_recovery_codes', 'password_reset_tokens')
+      AND tablename NOT IN ('audit_trail', 'audit_row_changes', 'roles', 'refresh_tokens', 'mfa_recovery_codes', 'password_reset_tokens', 'trusted_devices')
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('DROP POLICY IF EXISTS app_access ON %I', t);
@@ -71,6 +71,11 @@ CREATE POLICY owner_only ON mfa_recovery_codes
 ALTER TABLE password_reset_tokens ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS owner_only ON password_reset_tokens;
 CREATE POLICY owner_only ON password_reset_tokens
+  USING (false)
+  WITH CHECK (false);
+ALTER TABLE trusted_devices ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS owner_only ON trusted_devices;
+CREATE POLICY owner_only ON trusted_devices
   USING (false)
   WITH CHECK (false);
 

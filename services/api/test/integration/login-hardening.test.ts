@@ -1,9 +1,9 @@
 import { ensureTestCompany } from "../helpers/company.js";
 // Real-DB integration test (see company-isolation.test.ts's header comment).
 // Login hardening: lockout after repeated wrong passwords (audited, cleared by
-// a good login / reset / admin unlock), the password policy, the idle
-// timeout, and session revocation when a user is disabled or has their role
-// changed — including that an already-issued access token stops working at once.
+// a good login / reset / admin unlock), the password policy, the fixed
+// 12-hour sign-in, and session revocation when a user is disabled or has their
+// role changed — including that an already-issued access token stops working at once.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import bcrypt from "bcryptjs";
 import request from "supertest";
@@ -159,15 +159,24 @@ describe("Login hardening (real DB + real HTTP path)", () => {
   });
 
   describe("sessions", () => {
-    it("ends a session that has been idle longer than the timeout", async () => {
+    it("does not end a session just because it has been idle", async () => {
       const u = await makeUser("idle");
       const agent = request.agent(app);
       const res = await agent.post("/auth/login").send({ email: u.email, password: GOOD });
       expect(res.status).toBe(200);
-      await db.update(refreshTokens).set({ createdAt: new Date(Date.now() - (env.SESSION_IDLE_TIMEOUT_MINUTES + 5) * 60_000) }).where(eq(refreshTokens.userId, u.id));
+      await db.update(refreshTokens).set({ createdAt: new Date(Date.now() - 3 * 60 * 60_000) }).where(eq(refreshTokens.userId, u.id));
+      expect((await agent.post("/auth/refresh").set(CSRF)).status).toBe(200);
+    });
+
+    it("ends a session once 12 hours have passed since sign-in", async () => {
+      const u = await makeUser("expired12h");
+      const agent = request.agent(app);
+      const res = await agent.post("/auth/login").send({ email: u.email, password: GOOD });
+      expect(res.status).toBe(200);
+      await db.update(refreshTokens).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(refreshTokens.userId, u.id));
       const refreshed = await agent.post("/auth/refresh").set(CSRF);
       expect(refreshed.status).toBe(401);
-      expect(refreshed.body.message).toMatch(/inactivity/);
+      expect(refreshed.body.message).toMatch(/12 hours/);
     });
 
     it("keeps a recently used session alive", async () => {

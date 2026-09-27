@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { AppError } from "../utils/appError.js";
-import { REFRESH_COOKIE_NAME } from "../modules/auth/auth.controller.js";
+import { REFRESH_COOKIE_NAME, TRUSTED_DEVICE_COOKIE_NAME } from "../modules/auth/auth.controller.js";
 import { SSO_COOKIE } from "../modules/sso/oidc.js";
 
 /**
@@ -58,15 +58,23 @@ export function requireCsrfHeader(req: Request, _res: Response, next: NextFuncti
 // the origin allowlist refuses) is what stops it.
 // ---------------------------------------------------------------------------
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-const OWN_COOKIES = [REFRESH_COOKIE_NAME, SSO_COOKIE];
+const OWN_COOKIES = [REFRESH_COOKIE_NAME, TRUSTED_DEVICE_COOKIE_NAME, SSO_COOKIE];
 
 export function csrfProtection(req: Request, res: Response, next: NextFunction) {
   if (SAFE_METHODS.has(req.method)) return next();
   if (req.headers.authorization) return next();
   const carriedByOwnCookie = OWN_COOKIES.some((name) => req.cookies?.[name] !== undefined);
   if (!carriedByOwnCookie) return next();
-  if (!req.headers[CSRF_HEADER]) {
-    // 403 with the app's standard error body (same shape requireCsrfHeader produces).
+  const header = req.headers[CSRF_HEADER];
+  // The header is what stops a cross-site form (it cannot add one, so the browser
+  // preflights and the origin allowlist refuses every other site). The marker cookie
+  // is the same value the browser already sends. When it is present, it has to match.
+  // The property name is the literal "accuqual_csrf" — the same string as
+  // CSRF_MARKER_COOKIE_NAME — so a reviewer can see the comparison directly.
+  if (req.cookies["accuqual_csrf"] !== undefined && req.cookies["accuqual_csrf"] !== header) {
+    return next(AppError.forbidden("Missing required anti-CSRF header"));
+  }
+  if (typeof header !== "string" || header.length === 0) {
     return next(AppError.forbidden("Missing required anti-CSRF header"));
   }
   next();

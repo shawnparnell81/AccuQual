@@ -100,3 +100,4 @@ CREATE INDEX IF NOT EXISTS permission_role_modules_role_idx ON permission_role_m
 CREATE INDEX IF NOT EXISTS password_reset_tokens_hash_idx ON password_reset_tokens (token_hash);
 CREATE INDEX IF NOT EXISTS password_reset_tokens_user_idx ON password_reset_tokens (user_id);
 CREATE INDEX IF NOT EXISTS mfa_recovery_codes_user_idx ON mfa_recovery_codes (user_id);
+CREATE INDEX IF NOT EXISTS trusted_devices_user_idx ON trusted_devices (user_id);
