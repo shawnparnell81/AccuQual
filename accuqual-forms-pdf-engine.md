@@ -201,39 +201,3 @@ export const formVersions = pgTable("form_versions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 ```
-
----
-
-# 8. TODOs for Claude
-
-### PDF Engine TODOs
-- TODO: Scaffold PDF.js viewer
-- TODO: Scaffold AcroForm field overlay system
-- TODO: Scaffold form field → DB mapping
-- TODO: Scaffold auto‑save service
-- TODO: Scaffold versioning service
-- TODO: Scaffold export service
-
-### Multi‑Window TODOs
-- TODO: Create window manager component
-- TODO: Create window state store (Zustand)
-- TODO: Create draggable/resizable window UI
-- TODO: Create workspace persistence system
-
-### Backend TODOs
-- TODO: Create form service
-- TODO: Create form endpoints
-- TODO: Create form versioning logic
-- TODO: Create PDF merge/export logic
-
-### Frontend TODOs
-- TODO: Create PDF viewer component
-- TODO: Create form editor component
-- TODO: Create version history UI
-- TODO: Create AI suggestion panel
-
-### Database TODOs
-- TODO: Create form_data table
-- TODO: Create form_versions table
-- TODO: Create indexes for formType + entityId
-

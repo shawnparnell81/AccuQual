@@ -1,4 +1,4 @@
-/* AccuQual QMS landing page. Vanilla JS, no dependencies. */
+
 (function(){
   "use strict";
   var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -6,19 +6,17 @@
   var $$ = function(s,c){return Array.prototype.slice.call((c||document).querySelectorAll(s))};
   var yr=$("#yr"); if(yr) yr.textContent=new Date().getFullYear();
 
-  /* ---------- nav state ---------- */
   var nav=$("#nav");
   function onScroll(){ nav.classList.toggle("scrolled", window.scrollY>30); }
   window.addEventListener("scroll",onScroll,{passive:true}); onScroll();
 
-  /* ---------- reveal on scroll ---------- */
   var reveals=$$(".reveal");
   if(!("IntersectionObserver" in window) || reduce){ reveals.forEach(function(el){el.classList.add("in")}); }
   else{
     var io=new IntersectionObserver(function(entries){
       entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target);} });
     },{threshold:.12,rootMargin:"0px 0px -40px 0px"});
-    // stagger siblings
+
     reveals.forEach(function(el){
       var sib=$$(":scope > .reveal", el.parentElement); var i=sib.indexOf(el);
       if(i>0) el.style.setProperty("--d",(Math.min(i,6)*0.08)+"s");
@@ -26,7 +24,6 @@
     });
   }
 
-  /* ---------- starfield + parallax ---------- */
   var canvas=$("#stars"), ctx=canvas && canvas.getContext("2d");
   var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2), stars=[], motes=[];
   var mouse={x:.5,y:.5,tx:.5,ty:.5,px:-999,py:-999};
@@ -49,12 +46,12 @@
       if(x<-20||x>W+20||y<-20||y>H+20){ stars[i]=newStar(false); continue; }
       var a=Math.min(1,(1-s.z)*1.3)*(0.6+0.4*Math.sin(t*.002+s.tw)), r=(1-s.z)*2.1+.2;
       ctx.fillStyle="rgba("+s.hue+","+a.toFixed(3)+")";
-      if(!still && (s.z<.25 || warp>.15)){ // warp streak
+      if(!still && (s.z<.25 || warp>.15)){
         var k2=0.9/(s.z+speed*(6+30*warp)), x2=cx+s.x*k2*W*.5, y2=cy+s.y*k2*H*.5;
         ctx.strokeStyle="rgba("+s.hue+","+(a*.45).toFixed(3)+")"; ctx.lineWidth=Math.max(.6,r*.6); ctx.beginPath(); ctx.moveTo(x2,y2); ctx.lineTo(x,y); ctx.stroke();
       } else { ctx.beginPath(); ctx.arc(x,y,r,0,6.283); ctx.fill(); }
     }
-    // measurement-point motes that connect near the cursor
+
     for(var j=0;j<motes.length;j++){
       var m=motes[j];
       if(!still){ m.x+=m.vx; m.y+=m.vy; if(m.x<0||m.x>W) m.vx*=-1; if(m.y<0||m.y>H) m.vy*=-1; }
@@ -67,7 +64,7 @@
       ctx.fillStyle="rgba("+m.c+","+(d<170?.95:.45)+")";
       ctx.fillRect(m.x-1.5,m.y-1.5,3,3);
     }
-    if(mouse.px>0){ // crosshair reticle
+    if(mouse.px>0){
       ctx.strokeStyle="rgba(0,243,255,.55)"; ctx.lineWidth=1;
       ctx.beginPath(); ctx.arc(mouse.px,mouse.py,14,0,6.283); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(mouse.px-24,mouse.py); ctx.lineTo(mouse.px-8,mouse.py); ctx.moveTo(mouse.px+8,mouse.py); ctx.lineTo(mouse.px+24,mouse.py);
@@ -104,12 +101,10 @@
   }
   function fmt(v){ var s=v<0?"−":"+"; v=Math.abs(v); var a=v.toFixed(3); while(a.length<7) a="0"+a; return s+a; }
 
-  /* ---------- card spotlight ---------- */
   $$(".mod,.glass").forEach(function(c){
     c.addEventListener("pointermove",function(e){ var r=c.getBoundingClientRect(); c.style.setProperty("--mx",(e.clientX-r.left)+"px"); c.style.setProperty("--my",(e.clientY-r.top)+"px"); });
   });
 
-  /* ---------- CMM scan demo (illustrative values) ---------- */
   var pts=[
     {f:"Datum A edge",x:80,y:150,n:"0.000",d:0.004},{f:"Top edge P1",x:200,y:90,n:"0.000",d:-0.006},{f:"Top edge P2",x:330,y:90,n:"0.000",d:0.009},
     {f:"Chamfer P1",x:500,y:140,n:"0.000",d:0.012},{f:"Chamfer P2",x:545,y:185,n:"0.000",d:0.027},{f:"Right face",x:572,y:280,n:"0.000",d:-0.003},
@@ -179,15 +174,13 @@
     });
     $("#scanReset").addEventListener("click",resetScan);
     resetScan();
-    // autoplay once when scrolled into view
+
     if("IntersectionObserver" in window){
       var so=new IntersectionObserver(function(e){ if(e[0].isIntersecting){ so.disconnect(); if(!running&&idx===0) runBtn.click(); } },{threshold:.45});
       so.observe($(".scan-stage"));
     }
   }
 
-
-  /* ---- manual probing: drag the probe onto edges/bores (illustrative) ---- */
   (function(){
     var svg=$("#scanSvg"), viz=$(".scan-viz"), hint=$("#dragHint"); if(!svg||!probe) return;
     var cands=[], taken=[], path=$("#partPath"), L=path.getTotalLength();
@@ -222,7 +215,7 @@
     });
     function end(e){ if(!dragging||e.pointerId!==pid) return; dragging=false; viz.classList.remove("dragging"); }
     probe.addEventListener("pointerup",end); probe.addEventListener("pointercancel",end);
-    // keyboard: arrows nudge probe
+
     probe.addEventListener("keydown",function(e){ var m={ArrowLeft:[-8,0],ArrowRight:[8,0],ArrowUp:[0,-8],ArrowDown:[0,8]}[e.key]; if(!m) return; e.preventDefault();
       var fake={pointerId:"kb",clientX:0,clientY:0}; dragging=true; pid="kb";
       var x=pos.x+m[0], y=pos.y+m[1], sc=svg.getScreenCTM(); fake.clientX=sc.a*x+sc.e; fake.clientY=sc.d*y+sc.f;
@@ -230,7 +223,6 @@
     $("#scanReset").addEventListener("click",function(){ taken=[]; manualN=0; if(hint) hint.hidden=false; });
   })();
 
-  /* ---------- tab helper ---------- */
   function tabs(container, attr, onSel){
     var btns=$$("button",container);
     btns.forEach(function(b,i){
@@ -241,7 +233,6 @@
     sel(0);
   }
 
-  /* ---------- plant switcher (illustrative) ---------- */
   var plantData=[{i:7,f:4,g:12,d:3},{i:3,f:2,g:5,d:6},{i:11,f:7,g:9,d:1}];
   var ps=$("#plants .plant-switch");
   if(ps) tabs(ps,"data-plant",function(i){
@@ -250,7 +241,6 @@
     });
   });
 
-  /* ---------- role-aware home (illustrative) ---------- */
   var roleData=[
     [["pill bad","Issue","Fix overdue: burr on bore edge","9 days"],["pill amb","Doc","Control plan waiting on your approval","3 days"],["pill amb","Gauge","2 gauges go overdue this week","Due Fri"],["pill bad","Supplier","Supplier response past due","5 days"]],
     [["pill bad","Issue","Suspect parts on Line 2 need a disposition","Today"],["pill amb","Training","3 people not yet trained on WI rev C","Due Mon"],["pill cy","Audit","Layered audit for Line 2 scheduled","Thu"],["pill amb","Fix","Containment check waiting on you","2 days"]],
@@ -261,7 +251,6 @@
     stuck.innerHTML=roleData[i].map(function(r,j){ return "<li style='animation-delay:"+(j*60)+"ms'><span><span class='"+r[0]+"'>"+r[1]+"</span>"+r[2]+"</span><span class='age'>"+r[3]+"</span></li>"; }).join("");
   });
 
-  /* ---------- loop ---------- */
   var steps=[
     ["Issue","Someone spots a problem: a bad part, a customer complaint, an audit finding. It’s logged in seconds with photos, quantities, and where it happened."],
     ["Contain","Stop the bleeding first. Quarantine suspect stock, sort, and record what was checked so nothing bad ships while you dig in."],
@@ -296,7 +285,6 @@
     }
   }
 
-  /* ---------- gallery: gentle tilt + expand-to-lightbox ---------- */
   var lb=$("#lightbox"), lbImg=lb&&$("img",lb), lastFocus=null;
   var fineHover=window.matchMedia("(hover:hover) and (pointer:fine)").matches;
   $$(".gx").forEach(function(f){
@@ -304,7 +292,7 @@
     if(stage) f.addEventListener("pointermove",function(e){
       var r=stage.getBoundingClientRect(), px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
       stage.style.setProperty("--gx",(px*100)+"%"); stage.style.setProperty("--gy",(py*100)+"%");
-      // toned-down tilt: mouse only, off while dragging, off for the probe playground
+
       if(reduce || !fineHover || e.pointerType!=="mouse" || !f.classList.contains("tilt") || f.classList.contains("gx-busy")){ return; }
       var fr=f.getBoundingClientRect(), qx=(e.clientX-fr.left)/fr.width, qy=(e.clientY-fr.top)/fr.height;
       f.style.transform="rotateY("+((qx-.5)*3)+"deg) rotateX("+((.5-qy)*2.4)+"deg)";

@@ -220,31 +220,3 @@ NCR:
 CAPA:
 {{capaData}}
 ```
-
----
-
-## 8. TODOs for Claude
-
-### AI Engine TODOs
-- TODO: Scaffold AI engine directory
-- TODO: Implement LLM Gateway
-- TODO: Implement Embedding Engine
-- TODO: Implement Root Cause Pipeline
-- TODO: Implement CAPA Generator Pipeline
-- TODO: Implement 8D Generator Pipeline
-- TODO: Implement Risk Scoring Pipeline
-- TODO: Implement Audit Prep Pipeline
-- TODO: Implement Document Summarization Pipeline
-- TODO: Implement Predictive Quality Pipeline
-
-### AI Integration TODOs
-- TODO: Create API endpoints for each pipeline
-- TODO: Create frontend AI Insights panel
-- TODO: Create NCR/CAPA/8D AI suggestion UI components
-- TODO: Create risk score visualization components
-
-### AI Data TODOs
-- TODO: Create pgvector embedding tables
-- TODO: Create AI suggestion history views
-- TODO: Create risk score dashboards
-

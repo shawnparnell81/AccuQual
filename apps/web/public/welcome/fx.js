@@ -1,14 +1,12 @@
-/* AccuQual QMS landing: effects + drag-and-drop triage board. Vanilla JS, Pointer Events. */
+
 (function(){
   "use strict";
   var reduce=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var fine=window.matchMedia("(hover:hover) and (pointer:fine)").matches;
   var $=function(s,c){return (c||document).querySelector(s)}, $$=function(s,c){return Array.prototype.slice.call((c||document).querySelectorAll(s))};
 
-  /* ---------- hero entrance ---------- */
   requestAnimationFrame(function(){ document.body.classList.add("loaded"); });
 
-  /* ---------- FX canvas: bursts, confetti, cursor trail ---------- */
   var fx=$("#fx"), fctx=fx.getContext("2d"), parts=[], fxRun=false, DPR=Math.min(window.devicePixelRatio||1,2);
   function fxSize(){ fx.width=innerWidth*DPR; fx.height=innerHeight*DPR; fctx.setTransform(DPR,0,0,DPR,0,0); }
   fxSize(); addEventListener("resize",fxSize);
@@ -41,7 +39,6 @@
   }
   window.AQFX={burst:burst,confetti:confetti};
 
-  /* cursor glow + trail (desktop only) */
   var glow=$("#cursorGlow");
   if(fine && !reduce){
     var gx=innerWidth/2, gy=innerHeight/2, tx=gx, ty=gy, lastT=0, gRun=false;
@@ -58,17 +55,15 @@
       if(Math.abs(tx-gx)+Math.abs(ty-gy)>.5) requestAnimationFrame(gTick); else gRun=false; }
   }
 
-  /* magnetic buttons */
   if(fine && !reduce) $$(".hero .btn, .pricing .btn-primary, .nav .btn").forEach(function(b){
     b.classList.add("mag");
     b.addEventListener("pointermove",function(e){ var r=b.getBoundingClientRect(); var x=e.clientX-r.left-r.width/2, y=e.clientY-r.top-r.height/2; b.style.transform="translate("+(x*.28)+"px,"+(y*.4)+"px)"; });
     b.addEventListener("pointerleave",function(){ b.style.transform=""; });
   });
 
-  /* scroll progress + story word highlight */
   var prog=$("#scrollProg"), big=$(".story .big"), words=[];
   if(big && !reduce){
-    // wrap words, keep <br> and span.muted structure
+
     (function wrap(node){
       $$(":scope > *",node).forEach(wrap);
       Array.prototype.slice.call(node.childNodes).forEach(function(n){
@@ -87,20 +82,17 @@
   }); }
   addEventListener("scroll",onScroll,{passive:true}); onScroll();
 
-  /* subtle 3D tilt on module cards */
   if(fine && !reduce) $$(".mod").forEach(function(c){
     c.addEventListener("pointermove",function(e){ var r=c.getBoundingClientRect(), px=(e.clientX-r.left)/r.width-.5, py=(e.clientY-r.top)/r.height-.5;
       c.style.transform="perspective(1000px) rotateX("+(-py*5)+"deg) rotateY("+(px*6)+"deg) translateY(-6px)"; });
     c.addEventListener("pointerleave",function(){ c.style.transform=""; });
   });
 
-  /* animated counters for illustrative plant stats */
   window.AQCount=function(el,to){
     var from=parseInt(el.textContent,10)||0; if(reduce||from===to){ el.textContent=to; return; }
     var t0=performance.now(), d=700; (function s(now){ var k=Math.min(1,(now-t0)/d), e=1-Math.pow(1-k,3); el.textContent=Math.round(from+(to-from)*e); if(k<1) requestAnimationFrame(s); })(t0);
   };
 
-  /* =================== TRIAGE BOARD =================== */
   var board=$("#board"); if(!board) return;
   var STAGES=["inbox","open","contain","fix","verify","closed"];
   var SLABEL={inbox:"Floor inbox",open:"Open",contain:"Contain",fix:"Fix",verify:"Verify",closed:"Closed"};
@@ -161,7 +153,6 @@
     $("#ssCard").textContent="Pick up a card to start"; ["#ssStage","#ssOwner","#ssDue","#ssNext"].forEach(function(s){ $(s).textContent="–"; });
   }
 
-  /* FLIP helper: animate elements from old rects to new ones with a spring-ish ease */
   function flip(els,fn){
     var first=els.map(function(e){ return e.getBoundingClientRect(); }); fn();
     if(reduce) return;
@@ -169,7 +160,6 @@
       if((dx||dy) && e.animate) e.animate([{transform:"translate("+dx+"px,"+dy+"px)"},{transform:"none"}],{duration:380,easing:"cubic-bezier(.34,1.56,.64,1)"}); });
   }
 
-  /* ---- pointer drag ---- */
   var drag=null;
   function bindCard(el){
     el.addEventListener("pointerdown",onDown);
@@ -202,12 +192,12 @@
     var hit=document.elementFromPoint(e.clientX,e.clientY), z=hit&&hit.closest&&hit.closest(".dz");
     if(!z && hit && hit.closest){ var col=hit.closest(".col"); if(col) z=$(".dz",col); }
     if(z!==overZone){ if(overZone) overZone.classList.remove("over"); overZone=z; if(z) z.classList.add("over"); }
-    if(z){ // live reposition placeholder
+    if(z){
       var sibs=$$(".card:not(.placeholder)",z), before=null;
       for(var i=0;i<sibs.length;i++){ var r=sibs[i].getBoundingClientRect(); if(e.clientY<r.top+r.height/2){ before=sibs[i]; break; } }
       if(drag.el.parentElement!==z || drag.el.nextSibling!==before){ var moved=$$(".card:not(.placeholder)",board); flip(moved,function(){ z.insertBefore(drag.el,before); }); counts(); }
     }
-    // autoscroll near edges (touch / small screens)
+
     var edge=70; if(e.clientY<edge) scrollBy(0,-12); else if(e.clientY>innerHeight-edge) scrollBy(0,12);
   }
   function finish(ok){
@@ -228,7 +218,6 @@
   function onUp(e){ if(drag && e.pointerId===drag.id) finish(true); }
   function onCancel(e){ if(drag && e.pointerId===drag.id) finish(false); }
 
-  /* ---- keyboard drag ---- */
   var kb=null, kbMoving=false;
   function onKey(e){
     var el=e.currentTarget, k=e.key;

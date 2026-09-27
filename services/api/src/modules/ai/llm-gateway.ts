@@ -105,7 +105,7 @@ async function callAnthropic(prompt: string, options: LlmCallOptions): Promise<L
     return { text: stubResponse(prompt), usage: null, model, isStub: true };
   }
 
-  // Newer Claude models reject `temperature` outright (400 "`temperature` is
+  // Newer models from this provider reject `temperature` outright (400 "`temperature` is
   // deprecated for this model"), so it's only sent when a caller explicitly
   // sets one (a company's BYOK config can) — never as a hidden default — and
   // dropped and retried once if the model refuses it anyway.
@@ -133,7 +133,7 @@ async function callAnthropic(prompt: string, options: LlmCallOptions): Promise<L
   }
 
   if (!response.ok) {
-    throw Object.assign(new Error(`Anthropic API error: ${response.status}`), { status: response.status });
+    throw Object.assign(new Error(`AI provider request failed (${response.status})`), { status: response.status });
   }
 
   const data = (await response.json()) as { content: Array<{ text: string }>; usage?: { input_tokens: number; output_tokens: number } };
@@ -171,7 +171,7 @@ async function callOpenAi(prompt: string, options: LlmCallOptions): Promise<LlmC
   });
 
   if (!response.ok) {
-    throw Object.assign(new Error(`OpenAI API error: ${response.status}`), { status: response.status });
+    throw Object.assign(new Error(`AI provider request failed (${response.status})`), { status: response.status });
   }
 
   const data = (await response.json()) as { choices: Array<{ message: { content: string } }>; usage?: { prompt_tokens: number; completion_tokens: number } };
