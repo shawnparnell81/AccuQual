@@ -105,8 +105,8 @@ export async function openAttachment(documentId: number, versionId: number, atta
 /** The bytes of one revision file, still behind the signed link the API issues. */
 export async function fetchDocumentAttachment(documentId: number, versionId: number, attachmentId: number): Promise<{ bytes: ArrayBuffer; mimeType: string; fileName: string }> {
   const { data } = await apiClient.get<{ url: string; mimeType: string; fileName: string }>(`/documents/${documentId}/version/${versionId}/attachments/${attachmentId}/url`);
-  const base = apiClient.defaults.baseURL ?? "";
-  const res = await apiClient.get<ArrayBuffer>(`${base}${data.url}`, { responseType: "arraybuffer" });
+  // data.url is already an app path (/documents/files/download?token=...). apiClient adds baseURL itself.
+  const res = await apiClient.get<ArrayBuffer>(data.url, { responseType: "arraybuffer" });
   return { bytes: res.data, mimeType: data.mimeType, fileName: data.fileName };
 }
 

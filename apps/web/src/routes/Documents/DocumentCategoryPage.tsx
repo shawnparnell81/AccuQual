@@ -44,7 +44,7 @@ export function DocumentCategoryPage() {
     setBusy(true);
     try {
       const created = await apiClient.post<AccuQualDocument>("/documents", { title: file.name, category });
-      const current = await apiClient.get<CurrentState<DocumentPayload>>(`/documents/${created.data.id}/version/current`);
+      const current = await apiClient.get<CurrentState<DocumentPayload>>(`/documents/${created.data.id}/current`);
       const versionId = current.data.open?.id;
       if (!versionId) throw new Error("No draft to attach the file to.");
       await uploadAttachment(created.data.id, versionId, file);
@@ -59,7 +59,7 @@ export function DocumentCategoryPage() {
   }
 
   async function resolveFile(doc: AccuQualDocument) {
-    const current = await apiClient.get<CurrentState<DocumentPayload>>(`/documents/${doc.id}/version/current`);
+    const current = await apiClient.get<CurrentState<DocumentPayload>>(`/documents/${doc.id}/current`);
     const version = current.data.open ?? current.data.published;
     const file = version?.payload?.attachments?.[0];
     if (!version || !file) return null;
