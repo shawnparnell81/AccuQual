@@ -16,7 +16,7 @@ import { passwordResetTokens } from "../../src/drizzle/schema/passwordResetToken
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { totpAt, totpCounter } from "../../src/utils/totp.js";
-import { TRUSTED_DEVICE_COOKIE_NAME } from "../../src/modules/auth/auth.controller.js";
+import { CSRF_MARKER_COOKIE_NAME, REFRESH_COOKIE_NAME, TRUSTED_DEVICE_COOKIE_NAME } from "../../src/modules/auth/auth.controller.js";
 
 const app = createApp();
 const suffix = Date.now();
@@ -130,7 +130,16 @@ describe("trusted devices (real DB + real HTTP path)", () => {
     expect(lowered).toContain("samesite=lax");
     expect(lowered).not.toContain("domain=");
     expect(lowered).toContain("max-age=2592000");
+    expect(lowered).toMatch(/expires=/);
     expect(lowered).not.toContain("secure");
+    // The sign-in cookies on this same response die with the browser. Trust does not.
+    for (const name of [REFRESH_COOKIE_NAME, CSRF_MARKER_COOKIE_NAME]) {
+      const sessionCookie = setCookieHeader(verified, name);
+      expect(sessionCookie).toBeTruthy();
+      const sessionAttrs = sessionCookie!.slice(sessionCookie!.indexOf(";")).toLowerCase();
+      expect(sessionAttrs).not.toMatch(/max-age=/);
+      expect(sessionAttrs).not.toMatch(/expires=/);
+    }
     const raw = cookieValue(cookie!, TRUSTED_DEVICE_COOKIE_NAME);
     expect(raw.length).toBeGreaterThan(32);
     expect(raw.split(".")).toHaveLength(3);

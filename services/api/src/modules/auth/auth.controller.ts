@@ -30,7 +30,11 @@ export const TRUSTED_DEVICE_COOKIE_NAME = "accuqual_td";
 export const CSRF_MARKER_COOKIE_NAME = "accuqual_csrf";
 const CSRF_MARKER_VALUE = "1";
 
-/** Host-only, path /, SameSite matching the refresh cookie. No Domain attribute — see setRefreshCookie. */
+/**
+ * Host-only, path /, no Max-Age and no Expires. The browser drops these when
+ * it closes and still sends them to every tab in that same browser session.
+ * No Domain attribute — see setRefreshCookie.
+ */
 function sessionCookieOptions() {
   return {
     httpOnly: true,
@@ -40,9 +44,13 @@ function sessionCookieOptions() {
   };
 }
 
-/** Persistent until the sign-in's absolute end, so closing the browser does not sign the user out. Max-Age is the time left, not a fresh 12 hours. The value is encrypted; the refresh token is not stored in the cookie as clear text. */
-export function setRefreshCookie(res: Response, refreshToken: string, sessionExpiresAt: Date) {
-  const maxAge = Math.max(0, sessionExpiresAt.getTime() - Date.now());
+/**
+ * Browser-session cookie. Closing the browser signs the user out. The server
+ * still rejects the refresh token 12 hours after sign-in, even if the browser
+ * stays open. The value is encrypted; the refresh token is not stored in the
+ * cookie as clear text.
+ */
+export function setRefreshCookie(res: Response, refreshToken: string) {
   res.cookie(REFRESH_COOKIE_NAME, encryptRefreshCookie(refreshToken), {
     ...sessionCookieOptions(),
     // SameSite=None (only valid with Secure, which production already sets)
@@ -57,9 +65,10 @@ export function setRefreshCookie(res: Response, refreshToken: string, sessionExp
     // api.accuqualqms.com. A host-only cookie is stored for the host the
     // browser actually called and is sent back on /api/*. Pinning Domain to
     // the API host would hide it from that call.
-    maxAge,
+    // No maxAge and no expires: those attributes would keep the cookie after
+    // the browser closes. The 12-hour limit is on the token, not the cookie.
   });
-  res.cookie(CSRF_MARKER_COOKIE_NAME, CSRF_MARKER_VALUE, { ...sessionCookieOptions(), maxAge });
+  res.cookie(CSRF_MARKER_COOKIE_NAME, CSRF_MARKER_VALUE, sessionCookieOptions());
 }
 
 function clearRefreshCookie(res: Response) {
@@ -120,7 +129,7 @@ function sendSession(res: Response, result: Awaited<ReturnType<typeof authServic
     return;
   }
   const session = result as FinishedSession;
-  setRefreshCookie(res, session.refreshToken, session.sessionExpiresAt);
+  setRefreshCookie(res, session.refreshToken);
   if (session.trustedDeviceToken) setTrustedDeviceCookie(res, session.trustedDeviceToken);
   res.json(withoutRefreshToken(session as FinishedSession & Record<string, unknown>));
 }
@@ -139,7 +148,7 @@ export const mfaEnrollStartHandler = asyncHandler(async (req: Request, res: Resp
 
 export const mfaEnrollConfirmHandler = asyncHandler(async (req: Request, res: Response) => {
   const result = await authService.confirmEnrollmentWithToken(req.body.mfaToken, req.body.code, req.body.rememberMe === true, req.body.trustDevice === true, req.get("user-agent"));
-  setRefreshCookie(res, result.refreshToken, result.sessionExpiresAt);
+  setRefreshCookie(res, result.refreshToken);
   if (result.trustedDeviceToken) setTrustedDeviceCookie(res, result.trustedDeviceToken);
   res.json(withoutRefreshToken(result));
 });
@@ -190,7 +199,7 @@ export const refreshHandler = asyncHandler(async (req: Request, res: Response) =
   if (!token) throw AppError.unauthorized("Missing refresh token");
 
   const result = await authService.refresh(token);
-  setRefreshCookie(res, result.refreshToken, result.sessionExpiresAt);
+  setRefreshCookie(res, result.refreshToken);
   res.json(withoutRefreshToken(result));
 });
 
@@ -223,7 +232,7 @@ export const resetPasswordHandler = asyncHandler(async (req: Request, res: Respo
 export const changePasswordHandler = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) throw AppError.unauthorized();
   const result = await authService.changePassword(req.user.id, req.body.currentPassword, req.body.newPassword, refreshCookieFrom(req));
-  setRefreshCookie(res, result.refreshToken, result.sessionExpiresAt);
+  setRefreshCookie(res, result.refreshToken);
   clearTrustedDeviceCookie(res);
   res.json(withoutRefreshToken(result));
 });

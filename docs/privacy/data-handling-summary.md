@@ -30,7 +30,7 @@ roles are locked out of every table. This is covered by automated tests that run
 - Passwords are stored only as bcrypt hashes. Minimum 12 characters; common and known-breached passwords are refused
   (the breach check sends only the first five characters of a SHA-1 hash to the Have I Been Pwned range service).
 - Accounts lock for 15 minutes after 5 wrong passwords in 15 minutes; the owner is emailed and the event is audited.
-- A sign-in lasts 12 hours from the moment of sign-in, whether or not the person keeps using the app, and closing the browser does not end it sooner. After 12 hours they sign in again. Disabling a user or changing their role ends their sessions on the next request.
+- A sign-in ends when the browser is closed, and also ends 12 hours after sign-in even if the browser stays open. After that they sign in again. A browser set to reopen previous pages may restore the sign-in. Disabling a user or changing their role ends their sessions on the next request. A browser trusted for two-step sign-in can still skip the authenticator code for 30 days; that does not keep the sign-in itself alive after the browser closes.
 - Two-step sign-in (authenticator app) with one-time recovery codes. Administrators are required to use it by default;
   the company may require it for everyone.
 - Single sign-on (OpenID Connect) is available, restricted to email domains the company has

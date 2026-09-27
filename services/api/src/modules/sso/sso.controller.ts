@@ -191,7 +191,7 @@ export const ssoCallback = asyncHandler(async (req: Request, res: Response) => {
 
   try {
     const { session } = await handleCallback(callbackUrl, flow);
-    setRefreshCookie(res, session.refreshToken, session.sessionExpiresAt);
+    setRefreshCookie(res, session.refreshToken);
     // The SPA's own startup refresh turns that cookie into a session.
     res.redirect(`${env.FRONTEND_URL.replace(/\/$/, "")}/`);
   } catch (err) {

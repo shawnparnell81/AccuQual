@@ -67,43 +67,56 @@ describe("Auth refresh token cookie (real DB + real HTTP path)", () => {
     // Host-only: the browser calls app.accuqualqms.com and the /api rewrite
     // reaches the API. A Domain attribute for the API host would hide the cookie.
     expect(rtCookie!.toLowerCase()).not.toContain("domain=");
+    expectBrowserSessionCookie(rtCookie);
+    const csrf = setCookie.find((c) => c.startsWith("accuqual_csrf="));
+    expectBrowserSessionCookie(csrf);
   });
 
-  function maxAgeSeconds(cookie: string): number {
-    const match = /max-age=(\d+)/i.exec(cookie);
-    expect(match).toBeTruthy();
-    return Number(match![1]);
+  /** Attributes only, so a value that happens to contain the words cannot satisfy the check. */
+  function cookieAttributes(header: string): string {
+    const semi = header.indexOf(";");
+    expect(semi).toBeGreaterThan(0);
+    return header.slice(semi).toLowerCase();
   }
 
-  it("keeps everyone signed in for 12 hours from sign-in, and refresh does not start that clock over", async () => {
+  /** No Max-Age and no Expires: the browser drops the cookie when it closes. */
+  function expectBrowserSessionCookie(header: string | undefined) {
+    expect(header).toBeTruthy();
+    const attrs = cookieAttributes(header!);
+    expect(attrs).not.toMatch(/max-age=/);
+    expect(attrs).not.toMatch(/expires=/);
+  }
+
+  it("keeps the 12-hour limit on the server, and the browser cookie ends when the browser closes", async () => {
     const rtCookieOf = (res: request.Response) => (res.headers["set-cookie"] as unknown as string[]).find((c) => c.startsWith("accuqual_rt="))!;
-    const twelveHours = 12 * 60 * 60;
+    const twelveHours = 12 * 60 * 60 * 1000;
 
     const plain = await request(app).post("/auth/login").send({ email, password: PASSWORD });
-    const plainAge = maxAgeSeconds(rtCookieOf(plain));
-    expect(plainAge).toBeGreaterThanOrEqual(twelveHours - 5);
-    expect(plainAge).toBeLessThanOrEqual(twelveHours);
-    expect(rtCookieOf(plain).toLowerCase()).toContain("expires=");
+    expectBrowserSessionCookie(rtCookieOf(plain));
+    const plainJti = jtiFromCookie(rtCookieFrom(plain));
+    const [plainRow] = await db.select().from(refreshTokens).where(eq(refreshTokens.jti, plainJti));
+    const plainRemaining = plainRow!.expiresAt.getTime() - Date.now();
+    expect(plainRemaining).toBeGreaterThan(twelveHours - 5_000);
+    expect(plainRemaining).toBeLessThanOrEqual(twelveHours);
 
     const agent = request.agent(app);
     const remembered = await agent.post("/auth/login").send({ email, password: PASSWORD, rememberMe: true });
     expect(remembered.status).toBe(200);
     expect(remembered.body.remember).toBeUndefined();
     expect(remembered.body.sessionExpiresAt).toBeUndefined();
-    const rememberedAge = maxAgeSeconds(rtCookieOf(remembered));
-    expect(rememberedAge).toBeGreaterThanOrEqual(twelveHours - 5);
-    expect(rememberedAge).toBeLessThanOrEqual(twelveHours);
-    expect(rtCookieOf(remembered)).not.toContain("max-age=2592000");
+    expectBrowserSessionCookie(rtCookieOf(remembered));
+    expect(cookieAttributes(rtCookieOf(remembered))).not.toContain("max-age=2592000");
 
     const originalJti = jtiFromCookie(rtCookieFrom(remembered));
     const [original] = await db.select().from(refreshTokens).where(eq(refreshTokens.jti, originalJti));
+    const rememberedRemaining = original!.expiresAt.getTime() - Date.now();
+    expect(rememberedRemaining).toBeGreaterThan(twelveHours - 5_000);
+    expect(rememberedRemaining).toBeLessThanOrEqual(twelveHours);
 
     const refreshed = await agent.post("/auth/refresh").set(CSRF).send({});
     expect(refreshed.status).toBe(200);
-    const refreshedAge = maxAgeSeconds(rtCookieOf(refreshed));
-    expect(refreshedAge).toBeLessThanOrEqual(twelveHours);
-    expect(refreshedAge).toBeGreaterThan(twelveHours - 60);
-    expect(rtCookieOf(refreshed)).not.toContain("max-age=2592000");
+    expectBrowserSessionCookie(rtCookieOf(refreshed));
+    expect(cookieAttributes(rtCookieOf(refreshed))).not.toContain("max-age=2592000");
 
     const rotatedJti = jtiFromCookie(rtCookieFrom(refreshed));
     const [rotated] = await db.select().from(refreshTokens).where(eq(refreshTokens.jti, rotatedJti));

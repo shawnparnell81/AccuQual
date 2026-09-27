@@ -1,5 +1,42 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
+
+const AUTH_STORAGE_KEY = "accuqual-auth";
+
+/** Drops a copy left by an older build. That copy lived in localStorage and kept the previous user after the browser closed. */
+function dropPersistentAuthCopy() {
+  try {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch {
+    // Storage can be blocked. The session cookie is what signs the user in.
+  }
+}
+
+/**
+ * This tab only. A new tab does not see it; that tab signs in from the shared
+ * session cookie. If sessionStorage is blocked, memory is enough for this tab.
+ */
+function tabAuthStorage(): StateStorage {
+  try {
+    const probe = "__accuqual_auth_probe__";
+    sessionStorage.setItem(probe, "1");
+    sessionStorage.removeItem(probe);
+    return sessionStorage;
+  } catch {
+    const memory = new Map<string, string>();
+    return {
+      getItem: (name) => memory.get(name) ?? null,
+      setItem: (name, value) => {
+        memory.set(name, value);
+      },
+      removeItem: (name) => {
+        memory.delete(name);
+      },
+    };
+  }
+}
+
+dropPersistentAuthCopy();
 
 export interface AuthUser {
   id: number;
@@ -45,14 +82,14 @@ export const useAuthStore = create<AuthState>()(
       logout: () => set({ user: null, company: null, accessToken: null }),
     }),
     {
-      name: "accuqual-auth",
-      // B2 fix: the access token used to be persisted here too, alongside a
-      // long-lived refresh token that has since moved to an httpOnly cookie
-      // (see auth.controller.ts) — either one sitting in localStorage is a
-      // bearer credential any XSS on the page could read straight out from
-      // under it. Only `user`/`company` (display data, not credentials) are
-      // worth keeping across a reload now; accessToken starts null on every
-      // fresh load and useAuthBootstrap re-mints one from the cookie.
+      name: AUTH_STORAGE_KEY,
+      // The access token stays in memory. The refresh token is the httpOnly
+      // browser-session cookie (auth.controller.ts): closing the browser drops
+      // it, and the server still refuses it 12 hours after sign-in. user and
+      // company are display data for this tab, so a reload in the same browser
+      // session can show them before that cookie refresh returns. They are not
+      // a credential, and they do not survive the browser closing.
+      storage: createJSONStorage(tabAuthStorage),
       partialize: (state) => ({ user: state.user, company: state.company }),
     }
   )
