@@ -213,30 +213,3 @@ export const up = async (db) => {
   `);
 };
 ```
-
----
-
-## 5. Database TODOs for Claude
-
-### Schema TODOs
-- TODO: Generate full schema for all modules
-- TODO: Add foreign key constraints everywhere
-- TODO: Add indexes for high-volume tables
-- TODO: Add soft-delete flags where needed
-- TODO: Add audit trail tables
-
-### Migration TODOs
-- TODO: Generate initial migration set
-- TODO: Generate incremental migrations per module
-- TODO: Generate seed data for development
-
-### AI / Analytics TODOs
-- TODO: Create pgvector embedding tables
-- TODO: Create TimescaleDB hypertables for IoT data
-- TODO: Create ElasticSearch index mappings
-
-### Performance TODOs
-- TODO: Add partitioning for large tables (NCR, CAPA, audits)
-- TODO: Add caching layer for frequently accessed data
-- TODO: Add materialized views for dashboards
-

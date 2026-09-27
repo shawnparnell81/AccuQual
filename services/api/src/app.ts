@@ -21,6 +21,7 @@ const allowedOrigins = env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filte
 
 export function createApp() {
   const app = express();
+  app.disable("x-powered-by");
 
   // Render's proxy (and the static-site /api rewrite in front of it) puts the
   // caller in X-Forwarded-For. Trust exactly one hop so address-based limits

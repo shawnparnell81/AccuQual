@@ -32,6 +32,11 @@ server {
     default_type application/javascript;
   }
 
+  # Source maps are not part of the public site. Refuse them even if a build emits one.
+  location ~* \.map$ {
+    return 404;
+  }
+
   # Vite fingerprints every built asset filename with a content hash, so an
   # old browser tab can only ever reference an asset that's actually still
   # on disk under that exact name — safe to cache hard and forever.

@@ -1,5 +1,4 @@
-/* AccuQual QMS landing: interactive gallery mini-demos. Vanilla JS, Pointer Events, no dependencies.
-   Every number shown in these scenes is an illustrative sample, not a real spec or measurement. */
+
 (function(){
   "use strict";
   var reduce=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -7,7 +6,6 @@
   var NS="http://www.w3.org/2000/svg";
   var OK="#00FF9D", AMB="#FFB703", BAD="#FF2A6D", CY="#00F3FF", VI="#A855F7";
 
-  /* ---------- helpers ---------- */
   function mk(tag,attrs,parent){ var e=document.createElementNS(NS,tag); for(var k in attrs) e.setAttribute(k,attrs[k]); if(parent) parent.appendChild(e); return e; }
   function clamp(v,a,b){ return v<a?a:v>b?b:v; }
   function toSvg(svg,x,y){ var p=svg.createSVGPoint(); p.x=x; p.y=y; return p.matrixTransform(svg.getScreenCTM().inverse()); }
@@ -23,11 +21,11 @@
     (function s(now){ if(stopped) return; var k=Math.min(1,(now-t0)/ms), e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2; fn(from+(to-from)*e); if(k<1) requestAnimationFrame(s); else if(done) done(); })(t0);
     return {stop:function(){ stopped=true; }};
   }
-  function fade(el,ms,from,to,extra){ // attribute fade for SVG bits (ripples, click labels)
+  function fade(el,ms,from,to,extra){
     if(reduce){ el.setAttribute("opacity",to); return; }
     tween(0,1,ms,function(k){ el.setAttribute("opacity",from+(to-from)*k); if(extra) extra(k); });
   }
-  /* pointer drag on an SVG handle, with capture and no page scroll */
+
   function drag(handle,fig,h){
     var pid=null;
     handle.addEventListener("pointerdown",function(e){
@@ -48,7 +46,6 @@
 
   $$(".gx-stage").forEach(function(s){ s.addEventListener("scroll",function(){ s.scrollTop=0; s.scrollLeft=0; }); });
 
-  /* starfields inside the SVG scenes (seeded so they never jump) */
   $$(".gx-stars").forEach(function(g,gi){
     var n=+g.dataset.n||20, w=+g.dataset.w||800, h=+g.dataset.h||400, seed=gi*977+13;
     function rnd(){ seed=(seed*16807)%2147483647; return seed/2147483647; }
@@ -56,7 +53,6 @@
       mk("circle",{cx:(rnd()*w).toFixed(1),cy:(rnd()*h).toFixed(1),r:(.4+rnd()*1.1).toFixed(2),fill:c,opacity:(.25+rnd()*.6).toFixed(2)},g); }
   });
 
-  /* =================== 1. BRIDGE CMM =================== */
   (function(){
     var fig=$("#gxCmm"); if(!fig) return;
     var svg=$(".gx-svg",fig), car=$("#cmmCar"), ram=$("#cmmRam"), head=$("#cmmHead"), led=$("#cmmHeadLed"), joint=$("#cmmJoint"), sty=$("#cmmStylus"), halo=$("#cmmHalo"), ruby=$("#cmmRuby");
@@ -143,7 +139,6 @@
     draw(pos.x,pos.y);
   })();
 
-  /* =================== 2. CALIPERS =================== */
   (function(){
     var fig=$("#gxCal"); if(!fig) return;
     var svg=$(".gx-svg",fig), jaw=$("#calJaw"), lcd=$("#calLcd"), lcdU=$("#calLcdU"), read=$("#calRead"), pl=$("#calPill"), tolEl=$("#calTol"), live=$("#calLive");
@@ -199,7 +194,6 @@
     render();
   })();
 
-  /* =================== 3. HEIGHT GAUGE =================== */
   (function(){
     var fig=$("#gxHg"); if(!fig) return;
     var svg=$(".gx-svg",fig), headG=$("#hgHead"), lcd=$("#hgLcd"), read=$("#hgRead"), pl=$("#hgPill"), live=$("#hgLive"), chips=$("#hgChips"), tip=$("#hgTip"), line=$("#hgLine"), tagsG=$("#hgTags");
@@ -253,14 +247,13 @@
       else if(k==="PageUp"||k==="PageDown"){ var up=k==="PageUp", best=null; F.forEach(function(ft){ if(up?ft.nom>h+.1:ft.nom<h-.1){ if(best===null||(up?ft.nom<best:ft.nom>best)) best=ft.nom; } }); target=best===null?(up?MAX:0):best; }
       else if(k==="Home") target=0; else if(k==="End") target=MAX; else return;
       e.preventDefault(); firstUse(fig);
-      // step out of a snapped feature cleanly
+
       if(cur>=0&&(k.indexOf("Arrow")===0)) target=(target>h?F[cur].nom+.61:F[cur].nom-.61);
       setH(target,.6); if(cur<0) say(live,h.toFixed(2)+" millimeters");
     });
     render();
   })();
 
-  /* =================== 4. MICROMETER =================== */
   (function(){
     var fig=$("#gxMic"); if(!fig) return;
     var svg=$(".gx-svg",fig), turn=$("#micTurn"), thim=$("#micThimble"), spin=$("#micSpindle"), tg=$("#micTG"), knurl=$("#micKnurl"), ridge=$("#micRidge"), ratch=$("#micRatch"), click=$("#micClick"), ring=$("#micRing");
@@ -327,7 +320,6 @@
     render();
   })();
 
-  /* =================== 5. TABLET CHECKLIST =================== */
   (function(){
     var fig=$("#gxTab"); if(!fig) return;
     var stage=$(".gx-tabstage",fig), world=$("#tabWorld"), screen=$("#tabScreen"), list=$("#tsList"), go=$("#tsGo"), prog=$("#tsProg"), stamp=$("#tsStamp"), stampT=$("#tsStampT"), toast=$("#tsToast"), toastT=$("#tsToastT");
@@ -385,7 +377,6 @@
     update();
   })();
 
-  /* =================== 6. PROBE PLAYGROUND =================== */
   (function(){
     var fig=$("#gxHero"); if(!fig) return;
     var stage=$("#heroStage"), img=$("img",stage), cv=$("#heroCv"), ctx=cv.getContext("2d"), live=$("#heroLive");
@@ -439,21 +430,21 @@
     }
     function draw(now){
       ctx.clearRect(0,0,W,H);
-      // scan trail
+
       for(var i=0;i<trail.length;i++){ var t=trail[i], a=1-(now-t.t)/1100; if(a<=0) continue;
         ctx.globalAlpha=a*.9; ctx.fillStyle=i%2?CY:VI; ctx.shadowColor=ctx.fillStyle; ctx.shadowBlur=10;
         ctx.beginPath(); ctx.arc(t.x,t.y,.6+2.2*a,0,6.283); ctx.fill(); }
       ctx.shadowBlur=0; ctx.globalAlpha=1;
-      // polyline between points
+
       if(pts.length>1){ ctx.setLineDash([3,5]); ctx.strokeStyle="rgba(255,255,255,.22)"; ctx.lineWidth=1; ctx.beginPath();
         pts.forEach(function(p,j){ var s=i2s(p); if(j) ctx.lineTo(s.x,s.y); else ctx.moveTo(s.x,s.y); }); ctx.stroke(); ctx.setLineDash([]); }
-      // fitted circle
+
       if(fitC){ var c=i2s(fitC), R=fitC.r*k;
         ctx.strokeStyle=CY; ctx.lineWidth=2; ctx.shadowColor=CY; ctx.shadowBlur=16; ctx.beginPath(); ctx.arc(c.x,c.y,R,0,6.283); ctx.stroke(); ctx.shadowBlur=0;
         ctx.strokeStyle="rgba(168,85,247,.5)"; ctx.lineWidth=1; ctx.setLineDash([6,6]); ctx.beginPath(); ctx.arc(c.x,c.y,R+fitC.rnd*k*.5+6,0,6.283); ctx.stroke(); ctx.setLineDash([]);
         ctx.strokeStyle="rgba(255,255,255,.55)"; ctx.beginPath(); ctx.moveTo(c.x-10,c.y); ctx.lineTo(c.x+10,c.y); ctx.moveTo(c.x,c.y-10); ctx.lineTo(c.x,c.y+10); ctx.stroke();
         ctx.strokeStyle="rgba(0,243,255,.6)"; ctx.setLineDash([4,4]); ctx.beginPath(); ctx.moveTo(c.x-R,c.y); ctx.lineTo(c.x+R,c.y); ctx.stroke(); ctx.setLineDash([]);
-        // residual whiskers
+
         pts.forEach(function(p){ var d=Math.hypot(p.x-fitC.x,p.y-fitC.y), res=d-fitC.r, rel=fitC.rnd>0?Math.abs(res)/(fitC.rnd/2):0;
           var s=i2s(p), ux=(p.x-fitC.x)/d, uy=(p.y-fitC.y)/d; ctx.strokeStyle=rel>.8?BAD:rel>.45?AMB:OK; ctx.lineWidth=2;
           ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(c.x+ux*R,c.y+uy*R); ctx.stroke(); });
@@ -462,13 +453,13 @@
         ctx.fillStyle="rgba(4,6,10,.82)"; ctx.strokeStyle="rgba(0,243,255,.5)"; ctx.lineWidth=1; roundRect(lx,ly,tw+16,20,6); ctx.fill(); ctx.stroke();
         ctx.fillStyle=CY; ctx.fillText(lbl,lx+8,ly+14);
       }
-      // points + ripples
+
       pts.forEach(function(p,j){ var s=i2s(p); ctx.strokeStyle="#fff"; ctx.lineWidth=1.4; ctx.beginPath(); ctx.arc(s.x,s.y,5.5,0,6.283); ctx.stroke();
         ctx.fillStyle="#FF2A6D"; ctx.beginPath(); ctx.arc(s.x,s.y,2.4,0,6.283); ctx.fill();
         ctx.fillStyle="rgba(255,255,255,.7)"; ctx.font="600 9px 'JetBrains Mono',monospace"; ctx.fillText(String(j+1),s.x+7,s.y-6); });
       ripples.forEach(function(q){ var s=i2s(q), a=(now-q.t)/700; ctx.globalAlpha=1-a; ctx.strokeStyle=CY; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(s.x,s.y,6+26*a,0,6.283); ctx.stroke(); });
       ctx.globalAlpha=1;
-      // beam from the real ruby to the ghost probe + reticle
+
       if(vis>.02){ var rb=i2s(RUBY);
         ctx.globalAlpha=vis; var gr=ctx.createLinearGradient(rb.x,rb.y,ret.x,ret.y); gr.addColorStop(0,"rgba(0,243,255,.85)"); gr.addColorStop(1,"rgba(168,85,247,.5)");
         ctx.strokeStyle=gr; ctx.lineWidth=1.3; ctx.setLineDash([8,6]); ctx.lineDashOffset=reduce?0:-now/30; ctx.beginPath(); ctx.moveTo(rb.x,rb.y); ctx.lineTo(ret.x,ret.y); ctx.stroke(); ctx.setLineDash([]);
