@@ -6,6 +6,7 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { TextField, SelectField } from "../../components/forms/Field";
+import { Modal } from "../../components/modals/Modal";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { DEPARTMENTS } from "../../components/layout/navConfig";
 import type { AppUser, AppRole } from "../../api/types";
@@ -63,6 +64,9 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
   }
 
   const [form, setForm] = useState({ email: "", password: "", name: "", roleId: "", department: "" });
+  const [resetFor, setResetFor] = useState<AppUser | null>(null);
+  const [tempPassword, setTempPassword] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
@@ -115,6 +119,16 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
                       Unlock
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetFor(u);
+                      setTempPassword("");
+                    }}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Temporary password
+                  </button>
                   {u.mfaEnabled && (
                     <button
                       onClick={() => {
@@ -149,7 +163,7 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
               { email: form.email, password: form.password, name: form.name || undefined, roleId: form.roleId ? Number(form.roleId) : undefined, department: form.department || undefined } as Partial<AppUser> & { password: string },
               {
                 onSuccess: () => {
-                  toast.success("User created.");
+                  toast.success("User created. They'll be asked to choose their own password the first time they sign in.");
                   setForm({ email: "", password: "", name: "", roleId: "", department: "" });
                 },
                 onError: (err) => toast.error(extractErrorMessage(err, "Couldn't create user.")),
@@ -181,6 +195,33 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
           </button>
         </form>
       )}
+
+      <Modal title={resetFor ? `Temporary password for ${resetFor.email}` : "Temporary password"} isOpen={resetFor !== null} onClose={() => setResetFor(null)}>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!resetFor) return;
+            setResetBusy(true);
+            void apiClient
+              .post(`/users/${resetFor.id}/temporary-password`, { password: tempPassword })
+              .then(() => {
+                toast.success("Saved. They'll be asked to choose a new password the next time they sign in, and their other sessions have ended.");
+                setResetFor(null);
+                setTempPassword("");
+              })
+              .catch((err) => toast.error(extractErrorMessage(err, "Couldn't set that temporary password.")))
+              .finally(() => setResetBusy(false));
+          }}
+        >
+          <p className="text-sm text-muted-foreground">Hand this to them once. They have to pick their own password before they can open anything else.</p>
+          <TextField label="Temporary password" type="password" required minLength={12} autoComplete="new-password" value={tempPassword} onChange={(e) => setTempPassword(e.target.value)} />
+          <p className="text-xs text-muted-foreground">At least 12 characters. Common passwords are refused.</p>
+          <button type="submit" disabled={resetBusy} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
+            {resetBusy ? "Saving…" : "Save temporary password"}
+          </button>
+        </form>
+      </Modal>
     </div>
   );
 }

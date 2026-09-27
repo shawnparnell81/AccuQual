@@ -1,9 +1,11 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { AppLayout } from "./components/layout/AppLayout";
 import { ProtectedRoute } from "./components/layout/ProtectedRoute";
+import { RequireFreshPassword } from "./components/auth/RequireFreshPassword";
 import { LoginPage } from "./routes/Auth/LoginPage";
 import { ForgotPasswordPage } from "./routes/Auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "./routes/Auth/ResetPasswordPage";
+import { ForcePasswordChangePage } from "./routes/Auth/ForcePasswordChangePage";
 import { DashboardPage } from "./routes/Dashboard/DashboardPage";
 import { NcrListPage } from "./routes/NCR/NcrListPage";
 import { NcrWorkspacePage } from "./routes/NCR/NcrWorkspacePage";
@@ -124,6 +126,8 @@ export function App() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       <Route element={<ProtectedRoute />}>
+        <Route path="/change-password" element={<ForcePasswordChangePage />} />
+        <Route element={<RequireFreshPassword />}>
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomeRoute />} />
           <Route path="/home" element={<HomePage />} />
@@ -258,6 +262,7 @@ export function App() {
           </Route>
 
           <Route path="/reporting" element={<ReportingHubPage />} />
+        </Route>
         </Route>
       </Route>
     </Routes>

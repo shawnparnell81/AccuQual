@@ -2,6 +2,7 @@ import type { Request } from "express";
 import rateLimit, { MemoryStore } from "express-rate-limit";
 import { env } from "../config/env.js";
 import { verifyRefreshToken } from "../utils/jwt.js";
+import { openRefreshCookie } from "../modules/auth/refreshCookie.js";
 
 const DEVICE_INGEST_PATH = "/digital-twin/device-ingest";
 
@@ -47,13 +48,12 @@ const REFRESH_COOKIE = "accuqual_rt";
  */
 export function refreshRateLimitKey(req: Request): string {
   const raw = req.cookies?.[REFRESH_COOKIE];
-  if (typeof raw === "string" && raw.length > 0) {
-    try {
-      const sub = verifyRefreshToken(raw).sub;
-      if (sub) return `refresh-user-${sub}`;
-    } catch {
-      // unsigned, expired, or tampered
-    }
+  const token = openRefreshCookie(typeof raw === "string" ? raw : undefined) ?? "";
+  try {
+    const sub = verifyRefreshToken(token).sub;
+    if (sub) return `refresh-user-${sub}`;
+  } catch {
+    // missing, unsigned, expired, or tampered — count by address instead
   }
   return `refresh-ip-${req.ip ?? "unknown"}`;
 }

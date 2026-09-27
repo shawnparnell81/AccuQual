@@ -48,7 +48,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   const { email, password, name, roleId, department } = req.body;
   await assertPasswordAcceptable(password, { email, name });
   const passwordHash = await bcrypt.hash(password, 10);
-  const [created] = await req.db!.insert(users).values({ email, passwordHash, name, roleId, department, passwordChangedAt: new Date() }).returning();
+  const [created] = await req.db!.insert(users).values({ email, passwordHash, name, roleId, department, passwordChangedAt: new Date(), mustChangePassword: true }).returning();
   if (!created) throw new AppError("Failed to create user", 500);
   const { passwordHash: _omit, ...safe } = created;
   res.status(201).json(safe);
@@ -180,6 +180,35 @@ export const unlockUser = asyncHandler(async (req: Request, res: Response) => {
     .returning({ id: users.id });
   if (!updated) throw AppError.notFound("User");
   await recordAuditTrail(req.db!, { entityType: "User", entityId: updated.id, action: "status_change", changes: { action: "account_unlocked" }, performedBy: req.user?.id });
+  res.status(204).send();
+});
+
+/** An administrator replaces the password with one they hand out. The person must choose their own the next time they sign in, and every current session and trusted device ends now. */
+export const setTemporaryPassword = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const { password } = req.body as { password: string };
+  const [target] = await req.db!.select({ id: users.id, email: users.email, name: users.name }).from(users).where(eq(users.id, id));
+  if (!target) throw AppError.notFound("User");
+  await assertPasswordAcceptable(password, { email: target.email, name: target.name ?? undefined });
+  const passwordHash = await bcrypt.hash(password, 10);
+  const [updated] = await req
+    .db!.update(users)
+    .set({
+      passwordHash,
+      mustChangePassword: true,
+      passwordChangedAt: new Date(),
+      tokenVersion: sql`${users.tokenVersion} + 1`,
+      failedLoginCount: 0,
+      firstFailedLoginAt: null,
+      lockedUntil: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, id))
+    .returning({ id: users.id });
+  if (!updated) throw AppError.notFound("User");
+  await revokeRefreshTokenRows(updated.id);
+  await revokeAllTrustedDevices(updated.id, "temporary_password_set", req.user?.id);
+  await recordAuditTrail(req.db!, { entityType: "User", entityId: updated.id, action: "status_change", changes: { action: "temporary_password_set" }, performedBy: req.user?.id });
   res.status(204).send();
 });
 

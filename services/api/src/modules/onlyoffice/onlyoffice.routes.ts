@@ -13,7 +13,12 @@ import { assertOfficeAccess, authorizeOfficeFile, ensureExclusiveDraftFile, load
 import { buildEditorConfig, editorDocumentKey } from "./editorConfig.js";
 import { downloadSavedFile } from "./download.js";
 import { onlyOfficeSettings } from "./settings.js";
-import { bearerToken, readCallbackClaims, readFileClaims, signOfficeToken, verifyDocumentServerPayload, verifyOfficeToken } from "./token.js";
+import { eq } from "drizzle-orm";
+import { attachments } from "../../drizzle/schema/attachments.js";
+import { documentFolders } from "../../drizzle/schema/documentFolders.js";
+import { hasPermission } from "../../middleware/requirePermission.js";
+import { bearerToken, readAttachmentClaims, readCallbackClaims, readFileClaims, readFolderClaims, signOfficeToken, verifyDocumentServerPayload, verifyOfficeToken } from "./token.js";
+import { officeViewer, streamStoredFile } from "./viewSession.js";
 
 function requireSettings() {
   const settings = onlyOfficeSettings();
@@ -43,7 +48,9 @@ onlyOfficeRouter.get(
     if (!actor) throw AppError.unauthorized("Session is no longer valid");
     const access = await authorizeOfficeFile(req.db as Db, actor, ids);
     assertOfficeAccess(access);
-    const file = access.mode === "edit" ? await ensureExclusiveDraftFile(req.db as Db, actor, ids, access.file) : access.file;
+    // A preview always opens read-only. The Edit button omits mode=view and keeps the draft editor.
+    const mode = req.query.mode === "view" ? "view" : access.mode;
+    const file = mode === "edit" ? await ensureExclusiveDraftFile(req.db as Db, actor, ids, access.file) : access.file;
     const key = editorDocumentKey(file.fileId, file.sha256);
     const claims = { userId: actor.id, documentId: ids.documentId, versionId: ids.versionId, fileId: file.fileId };
     const fileToken = signOfficeToken(settings.jwtSecret, "oo-file", claims);
@@ -53,14 +60,15 @@ onlyOfficeRouter.get(
         fileId: file.fileId,
         fileName: file.fileName,
         sha256: file.sha256,
-        mode: access.mode,
+        mode,
+        viewer: officeViewer(req.query.viewer),
         user: { id: actor.id, name: actor.name },
         fileUrl: `${settings.apiBaseUrl}/onlyoffice/file?token=${encodeURIComponent(fileToken)}`,
         callbackUrl: `${settings.apiBaseUrl}/onlyoffice/callback?token=${encodeURIComponent(callbackToken)}`,
       },
       settings.jwtSecret,
     );
-    res.json({ documentServerUrl: settings.publicUrl, mode: access.mode, fileId: file.fileId, config });
+    res.json({ documentServerUrl: settings.publicUrl, mode, fileId: file.fileId, config });
   }),
 );
 
@@ -86,6 +94,50 @@ onlyOfficePublicRouter.get(
     res.setHeader("Cache-Control", "private, no-store");
     res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(access.file.fileName)}`);
     createReadStream(access.file.filePath).pipe(res);
+  }),
+);
+
+onlyOfficePublicRouter.get(
+  "/attachment-file",
+  asyncHandler(async (req: Request, res: Response) => {
+    const settings = requireSettings();
+    const claims = readAttachmentClaims(verifyOfficeToken(settings.jwtSecret, "oo-attachment", String(req.query.token ?? "")));
+    const actor = await loadOfficeActor(db, claims.userId);
+    if (!actor) throw AppError.notFound("File");
+    const [row] = await db.select().from(attachments).where(eq(attachments.id, claims.attachmentId));
+    if (!row) throw AppError.notFound("File");
+    streamStoredFile(res, row.filePath, row.mimeType ?? "application/octet-stream", row.fileSize ?? 0, row.fileName);
+  }),
+);
+
+onlyOfficePublicRouter.get(
+  "/folder-file",
+  asyncHandler(async (req: Request, res: Response) => {
+    const settings = requireSettings();
+    const claims = readFolderClaims(verifyOfficeToken(settings.jwtSecret, "oo-folder", String(req.query.token ?? "")));
+    const actor = await loadOfficeActor(db, claims.userId);
+    if (!actor) throw AppError.notFound("File");
+    const view = await hasPermission(db, actor, "document.view");
+    if (!view.allowed) throw AppError.notFound("File");
+    const [row] = await db.select().from(documentFolders).where(eq(documentFolders.id, claims.folderId));
+    if (!row?.pdfPath) throw AppError.notFound("File");
+    const ext = row.pdfPath.includes(".") ? row.pdfPath.slice(row.pdfPath.lastIndexOf(".")) : "";
+    const fileName = row.name.toLowerCase().endsWith(ext.toLowerCase()) ? row.name : `${row.name}${ext}`;
+    streamStoredFile(res, row.pdfPath, row.pdfMimeType ?? "application/octet-stream", undefined, fileName);
+  }),
+);
+
+/** View-only sessions never save. The document server still posts here when the preview closes. */
+onlyOfficePublicRouter.post(
+  "/view-callback",
+  asyncHandler(async (req: Request, res: Response) => {
+    const settings = requireSettings();
+    try {
+      verifyOfficeToken(settings.jwtSecret, "oo-view-callback", String(req.query.token ?? ""));
+    } catch {
+      return res.json({ error: 1 });
+    }
+    res.json({ error: 0 });
   }),
 );
 

@@ -4,6 +4,7 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { NavigationSettingsPage } from "./NavigationSettingsPage";
 import { ThemeSettingsSection } from "./ThemeSettingsSection";
 import { MfaSettingsSection, TrustedDevicesSection } from "./MfaSettingsSection";
+import { ChangePasswordSection } from "./ChangePasswordSection";
 import { FeasibilitySettingsPanel } from "./FeasibilitySettingsPanel";
 import { ERPSyncSettingsPanel } from "./ERPSyncSettingsPanel";
 
@@ -121,6 +122,7 @@ export function SettingsPage() {
         <div className="flex flex-col gap-4">
           <MfaSettingsSection />
           <TrustedDevicesSection />
+          <ChangePasswordSection />
         </div>
       )}
       {tab === "Theme" && <ThemeSettingsSection />}

@@ -14,7 +14,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { normalizeDocumentPayload, type DocumentAttachmentRef } from "../documents/documentPayload.js";
 import { detectFileType, documentAdapter, isInsideStorage, MAX_FILE_BYTES } from "../documents/documentVersioning.js";
 import * as engine from "../versioning/versioning.service.js";
-import { officeDocumentType } from "./editorConfig.js";
+import { OFFICE_TYPE_ERROR, officeDocumentType } from "./editorConfig.js";
 
 /**
  * The only access check for in-app Office editing.
@@ -70,7 +70,7 @@ export function decideOfficeAccess(
 ): { ok: true; mode: "view" | "edit" } | { ok: false; status: 403 | 404 | 415; reason: string } {
   if (!view.allowed) return { ok: false, status: 403, reason: view.reason ?? "You don't have permission to view this document." };
   if (!file) return { ok: false, status: 404, reason: "Attachment not found" };
-  if (!officeDocumentType(file.fileName)) return { ok: false, status: 415, reason: "Only Word (.docx) and Excel (.xlsx) files can be opened in the editor." };
+  if (!officeDocumentType(file.fileName)) return { ok: false, status: 415, reason: OFFICE_TYPE_ERROR };
   if (edit.allowed && file.status === "draft") return { ok: true, mode: "edit" };
   return { ok: true, mode: "view" };
 }

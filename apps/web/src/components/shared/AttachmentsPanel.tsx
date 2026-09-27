@@ -5,10 +5,10 @@ import { apiClient } from "../../api/client";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useToast } from "./ToastProvider";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
-import { Modal } from "../modals/Modal";
-import { PdfViewer } from "../forms/PdfViewer";
+import { InAppFilePreview, type PreviewRequest } from "./InAppFilePreview";
 import type { Attachment } from "../../api/types";
 import { formatDateTime } from "../../lib/dates";
+import { canPreview, previewKind, saveBytes } from "../../lib/filePreview";
 import { FileDropZone } from "./FileDropZone";
 import { usePageFileDrop } from "../../hooks/usePageFileDrop";
 import { UploadCloud } from "lucide-react";
@@ -73,42 +73,27 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
   });
 
   async function download(file: Attachment) {
-    try {
-      const res = await apiClient.get(`/attachments/${file.id}/download`, { responseType: "blob" });
-      const url = URL.createObjectURL(res.data as Blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = file.fileName;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      toast.error(await extractErrorMessageAsync(err, "Couldn't download that file."));
-    }
+    const res = await apiClient.get(`/attachments/${file.id}/download`, { responseType: "blob" });
+    saveBytes(res.data as Blob, file.fileName, file.mimeType ?? undefined);
   }
 
   const isAdmin = user?.roleName === "admin";
 
-  // Real in-app preview for PDF attachments, via the same PdfViewer every
-  // form-export preview already uses — fetches the real bytes on demand
-  // (never pre-fetched for every row in the list) rather than a new,
-  // one-off preview mechanism.
-  const [previewFile, setPreviewFile] = useState<Attachment | null>(null);
-  const [previewBytes, setPreviewBytes] = useState<Uint8Array | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const [preview, setPreview] = useState<PreviewRequest | null>(null);
 
-  async function preview(file: Attachment) {
-    setPreviewFile(file);
-    setPreviewBytes(null);
-    setPreviewLoading(true);
-    try {
-      const res = await apiClient.get(`/attachments/${file.id}/download`, { responseType: "arraybuffer" });
-      setPreviewBytes(new Uint8Array(res.data as ArrayBuffer));
-    } catch (err) {
-      toast.error(await extractErrorMessageAsync(err, "Couldn't load that file for preview."));
-      setPreviewFile(null);
-    } finally {
-      setPreviewLoading(false);
+  function openFile(file: Attachment) {
+    const kind = previewKind(file.fileName, file.mimeType);
+    if (kind === "download") {
+      void download(file).catch(async (err) => toast.error(await extractErrorMessageAsync(err, "Couldn't download that file.")));
+      return;
     }
+    setPreview({
+      fileName: file.fileName,
+      mimeType: file.mimeType,
+      loadBytes: async () => (await apiClient.get(`/attachments/${file.id}/download`, { responseType: "arraybuffer" })).data as ArrayBuffer,
+      officeSource: kind === "office" ? { kind: "attachment", attachmentId: file.id } : undefined,
+      download: () => download(file),
+    });
   }
 
   return (
@@ -153,17 +138,25 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
         {files.map((file) => (
           <li key={file.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
             <div className="min-w-0 flex-1">
-              <div className="truncate font-medium">{file.fileName}</div>
+              <button type="button" onClick={() => openFile(file)} className="block max-w-full truncate text-left font-medium hover:underline">
+                {file.fileName}
+              </button>
               <div className="text-xs text-muted-foreground">
                 {formatSize(file.fileSize)} · {formatDateTime(file.createdAt)}
               </div>
             </div>
-            {file.mimeType === "application/pdf" && (
-              <button onClick={() => preview(file)} className="shrink-0 text-muted-foreground hover:text-foreground" title="Preview">
+            {canPreview(file.fileName, file.mimeType) && (
+              <button type="button" onClick={() => openFile(file)} className="shrink-0 text-muted-foreground hover:text-foreground" title="Preview" aria-label={`Preview ${file.fileName}`}>
                 <Eye size={16} />
               </button>
             )}
-            <button onClick={() => download(file)} className="shrink-0 text-muted-foreground hover:text-foreground" title="Download">
+            <button
+              type="button"
+              onClick={() => void download(file).catch(async (err) => toast.error(await extractErrorMessageAsync(err, "Couldn't download that file.")))}
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+              title="Download"
+              aria-label={`Download ${file.fileName}`}
+            >
               <Download size={16} />
             </button>
             {(isAdmin || file.uploadedBy === user?.id) && (
@@ -175,9 +168,7 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
         ))}
       </ul>
 
-      <Modal title={previewFile?.fileName ?? "Preview"} isOpen={previewFile !== null} onClose={() => setPreviewFile(null)}>
-        <PdfViewer data={previewBytes} isLoading={previewLoading} />
-      </Modal>
+      <InAppFilePreview request={preview} onClose={() => setPreview(null)} />
     </FileDropZone>
   );
 }

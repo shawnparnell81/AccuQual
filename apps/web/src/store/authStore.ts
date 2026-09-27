@@ -7,6 +7,8 @@ export interface AuthUser {
   name: string | null;
   roleName: string | null;
   department: string | null;
+  /** Set when an administrator assigned a temporary password. The app blocks every other page until this is cleared. */
+  mustChangePassword?: boolean;
 }
 
 export interface CompanyContext {

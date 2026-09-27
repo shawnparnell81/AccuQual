@@ -533,6 +533,13 @@
       "when": 1790460792124,
       "tag": "0075_trusted_devices",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1790473860154,
+      "tag": "0076_must_change_password",
+      "breakpoints": true
     }
   ]
 }

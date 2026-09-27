@@ -64,7 +64,7 @@ export async function provisionCompany(input: ProvisionInput) {
   const password = input.adminPassword ?? randomBytes(9).toString("base64url");
   const [adminUser] = await db
     .insert(users)
-    .values({ email: input.adminEmail, passwordHash: await bcrypt.hash(password, 10), name: input.adminName ?? "Administrator", roleId: adminRole?.id ?? null })
+    .values({ email: input.adminEmail, passwordHash: await bcrypt.hash(password, 10), name: input.adminName ?? "Administrator", roleId: adminRole?.id ?? null, mustChangePassword: !input.adminPassword })
     .returning();
 
   const permissionRows: { departmentName: Department; moduleName: ResourceKey; accessLevel: AccessLevel }[] = [];

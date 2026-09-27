@@ -1,10 +1,12 @@
 import { useRef, useState } from "react";
 import { Download, FileText, Pencil, Trash2, Upload } from "lucide-react";
-import { ACCEPTED_FILES, formatBytes, openAttachment, removeAttachment, uploadAttachment, type DocumentAttachmentRef, type DocumentVersion } from "../../api/documents";
+import { ACCEPTED_FILES, fetchDocumentAttachment, formatBytes, removeAttachment, uploadAttachment, type DocumentAttachmentRef, type DocumentVersion } from "../../api/documents";
 import { isOfficeFileName } from "../../api/onlyoffice";
 import { useToast } from "../shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { FileDropZone } from "../shared/FileDropZone";
+import { InAppFilePreview, type PreviewRequest } from "../shared/InAppFilePreview";
+import { previewKind, saveBytes } from "../../lib/filePreview";
 import { OnlyOfficeEditor } from "./OnlyOfficeEditor";
 
 interface Props {
@@ -23,7 +25,28 @@ export function DocumentFilesPanel({ documentId, versionId, files, editable, onC
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [officeFile, setOfficeFile] = useState<DocumentAttachmentRef | null>(null);
+  const [preview, setPreview] = useState<PreviewRequest | null>(null);
   const toast = useToast();
+
+  async function downloadFile(f: DocumentAttachmentRef) {
+    const got = await fetchDocumentAttachment(documentId, versionId, f.id);
+    saveBytes(got.bytes, got.fileName || f.fileName, got.mimeType);
+  }
+
+  function openFile(f: DocumentAttachmentRef) {
+    const kind = previewKind(f.fileName, f.mimeType);
+    if (kind === "download") {
+      void downloadFile(f).catch((err) => toast.error(extractErrorMessage(err, "Couldn't download that file.")));
+      return;
+    }
+    setPreview({
+      fileName: f.fileName,
+      mimeType: f.mimeType,
+      loadBytes: async () => (await fetchDocumentAttachment(documentId, versionId, f.id)).bytes,
+      officeSource: kind === "office" ? { kind: "document", documentId, versionId, fileId: f.id, viewOnly: true } : undefined,
+      download: () => downloadFile(f),
+    });
+  }
 
   async function add(list: FileList | File[] | null) {
     if (!list || list.length === 0) return;
@@ -67,12 +90,14 @@ export function DocumentFilesPanel({ documentId, versionId, files, editable, onC
             <li key={f.id} className="flex flex-wrap items-center gap-3 rounded-md border border-border p-2 text-sm">
               <FileText size={16} className="shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{f.fileName}</p>
+                <button type="button" onClick={() => openFile(f)} className="block max-w-full truncate text-left font-medium hover:underline">
+                  {f.fileName}
+                </button>
                 <p className="text-xs text-muted-foreground">
                   {formatBytes(f.sizeBytes)} · checksum <code title={f.sha256}>{f.sha256.slice(0, 12)}</code>
                 </p>
               </div>
-              {isOfficeFileName(f.fileName) && (
+              {editable && isOfficeFileName(f.fileName) && (
                 <button
                   type="button"
                   onClick={() => {
@@ -82,11 +107,11 @@ export function DocumentFilesPanel({ documentId, versionId, files, editable, onC
                   }}
                   className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
                 >
-                  <Pencil size={13} /> {editable ? "Edit" : "View"}
+                  <Pencil size={13} /> Edit
                 </button>
               )}
-              <button onClick={() => void openAttachment(documentId, versionId, f.id).catch((err) => toast.error(extractErrorMessage(err, "Couldn't open that file.")))} className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
-                <Download size={13} /> Open
+              <button type="button" onClick={() => void downloadFile(f).catch((err) => toast.error(extractErrorMessage(err, "Couldn't download that file.")))} className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
+                <Download size={13} /> Download
               </button>
               {editable && (
                 <button disabled={busy} onClick={() => void remove(f)} className="inline-flex items-center gap-1 text-xs text-destructive hover:underline disabled:opacity-50" aria-label={`Remove ${f.fileName}`}>
@@ -106,6 +131,7 @@ export function DocumentFilesPanel({ documentId, versionId, files, editable, onC
           <p className="mt-1 text-xs text-muted-foreground">PDF, Word (.docx), Excel (.xlsx) or an image, up to 15 MB each. Word and Excel files can open in the editor while this server has ONLYOFFICE configured. Each file's checksum is recorded so the released revision can prove what it held.</p>
         </div>
       )}
+      <InAppFilePreview request={preview} onClose={() => setPreview(null)} />
       {officeFile && (
         <OnlyOfficeEditor
           documentId={documentId}

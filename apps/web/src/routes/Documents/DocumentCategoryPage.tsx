@@ -1,29 +1,17 @@
 import { useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eye, Upload } from "lucide-react";
+import { Download, Eye, Upload } from "lucide-react";
 import { apiClient } from "../../api/client";
-import { uploadAttachment, type DocumentPayload } from "../../api/documents";
+import { fetchDocumentAttachment, uploadAttachment, type DocumentPayload } from "../../api/documents";
 import type { CurrentState } from "../../api/versioning";
 import type { AccuQualDocument } from "../../api/types";
-import { isOfficeFileName } from "../../api/onlyoffice";
 import { DOCUMENT_FOLDER_PAGES } from "../../components/layout/sidebarStructure";
-import { OnlyOfficeEditor } from "../../components/documents/OnlyOfficeEditor";
-import { PdfViewer } from "../../components/forms/PdfViewer";
+import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { previewKind, saveBytes } from "../../lib/filePreview";
 import { formatDate } from "../../lib/dates";
-
-interface PreviewState {
-  title: string;
-  kind: "pdf" | "image" | "office" | "none";
-  bytes: Uint8Array | null;
-  imageUrl: string | null;
-  office: { documentId: number; versionId: number; fileId: number; fileName: string } | null;
-  note: string | null;
-}
-
-const emptyPreview: PreviewState = { title: "", kind: "none", bytes: null, imageUrl: null, office: null, note: null };
 
 /**
  * A single document folder (Drawings, Master Tool List, Shipping, and the other
@@ -38,8 +26,7 @@ export function DocumentCategoryPage() {
   const queryClient = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const [preview, setPreview] = useState<PreviewState>(emptyPreview);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const [preview, setPreview] = useState<PreviewRequest | null>(null);
 
   const documents = useQuery<AccuQualDocument[]>({
     queryKey: ["documents", undefined],
@@ -57,7 +44,7 @@ export function DocumentCategoryPage() {
     setBusy(true);
     try {
       const created = await apiClient.post<AccuQualDocument>("/documents", { title: file.name, category });
-      const current = await apiClient.get<CurrentState<DocumentPayload>>(`/documents/${created.data.id}/version/current`);
+      const current = await apiClient.get<CurrentState<DocumentPayload>>(`/documents/${created.data.id}/current`);
       const versionId = current.data.open?.id;
       if (!versionId) throw new Error("No draft to attach the file to.");
       await uploadAttachment(created.data.id, versionId, file);
@@ -71,47 +58,50 @@ export function DocumentCategoryPage() {
     }
   }
 
+  async function resolveFile(doc: AccuQualDocument) {
+    const current = await apiClient.get<CurrentState<DocumentPayload>>(`/documents/${doc.id}/current`);
+    const version = current.data.open ?? current.data.published;
+    const file = version?.payload?.attachments?.[0];
+    if (!version || !file) return null;
+    return { versionId: version.id, file };
+  }
+
+  async function downloadDoc(doc: AccuQualDocument) {
+    const resolved = await resolveFile(doc);
+    if (!resolved) {
+      toast.error("This document doesn't have a file to download yet.");
+      return;
+    }
+    const got = await fetchDocumentAttachment(doc.id, resolved.versionId, resolved.file.id);
+    saveBytes(got.bytes, got.fileName || resolved.file.fileName, got.mimeType);
+  }
+
   async function openPreview(doc: AccuQualDocument) {
-    setPreviewLoading(true);
-    setPreview({ ...emptyPreview, title: doc.title });
     try {
-      const current = await apiClient.get<CurrentState<DocumentPayload>>(`/documents/${doc.id}/version/current`);
-      const version = current.data.open ?? current.data.published;
-      const file = version?.payload?.attachments?.[0];
-      if (!version || !file) {
-        setPreview({ ...emptyPreview, title: doc.title, kind: "none", note: "This document doesn't have a file to preview yet." });
+      const resolved = await resolveFile(doc);
+      if (!resolved) {
+        toast.error("This document doesn't have a file to preview yet.");
         return;
       }
-      if (isOfficeFileName(file.fileName)) {
-        setPreview({
-          title: doc.title,
-          kind: "office",
-          bytes: null,
-          imageUrl: null,
-          office: { documentId: doc.id, versionId: version.id, fileId: file.id, fileName: file.fileName },
-          note: null,
-        });
+      const { file, versionId } = resolved;
+      const kind = previewKind(file.fileName, file.mimeType);
+      if (kind === "download") {
+        const got = await fetchDocumentAttachment(doc.id, versionId, file.id);
+        saveBytes(got.bytes, got.fileName || file.fileName, got.mimeType);
         return;
       }
-      const link = await apiClient.get<{ url: string }>(`/documents/${doc.id}/version/${version.id}/attachments/${file.id}/url`);
-      const base = apiClient.defaults.baseURL ?? "";
-      const res = await apiClient.get<ArrayBuffer>(`${base}${link.data.url}`, { responseType: "arraybuffer" });
-      const bytes = new Uint8Array(res.data);
-      if (file.mimeType === "application/pdf" || file.fileName.toLowerCase().endsWith(".pdf")) {
-        setPreview({ title: doc.title, kind: "pdf", bytes, imageUrl: null, office: null, note: null });
-        return;
-      }
-      if (file.mimeType?.startsWith("image/")) {
-        const blob = new Blob([bytes], { type: file.mimeType });
-        setPreview({ title: doc.title, kind: "image", bytes: null, imageUrl: URL.createObjectURL(blob), office: null, note: null });
-        return;
-      }
-      setPreview({ ...emptyPreview, title: doc.title, kind: "none", note: "Open this file from Documents to download it. Preview here covers PDF, images, Word, and Excel." });
+      setPreview({
+        fileName: file.fileName,
+        mimeType: file.mimeType,
+        loadBytes: async () => (await fetchDocumentAttachment(doc.id, versionId, file.id)).bytes,
+        officeSource: kind === "office" ? { kind: "document", documentId: doc.id, versionId, fileId: file.id, viewOnly: true } : undefined,
+        download: async () => {
+          const got = await fetchDocumentAttachment(doc.id, versionId, file.id);
+          saveBytes(got.bytes, got.fileName || file.fileName, got.mimeType);
+        },
+      });
     } catch (err) {
       toast.error(extractErrorMessage(err, "Couldn't open a preview."));
-      setPreview(emptyPreview);
-    } finally {
-      setPreviewLoading(false);
     }
   }
 
@@ -167,12 +157,19 @@ export function DocumentCategoryPage() {
             <tbody>
               {rows.map((doc) => (
                 <tr key={doc.id} className="border-t border-border">
-                  <td className="px-3 py-2 font-medium">{doc.title}</td>
+                  <td className="px-3 py-2 font-medium">
+                    <button type="button" onClick={() => void openPreview(doc)} className="text-left hover:underline">
+                      {doc.title}
+                    </button>
+                  </td>
                   <td className="px-3 py-2 text-muted-foreground">{doc.createdAt || doc.updatedAt ? formatDate(doc.createdAt ?? doc.updatedAt) : ""}</td>
                   <td className="px-3 py-2 capitalize text-muted-foreground">{doc.status.replace(/_/g, " ")}</td>
                   <td className="px-3 py-2 text-right">
-                    <button type="button" onClick={() => void openPreview(doc)} className="inline-flex items-center gap-1 text-primary hover:underline">
+                    <button type="button" onClick={() => void openPreview(doc)} className="mr-3 inline-flex items-center gap-1 text-primary hover:underline">
                       <Eye size={14} /> Preview
+                    </button>
+                    <button type="button" onClick={() => void downloadDoc(doc).catch((err) => toast.error(extractErrorMessage(err, "Couldn't download that file.")))} className="inline-flex items-center gap-1 text-primary hover:underline">
+                      <Download size={14} /> Download
                     </button>
                   </td>
                 </tr>
@@ -182,24 +179,7 @@ export function DocumentCategoryPage() {
         </div>
       )}
 
-      {(previewLoading || preview.title) && (
-        <section className="rounded-lg border border-border bg-card p-4">
-          <h2 className="mb-3 text-sm font-medium">{preview.title || "Preview"}</h2>
-          {previewLoading && <p className="text-sm text-muted-foreground">Opening preview…</p>}
-          {!previewLoading && preview.kind === "pdf" && <PdfViewer data={preview.bytes} isLoading={false} />}
-          {!previewLoading && preview.kind === "image" && preview.imageUrl && <img src={preview.imageUrl} alt={preview.title} className="max-h-[70vh] max-w-full rounded-md border border-border" />}
-          {!previewLoading && preview.kind === "office" && preview.office && (
-            <OnlyOfficeEditor
-              documentId={preview.office.documentId}
-              versionId={preview.office.versionId}
-              fileId={preview.office.fileId}
-              fileName={preview.office.fileName}
-              onClose={() => setPreview(emptyPreview)}
-            />
-          )}
-          {!previewLoading && preview.note && <p className="text-sm text-muted-foreground">{preview.note}</p>}
-        </section>
-      )}
+      <InAppFilePreview request={preview} onClose={() => setPreview(null)} />
     </div>
   );
 }

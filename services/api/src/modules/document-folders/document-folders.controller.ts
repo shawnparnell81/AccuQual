@@ -13,6 +13,11 @@ import { DEFAULT_DOCUMENT_FOLDERS, type DefaultFolderSeed } from "./defaultDocum
 import { presentDocumentFolders } from "./retiredDocumentFolders.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { expirationStatus } from "../documents/documents.controller.js";
+import { OFFICE_TYPE_ERROR, officeDocumentType } from "../onlyoffice/editorConfig.js";
+import { loadOfficeActor } from "../onlyoffice/access.js";
+import { onlyOfficeSettings } from "../onlyoffice/settings.js";
+import { signOfficeToken } from "../onlyoffice/token.js";
+import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
 
 // A separate entityType from "Document" (services/api/src/modules/documents)
 // — document_folders.id and documents.id are different id spaces, and
@@ -410,6 +415,32 @@ export const uploadDocument = asyncHandler(async (req: Request, res: Response) =
 
   const updated = await attachFileToFolder(db, created!.id, file, req.user?.id);
   res.status(201).json(updated);
+});
+
+/** Read-only ONLYOFFICE session for a Word, Excel, or PowerPoint file on a folder. Same audience as the folder download. */
+export const folderOfficeSessionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const [folder] = await req.db!.select().from(documentFolders).where(eq(documentFolders.id, id));
+  if (!folder?.pdfPath || !existsSync(folder.pdfPath)) throw AppError.notFound("Attached template file");
+  const ext = folder.pdfPath.includes(".") ? folder.pdfPath.slice(folder.pdfPath.lastIndexOf(".")) : "";
+  const fileName = folder.name.toLowerCase().endsWith(ext.toLowerCase()) ? folder.name : `${folder.name}${ext}`;
+  if (!officeDocumentType(fileName)) throw new AppError(OFFICE_TYPE_ERROR, 415);
+  const settings = onlyOfficeSettings();
+  if (!settings) throw new AppError("Office editing is not configured on this server.", 503);
+  const actor = await loadOfficeActor(req.db!, req.user!.id);
+  if (!actor) throw AppError.unauthorized("Session is no longer valid");
+  const fileToken = signOfficeToken(settings.jwtSecret, "oo-folder", { userId: actor.id, folderId: folder.id });
+  res.json(
+    viewOfficeSession({
+      fileId: folder.id,
+      fileName,
+      sha256: contentKey(folder.id, folder.pdfPath, folder.pdfMimeType),
+      user: { id: actor.id, name: actor.name },
+      fileToken,
+      fileRoute: "folder-file",
+      viewer: officeViewer(req.query.viewer),
+    }),
+  );
 });
 
 /** Streams the attached file back, e.g. for the "live preview" / download affordance. */
