@@ -7,6 +7,7 @@ import { createCalibrationEvent } from "../calibration/calibration.controller.js
 import { completeTrainingAssignment } from "../training/training.controller.js";
 import { DI_FORM_TYPE, syncDiFormToRecord } from "../quality/quality.formSync.js";
 import { COMPLAINT_FORM_TYPE, syncComplaintFormToRecord } from "../complaints/complaints.formSync.js";
+import { parseApqpSummaryData } from "./apqpSummary.validation.js";
 
 export const getTemplate = asyncHandler(async (req: Request, res: Response) => {
   const template = await formsService.loadTemplate(req.db!, req.params.type!);
@@ -21,11 +22,15 @@ export const getForm = asyncHandler(async (req: Request, res: Response) => {
 
 export const saveForm = asyncHandler(async (req: Request, res: Response) => {
   const entityId = req.params.id ? Number(req.params.id) : undefined;
+  const data =
+    req.params.type === "apqp_summary" && req.body.data && typeof req.body.data === "object"
+      ? parseApqpSummaryData(req.body.data as Record<string, unknown>)
+      : req.body.data;
   const saved = await formsService.saveData(req.db!, {
     formType: req.params.type!,
     entityType: req.body.entityType,
     entityId: req.body.entityId ?? entityId,
-    data: req.body.data,
+    data,
     userId: req.user?.id,
   });
 
