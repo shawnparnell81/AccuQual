@@ -10,6 +10,7 @@ import { SiteSwitcher } from "./SiteSwitcher";
 import { UserMenu } from "./UserMenu";
 import { ScanToFindDialog } from "./ScanToFindDialog";
 import { ThemeToggleButton } from "./ThemeToggleButton";
+import { ColorSchemeButton } from "./ColorSchemeButton";
 import { BackButton } from "./BackButton";
 import { DASHBOARD_LEAF } from "./navConfig";
 import {
@@ -185,6 +186,7 @@ export function TopNav() {
           </button>
           <ScanToFindDialog />
           <ThemeToggleButton />
+          <ColorSchemeButton />
           <NotificationDropdown />
           <WhatsNewDropdown />
           <UserMenu />

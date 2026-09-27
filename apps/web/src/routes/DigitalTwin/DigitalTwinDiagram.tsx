@@ -18,10 +18,10 @@ interface DigitalTwinDiagramProps {
  * from here so both use the one definition, not two that could drift).
  */
 export function heatColor(riskScore: number): string {
-  if (riskScore > 10) return "#e11d48";
-  if (riskScore > 5) return "#fb923c";
-  if (riskScore > 1) return "#f59e0b";
-  return "#64748b";
+  if (riskScore > 10) return "var(--chart-critical, #e11d48)";
+  if (riskScore > 5) return "var(--chart-problem, #fb923c)";
+  if (riskScore > 1) return "var(--chart-attention, #f59e0b)";
+  return "var(--chart-fallback, #64748b)";
 }
 
 /**

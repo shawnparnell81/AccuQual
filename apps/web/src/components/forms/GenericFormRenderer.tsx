@@ -4,15 +4,14 @@ import { materializeRow, STATUS_COLORS } from "./formulas";
 import { DetailsDisclosure } from "./DetailsDisclosure";
 import { inputTypeForFieldKind } from "./formInputType";
 
-// NAVY (header bars) is matched to the reference templates and kept in sync
-// with schema-pdf-renderer.ts's own constant so the on-screen form and the
-// exported PDF look like the same document — dark navy + white text reads
-// fine against either theme, so unlike the label/border colors below it
-// doesn't need a theme-aware token. Label cells and borders use the app's
-// own `bg-muted`/`border-border`/`text-foreground` tokens instead of a
-// hardcoded hex: those used to be pale-blue-on-dark-text unconditionally,
-// which read as a jarring light patch once dark mode shipped.
-const NAVY = "#1d3a5c";
+// Section bars and the document title use tokens whose Classic values are
+// the same navy as schema-pdf-renderer.ts (#1d3a5c), so the on-screen form
+// and the exported PDF still match in AccuQual Classic. A color scheme can
+// retint the on-screen form through --form-bar / --form-heading without
+// changing the PDF. Label cells and borders use `bg-muted` / `border-border`
+// / `text-foreground`.
+const FORM_BAR = "var(--form-bar, #1d3a5c)";
+const FORM_HEADING = "var(--form-heading, #1d3a5c)";
 
 interface GenericFormRendererProps {
   layout: FormLayout;
@@ -48,7 +47,7 @@ function SectionCard({
 }) {
   return (
     <div className="overflow-hidden rounded-md border border-border">
-      <div className="px-3 py-1.5 text-xs font-bold text-white" style={{ backgroundColor: NAVY }}>
+      <div className="px-3 py-1.5 text-xs font-bold text-white" style={{ backgroundColor: FORM_BAR }}>
         {section.number}. {section.title}
       </div>
       <div className="flex flex-col divide-y divide-border">
@@ -66,7 +65,7 @@ export function GenericFormRenderer({ layout, data, onChange, readOnly = false, 
   const details = layout.sections.filter((section) => parked.has(section.number));
   return (
     <div className="flex flex-col gap-5">
-      <h2 className="text-center text-base font-bold uppercase tracking-wide" style={{ color: NAVY }}>
+      <h2 className="text-center text-base font-bold uppercase tracking-wide" style={{ color: FORM_HEADING }}>
         {layout.title}
       </h2>
       {primary.map((section) => (

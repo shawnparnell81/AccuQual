@@ -29,6 +29,7 @@ export const updateUserSchema = z.object({
 /** A user's own theme override — see users.themePreferences. "" clears a color back to following the company/default theme, same convention as company.validation.ts's updateBrandingSchema. */
 export const updateMyThemeSchema = z.object({
   mode: z.enum(["light", "dark", "system"]).optional(),
+  scheme: z.enum(["classic", "dma"]).optional(),
   primaryColor: z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/, "must be a hex color like #1a2b3c")

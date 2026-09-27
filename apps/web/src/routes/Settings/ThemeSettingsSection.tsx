@@ -5,7 +5,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { TextField } from "../../components/forms/Field";
 import { useCurrentUser } from "../../hooks/useAuth";
-import { deriveThemeVars, resolveMode } from "../../lib/theme";
+import { applyTheme, COLOR_SCHEME_LABELS, deriveThemeVars, resolveMode, resolveScheme, type ColorScheme } from "../../lib/theme";
 import type { CompanyBranding, UserThemePreferences } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
@@ -51,12 +51,14 @@ export function ThemeSettingsSection() {
     mutationFn: async (body: UserThemePreferences) => (await apiClient.patch("/users/me/theme", body)).data,
     onSuccess: (data) => {
       queryClient.setQueryData(["users/me/theme"], data);
+      applyTheme(branding, data);
       toast.success("Theme preference saved.");
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save your theme preference.")),
   });
 
   const currentMode = prefs?.mode ?? "dark";
+  const currentScheme = resolveScheme(prefs?.scheme);
   const previewStyle = useMemo(() => {
     const vars = deriveThemeVars({
       mode: resolveMode(currentMode),
@@ -75,6 +77,28 @@ export function ThemeSettingsSection() {
     <div className="flex flex-col gap-4">
       <div className="rounded-lg border border-border bg-card p-4">
         <h3 className="mb-2 text-sm font-medium">Appearance</h3>
+        <p className="mb-2 text-xs font-medium text-muted-foreground">Color scheme</p>
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          {(Object.keys(COLOR_SCHEME_LABELS) as ColorScheme[]).map((scheme) => (
+            <button
+              key={scheme}
+              onClick={() => save.mutate({ scheme })}
+              disabled={save.isPending}
+              className={
+                currentScheme === scheme
+                  ? "rounded-md border border-primary bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary"
+                  : "rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted disabled:opacity-50"
+              }
+            >
+              {COLOR_SCHEME_LABELS[scheme]}
+            </button>
+          ))}
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          AccuQual Classic is the original palette. DMA Industries uses that brand's navy, steel blue, and logo indigo. Light and dark
+          apply to either scheme. The header palette button switches the same choice.
+        </p>
+        <p className="mb-2 text-xs font-medium text-muted-foreground">Light or dark</p>
         <div className="flex items-center gap-3">
           {MODES.map((m) => (
             <button
@@ -100,10 +124,11 @@ export function ThemeSettingsSection() {
       <div className="rounded-lg border border-border bg-card p-4">
         <h3 className="mb-2 text-sm font-medium">Your Color Overrides</h3>
         <p className="mb-3 text-xs text-muted-foreground">
-          Optional — leave blank to use your organization's theme colors. Only you see these. Primary recolors buttons, selected
-          navigation, focus rings, and the page around them (background, cards, text, borders) for the Light or Dark mode above —
-          changing a color never flips that mode. Accent recolors the wordmark stripe, role badge, secondary links, and chart markers.
-          Each color is adjusted for contrast in the mode you're in.
+          Optional — leave blank to use your organization's theme colors. Only you see these, and only while AccuQual Classic is
+          selected. DMA Industries keeps its own palette; these colors come back when you switch to Classic. Primary recolors buttons,
+          selected navigation, focus rings, and the page around them (background, cards, text, borders) for the Light or Dark mode
+          above — changing a color never flips that mode or the scheme. Accent recolors the wordmark stripe, role badge, secondary
+          links, and chart markers. Each color is adjusted for contrast in the mode you're in.
         </p>
         <div className="mb-4 rounded-md border border-border bg-background p-3 text-foreground" style={previewStyle}>
           <p className="text-sm">Page text</p>
