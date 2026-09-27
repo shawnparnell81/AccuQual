@@ -35,6 +35,7 @@ describe("home and role language", () => {
     assert.equal(departmentPhrase("customer_service"), "Customer service");
     assert.equal(statusPhrase("corrective_action"), "Fix in progress");
     assert.equal(statusPhrase("approved"), "Released");
+    assert.equal(statusPhrase("obsolete"), "Obsolete");
   });
 });
 

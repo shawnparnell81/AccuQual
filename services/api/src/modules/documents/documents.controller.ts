@@ -11,6 +11,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import * as engine from "../versioning/versioning.service.js";
 import { blankDocumentPayload } from "./documentPayload.js";
 import { documentAdapter, isInsideStorage } from "./documentVersioning.js";
+import { OBSOLETE_ARCHIVE_CATEGORY } from "./obsoleteArchive.js";
 
 export const baseHandlers = crudFactory(documents, { entityName: "Document", idColumn: "id", softDelete: true });
 
@@ -31,7 +32,21 @@ export const createDocumentHandler = asyncHandler(async (req: Request, res: Resp
   if (!doc) throw new AppError("Failed to create the document", 500);
   const draft = await engine.createInitialDraft(db, documentAdapter, doc.id, actor, { ...blankDocumentPayload(), title: doc.title, category: doc.category ?? null } as unknown as Record<string, unknown>);
   await recordAuditTrail(db, { entityType: "Document", entityId: doc.id, action: "create", changes: { title: doc.title, category: doc.category }, performedBy: actor.id });
-  res.status(201).json({ ...doc, openVersionId: draft.id });
+
+  // A file uploaded straight into Obsolete / Archive is obsolete immediately. The open draft stays so the file can be attached.
+  let created = doc;
+  if (doc.category === OBSOLETE_ARCHIVE_CATEGORY) {
+    const [marked] = await db.update(documents).set({ status: "obsolete", updatedAt: new Date() }).where(eq(documents.id, doc.id)).returning();
+    if (marked) created = marked;
+    await recordAuditTrail(db, {
+      entityType: "Document",
+      entityId: doc.id,
+      action: "status_change",
+      changes: { action: "moved_to_obsolete", fromCategory: doc.category, toCategory: OBSOLETE_ARCHIVE_CATEGORY, fromStatus: "draft", status: "obsolete" },
+      performedBy: actor.id,
+    });
+  }
+  res.status(201).json({ ...created, openVersionId: draft.id });
 });
 
 /**
@@ -80,6 +95,43 @@ export const obsoleteHandler = asyncHandler(async (req: Request, res: Response) 
     entityId: documentId,
     action: "status_change",
     changes: { action: "obsolete", status: "obsolete" },
+    performedBy: req.user?.id,
+  });
+  await publishEvent(WORKFLOW_STREAM, { module: "documents", event: "obsolete", entityId: documentId });
+
+  res.json(updated);
+});
+
+/**
+ * Files a document in Obsolete / Archive. Updates the live record only (category + status).
+ * Controlled revisions, signatures, and the revision ledger are left as they are.
+ * POST /documents/:id/archive is the retention age-out action and is not this move.
+ */
+export const moveToObsoleteHandler = asyncHandler(async (req: Request, res: Response) => {
+  const documentId = Number(req.params.id);
+  const [doc] = await req.db!.select().from(documents).where(eq(documents.id, documentId));
+  if (!doc || doc.isDeleted) throw AppError.notFound("Document");
+  if (doc.category === OBSOLETE_ARCHIVE_CATEGORY && doc.status === "obsolete") {
+    throw new AppError("This document is already in Obsolete / Archive.", 409);
+  }
+
+  const [updated] = await req
+    .db!.update(documents)
+    .set({ category: OBSOLETE_ARCHIVE_CATEGORY, status: "obsolete", updatedAt: new Date() })
+    .where(eq(documents.id, documentId))
+    .returning();
+
+  await recordAuditTrail(req.db!, {
+    entityType: "Document",
+    entityId: documentId,
+    action: "status_change",
+    changes: {
+      action: "moved_to_obsolete",
+      fromCategory: doc.category,
+      toCategory: OBSOLETE_ARCHIVE_CATEGORY,
+      fromStatus: doc.status,
+      status: "obsolete",
+    },
     performedBy: req.user?.id,
   });
   await publishEvent(WORKFLOW_STREAM, { module: "documents", event: "obsolete", entityId: documentId });

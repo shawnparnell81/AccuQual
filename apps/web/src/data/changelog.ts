@@ -21,6 +21,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "An administrator can edit a person's name, email, role, department, and manager, and can remove an account. Someone with quality records is turned off instead of erased. Their name stays on history as inactive, and records they created or signed stay editable. Open work must be handed to someone else first.",
       "Import data reads a CSV or Excel file into suppliers, customer contacts, parts, scorecards, certifications, inspections, lots, equipment, or users. Large files run in the background.",
       "Audits has an Internal Audits folder for uploading files, with the same list and preview as the other audit folders.",
+      "Quality has an Obsolete / Archive folder. A superseded document can be moved there. It stays marked Obsolete, keeps its revision history, and drops out of active lists unless that folder is open or Include obsolete is checked.",
       "Due-date reminders and escalation for overdue or stuck NCRs, CAPAs, 8Ds, and approvals waiting too long.",
       "Repeat NCRs now suggest a CAPA, with one click to open it and link the group.",
       "A personal daily digest in Settings lists what is due and which approvals are waiting, with a link to each record.",

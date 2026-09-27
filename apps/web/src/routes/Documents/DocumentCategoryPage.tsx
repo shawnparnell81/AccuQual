@@ -6,7 +6,8 @@ import { apiClient } from "../../api/client";
 import { fetchDocumentAttachment, uploadAttachment, type DocumentPayload } from "../../api/documents";
 import type { CurrentState } from "../../api/versioning";
 import type { AccuQualDocument } from "../../api/types";
-import { DOCUMENT_FOLDER_PAGES } from "../../components/layout/sidebarStructure";
+import { DOCUMENT_FOLDER_PAGES, OBSOLETE_ARCHIVE_CATEGORY } from "../../components/layout/sidebarStructure";
+import { StatusBadge } from "../../components/tables/StatusBadge";
 import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
@@ -28,8 +29,10 @@ export function DocumentCategoryPage() {
   const queryClient = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [movingId, setMovingId] = useState<number | null>(null);
   const [preview, setPreview] = useState<PreviewRequest | null>(null);
   const [filter, setFilter] = useState("");
+  const isArchive = category === OBSOLETE_ARCHIVE_CATEGORY;
 
   const documents = useQuery<AccuQualDocument[]>({
     queryKey: ["documents", undefined],
@@ -41,7 +44,7 @@ export function DocumentCategoryPage() {
     return <p className="text-sm text-muted-foreground">This folder isn't part of the menu.</p>;
   }
 
-  const rows = (documents.data ?? []).filter((doc) => doc.category === category && doc.status !== "obsolete") as (AccuQualDocument & { createdAt?: string | null })[];
+  const rows = (documents.data ?? []).filter((doc) => (isArchive ? doc.category === category || doc.status === "obsolete" : doc.category === category && doc.status !== "obsolete")) as (AccuQualDocument & { createdAt?: string | null })[];
   const needle = filter.trim().toLowerCase();
   const visible = needle ? rows.filter((doc) => doc.title.toLowerCase().includes(needle)) : rows;
 
@@ -60,6 +63,20 @@ export function DocumentCategoryPage() {
     } finally {
       setBusy(false);
       if (input.current) input.current.value = "";
+    }
+  }
+
+  async function moveToArchive(doc: AccuQualDocument) {
+    if (!confirm(`Move "${doc.title}" to Obsolete / Archive? Its revision history stays. It will be marked Obsolete and leave active lists.`)) return;
+    setMovingId(doc.id);
+    try {
+      await apiClient.post(`/documents/${doc.id}/move-to-obsolete`);
+      await queryClient.invalidateQueries({ queryKey: ["documents"] });
+      toast.success("Moved to Obsolete / Archive.");
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't move that document."));
+    } finally {
+      setMovingId(null);
     }
   }
 
@@ -169,15 +186,27 @@ export function DocumentCategoryPage() {
             </thead>
             <tbody>
               {visible.map((doc) => (
-                <tr key={doc.id} className="border-t border-border">
+                <tr key={doc.id} className={`border-t border-border ${doc.status === "obsolete" ? "bg-muted/40" : ""}`}>
                   <td className="px-3 py-2 font-medium">
                     <button type="button" onClick={() => void openPreview(doc)} className="text-left hover:underline">
                       {doc.title}
                     </button>
+                    {doc.status === "obsolete" && (
+                      <span className="ml-2 align-middle">
+                        <StatusBadge value="obsolete" label="Obsolete" />
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">{doc.createdAt || doc.updatedAt ? formatDate(doc.createdAt ?? doc.updatedAt) : ""}</td>
-                  <td className="px-3 py-2 capitalize text-muted-foreground">{doc.status.replace(/_/g, " ")}</td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {doc.status === "obsolete" ? <StatusBadge value="obsolete" label="Obsolete" /> : <span className="capitalize">{doc.status.replace(/_/g, " ")}</span>}
+                  </td>
                   <td className="px-3 py-2 text-right">
+                    {!isArchive && (
+                      <button type="button" onClick={() => void moveToArchive(doc)} disabled={movingId === doc.id} className="mr-3 inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-60">
+                        {movingId === doc.id ? "Moving…" : "Move to Obsolete / Archive"}
+                      </button>
+                    )}
                     <button type="button" onClick={() => void openPreview(doc)} className="mr-3 inline-flex items-center gap-1 text-primary hover:underline">
                       <Eye size={14} /> Preview
                     </button>

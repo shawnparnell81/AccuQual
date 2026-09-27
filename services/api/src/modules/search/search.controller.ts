@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { and, eq, sql, ilike, or, type SQLWrapper } from "drizzle-orm";
+import { and, eq, ne, sql, ilike, or, type SQLWrapper } from "drizzle-orm";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { workOrders } from "../../drizzle/schema/workOrders.js";
@@ -59,6 +59,7 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
   const db = req.db! as Db;
   const user = { id: req.user!.id, roleName: req.user?.roleName ?? null, department: req.user?.department ?? null };
   const q = String(req.query.q ?? "").trim();
+  const includeObsolete = ["1", "true", "yes"].includes(String(req.query.includeObsolete ?? "").toLowerCase());
 
   if (!q) return res.json({ results: [] });
 
@@ -198,12 +199,13 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
       db
         .select()
         .from(documents)
-        .where(and(eq(documents.isDeleted, false), conditions))
+        .where(and(eq(documents.isDeleted, false), includeObsolete ? undefined : ne(documents.status, "obsolete"), conditions))
         .limit(RESULTS_PER_TYPE)
         .then((rows) =>
           rows.map((r) => {
             const revision = r.revisionCode ? ` ${r.revisionCode}` : "";
-            return { type: "Document" as const, id: r.id, label: `Document #${r.id}${revision} — ${r.title}`, path: `/documents/${r.id}` };
+            const obsolete = r.status === "obsolete" ? " (Obsolete)" : "";
+            return { type: "Document" as const, id: r.id, label: `Document #${r.id}${revision} — ${r.title}${obsolete}`, path: `/documents/${r.id}` };
           }),
         ),
     );

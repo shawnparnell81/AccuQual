@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
+  Archive,
   BarChart3,
   Building2,
   CalendarDays,
@@ -54,6 +55,9 @@ export function isFolder(node: SidebarNode): node is SidebarFolder {
   return "children" in node;
 }
 
+/** Category stored on documents that live in Quality → Obsolete / Archive. */
+export const OBSOLETE_ARCHIVE_CATEGORY = "obsolete-archive" as const;
+
 /** Document folders for sidebar entries that have no module of their own. Category is stored on the controlled document. */
 export const DOCUMENT_FOLDER_PAGES: Record<string, { title: string; blurb: string; emphasizeUpload?: boolean }> = {
   drawings: { title: "Drawings", blurb: "Engineering drawings for this company. Upload a file to keep it here." },
@@ -75,6 +79,7 @@ export const DOCUMENT_FOLDER_PAGES: Record<string, { title: string; blurb: strin
   "validation-reports": { title: "Validation Reports", blurb: "Process and product validation reports. Upload a file to keep it here." },
   "product-alerts": { title: "Product Alerts", blurb: "Product alerts. Upload a file to keep it here." },
   recalls: { title: "Recalls", blurb: "Product recalls. Upload a file to keep it here." },
+  [OBSOLETE_ARCHIVE_CATEGORY]: { title: "Obsolete / Archive", blurb: "Old documents. Upload a file to keep it here, or move a superseded document into this folder." },
 };
 
 function doc(key: keyof typeof DOCUMENT_FOLDER_PAGES, icon: LucideIcon): SidebarLink {
@@ -127,6 +132,7 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
           { key: "management-system", label: "Management System", path: "/management-system", icon: Building2 },
         ],
       },
+      doc(OBSOLETE_ARCHIVE_CATEGORY, Archive),
       { key: "training", label: "Training", path: "/training", icon: GraduationCap },
       { key: "workers", label: "Workers", path: "/workers", icon: Users },
       { key: "inspections", label: "Inspections", path: "/quality-inspection-reports", icon: ClipboardCheck },

@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
@@ -19,6 +19,8 @@ const DOCUMENT_CONTROL_INDEX_ENTITY_ID = 1;
  */
 export function DocumentsPage() {
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const includeObsolete = params.get("includeObsolete") === "1";
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between rounded-lg border border-border bg-card p-4">
@@ -36,6 +38,22 @@ export function DocumentsPage() {
         title="Documents"
         resource="documents"
         onRowClick={(d) => navigate(`/documents/${d.id}`)}
+        rowPredicate={(d) => includeObsolete || d.status !== "obsolete"}
+        extraFilters={
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={includeObsolete}
+              onChange={(e) => {
+                const next = new URLSearchParams(params);
+                if (e.target.checked) next.set("includeObsolete", "1");
+                else next.delete("includeObsolete");
+                setParams(next, { replace: true });
+              }}
+            />
+            Include obsolete
+          </label>
+        }
         columns={[
           { header: "ID", accessor: (d) => `#${d.id}` },
           { header: "Title", accessor: (d) => d.title },

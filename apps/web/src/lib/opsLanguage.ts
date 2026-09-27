@@ -89,7 +89,7 @@ const STATUS_PHRASE: Record<string, string> = {
   draft: "Draft",
   in_review: "In review",
   approved: "Released",
-  obsolete: "Retired",
+  obsolete: "Obsolete",
   scheduled: "Scheduled",
   completed: "Done",
   overdue: "Late",

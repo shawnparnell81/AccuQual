@@ -13,7 +13,7 @@ const fieldClass = "w-full rounded-md border border-form-field bg-background px-
 export function FeasibilityDocumentSelector({ value, onChange }: { value: string[]; onChange: (value: string[]) => void }) {
   const { data: documents = [], isLoading, isError } = useControlledDocuments();
   const selected = new Set(value);
-  const catalog = documents.filter((doc) => !doc.isDeleted);
+  const catalog = documents.filter((doc) => !doc.isDeleted && doc.status !== "obsolete");
   const available = catalog.filter((doc) => !selected.has(String(doc.id)));
   const placeholder = isLoading
     ? "Loading documents…"

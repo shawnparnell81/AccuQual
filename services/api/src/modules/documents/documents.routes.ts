@@ -10,6 +10,7 @@ import {
   retiredRevisionHandler,
   downloadVersionHandler,
   obsoleteHandler,
+  moveToObsoleteHandler,
   historyHandler,
   listExpiringHandler,
   applyRetentionHandler,
@@ -48,6 +49,7 @@ documentsRouter.post("/:id/approve", retiredRevisionHandler);
 
 documentsRouter.get("/version/:versionId/file", downloadVersionHandler);
 documentsRouter.post("/:id/obsolete", obsoleteHandler);
+documentsRouter.post("/:id/move-to-obsolete", moveToObsoleteHandler);
 // On-demand version of the "retention/apply" sweep for a single document.
 documentsRouter.post("/:id/archive", archiveHandler);
 documentsRouter.get("/:id/history", historyHandler);

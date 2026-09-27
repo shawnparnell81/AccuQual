@@ -45,4 +45,23 @@ describe("Quality document folders", () => {
     assert.deepEqual(internal && { label: internal.label, path: internal.path }, { label: "Internal Audits", path: "/folders/internal-audits" });
     assert.equal(links.filter((link) => link.label === "Internal Audits").length, 1);
   });
+
+  it("adds Obsolete / Archive as a Quality folder, beside Document Control", () => {
+    assert.equal(DOCUMENT_FOLDER_PAGES["obsolete-archive"]?.title, "Obsolete / Archive");
+
+    const quality = SIDEBAR_FOLDERS.find((folder) => folder.key === "quality");
+    assert.ok(quality);
+    const labels = quality.children.map((child) => child.label);
+    const control = labels.indexOf("Document Control");
+    const archive = labels.indexOf("Obsolete / Archive");
+    assert.equal(archive, control + 1);
+    assert.equal(labels.filter((label) => label === "Obsolete / Archive").length, 1);
+
+    const audits = quality.children.find((child) => isFolder(child) && child.key === "audits");
+    assert.ok(audits && isFolder(audits));
+    assert.equal(audits.children.some((child) => child.label === "Obsolete / Archive"), false);
+
+    const link = flattenSidebarLinks(quality.children).find((item) => item.key === "obsolete-archive");
+    assert.deepEqual(link && { label: link.label, path: link.path }, { label: "Obsolete / Archive", path: "/folders/obsolete-archive" });
+  });
 });

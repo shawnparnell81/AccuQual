@@ -19,6 +19,7 @@ import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { OBSOLETE_ARCHIVE_CATEGORY } from "../../components/layout/sidebarStructure";
 import { DOC_EDIT_REASON, DOC_LOOP, documentLoop, duePhrase, isPastDue, statusPhrase } from "../../lib/opsLanguage";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import type { TrainingCourse } from "../../api/types";
@@ -210,6 +211,19 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
     }
   }
 
+  const canMoveToArchive = mayEdit && doc.category !== OBSOLETE_ARCHIVE_CATEGORY;
+
+  async function moveToArchive() {
+    if (!confirm("Move this document to Obsolete / Archive? Its revision history stays. It will be marked Obsolete and leave active lists.")) return;
+    try {
+      await apiClient.post(`/documents/${documentId}/move-to-obsolete`);
+      void queryClient.invalidateQueries({ queryKey: ["documents"] });
+      toast.success("Moved to Obsolete / Archive.");
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't move this document."));
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <RecordGlance
@@ -265,9 +279,20 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
               Retire document
             </button>
           )}
+          {canMoveToArchive && (
+            <button onClick={() => void moveToArchive()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+              Move to Obsolete / Archive
+            </button>
+          )}
           </>
         }
       />
+      {doc.status === "obsolete" && (
+        <p className="rounded-md border border-border bg-muted px-3 py-2 text-sm">
+          Marked <span className="font-medium">Obsolete</span>
+          {doc.category === OBSOLETE_ARCHIVE_CATEGORY ? " and filed in Obsolete / Archive." : ". Move it to Obsolete / Archive to file it with the other old documents."} Revision history is unchanged.
+        </p>
+      )}
       <DocumentTrainingLoop status={doc.status} courses={linkedCourses} failed={courses.isError} />
 
       {current && (
