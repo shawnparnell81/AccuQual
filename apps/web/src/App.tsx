@@ -6,91 +6,93 @@ import { LoginPage } from "./routes/Auth/LoginPage";
 import { ForgotPasswordPage } from "./routes/Auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "./routes/Auth/ResetPasswordPage";
 import { ForcePasswordChangePage } from "./routes/Auth/ForcePasswordChangePage";
-import { DashboardPage } from "./routes/Dashboard/DashboardPage";
-import { NcrListPage } from "./routes/NCR/NcrListPage";
-import { NcrWorkspacePage } from "./routes/NCR/NcrWorkspacePage";
-import { CapaListPage } from "./routes/CAPA/CapaListPage";
-import { CapaDetailPage } from "./routes/CAPA/CapaDetailPage";
-import { EightDPage } from "./routes/EightD/EightDPage";
-import { EightDDetailPage } from "./routes/EightD/EightDDetailPage";
-import { AuditsPage } from "./routes/Audits/AuditsPage";
-import { AuditDetailPage } from "./routes/Audits/AuditDetailPage";
-import { DocumentsPage } from "./routes/Documents/DocumentsPage";
-import { QuarantinePage } from "./routes/Quarantine/QuarantinePage";
-import { QuarantineDetailPage } from "./routes/Quarantine/QuarantineDetailPage";
-import { DocumentDetailPage } from "./routes/Documents/DocumentDetailPage";
-import { FolderExplorerPage } from "./routes/Documents/FolderExplorerPage";
-import { GeneralUploadsPage } from "./routes/Documents/GeneralUploadsPage";
-import { TrainingPage } from "./routes/Training/TrainingPage";
-import { TrainingDetailPage } from "./routes/Training/TrainingDetailPage";
-import { WorkersPage } from "./routes/Workers/WorkersPage";
-import { WorkerDetailPage } from "./routes/Workers/WorkerDetailPage";
-import { EmployeeTrainingHistoryPage } from "./routes/Training/EmployeeTrainingHistoryPage";
-import { ChangePage } from "./routes/Change/ChangePage";
-import { ChangeDetailPage } from "./routes/Change/ChangeDetailPage";
-import { RiskPage } from "./routes/Risk/RiskPage";
-import { RiskDetailPage } from "./routes/Risk/RiskDetailPage";
-import { RiskDashboardPage } from "./routes/Risk/RiskDashboardPage";
-import { FeasibilityPage } from "./routes/Feasibility/FeasibilityPage";
-import { FeasibilityDetailPage } from "./routes/Feasibility/FeasibilityDetailPage";
-import { DocumentChangeRequestsPage } from "./routes/DocumentChangeRequests/DocumentChangeRequestsPage";
-import { DocumentChangeRequestDetailPage } from "./routes/DocumentChangeRequests/DocumentChangeRequestDetailPage";
-import { QmsFormsLibraryPage } from "./routes/QmsForms/QmsFormsLibraryPage";
-import { QmsFormTypePage } from "./routes/QmsForms/QmsFormTypePage";
-import { QmsFormRecordPage } from "./routes/QmsForms/QmsFormRecordPage";
-import { ScarFormsPage } from "./routes/ScarForms/ScarFormsPage";
-import { ScarFormDetailPage } from "./routes/ScarForms/ScarFormDetailPage";
-import { QualityInspectionReportsPage } from "./routes/QualityInspectionReports/QualityInspectionReportsPage";
-import { QualityInspectionReportDetailPage } from "./routes/QualityInspectionReports/QualityInspectionReportDetailPage";
-import { PpapListPage } from "./routes/Ppap/PpapListPage";
-import { PpapDetailPage } from "./routes/Ppap/PpapDetailPage";
-import { NotificationsPage } from "./routes/Notifications/NotificationsPage";
-import { RetiredModulePage } from "./routes/Retired/RetiredModulePage";
-import { SuppliersPage } from "./routes/Suppliers/SuppliersPage";
-import { SupplierDetailPage } from "./routes/Suppliers/SupplierDetailPage";
-import { CalibrationPage } from "./routes/Calibration/CalibrationPage";
-import { EquipmentDetailPage } from "./routes/Calibration/EquipmentDetailPage";
-import { DocumentCategoryPage } from "./routes/Documents/DocumentCategoryPage";
-import { ManagementSystemPage } from "./routes/ManagementSystem/ManagementSystemPage";
-import { ControlledDocumentPage } from "./routes/ManagementSystem/ControlledDocumentPage";
-import { ParetoAnalysisPage } from "./routes/Pareto/ParetoAnalysisPage";
-import { WorkflowBuilderPage } from "./routes/Workflow/WorkflowBuilderPage";
-import { WorkflowCanvasPage } from "./routes/Workflow/WorkflowCanvasPage";
-import { AiInsightsPage } from "./routes/AI/AiInsightsPage";
-import { DigitalTwinPage } from "./routes/DigitalTwin/DigitalTwinPage";
-import { ReportingHubPage } from "./routes/Reporting/ReportingHubPage";
-import { NavigationSettingsPage } from "./routes/Settings/NavigationSettingsPage";
-import { SettingsPage } from "./routes/Settings/SettingsPage";
-import { RmaDetailPage } from "./routes/Rma/RmaDetailPage";
-import { WarrantyClaimsList } from "./routes/Warranty/WarrantyClaimsList";
-import { WarrantyClaimDetail } from "./routes/Warranty/WarrantyClaimDetail";
-import { WarrantyDashboard } from "./routes/Warranty/WarrantyDashboard";
-import { CrarListPage } from "./routes/Crar/CrarListPage";
-import { CrarDetailPage } from "./routes/Crar/CrarDetailPage";
-import { WorkOrderDetailPage } from "./routes/WorkOrders/WorkOrderDetailPage";
-import { AdminCompanyBrandingPage } from "./routes/Admin/AdminCompanyBrandingPage";
-import { AdminCompanyTemplatesPage } from "./routes/Admin/AdminCompanyTemplatesPage";
-import { AdminCompanyAiConfigPage } from "./routes/Admin/AdminCompanyAiConfigPage";
-import { AdminAiUsagePage } from "./routes/Admin/AdminAiUsagePage";
-import { AdminDigitalTwinSetupPage } from "./routes/Admin/AdminDigitalTwinSetupPage";
-import { RolesPermissionsPage } from "./routes/Admin/RolesPermissionsPage";
-import { AdminConsoleLayout } from "./routes/Admin/AdminConsoleLayout";
-import { AdminConsoleHomePage } from "./routes/Admin/AdminConsoleHomePage";
-import { AdminUsersRolesPage } from "./routes/Admin/AdminUsersRolesPage";
-import { AdminPlantsPage } from "./routes/Admin/AdminPlantsPage";
-import { AdminAiSettingsPage } from "./routes/Admin/AdminAiSettingsPage";
-import { AdminSupplierSettingsPage } from "./routes/Admin/AdminSupplierSettingsPage";
-import { AdminQualitySettingsPage } from "./routes/Admin/AdminQualitySettingsPage";
-import { AdminReceivingInventorySettingsPage } from "./routes/Admin/AdminReceivingInventorySettingsPage";
-import { AdminSystemHealthPage } from "./routes/Admin/AdminSystemHealthPage";
-import { AdminApiDocsPage } from "./routes/Admin/AdminApiDocsPage";
-import { AdminCompanySettingsPage } from "./routes/Admin/AdminCompanySettingsPage";
-import { AdminSsoPage } from "./routes/Admin/AdminSsoPage";
-import { AdminDataExportPage } from "./routes/Admin/AdminDataExportPage";
-import { HomePage } from "./routes/Home/HomePage";
 import { homeKind } from "./lib/opsLanguage";
-import { CalendarPage } from "./routes/Calendar/CalendarPage";
 import { useCurrentUser, useAuthBootstrap } from "./hooks/useAuth";
+import {
+  AdminAiSettingsPage,
+  AdminAiUsagePage,
+  AdminApiDocsPage,
+  AdminCompanyAiConfigPage,
+  AdminCompanyBrandingPage,
+  AdminCompanySettingsPage,
+  AdminCompanyTemplatesPage,
+  AdminConsoleHomePage,
+  AdminConsoleLayout,
+  AdminDataExportPage,
+  AdminDigitalTwinSetupPage,
+  AdminPlantsPage,
+  AdminQualitySettingsPage,
+  AdminReceivingInventorySettingsPage,
+  AdminSsoPage,
+  AdminSupplierSettingsPage,
+  AdminSystemHealthPage,
+  AdminUsersRolesPage,
+  AiInsightsPage,
+  AuditDetailPage,
+  AuditsPage,
+  CalendarPage,
+  CapaDetailPage,
+  CapaListPage,
+  ChangeDetailPage,
+  ChangePage,
+  ControlledDocumentPage,
+  CrarDetailPage,
+  CrarListPage,
+  DashboardPage,
+  DigitalTwinPage,
+  DocumentCategoryPage,
+  DocumentChangeRequestDetailPage,
+  DocumentChangeRequestsPage,
+  DocumentDetailPage,
+  DocumentsPage,
+  EightDDetailPage,
+  EightDPage,
+  EmployeeTrainingHistoryPage,
+  EquipmentDetailPage,
+  FeasibilityDetailPage,
+  FeasibilityPage,
+  FolderExplorerPage,
+  GeneralUploadsPage,
+  HomePage,
+  ManagementSystemPage,
+  NavigationSettingsPage,
+  NcrListPage,
+  NcrWorkspacePage,
+  NotificationsPage,
+  ParetoAnalysisPage,
+  PpapDetailPage,
+  PpapListPage,
+  QmsFormRecordPage,
+  QmsFormTypePage,
+  QmsFormsLibraryPage,
+  QualityInspectionReportDetailPage,
+  QualityInspectionReportsPage,
+  QuarantineDetailPage,
+  QuarantinePage,
+  ReportingHubPage,
+  RetiredModulePage,
+  RiskDashboardPage,
+  RiskDetailPage,
+  RiskPage,
+  RmaDetailPage,
+  RolesPermissionsPage,
+  ScarFormDetailPage,
+  ScarFormsPage,
+  SettingsPage,
+  SupplierDetailPage,
+  SuppliersPage,
+  TrainingDetailPage,
+  TrainingPage,
+  WarrantyClaimDetail,
+  WarrantyClaimsList,
+  WarrantyDashboard,
+  WorkOrderDetailPage,
+  WorkerDetailPage,
+  WorkersPage,
+  WorkflowBuilderPage,
+  WorkflowCanvasPage,
+  CalibrationPage,
+} from "./routes/pages";
 
 function HomeRoute() {
   const user = useCurrentUser();

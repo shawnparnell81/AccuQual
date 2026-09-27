@@ -23,6 +23,7 @@ export type InventorySettings = NonNullable<Company["inventorySettings"]>;
 export type ErpSyncSettings = NonNullable<Company["erpSyncSettings"]>;
 export type SupplierRiskSettings = NonNullable<Company["supplierRiskWeights"]>;
 export type ReceivingSettings = NonNullable<Company["receivingSettings"]>;
+export type QualityAutomationSettingsStored = NonNullable<Company["qualityAutomationSettings"]>;
 
 export function getFeasibilitySettings(co: Company): FeasibilitySettings {
   const stored = co.feasibilitySettings ?? {};
@@ -79,4 +80,8 @@ export function getSupplierRiskSettings(co: Company): SupplierRiskSettings {
 
 export function getReceivingSettings(co: Company): ReceivingSettings {
   return co.receivingSettings ?? {};
+}
+
+export function getQualityAutomationSettingsStored(co: Company): QualityAutomationSettingsStored {
+  return co.qualityAutomationSettings ?? {};
 }

@@ -8,6 +8,7 @@ import { completeTrainingAssignment } from "../training/training.controller.js";
 import { DI_FORM_TYPE, syncDiFormToRecord } from "../quality/quality.formSync.js";
 import { COMPLAINT_FORM_TYPE, syncComplaintFormToRecord } from "../complaints/complaints.formSync.js";
 import { parseApqpSummaryData } from "./apqpSummary.validation.js";
+import { noteRepeatNcr } from "../quality-automation/qualityAutomation.service.js";
 
 export const getTemplate = asyncHandler(async (req: Request, res: Response) => {
   const template = await formsService.loadTemplate(req.db!, req.params.type!);
@@ -44,6 +45,7 @@ export const saveForm = asyncHandler(async (req: Request, res: Response) => {
   if (req.params.type === COMPLAINT_FORM_TYPE && savedEntityId != null && req.body.data && typeof req.body.data === "object") {
     await syncComplaintFormToRecord(req.db!, Number(savedEntityId), req.body.data as Record<string, unknown>, req.user?.id);
   }
+  if (req.params.type === "ncr" && savedEntityId != null) await noteRepeatNcr(req.db!, Number(savedEntityId));
 
   res.json(saved);
 });

@@ -6,6 +6,7 @@ import { startReportingScheduler } from "./modules/reporting/reporting.scheduler
 import { startHealthMonitor } from "./modules/monitoring/healthMonitor.js";
 import { startCalibrationSweep } from "./modules/calibration/calibration.service.js";
 import { startTrainingSweep } from "./modules/training/training.service.js";
+import { startQualityAutomationSweep } from "./modules/quality-automation/qualityAutomation.service.js";
 
 // Before anything else can fail, so start-up errors are reported too.
 initSentry();
@@ -26,6 +27,8 @@ app.listen(env.PORT, () => {
   startCalibrationSweep();
   // Same for training: a digest to Quality of people who are overdue, expired, failed, or whose document has been revised.
   startTrainingSweep();
+  // Due-soon, due-today, overdue, and stuck reminders for NCR, CAPA, 8D, and approvals, plus the personal daily digest.
+  startQualityAutomationSweep();
 });
 
 process.on("unhandledRejection", (reason) => {

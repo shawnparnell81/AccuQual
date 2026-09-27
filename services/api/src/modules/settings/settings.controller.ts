@@ -4,7 +4,8 @@ import { company } from "../../drizzle/schema/company.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { encryptSecret, maskSecret, decryptSecret } from "../company/crypto.js";
-import { loadCompanyForSettings, getFeasibilitySettings, assertAccessibleRequiredDocuments, getInventorySettings, getErpSyncSettings, getSupplierRiskSettings, getReceivingSettings } from "./settings.service.js";
+import { loadCompanyForSettings, getFeasibilitySettings, assertAccessibleRequiredDocuments, getInventorySettings, getErpSyncSettings, getSupplierRiskSettings, getReceivingSettings, getQualityAutomationSettingsStored } from "./settings.service.js";
+import { resolveQualityAutomationSettings } from "../quality-automation/logic.js";
 import { triggerErpSync } from "./settings.erpSync.js";
 
 // ============================================================
@@ -139,6 +140,25 @@ export const updateSupplierRiskSettingsHandler = asyncHandler(async (req: Reques
 // Settings → Receiving (Phase 8) — see receivingAutomation.ts for exactly
 // how each field is read.
 // ============================================================
+
+export const getQualityAutomationSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const co = await loadCompanyForSettings(req.db!);
+  res.json(resolveQualityAutomationSettings(getQualityAutomationSettingsStored(co)));
+});
+
+export const updateQualityAutomationSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const co = await loadCompanyForSettings(req.db!);
+  const merged = { ...getQualityAutomationSettingsStored(co), ...req.body };
+  const [updated] = await req.db!.update(company).set({ qualityAutomationSettings: merged }).returning();
+  await recordAuditTrail(req.db!, {
+    entityType: "QualityAutomationSettings",
+    entityId: 1,
+    action: "update",
+    changes: { fieldsChanged: Object.keys(req.body) },
+    performedBy: req.user?.id,
+  });
+  res.json(resolveQualityAutomationSettings(updated!.qualityAutomationSettings));
+});
 
 export const getReceivingSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
   const co = await loadCompanyForSettings(req.db!);

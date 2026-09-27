@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-09-27",
+    date: "2026-09-27",
+    items: [
+      "Due-date reminders and escalation for overdue or stuck NCRs, CAPAs, 8Ds, and approvals waiting too long.",
+      "Repeat NCRs now suggest a CAPA, with one click to open it and link the group.",
+      "A personal daily digest in Settings lists what is due and which approvals are waiting, with a link to each record.",
+    ],
+  },
+  {
     version: "2026-09-22",
     date: "2026-09-22",
     items: [
