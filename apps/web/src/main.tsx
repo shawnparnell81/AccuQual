@@ -9,6 +9,14 @@ import "./styles/globals.css";
 import { applyStoredThemeVars, getStoredMode } from "./lib/theme";
 import { initErrorTracking } from "./lib/errorTracking";
 import { ErrorBoundary } from "./components/shared/ErrorBoundary";
+import { isMarketingHost, marketingDocumentTarget } from "./lib/publicSite";
+import { registerSW } from "virtual:pwa-register";
+
+const marketingTarget = marketingDocumentTarget(window.location.hostname, window.location.pathname, window.location.search, window.location.hash);
+if (marketingTarget) {
+  window.location.replace(marketingTarget);
+}
+// The public site never mounts the app, so a session refresh cannot run there.
 
 initErrorTracking();
 
@@ -19,24 +27,28 @@ initErrorTracking();
 document.documentElement.setAttribute("data-theme", getStoredMode() ?? "dark");
 applyStoredThemeVars();
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: 1, staleTime: 30_000 },
-  },
-});
+if (!isMarketingHost(window.location.hostname)) {
+  registerSW({ immediate: true });
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <ToastProvider>
-            <ConfirmProvider>
-              <App />
-            </ConfirmProvider>
-          </ToastProvider>
-        </BrowserRouter>
-      </QueryClientProvider>
-    </ErrorBoundary>
-  </React.StrictMode>
-);
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: 1, staleTime: 30_000 },
+    },
+  });
+
+  ReactDOM.createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <ToastProvider>
+              <ConfirmProvider>
+                <App />
+              </ConfirmProvider>
+            </ToastProvider>
+          </BrowserRouter>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </React.StrictMode>
+  );
+}

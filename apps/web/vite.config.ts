@@ -44,6 +44,9 @@ export default defineConfig(({ mode }) => ({
     // designed for).
     VitePWA({
       registerType: "autoUpdate",
+      // Registered from main.tsx, and only on the app host. The marketing
+      // host must not install a worker that serves the app shell for "/".
+      injectRegister: null,
       includeAssets: ["branding/logo-mark.png"],
       manifest: {
         name: "AccuQual",

@@ -35,6 +35,8 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 });
 
 let lastSuccessAt = 0;
+/** How many load-time checks in a row failed for a reason other than "signed out", so the next wait grows. */
+let bootstrapMisses = 0;
 let proactiveTimer: ReturnType<typeof setTimeout> | undefined;
 let inFlight: Promise<RefreshResult> | null = null;
 
@@ -115,9 +117,14 @@ function scheduleProactiveRefresh(token: string | null, delayOverride?: number) 
 }
 
 function settleRefreshResult(result: RefreshResult): RefreshResult {
-  if (result.ok) return result;
-  if (result.logout) endSession();
-  else scheduleProactiveRefresh(useAuthStore.getState().accessToken, result.retryAfterMs);
+  if (result.ok) {
+    bootstrapMisses = 0;
+    return result;
+  }
+  if (result.logout) {
+    bootstrapMisses = 0;
+    endSession();
+  } else scheduleProactiveRefresh(useAuthStore.getState().accessToken, result.retryAfterMs);
   return result;
 }
 
@@ -171,21 +178,32 @@ export function refreshSession(reason: RefreshReason = "proactive"): Promise<Ref
     if (token) return Promise.resolve({ ok: true, accessToken: token });
   }
   if (!inFlight) {
-    inFlight = coordinatedRefresh().then(settleRefreshResult).finally(() => {
+    // The first check is a single try. Repeating a 500 inline leaves ProtectedRoute
+    // rendering nothing until the backoff finishes, which is a blank page.
+    inFlight = coordinatedRefresh(reason === "bootstrap").then(settleRefreshResult).finally(() => {
       inFlight = null;
     });
   }
   return inFlight;
 }
 
-async function coordinatedRefresh(): Promise<RefreshResult> {
+/** One try. The load-time check uses this so a server error does not hold an empty page through the backoff sleeps. */
+async function refreshOnce(): Promise<RefreshResult> {
+  const outcome = await performRefreshAttempt(bootstrapMisses);
+  if (outcome.kind === "ok") return { ok: true, accessToken: outcome.accessToken };
+  if (outcome.kind === "unauthenticated") return { ok: false, logout: true };
+  bootstrapMisses += 1;
+  return { ok: false, logout: false, retryAfterMs: outcome.retryAfterMs };
+}
+
+async function coordinatedRefresh(once: boolean): Promise<RefreshResult> {
   listenForOtherTabs();
   const run = async () => {
     // Let a renewal message from the tab that just held this lock land before we send another request.
     await new Promise((resolve) => setTimeout(resolve, 0));
     const reused = reuseSharedRefresh();
     if (reused) return reused;
-    const result = await refresher.refresh();
+    const result = once ? await refreshOnce() : await refresher.refresh();
     rememberShared(result);
     return result;
   };

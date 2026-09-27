@@ -117,6 +117,15 @@ export function accessTokenExpiresAtMs(token: string): number | null {
 
 export type RefreshReason = "proactive" | "bootstrap" | "unauthorized";
 
+/**
+ * The load-time session check has finished. Only a successful renewal is a
+ * session. A rejection, a slow-down, a server error, or a dropped connection
+ * is signed out — leaving the check unresolved paints an empty shell.
+ */
+export function bootstrapSessionDecision(result: RefreshResult): "ready" | "signed-out" {
+  return result.ok ? "ready" : "signed-out";
+}
+
 /** True when there is no readable expiry, or the access token is inside the lead window (including already expired). */
 export function tokenNearExpiry(token: string | null, now = Date.now(), leadMs = PROACTIVE_REFRESH_LEAD_MS): boolean {
   if (!token) return true;

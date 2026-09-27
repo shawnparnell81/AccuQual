@@ -664,6 +664,16 @@
   <img alt="">
 </div>
 
+<script>
+  (function () {
+    // On the public site, Sign in opens the app. On the app host and in local
+    // dev the same page keeps its /login links. Host list matches src/lib/publicSite.ts.
+    var host = (location.hostname || "").toLowerCase().replace(/\.$/, "");
+    if (host !== "www.accuqualqms.com" && host !== "accuqualqms.com") return;
+    var links = document.querySelectorAll('a[href="/login"]');
+    for (var i = 0; i < links.length; i++) links[i].href = "https://app.accuqualqms.com/login";
+  })();
+</script>
 <script src="config.js"></script>
 <script src="app.js" defer></script>
 <script src="fx.js" defer></script>
