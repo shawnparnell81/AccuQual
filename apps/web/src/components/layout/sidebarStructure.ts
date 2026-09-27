@@ -72,6 +72,8 @@ export const DOCUMENT_FOLDER_PAGES: Record<string, { title: string; blurb: strin
   shipping: { title: "Shipping", blurb: "Shipping documents. Upload a file to keep it here." },
   receiving: { title: "Receiving", blurb: "Receiving documents. Upload a file to keep it here." },
   "validation-reports": { title: "Validation Reports", blurb: "Process and product validation reports. Upload a file to keep it here." },
+  "product-alerts": { title: "Product Alerts", blurb: "Product alerts. Upload a file to keep it here." },
+  recalls: { title: "Recalls", blurb: "Product recalls. Upload a file to keep it here." },
 };
 
 function doc(key: keyof typeof DOCUMENT_FOLDER_PAGES, icon: LucideIcon): SidebarLink {
@@ -129,6 +131,8 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
       { key: "inspections", label: "Inspections", path: "/quality-inspection-reports", icon: ClipboardCheck },
       doc("validation-reports", FileText),
       { key: "fai", label: "FAI", path: "/qms-forms/first_article_inspection", icon: ClipboardCheck },
+      doc("product-alerts", FileText),
+      doc("recalls", FileText),
       { key: "warranty", label: "Warranty", path: "/warranty", icon: ShieldCheck },
       doc("repairs", Hammer),
       {
