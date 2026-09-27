@@ -61,6 +61,8 @@ export interface TableBlock {
   minRows?: number;
   fixedRowLabels?: string[];
   labelColumnHeader?: string;
+  /** Short note drawn under the table (FMEA R.P.N. / Action Priority legend). */
+  legend?: string;
 }
 
 export type Block = RowBlock | TextareaBlock | YesNoBlock | TableBlock;

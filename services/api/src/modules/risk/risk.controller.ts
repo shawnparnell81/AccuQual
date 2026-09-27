@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { and, eq, desc } from "drizzle-orm";
 import { riskAssessments, fmeaItems, riskMitigations } from "../../drizzle/schema/risk.js";
+import { pfmeaActionPriority } from "../forms/fmeaPriority.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { stripClientOwnedFields } from "../../utils/crudFactory.js";
@@ -127,7 +128,7 @@ export const getRiskHandler = asyncHandler(async (req: Request, res: Response) =
   const record = await loadRisk(req, Number(req.params.id));
   const mitigations = await req.db!.select().from(riskMitigations).where(and(eq(riskMitigations.riskAssessmentId, record.id)));
   const fmea = await req.db!.select().from(fmeaItems).where(and(eq(fmeaItems.riskAssessmentId, record.id)));
-  res.json({ ...record, mitigations, fmeaItems: fmea });
+  res.json({ ...record, mitigations, fmeaItems: fmea.map(withFmeaActionPriority) });
 });
 
 /**
@@ -219,15 +220,20 @@ export const addFmeaItemHandler = asyncHandler(async (req: Request, res: Respons
     .values({ ...req.body, riskAssessmentId: risk.id, rpn: String(rpn) })
     .returning();
   await recordAuditTrail(req.db!, { entityType: "RiskAssessment", entityId: risk.id, action: "update", changes: { action: "fmea_item_added", failureMode: item!.failureMode, rpn }, performedBy: req.user?.id });
-  res.status(201).json(item);
+  res.status(201).json(withFmeaActionPriority(item!));
 });
+
+/** Action Priority is derived from S/O/D on read. It is not a column on fmea_items. */
+function withFmeaActionPriority<T extends { severity: number; occurrence: number; detection: number }>(item: T) {
+  return { ...item, actionPriority: pfmeaActionPriority(item.severity, item.occurrence, item.detection) };
+}
 
 export const listFmeaItemsHandler = asyncHandler(async (req: Request, res: Response) => {
   const items = await req
     .db!.select()
     .from(fmeaItems)
     .where(and(eq(fmeaItems.riskAssessmentId, Number(req.params.id))));
-  res.json(items);
+  res.json(items.map(withFmeaActionPriority));
 });
 
 /** Propose a mitigation action — any of the risk-matrix's five departments (each "proposes" per the spec; Quality still separately drives the parent risk's own status transitions above). */

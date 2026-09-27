@@ -77,6 +77,8 @@ export interface TableBlock {
   fixedRowLabels?: string[];
   /** Header text for the locked label column when `fixedRowLabels` is set (e.g. "Role"). */
   labelColumnHeader?: string;
+  /** Short note drawn under the table (FMEA R.P.N. / Action Priority legend). */
+  legend?: string;
 }
 
 export type Block = RowBlock | TextareaBlock | YesNoBlock | TableBlock;
