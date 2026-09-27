@@ -240,7 +240,7 @@ function generateTemporaryPassword(email: string, name?: string): string {
 const peopleEntity: ImportEntity<PersonValue, { rolesByName: Map<string, number> }> = {
   key: "people",
   label: "People",
-  description: "Create user accounts in bulk. Each person gets a one-time temporary password that you hand out; they can change it after signing in. Admins only.",
+  description: "Create user accounts in bulk. Each person gets a one-time temporary password that you hand out; they must set a new password the first time they sign in. Admins only.",
   fields: [
     { key: "email", label: "Email", required: true, example: "jamie@yourcompany.com", aliases: ["e-mail", "email address", "work email"] },
     { key: "name", label: "Full name", example: "Jamie Rivera", aliases: ["name", "employee", "employee name", "person"] },
@@ -289,7 +289,7 @@ const peopleEntity: ImportEntity<PersonValue, { rolesByName: Map<string, number>
     const passwordHash = await bcrypt.hash(temporaryPassword, 10);
     const [created] = await ctx.db
       .insert(users)
-      .values({ email: value.email, passwordHash, name: value.name, roleId: value.roleId, department: value.department, passwordChangedAt: new Date() })
+      .values({ email: value.email, passwordHash, name: value.name, roleId: value.roleId, department: value.department, passwordChangedAt: new Date(), mustChangePassword: true })
       .returning();
     await recordAuditTrail(ctx.db, { entityType: "User", entityId: created!.id, action: "create", changes: { email: value.email, roleId: value.roleId, department: value.department, source: "excel_import" }, performedBy: ctx.userId });
     return { id: created!.id, label: value.email, temporaryPassword };

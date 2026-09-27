@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { Paperclip, FileText, X, Inbox, ArrowUpRight, UploadCloud } from "lucide-react";
+import { Paperclip, FileText, Download, X, Inbox, ArrowUpRight, UploadCloud } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { FileDropZone, isFileDrag } from "../../components/shared/FileDropZone";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
+import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
+import { previewKind, saveBytes } from "../../lib/filePreview";
 
 interface DocumentFolder {
   id: number;
@@ -15,6 +17,7 @@ interface DocumentFolder {
   parentId: number | null;
   sortOrder: number;
   pdfPath: string | null;
+  pdfMimeType?: string | null;
   linkedPath: string | null;
   documentId: number | null;
   /** Only present when documentId is set — joined server-side, see document-folders.controller.ts's withLinkedDocumentInfo. */
@@ -486,14 +489,33 @@ function DocPill({
   onAttach: () => void;
   onRemoveAttachment: () => void;
 }) {
-  async function viewAttachment() {
-    // A plain <a href> wouldn't carry the apiClient's Authorization header,
-    // and this route requires auth — fetch as a blob (auth included) and
-    // hand the browser an object URL to open instead.
+  const [preview, setPreview] = useState<PreviewRequest | null>(null);
+
+  function attachedFileName() {
+    const ext = doc.pdfPath?.match(/\.[a-z0-9]+$/i)?.[0] ?? "";
+    if (!ext || doc.name.toLowerCase().endsWith(ext.toLowerCase())) return doc.name;
+    return `${doc.name}${ext}`;
+  }
+
+  async function downloadAttachment() {
     const res = await apiClient.get(`/document-folders/${doc.id}/template`, { responseType: "blob" });
-    const url = URL.createObjectURL(res.data as Blob);
-    window.open(url, "_blank", "noopener,noreferrer");
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    saveBytes(res.data as Blob, attachedFileName(), doc.pdfMimeType ?? undefined);
+  }
+
+  function viewAttachment() {
+    const fileName = attachedFileName();
+    const kind = previewKind(fileName, doc.pdfMimeType);
+    if (kind === "download") {
+      void downloadAttachment();
+      return;
+    }
+    setPreview({
+      fileName,
+      mimeType: doc.pdfMimeType,
+      loadBytes: async () => (await apiClient.get(`/document-folders/${doc.id}/template`, { responseType: "arraybuffer" })).data as ArrayBuffer,
+      officeSource: kind === "office" ? { kind: "folder", folderId: doc.id } : undefined,
+      download: downloadAttachment,
+    });
   }
 
   return (
@@ -527,9 +549,13 @@ function DocPill({
           <button onClick={viewAttachment} className="text-primary hover:opacity-80" aria-label={`View attached file for ${doc.name}`}>
             <FileText size={12} />
           </button>
+          <button onClick={() => void downloadAttachment()} className="text-muted-foreground hover:text-primary" aria-label={`Download attached file for ${doc.name}`}>
+            <Download size={12} />
+          </button>
           <button onClick={onRemoveAttachment} className="text-muted-foreground hover:text-destructive" aria-label={`Remove attached file for ${doc.name}`}>
             <X size={11} />
           </button>
+          <InAppFilePreview request={preview} onClose={() => setPreview(null)} />
         </>
       ) : (
         <button onClick={onAttach} className="text-muted-foreground hover:text-primary" aria-label={`Attach a file to ${doc.name}`}>

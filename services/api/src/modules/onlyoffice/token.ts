@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import { AppError } from "../../utils/appError.js";
 
 /** Separates our own file/callback links from the document server's config JWT, which is signed with the same secret. */
-export type OfficeTokenPurpose = "oo-file" | "oo-callback";
+export type OfficeTokenPurpose = "oo-file" | "oo-callback" | "oo-attachment" | "oo-folder" | "oo-view-callback";
 
 const FILE_TOKEN_SECONDS = 15 * 60;
 const CALLBACK_TOKEN_SECONDS = 12 * 60 * 60;
@@ -19,7 +19,7 @@ export interface OfficeCallbackClaims extends OfficeFileClaims {
 }
 
 export function signOfficeToken(secret: string, purpose: OfficeTokenPurpose, claims: Record<string, unknown>): string {
-  const expiresIn = purpose === "oo-file" ? FILE_TOKEN_SECONDS : CALLBACK_TOKEN_SECONDS;
+  const expiresIn = purpose === "oo-callback" || purpose === "oo-view-callback" ? CALLBACK_TOKEN_SECONDS : FILE_TOKEN_SECONDS;
   return jwt.sign({ ...claims, purpose }, secret, { algorithm: "HS256", expiresIn });
 }
 
@@ -49,6 +49,14 @@ export function readFileClaims(payload: Record<string, unknown>): OfficeFileClai
     versionId: claimId(payload, "versionId"),
     fileId: claimId(payload, "fileId"),
   };
+}
+
+export function readAttachmentClaims(payload: Record<string, unknown>): { userId: number; attachmentId: number } {
+  return { userId: claimId(payload, "userId"), attachmentId: claimId(payload, "attachmentId") };
+}
+
+export function readFolderClaims(payload: Record<string, unknown>): { userId: number; folderId: number } {
+  return { userId: claimId(payload, "userId"), folderId: claimId(payload, "folderId") };
 }
 
 export function readCallbackClaims(payload: Record<string, unknown>): OfficeCallbackClaims {

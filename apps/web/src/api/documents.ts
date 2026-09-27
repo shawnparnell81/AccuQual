@@ -102,6 +102,14 @@ export async function openAttachment(documentId: number, versionId: number, atta
   window.open(`${apiClient.defaults.baseURL ?? ""}${data.url}`, "_blank", "noopener");
 }
 
+/** The bytes of one revision file, still behind the signed link the API issues. */
+export async function fetchDocumentAttachment(documentId: number, versionId: number, attachmentId: number): Promise<{ bytes: ArrayBuffer; mimeType: string; fileName: string }> {
+  const { data } = await apiClient.get<{ url: string; mimeType: string; fileName: string }>(`/documents/${documentId}/version/${versionId}/attachments/${attachmentId}/url`);
+  const base = apiClient.defaults.baseURL ?? "";
+  const res = await apiClient.get<ArrayBuffer>(`${base}${data.url}`, { responseType: "arraybuffer" });
+  return { bytes: res.data, mimeType: data.mimeType, fileName: data.fileName };
+}
+
 export const formatBytes = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 
 /** Controlled-document row as GET /documents returns it, including the soft-delete flag the list type otherwise omits. */

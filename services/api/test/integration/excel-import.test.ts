@@ -177,12 +177,13 @@ describe("Excel / CSV import (real DB + real HTTP path)", () => {
     const { email, temporaryPassword } = res.body.credentials[0];
     expect(email).toBe(`jamie-${suffix}@test.local`);
     const [created] = await db.select().from(users).where(eq(users.email, email));
-    expect(created).toMatchObject({ roleId, department: "production", name: "Jamie Rivera" });
+    expect(created).toMatchObject({ roleId, department: "production", name: "Jamie Rivera", mustChangePassword: true });
     userIds.push(created!.id);
     // The password is never in the row summary, only in `credentials`, and it signs in for real.
     expect(JSON.stringify(res.body.createdRows)).not.toContain(temporaryPassword);
     const login = await request(app).post("/auth/login").send({ email, password: temporaryPassword });
     expect(login.status).toBe(200);
+    expect(login.body.user.mustChangePassword).toBe(true);
   });
 
   it("understands department wording like \"Sales & Marketing\" and \"Material Mgmt\"", async () => {

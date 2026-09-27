@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { passwordSchema } from "../../utils/passwordPolicy.js";
+import { PASSWORD_MAX_LENGTH, passwordSchema } from "../../utils/passwordPolicy.js";
 
 export const loginSchema = z.object({
   email: z.string().email(),
@@ -14,6 +14,11 @@ export const forgotPasswordSchema = z.object({
 
 export const resetPasswordSchema = z.object({
   token: z.string().min(1),
+  newPassword: passwordSchema,
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(PASSWORD_MAX_LENGTH),
   newPassword: passwordSchema,
 });
 

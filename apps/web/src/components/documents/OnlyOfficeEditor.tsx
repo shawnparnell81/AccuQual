@@ -1,15 +1,19 @@
 import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
-import { openOfficeSession, type OfficeSession } from "../../api/onlyoffice";
+import { Download, X } from "lucide-react";
+import { openOfficeSource, type OfficeSession, type OfficeSource } from "../../api/onlyoffice";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 
 interface Props {
-  documentId: number;
-  versionId: number;
-  fileId: number;
+  documentId?: number;
+  versionId?: number;
+  fileId?: number;
   fileName: string;
   onClose: () => void;
+  /** Preview passes this so a draft still opens read-only. The Edit button leaves it off. */
+  viewOnly?: boolean;
+  source?: OfficeSource;
+  onDownload?: () => void;
 }
 
 type DocEditorInstance = { destroyEditor?: () => void };
@@ -47,15 +51,17 @@ function loadEditorScript(documentServerUrl: string): Promise<void> {
  * Full-screen ONLYOFFICE editor. The session config is produced by the API; this component
  * only loads the document-server script and hosts the iframe the script creates.
  */
-export function OnlyOfficeEditor({ documentId, versionId, fileId, fileName, onClose }: Props) {
+export function OnlyOfficeEditor({ documentId, versionId, fileId, fileName, onClose, viewOnly, source, onDownload }: Props) {
   const placeholderId = useId().replace(/:/g, "");
   const [session, setSession] = useState<OfficeSession | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const resolved: OfficeSource = source ?? { kind: "document", documentId: documentId ?? 0, versionId: versionId ?? 0, fileId: fileId ?? 0, viewOnly };
+  const sourceKey = JSON.stringify(resolved);
 
   useEffect(() => {
     let cancelled = false;
-    openOfficeSession(documentId, versionId, fileId)
+    openOfficeSource(JSON.parse(sourceKey) as OfficeSource)
       .then((next) => {
         if (!cancelled) setSession(next);
       })
@@ -65,7 +71,7 @@ export function OnlyOfficeEditor({ documentId, versionId, fileId, fileName, onCl
     return () => {
       cancelled = true;
     };
-  }, [documentId, versionId, fileId]);
+  }, [sourceKey]);
 
   useEffect(() => {
     if (!session) return;
@@ -96,7 +102,12 @@ export function OnlyOfficeEditor({ documentId, versionId, fileId, fileName, onCl
     <div className="fixed inset-0 z-[70] flex flex-col bg-background">
       <div className="flex items-center gap-3 border-b border-border px-4 py-2">
         <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{title}</h2>
-        <button type="button" onClick={onClose} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
+        {onDownload && (
+          <button type="button" onClick={onDownload} className="inline-flex min-h-11 items-center gap-1 rounded-md border border-border px-3 text-sm hover:bg-muted">
+            <Download size={14} /> Download
+          </button>
+        )}
+        <button type="button" onClick={onClose} className="inline-flex min-h-11 items-center gap-1 rounded-md border border-border px-3 text-sm hover:bg-muted">
           <X size={14} /> Close
         </button>
       </div>

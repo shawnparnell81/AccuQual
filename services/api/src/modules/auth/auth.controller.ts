@@ -216,3 +216,12 @@ export const resetPasswordHandler = asyncHandler(async (req: Request, res: Respo
   await authService.resetPassword(req.body.token, req.body.newPassword);
   res.json({ message: "Password updated. You can now log in with your new password." });
 });
+
+/** Replaces the refresh cookie so this browser stays signed in, and clears the trusted-device cookie because every device was just forgotten. */
+export const changePasswordHandler = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) throw AppError.unauthorized();
+  const result = await authService.changePassword(req.user.id, req.body.currentPassword, req.body.newPassword, req.cookies?.[REFRESH_COOKIE_NAME]);
+  setRefreshCookie(res, result.refreshToken, result.sessionExpiresAt);
+  clearTrustedDeviceCookie(res);
+  res.json(withoutRefreshToken(result));
+});

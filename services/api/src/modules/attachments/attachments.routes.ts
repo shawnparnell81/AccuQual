@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
-import { uploadAttachmentHandler, listAttachmentsHandler, downloadAttachmentHandler, deleteAttachmentHandler } from "./attachments.controller.js";
+import { uploadAttachmentHandler, listAttachmentsHandler, downloadAttachmentHandler, attachmentOfficeSessionHandler, deleteAttachmentHandler } from "./attachments.controller.js";
 
 export const attachmentsRouter = Router();
 attachmentsRouter.use(requireAuth, withDb);
@@ -16,4 +16,5 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 
 attachmentsRouter.get("/", listAttachmentsHandler);
 attachmentsRouter.post("/", upload.single("file"), uploadAttachmentHandler);
 attachmentsRouter.get("/:id/download", downloadAttachmentHandler);
+attachmentsRouter.get("/:id/office-session", attachmentOfficeSessionHandler);
 attachmentsRouter.delete("/:id", deleteAttachmentHandler);

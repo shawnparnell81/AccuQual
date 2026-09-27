@@ -7,6 +7,11 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { env } from "../../config/env.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { OFFICE_TYPE_ERROR, officeDocumentType } from "../onlyoffice/editorConfig.js";
+import { loadOfficeActor } from "../onlyoffice/access.js";
+import { onlyOfficeSettings } from "../onlyoffice/settings.js";
+import { signOfficeToken } from "../onlyoffice/token.js";
+import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
 
 /**
  * ONE generic upload/list/download/delete surface reused by every module —
@@ -76,6 +81,30 @@ export const downloadAttachmentHandler = asyncHandler(async (req: Request, res: 
   res.setHeader("Content-Type", row.mimeType ?? "application/octet-stream");
   res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(row.fileName)}"`);
   createReadStream(row.filePath).pipe(res);
+});
+
+/** Read-only ONLYOFFICE session for a Word, Excel, or PowerPoint attachment. Same audience as download. */
+export const attachmentOfficeSessionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const [row] = await req.db!.select().from(attachments).where(eq(attachments.id, id));
+  if (!row) throw AppError.notFound("Attachment");
+  if (!officeDocumentType(row.fileName)) throw new AppError(OFFICE_TYPE_ERROR, 415);
+  const settings = onlyOfficeSettings();
+  if (!settings) throw new AppError("Office editing is not configured on this server.", 503);
+  const actor = await loadOfficeActor(req.db!, req.user!.id);
+  if (!actor) throw AppError.unauthorized("Session is no longer valid");
+  const fileToken = signOfficeToken(settings.jwtSecret, "oo-attachment", { userId: actor.id, attachmentId: row.id });
+  res.json(
+    viewOfficeSession({
+      fileId: row.id,
+      fileName: row.fileName,
+      sha256: contentKey(row.id, row.fileSize, row.fileName),
+      user: { id: actor.id, name: actor.name },
+      fileToken,
+      fileRoute: "attachment-file",
+      viewer: officeViewer(req.query.viewer),
+    }),
+  );
 });
 
 /** Uploader or admin only — same "you own what you uploaded, or you're an admin" rule as most delete actions in this app. */

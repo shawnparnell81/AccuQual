@@ -44,6 +44,11 @@ export const users = pgTable("users", {
   firstFailedLoginAt: timestamp("first_failed_login_at"),
   lockedUntil: timestamp("locked_until"),
   passwordChangedAt: timestamp("password_changed_at"),
+  // True when an administrator assigned the password (a new account, or a
+  // reset to a temporary one). The person must choose their own password
+  // after signing in — and after MFA, if they use it — before any other page
+  // works. Existing accounts stay false; only a newly assigned password sets it.
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
   // Multi-factor authentication (TOTP). The secret is AES-256-GCM ciphertext
   // (company/crypto.ts) and is written on enrollment start but only counts once
   // mfaEnabled flips true after the user proves a first code.

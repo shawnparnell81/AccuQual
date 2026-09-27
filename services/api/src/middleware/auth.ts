@@ -16,6 +16,9 @@ export interface AuthenticatedUser {
   supplierId: number | null;
 }
 
+/** Routes a person may still call after signing in with a temporary password. */
+const PASSWORD_CHANGE_ALLOWED = new Set(["/auth/change-password", "/auth/logout", "/auth/me"]);
+
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
@@ -52,9 +55,14 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       throw AppError.unauthorized("Invalid or expired token");
     }
 
-    const [live] = await db.select({ isActive: users.isActive, tokenVersion: users.tokenVersion }).from(users).where(eq(users.id, Number(payload.sub)));
+    const [live] = await db.select({ isActive: users.isActive, tokenVersion: users.tokenVersion, mustChangePassword: users.mustChangePassword }).from(users).where(eq(users.id, Number(payload.sub)));
     if (!live || !live.isActive) throw AppError.unauthorized("Session is no longer valid");
     if (payload.tv !== undefined && payload.tv !== live.tokenVersion) throw AppError.unauthorized("Session has been revoked");
+    // A temporary password only gets the person as far as choosing their own.
+    // Sign-out and the change itself stay available; every other page does not.
+    if (live.mustChangePassword && !PASSWORD_CHANGE_ALLOWED.has(`${req.baseUrl}${req.path}`)) {
+      throw AppError.forbidden("You need to set a new password before continuing.");
+    }
 
     req.user = {
       id: Number(payload.sub),

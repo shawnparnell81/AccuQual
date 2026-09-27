@@ -47,6 +47,7 @@ async function userWithRole(userId: number) {
       supplierId: users.supplierId,
       mfaEnabled: users.mfaEnabled,
       mfaRequiredSince: users.mfaRequiredSince,
+      mustChangePassword: users.mustChangePassword,
       companyMfaPolicy: company.mfaPolicy,
     })
     .from(users)
@@ -471,7 +472,7 @@ export async function resetPassword(rawToken: string, newPassword: string): Prom
   // Proving control of the mailbox also clears any lockout.
   await db
     .update(users)
-    .set({ passwordHash, tokenVersion: nextTokenVersion, passwordChangedAt: new Date(), failedLoginCount: 0, firstFailedLoginAt: null, lockedUntil: null })
+    .set({ passwordHash, tokenVersion: nextTokenVersion, passwordChangedAt: new Date(), mustChangePassword: false, failedLoginCount: 0, firstFailedLoginAt: null, lockedUntil: null })
     .where(eq(users.id, tokenRow.userId));
   await recordAuditTrail(db, {
     entityType: "User",
@@ -484,6 +485,80 @@ export async function resetPassword(rawToken: string, newPassword: string): Prom
   await revokeAllRefreshTokens(tokenRow.userId);
   await revokeAllTrustedDevices(tokenRow.userId, "password_reset", tokenRow.userId);
   await db.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, tokenRow.id));
+}
+
+/**
+ * The signed-in user picks a new password. Other sessions end immediately.
+ * This browser stays signed in for the time already left on its 12-hour
+ * sign-in — the window is not restarted. Every trusted device is forgotten.
+ */
+export async function changePassword(userId: number, currentPassword: string, newPassword: string, currentRefreshToken?: string) {
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
+  if (!user || !user.isActive) throw AppError.unauthorized("Session is no longer valid");
+  if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+    throw new AppError("Too many failed attempts. Try again later.", 429);
+  }
+  if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+    await recordFailedLogin(user);
+    throw AppError.unauthorized("Current password is incorrect.");
+  }
+  if (await bcrypt.compare(newPassword, user.passwordHash)) {
+    throw AppError.badRequest("Choose a different password than the one you use now.");
+  }
+  await assertPasswordAcceptable(newPassword, { email: user.email, name: user.name ?? undefined });
+
+  let sessionExpiresAt = freshSessionEnd();
+  if (currentRefreshToken) {
+    try {
+      const payload = verifyRefreshToken(currentRefreshToken);
+      if (Number(payload.sub) === userId && payload.jti) {
+        const [row] = await db.select().from(refreshTokens).where(eq(refreshTokens.jti, payload.jti));
+        if (row && !row.revokedAt && row.userId === userId && row.expiresAt.getTime() > Date.now() + 1000) {
+          sessionExpiresAt = continuingSessionEnd(row.expiresAt);
+        }
+      }
+    } catch {
+      // A missing or unreadable cookie still lets them stay signed in; the new sign-in ends on the usual 12-hour cap.
+    }
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  const nextTokenVersion = user.tokenVersion + 1;
+  await db
+    .update(users)
+    .set({
+      passwordHash,
+      tokenVersion: nextTokenVersion,
+      passwordChangedAt: new Date(),
+      mustChangePassword: false,
+      failedLoginCount: 0,
+      firstFailedLoginAt: null,
+      lockedUntil: null,
+    })
+    .where(eq(users.id, userId));
+
+  await revokeAllRefreshTokens(userId);
+  await revokeAllTrustedDevices(userId, "password_changed", userId);
+
+  const full = await userWithRole(userId);
+  if (!full) throw AppError.unauthorized("Session is no longer valid");
+  const tokens = await issueTokens(
+    { id: full.id, roleId: full.roleId, roleName: full.roleName, department: full.department, supplierId: full.supplierId, tokenVersion: full.tokenVersion },
+    sessionExpiresAt,
+  );
+
+  await recordAuditTrail(db, {
+    entityType: "User",
+    entityId: userId,
+    action: "status_change",
+    changes: { action: "password_changed" },
+    performedBy: userId,
+  }).catch((err) => logger.error("Failed to audit a password change", { userId, err }));
+
+  const notice = renderTemplate("password_changed", { resetUrl: `${env.FRONTEND_URL}/forgot-password` });
+  await sendEmail({ to: user.email, subject: notice.subject, body: notice.body }).catch((err) => logger.error("Failed to send the password-changed email", { userId, err }));
+
+  return { user: sanitize(full), company: await companyInfo(), ...tokens };
 }
 
 export async function me(userId: number) {

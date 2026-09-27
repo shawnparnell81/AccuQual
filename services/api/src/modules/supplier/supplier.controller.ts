@@ -119,7 +119,7 @@ export const createPortalAccountHandler = asyncHandler(async (req: Request, res:
 
   const [created] = await req
     .db!.insert(users)
-    .values({ email, passwordHash, name: name ?? supplier.name, roleId: supplierRole.id, department: null, supplierId })
+    .values({ email, passwordHash, name: name ?? supplier.name, roleId: supplierRole.id, department: null, supplierId, mustChangePassword: true })
     .returning();
   if (!created) throw new AppError("Failed to create the portal login", 500);
 

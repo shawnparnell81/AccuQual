@@ -298,7 +298,7 @@ export function ImportDialog({ entity, isOpen, onClose }: { entity: ImportEntity
               <p className="mb-1 flex items-center gap-2 text-sm font-medium">
                 <AlertTriangle size={15} /> Temporary passwords — shown only now
               </p>
-              <p className="mb-2 text-xs text-muted-foreground">Save this list and give each person their password privately. They can change it after signing in. It can't be shown again.</p>
+              <p className="mb-2 text-xs text-muted-foreground">Save this list and give each person their password privately. They must set a new password the first time they sign in. It can't be shown again.</p>
               <div className="max-h-40 overflow-y-auto rounded-md bg-background/60">
                 <table className="w-full text-xs">
                   <tbody>

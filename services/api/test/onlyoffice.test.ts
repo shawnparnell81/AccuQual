@@ -69,7 +69,7 @@ describe("authorizeOfficeFile", () => {
     expect(result).toEqual({ ok: false, status: 404, reason: "Attachment not found" });
   });
 
-  it("rejects a file that is not Word or Excel", async () => {
+  it("rejects a file that is not Word, Excel, or PowerPoint", async () => {
     const gate = deps({ ...draftDocx, fileName: "scan.pdf" }, { edit: true });
     const result = await authorizeOfficeFile({} as never, actor, { documentId: 1, versionId: 2, fileId: 4 }, gate);
     expect(result).toMatchObject({ ok: false, status: 415 });
@@ -85,9 +85,10 @@ describe("decideOfficeAccess", () => {
 describe("office editor tokens", () => {
   const secret = "test-onlyoffice-secret";
 
-  it("recognizes Word and Excel names and builds a key the document server will accept", () => {
+  it("recognizes Word, Excel, and PowerPoint names and builds a key the document server will accept", () => {
     expect(officeDocumentType("Work Instruction.DOCX")).toBe("word");
     expect(officeDocumentType("log.xlsx")).toBe("cell");
+    expect(officeDocumentType("Deck.PPTX")).toBe("slide");
     expect(officeDocumentType("scan.pdf")).toBeNull();
     expect(editorDocumentKey(12, "abc")).toMatch(/^f12-/);
   });

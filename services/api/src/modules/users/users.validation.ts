@@ -26,6 +26,10 @@ export const createUserSchema = z.object({
   department: departmentSchema.nullable().optional(),
 });
 
+export const temporaryPasswordSchema = z.object({
+  password: passwordSchema,
+});
+
 export const updateUserSchema = z.object({
   name: z.string().optional(),
   roleId: z.number().int().nullable().optional(),

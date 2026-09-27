@@ -5,7 +5,7 @@ import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createDocumentFolderSchema, updateDocumentFolderSchema } from "./document-folders.validation.js";
-import { list, create, update, remove, uploadTemplate, uploadDocument, downloadTemplate, removeTemplate } from "./document-folders.controller.js";
+import { list, create, update, remove, uploadTemplate, uploadDocument, downloadTemplate, folderOfficeSessionHandler, removeTemplate } from "./document-folders.controller.js";
 
 export const documentFoldersRouter = Router();
 // Security audit finding (high): this router had no RBAC gate at all — any
@@ -31,4 +31,5 @@ documentFoldersRouter.delete("/:id", remove);
 
 documentFoldersRouter.post("/:id/template", upload.single("file"), uploadTemplate);
 documentFoldersRouter.get("/:id/template", downloadTemplate);
+documentFoldersRouter.get("/:id/office-session", folderOfficeSessionHandler);
 documentFoldersRouter.delete("/:id/template", removeTemplate);
