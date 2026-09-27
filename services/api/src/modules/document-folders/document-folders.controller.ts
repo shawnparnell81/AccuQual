@@ -10,6 +10,7 @@ import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
 import type { Db } from "../../lib/requestDb.js";
 import { DEFAULT_DOCUMENT_FOLDERS, type DefaultFolderSeed } from "./defaultDocumentFolders.js";
+import { presentDocumentFolders } from "./retiredDocumentFolders.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { expirationStatus } from "../documents/documents.controller.js";
 
@@ -131,8 +132,7 @@ const ADDITIONAL_SUBFOLDERS: { department: string; folder: string; subfolder: st
   { department: "Quality", folder: "Nonconformance Management", subfolder: "Deviation / Waiver Requests" },
   { department: "Production", folder: "Safety & Compliance", subfolder: "Environmental Condition Records" },
   { department: "Shipping & Receiving", folder: "Incoming Inspection", subfolder: "Incoming Inspection Record" },
-  { department: "Purchasing", folder: "Supplier Management", subfolder: "Supplier Qualification & Evaluation" },
-  { department: "Purchasing", folder: "Compliance & Documentation", subfolder: "PO Quality Requirements" },
+  { department: "Quality", folder: "Supplier Quality", subfolder: "Supplier Qualification & Evaluation" },
 ];
 
 async function ensureAdditionalSubfolders(db: Db, all: (typeof documentFolders.$inferSelect)[]): Promise<(typeof documentFolders.$inferSelect)[]> {
@@ -201,7 +201,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     const pool = await ensureLibraryPool(db, seeded.filter((f) => f.parentId === null));
     const all = await ensureAdditionalSubfolders(db, [...seeded, pool]);
     await linkKnownForms(db, all);
-    return res.json(await withLinkedDocumentInfo(db, all));
+    return res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(all)));
   }
 
   const pool = await ensureLibraryPool(db, existing.filter((f) => f.parentId === null));
@@ -209,7 +209,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
   const withPool = alreadyIncluded ? existing : [...existing, pool];
   const all = await ensureAdditionalSubfolders(db, withPool);
   await linkKnownForms(db, all);
-  res.json(await withLinkedDocumentInfo(db, all));
+  res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(all)));
 });
 
 export const create = asyncHandler(async (req: Request, res: Response) => {

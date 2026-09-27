@@ -5,6 +5,7 @@ import { ncr } from "../../drizzle/schema/ncr.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import * as ncrService from "./ncr.service.js";
 import { syncNcrFormData, mapSeverityToClassification, ncrIsoDate } from "./ncr.formSync.js";
+import * as quarantineService from "../quarantine/quarantine.service.js";
 
 export const baseHandlers = crudFactory(ncr, {
   entityName: "NCR",
@@ -86,4 +87,20 @@ export const correctiveActionHandler = asyncHandler(async (req: Request, res: Re
 export const closeHandler = asyncHandler(async (req: Request, res: Response) => {
   const updated = await ncrService.close(req.db!, Number(req.params.id), req.user?.id, req.allowedSiteIds);
   res.json(updated);
+});
+
+export const listNcrQuarantineItemsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const ncrId = Number(req.params.id);
+  res.json(await quarantineService.listQuarantineItems(req.db!, "active", ncrId));
+});
+
+export const addNcrQuarantineItemHandler = asyncHandler(async (req: Request, res: Response) => {
+  const created = await quarantineService.addNcrQuarantineItem(req.db!, Number(req.params.id), req.body, req.user?.id);
+  res.status(201).json(created);
+});
+
+export const completeNcrDispositionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const actor = { id: req.user?.id ?? 0, roleName: req.user?.roleName ?? null };
+  const result = await quarantineService.completeNcrDisposition(req.db!, Number(req.params.id), req.body.disposition, actor);
+  res.json(result);
 });

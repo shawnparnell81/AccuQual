@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, or, gt } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, gt } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
 import {
   quarantineRecords,
@@ -377,4 +377,154 @@ export async function resolveFromReceivingLine(db: Db, lineItemId: number, outco
 
 export async function linkNcrFromReceiving(db: Db, quarantineId: number, ncrId: number) {
   await db.update(quarantineRecords).set({ ncrId, updatedAt: new Date() }).where(and(eq(quarantineRecords.id, quarantineId)));
+}
+
+// ---- NCR quarantined items ------------------------------------------------------------------------------------------------------------------------
+
+/** What an NCR disposition can do to the material it quarantined. Mapped onto the existing release/destroy dispositions. */
+export const NCR_ITEM_DISPOSITIONS = ["use_as_is", "rework", "scrap", "return_to_supplier"] as const;
+export type NcrItemDisposition = (typeof NCR_ITEM_DISPOSITIONS)[number];
+
+const NCR_DISPOSITION_RESOLVE: Record<NcrItemDisposition, { action: "release" | "destroy"; disposition: string; label: string }> = {
+  use_as_is: { action: "release", disposition: "use_as_is", label: "Use as is" },
+  rework: { action: "release", disposition: "reworked", label: "Rework" },
+  scrap: { action: "destroy", disposition: "scrapped", label: "Scrap" },
+  return_to_supplier: { action: "destroy", disposition: "returned_to_supplier", label: "Return to supplier" },
+};
+
+export const DISPOSITION_LABEL: Record<string, string> = {
+  use_as_is: "Use as is",
+  reworked: "Rework",
+  rework: "Rework",
+  scrapped: "Scrap",
+  scrap: "Scrap",
+  returned_to_supplier: "Return to supplier",
+  return_to_supplier: "Return to supplier",
+  sorted: "Sorted",
+  other: "Other",
+};
+
+export interface QuarantineItemView {
+  id: number;
+  partNumber: string;
+  quantity: string;
+  serialNumber: string | null;
+  quarantinedAt: Date | null;
+  ncrId: number | null;
+  releasedAt: Date | null;
+  disposition: string | null;
+  dispositionLabel: string | null;
+  status: QuarantineRecord["status"];
+}
+
+function partNumberOf(record: QuarantineRecord): string {
+  const meta = record.metadata as { partNumber?: unknown } | null;
+  if (meta && typeof meta.partNumber === "string" && meta.partNumber.trim()) return meta.partNumber.trim();
+  return record.itemLabel;
+}
+
+function serialOf(record: QuarantineRecord): string | null {
+  const meta = record.metadata as { serialNumber?: unknown } | null;
+  if (meta && typeof meta.serialNumber === "string" && meta.serialNumber.trim()) return meta.serialNumber.trim();
+  return null;
+}
+
+async function latestResolutions(db: Db, ids: number[]) {
+  const byId = new Map<number, { disposition: string }>();
+  if (ids.length === 0) return byId;
+  const rows = await db.select().from(quarantineResolutions).where(inArray(quarantineResolutions.quarantineId, ids)).orderBy(desc(quarantineResolutions.resolvedAt), desc(quarantineResolutions.id));
+  for (const row of rows) {
+    if (!byId.has(row.quarantineId)) byId.set(row.quarantineId, { disposition: row.disposition });
+  }
+  return byId;
+}
+
+function toItemView(record: QuarantineRecord, disposition: string | null, active: boolean): QuarantineItemView {
+  return {
+    id: record.id,
+    partNumber: partNumberOf(record),
+    quantity: active ? record.quantity : record.originalQuantity,
+    serialNumber: serialOf(record),
+    quarantinedAt: record.createdAt,
+    ncrId: record.ncrId,
+    releasedAt: record.releasedAt ?? record.destroyedAt,
+    disposition,
+    dispositionLabel: disposition ? (DISPOSITION_LABEL[disposition] ?? disposition) : null,
+    status: record.status,
+  };
+}
+
+/** Active holds, or items already released (including scrap and return, which close as destroyed). */
+export async function listQuarantineItems(db: Db, view: "active" | "released", ncrId?: number): Promise<QuarantineItemView[]> {
+  const statuses = view === "active" ? (["quarantined"] as const) : (["released", "destroyed"] as const);
+  const conditions = [inArray(quarantineRecords.status, [...statuses])];
+  if (ncrId !== undefined) conditions.push(eq(quarantineRecords.ncrId, ncrId));
+  const rows = await db.select().from(quarantineRecords).where(and(...conditions)).orderBy(desc(quarantineRecords.createdAt), desc(quarantineRecords.id));
+  const resolutions = await latestResolutions(db, rows.map((r) => r.id));
+  return rows.map((r) => toItemView(r, resolutions.get(r.id)?.disposition ?? null, view === "active"));
+}
+
+/** Puts one part on the quarantined-items list from an NCR. Reuses quarantine_records; the part number and optional serial live on that row. */
+export async function addNcrQuarantineItem(
+  db: Db,
+  ncrId: number,
+  input: { partNumber: string; quantity: number; serialNumber?: string | null },
+  actor?: number,
+): Promise<QuarantineItemView> {
+  const [row] = await db.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, ncrId), eq(ncr.isDeleted, false)));
+  if (!row) throw AppError.notFound("NCR");
+  const partNumber = input.partNumber.trim();
+  if (!partNumber) throw AppError.badRequest("Enter a part number.");
+  if (!(input.quantity > 0)) throw AppError.badRequest("Quantity must be more than zero.");
+  const serialNumber = input.serialNumber?.trim() || undefined;
+  const record = await createQuarantine(
+    db,
+    {
+      itemType: "other",
+      itemLabel: partNumber,
+      quantity: input.quantity,
+      reasonCategory: "nonconforming_material",
+      reason: `Quarantined from NCR #${ncrId}.`,
+      ncrId,
+      sourceType: "ncr",
+      sourceId: ncrId,
+      metadata: { partNumber, ...(serialNumber ? { serialNumber } : {}) },
+    },
+    actor,
+  );
+  return toItemView(record, null, true);
+}
+
+/**
+ * Completing the NCR disposition releases every item still quarantined against that NCR.
+ * Use-as-is and rework go back into use; scrap and return-to-supplier leave stock.
+ * Either way they leave the active list and stay in the released history.
+ * The person working the NCR is allowed to finish this — it is the disposition, not a second person deciding a hold they opened.
+ */
+export async function completeNcrDisposition(db: Db, ncrId: number, disposition: NcrItemDisposition, actor: ResolveActor): Promise<{ disposition: NcrItemDisposition; items: QuarantineItemView[] }> {
+  const mapped = NCR_DISPOSITION_RESOLVE[disposition];
+  if (!mapped) throw AppError.badRequest("Choose a disposition: use as is, rework, scrap, or return to supplier.");
+  const [row] = await db.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, ncrId), eq(ncr.isDeleted, false)));
+  if (!row) throw AppError.notFound("NCR");
+  const open = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.ncrId, ncrId), eq(quarantineRecords.status, "quarantined")));
+  if (open.length === 0) throw AppError.badRequest("This NCR has no quarantined items to release.");
+  const items: QuarantineItemView[] = [];
+  for (const record of open) {
+    const updated = await resolveQuarantine(
+      db,
+      record.id,
+      mapped.action,
+      { disposition: mapped.disposition, notes: `NCR #${ncrId} disposition completed: ${mapped.label}.` },
+      { ...actor, skipFourEyes: true },
+    );
+    items.push(toItemView(updated, mapped.disposition, false));
+  }
+  await recordAuditTrail(db, {
+    entityType: "NCR",
+    entityId: ncrId,
+    action: "status_change",
+    changes: { event: "ncr_quarantine_released", disposition, dispositionLabel: mapped.label, itemIds: items.map((item) => item.id) },
+    performedBy: actor.id > 0 ? actor.id : undefined,
+  });
+  return { disposition, items };
 }

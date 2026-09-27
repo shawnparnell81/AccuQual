@@ -35,8 +35,6 @@ const RELATED_SOURCE_LINK: Record<string, (id: number) => string> = {
   NCR: (id) => `/ncr/${id}`,
   Supplier: (id) => `/suppliers/${id}`,
   WorkOrder: (id) => `/work-orders/${id}`,
-  Requisition: (id) => `/erp/requisitions/${id}`,
-  PO: (id) => `/erp/${id}`,
   RMA: (id) => `/rma/${id}`,
   Risk: (id) => `/risk/${id}`,
   Feasibility: (id) => `/feasibility/${id}`,
@@ -104,10 +102,16 @@ export function CustomerDetailPage() {
             <StatusBadge value={customer.status} />
             {customer.customerType && <span className="text-sm text-muted-foreground">{customer.customerType}</span>}
             {customer.industry && <span className="text-sm text-muted-foreground">— {customer.industry}</span>}
-            {sourceLink && (
-              <a href={sourceLink} className="text-sm text-primary hover:underline">
-                Started from {customer.relatedSourceType} #{customer.relatedSourceId}
-              </a>
+            {customer.relatedSourceType && customer.relatedSourceId && (
+              sourceLink ? (
+                <a href={sourceLink} className="text-sm text-primary hover:underline">
+                  Started from {customer.relatedSourceType} #{customer.relatedSourceId}
+                </a>
+              ) : (
+                <span className="text-sm text-muted-foreground">
+                  Started from {customer.relatedSourceType} #{customer.relatedSourceId}
+                </span>
+              )
             )}
           </div>
         </div>

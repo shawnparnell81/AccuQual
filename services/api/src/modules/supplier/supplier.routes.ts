@@ -3,7 +3,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
-import { createSupplierSchema, addScorecardSchema, createPortalAccountSchema } from "./supplier.validation.js";
+import { createSupplierSchema, addScorecardSchema } from "./supplier.validation.js";
 import {
   baseHandlers,
   addScorecardHandler,
@@ -11,7 +11,6 @@ import {
   conditionalHandler,
   suspendHandler,
   removeHandler,
-  createPortalAccountHandler,
   getSupplierRiskScoreHandler,
   recomputeSupplierRiskScoreHandler,
   getSupplierKpisHandler,
@@ -52,7 +51,3 @@ supplierRouter.post("/:id/approve", approveHandler);
 supplierRouter.post("/:id/conditional", conditionalHandler);
 supplierRouter.post("/:id/suspend", suspendHandler);
 supplierRouter.post("/:id/remove", removeHandler);
-// Creates the Supplier Portal's external login for this supplier — see
-// createPortalAccountHandler's own comment. Quality/admin only, same level
-// as approve/conditional/suspend/remove above.
-supplierRouter.post("/:id/portal-account", validate(createPortalAccountSchema), createPortalAccountHandler);

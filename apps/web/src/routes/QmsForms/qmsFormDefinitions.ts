@@ -113,7 +113,7 @@ export const QMS_FORM_DEFINITIONS: QmsFormDefinition[] = [
         { key: "quality", label: "Quality" }, { key: "delivery", label: "Delivery" }, { key: "responsiveness", label: "Responsiveness" }, { key: "decision", label: "Decision" },
       ] },
     ],
-    folderPath: ["Purchasing", "Supplier Management", "Supplier Qualification & Evaluation"],
+    folderPath: ["Quality", "Supplier Quality", "Supplier Qualification & Evaluation"],
   },
   {
     formType: "po_quality_requirements",

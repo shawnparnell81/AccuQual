@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
-import { useNavVisibility } from "./navVisibility";
-import { navSearchText, plainNav } from "../../lib/opsLanguage";
+import { flattenSidebarLinks } from "./sidebarStructure";
 import { GlobalSearchResults } from "./GlobalSearchResults";
 
 /**
@@ -18,7 +17,7 @@ import { GlobalSearchResults } from "./GlobalSearchResults";
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
-  const { allVisibleLeaves } = useNavVisibility();
+  const allVisibleLeaves = flattenSidebarLinks();
 
   useEffect(() => {
     if (!open) setQuery("");
@@ -36,7 +35,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const navMatches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return allVisibleLeaves.filter((l) => navSearchText(l.key, l.label).includes(q)).slice(0, 8);
+    return allVisibleLeaves.filter((l) => `${l.label} ${l.key}`.toLowerCase().includes(q)).slice(0, 8);
   }, [allVisibleLeaves, query]);
 
   if (!open) return null;
@@ -70,7 +69,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-secondary"
                 >
                   <leaf.icon size={15} className="flex-none text-muted-foreground" />
-                  {plainNav(leaf.key, leaf.label).label}
+                  {leaf.label}
                 </button>
               ))}
             </div>

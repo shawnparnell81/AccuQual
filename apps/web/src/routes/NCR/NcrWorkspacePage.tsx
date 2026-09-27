@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { exportFormPdf } from "../../api/formHooks";
-import type { Ncr, Capa, Rma, WorkOrder, ErpPurchaseRequisition } from "../../api/types";
+import type { Ncr, Capa, Rma, WorkOrder } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextAreaField } from "../../components/forms/Field";
 import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowAction";
@@ -24,6 +24,7 @@ import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
 import { NCR_LOOP, READ_ONLY_REASON, duePhrase, isPastDue, ncrLoopIndex, ncrNextAction, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
+import { NcrQuarantineSection } from "./NcrQuarantineSection";
 
 const FORM_TYPE = "ncr";
 
@@ -31,8 +32,6 @@ const ncrHooks = createResourceHooks<Ncr>("ncr");
 const capaHooks = createResourceHooks<Capa>("capa");
 const rmaHooks = createResourceHooks<Rma>("rma");
 const workOrderHooks = createResourceHooks<WorkOrder>("work-orders");
-const requisitionHooks = createResourceHooks<ErpPurchaseRequisition>("erp/requisitions");
-
 interface EightDReport {
   id: number;
   ncrId: number | null;
@@ -103,8 +102,8 @@ export function NcrWorkspacePage() {
     <div className="flex flex-col gap-4">
       <RecordGlance
         crumbs={[
-          { label: "Issues", to: "/ncr" },
-          { label: `Issue #${ncr.id}` },
+          { label: "NCR", to: "/ncr" },
+          { label: `NCR #${ncr.id}` },
         ]}
         title={ncr.title}
         standard={`NCR #${ncr.id}`}
@@ -169,6 +168,8 @@ export function NcrWorkspacePage() {
         }
         trail={<LoopTrail steps={NCR_LOOP} current={ncrLoopIndex(ncr.status)} />}
       />
+
+      <NcrQuarantineSection ncrId={ncrId} canEdit={canEdit} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {/* Left pane — status/linking controls + the real editable form. */}
@@ -343,14 +344,12 @@ function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTi
   const { data: eightDs = [] } = eightDHooks.useList();
   const { data: rmas = [] } = rmaHooks.useList();
   const { data: workOrders = [] } = workOrderHooks.useList();
-  const { data: requisitions = [] } = requisitionHooks.useList();
   const [attachId, setAttachId] = useState("");
 
   const linkedCapas = capas.filter((c) => c.ncrId === ncrId);
   const linkedEightDs = eightDs.filter((r) => r.ncrId === ncrId);
   const linkedRmas = rmas.filter((r) => r.linkedNcrId === ncrId);
   const linkedWorkOrders = workOrders.filter((w) => w.linkedNcrId === ncrId);
-  const linkedRequisitions = requisitions.filter((r) => r.linkedNcrId === ncrId);
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
@@ -437,14 +436,6 @@ function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTi
             <button onClick={() => navigate(`/work-orders/${w.id}`)} className="flex w-full items-center justify-between text-left hover:text-primary">
               <span>Work Order #{w.id}</span>
               <StatusBadge value={w.status} />
-            </button>
-          </li>
-        ))}
-        {linkedRequisitions.map((r) => (
-          <li key={`pr-${r.id}`} className="pb-1">
-            <button onClick={() => navigate(`/erp/requisitions/${r.id}`)} className="flex w-full items-center justify-between text-left hover:text-primary">
-              <span>Requisition #{r.id}</span>
-              <StatusBadge value={r.status} />
             </button>
           </li>
         ))}

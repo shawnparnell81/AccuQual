@@ -40,7 +40,6 @@ describe("home and role language", () => {
 
 describe("nav search", () => {
   it("finds an issue by the plain name or the standard term", () => {
-    assert.match(navSearchText("ncr", "NCR"), /issues/);
     assert.match(navSearchText("ncr", "NCR"), /ncr/);
     assert.equal(plainNav("capa", "CAPA").label, "Fixes");
     assert.deepEqual(

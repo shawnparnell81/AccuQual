@@ -315,16 +315,11 @@ describe("Quarantine (real DB + real HTTP path)", () => {
   describe("receiving", () => {
     async function receivedLine(qty = 100) {
       const [item] = await db.insert(inventoryItems).values({ sku: `RCV-${Math.random().toString(36).slice(2, 8)}`, description: "Received part" }).returning();
-      const purchasing = qualityUser; // the PO endpoints are gated by department; use API-created records through a purchasing user
-      const buyer = await makeUser(companyId, `buyer-${Math.random().toString(36).slice(2, 6)}`, "operator", "purchasing");
       const receiver = await makeUser(companyId, `recv-${Math.random().toString(36).slice(2, 6)}`, "operator", "material_management");
-      void purchasing;
-      const po = await request(app).post("/erp/purchase-orders").set(as(buyer)).send({ supplierId, lineItems: [{ itemId: item!.id, quantity: qty, unitCost: 5 }] });
-      expect(po.status).toBe(201);
-      await request(app).post(`/erp/purchase-orders/${po.body.id}/send`).set(as(buyer));
-      const detail = await request(app).get(`/erp/purchase-orders/${po.body.id}`).set(as(buyer));
+      const [po] = await db.insert(erpPurchaseOrders).values({ supplierId, status: "sent" }).returning();
+      const [poLine] = await db.insert(erpPoLineItems).values({ purchaseOrderId: po!.id, itemId: item!.id, quantity: qty, unitCost: "5" }).returning();
       const lotNumber = `RL-${Math.random().toString(36).slice(2, 8)}`;
-      const doc = await request(app).post("/erp/receiving-documents").set(as(receiver)).send({ purchaseOrderId: po.body.id, lineItems: [{ poLineItemId: detail.body.lineItems[0].id, quantityReceived: qty, lotNumber }] });
+      const doc = await request(app).post("/erp/receiving-documents").set(as(receiver)).send({ purchaseOrderId: po!.id, lineItems: [{ poLineItemId: poLine!.id, quantityReceived: qty, lotNumber }] });
       expect(doc.status).toBe(201);
       const line = (await request(app).get(`/erp/receiving-documents/${doc.body.id}`).set(as(receiver))).body.lineItems[0];
       const status = (target: string, who: Who = qualityUser) => request(app).post(`/erp/receiving-line-items/${line.id}/status`).set(as(who)).send({ status: target });

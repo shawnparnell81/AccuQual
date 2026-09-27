@@ -12,6 +12,8 @@ import {
   rootCauseNcrSchema,
   correctiveActionNcrSchema,
   bulkUpdateNcrSchema,
+  addNcrQuarantineItemSchema,
+  completeNcrDispositionSchema,
 } from "./ncr.validation.js";
 import {
   baseHandlers,
@@ -21,6 +23,9 @@ import {
   rootCauseHandler,
   correctiveActionHandler,
   closeHandler,
+  listNcrQuarantineItemsHandler,
+  addNcrQuarantineItemHandler,
+  completeNcrDispositionHandler,
 } from "./ncr.controller.js";
 
 export const ncrRouter = Router();
@@ -40,3 +45,6 @@ ncrRouter.post("/:id/containment", validate(containmentNcrSchema), containmentHa
 ncrRouter.post("/:id/root-cause", validate(rootCauseNcrSchema), rootCauseHandler);
 ncrRouter.post("/:id/corrective-action", validate(correctiveActionNcrSchema), correctiveActionHandler);
 ncrRouter.post("/:id/close", closeHandler);
+ncrRouter.get("/:id/quarantine-items", listNcrQuarantineItemsHandler);
+ncrRouter.post("/:id/quarantine-items", validate(addNcrQuarantineItemSchema), addNcrQuarantineItemHandler);
+ncrRouter.post("/:id/disposition", validate(completeNcrDispositionSchema), completeNcrDispositionHandler);

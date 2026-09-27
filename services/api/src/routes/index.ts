@@ -45,14 +45,12 @@ import { notificationsRouter } from "../modules/notifications/notification.route
 import { notificationsMeRouter } from "../modules/notifications/notification.me.routes.js";
 import { inventoryRouter } from "../modules/inventory/inventory.routes.js";
 import { erpRouter } from "../modules/erp/erp.routes.js";
-import { erpRequisitionsRouter } from "../modules/erp/erpRequisitions.routes.js";
 import { erpPresetsRouter } from "../modules/erp/erpPresets.routes.js";
 import { erpSyncErrorsRouter } from "../modules/erp/erpSyncErrors.routes.js";
 import { companyRouter } from "../modules/company/company.routes.js";
 import { searchRouter } from "../modules/search/search.routes.js";
 import { rmaRouter } from "../modules/rma/rma.routes.js";
 import { workOrdersRouter } from "../modules/work-orders/workOrders.routes.js";
-import { onboardingRouter } from "../modules/onboarding/onboarding.routes.js";
 import { feasibilityRouter } from "../modules/feasibility/feasibility.routes.js";
 import { salesRouter } from "../modules/sales/sales.routes.js";
 import { customersRouter } from "../modules/customers/customers.routes.js";
@@ -65,7 +63,6 @@ import { settingsRouter } from "../modules/settings/settings.routes.js";
 import { attachmentsRouter } from "../modules/attachments/attachments.routes.js";
 import { importRouter } from "../modules/import/import.routes.js";
 import { warrantyRouter } from "../modules/warranty/warranty.routes.js";
-import { supplierPortalRouter } from "../modules/supplier-portal/supplierPortal.routes.js";
 import { crarRouter } from "../modules/crar/crar.routes.js";
 import { rmaActivityLogRouter } from "../modules/rma-activity-log/rmaActivityLog.routes.js";
 import { rmaLogRouter } from "../modules/rma-log/rmaLog.routes.js";
@@ -127,11 +124,6 @@ apiRouter.use("/nav", navRouter);
 apiRouter.use("/calendar", calendarRouter);
 apiRouter.use("/workers", workerRouter);
 apiRouter.use("/inventory", inventoryRouter);
-// Registered before /erp: a more specific prefix match must come first so
-// /erp/requisitions/* is handled by its own router (a different department
-// gate — see erpRequisitions.routes.ts's own comment) instead of falling
-// into erpRouter's blanket "erp" gate.
-apiRouter.use("/erp/requisitions", erpRequisitionsRouter);
 // Same precedent as above — /erp/presets/* and /erp/active-preset/* use
 // their own admin-only gate (see erpPresets.routes.ts's own comment), not
 // erpRouter's requireDepartmentAccess("erp").
@@ -144,7 +136,6 @@ apiRouter.use("/company", companyRouter);
 apiRouter.use("/search", searchRouter);
 apiRouter.use("/rma", rmaRouter);
 apiRouter.use("/work-orders", workOrdersRouter);
-apiRouter.use("/onboarding", onboardingRouter);
 apiRouter.use("/feasibility", feasibilityRouter);
 apiRouter.use("/sales", salesRouter);
 apiRouter.use("/customers", customersRouter);
@@ -157,7 +148,6 @@ apiRouter.use("/settings", settingsRouter);
 apiRouter.use("/attachments", attachmentsRouter);
 apiRouter.use("/import", importRouter);
 apiRouter.use("/warranty", warrantyRouter);
-apiRouter.use("/supplier-portal", supplierPortalRouter);
 apiRouter.use("/crar", crarRouter);
 apiRouter.use("/rma-activity-log", rmaActivityLogRouter);
 apiRouter.use("/rma-log", rmaLogRouter);

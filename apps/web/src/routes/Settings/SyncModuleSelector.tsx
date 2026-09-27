@@ -1,7 +1,6 @@
 const MODULES: { value: string; label: string }[] = [
   { value: "inventory", label: "Inventory" },
   { value: "suppliers", label: "Suppliers" },
-  { value: "purchaseOrders", label: "Purchase Orders" },
   { value: "workOrders", label: "Work Orders" },
 ];
 
