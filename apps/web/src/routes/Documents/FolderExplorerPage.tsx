@@ -9,7 +9,7 @@ import { FileDropZone, isFileDrag } from "../../components/shared/FileDropZone";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
-import { previewKind, saveBytes } from "../../lib/filePreview";
+import { onlyOfficeFile, previewKind, saveBytes } from "../../lib/filePreview";
 
 interface DocumentFolder {
   id: number;
@@ -513,7 +513,7 @@ function DocPill({
       fileName,
       mimeType: doc.pdfMimeType,
       loadBytes: async () => (await apiClient.get(`/document-folders/${doc.id}/template`, { responseType: "arraybuffer" })).data as ArrayBuffer,
-      officeSource: kind === "office" ? { kind: "folder", folderId: doc.id } : undefined,
+      officeSource: onlyOfficeFile(fileName, doc.pdfMimeType) ? { kind: "folder", folderId: doc.id } : undefined,
       download: downloadAttachment,
     });
   }

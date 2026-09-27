@@ -12,7 +12,7 @@ import { MAX_FILE_BYTES } from "../documents/documentVersioning.js";
 import { assertOfficeAccess, authorizeOfficeFile, ensureExclusiveDraftFile, loadOfficeActor, persistEditedOfficeFile } from "./access.js";
 import { buildEditorConfig, editorDocumentKey } from "./editorConfig.js";
 import { downloadSavedFile } from "./download.js";
-import { onlyOfficeSettings } from "./settings.js";
+import { officeEditorConfigured, onlyOfficeSettings } from "./settings.js";
 import { eq } from "drizzle-orm";
 import { attachments } from "../../drizzle/schema/attachments.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
@@ -36,6 +36,15 @@ function idQuery(req: Request, name: string): number {
  * Opens the editor for one file on one revision. The browser gets a signed DocsAPI config.
  * Whether that config can edit is decided only by authorizeOfficeFile.
  */
+/**
+ * Any signed-in person can ask. Attachment previews are not limited to the
+ * documents department, and the answer is only whether the editor is configured.
+ */
+export const onlyOfficeStatusRouter = Router();
+onlyOfficeStatusRouter.get("/status", requireAuth, (_req, res) => {
+  res.json({ configured: officeEditorConfigured() });
+});
+
 export const onlyOfficeRouter = Router();
 onlyOfficeRouter.use(requireAuth, withDb, requireDepartmentAccess("documents"));
 
