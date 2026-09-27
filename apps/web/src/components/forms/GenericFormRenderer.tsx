@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { Block, FormLayout, RowBlock, TableBlock, TextareaBlock, YesNoBlock } from "./layouts/types";
 import { materializeRow, STATUS_COLORS } from "./formulas";
 import { DetailsDisclosure } from "./DetailsDisclosure";
+import { inputTypeForFieldKind } from "./formInputType";
 
 // NAVY (header bars) is matched to the reference templates and kept in sync
 // with schema-pdf-renderer.ts's own constant so the on-screen form and the
@@ -135,7 +136,7 @@ function RowBlockView({ block, data, onChange, readOnly }: BlockViewProps<RowBlo
               </select>
             ) : (
               <input
-                type={field.kind === "date" ? "date" : field.kind === "number" ? "number" : "text"}
+                type={inputTypeForFieldKind(field.kind)}
                 className="w-full bg-transparent text-xs outline-none"
                 value={(data[field.name] as string) ?? ""}
                 onChange={(e) => onChange(field.name, field.kind === "number" ? e.target.valueAsNumber : e.target.value)}
@@ -311,7 +312,7 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
                     </select>
                   ) : (
                     <input
-                      type={col.kind === "date" ? "date" : col.kind === "number" ? "number" : "text"}
+                      type={inputTypeForFieldKind(col.kind)}
                       min={col.min}
                       max={col.max}
                       className="w-full bg-transparent text-xs outline-none"
