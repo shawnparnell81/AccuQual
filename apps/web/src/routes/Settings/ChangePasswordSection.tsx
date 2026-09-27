@@ -45,7 +45,7 @@ export function ChangePasswordForm({ forced, onChanged }: { forced?: boolean; on
         }
       }}
     >
-      {forced && <p className="text-sm text-muted-foreground">This password was set for you. Choose your own before you continue. You'll stay signed in on this browser.</p>}
+      {forced && <p className="text-sm text-muted-foreground">This password was set for you. Choose your own before you continue. You'll stay signed in on this browser until you close it.</p>}
       <TextField label="Current password" type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
       <TextField label="New password" type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
       <p className="text-xs text-muted-foreground">{RULES}</p>

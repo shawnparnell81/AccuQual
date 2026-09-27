@@ -18,12 +18,12 @@ const envSchema = z.object({
   JWT_ACCESS_SECRET: z.string().min(1),
   JWT_REFRESH_SECRET: z.string().min(1),
   JWT_ACCESS_TTL: z.string().default("15m"),
-  // No longer the length of a sign-in. Sessions last a fixed 12 hours from sign-in (SESSION_MAX_MS in jwt.ts). Kept so existing environment files still load.
+  // No longer the length of a sign-in. The server still ends a session 12 hours after sign-in (SESSION_MAX_MS in jwt.ts). The browser cookie ends sooner, when the browser closes. Kept so existing environment files still load.
   JWT_REFRESH_TTL: z.string().default("7d"),
   // No longer used. Kept so existing environment files still load.
   REMEMBER_ME_TTL: z.string().default("30d"),
 
-  // No longer used. A sign-in lasts 12 hours from the moment of sign-in whether or not anyone is using it. Kept so existing environment files still load.
+  // No longer used. A sign-in ends when the browser closes, and never lasts longer than 12 hours from sign-in (SESSION_MAX_MS in jwt.ts). Kept so existing environment files still load.
   SESSION_IDLE_TIMEOUT_MINUTES: z.coerce.number().int().min(1).default(60),
   // This many wrong passwords inside LOGIN_FAILURE_WINDOW_MINUTES lock the account for LOGIN_LOCKOUT_MINUTES.
   LOGIN_MAX_FAILURES: z.coerce.number().int().min(1).default(5),

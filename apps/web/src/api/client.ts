@@ -148,14 +148,12 @@ async function performRefreshAttempt(attempt: number) {
 /**
  * Exported for useAuthBootstrap — the app's initial silent-session check
  * runs through this same call. Applies the full `user`/`company` from the
- * response via `setSession`, not just the accessToken: a browser whose
- * persisted `user`/`company` (authStore's partialize) is missing — a
- * genuinely new device, or storage cleared without logging out first —
- * would otherwise refresh into an accessToken with no company context
- * anywhere in the client, breaking every action (e.g.
- * useWindowStore's openWindow) with no way to recover short of a real
- * re-login. auth.service.ts's `refresh()` was fixed to return `company` in
- * the same pass so this has something real to apply.
+ * response via `setSession`, not just the accessToken. A new tab does not
+ * share this tab's sessionStorage, and a cleared store has no user or
+ * company either. Leaving that tab with an access token and no company
+ * would break every action (for example useWindowStore's openWindow) with
+ * no way to recover short of a real re-login. auth.service.ts's `refresh()`
+ * returns `company` so this call has something real to apply.
  *
  * One renewal at a time in this tab, and one across tabs (a lock plus a
  * same-tab message). A second tab waits and reuses the token the first tab
