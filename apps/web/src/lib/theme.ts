@@ -4,11 +4,21 @@ export type ResolvedMode = "light" | "dark";
 
 /**
  * localStorage keys shared with the blocking script in index.html.
- * That script paints the last resolved mode and palette before the module
- * graph loads; keep the key strings and the managed variable list in sync.
+ * That script paints the last resolved mode, color scheme, and palette
+ * before the module graph loads; keep the key strings and the managed
+ * variable list in sync.
  */
 export const THEME_MODE_STORAGE_KEY = "accuqual-theme-mode";
 export const THEME_VARS_STORAGE_KEY = "accuqual-theme-vars";
+/** Independent of light/dark. "classic" is the built-in AccuQual palette. */
+export const THEME_SCHEME_STORAGE_KEY = "accuqual-color-scheme";
+
+export type ColorScheme = "classic" | "dma";
+
+export const COLOR_SCHEME_LABELS: Record<ColorScheme, string> = {
+  classic: "AccuQual Classic",
+  dma: "DMA Industries",
+};
 
 /** Inline custom properties applyTheme owns. Anything not in the derived map is removed so a cleared color falls back to globals.css. */
 const MANAGED_THEME_VARS = [
@@ -257,6 +267,25 @@ export function getStoredMode(): ResolvedMode | null {
   }
 }
 
+export function getStoredScheme(): ColorScheme | null {
+  try {
+    const stored = localStorage.getItem(THEME_SCHEME_STORAGE_KEY);
+    return stored === "classic" || stored === "dma" ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * An explicit profile value wins. When the profile has never stored a scheme,
+ * the last local choice stands so a refresh does not snap back to Classic
+ * before the theme request returns.
+ */
+export function resolveScheme(scheme: ColorScheme | undefined): ColorScheme {
+  if (scheme === "classic" || scheme === "dma") return scheme;
+  return getStoredScheme() ?? "classic";
+}
+
 function readStoredVars(): Record<string, string> | null {
   try {
     const raw = localStorage.getItem(THEME_VARS_STORAGE_KEY);
@@ -283,6 +312,9 @@ function readStoredVars(): Record<string, string> | null {
  * did not run. Invalid stored values are ignored.
  */
 export function applyStoredThemeVars(): void {
+  // DMA colors live in the stylesheet under [data-scheme="dma"]. Replaying a
+  // Classic override here would paint those custom colors on top of it.
+  if (getStoredScheme() === "dma") return;
   const vars = readStoredVars();
   if (!vars) return;
   const root = document.documentElement;
@@ -300,22 +332,36 @@ function persistVars(vars: Record<string, string>) {
 }
 
 /**
- * The one real theme engine entry point: sets the light/dark stamp plus
- * every color CSS custom property globals.css defines, in priority order
- * (user override > derived palette > explicit company field > built-in
- * default). Light and dark are chosen only from the mode preference —
- * a color never flips the mode. Every existing component already renders
- * through these tokens (bg-primary, text-foreground, border-border, ...).
+ * The one real theme engine entry point: sets the light/dark stamp, the
+ * Classic / DMA Industries scheme, and (for Classic) every color CSS
+ * custom property globals.css defines, in priority order (user override >
+ * derived palette > explicit company field > built-in default). Light and
+ * dark are chosen only from the mode preference — a color never flips the
+ * mode, and the scheme never flips the mode. DMA Industries is painted by
+ * the stylesheet so personal Classic overrides do not cover it. Every
+ * existing component already renders through these tokens (bg-primary,
+ * text-foreground, border-border, ...).
  */
 export function applyTheme(branding: CompanyBranding | undefined, userPrefs: UserThemePreferences | undefined): ResolvedMode {
   const mode = resolveMode(userPrefs?.mode);
+  const scheme = resolveScheme(userPrefs?.scheme);
   const root = document.documentElement;
 
   root.setAttribute("data-theme", mode);
+  root.setAttribute("data-scheme", scheme);
   try {
     localStorage.setItem(THEME_MODE_STORAGE_KEY, mode);
+    localStorage.setItem(THEME_SCHEME_STORAGE_KEY, scheme);
   } catch {
     // private browsing / storage blocked — the attribute is already set, that's what actually matters
+  }
+
+  // DMA Industries is a fixed palette in globals.css. Drop inline Classic
+  // overrides so they cannot cover it, and leave the stored Classic map
+  // alone so switching back restores it before the next profile fetch.
+  if (scheme === "dma") {
+    for (const cssVar of MANAGED_THEME_VARS) root.style.removeProperty(cssVar);
+    return mode;
   }
 
   const vars = deriveThemeVars({ mode, branding, userPrefs });

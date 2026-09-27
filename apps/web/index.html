@@ -36,7 +36,10 @@
       (function () {
         try {
           var mode = localStorage.getItem("accuqual-theme-mode");
+          var scheme = localStorage.getItem("accuqual-color-scheme");
           document.documentElement.setAttribute("data-theme", mode === "light" || mode === "dark" ? mode : "dark");
+          document.documentElement.setAttribute("data-scheme", scheme === "dma" ? "dma" : "classic");
+          if (scheme === "dma") return;
           var raw = localStorage.getItem("accuqual-theme-vars");
           if (!raw) return;
           var vars = JSON.parse(raw);

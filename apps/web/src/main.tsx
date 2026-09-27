@@ -6,7 +6,7 @@ import { App } from "./App";
 import { ToastProvider } from "./components/shared/ToastProvider";
 import { ConfirmProvider } from "./components/shared/ConfirmDialog";
 import "./styles/globals.css";
-import { applyStoredThemeVars, getStoredMode } from "./lib/theme";
+import { applyStoredThemeVars, getStoredMode, getStoredScheme } from "./lib/theme";
 import { initErrorTracking } from "./lib/errorTracking";
 import { ErrorBoundary } from "./components/shared/ErrorBoundary";
 import { isMarketingHost, marketingDocumentTarget } from "./lib/publicSite";
@@ -24,8 +24,10 @@ initErrorTracking();
 // frame matches the previous session instead of flashing dark-then-light
 // (or vice versa) once useThemeSync's real data loads. AppLayout.tsx's
 // useThemeSync takes over from here with the company/user's real theme.
+const bootScheme = getStoredScheme() ?? "classic";
+document.documentElement.setAttribute("data-scheme", bootScheme);
 document.documentElement.setAttribute("data-theme", getStoredMode() ?? "dark");
-applyStoredThemeVars();
+if (bootScheme !== "dma") applyStoredThemeVars();
 
 if (!isMarketingHost(window.location.hostname)) {
   registerSW({ immediate: true });

@@ -599,6 +599,8 @@ export interface CompanyBranding {
 /** GET/PATCH /users/me/theme — any authenticated user, own row only. Unset fields mean "follow the company/default theme" for that field specifically, not an all-or-nothing override. */
 export interface UserThemePreferences {
   mode?: "light" | "dark" | "system";
+  /** AccuQual Classic (default) or DMA Industries. Independent of mode. */
+  scheme?: "classic" | "dma";
   primaryColor?: string;
   accentColor?: string;
 }
