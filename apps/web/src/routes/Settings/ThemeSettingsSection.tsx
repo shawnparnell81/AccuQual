@@ -15,6 +15,12 @@ const MODES: Array<{ value: NonNullable<UserThemePreferences["mode"]>; label: st
   { value: "system", label: "Match System" },
 ];
 
+/** Fixed chips so each card still shows its own palette while the other scheme is active. */
+const SCHEME_CARDS: Array<{ id: ColorScheme; blurb: string; chips: [string, string, string] }> = [
+  { id: "classic", blurb: "Cyan on the original deep canvas", chips: ["#0B0F14", "#00F3FF", "#A855F7"] },
+  { id: "dma", blurb: "Navy, steel blue, and logo indigo", chips: ["#0A3C7B", "#507099", "#293170"] },
+];
+
 function useMyTheme() {
   return useQuery<UserThemePreferences>({ queryKey: ["users/me/theme"], queryFn: async () => (await apiClient.get("/users/me/theme")).data });
 }
@@ -48,13 +54,24 @@ export function ThemeSettingsSection() {
   }, [prefs]);
 
   const save = useMutation({
-    mutationFn: async (body: UserThemePreferences) => (await apiClient.patch("/users/me/theme", body)).data,
+    mutationFn: async (body: UserThemePreferences) => (await apiClient.patch<UserThemePreferences>("/users/me/theme", body)).data,
+    onMutate: (body) => {
+      const previous = prefs;
+      const optimistic = { ...prefs, ...body };
+      queryClient.setQueryData(["users/me/theme"], optimistic);
+      applyTheme(branding, optimistic);
+      return { previous };
+    },
     onSuccess: (data) => {
       queryClient.setQueryData(["users/me/theme"], data);
       applyTheme(branding, data);
       toast.success("Theme preference saved.");
     },
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save your theme preference.")),
+    onError: (err, _body, context) => {
+      queryClient.setQueryData(["users/me/theme"], context?.previous);
+      applyTheme(branding, context?.previous);
+      toast.error(extractErrorMessage(err, "Couldn't save your theme preference."));
+    },
   });
 
   const currentMode = prefs?.mode ?? "dark";
@@ -78,25 +95,38 @@ export function ThemeSettingsSection() {
       <div className="rounded-lg border border-border bg-card p-4">
         <h3 className="mb-2 text-sm font-medium">Appearance</h3>
         <p className="mb-2 text-xs font-medium text-muted-foreground">Color scheme</p>
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          {(Object.keys(COLOR_SCHEME_LABELS) as ColorScheme[]).map((scheme) => (
-            <button
-              key={scheme}
-              onClick={() => save.mutate({ scheme })}
-              disabled={save.isPending}
-              className={
-                currentScheme === scheme
-                  ? "rounded-md border border-primary bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary"
-                  : "rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted disabled:opacity-50"
-              }
-            >
-              {COLOR_SCHEME_LABELS[scheme]}
-            </button>
-          ))}
+        <div className="mb-2 grid gap-3 sm:grid-cols-2" role="group" aria-label="Color scheme">
+          {SCHEME_CARDS.map((card) => {
+            const selected = currentScheme === card.id;
+            return (
+              <button
+                key={card.id}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => {
+                  if (selected) return;
+                  save.mutate({ scheme: card.id });
+                }}
+                className={
+                  selected
+                    ? "rounded-lg border-2 border-primary bg-primary/10 p-3 text-left"
+                    : "rounded-lg border-2 border-border p-3 text-left hover:bg-muted"
+                }
+              >
+                <span className="mb-2 flex gap-1.5" aria-hidden>
+                  {card.chips.map((color) => (
+                    <span key={color} className="h-8 flex-1 rounded-md border border-border" style={{ backgroundColor: color }} />
+                  ))}
+                </span>
+                <span className="block text-sm font-medium">{COLOR_SCHEME_LABELS[card.id]}</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">{card.blurb}</span>
+              </button>
+            );
+          })}
         </div>
         <p className="mb-4 text-xs text-muted-foreground">
-          AccuQual Classic is the original palette. DMA Industries uses that brand's navy, steel blue, and logo indigo. Light and dark
-          apply to either scheme. The header palette button switches the same choice.
+          One click switches the whole app. AccuQual Classic is the original palette. DMA Industries uses that brand's navy, steel blue,
+          and logo indigo. Light and dark, including the header toggle, apply to either scheme and stay separate from this choice.
         </p>
         <p className="mb-2 text-xs font-medium text-muted-foreground">Light or dark</p>
         <div className="flex items-center gap-3">
