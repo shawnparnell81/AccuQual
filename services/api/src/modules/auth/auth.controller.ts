@@ -4,6 +4,9 @@ import { AppError } from "../../utils/appError.js";
 import { env } from "../../config/env.js";
 import * as authService from "./auth.service.js";
 import { decryptDeviceCookie, encryptDeviceCookie, hashTrustedDeviceToken, listTrustedDevices, revokeAllTrustedDevices, revokeTrustedDevice, TRUSTED_DEVICE_TTL_MS } from "./trustedDevice.service.js";
+import { encryptRefreshCookie, REFRESH_COOKIE_NAME, refreshCookieFrom } from "./refreshCookie.js";
+
+export { REFRESH_COOKIE_NAME };
 
 // Full-System Audit finding B2: the refresh token used to be a plain field
 // in the login/refresh JSON response, which the frontend then had
@@ -22,7 +25,6 @@ import { decryptDeviceCookie, encryptDeviceCookie, hashTrustedDeviceToken, listT
 // private Render deploy keeps the same browser path (VITE_API_BASE_URL=/api)
 // via the static-site rewrite, and docker-compose still uses the nginx
 // template, so "/" is the path that works in both places.
-export const REFRESH_COOKIE_NAME = "accuqual_rt";
 export const TRUSTED_DEVICE_COOKIE_NAME = "accuqual_td";
 /** Non-secret marker. The sign-in page already sends this same value in the anti-CSRF header. */
 export const CSRF_MARKER_COOKIE_NAME = "accuqual_csrf";
@@ -38,10 +40,10 @@ function sessionCookieOptions() {
   };
 }
 
-/** Persistent until the sign-in's absolute end, so closing the browser does not sign the user out. Max-Age is the time left, not a fresh 12 hours. */
+/** Persistent until the sign-in's absolute end, so closing the browser does not sign the user out. Max-Age is the time left, not a fresh 12 hours. The value is encrypted; the refresh token is not stored in the cookie as clear text. */
 export function setRefreshCookie(res: Response, refreshToken: string, sessionExpiresAt: Date) {
   const maxAge = Math.max(0, sessionExpiresAt.getTime() - Date.now());
-  res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
+  res.cookie(REFRESH_COOKIE_NAME, encryptRefreshCookie(refreshToken), {
     ...sessionCookieOptions(),
     // SameSite=None (only valid with Secure, which production already sets)
     // still sends the cookie on the same-origin /api path used by compose
@@ -184,7 +186,7 @@ export const revokeAllTrustedDevicesHandler = asyncHandler(async (req: Request, 
 });
 
 export const refreshHandler = asyncHandler(async (req: Request, res: Response) => {
-  const token = req.cookies?.[REFRESH_COOKIE_NAME];
+  const token = refreshCookieFrom(req);
   if (!token) throw AppError.unauthorized("Missing refresh token");
 
   const result = await authService.refresh(token);
@@ -220,7 +222,7 @@ export const resetPasswordHandler = asyncHandler(async (req: Request, res: Respo
 /** Replaces the refresh cookie so this browser stays signed in, and clears the trusted-device cookie because every device was just forgotten. */
 export const changePasswordHandler = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) throw AppError.unauthorized();
-  const result = await authService.changePassword(req.user.id, req.body.currentPassword, req.body.newPassword, req.cookies?.[REFRESH_COOKIE_NAME]);
+  const result = await authService.changePassword(req.user.id, req.body.currentPassword, req.body.newPassword, refreshCookieFrom(req));
   setRefreshCookie(res, result.refreshToken, result.sessionExpiresAt);
   clearTrustedDeviceCookie(res);
   res.json(withoutRefreshToken(result));

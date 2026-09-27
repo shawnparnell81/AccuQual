@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { pwnedPassword } from "hibp";
 import { z } from "zod";
 import { env } from "../config/env.js";
 import { AppError } from "./appError.js";
@@ -65,22 +65,13 @@ function breachCheckEnabled(): boolean {
   return env.NODE_ENV !== "test";
 }
 
-/** How many times the password appears in known breaches (0 when clean OR when the lookup could not be made — it fails open on purpose). */
+/**
+ * How many times the password appears in known breaches (0 when clean OR when the lookup could not be made — it fails open on purpose).
+ * The range API is what performs the check. This function does not hash the password for storage; stored passwords are bcrypt.
+ */
 export async function breachCount(password: string): Promise<number> {
-  const sha1 = createHash("sha1").update(password).digest("hex").toUpperCase();
-  const prefix = sha1.slice(0, 5);
-  const suffix = sha1.slice(5);
   try {
-    const res = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`, {
-      headers: { "Add-Padding": "true" },
-      signal: AbortSignal.timeout(2000),
-    });
-    if (!res.ok) return 0;
-    for (const line of (await res.text()).split("\n")) {
-      const [hashSuffix, count] = line.trim().split(":");
-      if (hashSuffix === suffix) return Number(count) || 0;
-    }
-    return 0;
+    return await pwnedPassword(password, { addPadding: true, timeoutMs: 2000 });
   } catch (err) {
     logger.warn("Password breach lookup unavailable — allowing the password on the offline rules alone.", { err: String(err) });
     return 0;

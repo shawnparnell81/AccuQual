@@ -16,6 +16,7 @@ import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { refreshTokens } from "../../src/drizzle/schema/refreshTokens.js";
 import { REFRESH_REUSE_GRACE_MS } from "../../src/modules/auth/auth.service.js";
+import { decryptRefreshCookie } from "../../src/modules/auth/refreshCookie.js";
 
 const app = createApp();
 const suffix = Date.now();
@@ -187,7 +188,9 @@ describe("Auth refresh token cookie (real DB + real HTTP path)", () => {
 
   function jtiFromCookie(cookie: string): string {
     const raw = decodeURIComponent(cookie.slice("accuqual_rt=".length));
-    const payload = raw.split(".")[1]!;
+    const token = decryptRefreshCookie(raw);
+    if (!token) throw new Error("refresh cookie was not encrypted");
+    const payload = token.split(".")[1]!;
     return (JSON.parse(Buffer.from(payload, "base64url").toString()) as { jti: string }).jti;
   }
 

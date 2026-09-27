@@ -491,8 +491,10 @@ export async function resetPassword(rawToken: string, newPassword: string): Prom
  * The signed-in user picks a new password. Other sessions end immediately.
  * This browser stays signed in for the time already left on its 12-hour
  * sign-in — the window is not restarted. Every trusted device is forgotten.
+ * The refresh cookie has to prove this browser's current sign-in. A missing
+ * or unusable cookie does not get a new 12-hour session.
  */
-export async function changePassword(userId: number, currentPassword: string, newPassword: string, currentRefreshToken?: string) {
+export async function changePassword(userId: number, currentPassword: string, newPassword: string, currentRefreshToken: string | undefined) {
   const [user] = await db.select().from(users).where(eq(users.id, userId));
   if (!user || !user.isActive) throw AppError.unauthorized("Session is no longer valid");
   if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
@@ -507,20 +509,20 @@ export async function changePassword(userId: number, currentPassword: string, ne
   }
   await assertPasswordAcceptable(newPassword, { email: user.email, name: user.name ?? undefined });
 
-  let sessionExpiresAt = freshSessionEnd();
-  if (currentRefreshToken) {
-    try {
-      const payload = verifyRefreshToken(currentRefreshToken);
-      if (Number(payload.sub) === userId && payload.jti) {
-        const [row] = await db.select().from(refreshTokens).where(eq(refreshTokens.jti, payload.jti));
-        if (row && !row.revokedAt && row.userId === userId && row.expiresAt.getTime() > Date.now() + 1000) {
-          sessionExpiresAt = continuingSessionEnd(row.expiresAt);
-        }
-      }
-    } catch {
-      // A missing or unreadable cookie still lets them stay signed in; the new sign-in ends on the usual 12-hour cap.
-    }
+  let payload;
+  try {
+    payload = verifyRefreshToken(currentRefreshToken ?? "");
+  } catch {
+    throw AppError.unauthorized("Your sign-in expired. Please sign in again.");
   }
+  if (Number(payload.sub) !== userId || !payload.jti) {
+    throw AppError.unauthorized("Your sign-in expired. Please sign in again.");
+  }
+  const [sessionRow] = await db.select().from(refreshTokens).where(eq(refreshTokens.jti, payload.jti));
+  if (!sessionRow || sessionRow.revokedAt || sessionRow.userId !== userId || sessionRow.expiresAt.getTime() <= Date.now() + 1000) {
+    throw AppError.unauthorized("Your sign-in expired. Please sign in again.");
+  }
+  const sessionExpiresAt = continuingSessionEnd(sessionRow.expiresAt);
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
   const nextTokenVersion = user.tokenVersion + 1;

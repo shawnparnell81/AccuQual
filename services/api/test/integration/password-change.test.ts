@@ -146,16 +146,27 @@ describe("password change (real DB + real HTTP path)", () => {
     expect(notice?.body).not.toContain(NEXT);
   });
 
+  it("refuses to change the password when this browser's refresh cookie is missing", async () => {
+    const user = await makeUser("no-cookie");
+    const login = await request(app).post("/auth/login").send({ email: user.email, password: CURRENT });
+    const token = login.body.accessToken as string;
+    const changed = await request(app).post("/auth/change-password").set(bearer(token)).send({ currentPassword: CURRENT, newPassword: NEXT });
+    expect(changed.status).toBe(401);
+    expect((await request(app).post("/auth/login").send({ email: user.email, password: CURRENT })).status).toBe(200);
+    expect((await request(app).post("/auth/login").send({ email: user.email, password: NEXT })).status).toBe(401);
+  });
+
   it("blocks every other page after a temporary password, including after the authenticator step", async () => {
     const user = await makeUser("forced", { mustChangePassword: true });
-    const login = await request(app).post("/auth/login").send({ email: user.email, password: CURRENT });
+    const agent = request.agent(app);
+    const login = await agent.post("/auth/login").send({ email: user.email, password: CURRENT });
     expect(login.status).toBe(200);
     expect(login.body.user.mustChangePassword).toBe(true);
     const token = login.body.accessToken as string;
     expect((await request(app).get("/auth/me").set(bearer(token))).status).toBe(200);
     expect((await request(app).get("/auth/mfa/status").set(bearer(token))).status).toBe(403);
 
-    const changed = await request(app).post("/auth/change-password").set(bearer(token)).send({ currentPassword: CURRENT, newPassword: NEXT });
+    const changed = await agent.post("/auth/change-password").set(bearer(token)).send({ currentPassword: CURRENT, newPassword: NEXT });
     expect(changed.status).toBe(200);
     expect(changed.body.user.mustChangePassword).toBe(false);
     expect((await request(app).get("/auth/mfa/status").set(bearer(changed.body.accessToken))).status).toBe(200);
@@ -167,14 +178,15 @@ describe("password change (real DB + real HTTP path)", () => {
     expect((await request(app).post("/auth/mfa/enable").set(bearer(enrolled.body.accessToken)).send({ code: codeAt(secret) })).status).toBe(200);
     await db.update(users).set({ mustChangePassword: true }).where(eq(users.id, mfaUser.id));
 
-    const challenge = await request(app).post("/auth/login").send({ email: mfaUser.email, password: CURRENT });
+    const mfaAgent = request.agent(app);
+    const challenge = await mfaAgent.post("/auth/login").send({ email: mfaUser.email, password: CURRENT });
     expect(challenge.body.mfaRequired).toBe(true);
     expect(challenge.body.accessToken).toBeUndefined();
-    const verified = await request(app).post("/auth/mfa/verify").send({ mfaToken: challenge.body.mfaToken, code: codeAt(secret, 1) });
+    const verified = await mfaAgent.post("/auth/mfa/verify").send({ mfaToken: challenge.body.mfaToken, code: codeAt(secret, 1) });
     expect(verified.status).toBe(200);
     expect(verified.body.user.mustChangePassword).toBe(true);
     expect((await request(app).get("/auth/mfa/status").set(bearer(verified.body.accessToken))).status).toBe(403);
-    const finished = await request(app)
+    const finished = await mfaAgent
       .post("/auth/change-password")
       .set(bearer(verified.body.accessToken))
       .send({ currentPassword: CURRENT, newPassword: NEXT });
