@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import { NavLink, Outlet, Link } from "react-router-dom";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import clsx from "clsx";
 import { Users, ShieldCheck, Workflow, Bot, Truck, ClipboardCheck, PackageSearch, BarChart3, HeartPulse, Building2, FileCode2, KeyRound, DatabaseBackup, Factory, type LucideIcon } from "lucide-react";
 
@@ -20,7 +22,7 @@ const SECTIONS: ConsoleSection[] = [
   { key: "workflows", label: "Workflows", icon: Workflow, externalPath: "/workflow", description: "Edit workflow states, transitions, conditions, and actions" },
   { key: "ai", label: "AI Settings", icon: Bot, path: "ai-settings", description: "LLM provider, model, safety mode, and usage" },
   { key: "supplier", label: "Supplier Settings", icon: Truck, path: "supplier-settings", description: "Supplier quality risk score weighting" },
-  { key: "quality", label: "Quality Settings", icon: ClipboardCheck, path: "quality-settings", description: "NCR auto-trigger and CAPA escalation rules" },
+  { key: "quality", label: "Quality Settings", icon: ClipboardCheck, path: "quality-settings", description: "Due reminders, repeat NCRs, and receiving escalation" },
   { key: "receiving_inventory", label: "Receiving & Inventory", icon: PackageSearch, path: "receiving-inventory-settings", description: "Aging, lot/serial numbering, and cost rules" },
   // A full page, not nested in this narrow sidebar — same "externalPath"
   // treatment as Workflows/Reporting Settings below: the field-mapping
@@ -84,7 +86,9 @@ export function AdminConsoleLayout() {
         )}
       </nav>
       <div className="min-w-0 flex-1">
-        <Outlet />
+        <Suspense fallback={<LoadingPlaceholder />}>
+          <Outlet />
+        </Suspense>
       </div>
     </div>
   );

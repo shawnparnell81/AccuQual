@@ -5,7 +5,7 @@ import { withSiteContext } from "../sites/siteContext.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createCapaSchema, updateCapaSchema, verifyCapaSchema } from "./capa.validation.js";
-import { baseHandlers, listHandler, startHandler, verifyHandler, closeHandler } from "./capa.controller.js";
+import { baseHandlers, listHandler, startHandler, verifyHandler, closeHandler, openRepeatCapaHandler } from "./capa.controller.js";
 
 export const capaRouter = Router();
 // Turns on PERMISSION_MATRIX.capa (quality: edit) — previously unenforced.
@@ -13,6 +13,7 @@ capaRouter.use(requireAuth, withDb, withSiteContext, requireDepartmentAccess("ca
 
 capaRouter.get("/", listHandler);
 capaRouter.post("/", validate(createCapaSchema), baseHandlers.create);
+capaRouter.post("/from-repeat", openRepeatCapaHandler);
 capaRouter.get("/:id", baseHandlers.getOne);
 capaRouter.patch("/:id", validate(updateCapaSchema), baseHandlers.update);
 capaRouter.post("/:id/start", startHandler);

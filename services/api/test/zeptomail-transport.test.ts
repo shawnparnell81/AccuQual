@@ -44,6 +44,16 @@ describe("ZeptoMailTransport", () => {
     });
   });
 
+  it("adds an HTML body only when the message has one", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new ZeptoMailTransport({ token: "abc123", from }).send({ ...message, html: "<p>Open</p>" });
+
+    expect(sent(fetchMock).body.htmlbody).toBe("<p>Open</p>");
+    expect(sent(fetchMock).body.textbody).toBe("Click the link.");
+  });
+
   it("does not double the Zoho-enczapikey prefix when the pasted token already has it", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 201 }));
     vi.stubGlobal("fetch", fetchMock);

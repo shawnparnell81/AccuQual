@@ -4,7 +4,7 @@ import { requireRole } from "../../middleware/rbac.js";
 import { requireAnyDepartment } from "../../middleware/departmentAccess.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
-import { updateFeasibilitySettingsSchema, updateInventorySettingsSchema, updateErpSyncSettingsSchema, triggerErpSyncSchema, updateSupplierRiskSettingsSchema, updateReceivingSettingsSchema } from "./settings.validation.js";
+import { updateFeasibilitySettingsSchema, updateInventorySettingsSchema, updateErpSyncSettingsSchema, triggerErpSyncSchema, updateSupplierRiskSettingsSchema, updateReceivingSettingsSchema, updateQualityAutomationSettingsSchema } from "./settings.validation.js";
 import {
   getFeasibilitySettingsHandler,
   updateFeasibilitySettingsHandler,
@@ -17,6 +17,8 @@ import {
   updateSupplierRiskSettingsHandler,
   getReceivingSettingsHandler,
   updateReceivingSettingsHandler,
+  getQualityAutomationSettingsHandler,
+  updateQualityAutomationSettingsHandler,
 } from "./settings.controller.js";
 
 /**
@@ -58,3 +60,6 @@ settingsRouter.post("/supplier-risk", requireAnyDepartment("quality"), validate(
 // inspection dispositions, the thing these settings actually govern).
 settingsRouter.get("/receiving", getReceivingSettingsHandler);
 settingsRouter.post("/receiving", requireAnyDepartment("quality"), validate(updateReceivingSettingsSchema), updateReceivingSettingsHandler);
+
+settingsRouter.get("/quality-automation", requireRole("admin", "quality_manager"), getQualityAutomationSettingsHandler);
+settingsRouter.post("/quality-automation", requireRole("admin", "quality_manager"), validate(updateQualityAutomationSettingsSchema), updateQualityAutomationSettingsHandler);

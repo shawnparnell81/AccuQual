@@ -122,11 +122,13 @@ describe("In-app notifications (real DB + real HTTP path)", () => {
   it("stores a per-user email and in-app preference", async () => {
     const saved = await request(app).patch("/notifications/me/preferences").set("Authorization", `Bearer ${tokenA}`).send({ email: false, inApp: false });
     expect(saved.status).toBe(200);
-    expect(saved.body).toEqual({ email: false, inApp: false });
+    expect(saved.body).toEqual({ email: false, inApp: false, dailyDigest: true });
     const hidden = await request(app).get("/notifications/me").set("Authorization", `Bearer ${tokenA}`);
     expect(hidden.body.notifications).toEqual([]);
     expect(hidden.body.unreadCount).toBe(0);
     const restored = await request(app).patch("/notifications/me/preferences").set("Authorization", `Bearer ${tokenA}`).send({ email: true, inApp: true });
-    expect(restored.body).toEqual({ email: true, inApp: true });
+    expect(restored.body).toEqual({ email: true, inApp: true, dailyDigest: true });
+    const digestOff = await request(app).patch("/notifications/me/preferences").set("Authorization", `Bearer ${tokenA}`).send({ dailyDigest: false });
+    expect(digestOff.body).toEqual({ email: true, inApp: true, dailyDigest: false });
   });
 });

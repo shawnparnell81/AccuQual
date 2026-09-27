@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { and, eq, asc, desc } from "drizzle-orm";
+import { and, eq, asc, desc, sql } from "drizzle-orm";
 import { workOrders, workOrderOperations } from "../../drizzle/schema/workOrders.js";
 import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
@@ -8,6 +8,7 @@ import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { applyMovement } from "../inventory/inventory.service.js";
+import { parseLimitOffset } from "../../utils/listQuery.js";
 
 /** Same inline-guard style as inventory.controller.ts/erp.controller.ts/rma.controller.ts's assertDepartment — Customer Service owns work orders (per explicit user request, 2026-09-15); every other read-level department (production/quality/material_management/purchasing) can view but never start/complete/cancel one. Admin/platform_admin bypass this entirely, which is how "General Manager" gets full access without a dedicated department. */
 function assertDepartment(req: Request, allowed: string[]) {
@@ -54,9 +55,12 @@ async function transition(req: Request, id: number, newStatus: string, patch: Re
 }
 
 export const listWorkOrdersHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { status } = req.query as Record<string, string | undefined>;
+  const { status, linkedNcrId } = req.query as Record<string, string | undefined>;
   const conditions = [];
   if (status) conditions.push(eq(workOrders.status, status));
+  if (linkedNcrId) conditions.push(eq(workOrders.linkedNcrId, Number(linkedNcrId)));
+  const { limit, offset, paginated } = parseLimitOffset(req.query as Record<string, unknown>);
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
 
   const rows = await req
     .db!.select({
@@ -73,8 +77,14 @@ export const listWorkOrdersHandler = asyncHandler(async (req: Request, res: Resp
     })
     .from(workOrders)
     .innerJoin(inventoryItems, eq(workOrders.itemId, inventoryItems.id))
-    .where(and(...conditions))
-    .orderBy(desc(workOrders.createdAt));
+    .where(where)
+    .orderBy(desc(workOrders.createdAt))
+    .limit(limit)
+    .offset(offset);
+  if (paginated) {
+    const [countRow] = await req.db!.select({ count: sql<number>`count(*)::int` }).from(workOrders).where(where);
+    res.setHeader("X-Total-Count", String(countRow?.count ?? rows.length));
+  }
   res.json(rows);
 });
 

@@ -41,9 +41,11 @@ notificationsMeRouter.patch(
     const body = req.body ?? {};
     if (body.inApp !== undefined && typeof body.inApp !== "boolean") throw AppError.badRequest("inApp must be true or false");
     if (body.email !== undefined && typeof body.email !== "boolean") throw AppError.badRequest("email must be true or false");
+    if (body.dailyDigest !== undefined && typeof body.dailyDigest !== "boolean") throw AppError.badRequest("dailyDigest must be true or false");
     const next = await updateMyNotificationPreferences(req.db! as Db, req.user!.id, {
       ...(typeof body.inApp === "boolean" ? { inApp: body.inApp } : {}),
       ...(typeof body.email === "boolean" ? { email: body.email } : {}),
+      ...(typeof body.dailyDigest === "boolean" ? { dailyDigest: body.dailyDigest } : {}),
     });
     res.json(next);
   })

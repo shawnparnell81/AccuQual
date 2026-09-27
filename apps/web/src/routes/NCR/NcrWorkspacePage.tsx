@@ -23,6 +23,7 @@ import { NCR_LOOP, READ_ONLY_REASON, duePhrase, isPastDue, ncrLoopIndex, ncrNext
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { NcrQuarantineSection } from "./NcrQuarantineSection";
+import { RepeatNcrBanner } from "./RepeatNcrBanner";
 
 const FORM_TYPE = "ncr";
 
@@ -72,7 +73,7 @@ export function NcrWorkspacePage() {
 
   const layout = getFormLayout(FORM_TYPE);
   const { isLoading: formLoading, values, updateField, isSaving } = useFormEditorState(FORM_TYPE, ncrId);
-  const { data: linkedCapaRows = [] } = capaHooks.useList();
+  const { data: linkedCapaRows = [] } = capaHooks.useList({ ncrId });
   const hasFix = linkedCapaRows.some((capa) => capa.ncrId === ncrId);
 
   async function handleDownload() {
@@ -166,6 +167,8 @@ export function NcrWorkspacePage() {
         }
         trail={<LoopTrail steps={NCR_LOOP} current={ncrLoopIndex(ncr.status)} />}
       />
+
+      <RepeatNcrBanner ncrId={ncrId} canEdit={canEdit} />
 
       <NcrQuarantineSection ncrId={ncrId} canEdit={canEdit} />
 
@@ -335,27 +338,22 @@ function ActionForm({
  */
 function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTitle: string; canEdit: boolean }) {
   const navigate = useNavigate();
-  const { data: capas = [] } = capaHooks.useList();
+  const [attachQuery, setAttachQuery] = useState("");
+  const [attachOpen, setAttachOpen] = useState(false);
+  const { data: capas = [] } = capaHooks.useList({ ncrId });
   const createCapa = capaHooks.useCreate();
   const attachCapa = capaHooks.useUpdate();
   const createEightD = eightDHooks.useCreate();
-  const { data: eightDs = [] } = eightDHooks.useList();
-  const { data: rmas = [] } = rmaHooks.useList();
-  const { data: workOrders = [] } = workOrderHooks.useList();
-  const [attachQuery, setAttachQuery] = useState("");
-  const [attachOpen, setAttachOpen] = useState(false);
+  const { data: eightDs = [] } = eightDHooks.useList({ ncrId });
+  const { data: rmas = [] } = rmaHooks.useList({ linkedNcrId: ncrId });
+  const { data: workOrders = [] } = workOrderHooks.useList({ linkedNcrId: ncrId });
+  const { data: searchCapas = [] } = capaHooks.useList(attachQuery.trim() ? { q: attachQuery.trim(), limit: 8 } : undefined, { enabled: attachOpen && attachQuery.trim().length > 0 });
 
-  const linkedCapas = capas.filter((c) => c.ncrId === ncrId);
+  const linkedCapas = capas.filter((c) => c.ncrId === ncrId || (c.repeatNcrIds ?? []).includes(ncrId));
   const linkedEightDs = eightDs.filter((r) => r.ncrId === ncrId);
   const linkedRmas = rmas.filter((r) => r.linkedNcrId === ncrId);
   const linkedWorkOrders = workOrders.filter((w) => w.linkedNcrId === ncrId);
-  const attachChoices = capas
-    .filter((c) => c.ncrId !== ncrId)
-    .filter((c) => {
-      const haystack = `${c.id} ${c.rootCause ?? ""}`.toLowerCase();
-      return haystack.includes(attachQuery.trim().toLowerCase());
-    })
-    .slice(0, 8);
+  const attachChoices = searchCapas.filter((c) => c.ncrId !== ncrId && !(c.repeatNcrIds ?? []).includes(ncrId));
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">

@@ -13,11 +13,12 @@ export function createResourceHooks<T extends { id: number }>(resource: string) 
   const key = [resource];
   const siteScoped = SITE_SCOPED_RESOURCES.has(resource);
 
-  function useList(params?: Record<string, unknown>) {
+  function useList(params?: Record<string, unknown>, options?: { enabled?: boolean }) {
     const siteId = useSiteStore((s) => (siteScoped ? s.currentSiteId : null));
     return useQuery({
       queryKey: siteScoped ? [...key, "site", siteId, params] : [...key, params],
       queryFn: async () => (await apiClient.get<T[]>(`/${resource}`, { params })).data,
+      enabled: options?.enabled !== false,
     });
   }
 

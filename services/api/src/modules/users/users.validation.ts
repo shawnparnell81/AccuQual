@@ -23,6 +23,7 @@ export const updateUserSchema = z.object({
   roleId: z.number().int().nullable().optional(),
   department: departmentSchema.nullable().optional(),
   isActive: z.boolean().optional(),
+  managerId: z.number().int().positive().nullable().optional(),
 });
 
 /** A user's own theme override — see users.themePreferences. "" clears a color back to following the company/default theme, same convention as company.validation.ts's updateBrandingSchema. */

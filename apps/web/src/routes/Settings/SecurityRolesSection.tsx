@@ -80,6 +80,7 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
             <th className="pb-2">Email</th>
             <th className="pb-2">Role</th>
             <th className="pb-2">Department</th>
+            <th className="pb-2">Manager</th>
             <th className="pb-2">Status</th>
             <th className="pb-2">2-step</th>
             {isAdmin && <th className="pb-2" />}
@@ -109,6 +110,27 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
                 )}
               </td>
               <td className="py-1.5 capitalize">{u.department ?? "—"}</td>
+              <td className="py-1.5">
+                {isAdmin ? (
+                  <select
+                    aria-label={`Manager for ${u.name ?? u.email}`}
+                    className="max-w-[10rem] rounded-md border border-border bg-background px-2 py-1 text-xs"
+                    value={u.managerId ?? ""}
+                    onChange={(e) => updateUser.mutate({ id: u.id, managerId: e.target.value ? Number(e.target.value) : null } as Partial<AppUser> & { id: number })}
+                  >
+                    <option value="">Quality manager</option>
+                    {users
+                      .filter((person) => person.id !== u.id && person.isActive)
+                      .map((person) => (
+                        <option key={person.id} value={person.id}>
+                          {person.name?.trim() || person.email}
+                        </option>
+                      ))}
+                  </select>
+                ) : (
+                  users.find((person) => person.id === u.managerId)?.name ?? "—"
+                )}
+              </td>
               <td className="py-1.5">
                 <StatusBadge value={u.isActive ? "active" : "disqualified"} label={u.isActive ? "Active" : "Deactivated"} />
                 {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && <span className="ml-2 text-xs text-destructive">Locked</span>}
