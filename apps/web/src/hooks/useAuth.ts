@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, refreshSession } from "../api/client";
+import { bootstrapSessionDecision } from "../api/sessionRefresh";
 import { useAuthStore, type AuthUser, type CompanyContext } from "../store/authStore";
 import { useWindowStore } from "../window-manager/useWindowStore";
 import { clearCurrentPlant } from "./useSites";
@@ -99,17 +100,22 @@ export function useAuthBootstrap() {
   useEffect(() => {
     if (bootstrapped) return;
     let cancelled = false;
-    void refreshSession("bootstrap").then((result) => {
+    const finishSignedOut = () => {
       if (cancelled) return;
-      // A 429 or a network blip leaves `bootstrapped` false. The shared
-      // refresher already scheduled the one retry, and a later success marks
-      // the session ready. A real rejection drops any stale persisted user.
-      if (!result.ok) {
-        if (!result.logout) return;
-        logout();
-      }
+      logout();
       setBootstrapped();
-    });
+    };
+    void refreshSession("bootstrap")
+      .then((result) => {
+        if (cancelled) return;
+        // A server error used to leave `bootstrapped` false, and ProtectedRoute
+        // renders nothing until that flag is set — a failed check was a blank page.
+        // Signed out is the fallback. A retry scheduled by the refresher can still
+        // restore the session if the cookie is good.
+        if (bootstrapSessionDecision(result) === "signed-out") finishSignedOut();
+        else setBootstrapped();
+      })
+      .catch(finishSignedOut);
     return () => {
       cancelled = true;
     };

@@ -119,8 +119,12 @@ services:
     runtime: static
     buildCommand: npm ci && npm run build --workspace apps/web
     staticPublishPath: apps/web/dist
+    # app.accuqualqms.com is the application. www.accuqualqms.com is the
+    # marketing site (same published files; index.html sends that host to
+    # /welcome and does not call the API). The apex name 301s to www in DNS.
     domains:
       - app.accuqualqms.com
+      - www.accuqualqms.com
     # Valid here because `domains` above is non-empty. Requests to this
     # service's onrender.com hostname then receive a 404.
     renderSubdomainPolicy: disabled

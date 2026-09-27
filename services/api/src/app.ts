@@ -39,7 +39,11 @@ export function createApp() {
         // browsers always send it for cross-origin requests, which is the
         // case this allowlist actually needs to police.
         if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-        callback(new Error(`Origin "${origin}" is not allowed by CORS`));
+        // Deny the origin without throwing. callback(error) is an unhandled
+        // 500, and the static-site /api rewrite forwards the browser's Origin.
+        // A 500 from the load-time session check is retried and the shell
+        // stays blank; a normal rejection is not.
+        callback(null, false);
       },
       // B2 fix: the refresh token now travels as an httpOnly cookie
       // (auth.controller.ts) instead of a JSON body field the frontend has
