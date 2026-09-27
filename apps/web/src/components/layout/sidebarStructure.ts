@@ -51,7 +51,6 @@ export const DOCUMENT_FOLDER_PAGES: Record<string, { title: string; blurb: strin
   repairs: { title: "Repairs", blurb: "Repair records and reports. Upload a file to keep it here." },
   "sop-procedures": { title: "Procedures", blurb: "Standard operating procedures. Upload a file to keep it here." },
   "sop-policies": { title: "Policies", blurb: "Company policies. Upload a file to keep it here." },
-  "sop-policies-and-procedures": { title: "Policies and Procedures", blurb: "Policies and procedures. Upload a file to keep it here." },
   "master-tool-list": { title: "Master Tool List", blurb: "The master list of tools and gages. Upload the current list here.", emphasizeUpload: true },
   "audit-plan": { title: "Audit Plan", blurb: "Audit plans. Upload a file to keep it here." },
   "audit-schedule": { title: "Audit Schedule", blurb: "Audit schedules. Upload a file to keep it here." },
@@ -97,7 +96,7 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
         key: "sop",
         label: "SOP",
         icon: ScrollText,
-        children: [doc("sop-procedures", FileText), doc("sop-policies", FileText), doc("sop-policies-and-procedures", FileText)],
+        children: [doc("sop-procedures", FileText), doc("sop-policies", FileText)],
       },
       {
         key: "calibration",
