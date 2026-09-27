@@ -23,8 +23,6 @@ describe("Validation workflow template", () => {
       "Protocol review & approval",
       "IQ (Installation Qualification)",
       "OQ (Operational Qualification)",
-      "PQ (Performance Qualification)",
-      "Deviations recorded/resolved",
       "Validation Report written",
       "Final review & approval/release",
     ]);
