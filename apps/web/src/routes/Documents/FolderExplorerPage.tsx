@@ -301,7 +301,7 @@ export function FolderExplorerPage() {
         </nav>
 
         <div className="flex min-w-0 flex-col gap-3 md:min-h-0 md:overflow-y-auto">
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <span className="h-3 w-3 flex-none rounded-full" style={{ backgroundColor: DEPARTMENT_COLORS[deptColorIndex % DEPARTMENT_COLORS.length] }} />
             <h2 className="text-lg font-semibold">{activeDept.name}</h2>
             <button
@@ -326,7 +326,7 @@ export function FolderExplorerPage() {
           <FileDropZone
             onFiles={(dropped) => void uploadFiles(activeDept.id, dropped)}
             overlay={false}
-            className="rounded-lg border-2 border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground transition-colors hover:border-primary/50"
+            className="shrink-0 rounded-lg border-2 border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground transition-colors hover:border-primary/50"
           >
             <span className="inline-flex items-center gap-2">
               <UploadCloud size={14} /> Drag files from your computer onto {activeDept.name}, or onto any folder below, to add them as documents
@@ -342,7 +342,7 @@ export function FolderExplorerPage() {
                 key={sub.id}
                 onFiles={(dropped) => void uploadFiles(sub.id, dropped)}
                 overlay={false}
-                className={`overflow-hidden rounded-lg border bg-card transition-shadow ${isDropTarget ? "border-primary ring-2 ring-primary" : "border-border"}`}
+                className={`shrink-0 overflow-hidden rounded-lg border bg-card transition-shadow ${isDropTarget ? "border-primary ring-2 ring-primary" : "border-border"}`}
               >
                 <div
                   className="flex cursor-grab items-center gap-2 border-b border-border bg-muted/50 px-3 py-2 active:cursor-grabbing"
@@ -410,7 +410,7 @@ export function FolderExplorerPage() {
           })}
 
           <form
-            className="flex items-center gap-2 pt-1"
+            className="flex shrink-0 items-center gap-2 pt-1"
             onSubmit={(e) => {
               e.preventDefault();
               if (!newFolderName.trim()) return;
