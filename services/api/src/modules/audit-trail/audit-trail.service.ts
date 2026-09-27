@@ -7,6 +7,7 @@ import { auditRowChanges } from "../../drizzle/schema/auditRowChanges.js";
 import { users } from "../../drizzle/schema/users.js";
 import * as schema from "../../drizzle/schema/index.js";
 import { logger } from "../../utils/logger.js";
+import { formatUserLabel } from "../users/userDisplay.js";
 
 interface RecordAuditTrailInput {
   entityType: string;
@@ -105,21 +106,18 @@ export async function recordAuditTrailStandalone(pool: Pool, input: RecordAuditT
  * by every history/audit read path (audit-trail.routes.ts,
  * workflow.controller.ts, warranty.controller.ts's claim workflow) so a
  * history panel never shows a bare "User #12" again. Falls back to email
- * when `name` is unset (nullable on the users table), and to
- * "Deleted User (ID #x)" when the id doesn't resolve at all — the FK on
- * audit_trail.performed_by has no cascade today (users are only ever
- * soft-deactivated, never hard-deleted), so that fallback is defensive
- * rather than a case this app currently produces, but a null result here
- * should never silently become "User #undefined" if that ever changes.
+ * when `name` is unset (nullable on the users table). A turned-off account
+ * keeps its name with " (inactive)" so a signature still reads as that
+ * person. "Deleted User (ID #x)" is only for an id with no row left.
  */
 export async function resolveUserNames(db: Db, userIds: (number | null | undefined)[]): Promise<Map<number, string>> {
   const ids = [...new Set(userIds.filter((id): id is number => id !== null && id !== undefined))];
   if (ids.length === 0) return new Map();
 
-  const rows = await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(inArray(users.id, ids));
-  const byId = new Map(rows.map((u) => [u.id, u.name?.trim() ? u.name : u.email]));
+  const rows = await db.select({ id: users.id, name: users.name, email: users.email, isActive: users.isActive }).from(users).where(inArray(users.id, ids));
+  const byId = new Map(rows.map((u) => [u.id, u]));
 
-  return new Map(ids.map((id) => [id, byId.get(id) ?? `Deleted User (ID #${id})`]));
+  return new Map(ids.map((id) => [id, formatUserLabel(byId.get(id), id)]));
 }
 
 /**

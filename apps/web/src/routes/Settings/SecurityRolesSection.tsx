@@ -16,6 +16,13 @@ import { isFullAccessRole } from "../../lib/fullAccess";
 const userHooks = createResourceHooks<AppUser>("users");
 const roleHooks = createResourceHooks<AppRole>("roles");
 
+interface OpenWorkGroup {
+  key: string;
+  label: string;
+  count: number;
+  items: { id: number; title: string }[];
+}
+
 /**
  * Real functionality, not a mockup: GET/POST/PATCH/DELETE /users and
  * GET/POST/PATCH /roles already exist (roles.controller.ts, users.
@@ -72,6 +79,45 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
   const [resetFor, setResetFor] = useState<AppUser | null>(null);
   const [tempPassword, setTempPassword] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
+  const [removing, setRemoving] = useState<AppUser | null>(null);
+  const [openWork, setOpenWork] = useState<OpenWorkGroup[]>([]);
+  const [replacementId, setReplacementId] = useState("");
+  const [removeBusy, setRemoveBusy] = useState(false);
+
+  async function finishRemove(person: AppUser, replacementUserId?: number) {
+    setRemoveBusy(true);
+    try {
+      const res = await apiClient.delete<{ message?: string }>(`/users/${person.id}`, { data: replacementUserId ? { replacementUserId } : {} });
+      toast.success(res.data.message || "Removed.");
+      setRemoving(null);
+      void queryClient.invalidateQueries({ queryKey: ["users"] });
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't remove that person."));
+    } finally {
+      setRemoveBusy(false);
+    }
+  }
+
+  async function startRemove(person: AppUser) {
+    try {
+      const res = await apiClient.get<{ openWork: OpenWorkGroup[] }>(`/users/${person.id}/open-work`);
+      const items = res.data.openWork ?? [];
+      if (items.length === 0) {
+        const ok = await confirm({
+          title: "Remove this person?",
+          message: `${person.name?.trim() || person.email} will be removed. If they have quality records, the account is turned off instead and their name stays on those records as inactive. Records they created or signed stay editable. They won't be able to sign in.`,
+          confirmLabel: "Remove",
+        });
+        if (ok) await finishRemove(person);
+        return;
+      }
+      setOpenWork(items);
+      setReplacementId("");
+      setRemoving(person);
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't check their open work."));
+    }
+  }
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
@@ -190,26 +236,7 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
                     Edit
                   </button>
                   {u.id !== currentUserId && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void confirm({
-                          title: "Remove this person?",
-                          message: `${u.name?.trim() || u.email} will be removed. If they have quality records, the account is turned off instead and their name stays on those records. They won't be able to sign in.`,
-                          confirmLabel: "Remove",
-                        }).then(async (ok) => {
-                          if (!ok) return;
-                          try {
-                            const res = await apiClient.delete<{ message?: string }>(`/users/${u.id}`);
-                            toast.success(res.data.message || "Removed.");
-                            void queryClient.invalidateQueries({ queryKey: ["users"] });
-                          } catch (err) {
-                            toast.error(extractErrorMessage(err, "Couldn't remove that person."));
-                          }
-                        });
-                      }}
-                      className="text-xs text-muted-foreground hover:text-destructive"
-                    >
+                    <button type="button" onClick={() => void startRemove(u)} className="text-xs text-muted-foreground hover:text-destructive">
                       Remove
                     </button>
                   )}
@@ -349,6 +376,49 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
           <p className="text-xs text-muted-foreground">At least 12 characters. Common passwords are refused.</p>
           <button type="submit" disabled={resetBusy} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
             {resetBusy ? "Saving…" : "Save temporary password"}
+          </button>
+        </form>
+      </Modal>
+
+      <Modal title={removing ? `Remove ${removing.name?.trim() || removing.email}` : "Remove this person"} isOpen={removing !== null} onClose={() => { if (!removeBusy) setRemoving(null); }}>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!removing || !replacementId) return;
+            void finishRemove(removing, Number(replacementId));
+          }}
+        >
+          <p className="text-sm text-muted-foreground">
+            They still have open work. Choose who should take it. Records they already created or signed stay as they are, stay editable, and keep their name.
+          </p>
+          <ul className="flex max-h-52 flex-col gap-2 overflow-auto text-sm">
+            {openWork.map((group) => (
+              <li key={group.key}>
+                <span className="font-medium">
+                  {group.count} {group.label}
+                </span>
+                <ul className="ml-4 list-disc text-muted-foreground">
+                  {group.items.map((item) => (
+                    <li key={item.id}>{item.title}</li>
+                  ))}
+                  {group.count > group.items.length && <li>and {group.count - group.items.length} more</li>}
+                </ul>
+              </li>
+            ))}
+          </ul>
+          <SelectField label="Give this work to" required value={replacementId} onChange={(e) => setReplacementId(e.target.value)}>
+            <option value="">Choose a person</option>
+            {users
+              .filter((person) => person.id !== removing?.id && person.isActive)
+              .map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name?.trim() || person.email}
+                </option>
+              ))}
+          </SelectField>
+          <button type="submit" disabled={!replacementId || removeBusy} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
+            {removeBusy ? "Removing…" : "Move work and remove"}
           </button>
         </form>
       </Modal>

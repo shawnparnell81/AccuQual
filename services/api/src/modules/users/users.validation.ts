@@ -18,6 +18,10 @@ export const temporaryPasswordSchema = z.object({
   password: passwordSchema,
 });
 
+export const deleteUserSchema = z.object({
+  replacementUserId: z.number().int().positive().optional(),
+});
+
 export const updateUserSchema = z.object({
   name: z.string().max(200).optional(),
   email: z.string().email().optional(),

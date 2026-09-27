@@ -18,7 +18,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-09-27",
     items: [
       "Roles are listed from the top of the organization down. An administrator can edit a role's name, description, rank, and permissions, and can remove a role after moving its people to another one.",
-      "An administrator can edit a person's name, email, role, department, and manager, and can remove an account. Someone with quality records is turned off instead of erased, so their name stays on the history.",
+      "An administrator can edit a person's name, email, role, department, and manager, and can remove an account. Someone with quality records is turned off instead of erased. Their name stays on history as inactive, and records they created or signed stay editable. Open work must be handed to someone else first.",
       "Import data reads a CSV or Excel file into suppliers, customer contacts, parts, scorecards, certifications, inspections, lots, equipment, or users. Large files run in the background.",
       "Due-date reminders and escalation for overdue or stuck NCRs, CAPAs, 8Ds, and approvals waiting too long.",
       "Repeat NCRs now suggest a CAPA, with one click to open it and link the group.",

@@ -20,6 +20,8 @@ import { assertPasswordAcceptable } from "../../utils/passwordPolicy.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { decideUserRemoval } from "./userRemoval.js";
 import { loadUserHistory } from "./userLinks.js";
+import { loadOpenWork, reassignOpenWork, type OpenWorkGroup } from "./userOpenWork.js";
+import { deleteUserSchema } from "./users.validation.js";
 import type { Db } from "../../lib/requestDb.js";
 
 export const listUsers = asyncHandler(async (req: Request, res: Response) => {
@@ -233,8 +235,28 @@ function isForeignKeyError(err: unknown): boolean {
   return error.code === "23503" || error.cause?.code === "23503";
 }
 
+function removalAudit(moved: OpenWorkGroup[], replacement: { id: number; name: string | null; email: string } | null) {
+  if (!replacement || moved.length === 0) return {};
+  return {
+    reassignedTo: replacement.id,
+    reassignedToName: replacement.name?.trim() || replacement.email,
+    openWork: moved.map((item) => ({ key: item.key, label: item.label, count: item.count })),
+  };
+}
+
+/** Open work that must be handed to someone else before this account can be removed. */
+export const getUserOpenWork = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const [target] = await req.db!.select({ id: users.id }).from(users).where(eq(users.id, id));
+  if (!target) throw AppError.notFound("User");
+  res.json({ openWork: await loadOpenWork(req.db!, id) });
+});
+
 export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
+  const parsed = deleteUserSchema.safeParse(req.body ?? {});
+  if (!parsed.success) throw AppError.badRequest("Choose a person to take their open work.");
+
   const [target] = await req
     .db!.select({ id: users.id, name: users.name, email: users.email, isActive: users.isActive, roleName: roles.name })
     .from(users)
@@ -242,37 +264,57 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
     .where(eq(users.id, id));
   if (!target) throw AppError.notFound("User");
 
+  const openWork = await loadOpenWork(req.db!, id);
+  let replacement: { id: number; name: string | null; email: string } | null = null;
+  if (openWork.length > 0 && parsed.data.replacementUserId != null) {
+    const [row] = await req.db!.select({ id: users.id, name: users.name, email: users.email, isActive: users.isActive }).from(users).where(eq(users.id, parsed.data.replacementUserId));
+    if (!row || !row.isActive || row.id === id) throw AppError.badRequest("Choose an active person, other than this one, to take their open work.");
+    replacement = row;
+  }
+
   const decision = decideUserRemoval({
     actorId: req.user?.id ?? 0,
     targetId: id,
     targetRoleName: target.roleName,
     otherActiveFullAccess: await otherActiveFullAccess(req.db!, id),
     history: await loadUserHistory(req.db!, id),
+    openWork,
+    hasReplacement: replacement != null,
   });
-  if (decision.outcome === "blocked") throw new AppError(decision.message, decision.status);
+  if (decision.outcome === "blocked") {
+    throw new AppError(decision.message, decision.status, decision.requiresReplacement ? { requiresReplacement: true, openWork } : undefined);
+  }
+
+  const handoff = replacement ? ` Open work was moved to ${replacement.name?.trim() || replacement.email}.` : "";
 
   if (decision.outcome === "deleted") {
     try {
       await req.db!.transaction(async (tx) => {
+        const moved = replacement ? await reassignOpenWork(tx, id, replacement.id) : [];
         await clearSignInRows(tx, id);
-        await recordAuditTrail(tx, { entityType: "User", entityId: id, action: "delete", changes: { action: "hard_delete", email: target.email, name: target.name }, performedBy: req.user?.id });
+        await recordAuditTrail(tx, { entityType: "User", entityId: id, action: "delete", changes: { action: "hard_delete", email: target.email, name: target.name, ...removalAudit(moved, replacement) }, performedBy: req.user?.id });
         await tx.delete(users).where(eq(users.id, id));
       });
-      res.status(200).json({ outcome: "deleted", message: decision.message });
+      res.status(200).json({ outcome: "deleted", message: `${decision.message}${handoff}` });
       return;
     } catch (err) {
       if (!isForeignKeyError(err)) throw err;
     }
   }
 
-  const [updated] = await req
-    .db!.update(users)
-    .set({ isActive: false, tokenVersion: sql`${users.tokenVersion} + 1`, updatedAt: new Date() })
-    .where(eq(users.id, id))
-    .returning();
+  let moved: OpenWorkGroup[] = [];
+  const [updated] = await req.db!.transaction(async (tx) => {
+    moved = replacement ? await reassignOpenWork(tx, id, replacement.id) : [];
+    const [row] = await tx
+      .update(users)
+      .set({ isActive: false, tokenVersion: sql`${users.tokenVersion} + 1`, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return [row];
+  });
   if (!updated) throw AppError.notFound("User");
-  const message = decision.outcome === "deactivated" ? decision.message : "This person has records tied to them, so the account was turned off instead of erased. Their name stays on those records, and they can no longer sign in.";
-  await recordAuditTrail(req.db!, { entityType: "User", entityId: updated.id, action: "status_change", changes: { action: "deactivate", sessionsRevoked: true, reason: message }, performedBy: req.user?.id });
+  const message = `${decision.outcome === "deactivated" ? decision.message : "This person has records tied to them, so the account was turned off instead of erased. Their name stays on those records, and they can no longer sign in."}${handoff}`;
+  await recordAuditTrail(req.db!, { entityType: "User", entityId: updated.id, action: "status_change", changes: { action: "deactivate", sessionsRevoked: true, reason: message, ...removalAudit(moved, replacement) }, performedBy: req.user?.id });
   await revokeRefreshTokenRows(updated.id);
   res.status(200).json({ outcome: "deactivated", message });
 });

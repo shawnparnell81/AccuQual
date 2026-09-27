@@ -6,7 +6,7 @@ export interface HistoryHit {
 }
 
 export type UserRemovalDecision =
-  | { outcome: "blocked"; status: number; message: string }
+  | { outcome: "blocked"; status: number; message: string; requiresReplacement?: boolean }
   | { outcome: "deleted"; message: string }
   | { outcome: "deactivated"; message: string };
 
@@ -57,6 +57,8 @@ export function decideUserRemoval(input: {
   targetRoleName: string | null;
   otherActiveFullAccess: number;
   history: HistoryHit[];
+  openWork?: HistoryHit[];
+  hasReplacement?: boolean;
 }): UserRemovalDecision {
   if (input.actorId === input.targetId) {
     return { outcome: "blocked", status: 409, message: "You can't delete your own account." };
@@ -66,6 +68,19 @@ export function decideUserRemoval(input: {
       outcome: "blocked",
       status: 409,
       message: "This is the last Owner or Administrator. Give that access to someone else first.",
+    };
+  }
+  const openWork = (input.openWork ?? []).filter((hit) => hit.count > 0);
+  if (openWork.length > 0 && !input.hasReplacement) {
+    const listed = openWork
+      .slice(0, 6)
+      .map((hit) => `${hit.count} ${hit.label}`)
+      .join(", ");
+    return {
+      outcome: "blocked",
+      status: 409,
+      requiresReplacement: true,
+      message: `This person still has open work (${listed}). Choose someone to take it before removing them.`,
     };
   }
   const history = input.history.filter((hit) => hit.count > 0);

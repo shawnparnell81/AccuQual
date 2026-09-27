@@ -42,7 +42,7 @@ export interface WorkflowHistoryEntry {
   action: "create" | "update" | "delete" | "status_change" | "transition_failed";
   changes: Record<string, unknown> | null;
   performedBy: number | null;
-  /** Resolved server-side (see audit-trail.service.ts's withResolvedActors) — a name, an email, "Deleted User (ID #x)", or null when performedBy itself is null (a system action, rendered as "System"). Prefer this over the bare performedBy id everywhere history is shown. */
+  /** Resolved server-side (see audit-trail.service.ts's withResolvedActors) — a name, an email, "Jane Doe (inactive)" when the account is turned off, "Deleted User (ID #x)" when the row is gone, or null when performedBy itself is null (a system action, rendered as "System"). Prefer this over the bare performedBy id everywhere history is shown. */
   performedByName: string | null;
   createdAt: string;
   /** Field-level old -> new values the audit_row_change() database trigger recorded in the same transaction as this entry (empty for entries older than the trigger). */
