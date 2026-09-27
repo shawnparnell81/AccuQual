@@ -99,28 +99,19 @@ export function useAuthBootstrap() {
   useEffect(() => {
     if (bootstrapped) return;
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const attempt = () => {
-      void refreshSession().then((result) => {
-        if (cancelled) return;
-        // A real rejection (no cookie, revoked session) drops any stale
-        // persisted user. A 429 or a network blip must not: wait and try
-        // again, and leave `bootstrapped` false so ProtectedRoute does not
-        // bounce a live session to /login while we do.
-        if (!result.ok) {
-          if (!result.logout) {
-            timer = setTimeout(attempt, result.retryAfterMs);
-            return;
-          }
-          logout();
-        }
-        setBootstrapped();
-      });
-    };
-    attempt();
+    void refreshSession("bootstrap").then((result) => {
+      if (cancelled) return;
+      // A 429 or a network blip leaves `bootstrapped` false. The shared
+      // refresher already scheduled the one retry, and a later success marks
+      // the session ready. A real rejection drops any stale persisted user.
+      if (!result.ok) {
+        if (!result.logout) return;
+        logout();
+      }
+      setBootstrapped();
+    });
     return () => {
       cancelled = true;
-      if (timer) clearTimeout(timer);
     };
     // Intentionally once per mount — bootstrapped is read only to decide
     // whether to even start, not to re-trigger this on every change it
