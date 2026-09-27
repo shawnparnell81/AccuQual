@@ -27,4 +27,22 @@ describe("Quality document folders", () => {
     assert.equal(labels.filter((label) => label === "Product Alerts" || label === "Recalls").length, 2);
     assert.equal(quality.children.filter((child) => !isFolder(child) && (child.key === "product-alerts" || child.key === "recalls")).length, 2);
   });
+
+  it("adds Internal Audits under Audits as an upload folder, beside the other audit folders", () => {
+    assert.equal(DOCUMENT_FOLDER_PAGES["internal-audits"]?.title, "Internal Audits");
+
+    const quality = SIDEBAR_FOLDERS.find((folder) => folder.key === "quality");
+    assert.ok(quality);
+    const audits = quality.children.find((child) => isFolder(child) && child.key === "audits");
+    assert.ok(audits && isFolder(audits));
+    assert.deepEqual(
+      audits.children.map((child) => child.label),
+      ["Internal Audits", "Audit Plan", "Audit Schedule", "Audit Checklist", "Audit Report"],
+    );
+
+    const links = flattenSidebarLinks([audits]);
+    const internal = links.find((link) => link.key === "internal-audits");
+    assert.deepEqual(internal && { label: internal.label, path: internal.path }, { label: "Internal Audits", path: "/folders/internal-audits" });
+    assert.equal(links.filter((link) => link.label === "Internal Audits").length, 1);
+  });
 });

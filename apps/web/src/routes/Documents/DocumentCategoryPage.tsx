@@ -13,6 +13,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { previewKind, saveBytes } from "../../lib/filePreview";
 import { formatDate } from "../../lib/dates";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { TextField } from "../../components/forms/Field";
 
 /**
  * A single document folder (Drawings, Master Tool List, Shipping, and the other
@@ -28,6 +29,7 @@ export function DocumentCategoryPage() {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<PreviewRequest | null>(null);
+  const [filter, setFilter] = useState("");
 
   const documents = useQuery<AccuQualDocument[]>({
     queryKey: ["documents", undefined],
@@ -40,6 +42,8 @@ export function DocumentCategoryPage() {
   }
 
   const rows = (documents.data ?? []).filter((doc) => doc.category === category && doc.status !== "obsolete") as (AccuQualDocument & { createdAt?: string | null })[];
+  const needle = filter.trim().toLowerCase();
+  const visible = needle ? rows.filter((doc) => doc.title.toLowerCase().includes(needle)) : rows;
 
   async function upload(file: File) {
     setBusy(true);
@@ -145,6 +149,14 @@ export function DocumentCategoryPage() {
       )}
 
       {rows.length > 0 && (
+        <div className="max-w-sm">
+          <TextField label="Filter files" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search by file name" />
+        </div>
+      )}
+
+      {rows.length > 0 && visible.length === 0 && <p className="text-sm text-muted-foreground">No files match this filter.</p>}
+
+      {visible.length > 0 && (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-left text-sm">
             <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
@@ -156,7 +168,7 @@ export function DocumentCategoryPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((doc) => (
+              {visible.map((doc) => (
                 <tr key={doc.id} className="border-t border-border">
                   <td className="px-3 py-2 font-medium">
                     <button type="button" onClick={() => void openPreview(doc)} className="text-left hover:underline">

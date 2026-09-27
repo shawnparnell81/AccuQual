@@ -69,6 +69,7 @@ export const DOCUMENT_FOLDER_PAGES: Record<string, { title: string; blurb: strin
   "audit-schedule": { title: "Audit Schedule", blurb: "Audit schedules. Upload a file to keep it here." },
   "audit-checklist": { title: "Audit Checklist", blurb: "Audit checklists. Upload a file to keep it here." },
   "audit-report": { title: "Audit Report", blurb: "Audit reports. Upload a file to keep it here." },
+  "internal-audits": { title: "Internal Audits", blurb: "Internal audits. Upload a file to keep it here." },
   shipping: { title: "Shipping", blurb: "Shipping documents. Upload a file to keep it here." },
   receiving: { title: "Receiving", blurb: "Receiving documents. Upload a file to keep it here." },
   "validation-reports": { title: "Validation Reports", blurb: "Process and product validation reports. Upload a file to keep it here." },
@@ -153,7 +154,7 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
         label: "Audits",
         icon: ClipboardCheck,
         path: "/audits",
-        children: [doc("audit-plan", ClipboardList), doc("audit-schedule", ClipboardList), doc("audit-checklist", ClipboardCheck), doc("audit-report", FileText)],
+        children: [doc("internal-audits", ClipboardCheck), doc("audit-plan", ClipboardList), doc("audit-schedule", ClipboardList), doc("audit-checklist", ClipboardCheck), doc("audit-report", FileText)],
       },
       {
         key: "suppliers",
