@@ -20,7 +20,7 @@ export const requirementsSchema = z
 
 const courseFields = {
   requiredForRoleId: z.number().int().nullable().optional(),
-  requiredForDepartment: z.string().trim().max(60).nullable().optional(),
+  requiredForDepartment: z.string().trim().max(60).nullable().optional().refine((value) => value !== "sales_and_marketing", "That department is not offered."),
   validityMonths: z.coerce.number().int().min(1).max(600).nullable().optional(),
   requirements: requirementsSchema.optional(),
 };

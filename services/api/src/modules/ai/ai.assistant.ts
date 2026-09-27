@@ -304,7 +304,7 @@ async function loadContextSummary(db: Db, module: string, recordId?: number): Pr
       `part/project "${row.partProjectName ?? "not set"}" (RFQ/Quote ${row.rfqQuoteNumber ?? "not set"}). Status: ${row.status}. ` +
       `Determination: ${row.determination ?? "not yet decided"} — one of feasible_as_quoted, feasible_with_conditions, not_feasible. ` +
       `Assessment areas so far — ${areaSummary || "none assessed yet"}. ` +
-      `This is a fixed 7-area, 1-department-owned document (Engineering) with a 5-row sign-off table (Engineering/Quality/Manufacturing/Purchasing/Sales) — not a weighted scoring system.`
+      `This is a fixed 7-area, 1-department-owned document (Engineering) with a 4-row sign-off table (Engineering/Quality/Manufacturing/Purchasing) — not a weighted scoring system.`
     );
   }
 

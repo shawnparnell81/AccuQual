@@ -13,7 +13,7 @@ import {
   getDepartmentAccessLevel,
   MODULE_LABELS,
   VISIBLE_RESOURCE_KEYS,
-  DEPARTMENTS,
+  VISIBLE_DEPARTMENTS,
   type AccessLevel,
   type Department,
   type ResourceKey,
@@ -50,7 +50,7 @@ export const listDepartmentPermissionsHandler = asyncHandler(async (req: Request
   const rows = await req.db!.select().from(departmentPermissions);
   const overrides = new Map(rows.map((r) => [`${r.departmentName}:${r.moduleName}`, r]));
 
-  const grid = DEPARTMENTS.flatMap((departmentName) =>
+  const grid = VISIBLE_DEPARTMENTS.flatMap((departmentName) =>
     VISIBLE_RESOURCE_KEYS.map((moduleName) => {
       const override = overrides.get(`${departmentName}:${moduleName}`);
       return {

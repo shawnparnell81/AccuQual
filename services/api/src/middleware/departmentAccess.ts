@@ -76,6 +76,9 @@ export type ResourceKey =
 
 export const DEPARTMENTS: Department[] = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management", "sales_and_marketing"];
 
+/** Departments the product still offers. `sales_and_marketing` stays in DEPARTMENTS so existing user and permission rows keep a real value; catalogs, pickers, and new grants must not list it. */
+export const VISIBLE_DEPARTMENTS: Department[] = DEPARTMENTS.filter((department) => department !== "sales_and_marketing");
+
 /** Friendly labels for the Roles & Permissions admin UI's modules list — the real, complete, fixed set ("no fictional modules": a company can only configure access to a module that actually has a requireDepartmentAccess/requireSupplierPortalAccess gate on it, never an invented name). */
 export const MODULE_LABELS: Record<ResourceKey, string> = {
   ncr: "NCR",

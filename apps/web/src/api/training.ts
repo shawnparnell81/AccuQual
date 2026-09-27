@@ -99,7 +99,7 @@ export interface Person {
   email: string;
 }
 
-export const DEPARTMENTS = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management", "sales_and_marketing"];
+export const DEPARTMENTS = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management"];
 export const departmentLabel = (d: string) => d.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 
 export function useStatusRows(filters: { courseId?: number; userId?: number; status?: string }) {

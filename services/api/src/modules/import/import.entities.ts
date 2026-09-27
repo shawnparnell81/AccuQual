@@ -225,7 +225,7 @@ interface PersonValue {
   department?: string;
 }
 
-const DEPARTMENTS = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management", "sales_and_marketing"];
+const DEPARTMENTS = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management"];
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 
 function generateTemporaryPassword(email: string, name?: string): string {
@@ -245,7 +245,7 @@ const peopleEntity: ImportEntity<PersonValue, { rolesByName: Map<string, number>
     { key: "email", label: "Email", required: true, example: "jamie@yourcompany.com", aliases: ["e-mail", "email address", "work email"] },
     { key: "name", label: "Full name", example: "Jamie Rivera", aliases: ["name", "employee", "employee name", "person"] },
     { key: "role", label: "Role", help: "Must match an existing role name (for example operator, quality_manager, auditor). Blank means no role yet.", example: "operator", aliases: ["job role", "access", "access level"] },
-    { key: "department", label: "Department", help: "Quality, Engineering, Production, Customer Service, Purchasing, Material Management or Sales & Marketing.", example: "Production", aliases: ["dept", "team", "area"] },
+    { key: "department", label: "Department", help: "Quality, Engineering, Production, Customer Service, Purchasing, or Material Management.", example: "Production", aliases: ["dept", "team", "area"] },
   ],
   async prepare(ctx, identities) {
     const existing = new Set<string>();

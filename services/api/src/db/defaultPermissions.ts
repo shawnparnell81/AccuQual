@@ -113,7 +113,7 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // controller narrows" pattern as risk/rma/work_orders. material_management
   // dropped — it has no row on this document at all (the docx's sign-off
   // table is Engineering/Quality/Manufacturing/Purchasing/Sales only).
-  feasibility: { engineering: "edit", quality: "edit", production: "edit", purchasing: "edit", sales_and_marketing: "edit" },
+  feasibility: { engineering: "edit", quality: "edit", production: "edit", purchasing: "edit" },
   // Not a sheet row — the new Sales & Marketing module, and sales_and_marketing's
   // first real PERMISSION_MATRIX entry as a department (see the Sales &
   // Marketing module review — added as ONE department, not split into
@@ -123,7 +123,7 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // admin-only, enforced inline — no department gets it, per the module's
   // own explicit "Admin: delete records" rule (a stricter rule than risk/
   // feasibility's quality-or-admin, kept as literally specified this time).
-  sales: { sales_and_marketing: "edit", quality: "read", engineering: "read" },
+  sales: { quality: "read", engineering: "read" },
   // Not a sheet row — the Customer Onboarding module. sales_and_marketing
   // owns the whole case lifecycle (create through activate), same reasoning
   // as its own sales_accounts pipeline — there's no separate "reviewer
@@ -134,7 +134,7 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // linked Risk/Feasibility review — see customers.ts's relatedSourceType),
   // same level as the sales module above. Delete stays admin-only, enforced
   // inline in customers.controller.ts — same stricter rule as sales.
-  customers: { sales_and_marketing: "edit", quality: "read", engineering: "read" },
+  customers: { quality: "read", engineering: "read" },
   // The Warranty module. Customer Service owns intake (a warranty claim
   // starts as a customer contact); Quality owns inspection + the
   // supplier_review/approved/rejected disposition decision (same
@@ -221,8 +221,8 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // documents (see modules/versioning): every department needs to read the
   // published version, Quality owns drafting. Publishing further requires a
   // reviewer role (admin / quality manager), enforced in the versioning router.
-  management_review: { quality: "edit", engineering: "read", production: "read", customer_service: "read", purchasing: "read", material_management: "read", sales_and_marketing: "read" },
-  context_of_org: { quality: "edit", engineering: "read", production: "read", customer_service: "read", purchasing: "read", material_management: "read", sales_and_marketing: "read" },
+  management_review: { quality: "edit", engineering: "read", production: "read", customer_service: "read", purchasing: "read", material_management: "read" },
+  context_of_org: { quality: "edit", engineering: "read", production: "read", customer_service: "read", purchasing: "read", material_management: "read" },
   // Sprint 1 fix (accuqual-implementation-sequencing.md) — Document Control
   // previously had NO RBAC gate at all (documents.routes.ts's own old
   // comment explains why: "read-by-everyone, write-by-few," and copying the
@@ -242,7 +242,6 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
     customer_service: "read",
     purchasing: "read",
     material_management: "read",
-    sales_and_marketing: "read",
   },
   // Customer Contact & Communications Log — closes the Buyer Evaluation's
   // "no communication log" finding. Customer Service (the front-line
@@ -259,7 +258,6 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
     production: "read",
     purchasing: "read",
     material_management: "read",
-    sales_and_marketing: "read",
   },
   // Was completely ungated before this — a real gap (Full-System Audit
   // finding C1). No department-sheet row exists for this module either, so
@@ -274,7 +272,6 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
     customer_service: "read",
     purchasing: "read",
     material_management: "read",
-    sales_and_marketing: "read",
   },
   // Had NO ResourceKey at all before this — structurally excluded from the
   // permission system, not just mis-wired (Full-System Audit finding C2).
@@ -289,7 +286,6 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
     customer_service: "read",
     purchasing: "read",
     material_management: "read",
-    sales_and_marketing: "read",
   },
   // Had NO ResourceKey at all before this either (Full-System Audit finding
   // C3) — unlike training above, this one genuinely has no single owning
@@ -310,7 +306,6 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
     customer_service: "edit",
     purchasing: "edit",
     material_management: "edit",
-    sales_and_marketing: "edit",
   },
   // Same reasoning as qms_forms above: a SCAR can originate from any
   // department dealing with a supplier, so every department gets edit —
@@ -324,7 +319,6 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
     customer_service: "edit",
     purchasing: "edit",
     material_management: "edit",
-    sales_and_marketing: "edit",
   },
   // Quarantine: Quality places and decides holds; Material Management physically handles held stock (edit lets it place and move a hold —
   // releasing or destroying additionally needs a reviewer role, see requirePermission's "release" action); Production and Purchasing
@@ -339,6 +333,5 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
     customer_service: "read",
     purchasing: "read",
     material_management: "read",
-    sales_and_marketing: "read",
   },
 };

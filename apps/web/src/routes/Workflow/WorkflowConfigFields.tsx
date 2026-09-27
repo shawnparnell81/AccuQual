@@ -22,7 +22,7 @@ export const TRIGGER_KINDS = [
 ];
 export const CONDITION_OPERATORS = ["equals", "notEquals", "in", "greaterThan", "greaterOrEqual", "lessThan", "lessOrEqual", "contains"] as const;
 type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
-export const DEPARTMENT_OPTIONS = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management", "sales_and_marketing"];
+export const DEPARTMENT_OPTIONS = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management"];
 
 /** A condition node's config, rendered/edited as (field, operator, value) rather than a raw JSON blob. */
 export function ConditionFields({ node, onChange }: { node: WorkflowNode; onChange: (config: Record<string, unknown>) => void }) {

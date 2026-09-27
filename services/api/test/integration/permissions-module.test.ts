@@ -117,6 +117,7 @@ describe("Roles & Permissions module (real DB + real HTTP path)", () => {
       expect(cell.accessLevel).toBe("read");
       expect(cell.isOverride).toBe(true); // a real seeded row — no more implicit fallback to be "not an override"
       expect(cell.id).not.toBeNull();
+      expect(res.body.some((r: { departmentName: string }) => r.departmentName === "sales_and_marketing")).toBe(false);
     });
 
     ;

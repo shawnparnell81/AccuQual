@@ -30,7 +30,6 @@ const SIGNOFF_ROWS: { prefix: string; label: string; department: string }[] = [
   { prefix: "quality", label: "Quality Assurance", department: "quality" },
   { prefix: "manufacturing", label: "Manufacturing / Operations", department: "production" },
   { prefix: "purchasing", label: "Supply Chain / Purchasing", department: "purchasing" },
-  { prefix: "sales", label: "Sales / Commercial", department: "sales_and_marketing" },
 ];
 
 function useFeasibilitySettings() {

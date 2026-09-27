@@ -29,7 +29,6 @@ import { finalInspectionReleaseChecklistLayout } from "./finalInspectionReleaseC
 import { gageRRLayout } from "./gageRR.js";
 import { paretoChartLayout } from "./paretoChart.js";
 import { inventoryItemLayout } from "./inventoryItem.js";
-import { customerRequirementsLayout } from "./customerRequirements.js";
 import { auditChecklistLayout } from "./auditChecklist.js";
 
 /**
@@ -73,7 +72,6 @@ export const FORM_LAYOUTS: Record<string, FormLayout> = {
   gage_rr: gageRRLayout,
   pareto_chart: paretoChartLayout,
   inventory_item: inventoryItemLayout,
-  customer_requirements: customerRequirementsLayout,
 };
 
 export function getFormLayout(formType: string): FormLayout | undefined {

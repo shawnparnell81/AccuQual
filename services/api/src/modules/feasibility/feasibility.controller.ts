@@ -23,7 +23,6 @@ const SIGNOFF_OWNER: Record<string, string> = {
   quality: "quality",
   production: "manufacturing", // docx: "Manufacturing / Operations"
   purchasing: "purchasing", // docx: "Supply Chain / Purchasing"
-  sales_and_marketing: "sales", // docx: "Sales / Commercial"
 };
 
 /**
@@ -54,6 +53,11 @@ async function loadFeasibility(req: Request, id: number) {
   return row;
 }
 
+/** The Sales / Commercial sign-off columns stay stored. Responses do not surface them. */
+function hideSalesSignoff<T extends { salesSignoffName: string | null; salesSignoffSignature: string | null; salesSignoffDate: Date | null }>(row: T): T {
+  return { ...row, salesSignoffName: null, salesSignoffSignature: null, salesSignoffDate: null };
+}
+
 export const listFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
   const { status, customerId } = req.query as Record<string, string | undefined>;
   const conditions = [];
@@ -61,12 +65,12 @@ export const listFeasibilityHandler = asyncHandler(async (req: Request, res: Res
   if (customerId) conditions.push(eq(feasibilityReviews.customerId, Number(customerId)));
 
   const rows = await req.db!.select().from(feasibilityReviews).where(and(...conditions)).orderBy(desc(feasibilityReviews.createdAt));
-  res.json(rows);
+  res.json(rows.map(hideSalesSignoff));
 });
 
-/** Create — engineering (its own document) or sales_and_marketing (launching one from the Customer Onboarding packet). */
+/** Create — engineering owns this document. */
 export const createFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["engineering", "sales_and_marketing"]);
+  assertDepartment(req, ["engineering"]);
 
   const co = await loadCompanyForSettings(req.db!);
   const settings = getFeasibilitySettings(co);
@@ -88,11 +92,11 @@ export const createFeasibilityHandler = asyncHandler(async (req: Request, res: R
     .values({ ...areaDefaults, ...req.body, ownerId, createdBy: req.user?.id })
     .returning();
   await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
-  res.status(201).json(created);
+  res.status(201).json(hideSalesSignoff(created!));
 });
 
 export const getFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await loadFeasibility(req, Number(req.params.id)));
+  res.json(hideSalesSignoff(await loadFeasibility(req, Number(req.params.id))));
 });
 
 /** Every content field except the 5 sign-off rows — engineering or admin only. */
@@ -108,7 +112,7 @@ export const updateFeasibilityHandler = asyncHandler(async (req: Request, res: R
     .returning();
 
   await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: record.id, action: "update", changes: { fieldsChanged: Object.keys(req.body) }, performedBy: req.user?.id });
-  res.json(updated);
+  res.json(hideSalesSignoff(updated!));
 });
 
 /**
@@ -136,7 +140,7 @@ export const updateSignoffHandler = asyncHandler(async (req: Request, res: Respo
 
   const [updated] = await req.db!.update(feasibilityReviews).set(patch).where(eq(feasibilityReviews.id, record.id)).returning();
   await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: record.id, action: "update", changes: { subAction: "signoff", fieldsChanged: Object.keys(req.body) }, performedBy: req.user?.id });
-  res.json(updated);
+  res.json(hideSalesSignoff(updated!));
 });
 
 /**
@@ -173,7 +177,7 @@ export const finalizeFeasibilityHandler = asyncHandler(async (req: Request, res:
     });
   }
 
-  res.json(updated);
+  res.json(hideSalesSignoff(updated!));
 });
 
 /** Delete — engineering or admin only (this document has no cross-department delete rule, unlike the old version). */

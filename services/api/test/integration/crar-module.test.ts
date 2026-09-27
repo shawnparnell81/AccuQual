@@ -169,19 +169,14 @@ describe("CRAR module (real DB + real HTTP path)", () => {
       expect(res.status).toBe(403);
     });
 
-    it("admin grants sales_and_marketing 'edit' on crar via the self-service API", async () => {
+    it("the permissions API does not accept a Sales & Marketing department grant", async () => {
       const res = await request(app).patch("/permissions/department-permissions").set("Authorization", `Bearer ${adminToken}`).send({ departmentName: "sales_and_marketing", moduleName: "crar", accessLevel: "edit" });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(400);
     });
 
-    it("...and now sales_and_marketing can create AND fully edit a CRAR's content — not just link it", async () => {
-      const create = await request(app).post("/crar").set("Authorization", `Bearer ${salesToken}`).send({ customerName: "New Capability Co", partNumber: "PN-NEW" });
-      expect(create.status).toBe(201);
-      const newId = create.body.id;
-
-      const update = await request(app).patch(`/crar/${newId}`).set("Authorization", `Bearer ${salesToken}`).send({ findings: "sales_and_marketing can edit real content now" });
-      expect(update.status).toBe(200);
-      expect(update.body.findings).toBe("sales_and_marketing can edit real content now");
+    it("sales_and_marketing still cannot create or edit a CRAR", async () => {
+      const create = await request(app).post("/crar").set("Authorization", `Bearer ${salesToken}`).send({ customerName: "Should stay blocked", partNumber: "PN-NEW" });
+      expect(create.status).toBe(403);
     });
 
     it("engineering/purchasing still stay link-only even with crar edit — the structural carve-out didn't change", async () => {
@@ -189,8 +184,7 @@ describe("CRAR module (real DB + real HTTP path)", () => {
       expect(create.status).toBe(403);
     });
 
-    it("revoking sales_and_marketing's crar access again blocks it", async () => {
-      await request(app).delete("/permissions/department-permissions").set("Authorization", `Bearer ${adminToken}`).send({ departmentName: "sales_and_marketing", moduleName: "crar" });
+    it("a stored sales_and_marketing user still cannot create a CRAR", async () => {
       const res = await request(app).post("/crar").set("Authorization", `Bearer ${salesToken}`).send({ customerName: "Should be blocked again" });
       expect(res.status).toBe(403);
     });

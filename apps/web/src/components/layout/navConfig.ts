@@ -31,7 +31,6 @@ import {
   Hammer,
   FileSignature,
   Compass,
-  Megaphone,
   FileEdit,
   LibraryBig,
   ShieldX,
@@ -125,7 +124,6 @@ export const DEPARTMENTS: DepartmentMeta[] = [
   { key: "customer_service", label: "Customer Service", icon: Headset, text: "text-violet-700 dark:text-violet-400", bgSoft: "bg-violet-500/10", ring: "ring-violet-500/30" },
   { key: "purchasing", label: "Purchasing", icon: ShoppingCart, text: "text-emerald-700 dark:text-emerald-400", bgSoft: "bg-emerald-500/10", ring: "ring-emerald-500/30" },
   { key: "material_management", label: "Material Mgmt", icon: PackageSearch, text: "text-orange-800 dark:text-orange-400", bgSoft: "bg-orange-500/10", ring: "ring-orange-500/30" },
-  { key: "sales_and_marketing", label: "Sales & Marketing", icon: Megaphone, text: "text-pink-700 dark:text-pink-400", bgSoft: "bg-pink-500/10", ring: "ring-pink-500/30" },
 ];
 
 // ---- canonical leaves shared across more than one department's dropdown ----
@@ -413,10 +411,6 @@ export const NAV_STRUCTURE: NavGroup[] = [
   {
     department: "material_management",
     items: [SUPPLIERS, INVENTORY, ERP, RMA, WORK_ORDERS, PURCHASE_REQUISITIONS, WARRANTY, RMA_LOG],
-  },
-  {
-    department: "sales_and_marketing",
-    items: [],
   },
   {
     // Not in the sheet — kept so nothing loses a working page. Access is
