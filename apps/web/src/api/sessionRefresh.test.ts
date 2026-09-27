@@ -5,8 +5,10 @@ import {
   createSessionRefresher,
   nextProactiveDelayMs,
   proactiveRefreshDelayMs,
+  refreshDecision,
   retryDelayMs,
   settleAfterRefresh,
+  tokenNearExpiry,
   type RefreshAttempt,
 } from "./sessionRefresh.ts";
 
@@ -211,5 +213,32 @@ describe("proactive renewal", () => {
     assert.equal(nextProactiveDelayMs(token, now, 0), 0);
     const fresh = tokenExpiringAt(exp);
     assert.equal(nextProactiveDelayMs(fresh, exp * 1000 - 14 * 60_000, exp * 1000), 13 * 60_000);
+  });
+});
+
+describe("when a renewal is redundant", () => {
+  const now = 1_700_000_000_000;
+
+  it("does not renew a token that still has plenty of time left", () => {
+    const token = tokenExpiringAt((now + 10 * 60_000) / 1000);
+    assert.equal(tokenNearExpiry(token, now), false);
+    assert.equal(refreshDecision({ reason: "proactive", accessToken: token, now }), "skip");
+    assert.equal(refreshDecision({ reason: "bootstrap", accessToken: token, now }), "skip");
+    assert.equal(refreshDecision({ reason: "unauthorized", accessToken: token, now }), "refresh");
+    assert.equal(refreshDecision({ reason: "unauthorized", accessToken: token, now, lastSuccessAt: now - 1_000 }), "skip");
+  });
+
+  it("renews once the token is inside the lead window, but not again right after a success", () => {
+    const token = tokenExpiringAt((now + 30_000) / 1000);
+    assert.equal(tokenNearExpiry(token, now), true);
+    assert.equal(refreshDecision({ reason: "proactive", accessToken: token, now, lastSuccessAt: now - 1_000 }), "skip");
+    assert.equal(refreshDecision({ reason: "proactive", accessToken: token, now, lastSuccessAt: now - 60_000 }), "refresh");
+    assert.equal(refreshDecision({ reason: "unauthorized", accessToken: token, now }), "refresh");
+  });
+
+  it("bootstraps when there is no token, and does not proactively renew a signed-out tab", () => {
+    assert.equal(refreshDecision({ reason: "bootstrap", accessToken: null, now }), "refresh");
+    assert.equal(refreshDecision({ reason: "proactive", accessToken: null, now }), "skip");
+    assert.equal(refreshDecision({ reason: "unauthorized", accessToken: null, now }), "refresh");
   });
 });

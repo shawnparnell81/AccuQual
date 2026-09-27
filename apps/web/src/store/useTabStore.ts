@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { isLiveTabPath, selectRestoredTabs } from "../lib/tabPaths";
 
 export interface TabInstance {
   id: string;
@@ -59,7 +60,7 @@ function restore(ownerId: string): { tabs: TabInstance[]; activeId: string | nul
     const raw = localStorage.getItem(storageKey(ownerId));
     if (!raw) return { tabs: [], activeId: null };
     const parsed = JSON.parse(raw) as { tabs: TabInstance[]; activeId: string | null };
-    return { tabs: parsed.tabs ?? [], activeId: parsed.activeId ?? null };
+    return selectRestoredTabs(parsed.tabs ?? [], parsed.activeId ?? null);
   } catch {
     return { tabs: [], activeId: null };
   }
@@ -78,11 +79,14 @@ export const useTabStore = create<TabState>((set, get) => ({
   loadForUser: (ownerId) => {
     const { tabs, activeId } = restore(ownerId);
     set({ ownerId, tabs, activeId });
+    // Write the filtered list back so a removed page (ERP, requisitions, …) is not opened again next time.
+    persist(ownerId, tabs, activeId);
   },
 
   clear: () => set({ ownerId: null, tabs: [], activeId: null }),
 
   openTab: ({ path, title, icon }) => {
+    if (!isLiveTabPath(path)) return get().activeId ?? "";
     const { ownerId, tabs } = get();
     const existing = tabs.find((t) => t.path === path);
     if (existing) {
@@ -98,6 +102,7 @@ export const useTabStore = create<TabState>((set, get) => ({
   },
 
   syncActiveTabLocation: (path, title, icon) => {
+    if (!isLiveTabPath(path)) return;
     const { ownerId, tabs, activeId } = get();
     const active = tabs.find((t) => t.id === activeId);
     if (active?.path === path) return; // already showing this path — e.g. openTab's own navigate() just landed here

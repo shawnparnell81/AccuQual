@@ -115,6 +115,38 @@ export function accessTokenExpiresAtMs(token: string): number | null {
   }
 }
 
+export type RefreshReason = "proactive" | "bootstrap" | "unauthorized";
+
+/** True when there is no readable expiry, or the access token is inside the lead window (including already expired). */
+export function tokenNearExpiry(token: string | null, now = Date.now(), leadMs = PROACTIVE_REFRESH_LEAD_MS): boolean {
+  if (!token) return true;
+  const expiresAt = accessTokenExpiresAtMs(token);
+  if (expiresAt == null) return true;
+  return expiresAt - now <= leadMs;
+}
+
+/**
+ * Whether this caller should hit the network.
+ * A still-valid access token does not need a renewal, including when some other request returned 401.
+ * A renewal that just succeeded is not repeated until the gap has passed.
+ */
+export function refreshDecision(input: { reason: RefreshReason; accessToken: string | null; now?: number; lastSuccessAt?: number }): "skip" | "refresh" {
+  const now = input.now ?? Date.now();
+  const lastSuccessAt = input.lastSuccessAt ?? 0;
+  const near = tokenNearExpiry(input.accessToken, now);
+  if (input.reason === "unauthorized") {
+    // A request that failed just after a renewal already has a new token. Renewing again
+    // would send the same sign-in cookie twice. A failure with no recent renewal still renews,
+    // so a revoked sign-in still ends instead of sitting on a dead token.
+    if (input.accessToken && !near && lastSuccessAt > 0 && now - lastSuccessAt < MIN_PROACTIVE_GAP_MS) return "skip";
+    return "refresh";
+  }
+  if (!input.accessToken) return input.reason === "bootstrap" ? "refresh" : "skip";
+  if (!near) return "skip";
+  if (lastSuccessAt > 0 && now - lastSuccessAt < MIN_PROACTIVE_GAP_MS) return "skip";
+  return "refresh";
+}
+
 /** How long to wait before renewing. Zero means the token is already inside the lead window (or already expired). */
 export function proactiveRefreshDelayMs(token: string, now = Date.now(), leadMs = PROACTIVE_REFRESH_LEAD_MS): number | null {
   const expiresAt = accessTokenExpiresAtMs(token);

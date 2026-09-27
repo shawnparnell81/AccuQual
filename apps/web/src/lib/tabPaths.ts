@@ -1,0 +1,126 @@
+/**
+ * Saved open-page tabs. A path stays only when the app still has that page.
+ * Purchasing screens (/erp, /erp/requisitions, purchase-order detail) now
+ * redirect home and their APIs are gone, so restoring them was calling
+ * /api/erp/overview and /api/erp/requisitions and getting 404. Feasibility
+ * still has its own page, so those tabs stay.
+ */
+
+interface SavedTab {
+  id: string;
+  path: string;
+}
+
+const EXACT = new Set([
+  "/",
+  "/home",
+  "/calendar",
+  "/ncr",
+  "/capa",
+  "/8d",
+  "/audits",
+  "/documents",
+  "/documents/folders",
+  "/documents/uploads",
+  "/training",
+  "/workers",
+  "/change",
+  "/risk",
+  "/risk/dashboard",
+  "/feasibility",
+  "/sales",
+  "/sales/dashboard",
+  "/customers",
+  "/customers/dashboard",
+  "/document-change-requests",
+  "/qms-forms",
+  "/scar-forms",
+  "/quality-inspection-reports",
+  "/ppap",
+  "/production-logs",
+  "/management-system",
+  "/management-system/management-review",
+  "/management-system/context",
+  "/pareto",
+  "/suppliers",
+  "/calibration",
+  "/quarantine",
+  "/inventory",
+  "/inventory/alerts",
+  "/inventory/lots",
+  "/erp/presets",
+  "/erp/errors",
+  "/rma",
+  "/warranty",
+  "/warranty/dashboard",
+  "/crar",
+  "/rma-activity-log",
+  "/rma-log",
+  "/work-orders",
+  "/workflow",
+  "/ai",
+  "/digital-twin",
+  "/settings",
+  "/settings/navigation",
+  "/admin",
+  "/admin/company-ai",
+  "/admin/ai-usage",
+  "/reporting",
+]);
+
+/** One dynamic segment: a number, or (for a few list filters) any single path piece. */
+const ONE_SEGMENT: RegExp[] = [
+  /^\/ncr\/\d+$/,
+  /^\/capa\/\d+$/,
+  /^\/8d\/\d+$/,
+  /^\/audits\/\d+$/,
+  /^\/folders\/[^/]+$/,
+  /^\/documents\/\d+$/,
+  /^\/training\/employee\/\d+$/,
+  /^\/training\/\d+$/,
+  /^\/workers\/\d+$/,
+  /^\/change\/\d+$/,
+  /^\/risk\/\d+$/,
+  /^\/feasibility\/\d+$/,
+  /^\/sales\/\d+$/,
+  /^\/customers\/\d+$/,
+  /^\/document-change-requests\/\d+$/,
+  /^\/qms-forms\/[^/]+$/,
+  /^\/qms-forms\/[^/]+\/\d+$/,
+  /^\/scar-forms\/\d+$/,
+  /^\/quality-inspection-reports\/\d+$/,
+  /^\/ppap\/\d+$/,
+  /^\/suppliers\/\d+$/,
+  /^\/calibration\/\d+$/,
+  /^\/quarantine\/\d+$/,
+  /^\/inventory\/lots\/\d+$/,
+  /^\/inventory\/lots\/\d+\/label$/,
+  /^\/inventory\/\d+$/,
+  /^\/erp\/presets\/[^/]+$/,
+  /^\/rma\/\d+$/,
+  /^\/warranty\/\d+$/,
+  /^\/crar\/\d+$/,
+  /^\/rma-log\/\d+$/,
+  /^\/work-orders\/\d+$/,
+  /^\/workflow\/\d+$/,
+  /^\/admin\/[^/]+$/,
+];
+
+export function normalizeTabPath(path: string): string {
+  const pathname = path.split("?")[0]?.split("#")[0] ?? "";
+  if (pathname.length > 1 && pathname.endsWith("/")) return pathname.slice(0, -1);
+  return pathname || "/";
+}
+
+/** True when this path still opens a real page (not a redirect left behind for an old bookmark). */
+export function isLiveTabPath(path: string): boolean {
+  const pathname = normalizeTabPath(path);
+  if (EXACT.has(pathname)) return true;
+  return ONE_SEGMENT.some((pattern) => pattern.test(pathname));
+}
+
+export function selectRestoredTabs<T extends SavedTab>(tabs: T[], activeId: string | null): { tabs: T[]; activeId: string | null } {
+  const live = tabs.filter((tab) => typeof tab?.path === "string" && isLiveTabPath(tab.path));
+  const active = live.some((tab) => tab.id === activeId) ? activeId : (live[0]?.id ?? null);
+  return { tabs: live, activeId: active };
+}
