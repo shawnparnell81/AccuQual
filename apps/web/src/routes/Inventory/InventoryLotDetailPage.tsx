@@ -99,12 +99,7 @@ export function InventoryLotDetailPage() {
       <Section title="Purchase Order" emptyMessage={purchaseOrder ? undefined : "This lot isn't linked to a Purchase Order — it was likely entered manually, not through a Receiving Document."}>
         {purchaseOrder && (
           <dl className="grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            <Field
-              label="PO #"
-              value={
-                PO #{purchaseOrder.id}
-              }
-            />
+            <Field label="PO #" value={`PO #${purchaseOrder.id}`} />
             <Field label="PO Status" value={<StatusBadge value={purchaseOrder.status} />} />
             <Field label="Ordered On" value={new Date(purchaseOrder.createdAt).toLocaleDateString()} />
             <Field label="Expected Delivery" value={purchaseOrder.expectedDeliveryDate ? new Date(purchaseOrder.expectedDeliveryDate).toLocaleDateString() : null} />

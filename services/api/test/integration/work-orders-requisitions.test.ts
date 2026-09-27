@@ -151,6 +151,6 @@ describe("Work Orders + Purchase Requisitions (real DB + real HTTP path)", () =>
 
   it("purchase orders and requisitions are no longer available", async () => {
     expect((await request(app).get("/erp/purchase-orders").set("Authorization", `Bearer ${purchasingToken}`)).status).toBe(404);
-    expect((await request(app).post("/erp/requisitions").set("Authorization", `Bearer ${engineeringToken}`).send({ itemId, quantity: 25 })).status).toBe(404);
+    expect((await request(app).post("/erp/requisitions").set("Authorization", `Bearer ${purchasingToken}`).send({ itemId, quantity: 25 })).status).toBe(404);
   });
 });
