@@ -7,6 +7,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { TextField, SelectField } from "../../components/forms/Field";
 import type { CompanyAiConfig } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 // The two real, already-integrated providers (see llm-gateway.ts) — not an
 // open list, so this can never store a provider the app has no code path for.
@@ -67,7 +68,7 @@ function AiConfigForm() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save AI configuration.")),
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
 
   return (
     <form

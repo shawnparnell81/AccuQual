@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
@@ -9,6 +9,7 @@ import { TextField } from "../../components/forms/Field";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { Modal } from "../../components/modals/Modal";
 import type { WorkflowDefinition, WorkflowTemplate, WorkflowHealthReport, WorkflowRun } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const workflowHooks = createResourceHooks<WorkflowDefinition>("workflow");
 
@@ -104,6 +105,18 @@ export function WorkflowBuilderPage() {
     onSuccess: (created) => navigate(`/workflow/${created.id}`),
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't create the workflow.")),
   });
+  const [params, setParams] = useSearchParams();
+  const templateStarted = useRef(false);
+  useEffect(() => {
+    if (templateStarted.current || params.get("template") !== "validation") return;
+    const template = templates.find((item) => item.key === "validation");
+    if (!template) return;
+    templateStarted.current = true;
+    const next = new URLSearchParams(params);
+    next.delete("template");
+    setParams(next, { replace: true });
+    create.mutate({ name: template.name, module: template.module, definition: template.definition });
+  }, [create, params, setParams, templates]);
 
   const run = useMutation({
     mutationFn: async ({ id, simulate }: { id: number; simulate: boolean }) => (await apiClient.post<WorkflowRun>(`/workflow/${id}/run`, { context: {}, simulate })).data,
@@ -144,7 +157,7 @@ export function WorkflowBuilderPage() {
         <div className="rounded-lg border border-border bg-card p-4">
           <h2 className="mb-3 text-sm font-medium">Workflow Health</h2>
           {!health ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            <LoadingPlaceholder />
           ) : (
             <>
               <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">

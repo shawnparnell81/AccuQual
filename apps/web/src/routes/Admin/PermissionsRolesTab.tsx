@@ -5,6 +5,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { TextField } from "../../components/forms/Field";
 import type { ModuleAccessLevel, PermissionModuleInfo, PermissionRole } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const LEVELS: ModuleAccessLevel[] = ["read", "edit"];
 
@@ -78,7 +79,7 @@ export function PermissionsRolesTab() {
       </form>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadingPlaceholder />
       ) : roles.length === 0 ? (
         <p className="text-sm text-muted-foreground">No custom roles yet — everyone's access comes from their department alone.</p>
       ) : (

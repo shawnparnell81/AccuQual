@@ -7,6 +7,7 @@ import { apiClient } from "../../api/client";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { SelectField } from "../../components/forms/Field";
 import type { InventoryAlert, InventoryAlertRouting } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const alertHooks = createResourceHooks<InventoryAlert>("inventory/alerts");
 
@@ -90,7 +91,7 @@ export function InventoryAlertsPage() {
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadingPlaceholder />
       ) : filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           {alerts.length === 0 ? "No alerts — every item is within its min/max range." : "No alerts match these filters."}

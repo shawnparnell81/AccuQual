@@ -7,6 +7,8 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { TextField, SelectField } from "../../components/forms/Field";
 import type { AppRole } from "../../api/types";
+import { useConfirm } from "../../components/shared/ConfirmDialog";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 interface SsoDomain {
   id: number;
@@ -132,6 +134,7 @@ function DomainsPanel({ domains }: { domains: SsoDomain[] }) {
 }
 
 function ConnectionPanel({ config }: { config: SsoConfig }) {
+  const confirm = useConfirm();
   const toast = useToast();
   const queryClient = useQueryClient();
   const { data: roles = [] } = useQuery<AppRole[]>({ queryKey: ["roles"], queryFn: async () => (await apiClient.get("/roles")).data });
@@ -263,7 +266,13 @@ function ConnectionPanel({ config }: { config: SsoConfig }) {
           <button
             type="button"
             onClick={() => {
-              if (window.confirm("Remove the single sign-on connection? People will sign in with passwords again.")) remove.mutate();
+              void confirm({
+                title: "Remove single sign-on?",
+                message: "People will sign in with passwords again.",
+                confirmLabel: "Remove",
+              }).then((ok) => {
+                if (ok) remove.mutate();
+              });
             }}
             className="text-sm text-muted-foreground hover:text-destructive"
           >
@@ -286,7 +295,7 @@ export function AdminSsoPage() {
       </div>
       <AdminOnlyGuard>
         {isLoading || !data ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <LoadingPlaceholder />
         ) : (
           <>
             <DomainsPanel domains={data.domains} />

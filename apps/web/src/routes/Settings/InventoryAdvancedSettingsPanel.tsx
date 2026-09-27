@@ -8,6 +8,7 @@ import type { InventorySettings } from "../../api/types";
 import { LotNumberFormatEditor } from "./LotNumberFormatEditor";
 import { SerialNumberFormatEditor } from "./SerialNumberFormatEditor";
 import { InventoryAgingRuleEditor } from "./InventoryAgingRuleEditor";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 function useInventorySettings() {
   return useQuery<InventorySettings>({ queryKey: ["settings/inventory"], queryFn: async () => (await apiClient.get("/settings/inventory")).data });
@@ -40,7 +41,7 @@ export function InventoryAdvancedSettingsPanel() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save Inventory settings.")),
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">

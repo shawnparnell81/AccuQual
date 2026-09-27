@@ -10,6 +10,7 @@ import { TrendLineChart } from "../../components/charts/TrendLineChart";
 import { Modal } from "../../components/modals/Modal";
 import { TextField, TextAreaField } from "../../components/forms/Field";
 import type { SupplierQualityFactors, SupplierRiskScoreWithTrend } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 interface ScorecardEntry {
   id: number;
@@ -130,7 +131,7 @@ export function SupplierScorecard({ supplierId }: { supplierId?: number }) {
           </div>
         </div>
         {riskLoading || !risk ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <LoadingPlaceholder />
         ) : (
           <>
             <div className="mb-4 flex items-center gap-3">
@@ -189,7 +190,7 @@ export function SupplierScorecard({ supplierId }: { supplierId?: number }) {
           )}
         </div>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <LoadingPlaceholder />
         ) : rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">No scorecard entries recorded yet.</p>
         ) : (

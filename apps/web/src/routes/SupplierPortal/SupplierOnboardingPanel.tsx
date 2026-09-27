@@ -8,6 +8,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { ONBOARDING_DOCUMENT_TYPES } from "../../api/types";
 import type { SupplierOnboardingDocument } from "../../api/types";
 import { FileDropZone } from "../../components/shared/FileDropZone";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 /** Supplier onboarding package: W-9, NDA, Quality Manual, Process Flow, Control Plan, FMEA, Org Chart, ISO/IATF/AS9100 certs, Questionnaire, Agreement. Upload is the supplier's own self-service action (or staff on their behalf once a supplier is picked); review (approve/reject) is Quality/Purchasing only. */
 export function SupplierOnboardingPanel({ supplierId, isReviewer }: { supplierId?: number; isReviewer: boolean }) {
@@ -65,7 +66,7 @@ export function SupplierOnboardingPanel({ supplierId, isReviewer }: { supplierId
       <div className="rounded-lg border border-border bg-card p-4">
         <h3 className="mb-3 text-sm font-medium">Onboarding Status</h3>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <LoadingPlaceholder />
         ) : docs.length === 0 ? (
           <p className="text-sm text-muted-foreground">No documents uploaded yet.</p>
         ) : (

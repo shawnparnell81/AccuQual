@@ -12,6 +12,7 @@ import { WarrantyDocumentsPanel } from "./WarrantyDocumentsPanel";
 import { WarrantyCrarPanel } from "./WarrantyCrarPanel";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import type { WarrantyClaim, WarrantyStatus } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const claimHooks = createResourceHooks<WarrantyClaim>("warranty/claims");
 
@@ -62,7 +63,7 @@ export function WarrantyClaimDetail() {
   });
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !claim) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !claim) return <LoadingPlaceholder />;
 
   const isAdmin = currentUser?.roleName === "admin";
   const department = currentUser?.department;

@@ -4,6 +4,7 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { TextField } from "../../components/forms/Field";
 import type { RmaActivityLogEntry } from "../../api/types";
 import { formatDateTime } from "../../lib/dates";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const rmaActivityLogHooks = createResourceHooks<RmaActivityLogEntry>("rma-activity-log");
 
@@ -40,7 +41,7 @@ export function RmaActivityLogPage() {
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadingPlaceholder />
       ) : rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No log entries yet.</p>
       ) : (

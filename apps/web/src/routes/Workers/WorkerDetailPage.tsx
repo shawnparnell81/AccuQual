@@ -6,6 +6,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { useWorker, useUpsertWorkerProfile, EMPLOYMENT_STATUSES, EMPLOYMENT_STATUS_LABEL, type EmploymentStatus } from "../../api/workers";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 interface FormState {
   jobTitle: string;
@@ -47,7 +48,7 @@ export function WorkerDetailPage() {
     }
   }, [data?.profile]);
 
-  if (isLoading || !form) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
+  if (isLoading || !form) return <LoadingPlaceholder />;
   if (isError || !data) return <div className="p-6 text-sm text-destructive">Couldn't load this worker.</div>;
 
   const { profile, activity } = data;

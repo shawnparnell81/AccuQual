@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { SaveStatus } from "../../components/shared/SaveStatus";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { Link, useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import type { Capa } from "../../api/types";
@@ -43,6 +45,7 @@ export function CapaDetailPage() {
   const verifyAction = useWorkflowAction("capa", "verify", { successMessage: "Verification recorded.", invalidateKeys: historyKey });
   const closeAction = useWorkflowAction("capa", "close", { successMessage: "CAPA closed.", invalidateKeys: historyKey });
   const [verification, setVerification] = useState("");
+  const [verificationTouched, setVerificationTouched] = useState(false);
   // Phase 11 bug fix — this field was write-only local draft state with no
   // hydration from the record at all: a CAPA already verified (status
   // "verifying" or "closed") showed an empty box here forever, even though
@@ -56,8 +59,8 @@ export function CapaDetailPage() {
     if (capa?.verification) setVerification(capa.verification);
   }, [capa?.verification]);
 
-  if (isError) return <p className="text-sm text-destructive">Couldn't load this fix. Refresh the page and try again.</p>;
-  if (isLoading || !capa) return <p className="text-sm text-muted-foreground">Loading this fix…</p>;
+  if (isError) return <p className="text-sm text-destructive">Couldn't load this CAPA. Refresh the page and try again.</p>;
+  if (isLoading || !capa) return <LoadingPlaceholder />;
 
   const owner = label(capa.ownerId);
   const closed = capa.status === "closed";
@@ -66,11 +69,11 @@ export function CapaDetailPage() {
     <div className="flex flex-col gap-4">
       <RecordGlance
         crumbs={[
-          { label: "Fixes", to: "/capa" },
-          ...(capa.ncrId ? [{ label: `Issue #${capa.ncrId}`, to: `/ncr/${capa.ncrId}` }] : []),
-          { label: `Fix #${capa.id}` },
+          { label: "CAPA", to: "/capa" },
+          ...(capa.ncrId ? [{ label: `NCR #${capa.ncrId}`, to: `/ncr/${capa.ncrId}` }] : []),
+          { label: `CAPA #${capa.id}` },
         ]}
-        title={`Fix #${capa.id}`}
+        title={`CAPA #${capa.id}`}
         standard="CAPA"
         stateValue={capa.status}
         stateLabel={statusPhrase(capa.status)}
@@ -134,13 +137,14 @@ export function CapaDetailPage() {
         }
         trail={<LoopTrail steps={CAPA_LOOP} current={capaLoopIndex(capa.status)} />}
       />
+      <SaveStatus saving={updateCapa.isPending} unsaved={verificationTouched && verification !== (capa.verification ?? "")} />
       <p className="text-sm text-muted-foreground">
         {capa.ncrId ? (
           <>
-            Opened from <Link to={`/ncr/${capa.ncrId}`} className="text-primary hover:underline">issue #{capa.ncrId}</Link>.
+            Opened from <Link to={`/ncr/${capa.ncrId}`} className="text-primary hover:underline">NCR #{capa.ncrId}</Link>.
           </>
         ) : (
-          <>This fix isn't tied to an issue yet. Link it from the issue so containment, the fix, and the check stay one story.</>
+          <>This CAPA isn't tied to an NCR yet. Link it from the NCR so containment, the CAPA, and the check stay one story.</>
         )}
       </p>
 
@@ -200,7 +204,7 @@ export function CapaDetailPage() {
               {!capa.verification && capa.status === "in_progress" && (
                 <p className="mb-2 text-sm text-muted-foreground">Nothing recorded yet. Write what you checked, then submit it.</p>
               )}
-              <TextAreaField label="" value={verification} onChange={(e) => setVerification(e.target.value)} readOnly={!canEdit || capa.status !== "in_progress"} />
+              <TextAreaField label="" value={verification} onChange={(e) => { setVerificationTouched(true); setVerification(e.target.value); }} readOnly={!canEdit || capa.status !== "in_progress"} />
               <WorkflowActionButton
                 label="Submit the check"
                 navKey="capa"
@@ -251,6 +255,7 @@ export function CapaDetailPage() {
                 // Verification Steps textarea below already uses, so the
                 // user still explicitly reviews and submits it themselves.
                 updateCapa.mutate({ id: capaId, actionPlan: output.actionPlan, preventiveAction: output.preventiveAction });
+                setVerificationTouched(true);
                 setVerification(output.verification);
               }}
               renderPreview={(output) => (

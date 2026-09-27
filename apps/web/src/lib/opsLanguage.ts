@@ -27,7 +27,7 @@ const DEPARTMENT_PHRASES: Record<string, string> = {
 /** Everyday nav labels. `standard` is the ISO/IATF term, shown smaller beside the plain name. */
 export const PRIMARY_NAV: { key: string; label: string; standard?: string }[] = [
   { key: "ncr", label: "NCR" },
-  { key: "capa", label: "Fixes", standard: "CAPA" },
+  { key: "capa", label: "CAPA" },
   { key: "documents", label: "Documents" },
   { key: "training", label: "Training" },
   { key: "audit", label: "Audits" },
@@ -37,7 +37,7 @@ export const PRIMARY_NAV_KEYS = new Set(PRIMARY_NAV.map((item) => item.key));
 
 const NAV_PLAIN: Record<string, { label: string; standard?: string }> = {
   ncr: { label: "NCR" },
-  capa: { label: "Fixes", standard: "CAPA" },
+  capa: { label: "CAPA" },
   "8d": { label: "8D reports", standard: "8D" },
   di: { label: "NCR" },
   audit: { label: "Audits" },
@@ -180,13 +180,13 @@ export function ncrNextAction(status: "open" | "contained" | "investigating" | "
     case "open":
       return "Contain it and decide what happens to the parts.";
     case "contained":
-      return "Write the cause, then open a fix.";
+      return "Write the cause, then open a CAPA.";
     case "investigating":
-      return hasFix ? "Write the corrective action on this issue." : "Open a fix so this doesn't stop at containment.";
+      return hasFix ? "Write the corrective action on this NCR." : "Open a CAPA so this doesn't stop at containment.";
     case "corrective_action":
-      return "Check the fix, then close this issue.";
+      return "Check the CAPA, then close this NCR.";
     case "closed":
-      return "Nothing left on this issue.";
+      return "Nothing left on this NCR.";
   }
 }
 
@@ -206,13 +206,13 @@ export function capaLoopIndex(status: "open" | "in_progress" | "verifying" | "cl
 export function capaNextAction(status: "open" | "in_progress" | "verifying" | "closed"): string {
   switch (status) {
     case "open":
-      return "Start the work on this fix.";
+      return "Start the work on this CAPA.";
     case "in_progress":
-      return "Record whether the fix worked.";
+      return "Record whether the CAPA worked.";
     case "verifying":
-      return "Close it if the fix held.";
+      return "Close it if the CAPA held.";
     case "closed":
-      return "Nothing left on this fix.";
+      return "Nothing left on this CAPA.";
   }
 }
 

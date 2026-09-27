@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { SupplierPortalPerformance, SupplierQualityFactors } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -36,7 +37,7 @@ export function SupplierPerformanceDashboard({ supplierId }: { supplierId?: numb
     queryFn: async () => (await apiClient.get("/supplier-portal/kpis", { params: supplierId ? { supplierId } : undefined })).data,
   });
 
-  if (isLoading || !data) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !data) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">

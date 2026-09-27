@@ -1,16 +1,15 @@
 import type { Request, Response } from "express";
-import { and, eq, sql, ilike, type SQLWrapper } from "drizzle-orm";
+import { and, eq, sql, ilike, or, type SQLWrapper } from "drizzle-orm";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { workOrders } from "../../drizzle/schema/workOrders.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
-import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { audits } from "../../drizzle/schema/audits.js";
 import { trainingCourses } from "../../drizzle/schema/training.js";
 import { equipment } from "../../drizzle/schema/calibration.js";
 import { rma } from "../../drizzle/schema/rma.js";
 import { eightD } from "../../drizzle/schema/eightD.js";
-import { complaints } from "../../drizzle/schema/complaints.js";
+import { documents } from "../../drizzle/schema/documents.js";
 import { changeRequests } from "../../drizzle/schema/change.js";
 import { riskAssessments } from "../../drizzle/schema/risk.js";
 import { ppapPackages } from "../../drizzle/schema/ppap.js";
@@ -21,7 +20,7 @@ import type { Db } from "../../lib/requestDb.js";
 const RESULTS_PER_TYPE = 5;
 
 export interface SearchResult {
-  type: "NCR" | "CAPA" | "PO" | "WO" | "Audit" | "Supplier" | "Item" | "Training" | "Calibration" | "RMA" | "8D" | "Complaint" | "Change" | "Risk" | "PPAP";
+  type: "NCR" | "CAPA" | "WO" | "Audit" | "Supplier" | "Training" | "Calibration" | "RMA" | "8D" | "Document" | "Change" | "Risk" | "PPAP";
   id: number;
   label: string;
   path: string;
@@ -52,8 +51,9 @@ function idPrefix(column: SQLWrapper, digits: string) {
 
 /**
  * GET /search?q=... — read-only across every module's own real table, no
- * new table of its own. Covers NCR/CAPA/PO/Work Order/Audit/Supplier/
- * Item/Training/Calibration/RMA/8D/Complaint/Change/Risk/PPAP.
+ * new table of its own. Numeric ids for records, plus document title /
+ * revision and equipment name / serial. Complaint, inventory, and purchase
+ * orders are not returned.
  */
 export const searchHandler = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db! as Db;
@@ -95,11 +95,6 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
     for (const r of rows) results.push({ type: "8D", id: r.id, label: `8D #${r.id}${r.ncrId ? ` (NCR #${r.ncrId})` : ""}`, path: `/8d/${r.id}` });
   }
 
-  if (digits && await canRead(db, user, "complaints")) {
-    const rows = await db.select().from(complaints).where(and(idPrefix(complaints.id, digits))).limit(RESULTS_PER_TYPE);
-    for (const r of rows) results.push({ type: "Complaint", id: r.id, label: `Complaint #${r.id}${r.customerName ? ` — ${r.customerName}` : ""}`, path: `/complaints/${r.id}` });
-  }
-
   if (digits && await canRead(db, user, "change")) {
     const rows = await db.select().from(changeRequests).where(and(idPrefix(changeRequests.id, digits))).limit(RESULTS_PER_TYPE);
     for (const r of rows) results.push({ type: "Change", id: r.id, label: `Change #${r.id} — ${r.title}`, path: `/change/${r.id}` });
@@ -121,21 +116,33 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
     for (const r of rows) results.push({ type: "Supplier", id: r.id, label: `Supplier #${r.id} — ${r.name}`, path: `/suppliers/${r.id}` });
   }
 
-  if (await canRead(db, user, "inventory")) {
-    // Inventory Item # is realistically the SKU, not the bare serial id — search matches either.
-    const conditions = digits ? idPrefix(inventoryItems.id, digits) : ilike(inventoryItems.sku, `${q}%`);
-    const rows = await db.select().from(inventoryItems).where(and(conditions)).limit(RESULTS_PER_TYPE);
-    for (const r of rows) results.push({ type: "Item", id: r.id, label: `${r.sku}${r.description ? ` — ${r.description}` : ""}`, path: `/inventory/${r.id}` });
+  if (await canRead(db, user, "documents")) {
+    const textMatch = or(ilike(documents.title, `%${q}%`), ilike(documents.revisionCode, `%${q}%`));
+    const conditions = digits ? or(idPrefix(documents.id, digits), textMatch) : textMatch;
+    const rows = await db
+      .select()
+      .from(documents)
+      .where(and(eq(documents.isDeleted, false), conditions))
+      .limit(RESULTS_PER_TYPE);
+    for (const r of rows) {
+      const revision = r.revisionCode ? ` ${r.revisionCode}` : "";
+      results.push({ type: "Document", id: r.id, label: `Document #${r.id}${revision} — ${r.title}`, path: `/documents/${r.id}` });
+    }
   }
 
   if (digits) {
     // Training: no ResourceKey in PERMISSION_MATRIX at all — read-by-everyone, same as the real /training routes (no department gate there either).
     const trainingRows = await db.select().from(trainingCourses).where(and(idPrefix(trainingCourses.id, digits))).limit(RESULTS_PER_TYPE);
     for (const r of trainingRows) results.push({ type: "Training", id: r.id, label: `Course #${r.id} — ${r.title}`, path: `/training/${r.id}` });
+  }
 
-    if (await canRead(db, user, "calibration")) {
-      const equipmentRows = await db.select().from(equipment).where(and(idPrefix(equipment.id, digits))).limit(RESULTS_PER_TYPE);
-      for (const r of equipmentRows) results.push({ type: "Calibration", id: r.id, label: `${r.name} (#${r.id})`, path: `/calibration/${r.id}` });
+  if (await canRead(db, user, "calibration")) {
+    const textMatch = or(ilike(equipment.name, `%${q}%`), ilike(equipment.serialNumber, `%${q}%`));
+    const conditions = digits ? or(idPrefix(equipment.id, digits), textMatch) : textMatch;
+    const equipmentRows = await db.select().from(equipment).where(and(conditions)).limit(RESULTS_PER_TYPE);
+    for (const r of equipmentRows) {
+      const serial = r.serialNumber ? ` · ${r.serialNumber}` : "";
+      results.push({ type: "Calibration", id: r.id, label: `${r.name}${serial} (#${r.id})`, path: `/calibration/${r.id}` });
     }
   }
 

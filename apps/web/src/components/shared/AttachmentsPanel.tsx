@@ -12,6 +12,7 @@ import { canPreview, previewKind, saveBytes } from "../../lib/filePreview";
 import { FileDropZone } from "./FileDropZone";
 import { usePageFileDrop } from "../../hooks/usePageFileDrop";
 import { UploadCloud } from "lucide-react";
+import { LoadingPlaceholder } from "./LoadingPlaceholder";
 
 function formatSize(bytes: number | null): string {
   if (bytes === null) return "";
@@ -131,7 +132,7 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
         />
       </div>
 
-      {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {isLoading && <LoadingPlaceholder />}
       {!isLoading && files.length === 0 && <p className="text-sm text-muted-foreground">No files attached yet.</p>}
 
       <ul className="flex flex-col gap-1.5">

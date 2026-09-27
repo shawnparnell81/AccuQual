@@ -7,6 +7,7 @@ import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { FormTemplateStatus } from "../../api/types";
 import { FileDropZone } from "../../components/shared/FileDropZone";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 // The 9 form types this page is explicitly meant to manage (see the Company
 // Template Upload UI review) — a subset of forms.validation.ts's full
@@ -118,7 +119,7 @@ function TemplatesTable() {
   const { data: templates = [], isLoading } = useTemplates();
   const byType = new Map(templates.map((t) => [t.formType, t]));
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border">

@@ -4,6 +4,7 @@ import { apiClient } from "../../api/client";
 import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { SystemHealthReport } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 function useSystemHealth() {
   return useQuery<SystemHealthReport>({
@@ -155,7 +156,7 @@ export function AdminSystemHealthPage() {
       </div>
       <AdminOnlyGuard>
         {isLoading || !report ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <LoadingPlaceholder />
         ) : (
           <>
             <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-4">

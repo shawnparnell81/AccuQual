@@ -8,6 +8,7 @@ import { useVersioning, useVersionPayload, type VersionFull } from "../../api/ve
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 // Both documents are a single record per organization (id 1) — the same singleton the generic forms engine has always used.
 const RECORD_ID = 1;
@@ -149,7 +150,7 @@ export function ControlledDocumentPage({ basePath, formType, title, noun, descri
           )}
           <div className="rounded-lg border border-border bg-card p-4">
             {noVersions || !shown ? (
-              <p className="text-sm text-muted-foreground">{v.current.isLoading ? "Loading…" : "Nothing here yet."}</p>
+              v.current.isLoading ? <LoadingPlaceholder /> : <p className="text-sm text-muted-foreground">Nothing here yet.</p>
             ) : layout ? (
               <GenericFormRenderer layout={layout} data={editable ? values : (shown.payload ?? {})} onChange={change} readOnly={!editable} />
             ) : (

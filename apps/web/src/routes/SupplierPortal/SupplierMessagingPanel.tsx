@@ -6,6 +6,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import type { SupplierMessage } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 interface SupplierMessageDraft {
   subject: string;
@@ -98,7 +99,7 @@ export function SupplierMessagingPanel({ supplierId }: { supplierId?: number }) 
         )}
       </div>
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadingPlaceholder />
       ) : messages.length === 0 ? (
         <p className="text-sm text-muted-foreground">No messages yet — start the conversation below.</p>
       ) : (

@@ -6,6 +6,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { TextField, TextAreaField } from "../../components/forms/Field";
 import type { CompanyBranding } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 function useBranding() {
   return useQuery<CompanyBranding>({ queryKey: ["company/branding"], queryFn: async () => (await apiClient.get("/company/branding")).data });
@@ -70,7 +71,7 @@ function BrandingForm() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save branding.")),
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
 
   return (
     <form

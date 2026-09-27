@@ -44,7 +44,7 @@ export function CapaBoard({ capas, canEdit }: { capas: Capa[]; canEdit: boolean 
   }
 
   function requestMove(capa: Capa, to: string) {
-    const name = `Fix #${capa.id}`;
+    const name = `CAPA #${capa.id}`;
     if (to === "in_progress") setStep({ title: `Start ${name}?`, description: "Mark work on this fix as started.", submitLabel: "Start work", run: () => post(capa, "start", undefined, `${name} started.`) });
     else if (to === "verifying")
       setStep({ title: `Check ${name}`, description: "Record how you confirmed the fix actually worked.", fieldLabel: "How was it verified?", minLength: 10, submitLabel: "Save and move to checking", run: (t) => post(capa, "verify", { verification: t }, `${name} is being checked.`) });
@@ -63,7 +63,7 @@ export function CapaBoard({ capas, canEdit }: { capas: Capa[]; canEdit: boolean 
         onMove={(c, to) => requestMove(c, to)}
         rejectMessage={(c, to) => {
           const next = NEXT[c.status];
-          return next ? `Fixes move one step at a time. #${c.id} goes from ${statusPhrase(c.status)} to ${statusPhrase(next)} first — drop it there.` : `#${c.id} is closed and can't move (${statusPhrase(to)}).`;
+          return next ? `CAPAs move one step at a time. #${c.id} goes from ${statusPhrase(c.status)} to ${statusPhrase(next)} first — drop it there.` : `#${c.id} is closed and can't move (${statusPhrase(to)}).`;
         }}
         people={people.map((person) => ({ id: person.id, name: person.name?.trim() || person.email }))}
         assignedTo={(c) => c.ownerId}
@@ -71,14 +71,14 @@ export function CapaBoard({ capas, canEdit }: { capas: Capa[]; canEdit: boolean 
           apiClient
             .patch(`/capa/${c.id}`, { ownerId: personId })
             .then(() => qc.invalidateQueries({ queryKey: ["capa"] }))
-            .then(() => toast.success(`Fix #${c.id} assigned to ${personName}.`))
+            .then(() => toast.success(`CAPA #${c.id} assigned to ${personName}.`))
             .catch((err) => toast.error(extractErrorMessage(err, "Couldn't assign this fix.")));
         }}
         renderCard={(c) => (
           <div onClick={() => navigate(`/capa/${c.id}`)} className="cursor-pointer">
             <div className="flex items-start justify-between gap-2">
               <span className="text-xs font-semibold text-muted-foreground">#{c.id}</span>
-              <span className="text-xs text-muted-foreground">{c.ncrId ? `Issue #${c.ncrId}` : "Not linked"}</span>
+              <span className="text-xs text-muted-foreground">{c.ncrId ? `NCR #${c.ncrId}` : "Not linked"}</span>
             </div>
             <p className="mt-1 line-clamp-2 text-sm font-medium leading-snug">{c.rootCause?.trim() || c.actionPlan?.trim() || "Corrective action"}</p>
             <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">

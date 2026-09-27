@@ -13,12 +13,12 @@ export interface NotificationEntry {
 }
 
 /** The in-app notification bell — polled the same way TopNav's own nav-KPI badges are (60s interval, 30s stale). */
-export function useNotifications() {
+export function useNotifications(limit = 30) {
   const qc = useQueryClient();
 
-  const { data } = useQuery<{ notifications: NotificationEntry[]; unreadCount: number }>({
-    queryKey: ["notifications/me"],
-    queryFn: async () => (await apiClient.get("/notifications/me")).data,
+  const { data, isLoading } = useQuery<{ notifications: NotificationEntry[]; unreadCount: number }>({
+    queryKey: ["notifications/me", limit],
+    queryFn: async () => (await apiClient.get("/notifications/me", { params: { limit } })).data,
     refetchInterval: 60_000,
     staleTime: 30_000,
   });
@@ -28,5 +28,17 @@ export function useNotifications() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications/me"] }),
   });
 
-  return { notifications: data?.notifications ?? [], unreadCount: data?.unreadCount ?? 0, markRead: markRead.mutate };
+  const markAllRead = useMutation({
+    mutationFn: async () => apiClient.post("/notifications/me/read-all"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications/me"] }),
+  });
+
+  return {
+    notifications: data?.notifications ?? [],
+    unreadCount: data?.unreadCount ?? 0,
+    isLoading,
+    markRead: markRead.mutate,
+    markAllRead: markAllRead.mutate,
+    markingAll: markAllRead.isPending,
+  };
 }

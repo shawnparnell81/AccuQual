@@ -12,6 +12,7 @@ import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPan
 import { SelectField } from "../../components/forms/Field";
 import { RmaLogFormRenderer } from "./RmaLogFormRenderer";
 import type { RmaLogRecord, RmaLogStatus, WarrantyClaim } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const rmaLogHooks = createResourceHooks<RmaLogRecord>("rma-log");
 const warrantyHooks = createResourceHooks<WarrantyClaim>("warranty/claims");
@@ -57,7 +58,7 @@ export function RmaLogDetailPage() {
   }, [record]);
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !record) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !record) return <LoadingPlaceholder />;
 
   const isClosed = record.status === "closed";
   const isReadOnly = isClosed || !canWrite;

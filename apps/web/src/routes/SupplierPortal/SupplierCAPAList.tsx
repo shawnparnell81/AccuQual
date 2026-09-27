@@ -4,6 +4,7 @@ import { apiClient } from "../../api/client";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { useCurrentUser } from "../../hooks/useAuth";
 import type { Capa } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 /** Same derived-visibility approach as SupplierNCRList — see supplierPortal.controller.ts's supplierCapaListHandler. */
 export function SupplierCAPAList({ supplierId }: { supplierId?: number }) {
@@ -14,7 +15,7 @@ export function SupplierCAPAList({ supplierId }: { supplierId?: number }) {
     queryFn: async () => (await apiClient.get("/supplier-portal/capa/list", { params: supplierId ? { supplierId } : undefined })).data,
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">No CAPAs linked to this supplier yet.</p>;
 
   return (

@@ -11,6 +11,7 @@ import { TrendLineChart, type TrendDatum } from "../../components/charts/TrendLi
 import { RiskHeatmap } from "../../components/charts/RiskHeatmap";
 import { ReportExportButtons } from "../../components/shared/ReportExportButtons";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 // ---------------------------------------------------------------------------
 // Types — local to this page, matching reporting.service.ts's real response
@@ -373,8 +374,8 @@ function ScheduledReportsSection() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td className="p-3 text-muted-foreground" colSpan={7}>
-                  Loading…
+                <td className="p-3" colSpan={7}>
+                  <LoadingPlaceholder />
                 </td>
               </tr>
             ) : schedules.length === 0 ? (

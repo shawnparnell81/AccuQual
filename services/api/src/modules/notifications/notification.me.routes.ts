@@ -4,7 +4,7 @@ import { withDb } from "../../lib/requestDb.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import type { Db } from "../../lib/requestDb.js";
-import { listMyNotifications, markNotificationRead } from "./notification.service.js";
+import { getMyNotificationPreferences, listMyNotifications, markAllNotificationsRead, markNotificationRead, updateMyNotificationPreferences } from "./notification.service.js";
 
 // Self-service only — no requireRole here. Deliberately its own router,
 // mounted at /notifications BEFORE notification.routes.ts's admin-only
@@ -21,8 +21,39 @@ notificationsMeRouter.use(requireAuth, withDb);
 notificationsMeRouter.get(
   "/me",
   asyncHandler(async (req, res) => {
-    const { rows, unreadCount } = await listMyNotifications(req.db! as Db, req.user!.id);
+    const requested = Number(req.query.limit ?? 30);
+    const limit = Number.isInteger(requested) ? Math.min(200, Math.max(1, requested)) : 30;
+    const { rows, unreadCount } = await listMyNotifications(req.db! as Db, req.user!.id, limit);
     res.json({ notifications: rows, unreadCount });
+  })
+);
+
+notificationsMeRouter.get(
+  "/me/preferences",
+  asyncHandler(async (req, res) => {
+    res.json(await getMyNotificationPreferences(req.db! as Db, req.user!.id));
+  })
+);
+
+notificationsMeRouter.patch(
+  "/me/preferences",
+  asyncHandler(async (req, res) => {
+    const body = req.body ?? {};
+    if (body.inApp !== undefined && typeof body.inApp !== "boolean") throw AppError.badRequest("inApp must be true or false");
+    if (body.email !== undefined && typeof body.email !== "boolean") throw AppError.badRequest("email must be true or false");
+    const next = await updateMyNotificationPreferences(req.db! as Db, req.user!.id, {
+      ...(typeof body.inApp === "boolean" ? { inApp: body.inApp } : {}),
+      ...(typeof body.email === "boolean" ? { email: body.email } : {}),
+    });
+    res.json(next);
+  })
+);
+
+notificationsMeRouter.post(
+  "/me/read-all",
+  asyncHandler(async (req, res) => {
+    const updated = await markAllNotificationsRead(req.db! as Db, req.user!.id);
+    res.json({ updated });
   })
 );
 

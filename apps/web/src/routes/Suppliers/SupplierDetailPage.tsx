@@ -15,6 +15,7 @@ import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
 import { useToast } from "../../components/shared/ToastProvider";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const supplierHooks = createResourceHooks<Supplier>("suppliers");
 
@@ -87,7 +88,7 @@ export function SupplierDetailPage() {
   const removeAction = useWorkflowAction("suppliers", "remove", { successMessage: "Supplier disqualified.", invalidateKeys: historyKey });
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !supplier) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !supplier) return <LoadingPlaceholder />;
 
   // Disqualification is terminal on the backend (supplier.controller.ts) —
   // every other action 400s once here, so none of them are worth showing.
@@ -182,7 +183,7 @@ export function SupplierDetailPage() {
           </div>
         </div>
         {!performance ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <LoadingPlaceholder />
         ) : performance.itemCount === 0 ? (
           <p className="text-sm text-muted-foreground">
             No inventory items are linked to this supplier yet — set it as an item's supplier from that item's detail page to start
@@ -219,7 +220,7 @@ export function SupplierDetailPage() {
           "AI Supplier Risk Prediction" above (that one is LLM-generated). Weights configurable in Settings → Supplier Risk.
         </p>
         {riskLoading || !riskScore ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <LoadingPlaceholder />
         ) : (
           <>
             <div className="mb-4 flex items-center gap-3">
@@ -242,7 +243,7 @@ export function SupplierDetailPage() {
       <div className="rounded-lg border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-medium">Costing</h2>
         {costing.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <LoadingPlaceholder />
         ) : !costing.entry ? (
           <p className="text-sm text-muted-foreground">
             No costed, linked inventory items yet — link an item to this supplier and set its unit cost from that item's detail page.

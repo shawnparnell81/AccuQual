@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -12,6 +12,8 @@ import type { Ncr, Capa } from "../../api/types";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { READ_ONLY_REASON } from "../../lib/opsLanguage";
+import { SaveStatus } from "../../components/shared/SaveStatus";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 interface EightDReport {
   id: number;
@@ -59,6 +61,7 @@ export function EightDDetailPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["8d", reportId] }),
   });
   const [draftByStep, setDraftByStep] = useState<Record<string, string>>({});
+  const updateReport = eightDHooks.useUpdate();
   const { data: linkedNcr } = ncrHooks.useOne(report?.ncrId ?? undefined);
   // Same client-filtered pattern the NCR workspace's own Linked Records
   // panel already uses (GET /capa has no ?ncrId= filter) — fine at this
@@ -66,8 +69,19 @@ export function EightDDetailPage() {
   const { data: allCapas = [] } = capaHooks.useList();
   const linkedCapa = allCapas.find((c) => c.ncrId === report?.ncrId);
 
+  const draftDirty = !!report && Object.entries(draftByStep).some(([key, value]) => value !== (report.data?.[key] ?? ""));
+
+  const saveDraft = updateReport.mutate;
+  useEffect(() => {
+    if (!canEdit || !report || !draftDirty) return;
+    const timer = setTimeout(() => {
+      saveDraft({ id: reportId, data: { ...(report.data ?? {}), ...draftByStep } });
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [canEdit, draftByStep, draftDirty, report, reportId, saveDraft]);
+
   if (isError) return <p className="text-sm text-destructive">Couldn't load this 8D report. Refresh the page and try again.</p>;
-  if (isLoading || !report) return <p className="text-sm text-muted-foreground">Loading this 8D report…</p>;
+  if (isLoading || !report) return <LoadingPlaceholder />;
 
   const step = STEPS[report.currentStep - 1];
 
@@ -75,9 +89,9 @@ export function EightDDetailPage() {
     <div className="flex flex-col gap-4">
       <RecordCrumbs
         items={[
-          { label: "Issues", to: "/ncr" },
-          ...(report.ncrId ? [{ label: `Issue #${report.ncrId}`, to: `/ncr/${report.ncrId}` }] : []),
-          ...(linkedCapa ? [{ label: `Fix #${linkedCapa.id}`, to: `/capa/${linkedCapa.id}` }] : []),
+          { label: "NCR", to: "/ncr" },
+          ...(report.ncrId ? [{ label: `NCR #${report.ncrId}`, to: `/ncr/${report.ncrId}` }] : []),
+          ...(linkedCapa ? [{ label: `CAPA #${linkedCapa.id}`, to: `/capa/${linkedCapa.id}` }] : []),
           { label: `8D #${report.id}` },
         ]}
       />
@@ -89,16 +103,16 @@ export function EightDDetailPage() {
             {report.ncrId ? (
               <>
                 {" "}
-                · from <Link to={`/ncr/${report.ncrId}`} className="text-primary hover:underline">issue #{report.ncrId}</Link>
+                · from <Link to={`/ncr/${report.ncrId}`} className="text-primary hover:underline">NCR #{report.ncrId}</Link>
               </>
             ) : null}
             {linkedCapa ? (
               <>
                 {" "}
-                · <Link to={`/capa/${linkedCapa.id}`} className="text-primary hover:underline">fix #{linkedCapa.id}</Link>
+                · <Link to={`/capa/${linkedCapa.id}`} className="text-primary hover:underline">CAPA #{linkedCapa.id}</Link>
               </>
             ) : report.ncrId ? (
-              <> · no fix linked yet</>
+              <> · no CAPA linked yet</>
             ) : null}
           </p>
         </div>
@@ -129,13 +143,14 @@ export function EightDDetailPage() {
               )}
             />
           )}
+          <SaveStatus saving={updateReport.isPending} unsaved={draftDirty && !updateReport.isPending} />
           <OpenFormButton formType="eight_d" entityId={report.id} title={`8D Report #${report.id} Form`} />
           <PrintFormButton formType="eight_d" entityId={report.id} />
         </div>
       </div>
       {!canEdit && <p className="text-sm text-muted-foreground">{READ_ONLY_REASON}</p>}
       {!report.ncrId && (
-        <p className="text-sm text-muted-foreground">This report isn't tied to an issue. Link it from the issue so the 8D, the fix, and the check stay one story.</p>
+        <p className="text-sm text-muted-foreground">This report isn't tied to an NCR. Link it from the NCR so the 8D, the CAPA, and the check stay one story.</p>
       )}
 
       <div className="flex flex-col gap-3">

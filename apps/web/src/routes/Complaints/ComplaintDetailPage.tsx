@@ -10,6 +10,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { useWorkflowAction, useWorkflowUpdate } from "../../hooks/useWorkflowAction";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 interface Complaint {
   id: number;
@@ -57,7 +58,7 @@ export function ComplaintDetailPage() {
   }, [complaint]);
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !complaint) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !complaint) return <LoadingPlaceholder />;
 
   const closed = complaint.status === "closed";
   const set = (key: keyof typeof fields) => (e: { target: { value: string } }) => setFields((f) => ({ ...f, [key]: e.target.value }));

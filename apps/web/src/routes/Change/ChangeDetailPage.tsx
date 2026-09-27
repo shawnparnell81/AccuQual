@@ -5,6 +5,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 interface ChangeRequest {
   id: number;
@@ -26,7 +27,7 @@ export function ChangeDetailPage() {
   const canEdit = useCanEditWorkflow("change");
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !change) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !change) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">

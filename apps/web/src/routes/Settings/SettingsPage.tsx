@@ -6,9 +6,9 @@ import { ThemeSettingsSection } from "./ThemeSettingsSection";
 import { MfaSettingsSection, TrustedDevicesSection } from "./MfaSettingsSection";
 import { ChangePasswordSection } from "./ChangePasswordSection";
 import { FeasibilitySettingsPanel } from "./FeasibilitySettingsPanel";
-import { ERPSyncSettingsPanel } from "./ERPSyncSettingsPanel";
+import { NotificationPreferencesSection } from "./NotificationPreferencesSection";
 
-const TABS = ["User Preferences", "Company", "Security", "Theme", "Notifications", "Email Alerts", "ERP Integration", "Feasibility", "Navigation"] as const;
+const TABS = ["User Preferences", "Company", "Security", "Theme", "Notifications", "Email Alerts", "Feasibility", "Navigation"] as const;
 type Tab = (typeof TABS)[number];
 
 const COMPANY_LINKS = [
@@ -39,28 +39,9 @@ function CompanySettingsLinks() {
   );
 }
 
-/** A section of this page with nothing behind it yet — shown plainly rather than as a working-looking toggle that does nothing. */
-function NotAvailable({ what }: { what: string }) {
-  return (
-    <div className="rounded-lg border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">
-      {what} isn't available yet — there's no {what.toLowerCase()} system built into AccuQual to configure. This section is a placeholder
-      until that exists, rather than a control that would silently do nothing.
-    </div>
-  );
-}
-
 /**
- * General app settings — distinct from /settings/navigation ("Customize
- * Navigation"), which is a real, separate, already-shipped feature for
- * hiding department dropdowns, not a bug and not replaced here. That page
- * is folded in as this page's "Navigation" tab so there's one Settings
- * entry point instead of two unrelated ones; its own URL still works.
- *
- * Every tab here is either real (backed by an existing endpoint —
- * Security & Roles uses GET/POST/PATCH/DELETE /users and GET/POST/PATCH
- * /roles, both real and previously unused by any frontend page) or an
- * explicit "not available" placeholder — nothing here is a toggle that
- * looks functional but silently does nothing.
+ * General app settings. Notifications and email alerts are real per-user
+ * switches. Email delivery itself is the company's mail connection.
  */
 export function SettingsPage() {
   const [tab, setTab] = useState<Tab>("User Preferences");
@@ -127,9 +108,8 @@ export function SettingsPage() {
       )}
       {tab === "Theme" && <ThemeSettingsSection />}
 
-      {tab === "Notifications" && <NotAvailable what="Notifications" />}
-      {tab === "Email Alerts" && <NotAvailable what="Email delivery" />}
-      {tab === "ERP Integration" && <ERPSyncSettingsPanel />}
+      {tab === "Notifications" && <NotificationPreferencesSection mode="inApp" />}
+      {tab === "Email Alerts" && <NotificationPreferencesSection mode="email" />}
       {tab === "Feasibility" && <FeasibilitySettingsPanel />}
 
       {tab === "Navigation" && <NavigationSettingsPage />}

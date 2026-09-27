@@ -17,6 +17,7 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const auditHooks = createResourceHooks<Audit>("audits");
 
@@ -80,7 +81,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
   }
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !audit) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !audit) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">

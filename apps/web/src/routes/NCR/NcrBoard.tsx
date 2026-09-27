@@ -47,7 +47,7 @@ export function NcrBoard({ ncrs, canEdit }: { ncrs: Ncr[]; canEdit: boolean }) {
   }
 
   function requestMove(ncr: Ncr, to: string) {
-    const name = `Issue #${ncr.id}`;
+    const name = `NCR #${ncr.id}`;
     if (to === "contained")
       setStep({ title: `Contain ${name}`, description: "Describe what you did to stop the problem from spreading. This is what moves it to Contained.", fieldLabel: "Containment", submitLabel: "Mark contained", run: (t) => post(ncr, "containment", { containment: t }, `${name} contained.`) });
     else if (to === "investigating")
@@ -71,7 +71,7 @@ export function NcrBoard({ ncrs, canEdit }: { ncrs: Ncr[]; canEdit: boolean }) {
         rejectMessage={(n, to) => {
           const next = NEXT[n.status];
           return next
-            ? `Issues move one step at a time. #${n.id} goes from ${statusPhrase(n.status)} to ${statusPhrase(next)} first — drop it there.`
+            ? `NCRs move one step at a time. #${n.id} goes from ${statusPhrase(n.status)} to ${statusPhrase(next)} first — drop it there.`
             : `#${n.id} is closed and can't move (${statusPhrase(to)}).`;
         }}
         people={people.map((person) => ({ id: person.id, name: person.name?.trim() || person.email }))}
@@ -80,8 +80,8 @@ export function NcrBoard({ ncrs, canEdit }: { ncrs: Ncr[]; canEdit: boolean }) {
           apiClient
             .post(`/ncr/${n.id}/assign`, { assignedTo: personId })
             .then(() => qc.invalidateQueries({ queryKey: ["ncr"] }))
-            .then(() => toast.success(`Issue #${n.id} assigned to ${personName}.`))
-            .catch((err) => toast.error(extractErrorMessage(err, "Couldn't assign this issue.")));
+            .then(() => toast.success(`NCR #${n.id} assigned to ${personName}.`))
+            .catch((err) => toast.error(extractErrorMessage(err, "Couldn't assign this NCR.")));
         }}
         renderCard={(n) => (
           <div onClick={() => navigate(`/ncr/${n.id}`)} className="cursor-pointer">

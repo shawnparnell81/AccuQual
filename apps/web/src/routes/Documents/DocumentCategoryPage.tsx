@@ -12,6 +12,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { previewKind, saveBytes } from "../../lib/filePreview";
 import { formatDate } from "../../lib/dates";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 /**
  * A single document folder (Drawings, Master Tool List, Shipping, and the other
@@ -137,7 +138,7 @@ export function DocumentCategoryPage() {
         </div>
       </div>
 
-      {documents.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {documents.isLoading && <LoadingPlaceholder />}
       {documents.isError && <p className="text-sm text-destructive">Couldn't load this folder. Refresh the page and try again.</p>}
       {!documents.isLoading && !documents.isError && rows.length === 0 && (
         <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No files in this folder yet. Use Upload to add one.</div>

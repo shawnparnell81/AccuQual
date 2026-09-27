@@ -460,9 +460,11 @@ a.kpi-tile:hover,
 @keyframes page-in {
   from {
     opacity: 0;
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
+    transform: none;
   }
 }
 @keyframes shimmer {
@@ -786,6 +788,18 @@ input[type="radio"] {
   cursor: not-allowed;
   box-shadow: none;
 }
+.aq-icon-btn:focus-visible,
+.aq-nav-link:focus-visible,
+.aq-nav-folder-link:focus-visible,
+.aq-nav-chevron-btn:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+.aq-only-sm {
+  display: none;
+}
 .aq-dotn {
   position: absolute;
   top: -4px;
@@ -1089,12 +1103,11 @@ body.side-collapsed .aq-nav-folder-link {
 }
 @media (max-width: 720px) {
   :root {
-    --top-h: 108px;
+    --top-h: 62px;
   }
   .aq-topbar {
-    flex-wrap: wrap;
-    align-content: center;
-    row-gap: 8px;
+    flex-wrap: nowrap;
+    align-items: center;
     height: var(--top-h);
     padding: 0 10px;
     gap: 6px;
@@ -1104,20 +1117,18 @@ body.side-collapsed .aq-nav-folder-link {
   .aq-brand .aq-qms {
     display: none;
   }
-  .aq-top-tools {
-    order: 5;
-    width: 100%;
-    margin-left: 0;
-    gap: 5px;
+  .aq-only-sm {
+    display: inline-grid;
   }
-  .aq-top-tools .aq-sel {
-    flex: 1;
+  .aq-top-tools {
+    width: auto;
+    margin-left: auto;
+    gap: 5px;
     min-width: 0;
   }
-  .aq-top-tools .aq-sel select,
+  .aq-top-tools .aq-sel,
   .aq-top-tools .aq-select {
-    max-width: none;
-    width: 100%;
+    max-width: 7.5rem;
   }
   .aq-icon-btn {
     width: 34px;

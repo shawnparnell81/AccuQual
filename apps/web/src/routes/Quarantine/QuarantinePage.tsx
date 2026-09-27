@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { formatDate } from "../../lib/dates";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 export interface QuarantineItemRow {
   id: number;
@@ -61,7 +62,7 @@ export function QuarantinePage() {
         ))}
       </div>
 
-      {query.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {query.isLoading && <LoadingPlaceholder />}
       {query.isError && <p className="text-sm text-destructive">Couldn't load quarantined items. Refresh the page and try again.</p>}
       {!query.isLoading && !query.isError && rows.length === 0 && (
         <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">

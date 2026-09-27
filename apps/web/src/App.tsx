@@ -44,7 +44,8 @@ import { QualityInspectionReportsPage } from "./routes/QualityInspectionReports/
 import { QualityInspectionReportDetailPage } from "./routes/QualityInspectionReports/QualityInspectionReportDetailPage";
 import { PpapListPage } from "./routes/Ppap/PpapListPage";
 import { PpapDetailPage } from "./routes/Ppap/PpapDetailPage";
-import { ProductionLogsPage } from "./routes/Production/ProductionLogsPage";
+import { NotificationsPage } from "./routes/Notifications/NotificationsPage";
+import { RetiredModulePage } from "./routes/Retired/RetiredModulePage";
 import { SuppliersPage } from "./routes/Suppliers/SuppliersPage";
 import { SupplierDetailPage } from "./routes/Suppliers/SupplierDetailPage";
 import { CalibrationPage } from "./routes/Calibration/CalibrationPage";
@@ -60,26 +61,12 @@ import { DigitalTwinPage } from "./routes/DigitalTwin/DigitalTwinPage";
 import { ReportingHubPage } from "./routes/Reporting/ReportingHubPage";
 import { NavigationSettingsPage } from "./routes/Settings/NavigationSettingsPage";
 import { SettingsPage } from "./routes/Settings/SettingsPage";
-import { InventoryListPage } from "./routes/Inventory/InventoryListPage";
-import { InventoryDetailPage } from "./routes/Inventory/InventoryDetailPage";
-import { InventoryAlertsPage } from "./routes/Inventory/InventoryAlertsPage";
-import { InventoryLotsPage } from "./routes/Inventory/InventoryLotsPage";
-import { InventoryLotDetailPage } from "./routes/Inventory/InventoryLotDetailPage";
-import { LotLabelPrint } from "./routes/Inventory/LotLabelPrint";
-import { RmaListPage } from "./routes/Rma/RmaListPage";
 import { RmaDetailPage } from "./routes/Rma/RmaDetailPage";
 import { WarrantyClaimsList } from "./routes/Warranty/WarrantyClaimsList";
 import { WarrantyClaimDetail } from "./routes/Warranty/WarrantyClaimDetail";
 import { WarrantyDashboard } from "./routes/Warranty/WarrantyDashboard";
 import { CrarListPage } from "./routes/Crar/CrarListPage";
 import { CrarDetailPage } from "./routes/Crar/CrarDetailPage";
-import { RmaActivityLogPage } from "./routes/RmaActivityLog/RmaActivityLogPage";
-import { RmaLogListPage } from "./routes/RmaLog/RmaLogListPage";
-import { RmaLogDetailPage } from "./routes/RmaLog/RmaLogDetailPage";
-import { ErpPresetsListPage } from "./routes/Erp/ErpPresetsListPage";
-import { ErpSyncErrorsPage } from "./routes/Erp/ErpSyncErrorsPage";
-import { ErpPresetEditorPage } from "./routes/Erp/ErpPresetEditorPage";
-import { WorkOrderListPage } from "./routes/WorkOrders/WorkOrderListPage";
 import { WorkOrderDetailPage } from "./routes/WorkOrders/WorkOrderDetailPage";
 import { AdminCompanyBrandingPage } from "./routes/Admin/AdminCompanyBrandingPage";
 import { AdminCompanyTemplatesPage } from "./routes/Admin/AdminCompanyTemplatesPage";
@@ -176,7 +163,7 @@ export function App() {
           <Route path="/quality-inspection-reports/:id" element={<QualityInspectionReportDetailPage />} />
           <Route path="/ppap" element={<PpapListPage />} />
           <Route path="/ppap/:id" element={<PpapDetailPage />} />
-          <Route path="/production-logs" element={<ProductionLogsPage />} />
+          <Route path="/production-logs" element={<RetiredModulePage name="Production" />} />
           <Route path="/management-system" element={<ManagementSystemPage />} />
           <Route
             path="/management-system/management-review"
@@ -195,32 +182,21 @@ export function App() {
           <Route path="/quarantine/:id" element={<QuarantineDetailPage />} />
           <Route path="/complaints" element={<Navigate to="/ncr" replace />} />
           <Route path="/complaints/:id" element={<Navigate to="/ncr" replace />} />
-          <Route path="/inventory" element={<InventoryListPage />} />
-          <Route path="/inventory/alerts" element={<InventoryAlertsPage />} />
-          <Route path="/inventory/lots" element={<InventoryLotsPage />} />
-          <Route path="/inventory/lots/:id" element={<InventoryLotDetailPage />} />
-          <Route path="/inventory/lots/:id/label" element={<LotLabelPrint />} />
-          <Route path="/inventory/:id" element={<InventoryDetailPage />} />
-          <Route path="/erp" element={<Navigate to="/" replace />} />
-          <Route path="/erp/new" element={<Navigate to="/" replace />} />
-          <Route path="/erp/requisitions" element={<Navigate to="/" replace />} />
-          <Route path="/erp/requisitions/:id" element={<Navigate to="/" replace />} />
-          <Route path="/erp/presets" element={<ErpPresetsListPage />} />
-          <Route path="/erp/presets/:id" element={<ErpPresetEditorPage />} />
-          <Route path="/erp/errors" element={<ErpSyncErrorsPage />} />
-          <Route path="/erp/:id" element={<Navigate to="/" replace />} />
-          <Route path="/rma" element={<RmaListPage />} />
+          <Route path="/inventory/*" element={<RetiredModulePage name="Inventory" />} />
+          <Route path="/erp/*" element={<RetiredModulePage name="ERP" />} />
+          <Route path="/erp" element={<RetiredModulePage name="ERP" />} />
+          <Route path="/rma" element={<RetiredModulePage name="RMA" />} />
           <Route path="/rma/:id" element={<RmaDetailPage />} />
           <Route path="/warranty" element={<WarrantyClaimsList />} />
           <Route path="/warranty/dashboard" element={<WarrantyDashboard />} />
           <Route path="/warranty/:id" element={<WarrantyClaimDetail />} />
           <Route path="/crar" element={<CrarListPage />} />
           <Route path="/crar/:id" element={<CrarDetailPage />} />
-          <Route path="/rma-activity-log" element={<RmaActivityLogPage />} />
-          <Route path="/rma-log" element={<RmaLogListPage />} />
-          <Route path="/rma-log/:id" element={<RmaLogDetailPage />} />
+          <Route path="/rma-activity-log" element={<RetiredModulePage name="RMA activity" />} />
+          <Route path="/rma-log/*" element={<RetiredModulePage name="RMA log" />} />
+          <Route path="/rma-log" element={<RetiredModulePage name="RMA log" />} />
           <Route path="/supplier-portal" element={<Navigate to="/suppliers" replace />} />
-          <Route path="/work-orders" element={<WorkOrderListPage />} />
+          <Route path="/work-orders" element={<RetiredModulePage name="Work orders" />} />
           <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
           <Route path="/onboarding" element={<Navigate to="/settings" replace />} />
 
@@ -256,6 +232,7 @@ export function App() {
           </Route>
 
           <Route path="/reporting" element={<ReportingHubPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
         </Route>
         </Route>
       </Route>

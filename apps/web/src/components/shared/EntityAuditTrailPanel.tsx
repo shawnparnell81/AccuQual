@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { formatDateTime } from "../../lib/dates";
+import { LoadingPlaceholder } from "./LoadingPlaceholder";
 
 interface AuditRow {
   id: number;
@@ -32,7 +33,7 @@ export function EntityAuditTrailPanel({ entityType, entityId, title = "Audit Tra
     <div className="rounded-lg border border-border bg-card p-4 print:hidden">
       <h3 className="mb-2 text-sm font-medium">{title}</h3>
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadingPlaceholder />
       ) : sorted.length === 0 ? (
         <p className="text-sm text-muted-foreground">No history yet.</p>
       ) : (

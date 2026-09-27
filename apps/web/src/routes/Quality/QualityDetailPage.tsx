@@ -9,6 +9,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { useWorkflowAction, useWorkflowUpdate } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 interface DiscrepancyInvestigation {
   id: number;
@@ -52,7 +53,7 @@ export function QualityDetailPage() {
   useEffect(() => setDisposition(discrepancy?.disposition ?? ""), [discrepancy?.disposition]);
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !discrepancy) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !discrepancy) return <LoadingPlaceholder />;
 
   const closed = discrepancy.status === "closed";
 

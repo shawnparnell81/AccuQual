@@ -9,6 +9,7 @@ import { SelectField } from "../../components/forms/Field";
 import { Modal } from "../../components/modals/Modal";
 import { BUCKET_CLASSES } from "../../components/tables/StatusBadge";
 import type { ErpConnectorPreset, ErpPresetModule, ErpPresetVendor } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const VENDOR_LABELS: Record<ErpPresetVendor, string> = { sap: "SAP", oracle: "Oracle", netsuite: "NetSuite", epicor: "Epicor", dynamics: "Microsoft Dynamics", custom: "Custom" };
 const MODULE_LABELS: Record<ErpPresetModule, string> = {
@@ -115,7 +116,7 @@ function ErpPresetsListPageBody() {
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadingPlaceholder />
       ) : byVendor.length === 0 ? (
         <p className="text-sm text-muted-foreground">No presets match these filters.</p>
       ) : (

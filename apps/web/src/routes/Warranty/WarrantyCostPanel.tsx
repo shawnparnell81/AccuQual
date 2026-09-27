@@ -5,6 +5,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { SelectField, TextField } from "../../components/forms/Field";
 import type { WarrantyClaimCost, WarrantyCostType } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const COST_TYPES: WarrantyCostType[] = ["parts", "labor", "shipping", "replacement_unit", "other"];
 
@@ -41,7 +42,7 @@ export function WarrantyCostPanel({ claimId, actualCost, canEdit }: { claimId: n
       </div>
 
       {isLoading ? (
-        <p className="mt-2 text-sm text-muted-foreground">Loading…</p>
+        <LoadingPlaceholder />
       ) : costs.length === 0 ? (
         <p className="mt-2 text-sm text-muted-foreground">No cost entries yet.</p>
       ) : (

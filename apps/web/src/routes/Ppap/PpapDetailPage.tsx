@@ -5,6 +5,7 @@ import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import type { PpapPackage } from "./PpapListPage";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const ppapHooks = createResourceHooks<PpapPackage>("ppap");
 
@@ -29,7 +30,7 @@ export function PpapDetailPage() {
   const { data: ppap, isLoading, isError } = ppapHooks.useOne(ppapId);
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !ppap) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !ppap) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">

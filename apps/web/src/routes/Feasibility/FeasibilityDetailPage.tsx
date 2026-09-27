@@ -10,6 +10,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { Modal } from "../../components/modals/Modal";
 import { FeasibilityReviewForm } from "./FeasibilityReviewForm";
 import type { FeasibilityReview } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const feasibilityHooks = createResourceHooks<FeasibilityReview>("feasibility");
 
@@ -29,7 +30,7 @@ export function FeasibilityDetailPage() {
   const deleteReview = feasibilityHooks.useDelete();
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !review) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !review) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">

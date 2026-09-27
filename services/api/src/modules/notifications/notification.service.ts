@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNull, sql } from "drizzle-orm";
 import nodemailer from "nodemailer";
 import type { Db } from "../../lib/requestDb.js";
 import { users } from "../../drizzle/schema/users.js";
@@ -214,9 +214,22 @@ export async function notifyRecipients(db: Db, recipients: string[], subject: st
   return notify(db, recipients, subject, body, relatedEntityType, relatedEntityId);
 }
 
+export type NotificationPreferences = { inApp: boolean; email: boolean };
+
+export function normalizeNotificationPreferences(raw: Partial<NotificationPreferences> | null | undefined): NotificationPreferences {
+  return { inApp: raw?.inApp !== false, email: raw?.email !== false };
+}
+
+async function emailAllowed(db: Db, recipient: string): Promise<boolean> {
+  const [row] = await db.select({ notificationPreferences: users.notificationPreferences }).from(users).where(eq(users.email, recipient));
+  if (!row) return true;
+  return normalizeNotificationPreferences(row.notificationPreferences).email;
+}
+
 async function notify(db: Db, recipients: string[], subject: string, body: string, relatedEntityType?: string, relatedEntityId?: number): Promise<number> {
   for (const recipient of recipients) {
-    const status = activeTransport ? await deliver(activeTransport, { to: recipient, subject, body }) : "logged_only";
+    const allowEmail = await emailAllowed(db, recipient);
+    const status = allowEmail && activeTransport ? await deliver(activeTransport, { to: recipient, subject, body }) : "logged_only";
     await db.insert(notificationLog).values({ channel: "email", recipient, subject, body, status, relatedEntityType, relatedEntityId });
   }
   return recipients.length;
@@ -287,14 +300,42 @@ async function ownEmail(db: Db, userId: number): Promise<string | null> {
 export async function listMyNotifications(db: Db, userId: number, limit = 30) {
   const email = await ownEmail(db, userId);
   if (!email) return { rows: [], unreadCount: 0 };
+  const [user] = await db.select({ notificationPreferences: users.notificationPreferences }).from(users).where(eq(users.id, userId));
+  if (!normalizeNotificationPreferences(user?.notificationPreferences).inApp) return { rows: [], unreadCount: 0 };
   const rows = await db
     .select()
     .from(notificationLog)
     .where(and(eq(notificationLog.recipient, email)))
     .orderBy(desc(notificationLog.createdAt))
     .limit(limit);
-  const unreadCount = rows.filter((r) => r.readAt === null).length;
-  return { rows, unreadCount };
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(notificationLog)
+    .where(and(eq(notificationLog.recipient, email), isNull(notificationLog.readAt)));
+  return { rows, unreadCount: Number(countRow?.count ?? 0) };
+}
+
+export async function getMyNotificationPreferences(db: Db, userId: number): Promise<NotificationPreferences> {
+  const [user] = await db.select({ notificationPreferences: users.notificationPreferences }).from(users).where(eq(users.id, userId));
+  return normalizeNotificationPreferences(user?.notificationPreferences);
+}
+
+export async function updateMyNotificationPreferences(db: Db, userId: number, patch: Partial<NotificationPreferences>): Promise<NotificationPreferences> {
+  const current = await getMyNotificationPreferences(db, userId);
+  const next = normalizeNotificationPreferences({ ...current, ...patch });
+  await db.update(users).set({ notificationPreferences: next, updatedAt: new Date() }).where(eq(users.id, userId));
+  return next;
+}
+
+export async function markAllNotificationsRead(db: Db, userId: number): Promise<number> {
+  const email = await ownEmail(db, userId);
+  if (!email) return 0;
+  const updated = await db
+    .update(notificationLog)
+    .set({ readAt: new Date() })
+    .where(and(eq(notificationLog.recipient, email), isNull(notificationLog.readAt)))
+    .returning({ id: notificationLog.id });
+  return updated.length;
 }
 
 /** Marks one notification read — ownership is `recipient = the caller's own email`, not just a matching id, so a guessed id can never mark someone else's notification read (or reveal whether it exists). */

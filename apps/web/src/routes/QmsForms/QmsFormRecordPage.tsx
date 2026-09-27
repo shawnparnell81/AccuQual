@@ -10,6 +10,7 @@ import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPan
 import { Modal } from "../../components/modals/Modal";
 import { getQmsFormDefinition } from "./qmsFormDefinitions";
 import type { QmsForm, QmsFormRow, QmsFormStatus } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const qmsFormHooks = createResourceHooks<QmsForm>("qms-forms");
 const STATUSES: QmsFormStatus[] = ["draft", "active", "obsolete"];
@@ -70,7 +71,7 @@ export function QmsFormRecordPage() {
 
   if (!definition) return <p className="text-sm text-destructive">Unknown form type "{formType}".</p>;
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !record) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !record) return <LoadingPlaceholder />;
 
   const rowsBySection = (sectionKey: string) => (record.rows ?? []).filter((r) => r.sectionKey === sectionKey);
 

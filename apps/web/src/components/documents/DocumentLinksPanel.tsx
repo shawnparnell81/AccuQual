@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, X } from "lucide-react";
 import { LINK_TYPES, linkTypeLabel, useLinkHistory, useLinkTargets, type DocumentLink, type LinkType } from "../../api/documents";
+import { LoadingPlaceholder } from "../shared/LoadingPlaceholder";
 
 const routeFor = (l: { type: LinkType; id: number }) => LINK_TYPES.find((t) => t.value === l.type)?.route(l.id) ?? "#";
 
@@ -79,7 +80,7 @@ export function DocumentLinksPanel({ links, editable, onChange }: Props) {
 /** Every record the document has ever been linked to, and in which revisions — kept across versions, so a removed link is still traceable. */
 export function DocumentLinkHistory({ documentId }: { documentId: number }) {
   const { data, isLoading } = useLinkHistory(documentId);
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
   if (!data || data.links.length === 0) return <p className="text-sm text-muted-foreground">No record has ever been linked to this document.</p>;
   return (
     <ul className="flex flex-col gap-1.5">

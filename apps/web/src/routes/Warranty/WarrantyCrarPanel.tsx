@@ -6,6 +6,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useWorkflowAccessLevel } from "../../hooks/useWorkflowAccess";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { CrarClaim } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 /**
  * Module 4's "Add CRAR tab inside WarrantyClaimDetail.tsx" — lets Quality
@@ -61,7 +62,7 @@ export function WarrantyCrarPanel({ claimId }: { claimId: number }) {
       </div>
 
       {isLoading ? (
-        <p className="mt-2 text-sm text-muted-foreground">Loading…</p>
+        <LoadingPlaceholder />
       ) : rows.length === 0 ? (
         <p className="mt-2 text-sm text-muted-foreground">No CRAR started for this claim yet.</p>
       ) : (

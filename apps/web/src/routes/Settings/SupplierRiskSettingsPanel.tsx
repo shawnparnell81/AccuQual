@@ -4,6 +4,7 @@ import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import type { SupplierRiskSettings } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const FACTORS: { key: keyof SupplierRiskSettings; label: string; hint: string }[] = [
   { key: "ncr", label: "NCR Count", hint: "10+ NCRs on file = maximum contribution" },
@@ -48,7 +49,7 @@ export function SupplierRiskSettingsPanel() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save Supplier Risk settings.")),
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Moon, Sun } from "lucide-react";
 import { apiClient } from "../../api/client";
@@ -43,6 +44,12 @@ export function ThemeToggleButton() {
       applyTheme(branding, prefs);
     },
   });
+
+  useEffect(() => {
+    const onToggle = () => save.mutate(next);
+    window.addEventListener("accuqual-toggle-theme", onToggle);
+    return () => window.removeEventListener("accuqual-toggle-theme", onToggle);
+  }, [next, save]);
 
   return (
     <button type="button" className="aq-icon-btn" aria-label="Toggle light or dark mode" title={mode === "dark" ? "Switch to light" : "Switch to dark"} onClick={() => save.mutate(next)}>

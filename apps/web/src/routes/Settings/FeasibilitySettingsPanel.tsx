@@ -6,6 +6,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import type { FeasibilitySettings } from "../../api/types";
 import { FeasibilityRiskLevelSelector } from "./FeasibilityRiskLevelSelector";
 import { FeasibilityDocumentSelector } from "./FeasibilityDocumentSelector";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 function useFeasibilitySettings() {
   return useQuery<FeasibilitySettings>({ queryKey: ["settings/feasibility"], queryFn: async () => (await apiClient.get("/settings/feasibility")).data });
@@ -38,7 +39,7 @@ export function FeasibilitySettingsPanel() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save Feasibility settings.")),
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">

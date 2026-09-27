@@ -7,6 +7,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { TextAreaField, SelectField } from "../../components/forms/Field";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { Supplier8dResponse, Ncr } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
 
@@ -76,7 +77,7 @@ export function Supplier8DForm({ supplierId, isReviewer }: { supplierId?: number
       <div className="rounded-lg border border-border bg-card p-4">
         <h3 className="mb-3 text-sm font-medium">Submitted 8Ds</h3>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <LoadingPlaceholder />
         ) : responses.length === 0 ? (
           <p className="text-sm text-muted-foreground">No 8D responses yet.</p>
         ) : (

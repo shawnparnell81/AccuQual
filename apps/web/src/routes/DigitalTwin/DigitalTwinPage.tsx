@@ -8,6 +8,7 @@ import { TextField } from "../../components/forms/Field";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { DigitalTwinDiagram, heatColor } from "./DigitalTwinDiagram";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const twinHooks = createResourceHooks<DigitalTwinModel>("digital-twin/models");
 
@@ -41,7 +42,7 @@ function DriftAlertsPanel() {
     <div className="rounded-lg border border-border bg-card p-4">
       <h2 className="mb-2 text-sm font-medium">Live Drift Alerts</h2>
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadingPlaceholder />
       ) : alerts.length === 0 ? (
         <p className="text-sm text-muted-foreground">No drift detected. Alerts appear here when a device's readings jump well above or below their normal level.</p>
       ) : (

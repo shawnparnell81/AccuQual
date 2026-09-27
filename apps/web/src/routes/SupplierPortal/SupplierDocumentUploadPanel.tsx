@@ -6,6 +6,7 @@ import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { TextField } from "../../components/forms/Field";
 import type { SupplierDocument } from "../../api/types";
 import { FileDropZone } from "../../components/shared/FileDropZone";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 // Phase 7 task 2 — explicit categories the brief names (certificates,
 // corrective action evidence) alongside the pre-existing free-text
@@ -78,7 +79,7 @@ export function SupplierDocumentUploadPanel({ supplierId }: { supplierId?: numbe
       <div className="rounded-lg border border-border bg-card p-4">
         <h3 className="mb-3 text-sm font-medium">Document Library</h3>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <LoadingPlaceholder />
         ) : docs.length === 0 ? (
           <p className="text-sm text-muted-foreground">No documents on file yet.</p>
         ) : (

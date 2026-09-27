@@ -3,6 +3,7 @@ import SwaggerUI from "swagger-ui-react";
 import "swagger-ui-react/swagger-ui.css";
 import { apiClient } from "../../api/client";
 import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 function useOpenApiSpec() {
   return useQuery({
@@ -33,7 +34,7 @@ export function AdminApiDocsPage() {
         </p>
       </div>
       <AdminOnlyGuard>
-        {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+        {isLoading && <LoadingPlaceholder />}
         {error && <p className="text-sm text-destructive">Could not load the API spec.</p>}
         {spec && (
           <div className="overflow-hidden rounded-lg border border-border bg-white">
