@@ -97,6 +97,9 @@ export const MODULE_LABELS: Record<ResourceKey, string> = {
   purchase_requisitions: "Purchase Requisitions",
   risk: "Risk / FMEA",
   feasibility: "Feasibility Review",
+  // Stored permission key only. Sales accounts are not offered in the app
+  // (they live in Oracle NetSuite). VISIBLE_RESOURCE_KEYS omits this key
+  // from admin catalogs and onboarding so nothing asks for or shows it.
   sales: "Sales Accounts",
   customers: "Customer Onboarding",
   warranty: "Warranty",
@@ -121,6 +124,9 @@ export const MODULE_LABELS: Record<ResourceKey, string> = {
   worker_profile: "Worker Profiles",
 };
 export const RESOURCE_KEYS: ResourceKey[] = Object.keys(MODULE_LABELS) as ResourceKey[];
+
+/** Modules the product still offers. `sales` stays in RESOURCE_KEYS so existing permission rows keep a real key; catalogs must not list it. */
+export const VISIBLE_RESOURCE_KEYS: ResourceKey[] = RESOURCE_KEYS.filter((key) => key !== "sales");
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 

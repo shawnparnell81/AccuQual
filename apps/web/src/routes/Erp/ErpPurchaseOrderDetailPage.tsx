@@ -14,7 +14,6 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { Modal } from "../../components/modals/Modal";
 import { TextField } from "../../components/forms/Field";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
-import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
 import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
 import type { ErpPurchaseOrder, ErpReceivingDocument, ErpReceivingLineItem, ReceivingLineItemStatus } from "../../api/types";
 
@@ -277,7 +276,6 @@ export function ErpPurchaseOrderDetailPage() {
             </button>
           )}
           <WorkflowActionButton label="Cancel" navKey="erp" action={cancelAction} onClick={() => cancelAction.mutate({ id: poId })} visible={canCancel} />
-          <LinkSalesAccountButton sourceType="PO" sourceId={po.id} defaultAccountName={po.supplierName ?? `PO #${po.id}`} />
           <CreateCustomerButton sourceType="PO" sourceId={po.id} defaultLegalName={po.supplierName ?? `PO #${po.id}`} />
         </div>
       </div>

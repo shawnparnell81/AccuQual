@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { RESOURCE_KEYS, DEPARTMENTS } from "../../middleware/departmentAccess.js";
+import { VISIBLE_RESOURCE_KEYS, DEPARTMENTS } from "../../middleware/departmentAccess.js";
 
 /** "No fictional modules/departments" — a company can only configure access for a module/department that's a real, fixed, already-wired value, never an arbitrary string. */
-export const moduleNameSchema = z.enum(RESOURCE_KEYS as [string, ...string[]]);
+export const moduleNameSchema = z.enum(VISIBLE_RESOURCE_KEYS as [string, ...string[]]);
 export const departmentNameSchema = z.enum(DEPARTMENTS as [string, ...string[]]);
 export const accessLevelSchema = z.enum(["none", "read", "edit"]);
 

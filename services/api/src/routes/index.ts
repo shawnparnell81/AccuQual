@@ -52,7 +52,6 @@ import { searchRouter } from "../modules/search/search.routes.js";
 import { rmaRouter } from "../modules/rma/rma.routes.js";
 import { workOrdersRouter } from "../modules/work-orders/workOrders.routes.js";
 import { feasibilityRouter } from "../modules/feasibility/feasibility.routes.js";
-import { salesRouter } from "../modules/sales/sales.routes.js";
 import { customersRouter } from "../modules/customers/customers.routes.js";
 import { customerCommunicationsRouter } from "../modules/customer-communications/customerCommunications.routes.js";
 import { documentChangeRequestsRouter } from "../modules/document-change-requests/documentChangeRequests.routes.js";
@@ -137,7 +136,8 @@ apiRouter.use("/search", searchRouter);
 apiRouter.use("/rma", rmaRouter);
 apiRouter.use("/work-orders", workOrdersRouter);
 apiRouter.use("/feasibility", feasibilityRouter);
-apiRouter.use("/sales", salesRouter);
+// Sales accounts are not part of this app (they live in Oracle NetSuite).
+// The sales_* tables stay in place; this router is not mounted.
 apiRouter.use("/customers", customersRouter);
 apiRouter.use("/customer-communications", customerCommunicationsRouter);
 apiRouter.use("/document-change-requests", documentChangeRequestsRouter);

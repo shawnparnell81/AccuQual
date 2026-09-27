@@ -12,7 +12,7 @@ import {
   getUserAccessLevel,
   getDepartmentAccessLevel,
   MODULE_LABELS,
-  RESOURCE_KEYS,
+  VISIBLE_RESOURCE_KEYS,
   DEPARTMENTS,
   type AccessLevel,
   type Department,
@@ -29,7 +29,7 @@ import type { Db } from "../../lib/requestDb.js";
 
 /** GET /permissions/modules — the fixed, real module catalog, for populating any admin grid's columns. */
 export const listModulesHandler = asyncHandler(async (_req: Request, res: Response) => {
-  res.json(RESOURCE_KEYS.map((key) => ({ key, label: MODULE_LABELS[key] })));
+  res.json(VISIBLE_RESOURCE_KEYS.map((key) => ({ key, label: MODULE_LABELS[key] })));
 });
 
 /** GET /permissions/effective — the CURRENT user's own effective access to every module, computed live. This is what the frontend's button/nav gating should read instead of a static config file. */
@@ -37,7 +37,7 @@ export const getMyEffectivePermissionsHandler = asyncHandler(async (req: Request
   const db = req.db! as Db;
   const user = { id: req.user!.id, roleName: req.user!.roleName, department: req.user!.department };
 
-  const entries = await Promise.all(RESOURCE_KEYS.map(async (key) => [key, await getUserAccessLevel(db, user, key)] as const));
+  const entries = await Promise.all(VISIBLE_RESOURCE_KEYS.map(async (key) => [key, await getUserAccessLevel(db, user, key)] as const));
   res.json(Object.fromEntries(entries));
 });
 
@@ -51,7 +51,7 @@ export const listDepartmentPermissionsHandler = asyncHandler(async (req: Request
   const overrides = new Map(rows.map((r) => [`${r.departmentName}:${r.moduleName}`, r]));
 
   const grid = DEPARTMENTS.flatMap((departmentName) =>
-    RESOURCE_KEYS.map((moduleName) => {
+    VISIBLE_RESOURCE_KEYS.map((moduleName) => {
       const override = overrides.get(`${departmentName}:${moduleName}`);
       return {
         departmentName,
@@ -288,7 +288,7 @@ export const getUserEffectivePermissionsHandler = asyncHandler(async (req: Reque
   if (!targetUser) throw AppError.notFound("User");
 
   const breakdown = await Promise.all(
-    RESOURCE_KEYS.map(async (moduleName) => {
+    VISIBLE_RESOURCE_KEYS.map(async (moduleName) => {
       const [effectiveLevel, departmentLevel] = await Promise.all([
         getUserAccessLevel(db, targetUser, moduleName),
         getDepartmentAccessLevel(db, targetUser.department as Department | null, moduleName),

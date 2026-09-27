@@ -17,9 +17,8 @@ interface CreateCustomerButtonProps {
 
 /**
  * The one "Start Customer Onboarding" button/modal, reused on NCR, Supplier,
- * Work Orders, Requisitions, PO, RMA, Risk, Feasibility, and Sales Account
- * detail pages — see the Customer Onboarding module's Integration Points.
- * A single shared component so all nine stay in sync, same reasoning as
+ * Work Orders, Requisitions, PO, RMA, Risk, and Feasibility detail pages.
+ * A single shared component so those stay in sync, same reasoning as
  * CreateRiskButton/CreateFeasibilityButton.
  */
 export function CreateCustomerButton({ sourceType, sourceId, defaultLegalName, label = "Start Customer Onboarding" }: CreateCustomerButtonProps) {

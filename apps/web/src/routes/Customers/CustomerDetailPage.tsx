@@ -38,7 +38,6 @@ const RELATED_SOURCE_LINK: Record<string, (id: number) => string> = {
   RMA: (id) => `/rma/${id}`,
   Risk: (id) => `/risk/${id}`,
   Feasibility: (id) => `/feasibility/${id}`,
-  SalesAccount: (id) => `/sales/${id}`,
 };
 
 /**
@@ -102,7 +101,7 @@ export function CustomerDetailPage() {
             <StatusBadge value={customer.status} />
             {customer.customerType && <span className="text-sm text-muted-foreground">{customer.customerType}</span>}
             {customer.industry && <span className="text-sm text-muted-foreground">— {customer.industry}</span>}
-            {customer.relatedSourceType && customer.relatedSourceId && (
+            {customer.relatedSourceType && customer.relatedSourceId && customer.relatedSourceType !== ("SalesAccount" as string) && (
               sourceLink ? (
                 <a href={sourceLink} className="text-sm text-primary hover:underline">
                   Started from {customer.relatedSourceType} #{customer.relatedSourceId}

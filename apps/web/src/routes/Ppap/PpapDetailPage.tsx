@@ -3,7 +3,6 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
-import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import type { PpapPackage } from "./PpapListPage";
 
@@ -44,9 +43,6 @@ export function PpapDetailPage() {
             {ppap.partName && <span className="text-sm text-muted-foreground">{ppap.partName}</span>}
             {ppap.customer && <span className="text-sm text-muted-foreground">— {ppap.customer}</span>}
           </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <LinkSalesAccountButton sourceType="PPAP" sourceId={ppap.id} defaultAccountName={ppap.customer ?? `PPAP #${ppap.id}`} />
         </div>
       </div>
 

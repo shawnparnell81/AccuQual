@@ -17,7 +17,6 @@ import { getFormLayout } from "../../components/forms/layouts";
 import { GenericFormRenderer } from "../../components/forms/GenericFormRenderer";
 import { useFormEditorState } from "../../components/forms/useFormEditorState";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
-import { LinkSalesAccountButton } from "../../components/shared/LinkSalesAccountButton";
 import { CreateCustomerButton } from "../../components/shared/CreateCustomerButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
@@ -394,7 +393,6 @@ function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTi
           </form>
           )}
           {canEdit && <CreateRiskButton sourceType="NCR" sourceId={ncrId} defaultTitle={`Risk from ${ncrTitle}`} defaultDepartment="quality" defaultCategory="process" />}
-          {canEdit && <LinkSalesAccountButton sourceType="NCR" sourceId={ncrId} defaultAccountName={ncrTitle} />}
           {canEdit && <CreateCustomerButton sourceType="NCR" sourceId={ncrId} defaultLegalName={ncrTitle} />}
         </div>
       </div>

@@ -49,7 +49,7 @@ export interface FieldChange {
 }
 
 /** Friendly moduleName values the history endpoint accepts — kept in sync with services/api's workflow.controller.ts MODULE_ENTITY_TYPES. */
-export type WorkflowModuleName = "calibration" | "quarantine" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp" | "rma" | "work_orders" | "risk" | "feasibility" | "sales_accounts" | "customers" | "document_change_requests" | "qms_forms" | "scar_forms" | "quality_inspection_reports" | "crar" | "rma_log" | "complaints";
+export type WorkflowModuleName = "calibration" | "quarantine" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp" | "rma" | "work_orders" | "risk" | "feasibility" | "customers" | "document_change_requests" | "qms_forms" | "scar_forms" | "quality_inspection_reports" | "crar" | "rma_log" | "complaints";
 
 export interface Ncr {
   id: number;
@@ -1320,73 +1320,9 @@ export interface ErpSyncErrorsListResult {
   offset: number;
 }
 
-export type SalesAccountStatus = "prospect" | "active" | "dormant";
-export type SalesQuoteStatus = "draft" | "submitted" | "accepted" | "rejected" | "archived";
-export type SalesContractStatus = "draft" | "active" | "expired" | "archived";
-export type SalesContractType = "customer" | "service" | "pricing" | "renewal";
-export type SalesActivityType = "call" | "meeting" | "email" | "demo" | "follow_up" | "note";
-export type SalesRelatedSourceType = "NCR" | "PPAP" | "ChangeRequest" | "WorkOrder" | "Requisition" | "PO" | "RMA";
-
-export interface SalesAccount {
-  id: number;
-  customerName: string;
-  industry: string | null;
-  primaryContactName: string | null;
-  primaryContactEmail: string | null;
-  primaryContactPhone: string | null;
-  status: SalesAccountStatus;
-  ownerId: number | null;
-  createdBy: number | null;
-  createdAt: string;
-  updatedAt: string | null;
-  // Detail endpoint only.
-  activities?: SalesActivity[];
-  quotes?: SalesQuote[];
-  contracts?: SalesContract[];
-}
-
-export interface SalesActivity {
-  id: number;
-  accountId: number;
-  activityType: SalesActivityType;
-  notes: string | null;
-  nextSteps: string | null;
-  dueDate: string | null;
-  ownerId: number | null;
-  relatedSourceType: SalesRelatedSourceType | null;
-  relatedSourceId: number | null;
-  createdBy: number | null;
-  createdAt: string;
-  updatedAt: string | null;
-}
-
-export interface SalesQuote {
-  id: number;
-  accountId: number;
-  quoteNumber: string;
-  revision: number;
-  status: SalesQuoteStatus;
-  pricingSheetDocumentId: number | null;
-  createdBy: number | null;
-  createdAt: string;
-  updatedAt: string | null;
-}
-
-export interface SalesContract {
-  id: number;
-  accountId: number;
-  contractType: SalesContractType;
-  effectiveDate: string | null;
-  expirationDate: string | null;
-  status: SalesContractStatus;
-  createdBy: number | null;
-  createdAt: string;
-  updatedAt: string | null;
-}
-
 export type CustomerType = "OEM" | "Tier 1" | "Tier 2" | "Distributor" | "Other";
 export type CustomerStatus = "draft" | "submitted" | "under_review" | "approved" | "activated" | "rejected";
-export type CustomerRelatedSourceType = "NCR" | "Supplier" | "WorkOrder" | "Requisition" | "PO" | "RMA" | "Risk" | "Feasibility" | "SalesAccount";
+export type CustomerRelatedSourceType = "NCR" | "Supplier" | "WorkOrder" | "Requisition" | "PO" | "RMA" | "Risk" | "Feasibility";
 
 /** A Customer Onboarding case — ONE table for both the master record and its onboarding workflow, see customers.ts's own schema comment. */
 export interface Customer {

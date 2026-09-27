@@ -1,9 +1,9 @@
 /**
  * Saved open-page tabs. A path stays only when the app still has that page.
- * Purchasing screens (/erp, /erp/requisitions, purchase-order detail) now
- * redirect home and their APIs are gone, so restoring them was calling
- * /api/erp/overview and /api/erp/requisitions and getting 404. Feasibility
- * still has its own page, so those tabs stay.
+ * Purchasing screens (/erp, /erp/requisitions, purchase-order detail) and
+ * sales accounts (/sales) now redirect home, so restoring them was calling
+ * APIs that are no longer part of the app. Feasibility still has its own
+ * page, so those tabs stay.
  */
 
 interface SavedTab {
@@ -28,8 +28,6 @@ const EXACT = new Set([
   "/risk",
   "/risk/dashboard",
   "/feasibility",
-  "/sales",
-  "/sales/dashboard",
   "/customers",
   "/customers/dashboard",
   "/document-change-requests",
@@ -82,7 +80,6 @@ const ONE_SEGMENT: RegExp[] = [
   /^\/change\/\d+$/,
   /^\/risk\/\d+$/,
   /^\/feasibility\/\d+$/,
-  /^\/sales\/\d+$/,
   /^\/customers\/\d+$/,
   /^\/document-change-requests\/\d+$/,
   /^\/qms-forms\/[^/]+$/,

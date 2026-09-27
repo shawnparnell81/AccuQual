@@ -85,17 +85,25 @@ describe("Customer Onboarding module (real DB + real HTTP path)", () => {
     expect(res.status).toBe(403);
   });
 
-  it("sales_and_marketing can create a customer, linked to a real Sales Account", async () => {
+  it("sales_and_marketing can create a customer", async () => {
     const res = await request(app)
       .post("/customers")
       .set("Authorization", `Bearer ${salesToken}`)
-      .send({ legalName: "Acme Fabrication Co", industry: "manufacturing", customerType: "OEM", relatedSourceType: "SalesAccount", relatedSourceId: 999 });
+      .send({ legalName: "Acme Fabrication Co", industry: "manufacturing", customerType: "OEM" });
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("draft");
     customerId = res.body.id;
 
     const [row] = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "Customer"), eq(auditTrail.entityId, customerId), eq(auditTrail.action, "create")));
     expect(row).toBeTruthy();
+  });
+
+  it("rejects a Sales Account as the source of a customer", async () => {
+    const res = await request(app)
+      .post("/customers")
+      .set("Authorization", `Bearer ${salesToken}`)
+      .send({ legalName: "Should Fail", relatedSourceType: "SalesAccount", relatedSourceId: 1 });
+    expect(res.status).toBe(400);
   });
 
   it("quality CAN read the customer (read access per the matrix)", async () => {

@@ -172,7 +172,6 @@ const MODULE_ENTITY_TYPES: Record<string, string> = {
   work_orders: "WorkOrder",
   risk: "RiskAssessment",
   feasibility: "FeasibilityReview",
-  sales_accounts: "SalesAccount",
   customers: "Customer",
   document_change_requests: "DocumentChangeRequest",
   qms_forms: "QmsForm",
