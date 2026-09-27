@@ -1,4 +1,4 @@
-import { IMPORT_DATA_PERMISSION } from "./roleAccess.js";
+import { IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS } from "./roleAccess.js";
 
 /**
  * Organizational ladder. A smaller number is higher and is listed first.
@@ -43,8 +43,8 @@ export interface RoleSeed {
 
 /** Built-in roles. Names are what sign-in and the permission checks use, so they stay fixed. */
 export const ROLE_SEEDS: RoleSeed[] = [
-  { name: "owner", description: "Owner — full access to everything", hierarchyLevel: 10, isProtected: true, permissions: [IMPORT_DATA_PERMISSION] },
-  { name: "admin", description: "Administrator — full access", hierarchyLevel: 15, isProtected: true, permissions: [IMPORT_DATA_PERMISSION] },
+  { name: "owner", description: "Owner — full access to everything", hierarchyLevel: 10, isProtected: true, permissions: [IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS] },
+  { name: "admin", description: "Administrator — full access", hierarchyLevel: 15, isProtected: true, permissions: [IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS] },
   { name: "president", description: "President — can view the quality system and approve work", hierarchyLevel: 20, isProtected: true, permissions: [] },
   { name: "vice_president", description: "Vice President — can view the quality system and approve work", hierarchyLevel: 30, isProtected: true, permissions: [] },
   { name: "quality_manager", description: "Manages NCR/CAPA/Audits/Suppliers", hierarchyLevel: 50, isProtected: true, permissions: [] },

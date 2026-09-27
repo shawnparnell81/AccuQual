@@ -8,7 +8,7 @@ export const roles = pgTable("roles", {
   hierarchyLevel: integer("hierarchy_level").notNull().default(80),
   /** Built-in roles (Owner, Administrator, and the other seeded names) cannot be deleted or renamed. */
   isProtected: boolean("is_protected").notNull().default(false),
-  /** Extra capabilities. `import_data` lets this role use Admin → Import data. Owner and Administrator always can. */
+  /** Extra capabilities. `import_data` lets this role use Admin → Import data. `restore_archived_documents` lets an Owner or Administrator return a document from Obsolete / Archive. Owner and Administrator always have import; restore is only those two roles, and only when this permission is on the role. */
   permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
 });
 

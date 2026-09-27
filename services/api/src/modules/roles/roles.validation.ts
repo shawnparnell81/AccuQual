@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { IMPORT_DATA_PERMISSION } from "./roleAccess.js";
+import { IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS } from "./roleAccess.js";
 
-const permissionList = z.array(z.enum([IMPORT_DATA_PERMISSION])).max(5);
+const permissionList = z.array(z.enum([IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS])).max(5);
 
 export const createRoleSchema = z.object({
   name: z.string().trim().min(1).max(80),

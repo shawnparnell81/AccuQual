@@ -1,7 +1,9 @@
 import type { Request, Response } from "express";
 import { createReadStream, existsSync } from "node:fs";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { documents, documentVersions, type Document, type DocumentVersion } from "../../drizzle/schema/documents.js";
+import { roles } from "../../drizzle/schema/roles.js";
+import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { controlledVersions } from "../../drizzle/schema/versioning.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
@@ -11,7 +13,8 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import * as engine from "../versioning/versioning.service.js";
 import { blankDocumentPayload } from "./documentPayload.js";
 import { documentAdapter, isInsideStorage } from "./documentVersioning.js";
-import { OBSOLETE_ARCHIVE_CATEGORY } from "./obsoleteArchive.js";
+import { ARCHIVED_READ_ONLY, isInObsoleteArchive, OBSOLETE_ARCHIVE_CATEGORY } from "./obsoleteArchive.js";
+import { roleCanRestoreArchivedDocuments } from "../roles/roleAccess.js";
 
 export const baseHandlers = crudFactory(documents, { entityName: "Document", idColumn: "id", softDelete: true });
 
@@ -32,21 +35,9 @@ export const createDocumentHandler = asyncHandler(async (req: Request, res: Resp
   if (!doc) throw new AppError("Failed to create the document", 500);
   const draft = await engine.createInitialDraft(db, documentAdapter, doc.id, actor, { ...blankDocumentPayload(), title: doc.title, category: doc.category ?? null } as unknown as Record<string, unknown>);
   await recordAuditTrail(db, { entityType: "Document", entityId: doc.id, action: "create", changes: { title: doc.title, category: doc.category }, performedBy: actor.id });
-
-  // A file uploaded straight into Obsolete / Archive is obsolete immediately. The open draft stays so the file can be attached.
-  let created = doc;
-  if (doc.category === OBSOLETE_ARCHIVE_CATEGORY) {
-    const [marked] = await db.update(documents).set({ status: "obsolete", updatedAt: new Date() }).where(eq(documents.id, doc.id)).returning();
-    if (marked) created = marked;
-    await recordAuditTrail(db, {
-      entityType: "Document",
-      entityId: doc.id,
-      action: "status_change",
-      changes: { action: "moved_to_obsolete", fromCategory: doc.category, toCategory: OBSOLETE_ARCHIVE_CATEGORY, fromStatus: "draft", status: "obsolete" },
-      performedBy: actor.id,
-    });
-  }
-  res.status(201).json({ ...created, openVersionId: draft.id });
+  // A file uploaded into Obsolete / Archive stays a draft until the file is attached and the move is confirmed.
+  // Marking it obsolete here would lock the row before the file could be stored.
+  res.status(201).json({ ...doc, openVersionId: draft.id });
 });
 
 /**
@@ -102,6 +93,13 @@ export const obsoleteHandler = asyncHandler(async (req: Request, res: Response) 
   res.json(updated);
 });
 
+function archiveAcknowledgement(doc: { id: number; title: string }, body: { acknowledged?: boolean; confirmation?: string }): void {
+  const confirmation = body.confirmation?.trim() ?? "";
+  const typed = confirmation === String(doc.id) || confirmation.toLowerCase() === doc.title.trim().toLowerCase();
+  if (body.acknowledged === true || typed) return;
+  throw AppError.badRequest("Type the document number or name, or tick that you understand, before archiving this document.");
+}
+
 /**
  * Files a document in Obsolete / Archive. Updates the live record only (category + status).
  * Controlled revisions, signatures, and the revision ledger are left as they are.
@@ -109,11 +107,11 @@ export const obsoleteHandler = asyncHandler(async (req: Request, res: Response) 
  */
 export const moveToObsoleteHandler = asyncHandler(async (req: Request, res: Response) => {
   const documentId = Number(req.params.id);
+  const body = req.body as { reason: string; acknowledged?: boolean; confirmation?: string };
   const [doc] = await req.db!.select().from(documents).where(eq(documents.id, documentId));
   if (!doc || doc.isDeleted) throw AppError.notFound("Document");
-  if (doc.category === OBSOLETE_ARCHIVE_CATEGORY && doc.status === "obsolete") {
-    throw new AppError("This document is already in Obsolete / Archive.", 409);
-  }
+  if (isInObsoleteArchive(doc)) throw new AppError("This document is already in Obsolete / Archive.", 409);
+  archiveAcknowledgement(doc, body);
 
   const [updated] = await req
     .db!.update(documents)
@@ -131,12 +129,74 @@ export const moveToObsoleteHandler = asyncHandler(async (req: Request, res: Resp
       toCategory: OBSOLETE_ARCHIVE_CATEGORY,
       fromStatus: doc.status,
       status: "obsolete",
+      reason: body.reason,
     },
     performedBy: req.user?.id,
   });
   await publishEvent(WORKFLOW_STREAM, { module: "documents", event: "obsolete", entityId: documentId });
 
   res.json(updated);
+});
+
+/**
+ * Puts an archived document back in the folder it was moved from and clears the read-only lock.
+ * Owner and Administrator only, and only when the role has restore_archived_documents.
+ */
+export const restoreArchivedDocumentHandler = asyncHandler(async (req: Request, res: Response) => {
+  const documentId = Number(req.params.id);
+  const reason = (req.body as { reason: string }).reason;
+  const roleName = req.user?.roleName ?? null;
+  const [role] = await req.db!.select({ permissions: roles.permissions }).from(roles).where(eq(roles.name, roleName ?? ""));
+  if (!roleCanRestoreArchivedDocuments(roleName, role?.permissions)) {
+    throw AppError.forbidden("Only an Owner or Administrator with permission to restore archived documents can do that.");
+  }
+
+  const [doc] = await req.db!.select().from(documents).where(eq(documents.id, documentId));
+  if (!doc || doc.isDeleted) throw AppError.notFound("Document");
+  if (!isInObsoleteArchive(doc)) throw AppError.badRequest("This document is not in Obsolete / Archive.");
+
+  const history = await req.db!.select().from(auditTrail).where(and(eq(auditTrail.entityType, "Document"), eq(auditTrail.entityId, documentId)));
+  const move = [...history].reverse().find((row) => (row.changes as { action?: string } | null)?.action === "moved_to_obsolete");
+  const changes = (move?.changes ?? {}) as { fromCategory?: unknown; fromStatus?: unknown };
+  const fromCategory = typeof changes.fromCategory === "string" && changes.fromCategory !== OBSOLETE_ARCHIVE_CATEGORY ? changes.fromCategory : null;
+  const fromStatus = typeof changes.fromStatus === "string" && changes.fromStatus !== "obsolete" ? changes.fromStatus : "draft";
+
+  // The database trigger rejects every other update of an archived row. This setting is local to the request transaction.
+  await req.db!.execute(sql`SELECT set_config('accuqual.restore_document', ${String(documentId)}, true)`);
+  const [updated] = await req
+    .db!.update(documents)
+    .set({ category: fromCategory, status: fromStatus, updatedAt: new Date() })
+    .where(eq(documents.id, documentId))
+    .returning();
+
+  await recordAuditTrail(req.db!, {
+    entityType: "Document",
+    entityId: documentId,
+    action: "status_change",
+    changes: {
+      action: "restored_from_obsolete",
+      fromCategory: OBSOLETE_ARCHIVE_CATEGORY,
+      toCategory: fromCategory,
+      fromStatus: "obsolete",
+      status: fromStatus,
+      reason,
+    },
+    performedBy: req.user?.id,
+  });
+
+  res.json(updated);
+});
+
+/** Writes against an archived document are refused for every role, including Owner and Administrator, until it is restored. */
+export const rejectArchivedDocumentWrites = asyncHandler(async (req: Request, _res: Response, next) => {
+  if (req.method === "GET" || req.method === "HEAD") return next();
+  if (req.method === "POST" && /\/restore$/.test(req.path)) return next();
+  // Router-level middleware runs before :id is bound, so the id comes from the path.
+  const id = Number(req.path.match(/\/(\d+)(?:\/|$)/)?.[1]);
+  if (!Number.isInteger(id) || id < 1) return next();
+  const [doc] = await req.db!.select({ status: documents.status, category: documents.category }).from(documents).where(eq(documents.id, id));
+  if (doc && isInObsoleteArchive(doc)) throw new AppError(ARCHIVED_READ_ONLY, 409);
+  next();
 });
 
 /**
@@ -203,6 +263,7 @@ interface RetentionDecision {
  * active document" (see the approval date the revision ledger records on publish).
  */
 function decideRetention(doc: Document, currentVersion?: Pick<DocumentVersion, "approvedAt">): RetentionDecision {
+  if (isInObsoleteArchive(doc)) return { eligible: false, reason: "document is in Obsolete / Archive and is read-only until an administrator restores it" };
   if (doc.status !== "obsolete") return { eligible: false, reason: `document is "${doc.status}", not "obsolete"` };
   if (doc.retentionState === "archived") return { eligible: false, reason: "already archived" };
   if (!currentVersion?.approvedAt) return { eligible: false, reason: "current version was never approved, so there's no date to measure retention from" };

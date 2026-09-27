@@ -2,6 +2,9 @@
 
 export const IMPORT_DATA_PERMISSION = "import_data";
 
+/** Lets an Owner or Administrator return a document from Obsolete / Archive. Other roles never can. */
+export const RESTORE_ARCHIVED_DOCUMENTS = "restore_archived_documents";
+
 /** Owner and Administrator can do everything an admin route allows. */
 export const FULL_ACCESS_ROLES = new Set(["admin", "owner"]);
 
@@ -29,4 +32,10 @@ export function isBroadViewRole(roleName: string | null | undefined): boolean {
 export function roleHasImportPermission(roleName: string | null | undefined, permissions: readonly string[] | null | undefined): boolean {
   if (isFullAccessRole(roleName)) return true;
   return (permissions ?? []).includes(IMPORT_DATA_PERMISSION);
+}
+
+/** Owner and Administrator only, and only when the role carries restore_archived_documents. */
+export function roleCanRestoreArchivedDocuments(roleName: string | null | undefined, permissions: readonly string[] | null | undefined): boolean {
+  if (!isFullAccessRole(roleName)) return false;
+  return (permissions ?? []).includes(RESTORE_ARCHIVED_DOCUMENTS);
 }

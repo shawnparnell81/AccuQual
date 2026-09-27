@@ -117,6 +117,16 @@ function logFailedTransition(req: Request, err: unknown, statusCode: number): vo
   }).catch((loggingErr) => logger.error("logFailedTransition itself failed", loggingErr));
 }
 
+function errorChain(err: unknown): string[] {
+  const messages: string[] = [];
+  let current: unknown = err;
+  while (current instanceof Error) {
+    messages.push(current.message);
+    current = current.cause;
+  }
+  return messages;
+}
+
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (err instanceof ZodError) {
     logFailedTransition(req, err, 400);
@@ -138,6 +148,15 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
       error: err.name,
       message: err.message,
       details: err.details,
+      requestId: getRequestId(),
+    });
+  }
+
+  if (errorChain(err).some((message) => /archived document/i.test(message))) {
+    logFailedTransition(req, err, 409);
+    return res.status(409).json({
+      error: "Conflict",
+      message: "This document is in Obsolete / Archive and is read-only. An administrator has to restore it before it can be changed.",
       requestId: getRequestId(),
     });
   }

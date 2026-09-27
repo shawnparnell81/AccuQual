@@ -29,3 +29,16 @@ export const requestReviewSchema = z.object({
 
 /** A reviewer's decision. Sending a version back needs a reason (enforced by the engine). */
 export const decisionSchema = z.object({ notes: z.string().max(4000).optional() });
+
+/** Move into Obsolete / Archive. The reason is stored on the audit row. Acknowledgement is the "I understand" checkbox; confirmation is the typed document number or name. */
+export const moveToObsoleteSchema = z.object({
+  reason: z.string().trim().min(1).max(500),
+  acknowledged: z.boolean().optional(),
+  confirmation: z.string().trim().max(300).optional(),
+});
+
+/** Return an archived document to the folder it came from. */
+export const restoreArchivedDocumentSchema = z.object({
+  reason: z.string().trim().min(1).max(500),
+  acknowledged: z.literal(true),
+});

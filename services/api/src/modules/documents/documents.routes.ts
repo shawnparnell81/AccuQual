@@ -3,7 +3,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
-import { createDocumentSchema, updateDocumentSchema } from "./documents.validation.js";
+import { createDocumentSchema, moveToObsoleteSchema, restoreArchivedDocumentSchema, updateDocumentSchema } from "./documents.validation.js";
 import {
   baseHandlers,
   createDocumentHandler,
@@ -11,6 +11,8 @@ import {
   downloadVersionHandler,
   obsoleteHandler,
   moveToObsoleteHandler,
+  restoreArchivedDocumentHandler,
+  rejectArchivedDocumentWrites,
   historyHandler,
   listExpiringHandler,
   applyRetentionHandler,
@@ -29,7 +31,7 @@ import { registerDocumentVersionRoutes } from "./documents.versions.routes.js";
 // Document versioning: revisions are drafted, reviewed and published through the shared version-control engine
 // (documents.versions.routes.ts), which adds its own per-action permission gate (document.view / edit / review / publish).
 export const documentsRouter = Router();
-documentsRouter.use(requireAuth, withDb, requireDepartmentAccess("documents"));
+documentsRouter.use(requireAuth, withDb, requireDepartmentAccess("documents"), rejectArchivedDocumentWrites);
 
 // Fixed-path routes first — "expiring" and "retention" would otherwise be
 // swallowed by GET/POST "/:id"-shaped routes below.
@@ -49,7 +51,8 @@ documentsRouter.post("/:id/approve", retiredRevisionHandler);
 
 documentsRouter.get("/version/:versionId/file", downloadVersionHandler);
 documentsRouter.post("/:id/obsolete", obsoleteHandler);
-documentsRouter.post("/:id/move-to-obsolete", moveToObsoleteHandler);
+documentsRouter.post("/:id/move-to-obsolete", validate(moveToObsoleteSchema), moveToObsoleteHandler);
+documentsRouter.post("/:id/restore", validate(restoreArchivedDocumentSchema), restoreArchivedDocumentHandler);
 // On-demand version of the "retention/apply" sweep for a single document.
 documentsRouter.post("/:id/archive", archiveHandler);
 documentsRouter.get("/:id/history", historyHandler);
