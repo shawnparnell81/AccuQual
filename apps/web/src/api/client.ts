@@ -1,4 +1,5 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
+import { adoptBrowserSession, releaseBrowserSessionTab } from "../lib/browserSession";
 import { useAuthStore, type AuthUser, type CompanyContext } from "../store/authStore";
 import { useSiteStore } from "../store/siteStore";
 import {
@@ -60,8 +61,22 @@ const refresher = createSessionRefresher({
 });
 
 function endSession() {
+  releaseBrowserSessionTab();
   useAuthStore.getState().logout();
   useSiteStore.getState().setCurrentSiteId(null);
+}
+
+/** Clears a refresh cookie the browser restored after it was closed. The trusted-browser cookie is left in place. */
+export async function abandonRestoredBrowserSession(): Promise<void> {
+  try {
+    await axios.post(
+      `${apiClient.defaults.baseURL}/auth/end-browser-session`,
+      {},
+      { withCredentials: true, headers: { "X-AccuQual-Csrf": "1" } },
+    );
+  } catch {
+    // The sign-in screen is shown either way. The next visit tries again.
+  }
 }
 
 function listenForOtherTabs() {
@@ -143,6 +158,7 @@ async function performRefreshAttempt(attempt: number) {
     // Stamp this before setSession. That update schedules the next renewal, and it
     // must see that a renewal just finished or it will fire another one immediately.
     lastSuccessAt = Date.now();
+    adoptBrowserSession();
     useAuthStore.getState().setSession(data.user, data.accessToken, data.company);
     return { kind: "ok" as const, accessToken: data.accessToken };
   } catch (err) {
@@ -245,6 +261,8 @@ function isRefreshRequest(config: InternalAxiosRequestConfig): boolean {
 
 useAuthStore.subscribe((state, previous) => {
   if (state.accessToken !== previous.accessToken) scheduleProactiveRefresh(state.accessToken);
+  if (state.accessToken && !previous.accessToken) adoptBrowserSession();
+  if (!state.accessToken && previous.accessToken) releaseBrowserSessionTab();
 });
 
 if (typeof document !== "undefined") {
