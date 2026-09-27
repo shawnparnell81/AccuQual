@@ -7,6 +7,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
 import { TextField, SelectField } from "../../components/forms/Field";
 import type { CompanyProfile } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 function useCompanyProfile() {
   return useQuery<CompanyProfile>({ queryKey: ["company/profile"], queryFn: async () => (await apiClient.get("/company/profile")).data });
@@ -72,7 +73,7 @@ export function AdminCompanySettingsPage() {
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadingPlaceholder />
       ) : (
         <AdminOnlyGuard>
           <form

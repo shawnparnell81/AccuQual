@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import type { Capa } from "../../api/types";
@@ -30,12 +30,19 @@ export function CapaListPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (params.get("new") !== "1") return;
+    if (canEdit) setCreateOpen(true);
+    const next = new URLSearchParams(params);
+    next.delete("new");
+    setParams(next, { replace: true });
+  }, [canEdit, params, setParams]);
   const view: "list" | "board" = params.get("view") === "board" ? "board" : "list";
   const [form, setForm] = useState<{ ncrId: string; rootCause: string }>({ ncrId: "", rootCause: "" });
 
   const columns: Column<Capa>[] = [
     { header: "ID", accessor: (c) => `#${c.id}` },
-    { header: "Issue", accessor: (c) => (c.ncrId ? `#${c.ncrId}` : "Not linked") },
+    { header: "NCR", accessor: (c) => (c.ncrId ? `#${c.ncrId}` : "Not linked") },
     { header: "State", accessor: (c) => <StatusBadge value={c.status} label={statusPhrase(c.status)} /> },
     { header: "Owner", accessor: (c) => label(c.ownerId) },
     { header: "Due", accessor: (c) => duePhrase(c.dueDate, c.status === "closed") },
@@ -45,7 +52,7 @@ export function CapaListPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Fixes</h1>
+          <h1 className="text-2xl font-semibold">CAPA</h1>
           <p className="text-sm text-muted-foreground">Corrective actions (CAPA). Start from the issue they belong to.</p>
           <CurrentPlantNote />
         </div>
@@ -87,7 +94,7 @@ export function CapaListPage() {
       />
       )}
 
-      <Modal title="Open a fix" isOpen={createOpen} onClose={() => { setCreateOpen(false); setPendingFiles([]); }}>
+      <Modal title="Open a CAPA" isOpen={createOpen} onClose={() => { setCreateOpen(false); setPendingFiles([]); }}>
         <form
           className="flex flex-col gap-4"
           onSubmit={(e) => {

@@ -63,14 +63,14 @@ export function RoleHome() {
   const late = lateItems([
     ...openIssues.map((ncr) => ({
       who: label(ncr.assignedTo),
-      label: `Issue #${ncr.id}`,
+      label: `NCR #${ncr.id}`,
       link: `/ncr/${ncr.id}`,
       due: ncr.dueDate,
       terminal: false,
     })),
     ...openFixes.map((capa) => ({
       who: label(capa.ownerId),
-      label: `Fix #${capa.id}`,
+      label: `CAPA #${capa.id}`,
       link: `/capa/${capa.id}`,
       due: capa.dueDate,
       terminal: false,
@@ -80,15 +80,15 @@ export function RoleHome() {
   const waiting = [
     ...openIssues
       .filter((ncr) => ncr.status === "open" && !ncr.containment)
-      .map((ncr) => ({ key: `ncr-${ncr.id}`, label: `Issue #${ncr.id} — ${ncr.title}`, detail: "Not contained yet", link: `/ncr/${ncr.id}` })),
+      .map((ncr) => ({ key: `ncr-${ncr.id}`, label: `NCR #${ncr.id} — ${ncr.title}`, detail: "Not contained yet", link: `/ncr/${ncr.id}` })),
     ...openIssues
       .filter((ncr) => (ncr.status === "investigating" || ncr.status === "corrective_action") && !fixIds.has(ncr.id))
-      .map((ncr) => ({ key: `link-${ncr.id}`, label: `Issue #${ncr.id} — ${ncr.title}`, detail: "No fix linked yet", link: `/ncr/${ncr.id}` })),
+      .map((ncr) => ({ key: `link-${ncr.id}`, label: `NCR #${ncr.id} — ${ncr.title}`, detail: "No CAPA linked yet", link: `/ncr/${ncr.id}` })),
     ...openFixes
       .filter((capa) => capa.status === "verifying" || capa.status === "open")
       .map((capa) => ({
         key: `capa-${capa.id}`,
-        label: `Fix #${capa.id}`,
+        label: `CAPA #${capa.id}`,
         detail: capa.status === "open" ? "Not started" : "Waiting on the check",
         link: `/capa/${capa.id}`,
       })),
@@ -222,7 +222,7 @@ function NextCallout({
     return (
       <Callout
         kicker="Next"
-        title={`Issue #${issue.id} — ${issue.title}`}
+        title={`NCR #${issue.id} — ${issue.title}`}
         detail={`${ncrNextAction(issue.status, hasFix)} ${who === "Unassigned" ? "Nobody owns it yet." : `${who} owns it.`}`}
         href={`/ncr/${issue.id}`}
       />

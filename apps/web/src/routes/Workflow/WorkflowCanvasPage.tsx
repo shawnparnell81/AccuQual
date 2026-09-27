@@ -12,6 +12,7 @@ import { LifecycleBar, VersionDiffViewer, VersionStatusBadge, VersionTimeline } 
 import { useVersioning, useVersionPayload, validatePayload, type ValidationReport, type VersionFull } from "../../api/versioning";
 import type { WorkflowRun } from "../../api/types";
 import { WorkflowCanvasEditor } from "./canvas/WorkflowCanvasEditor";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { DEPARTMENT_OPTIONS } from "./WorkflowConfigFields";
 import type { WfMetadata, WfPayload } from "./canvas/graph";
 
@@ -191,7 +192,7 @@ export function WorkflowCanvasPage() {
       )}
 
       {!shown ? (
-        <p className="text-sm text-muted-foreground">{v.current.isLoading ? "Loading…" : "Nothing here yet."}</p>
+        v.current.isLoading ? <LoadingPlaceholder /> : <p className="text-sm text-muted-foreground">Nothing here yet.</p>
       ) : (
         <WorkflowCanvasEditor
           key={`${shown.id}:${editable}`}

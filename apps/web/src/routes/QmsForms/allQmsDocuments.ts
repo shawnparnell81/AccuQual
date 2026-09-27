@@ -30,13 +30,11 @@ const REUSED_MODULE_DOCUMENTS: QmsDocumentEntry[] = [
   { title: "Training & Competency Record", department: "Quality", route: "/training", isGeneric: false },
   { title: "Customer Complaint Record", department: "Quality", route: "/complaints", isGeneric: false },
   { title: "Supplier NCR", department: "Quality", route: "/ncr", isGeneric: false },
-  { title: "Production Traveler", department: "Production", route: "/work-orders", isGeneric: false },
-  { title: "Automotive Manufacturing Work Order", department: "Production", route: "/work-orders", isGeneric: false },
   { title: "Engineering Change Request", department: "Engineering", route: "/change", isGeneric: false },
   { title: "Engineering Change Order", department: "Engineering", route: "/change", isGeneric: false },
 ];
 
-const HIDDEN_FORM_DEPARTMENTS = new Set(["Purchasing", "Sales and Marketing", "Customer Service"]);
+const HIDDEN_FORM_DEPARTMENTS = new Set(["Purchasing", "Sales and Marketing", "Customer Service", "Production", "Material Management"]);
 const HIDDEN_FORM_TYPES = new Set(["po_quality_requirements", "customer_satisfaction_record", "product_traceability_record"]);
 
 export const ALL_QMS_DOCUMENTS: QmsDocumentEntry[] = [

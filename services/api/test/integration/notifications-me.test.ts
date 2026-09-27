@@ -108,4 +108,25 @@ describe("In-app notifications (real DB + real HTTP path)", () => {
   it("requires authentication", async () => {
     expect((await request(app).get("/notifications/me")).status).toBe(401);
   });
+
+  it("marks every unread notification for the caller and leaves someone else's rows alone", async () => {
+    await db.insert(notificationLog).values({ channel: "email", recipient: emailA, subject: "Another one", body: "still unread", status: "sent" });
+    const mark = await request(app).post("/notifications/me/read-all").set("Authorization", `Bearer ${tokenA}`);
+    expect(mark.status).toBe(200);
+    const after = await request(app).get("/notifications/me").set("Authorization", `Bearer ${tokenA}`);
+    expect(after.body.unreadCount).toBe(0);
+    const other = await request(app).get("/notifications/me").set("Authorization", `Bearer ${tokenB}`);
+    expect(other.body.notifications.some((n: { readAt: string | null }) => n.readAt === null)).toBe(true);
+  });
+
+  it("stores a per-user email and in-app preference", async () => {
+    const saved = await request(app).patch("/notifications/me/preferences").set("Authorization", `Bearer ${tokenA}`).send({ email: false, inApp: false });
+    expect(saved.status).toBe(200);
+    expect(saved.body).toEqual({ email: false, inApp: false });
+    const hidden = await request(app).get("/notifications/me").set("Authorization", `Bearer ${tokenA}`);
+    expect(hidden.body.notifications).toEqual([]);
+    expect(hidden.body.unreadCount).toBe(0);
+    const restored = await request(app).patch("/notifications/me/preferences").set("Authorization", `Bearer ${tokenA}`).send({ email: true, inApp: true });
+    expect(restored.body).toEqual({ email: true, inApp: true });
+  });
 });

@@ -10,6 +10,7 @@ import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPan
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { Modal } from "../../components/modals/Modal";
 import type { ScarForm, Supplier } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const scarHooks = createResourceHooks<ScarForm>("scar-forms");
 
@@ -52,7 +53,7 @@ export function ScarFormDetailPage() {
   });
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !scar) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !scar) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">

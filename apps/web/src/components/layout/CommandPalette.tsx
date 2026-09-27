@@ -1,81 +1,173 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
-import { flattenSidebarLinks } from "./sidebarStructure";
-import { GlobalSearchResults } from "./GlobalSearchResults";
+import { apiClient } from "../../api/client";
+import type { SearchResult } from "../../api/types";
+import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { useOpenTab } from "../../hooks/useOpenTab";
+import { useCurrentUser } from "../../hooks/useAuth";
+import { readRecentRecords, rememberRecord, type RecentRecord } from "../../lib/recentRecords";
+import { useDialogBehavior } from "../shared/useDialogBehavior";
+import { flattenSidebarLinks, visibleSidebar, SIDEBAR_FOLDERS } from "./sidebarStructure";
+
+interface PaletteItem {
+  id: string;
+  label: string;
+  hint?: string;
+  run: () => void;
+}
 
 /**
- * Cmd/Ctrl+K quick-jump — two result groups: "Go to" (every module this
- * viewer can currently see, from the same live source TopNav's dropdowns
- * use — see navVisibility.ts) and "Records" (the existing GET /search +
- * GlobalSearchResults, unmodified — the same debounce, RBAC, and
- * open-as-a-tab behavior the header search box already has). Deliberately
- * a lightweight overlay of its own rather than Modal.tsx: that component's
- * drag handle and backdrop-click-to-close chrome is dialog UX, not the
- * type-and-go feel a palette needs.
+ * Ctrl/Cmd+K. Pages come from the same sidebar tree as the menu (including
+ * admin-only entries). Records use GET /search. Arrow keys move the
+ * highlight; Enter opens it.
  */
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [query, setQuery] = useState("");
+  const [active, setActive] = useState(0);
+  const [recent, setRecent] = useState<RecentRecord[]>([]);
   const navigate = useNavigate();
-  const allVisibleLeaves = flattenSidebarLinks();
+  const openTab = useOpenTab();
+  const user = useCurrentUser();
+  const isAdmin = user?.roleName === "admin";
+  const dialogRef = useDialogBehavior(open, onClose);
+  const debouncedQuery = useDebouncedValue(query.trim(), 250);
+
+  const pages = useMemo(() => flattenSidebarLinks(visibleSidebar(SIDEBAR_FOLDERS, isAdmin)), [isAdmin]);
 
   useEffect(() => {
-    if (!open) setQuery("");
+    if (!open) {
+      setQuery("");
+      setActive(0);
+      return;
+    }
+    setRecent(readRecentRecords());
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  const { data, isFetching } = useQuery<{ results: SearchResult[] }>({
+    queryKey: ["search", debouncedQuery],
+    queryFn: async () => (await apiClient.get("/search", { params: { q: debouncedQuery } })).data,
+    enabled: open && debouncedQuery.length > 0,
+  });
 
-  const navMatches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
-    return allVisibleLeaves.filter((l) => `${l.label} ${l.key}`.toLowerCase().includes(q)).slice(0, 8);
-  }, [allVisibleLeaves, query]);
+  const needle = query.trim().toLowerCase();
+
+  const items = useMemo(() => {
+    const actions: PaletteItem[] = [
+      { id: "new-ncr", label: "New NCR", hint: "Action", run: () => navigate("/ncr?new=1") },
+      { id: "new-capa", label: "New CAPA", hint: "Action", run: () => navigate("/capa?new=1") },
+      { id: "start-validation", label: "Start validation", hint: "Action", run: () => navigate("/workflow?template=validation") },
+      { id: "upload-validation", label: "Upload to Validation Reports", hint: "Action", run: () => navigate("/folders/validation-reports") },
+      { id: "assignments", label: "Go to my assignments", hint: "Action", run: () => navigate("/home") },
+      { id: "theme", label: "Toggle theme", hint: "Action", run: () => window.dispatchEvent(new Event("accuqual-toggle-theme")) },
+    ].filter((action) => !needle || action.label.toLowerCase().includes(needle));
+
+    const recentItems: PaletteItem[] = needle
+      ? []
+      : recent.map((record) => ({
+          id: `recent-${record.path}`,
+          label: record.title,
+          hint: "Recent",
+          run: () => {
+            openTab({ path: record.path, title: record.title, icon: "default" });
+          },
+        }));
+
+    const pageItems: PaletteItem[] = (needle ? pages.filter((page) => `${page.label} ${page.key}`.toLowerCase().includes(needle)).slice(0, 8) : []).map((page) => ({
+        id: `page-${page.key}`,
+        label: page.label,
+        hint: "Go to",
+        run: () => navigate(page.path),
+      }));
+
+    const recordItems: PaletteItem[] = (data?.results ?? []).map((result) => ({
+      id: `record-${result.type}-${result.id}`,
+      label: result.label,
+      hint: result.type,
+      run: () => {
+        rememberRecord({ path: result.path, title: result.label, type: result.type });
+        openTab({ path: result.path, title: result.label, icon: "default" });
+      },
+    }));
+
+    return [...actions, ...recentItems, ...pageItems, ...recordItems];
+  }, [data?.results, navigate, needle, openTab, pages, recent]);
+
+  useEffect(() => {
+    setActive(0);
+  }, [needle]);
+
+  useEffect(() => {
+    if (active >= items.length) setActive(0);
+  }, [active, items.length]);
+
+  function choose(item: PaletteItem | undefined) {
+    if (!item) return;
+    item.run();
+    onClose();
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActive((current) => (items.length === 0 ? 0 : (current + 1) % items.length));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActive((current) => (items.length === 0 ? 0 : (current - 1 + items.length) % items.length));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      choose(items[active]);
+    }
+  }
 
   if (!open) return null;
 
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
-      <div className="fixed left-1/2 top-24 z-50 w-full max-w-lg -translate-x-1/2 rounded-lg border border-border bg-card shadow-xl">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
+        tabIndex={-1}
+        className="modal-in fixed left-1/2 top-24 z-50 w-full max-w-lg -translate-x-1/2 rounded-lg border border-border bg-card shadow-xl outline-none"
+      >
         <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
           <Search size={15} className="flex-none text-muted-foreground" />
           <input
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Jump to a page or search records…"
+            onKeyDown={onKeyDown}
+            placeholder="Jump to a page, run an action, or search records…"
+            aria-label="Command palette search"
+            aria-activedescendant={items[active] ? `palette-item-${items[active]!.id}` : undefined}
+            aria-controls="palette-list"
             className="flex-1 bg-transparent py-1 text-sm outline-none"
           />
           <kbd className="flex-none rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">Esc</kbd>
         </div>
-        <div className="max-h-[60vh] overflow-y-auto">
-          {navMatches.length > 0 && (
-            <div className="border-b border-border p-1">
-              <p className="px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Go to</p>
-              {navMatches.map((leaf) => (
-                <button
-                  key={leaf.key}
-                  onClick={() => {
-                    navigate(leaf.path);
-                    onClose();
-                  }}
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-secondary"
-                >
-                  <leaf.icon size={15} className="flex-none text-muted-foreground" />
-                  {leaf.label}
-                </button>
-              ))}
-            </div>
+        <div id="palette-list" role="listbox" className="max-h-[60vh] overflow-y-auto p-1">
+          {items.length === 0 && (
+            <p className="p-4 text-center text-sm text-muted-foreground">{isFetching ? "Searching…" : "No matches. Try a page name or a record number."}</p>
           )}
-          <GlobalSearchResults query={query} onSelect={onClose} />
-          {!query.trim() && <p className="p-4 text-center text-sm text-muted-foreground">Start typing a page name or a record number…</p>}
+          {items.map((item, index) => (
+            <button
+              id={`palette-item-${item.id}`}
+              key={item.id}
+              type="button"
+              role="option"
+              aria-selected={index === active}
+              onMouseEnter={() => setActive(index)}
+              onClick={() => choose(item)}
+              className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm ${index === active ? "bg-secondary" : "hover:bg-secondary"}`}
+            >
+              {item.hint && <span className="w-16 flex-none text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{item.hint}</span>}
+              <span className="truncate">{item.label}</span>
+            </button>
+          ))}
         </div>
       </div>
     </>

@@ -5,6 +5,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { DEPARTMENTS } from "../../components/layout/navConfig";
 import type { PermissionRole, CompanyUser, UserEffectivePermissions, UserPermissionRoleAssignment } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 /**
  * Which department each user belongs to (PATCH /users/:id — a pre-existing
@@ -60,7 +61,7 @@ export function PermissionsUserAssignmentsTab() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't remove that role.")),
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-3">
@@ -138,7 +139,7 @@ function EffectivePermissionsPanel({ userId }: { userId: number }) {
     queryFn: async () => (await apiClient.get(`/permissions/users/${userId}/effective`)).data,
   });
 
-  if (isLoading || !data) return <p className="mt-2 text-xs text-muted-foreground">Loading…</p>;
+  if (isLoading || !data) return <LoadingPlaceholder />;
   const nonNone = data.breakdown.filter((b) => b.effectiveLevel !== "none");
 
   return (

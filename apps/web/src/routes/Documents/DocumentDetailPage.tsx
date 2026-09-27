@@ -18,6 +18,7 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { DOC_EDIT_REASON, DOC_LOOP, documentLoop, duePhrase, isPastDue, statusPhrase } from "../../lib/opsLanguage";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import type { TrainingCourse } from "../../api/types";
@@ -310,7 +311,7 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
 
       {tab === "details" && (
         <div className="rounded-lg border border-border bg-card p-4">
-          {!shown ? <p className="text-sm text-muted-foreground">{v.current.isLoading ? "Loading…" : "Nothing here yet. Start a draft above to write this document."}</p> : <DocumentDetailsPanel values={shownValues} editable={editable} onChange={change} summary={summary} onSummaryChange={(s) => { dirty.current = true; setSummary(s); }} />}
+          {!shown ? (v.current.isLoading ? <LoadingPlaceholder /> : <p className="text-sm text-muted-foreground">Nothing here yet. Start a draft above to write this document.</p>) : <DocumentDetailsPanel values={shownValues} editable={editable} onChange={change} summary={summary} onSummaryChange={(s) => { dirty.current = true; setSummary(s); }} />}
           {editable && report && report.errors.length > 0 && (
             <ul className="mt-3 list-disc pl-5 text-xs text-destructive">
               {report.errors.map((e) => (

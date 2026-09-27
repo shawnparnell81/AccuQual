@@ -7,6 +7,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { TextField, TextAreaField, SelectField } from "../../components/forms/Field";
 import type { ErpConnectorPreset, ErpFieldMapping, ErpPresetModule, ErpPresetVendor, ErpTransformRule, ErpTriggerRule, ErpValidationRule } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const VENDORS: ErpPresetVendor[] = ["sap", "oracle", "netsuite", "epicor", "dynamics", "custom"];
 const MODULES: ErpPresetModule[] = ["inventory", "suppliers", "workOrders", "ncr", "capa", "training", "audits", "documentControl"];
@@ -186,7 +187,7 @@ function ErpPresetEditorPageBody() {
   const previewOutput = useMemo(() => previewMapping(sampleRecord, fieldMappings), [sampleRecord, fieldMappings]);
   const sortedHistory = useMemo(() => [...(existing?.versionHistory ?? [])].sort((a, b) => b.version - a.version), [existing]);
 
-  if (!isNew && isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (!isNew && isLoading) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">

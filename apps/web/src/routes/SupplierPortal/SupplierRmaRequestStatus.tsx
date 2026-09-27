@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { SupplierRmaRequest } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 /**
  * The supplier's own submitted RMA Requests and what happened to each — a
@@ -21,7 +22,7 @@ export function SupplierRmaRequestStatus() {
     <div className="rounded-lg border border-border bg-card p-4">
       <h3 className="mb-3 text-sm font-medium">Your RMA Requests</h3>
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadingPlaceholder />
       ) : rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No RMA Requests submitted yet.</p>
       ) : (

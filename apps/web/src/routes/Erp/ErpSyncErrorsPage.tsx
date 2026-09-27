@@ -8,6 +8,7 @@ import { SelectField } from "../../components/forms/Field";
 import { Modal } from "../../components/modals/Modal";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { ErpErrorType, ErpSyncError, ErpSyncErrorsListResult } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const ERROR_TYPES: ErpErrorType[] = ["mappingError", "validationError", "transformError", "triggerError", "erpApiError", "unexpectedError"];
 const MODULES = ["inventory", "suppliers", "workOrders", "ncr", "capa", "training", "audits", "documentControl"];
@@ -119,7 +120,7 @@ function ErpSyncErrorsPageBody() {
       </div>
 
       {isLoading || !data ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadingPlaceholder />
       ) : rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No errors match these filters.</p>
       ) : (

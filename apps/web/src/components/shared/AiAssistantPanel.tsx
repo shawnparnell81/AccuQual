@@ -112,7 +112,8 @@ export function AiAssistantPanel() {
               {m.role === "assistant" && (
                 <button
                   onClick={() => copyMessage(m.content)}
-                  className="flex items-center gap-1 text-xs text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
+                  aria-label="Copy reply"
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground focus-visible:text-foreground"
                 >
                   <Copy size={12} /> Copy
                 </button>

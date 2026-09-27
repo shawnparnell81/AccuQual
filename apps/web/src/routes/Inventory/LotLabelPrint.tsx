@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { QrLabel } from "../../components/shared/QrLabel";
 import type { InventoryLotTraceability } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 function useLotTrace(lotId: number | undefined) {
   return useQuery<InventoryLotTraceability>({
@@ -28,7 +29,7 @@ export function LotLabelPrint() {
   const lotId = id ? Number(id) : undefined;
   const { data, isLoading, isError } = useLotTrace(lotId);
 
-  if (isLoading) return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
+  if (isLoading) return <LoadingPlaceholder />;
   if (isError || !data) return <div className="p-6 text-sm text-destructive">Couldn't load this lot.</div>;
 
   const { lot, item } = data;

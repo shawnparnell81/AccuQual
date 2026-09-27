@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Megaphone } from "lucide-react";
 import { CHANGELOG } from "../../data/changelog";
 import { useChangelogSeen } from "../../hooks/useChangelogSeen";
@@ -13,7 +13,19 @@ import { useChangelogSeen } from "../../hooks/useChangelogSeen";
  */
 export function WhatsNewDropdown() {
   const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const { hasUnseen, markSeenAsCurrent } = useChangelogSeen();
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      buttonRef.current?.focus();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
 
   return (
     <div className="relative">
@@ -23,7 +35,11 @@ export function WhatsNewDropdown() {
           setOpen(next);
           if (next) markSeenAsCurrent();
         }}
+        ref={buttonRef}
+        type="button"
         title="What's new"
+        aria-label="What's new"
+        aria-expanded={open}
         className="aq-icon-btn aq-hide-sm"
       >
         <Megaphone size={16} />

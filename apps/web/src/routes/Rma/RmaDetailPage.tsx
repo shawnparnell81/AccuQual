@@ -13,6 +13,7 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { Modal } from "../../components/modals/Modal";
 import { TextField, SelectField, TextAreaField } from "../../components/forms/Field";
 import type { Rma, RmaItem, InventoryItem, Ncr, Capa, RmaStatus } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const rmaHooks = createResourceHooks<Rma>("rma");
 const itemHooks = createResourceHooks<InventoryItem>("inventory/items");
@@ -173,7 +174,7 @@ export function RmaDetailPage() {
   });
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !record) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !record) return <LoadingPlaceholder />;
 
   const isAdmin = currentUser?.roleName === "admin";
   const department = currentUser?.department;

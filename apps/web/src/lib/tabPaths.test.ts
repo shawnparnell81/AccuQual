@@ -25,12 +25,14 @@ describe("saved tabs for removed pages", () => {
     const restored = selectRestoredTabs(saved, "c");
     assert.deepEqual(
       restored.tabs.map((tab) => tab.path),
-      ["/ncr", "/feasibility", "/feasibility/3", "/erp/presets", "/settings"],
+      ["/ncr", "/feasibility", "/feasibility/3", "/settings"],
     );
     assert.equal(restored.activeId, "a");
     assert.equal(isLiveTabPath("/erp/overview"), false);
     assert.equal(isLiveTabPath("/ncr/9"), true);
-    assert.equal(isLiveTabPath("/inventory/lots/4/label"), true);
+    assert.equal(isLiveTabPath("/inventory/lots/4/label"), false);
+    assert.equal(isLiveTabPath("/work-orders/4"), true);
+    assert.equal(isLiveTabPath("/notifications"), true);
     assert.equal(isLiveTabPath("/admin/users"), true);
     assert.equal(isLiveTabPath("/sales"), false);
     assert.equal(isLiveTabPath("/sales/dashboard"), false);

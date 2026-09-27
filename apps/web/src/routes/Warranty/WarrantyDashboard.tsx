@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../api/client";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { WarrantyAnalytics } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 /** GET /warranty/analytics — real counts/cost totals/average time-in-status, no fabricated figures (an empty company shows real zeros, not sample data). */
 export function WarrantyDashboard() {
@@ -12,7 +13,7 @@ export function WarrantyDashboard() {
     queryFn: async () => (await apiClient.get("/warranty/analytics")).data,
   });
 
-  if (isLoading || !data) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !data) return <LoadingPlaceholder />;
 
   const statuses = Object.entries(data.byStatus) as [string, number][];
 

@@ -6,6 +6,7 @@ import { MoveModal, ResolveModal } from "../../components/quarantine/QuarantineM
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const STATUS_LABEL: Record<QuarantineStatus, string> = { quarantined: "On hold", released: "Released", destroyed: "Removed from stock" };
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "—");
@@ -29,7 +30,7 @@ export function QuarantineDetailPage() {
   const [moveOpen, setMoveOpen] = useState(false);
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !r) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !r) return <LoadingPlaceholder />;
   const open = r.status === "quarantined";
 
   return (

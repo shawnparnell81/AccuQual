@@ -4,6 +4,7 @@ import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { TextField } from "../../components/forms/Field";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 interface SupplierSettings {
   id: number;
@@ -35,7 +36,7 @@ export function SupplierSettingsPanel({ supplierId }: { supplierId?: number }) {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save these settings.")),
   });
 
-  if (isLoading || !data) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !data) return <LoadingPlaceholder />;
 
   return (
     <div className="flex max-w-md flex-col gap-3 rounded-lg border border-border bg-card p-4">

@@ -1,21 +1,31 @@
 import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
+  BarChart3,
+  Building2,
+  CalendarDays,
   ClipboardCheck,
   ClipboardList,
   Cog,
-  Factory,
+  FileEdit,
   FileSearch,
   FileText,
+  FolderTree,
   Gauge,
   GitBranch,
+  GraduationCap,
   Hammer,
-  Package,
+  LayoutDashboard,
+  Library,
+  PieChart,
   ScrollText,
+  Shield,
   ShieldAlert,
   ShieldCheck,
-  Ship,
+  Sparkles,
   Truck,
+  Users,
+  Workflow,
   Wrench,
 } from "lucide-react";
 
@@ -24,6 +34,8 @@ export interface SidebarLink {
   label: string;
   path: string;
   icon: LucideIcon;
+  /** Company administrators only. */
+  adminOnly?: boolean;
 }
 
 export interface SidebarFolder {
@@ -32,6 +44,7 @@ export interface SidebarFolder {
   icon: LucideIcon;
   /** When set, the folder name itself opens this page (in addition to its children). */
   path?: string;
+  adminOnly?: boolean;
   children: SidebarNode[];
 }
 
@@ -68,6 +81,17 @@ function doc(key: keyof typeof DOCUMENT_FOLDER_PAGES, icon: LucideIcon): Sidebar
 
 export const SIDEBAR_FOLDERS: SidebarFolder[] = [
   {
+    key: "workspace",
+    label: "Workspace",
+    icon: LayoutDashboard,
+    children: [
+      { key: "home", label: "Home", path: "/home", icon: LayoutDashboard },
+      { key: "calendar", label: "Calendar", path: "/calendar", icon: CalendarDays },
+      { key: "reporting", label: "Reporting", path: "/reporting", icon: BarChart3 },
+      { key: "pareto", label: "Pareto", path: "/pareto", icon: PieChart },
+    ],
+  },
+  {
     key: "engineering",
     label: "Engineering",
     icon: Cog,
@@ -76,6 +100,7 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
       doc("apqp", ClipboardList),
       { key: "ppap", label: "PPAP Packet", path: "/ppap", icon: ClipboardList },
       { key: "fmea", label: "FMEA", path: "/risk", icon: ShieldAlert },
+      { key: "risk-dashboard", label: "Risk dashboard", path: "/risk/dashboard", icon: BarChart3 },
       doc("ecn", GitBranch),
       doc("ecr", GitBranch),
       { key: "process-change", label: "Process Change", path: "/change", icon: GitBranch },
@@ -87,6 +112,20 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
     label: "Quality",
     icon: ShieldCheck,
     children: [
+      {
+        key: "document-control",
+        label: "Document Control",
+        icon: FileText,
+        path: "/documents",
+        children: [
+          { key: "folder-explorer", label: "Folder Explorer", path: "/documents/folders", icon: FolderTree },
+          { key: "dcr", label: "Document changes", path: "/document-change-requests", icon: FileEdit },
+          { key: "qms-forms", label: "QMS Forms", path: "/qms-forms", icon: Library },
+          { key: "management-system", label: "Management System", path: "/management-system", icon: Building2 },
+        ],
+      },
+      { key: "training", label: "Training", path: "/training", icon: GraduationCap },
+      { key: "workers", label: "Workers", path: "/workers", icon: Users },
       { key: "inspections", label: "Inspections", path: "/quality-inspection-reports", icon: ClipboardCheck },
       doc("validation-reports", FileText),
       { key: "fai", label: "FAI", path: "/qms-forms/first_article_inspection", icon: ClipboardCheck },
@@ -106,47 +145,65 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
         children: [doc("master-tool-list", Wrench)],
       },
       {
-        key: "audit",
-        label: "Audit",
+        key: "audits",
+        label: "Audits",
         icon: ClipboardCheck,
+        path: "/audits",
         children: [doc("audit-plan", ClipboardList), doc("audit-schedule", ClipboardList), doc("audit-checklist", ClipboardCheck), doc("audit-report", FileText)],
       },
       {
-        key: "issues",
-        label: "Issues",
+        key: "suppliers",
+        label: "Suppliers",
+        icon: Truck,
+        path: "/suppliers",
+        children: [{ key: "scar", label: "SCAR", path: "/scar-forms", icon: ClipboardList }],
+      },
+      {
+        key: "ncr-capa",
+        label: "NCR & CAPA",
         icon: AlertTriangle,
         children: [
-          { key: "8d", label: "8D", path: "/8d", icon: FileSearch },
           { key: "ncr", label: "NCR", path: "/ncr", icon: AlertTriangle },
           { key: "capa", label: "CAPA", path: "/capa", icon: ClipboardCheck },
+          { key: "8d", label: "8D", path: "/8d", icon: FileSearch },
         ],
       },
       { key: "quarantine", label: "Quarantined items", path: "/quarantine", icon: ShieldAlert },
     ],
   },
   {
-    key: "operations",
-    label: "Operations",
-    icon: Factory,
+    key: "admin-tools",
+    label: "Admin & tools",
+    icon: Shield,
     children: [
-      doc("shipping", Ship),
-      doc("receiving", Truck),
-      {
-        key: "production",
-        label: "Production",
-        icon: Package,
-        path: "/production-logs",
-        children: [{ key: "work-orders", label: "Work Orders", path: "/work-orders", icon: ClipboardList }],
-      },
+      { key: "workflow", label: "Workflow Builder", path: "/workflow", icon: Workflow },
+      { key: "ai", label: "AI Insights", path: "/ai", icon: Sparkles },
+      { key: "admin", label: "Admin", path: "/admin", icon: Shield, adminOnly: true },
     ],
   },
 ];
+
+/** Drops admin-only entries for everyone else, and folders that would be empty. */
+export function visibleSidebar(nodes: SidebarNode[], isAdmin: boolean): SidebarNode[] {
+  const out: SidebarNode[] = [];
+  for (const node of nodes) {
+    if (node.adminOnly && !isAdmin) continue;
+    if (isFolder(node)) {
+      const children = visibleSidebar(node.children, isAdmin);
+      if (children.length === 0 && !node.path) continue;
+      out.push({ ...node, children });
+    } else {
+      out.push(node);
+    }
+  }
+  return out;
+}
 
 export function flattenSidebarLinks(nodes: SidebarNode[] = SIDEBAR_FOLDERS): SidebarLink[] {
   const out: SidebarLink[] = [];
   for (const node of nodes) {
     if (isFolder(node)) {
-      if (node.path) out.push({ key: node.key, label: node.label, path: node.path, icon: node.icon });
+      if (node.path) out.push({ key: node.key, label: node.label, path: node.path, icon: node.icon, adminOnly: node.adminOnly });
       out.push(...flattenSidebarLinks(node.children));
     } else {
       out.push(node);

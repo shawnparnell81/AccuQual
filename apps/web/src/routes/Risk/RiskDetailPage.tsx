@@ -17,6 +17,7 @@ import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { Modal } from "../../components/modals/Modal";
 import { RISK_CATEGORIES } from "../../components/shared/riskConstants";
 import type { RiskAssessment, RiskMitigation, FmeaItem } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const riskHooks = createResourceHooks<RiskAssessment>("risk");
 const RATINGS_5 = [1, 2, 3, 4, 5];
@@ -65,7 +66,7 @@ export function RiskDetailPage() {
   });
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !risk) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !risk) return <LoadingPlaceholder />;
 
   const sourceLink = risk.sourceType && risk.sourceId ? SOURCE_LINK[risk.sourceType]?.(risk.sourceId) : undefined;
 

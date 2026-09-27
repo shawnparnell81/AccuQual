@@ -18,6 +18,7 @@ import {
   isFolder,
   pathMatches,
   sidebarNodeContainsPath,
+  visibleSidebar,
   type SidebarFolder,
   type SidebarNode,
 } from "./sidebarStructure";
@@ -57,7 +58,9 @@ export function TopNav() {
   const [query, setQuery] = useState("");
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>(() => readOpenFolders(user?.id));
 
-  const links = flattenSidebarLinks();
+  const isAdmin = user?.roleName === "admin";
+  const folders = visibleSidebar(SIDEBAR_FOLDERS, isAdmin);
+  const links = flattenSidebarLinks(folders);
   const needle = query.trim().toLowerCase();
   const searchResults = needle ? links.filter((leaf) => `${leaf.label} ${leaf.key}`.toLowerCase().includes(needle)) : [];
 
@@ -173,6 +176,9 @@ export function TopNav() {
         <div className="aq-top-tools">
           <BackButton />
           <SiteSwitcher />
+          <button type="button" className="aq-icon-btn aq-only-sm" aria-label="Search" title="Search" onClick={() => window.dispatchEvent(new Event("accuqual-open-palette"))}>
+            <Search size={16} />
+          </button>
           <button type="button" className="aq-icon-btn aq-hide-sm" aria-label="Open command palette (Ctrl+K)" title="Command palette (Ctrl/⌘+K)" onClick={() => window.dispatchEvent(new Event("accuqual-open-palette"))}>
             <Command size={16} />
           </button>
@@ -193,7 +199,7 @@ export function TopNav() {
               <span className="aq-nav-label">{DASHBOARD_LEAF.label}</span>
             </NavLink>
           </div>
-          {SIDEBAR_FOLDERS.map((folder) => (
+          {folders.filter(isFolder).map((folder) => (
             <FolderBlock key={folder.key} node={folder} open={folderOpen(folder)} onToggle={() => toggleFolder(folder.key, folderOpen(folder))} isOpen={folderOpen} onToggleKey={toggleFolder} onNavigate={closeSide} pathname={location.pathname} />
           ))}
         </div>

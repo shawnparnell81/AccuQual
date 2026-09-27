@@ -9,6 +9,7 @@ import { SyncScheduleSelector } from "./SyncScheduleSelector";
 import { SyncModuleSelector } from "./SyncModuleSelector";
 import { SyncConflictRuleEditor } from "./SyncConflictRuleEditor";
 import { SyncStatusHistoryViewer } from "./SyncStatusHistoryViewer";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 function useErpSyncSettings() {
   return useQuery<ErpSyncSettings>({ queryKey: ["settings/erp-sync"], queryFn: async () => (await apiClient.get("/settings/erp-sync")).data });
@@ -73,7 +74,7 @@ export function ERPSyncSettingsPanel() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't trigger a sync.")),
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">

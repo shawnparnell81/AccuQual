@@ -7,6 +7,7 @@ import { TextField } from "../../components/forms/Field";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { deriveThemeVars, resolveMode } from "../../lib/theme";
 import type { CompanyBranding, UserThemePreferences } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const MODES: Array<{ value: NonNullable<UserThemePreferences["mode"]>; label: string }> = [
   { value: "light", label: "Light" },
@@ -68,7 +69,7 @@ export function ThemeSettingsSection() {
     return vars as CSSProperties;
   }, [accentColor, branding, currentMode, primaryColor]);
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">

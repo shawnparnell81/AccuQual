@@ -7,6 +7,7 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { TextAreaField, SelectField } from "../../components/forms/Field";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { SupplierCorrectiveAction, Ncr, Capa } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
 const capaHooks = createResourceHooks<Capa>("capa");
@@ -95,7 +96,7 @@ export function SupplierCARForm({ supplierId, isReviewer }: { supplierId?: numbe
       <div className="rounded-lg border border-border bg-card p-4">
         <h3 className="mb-3 text-sm font-medium">Submitted Responses</h3>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <LoadingPlaceholder />
         ) : cars.length === 0 ? (
           <p className="text-sm text-muted-foreground">No responses yet.</p>
         ) : (

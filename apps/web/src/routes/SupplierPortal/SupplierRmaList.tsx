@@ -4,6 +4,7 @@ import { apiClient } from "../../api/client";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { useCurrentUser } from "../../hooks/useAuth";
 import type { Rma } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 /** Phase 7 task 1 — unlike SupplierNCRList/SupplierCAPAList, `rma` carries a real supplierId FK, so this is a direct list, not a derived join (see supplierPortal.controller.ts's own comment on why it's still a wrapper endpoint rather than /rma directly). */
 export function SupplierRmaList({ supplierId }: { supplierId?: number }) {
@@ -14,7 +15,7 @@ export function SupplierRmaList({ supplierId }: { supplierId?: number }) {
     queryFn: async () => (await apiClient.get("/supplier-portal/rma/list", { params: supplierId ? { supplierId } : undefined })).data,
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">No RMAs raised against this supplier yet.</p>;
 
   return (

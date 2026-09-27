@@ -41,7 +41,7 @@ describe("home and role language", () => {
 describe("nav search", () => {
   it("finds an issue by the plain name or the standard term", () => {
     assert.match(navSearchText("ncr", "NCR"), /ncr/);
-    assert.equal(plainNav("capa", "CAPA").label, "Fixes");
+    assert.equal(plainNav("capa", "CAPA").label, "CAPA");
     assert.deepEqual(
       PRIMARY_NAV.map((item) => item.key),
       ["ncr", "capa", "documents", "training", "audit"]
@@ -54,7 +54,7 @@ describe("close-the-loop copy", () => {
     assert.equal(ncrLoopIndex("open"), 0);
     assert.match(ncrNextAction("open", false), /Contain/);
     assert.equal(ncrLoopIndex("contained"), 1);
-    assert.match(ncrNextAction("investigating", false), /Open a fix/);
+    assert.match(ncrNextAction("investigating", false), /Open a CAPA/);
     assert.match(ncrNextAction("investigating", true), /corrective action/);
     assert.equal(ncrLoopIndex("closed"), 4);
   });
@@ -94,15 +94,15 @@ describe("ownership and dates", () => {
   it("sorts late work by due day", () => {
     const rows = lateItems(
       [
-        { who: "Sam", label: "Issue #2", link: "/ncr/2", due: "2026-09-20", terminal: false },
-        { who: "Ada", label: "Fix #1", link: "/capa/1", due: "2026-09-10", terminal: false },
-        { who: "Ada", label: "Issue #9", link: "/ncr/9", due: "2026-09-01", terminal: true },
+        { who: "Sam", label: "NCR #2", link: "/ncr/2", due: "2026-09-20", terminal: false },
+        { who: "Ada", label: "CAPA #1", link: "/capa/1", due: "2026-09-10", terminal: false },
+        { who: "Ada", label: "NCR #9", link: "/ncr/9", due: "2026-09-01", terminal: true },
       ],
       "2026-09-23"
     );
     assert.deepEqual(
       rows.map((row) => row.label),
-      ["Fix #1", "Issue #2"]
+      ["CAPA #1", "NCR #2"]
     );
   });
 });

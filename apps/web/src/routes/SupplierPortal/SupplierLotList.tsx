@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { InventoryLot } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 interface SupplierLot extends InventoryLot {
   /** The originating receiving line item's own disposition — a lot has no accept/reject status of its own (see erp.ts's schema comment). */
@@ -15,7 +16,7 @@ export function SupplierLotList({ supplierId }: { supplierId?: number }) {
     queryFn: async () => (await apiClient.get("/supplier-portal/lots/list", { params: supplierId ? { supplierId } : undefined })).data,
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">No shipment lots recorded for this supplier yet.</p>;
 
   return (

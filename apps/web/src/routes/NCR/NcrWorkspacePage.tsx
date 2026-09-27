@@ -342,12 +342,20 @@ function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTi
   const { data: eightDs = [] } = eightDHooks.useList();
   const { data: rmas = [] } = rmaHooks.useList();
   const { data: workOrders = [] } = workOrderHooks.useList();
-  const [attachId, setAttachId] = useState("");
+  const [attachQuery, setAttachQuery] = useState("");
+  const [attachOpen, setAttachOpen] = useState(false);
 
   const linkedCapas = capas.filter((c) => c.ncrId === ncrId);
   const linkedEightDs = eightDs.filter((r) => r.ncrId === ncrId);
   const linkedRmas = rmas.filter((r) => r.linkedNcrId === ncrId);
   const linkedWorkOrders = workOrders.filter((w) => w.linkedNcrId === ncrId);
+  const attachChoices = capas
+    .filter((c) => c.ncrId !== ncrId)
+    .filter((c) => {
+      const haystack = `${c.id} ${c.rootCause ?? ""}`.toLowerCase();
+      return haystack.includes(attachQuery.trim().toLowerCase());
+    })
+    .slice(0, 8);
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
@@ -359,7 +367,7 @@ function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTi
             onClick={() => createCapa.mutate({ ncrId }, { onSuccess: (created) => navigate(`/capa/${created.id}`) })}
             className="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground"
           >
-            Open a fix
+            Open a CAPA
           </button>
           )}
           {canEdit && (
@@ -371,42 +379,61 @@ function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTi
           </button>
           )}
           {canEdit && (
-          <form
-            className="flex items-center gap-1"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const capaId = Number(attachId);
-              if (!capaId) return;
-              attachCapa.mutate({ id: capaId, ncrId }, { onSuccess: () => setAttachId("") });
-            }}
-          >
+          <div className="relative">
             <input
-              value={attachId}
-              onChange={(e) => setAttachId(e.target.value)}
-              placeholder="CAPA #"
-              className="w-16 rounded-md border border-border bg-transparent px-2 py-1 text-xs"
+              value={attachQuery}
+              onChange={(e) => {
+                setAttachQuery(e.target.value);
+                setAttachOpen(true);
+              }}
+              onFocus={() => setAttachOpen(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setAttachOpen(false);
+              }}
+              placeholder="Search CAPAs"
+              aria-label="Search CAPAs to attach"
+              aria-expanded={attachOpen}
+              aria-controls="capa-attach-list"
+              className="w-40 rounded-md border border-border bg-transparent px-2 py-1 text-xs"
             />
-            <button type="submit" className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
-              Attach existing fix
-            </button>
-          </form>
+            {attachOpen && (
+              <ul id="capa-attach-list" role="listbox" className="absolute right-0 z-20 mt-1 max-h-48 w-64 overflow-auto rounded-md border border-border bg-card p-1 shadow-lg">
+                {attachChoices.length === 0 && <li className="px-2 py-1 text-xs text-muted-foreground">No matching CAPA</li>}
+                {attachChoices.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      role="option"
+                      className="w-full truncate rounded px-2 py-1 text-left text-xs hover:bg-muted"
+                      onClick={() => {
+                        attachCapa.mutate({ id: c.id, ncrId }, { onSuccess: () => { setAttachQuery(""); setAttachOpen(false); } });
+                      }}
+                    >
+                      CAPA #{c.id}
+                      {c.rootCause ? ` — ${c.rootCause}` : ""}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           )}
           {canEdit && <CreateRiskButton sourceType="NCR" sourceId={ncrId} defaultTitle={`Risk from ${ncrTitle}`} defaultDepartment="quality" defaultCategory="process" />}
         </div>
       </div>
 
       {linkedCapas.length === 0 && (
-        <p className="mb-2 text-sm text-muted-foreground">No fix is tied to this issue yet. Open one so containment doesn't end here.</p>
+        <p className="mb-2 text-sm text-muted-foreground">No CAPA is tied to this NCR yet. Open one so containment doesn't end here.</p>
       )}
       {linkedEightDs.length === 0 && (
-        <p className="mb-2 text-sm text-muted-foreground">No 8D report yet. Start one when this issue needs the eight-step writeup.</p>
+        <p className="mb-2 text-sm text-muted-foreground">No 8D report yet. Start one when this NCR needs the eight-step writeup.</p>
       )}
 
       <ul className="flex flex-col gap-2 text-sm">
         {linkedCapas.map((c) => (
           <li key={`capa-${c.id}`} className="border-b border-border pb-1">
             <button onClick={() => navigate(`/capa/${c.id}`)} className="flex w-full items-center justify-between text-left hover:text-primary">
-              <span>Fix #{c.id}</span>
+              <span>CAPA #{c.id}</span>
               <StatusBadge value={c.status} label={statusPhrase(c.status)} />
             </button>
           </li>

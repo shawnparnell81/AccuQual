@@ -12,6 +12,7 @@ import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPan
 import { SelectField } from "../../components/forms/Field";
 import { CrarFormRenderer } from "./CrarFormRenderer";
 import type { CrarClaim, CrarStatus, WarrantyClaim, RmaLogRecord } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const crarHooks = createResourceHooks<CrarClaim>("crar");
 const warrantyHooks = createResourceHooks<WarrantyClaim>("warranty/claims");
@@ -55,7 +56,7 @@ export function CrarDetailPage() {
   }, [record]);
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !record) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !record) return <LoadingPlaceholder />;
 
   const isAdmin = currentUser?.roleName === "admin";
   const department = currentUser?.department;

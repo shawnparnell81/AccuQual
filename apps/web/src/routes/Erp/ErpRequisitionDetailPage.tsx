@@ -11,6 +11,7 @@ import { WorkflowActionButton } from "../../components/shared/WorkflowActionButt
 import { TextAreaField } from "../../components/forms/Field";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import type { ErpPurchaseRequisition } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const requisitionHooks = createResourceHooks<ErpPurchaseRequisition>("erp/requisitions");
 
@@ -48,7 +49,7 @@ export function ErpRequisitionDetailPage() {
   });
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !record) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !record) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">

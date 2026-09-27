@@ -540,6 +540,13 @@
       "when": 1790473860154,
       "tag": "0076_must_change_password",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1790550000000,
+      "tag": "0077_user_notification_preferences",
+      "breakpoints": true
     }
   ]
 }

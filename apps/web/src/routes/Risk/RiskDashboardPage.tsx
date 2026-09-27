@@ -4,6 +4,7 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import type { RiskAssessment } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { riskLevelFromScore } from "../../components/shared/riskConstants";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const riskHooks = createResourceHooks<RiskAssessment>("risk");
 
@@ -47,7 +48,7 @@ export function RiskDashboardPage() {
 
   const highCritical = risks.filter((r) => r.riskLevel === "high" || r.riskLevel === "critical" || (r.riskScore && r.riskScore >= 10));
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">

@@ -15,6 +15,7 @@ import { Modal } from "../../components/modals/Modal";
 import { TextField } from "../../components/forms/Field";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
 import type { ErpPurchaseOrder, ErpReceivingDocument, ErpReceivingLineItem, ReceivingLineItemStatus } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const poHooks = createResourceHooks<ErpPurchaseOrder>("erp/purchase-orders");
 
@@ -248,7 +249,7 @@ export function ErpPurchaseOrderDetailPage() {
   const cancelAction = useWorkflowAction("erp/purchase-orders", "cancel", { successMessage: "Purchase order cancelled.", invalidateKeys: historyKey });
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !po) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !po) return <LoadingPlaceholder />;
 
   const canCancel = po.status !== "received" && po.status !== "cancelled";
   const canSend = po.status === "draft";

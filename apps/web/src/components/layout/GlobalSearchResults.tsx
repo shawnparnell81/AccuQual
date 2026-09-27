@@ -3,21 +3,19 @@ import { apiClient } from "../../api/client";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useOpenTab } from "../../hooks/useOpenTab";
 import type { SearchResult } from "../../api/types";
+import { rememberRecord } from "../../lib/recentRecords";
 
 const TYPE_TO_ICON: Record<SearchResult["type"], string> = {
   NCR: "ncr",
   CAPA: "capa",
-  PO: "erp",
   WO: "default",
   Audit: "audit",
   Supplier: "supplier",
-  Item: "inventory",
   Training: "training",
   Calibration: "calibration",
-  // Same icon keys tabMeta.ts's own path-based rules already use for these routes.
   RMA: "rma",
   "8D": "capa",
-  Complaint: "capa",
+  Document: "documents",
   Change: "default",
   Risk: "default",
   PPAP: "default",
@@ -54,6 +52,7 @@ export function GlobalSearchResults({ query, onSelect }: { query: string; onSele
         <button
           key={`${r.type}-${r.id}`}
           onClick={() => {
+            rememberRecord({ path: r.path, title: r.label, type: r.type });
             openTab({ path: r.path, title: r.label, icon: TYPE_TO_ICON[r.type] });
             onSelect();
           }}

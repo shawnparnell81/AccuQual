@@ -4,6 +4,7 @@ import { apiClient } from "../../api/client";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { useCurrentUser } from "../../hooks/useAuth";
 import type { QualityInspectionReport } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 /** Phase 8 task 3 — "supplier-facing visibility: inspection notes." A real, direct supplierId FK join (added this phase), unlike NCR/CAPA's derived-link pattern. */
 export function SupplierInspectionList({ supplierId }: { supplierId?: number }) {
@@ -14,7 +15,7 @@ export function SupplierInspectionList({ supplierId }: { supplierId?: number }) 
     queryFn: async () => (await apiClient.get("/supplier-portal/inspections/list", { params: supplierId ? { supplierId } : undefined })).data,
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">No inspections recorded against this supplier yet.</p>;
 
   return (

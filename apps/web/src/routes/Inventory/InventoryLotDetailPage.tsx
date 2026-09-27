@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { InventoryLotTraceability, InventoryMovement } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 function useLotTrace(lotId: number | undefined) {
   return useQuery<InventoryLotTraceability>({
@@ -45,7 +46,7 @@ export function InventoryLotDetailPage() {
   const lotId = id ? Number(id) : undefined;
   const { data, isLoading } = useLotTrace(lotId);
 
-  if (isLoading || !data) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !data) return <LoadingPlaceholder />;
   const { lot, item, supplier, receivingLineItem, poLineItem, purchaseOrder, inspectionReport, movements } = data;
 
   return (

@@ -103,6 +103,7 @@ export function AppLayout() {
     if (isSupplierPortal) return;
     const { title, icon } = deriveTabMeta(location.pathname);
     syncActiveTabLocation(location.pathname, title, icon);
+    document.title = title && title !== location.pathname ? `${title} · AccuQual` : "AccuQual";
   }, [isSupplierPortal, location.pathname, syncActiveTabLocation]);
 
   if (isSupplierPortal) {

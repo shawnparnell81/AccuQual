@@ -6,11 +6,9 @@ import { ensureTestCompany } from "../helpers/company.js";
 // cross-module aggregation endpoint most likely to regress into a
 // leak during a refactor.
 //
-// Real behavior verified directly against search.controller.ts before
-// writing this (NOT assumed): NCR/CAPA/etc. only ever match a numeric
-// ID-prefix query ("search ONLY by document number or ID" — no title/
-// description text search at all), and the response is `{ results: [...] }`,
-// not a bare array.
+// Record numbers still match a numeric id prefix. Documents also match title
+// and revision, and equipment matches name and serial. The response is
+// `{ results: [...] }`, not a bare array.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import request from "supertest";
@@ -25,6 +23,8 @@ import { complaints } from "../../src/drizzle/schema/complaints.js";
 import { changeRequests } from "../../src/drizzle/schema/change.js";
 import { riskAssessments } from "../../src/drizzle/schema/risk.js";
 import { ppapPackages } from "../../src/drizzle/schema/ppap.js";
+import { documents } from "../../src/drizzle/schema/documents.js";
+import { equipment } from "../../src/drizzle/schema/calibration.js";
 import { suppliers } from "../../src/drizzle/schema/supplier.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
@@ -41,6 +41,10 @@ let complaintId: number;
 let changeId: number;
 let riskId: number;
 let ppapId: number;
+let documentId: number;
+let equipmentId: number;
+const documentTitle = `Search Doc ${suffix}`;
+const gageName = `Search Gage ${suffix}`;
 const userIds: number[] = [];
 let qualityToken: string;
 let engineeringToken: string;
@@ -84,6 +88,10 @@ describe("Search (real DB + real HTTP path)", () => {
     riskId = riskRow!.id;
     const [ppapRow] = await db.insert(ppapPackages).values({ partNumber: `PN-SEARCH-${suffix}` }).returning();
     ppapId = ppapRow!.id;
+    const [documentRow] = await db.insert(documents).values({ title: documentTitle, revisionCode: `REV-${suffix}` }).returning();
+    documentId = documentRow!.id;
+    const [equipmentRow] = await db.insert(equipment).values({ name: gageName, serialNumber: `SER-${suffix}` }).returning();
+    equipmentId = equipmentRow!.id;
   });
 
   afterAll(async () => {
@@ -124,9 +132,9 @@ describe("Search (real DB + real HTTP path)", () => {
     expect(res.body.results.some((r: { type: string; id: number }) => r.type === "8D" && r.id === eightDId)).toBe(true);
   });
 
-  it("finds a Complaint (engineering has edit access)", async () => {
+  it("does not return a Complaint result — complaints redirect to NCR and are not a search type", async () => {
     const res = await request(app).get(`/search?q=${complaintId}`).set("Authorization", `Bearer ${engineeringToken}`);
-    expect(res.body.results.some((r: { type: string; id: number }) => r.type === "Complaint" && r.id === complaintId)).toBe(true);
+    expect(res.body.results.some((r: { type: string }) => r.type === "Complaint")).toBe(false);
   });
 
   it("finds a Change request (engineering has edit access)", async () => {
@@ -142,6 +150,15 @@ describe("Search (real DB + real HTTP path)", () => {
   it("finds a PPAP package (engineering has edit access)", async () => {
     const res = await request(app).get(`/search?q=${ppapId}`).set("Authorization", `Bearer ${engineeringToken}`);
     expect(res.body.results.some((r: { type: string; id: number }) => r.type === "PPAP" && r.id === ppapId)).toBe(true);
+  });
+
+  it("finds a document by title and a gage by name, not only by numeric id", async () => {
+    const byTitle = await request(app).get("/search").query({ q: documentTitle }).set("Authorization", `Bearer ${qualityToken}`);
+    expect(byTitle.status).toBe(200);
+    expect(byTitle.body.results.some((r: { type: string; id: number }) => r.type === "Document" && r.id === documentId)).toBe(true);
+
+    const byGage = await request(app).get("/search").query({ q: gageName }).set("Authorization", `Bearer ${qualityToken}`);
+    expect(byGage.body.results.some((r: { type: string; id: number }) => r.type === "Calibration" && r.id === equipmentId)).toBe(true);
   });
 
   it("quality (zero access to ppap) never sees the PPAP package — same skip-the-category behavior as NCR/engineering above", async () => {

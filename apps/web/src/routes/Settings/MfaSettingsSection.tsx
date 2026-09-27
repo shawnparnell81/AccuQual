@@ -7,6 +7,8 @@ import { MfaEnrollPanel, RecoveryCodesPanel } from "../../components/auth/MfaPan
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { formatDate } from "../../lib/dates";
+import { useConfirm } from "../../components/shared/ConfirmDialog";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 export interface MfaStatus {
   enabled: boolean;
@@ -70,7 +72,7 @@ export function MfaSettingsSection() {
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["auth/mfa/status"] });
 
-  if (isLoading || !status) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !status) return <LoadingPlaceholder />;
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
@@ -175,6 +177,7 @@ interface TrustedDevice {
 
 /** Settings → Security: browsers that can skip the authenticator code until they expire. */
 export function TrustedDevicesSection() {
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const toast = useToast();
   const { data, isLoading, isError } = useQuery<{ devices: TrustedDevice[] }>({
@@ -193,7 +196,8 @@ export function TrustedDevicesSection() {
   }
 
   async function forgetAll() {
-    if (!window.confirm("Forget every trusted device? Each one will ask for an authenticator code the next time you sign in there.")) return;
+    const ok = await confirm({ title: "Forget every trusted device?", message: "Each one will ask for an authenticator code the next time you sign in there.", confirmLabel: "Forget all" });
+    if (!ok) return;
     try {
       await apiClient.post("/auth/trusted-devices/forget-all");
       toast.success("All trusted devices forgotten.");
@@ -212,7 +216,7 @@ export function TrustedDevicesSection() {
         A trusted device skips the authenticator code for 30 days. Your password is still required every time. The 30 days start when you trust the device and do not restart when you sign in.
       </p>
 
-      {isLoading && <p className="mt-3 text-sm text-muted-foreground">Loading…</p>}
+      {isLoading && <LoadingPlaceholder />}
       {isError && <p className="mt-3 text-sm text-destructive">Couldn't load trusted devices.</p>}
 
       {!isLoading && !isError && devices.length === 0 && (
@@ -235,8 +239,12 @@ export function TrustedDevicesSection() {
               <button
                 type="button"
                 onClick={() => {
-                  if (!window.confirm(device.current ? "Forget this device? This browser will ask for an authenticator code the next time you sign in." : "Forget this device? It will ask for an authenticator code the next time you sign in there.")) return;
-                  void forget(`/auth/trusted-devices/${device.id}`, "Device forgotten.");
+                  const message = device.current
+                    ? "This browser will ask for an authenticator code the next time you sign in."
+                    : "It will ask for an authenticator code the next time you sign in there.";
+                  void confirm({ title: "Forget this device?", message, confirmLabel: "Forget" }).then((ok) => {
+                    if (ok) void forget(`/auth/trusted-devices/${device.id}`, "Device forgotten.");
+                  });
                 }}
                 className="rounded-md border border-border px-3 py-1.5 text-sm"
               >

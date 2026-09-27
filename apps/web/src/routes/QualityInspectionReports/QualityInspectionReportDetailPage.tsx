@@ -12,6 +12,7 @@ import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSugg
 import { Modal } from "../../components/modals/Modal";
 import { DEFECT_CATEGORIES, INSPECTION_METHODS } from "../../api/types";
 import type { QualityInspectionReport, QualityInspectionItem, InspectionType, InspectionFinalStatus, Supplier, DefectCategory, InspectionMethod } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const reportHooks = createResourceHooks<QualityInspectionReport>("quality-inspection-reports");
 const INSPECTION_TYPES: InspectionType[] = ["incoming", "in_process", "final"];
@@ -76,7 +77,7 @@ export function QualityInspectionReportDetailPage() {
   });
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !report) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !report) return <LoadingPlaceholder />;
 
   const items = report.items ?? [];
 

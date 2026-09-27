@@ -4,6 +4,7 @@ import { apiClient } from "../../api/client";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { useCurrentUser } from "../../hooks/useAuth";
 import type { ScarForm } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 /** Phase 7 task 1 — SCAR (Supplier Corrective Action Request) forms now carry a real, nullable supplierId FK added this phase (see scarForms.ts's schema comment — the pre-existing supplierName field was free text with no reliable join back to a real supplier record). Only SCARs created against a real supplier show up here; older ones typed with just a name won't until re-linked. */
 export function SupplierScarList({ supplierId }: { supplierId?: number }) {
@@ -14,7 +15,7 @@ export function SupplierScarList({ supplierId }: { supplierId?: number }) {
     queryFn: async () => (await apiClient.get("/supplier-portal/scar/list", { params: supplierId ? { supplierId } : undefined })).data,
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">No SCARs issued to this supplier yet.</p>;
 
   return (

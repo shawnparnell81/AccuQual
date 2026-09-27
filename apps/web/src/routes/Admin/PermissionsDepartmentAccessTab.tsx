@@ -5,6 +5,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { DEPARTMENTS } from "../../components/layout/navConfig";
 import type { DepartmentPermissionCell, ModuleAccessLevel, PermissionModuleInfo } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const LEVEL_LABEL: Record<ModuleAccessLevel, string> = { none: "None", read: "Read", edit: "Edit" };
 
@@ -52,7 +53,7 @@ export function PermissionsDepartmentAccessTab() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't reset that permission.")),
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border">

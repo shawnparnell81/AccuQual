@@ -5,6 +5,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { DEFECT_CATEGORIES } from "../../api/types";
 import type { ReceivingSettings } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 function useReceivingSettings() {
   return useQuery<ReceivingSettings>({ queryKey: ["settings/receiving"], queryFn: async () => (await apiClient.get("/settings/receiving")).data });
@@ -41,7 +42,7 @@ export function ReceivingSettingsPanel() {
     setForm({ ...form, autoCreateNcrDefectCategories: current.includes(category) ? current.filter((c) => c !== category) : [...current, category] });
   }
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">

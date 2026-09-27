@@ -4,6 +4,7 @@ import { apiClient } from "../../api/client";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { useCurrentUser } from "../../hooks/useAuth";
 import type { WarrantyClaim } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 /** Phase 7 task 1 — warrantyClaims carries a real (nullable, set once the claim moves to the supplier) supplierId FK, same direct-list shape as SupplierRmaList. */
 export function SupplierWarrantyList({ supplierId }: { supplierId?: number }) {
@@ -14,7 +15,7 @@ export function SupplierWarrantyList({ supplierId }: { supplierId?: number }) {
     queryFn: async () => (await apiClient.get("/supplier-portal/warranty/list", { params: supplierId ? { supplierId } : undefined })).data,
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) return <LoadingPlaceholder />;
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">No warranty claims linked to this supplier yet.</p>;
 
   return (

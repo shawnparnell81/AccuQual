@@ -17,6 +17,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const itemHooks = createResourceHooks<InventoryItem>("inventory/items");
 const alertHooks = createResourceHooks<InventoryAlert>("inventory/alerts");
@@ -269,7 +270,7 @@ export function InventoryDetailPage() {
   const acknowledgeAction = useWorkflowAction("inventory/alerts", "acknowledge", { successMessage: "Alert acknowledged." });
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !item) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !item) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">
@@ -420,7 +421,7 @@ export function InventoryDetailPage() {
         <div className="rounded-lg border border-border bg-card p-4">
           <h3 className="mb-3 text-sm font-medium">Costing</h3>
           {!costing ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            <LoadingPlaceholder />
           ) : costing.unitCost === null ? (
             <p className="text-sm text-muted-foreground">No unit cost set — set one above to see item value and scrap/consumption cost.</p>
           ) : (

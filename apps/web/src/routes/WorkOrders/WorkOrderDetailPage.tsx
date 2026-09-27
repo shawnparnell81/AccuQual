@@ -9,6 +9,7 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { TextField } from "../../components/forms/Field";
 import { ProductionWorkOrderTraveler } from "./ProductionWorkOrderTraveler";
 import type { WorkOrder, WorkOrderStatus } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const woHooks = createResourceHooks<WorkOrder>("work-orders");
 
@@ -26,7 +27,7 @@ export function WorkOrderDetailPage() {
   });
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !record) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !record) return <LoadingPlaceholder />;
 
   const status = record.status as WorkOrderStatus;
 

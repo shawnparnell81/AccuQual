@@ -8,6 +8,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { PPAP_DOCUMENT_TYPES } from "../../api/types";
 import type { SupplierPpapSubmission } from "../../api/types";
 import { FileDropZone } from "../../components/shared/FileDropZone";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const LEVELS = [1, 2, 3, 4, 5];
 
@@ -55,7 +56,7 @@ export function PPAPSubmissionPanel({ supplierId, isReviewer }: { supplierId?: n
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadingPlaceholder />
       ) : submissions.length === 0 ? (
         <p className="text-sm text-muted-foreground">No PPAP submissions yet.</p>
       ) : (

@@ -10,6 +10,7 @@ import { Modal } from "../../components/modals/Modal";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { DEPARTMENTS } from "../../components/layout/navConfig";
 import type { AppUser, AppRole } from "../../api/types";
+import { useConfirm } from "../../components/shared/ConfirmDialog";
 
 const userHooks = createResourceHooks<AppUser>("users");
 const roleHooks = createResourceHooks<AppRole>("roles");
@@ -43,6 +44,7 @@ export function SecurityRolesSection() {
 }
 
 function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
+  const confirm = useConfirm();
   const { data: users = [] } = userHooks.useList();
   const { data: roles = [] } = roleHooks.useList();
   const toast = useToast();
@@ -132,7 +134,13 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
                   {u.mfaEnabled && (
                     <button
                       onClick={() => {
-                        if (window.confirm(`Reset two-step sign-in for ${u.email}? They will be signed out and can set it up again.`)) void adminAction(`/users/${u.id}/mfa/reset`, "Two-step sign-in reset.");
+                        void confirm({
+                          title: "Reset two-step sign-in?",
+                          message: `${u.email} will be signed out and can set it up again.`,
+                          confirmLabel: "Reset",
+                        }).then((ok) => {
+                          if (ok) void adminAction(`/users/${u.id}/mfa/reset`, "Two-step sign-in reset.");
+                        });
                       }}
                       className="text-xs text-muted-foreground hover:text-destructive"
                     >

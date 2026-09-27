@@ -16,6 +16,7 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { FileDropZone } from "../../components/shared/FileDropZone";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 interface Equipment extends EquipmentState {
   serialNumber: string | null;
@@ -130,7 +131,7 @@ export function EquipmentDetailPage() {
   }
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
-  if (isLoading || !equipment) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !equipment) return <LoadingPlaceholder />;
 
   return (
     <div className="flex flex-col gap-4">

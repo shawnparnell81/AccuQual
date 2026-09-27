@@ -6,6 +6,7 @@ import { WorkflowTrendChart } from "../../components/charts/WorkflowTrendChart";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { SelectField } from "../../components/forms/Field";
 import type { CompanyAiUsage, AiSuggestionHistoryResponse } from "../../api/types";
+import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 function useAiUsage() {
   return useQuery<CompanyAiUsage>({ queryKey: ["company/ai-usage"], queryFn: async () => (await apiClient.get("/company/ai-usage")).data });
@@ -57,7 +58,7 @@ const currency = (n: number) => `$${n.toLocaleString(undefined, { minimumFractio
 function UsageDashboard() {
   const { data, isLoading } = useAiUsage();
 
-  if (isLoading || !data) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading || !data) return <LoadingPlaceholder />;
 
   const limitPct = data.limitEnforced && data.monthlyLimit ? Math.min((data.currentMonthTokens / data.monthlyLimit) * 100, 100) : null;
 
@@ -186,7 +187,7 @@ function SuggestionHistory() {
       </div>
 
       {isLoading || !data ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadingPlaceholder />
       ) : data.items.length === 0 ? (
         <p className="text-sm text-muted-foreground">No AI suggestions match these filters yet.</p>
       ) : (
