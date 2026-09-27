@@ -117,7 +117,12 @@ export function SettingsPage() {
       )}
 
       {tab === "Company" && <CompanySettingsLinks />}
-      {tab === "Security" && <MfaSettingsSection />}
+      {tab === "Security" && (
+        <div className="flex flex-col gap-4">
+          <MfaSettingsSection />
+          <TrustedDevicesSection />
+        </div>
+      )}
       {tab === "Theme" && <ThemeSettingsSection />}
 
       {tab === "Notifications" && <NotAvailable what="Notifications" />}

@@ -32,8 +32,9 @@ function Card({ subtitle, children, onSubmit }: { subtitle: string; children: Re
     </>
   );
   const cls = "w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl ring-1 ring-primary/10";
+  // The card grows with its contents so a short window can scroll to the trust checkbox instead of clipping it.
   return (
-    <div className="flex h-screen items-center justify-center overflow-y-auto px-4">
+    <div className="flex min-h-screen items-center justify-center overflow-y-auto px-4 py-8 pb-16">
       <StandardsDisclaimer className="fixed inset-x-0 bottom-3 px-4 text-center" />
       {onSubmit ? (
         <form onSubmit={onSubmit} className={cls}>
@@ -83,17 +84,17 @@ const REMEMBERED_EMAIL_KEY = "accuqual-remembered-email";
 
 function TrustDeviceChoice({ checked, onChange }: { checked: boolean; onChange: (value: boolean) => void }) {
   return (
-    <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm">
+    <label htmlFor="trust-device" className="mt-4 flex cursor-pointer items-start gap-3 rounded-md border border-border bg-background/50 p-3 text-sm text-foreground">
       <input
         id="trust-device"
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 h-4 w-4 rounded border-form-field accent-[hsl(var(--primary))]"
+        className="mt-0.5 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
       />
       <span>
-        Don't ask for a code on this device for 30 days
-        <span className="block text-xs text-muted-foreground">Your password is still required every time. After 30 days, or in a different browser, we'll ask for the code again.</span>
+        <span className="font-medium">Trust this browser for 30 days</span>
+        <span className="mt-1 block text-xs text-muted-foreground">Don't ask for a code on this device for 30 days. Your password is still required every time. After 30 days, or in a different browser, we'll ask for the code again.</span>
       </span>
     </label>
   );

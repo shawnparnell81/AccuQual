@@ -5,7 +5,9 @@ import {
   classifyRefreshFailure,
   createSessionRefresher,
   nextProactiveDelayMs,
+  refreshDecision,
   settleAfterRefresh,
+  type RefreshReason,
   type RefreshResult,
 } from "./sessionRefresh";
 
@@ -32,8 +34,24 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
-let lastRefreshAt = 0;
+let lastSuccessAt = 0;
 let proactiveTimer: ReturnType<typeof setTimeout> | undefined;
+let inFlight: Promise<RefreshResult> | null = null;
+
+const REFRESH_CHANNEL = "accuqual-session-refresh";
+const REFRESH_LOCK = "accuqual-session-refresh";
+/** How long a renewal another tab just finished can be reused, so this tab does not send the same cookie again. */
+const SHARED_REFRESH_MS = 15_000;
+
+interface SharedRefresh {
+  at: number;
+  result: RefreshResult;
+  user?: AuthUser;
+  company?: CompanyContext | null;
+}
+
+let sharedRefresh: SharedRefresh | null = null;
+let refreshChannel: BroadcastChannel | null = null;
 
 const refresher = createSessionRefresher({
   attempt: (attempt) => performRefreshAttempt(attempt),
@@ -44,18 +62,63 @@ function endSession() {
   useSiteStore.getState().setCurrentSiteId(null);
 }
 
+function listenForOtherTabs() {
+  if (refreshChannel || typeof BroadcastChannel === "undefined") return;
+  refreshChannel = new BroadcastChannel(REFRESH_CHANNEL);
+  refreshChannel.onmessage = (event: MessageEvent<SharedRefresh>) => {
+    const data = event.data;
+    if (!data || typeof data.at !== "number" || Date.now() - data.at > SHARED_REFRESH_MS) return;
+    sharedRefresh = data;
+    if (data.result.ok && data.user) {
+      lastSuccessAt = data.at;
+      useAuthStore.getState().setSession(data.user, data.result.accessToken, data.company ?? null);
+    } else if (!data.result.ok && data.result.logout) {
+      endSession();
+    }
+  };
+}
+
+function rememberShared(result: RefreshResult) {
+  const state = useAuthStore.getState();
+  const message: SharedRefresh = {
+    at: Date.now(),
+    result,
+    user: result.ok ? (state.user ?? undefined) : undefined,
+    company: state.company,
+  };
+  sharedRefresh = message;
+  try {
+    refreshChannel?.postMessage(message);
+  } catch {
+    // A browser that refuses the channel still renews this tab. Other tabs retry on their own timer.
+  }
+}
+
+function reuseSharedRefresh(): RefreshResult | null {
+  if (!sharedRefresh || Date.now() - sharedRefresh.at > SHARED_REFRESH_MS) return null;
+  if (!sharedRefresh.result.ok) return sharedRefresh.result;
+  const token = useAuthStore.getState().accessToken;
+  if (!token) return null;
+  return { ok: true, accessToken: token };
+}
+
 function scheduleProactiveRefresh(token: string | null, delayOverride?: number) {
   if (proactiveTimer) clearTimeout(proactiveTimer);
   proactiveTimer = undefined;
-  const delay = delayOverride ?? (token ? nextProactiveDelayMs(token, Date.now(), lastRefreshAt) : null);
+  const delay = delayOverride ?? (token ? nextProactiveDelayMs(token, Date.now(), lastSuccessAt) : null);
   if (delay == null) return;
   proactiveTimer = setTimeout(() => {
-    void refreshSession().then((result) => {
-      if (result.ok) return;
-      if (result.logout) endSession();
-      else scheduleProactiveRefresh(useAuthStore.getState().accessToken, result.retryAfterMs);
-    });
+    const current = useAuthStore.getState().accessToken;
+    // A signed-out retry (the first check failed before a token existed) is a bootstrap, not a proactive skip.
+    void refreshSession(current ? "proactive" : "bootstrap");
   }, delay);
+}
+
+function settleRefreshResult(result: RefreshResult): RefreshResult {
+  if (result.ok) return result;
+  if (result.logout) endSession();
+  else scheduleProactiveRefresh(useAuthStore.getState().accessToken, result.retryAfterMs);
+  return result;
 }
 
 async function performRefreshAttempt(attempt: number) {
@@ -70,6 +133,9 @@ async function performRefreshAttempt(attempt: number) {
       // Raw axios, not apiClient: a 401 from this call must not re-enter the interceptor.
       { withCredentials: true, headers: { "X-AccuQual-Csrf": "1" } },
     );
+    // Stamp this before setSession. That update schedules the next renewal, and it
+    // must see that a renewal just finished or it will fire another one immediately.
+    lastSuccessAt = Date.now();
     useAuthStore.getState().setSession(data.user, data.accessToken, data.company);
     return { kind: "ok" as const, accessToken: data.accessToken };
   } catch (err) {
@@ -91,13 +157,42 @@ async function performRefreshAttempt(attempt: number) {
  * re-login. auth.service.ts's `refresh()` was fixed to return `company` in
  * the same pass so this has something real to apply.
  *
- * Shares one in-flight renewal with the 401 interceptor and the timer that
- * renews shortly before the access token expires. A 429 does not end the
- * session; the caller should wait `retryAfterMs` and try again.
+ * One renewal at a time in this tab, and one across tabs (a lock plus a
+ * same-tab message). A second tab waits and reuses the token the first tab
+ * just received instead of sending the same cookie again — that second send
+ * was coming back 401, and enough of them together came back 429.
+ * A 401 right after a renewal replays with the new token instead of renewing
+ * again. A 429 does not end the session; one retry is scheduled.
  */
-export function refreshSession(): Promise<RefreshResult> {
-  lastRefreshAt = Date.now();
-  return refresher.refresh();
+export function refreshSession(reason: RefreshReason = "proactive"): Promise<RefreshResult> {
+  const token = useAuthStore.getState().accessToken;
+  if (refreshDecision({ reason, accessToken: token, lastSuccessAt }) === "skip") {
+    if (inFlight) return inFlight;
+    if (token) return Promise.resolve({ ok: true, accessToken: token });
+  }
+  if (!inFlight) {
+    inFlight = coordinatedRefresh().then(settleRefreshResult).finally(() => {
+      inFlight = null;
+    });
+  }
+  return inFlight;
+}
+
+async function coordinatedRefresh(): Promise<RefreshResult> {
+  listenForOtherTabs();
+  const run = async () => {
+    // Let a renewal message from the tab that just held this lock land before we send another request.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const reused = reuseSharedRefresh();
+    if (reused) return reused;
+    const result = await refresher.refresh();
+    rememberShared(result);
+    return result;
+  };
+  if (typeof navigator !== "undefined" && navigator.locks?.request) {
+    return navigator.locks.request(REFRESH_LOCK, run);
+  }
+  return run();
 }
 
 export async function refreshAccessToken(): Promise<string | null> {
@@ -113,7 +208,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && original && !original._retried && !isRefreshRequest(original)) {
       original._retried = true;
       const settled = await settleAfterRefresh(
-        () => refreshSession(),
+        () => refreshSession("unauthorized"),
         (token) => {
           original.headers.set("Authorization", `Bearer ${token}`);
           return apiClient.request(original);
@@ -141,12 +236,8 @@ if (typeof document !== "undefined") {
     if (document.visibilityState !== "visible") return;
     const token = useAuthStore.getState().accessToken;
     if (!token) return;
-    if (nextProactiveDelayMs(token, Date.now(), lastRefreshAt) !== 0) return;
-    void refreshSession().then((result) => {
-      if (result.ok) return;
-      if (result.logout) endSession();
-      else scheduleProactiveRefresh(token, result.retryAfterMs);
-    });
+    if (nextProactiveDelayMs(token, Date.now(), lastSuccessAt) !== 0) return;
+    void refreshSession("proactive");
   });
 }
 
