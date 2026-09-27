@@ -9,6 +9,31 @@
     <title>AccuQual</title>
     <script>
       (function () {
+        // Marketing hosts show the static landing page and never boot the app
+        // (no session refresh). Keep this host list in sync with src/lib/publicSite.ts.
+        var host = (location.hostname || "").toLowerCase().replace(/\.$/, "");
+        if (host !== "www.accuqualqms.com" && host !== "accuqualqms.com") return;
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            for (var i = 0; i < regs.length; i++) regs[i].unregister();
+          });
+        }
+        if (window.caches && caches.keys) {
+          caches.keys().then(function (keys) {
+            for (var i = 0; i < keys.length; i++) caches.delete(keys[i]);
+          });
+        }
+        var path = location.pathname;
+        if (path === "/login" || path === "/forgot-password" || path === "/reset-password") {
+          location.replace("https://app.accuqualqms.com" + path + location.search + location.hash);
+          return;
+        }
+        if (path === "/welcome" || path.indexOf("/welcome/") === 0) return;
+        location.replace("/welcome/index.html");
+      })();
+    </script>
+    <script>
+      (function () {
         try {
           var mode = localStorage.getItem("accuqual-theme-mode");
           document.documentElement.setAttribute("data-theme", mode === "light" || mode === "dark" ? mode : "dark");

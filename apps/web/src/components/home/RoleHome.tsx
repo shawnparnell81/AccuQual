@@ -18,10 +18,10 @@ import { useSites } from "../../hooks/useSites";
 import { useSiteStore } from "../../store/siteStore";
 import { WorkflowInbox } from "./WorkflowInbox";
 
-function useModuleList<T>(resource: string, enabled: boolean, siteKey: number | null | "shared") {
+function useModuleList<T>(resource: string, enabled: boolean, siteKey: number | null | "shared", params?: Record<string, string>) {
   return useQuery({
-    queryKey: [resource, siteKey, undefined],
-    queryFn: async () => (await apiClient.get<T[]>(`/${resource}`)).data,
+    queryKey: [resource, siteKey, params],
+    queryFn: async () => (await apiClient.get<T[]>(`/${resource}`, { params })).data,
     enabled,
     staleTime: 30_000,
     retry: false,
@@ -48,8 +48,8 @@ export function RoleHome() {
   const wantPlant = kind === "lead" || kind === "auditor";
   const ncrs = useModuleList<Ncr>("ncr", wantPlant && can("ncr"), siteId);
   const capas = useModuleList<Capa>("capa", wantPlant && can("capa"), siteId);
-  const documents = useModuleList<AccuQualDocument>("documents", wantPlant && can("documents"), "shared");
-  const audits = useModuleList<Audit>("audits", wantPlant && can("audit"), siteId);
+  const documents = useModuleList<AccuQualDocument>("documents", wantPlant && can("documents"), "shared", { status: "in_review" });
+  const audits = useModuleList<Audit>("audits", wantPlant && can("audit"), siteId, { statusNot: "completed" });
   const { label } = usePersonDirectory();
   const { items } = useCalendarItems();
   const summary = summarizeCalendarItems(items);

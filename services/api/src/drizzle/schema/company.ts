@@ -194,6 +194,19 @@ export const company = pgTable("company", {
   // established company must never see a "new company" checklist; a genuinely new company starts with this unset,
   // reads back as { dismissed: false, completedItems: [] } (see getOnboardingHandler).
   onboardingProgress: jsonb("onboarding_progress").$type<{ dismissed: boolean; completedItems: string[] }>(),
+  /**
+   * Due-date reminders, stuck-record escalation, and repeat-NCR detection.
+   * Unset fields fall back to the defaults in quality-automation/logic.ts
+   * (remind 3 days before, escalate after 7 days overdue, 3 NCRs in 90 days).
+   */
+  qualityAutomationSettings: jsonb("quality_automation_settings").$type<{
+    remindDaysBeforeDue?: number;
+    escalateAfterDaysOverdue?: number;
+    stuckDays?: number;
+    approvalStuckDays?: number;
+    repeatNcrWindowDays?: number;
+    repeatNcrThreshold?: number;
+  }>().default({}),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

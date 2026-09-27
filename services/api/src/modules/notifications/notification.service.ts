@@ -26,8 +26,16 @@ interface NotifyDepartmentInput {
  * ...) later means implementing this interface and changing one line in
  * notify()/notifyDepartment() — no caller changes.
  */
+export interface OutboundEmail {
+  to: string;
+  subject: string;
+  body: string;
+  /** Optional HTML version. Callers that only have plain text leave this unset. */
+  html?: string;
+}
+
 export interface EmailTransport {
-  send(message: { to: string; subject: string; body: string }): Promise<"sent" | "failed">;
+  send(message: OutboundEmail): Promise<"sent" | "failed">;
 }
 
 export const logTransport: EmailTransport = {
@@ -71,11 +79,11 @@ export class SmtpTransport implements EmailTransport {
    * schema comment on the same honest limitation for scheduled ERP sync);
    * retryFailedNotifications() below is the explicit, triggered equivalent.
    */
-  async send(message: { to: string; subject: string; body: string }): Promise<"sent" | "failed"> {
+  async send(message: OutboundEmail): Promise<"sent" | "failed"> {
     const maxAttempts = 3;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        await this.transporter.sendMail({ from: env.SMTP_FROM, to: message.to, subject: message.subject, text: message.body });
+        await this.transporter.sendMail({ from: env.SMTP_FROM, to: message.to, subject: message.subject, text: message.body, ...(message.html ? { html: message.html } : {}) });
         return "sent";
       } catch (err) {
         if (attempt === maxAttempts) {
@@ -124,13 +132,14 @@ export class ZeptoMailTransport implements EmailTransport {
     this.from = parseFromAddress(config.from);
   }
 
-  async send(message: { to: string; subject: string; body: string }): Promise<"sent" | "failed"> {
+  async send(message: OutboundEmail): Promise<"sent" | "failed"> {
     const maxAttempts = 3;
     const payload = JSON.stringify({
       from: this.from,
       to: [{ email_address: { address: message.to } }],
       subject: message.subject,
       textbody: message.body,
+      ...(message.html ? { htmlbody: message.html } : {}),
     });
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -195,13 +204,13 @@ export function setEmailTransport(transport: EmailTransport | null) {
  * delivery still goes through the exact same transport.
  */
 /** One delivery attempt through the active transport; a failure is counted for the "outgoing email" alert. */
-async function deliver(transport: EmailTransport, message: { to: string; subject: string; body: string }): Promise<"sent" | "failed"> {
+async function deliver(transport: EmailTransport, message: OutboundEmail): Promise<"sent" | "failed"> {
   const status = await transport.send(message).catch(() => "failed" as const);
   if (status === "failed") metrics.emailFailures.add();
   return status;
 }
 
-export async function sendEmail(message: { to: string; subject: string; body: string }): Promise<"sent" | "logged_only" | "failed"> {
+export async function sendEmail(message: OutboundEmail): Promise<"sent" | "logged_only" | "failed"> {
   if (!activeTransport) {
     logger.info("Email (logged, not delivered — no transport configured)", message);
     return "logged_only";
@@ -210,14 +219,14 @@ export async function sendEmail(message: { to: string; subject: string; body: st
 }
 
 /** Writes one notification_log row per recipient and returns how many were notified. */
-export async function notifyRecipients(db: Db, recipients: string[], subject: string, body: string, relatedEntityType?: string, relatedEntityId?: number): Promise<number> {
-  return notify(db, recipients, subject, body, relatedEntityType, relatedEntityId);
+export async function notifyRecipients(db: Db, recipients: string[], subject: string, body: string, relatedEntityType?: string, relatedEntityId?: number, html?: string): Promise<number> {
+  return notify(db, recipients, subject, body, relatedEntityType, relatedEntityId, html);
 }
 
-export type NotificationPreferences = { inApp: boolean; email: boolean };
+export type NotificationPreferences = { inApp: boolean; email: boolean; dailyDigest: boolean };
 
 export function normalizeNotificationPreferences(raw: Partial<NotificationPreferences> | null | undefined): NotificationPreferences {
-  return { inApp: raw?.inApp !== false, email: raw?.email !== false };
+  return { inApp: raw?.inApp !== false, email: raw?.email !== false, dailyDigest: raw?.dailyDigest !== false };
 }
 
 async function emailAllowed(db: Db, recipient: string): Promise<boolean> {
@@ -226,10 +235,10 @@ async function emailAllowed(db: Db, recipient: string): Promise<boolean> {
   return normalizeNotificationPreferences(row.notificationPreferences).email;
 }
 
-async function notify(db: Db, recipients: string[], subject: string, body: string, relatedEntityType?: string, relatedEntityId?: number): Promise<number> {
+async function notify(db: Db, recipients: string[], subject: string, body: string, relatedEntityType?: string, relatedEntityId?: number, html?: string): Promise<number> {
   for (const recipient of recipients) {
     const allowEmail = await emailAllowed(db, recipient);
-    const status = allowEmail && activeTransport ? await deliver(activeTransport, { to: recipient, subject, body }) : "logged_only";
+    const status = allowEmail && activeTransport ? await deliver(activeTransport, { to: recipient, subject, body, html }) : "logged_only";
     await db.insert(notificationLog).values({ channel: "email", recipient, subject, body, status, relatedEntityType, relatedEntityId });
   }
   return recipients.length;

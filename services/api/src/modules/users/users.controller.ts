@@ -18,6 +18,7 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
       name: users.name,
       roleId: users.roleId,
       department: users.department,
+      managerId: users.managerId,
       isActive: users.isActive,
       mfaEnabled: users.mfaEnabled,
       lockedUntil: users.lockedUntil,
@@ -35,6 +36,7 @@ export const getUser = asyncHandler(async (req: Request, res: Response) => {
       name: users.name,
       roleId: users.roleId,
       department: users.department,
+      managerId: users.managerId,
       isActive: users.isActive,
       createdAt: users.createdAt,
     })
@@ -58,7 +60,12 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const [before] = await req.db!.select({ roleId: users.roleId, department: users.department, isActive: users.isActive }).from(users).where(and(eq(users.id, Number(req.params.id))));
   if (!before) throw AppError.notFound("User");
   // Disabling a user, or changing what they may do, ends their current sessions: bumping token_version makes requireAuth refuse their access token on the very next request and blocks every refresh token. They sign in again and get the new permissions.
-  const body = req.body as { roleId?: number | null; department?: string | null; isActive?: boolean };
+  const body = req.body as { roleId?: number | null; department?: string | null; isActive?: boolean; managerId?: number | null };
+  if (body.managerId != null) {
+    if (body.managerId === Number(req.params.id)) throw AppError.badRequest("A person can't be their own manager.");
+    const [manager] = await req.db!.select({ id: users.id }).from(users).where(and(eq(users.id, body.managerId)));
+    if (!manager) throw AppError.badRequest("That manager isn't a user.");
+  }
   const revokeSessions =
     (body.isActive === false && before.isActive) ||
     (body.roleId !== undefined && body.roleId !== before.roleId) ||

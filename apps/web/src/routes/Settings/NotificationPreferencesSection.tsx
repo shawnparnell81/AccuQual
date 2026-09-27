@@ -7,6 +7,7 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 export interface NotificationPreferences {
   inApp: boolean;
   email: boolean;
+  dailyDigest: boolean;
 }
 
 export function NotificationPreferencesSection({ mode }: { mode: "inApp" | "email" }) {
@@ -53,6 +54,17 @@ export function NotificationPreferencesSection({ mode }: { mode: "inApp" | "emai
         <input type="checkbox" checked={data.email} disabled={save.isPending} onChange={(e) => save.mutate({ email: e.target.checked })} />
         Email me these alerts
       </label>
+      <div className="mt-4 border-t border-border pt-4">
+        <h3 className="text-sm font-medium">Daily digest</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Once a day, email a list of your overdue and due-soon NCRs, CAPAs, and 8Ds, plus approvals waiting on you. Each line links straight to the record. Turning this off does not stop individual reminders.
+        </p>
+        <label className="mt-3 flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={data.dailyDigest !== false} disabled={save.isPending || !data.email} onChange={(e) => save.mutate({ dailyDigest: e.target.checked })} />
+          Email me a daily digest
+        </label>
+        {!data.email && <p className="mt-2 text-xs text-muted-foreground">Turn email alerts on to receive the digest.</p>}
+      </div>
     </section>
   );
 }

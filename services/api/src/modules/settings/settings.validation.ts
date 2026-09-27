@@ -91,6 +91,16 @@ export const updateSupplierRiskSettingsSchema = z.object({
   responsiveness: z.coerce.number().min(0).optional(),
 });
 
+/** Due reminders, escalation, and repeat-NCR thresholds. Admins edit these; unset fields keep the defaults. */
+export const updateQualityAutomationSettingsSchema = z.object({
+  remindDaysBeforeDue: z.coerce.number().int().min(0).max(30).optional(),
+  escalateAfterDaysOverdue: z.coerce.number().int().min(1).max(90).optional(),
+  stuckDays: z.coerce.number().int().min(1).max(180).optional(),
+  approvalStuckDays: z.coerce.number().int().min(1).max(60).optional(),
+  repeatNcrWindowDays: z.coerce.number().int().min(7).max(365).optional(),
+  repeatNcrThreshold: z.coerce.number().int().min(2).max(20).optional(),
+});
+
 /** Settings → Receiving (Phase 8) — read by erp/receivingAutomation.ts. */
 export const updateReceivingSettingsSchema = z.object({
   autoCreateNcrOnRejection: z.boolean().optional(),

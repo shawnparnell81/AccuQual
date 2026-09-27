@@ -63,11 +63,8 @@ export function EightDDetailPage() {
   const [draftByStep, setDraftByStep] = useState<Record<string, string>>({});
   const updateReport = eightDHooks.useUpdate();
   const { data: linkedNcr } = ncrHooks.useOne(report?.ncrId ?? undefined);
-  // Same client-filtered pattern the NCR workspace's own Linked Records
-  // panel already uses (GET /capa has no ?ncrId= filter) — fine at this
-  // data scale, matching that page's own reasoning.
-  const { data: allCapas = [] } = capaHooks.useList();
-  const linkedCapa = allCapas.find((c) => c.ncrId === report?.ncrId);
+  const { data: linkedCapas = [] } = capaHooks.useList(report?.ncrId ? { ncrId: report.ncrId } : undefined, { enabled: report?.ncrId != null });
+  const linkedCapa = linkedCapas[0];
 
   const draftDirty = !!report && Object.entries(draftByStep).some(([key, value]) => value !== (report.data?.[key] ?? ""));
 

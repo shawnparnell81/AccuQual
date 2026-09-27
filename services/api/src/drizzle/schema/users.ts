@@ -74,8 +74,10 @@ export const users = pgTable("users", {
   // ResourceListPage's Column<T>.accessor returns ReactNode, not a plain sortable value, so a generic sort control isn't
   // type-safe to build without touching every one of DataTable's ~21 existing callers — deliberately out of scope here.
   savedViews: jsonb("saved_views").$type<Record<string, { label: string; searchText: string }[]>>().default({}),
-  // Per-user bell and email switches. Missing or partial values mean both are on.
-  notificationPreferences: jsonb("notification_preferences").$type<{ inApp?: boolean; email?: boolean }>().default({ inApp: true, email: true }),
+  // Per-user bell, email, and daily-digest switches. Missing values mean on.
+  notificationPreferences: jsonb("notification_preferences").$type<{ inApp?: boolean; email?: boolean; dailyDigest?: boolean }>().default({ inApp: true, email: true, dailyDigest: true }),
+  // Who to escalate this person's overdue or stuck records to. Null means a quality manager.
+  managerId: integer("manager_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });

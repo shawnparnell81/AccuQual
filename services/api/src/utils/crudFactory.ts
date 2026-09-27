@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { parseLimitOffset } from "./listQuery.js";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { asyncHandler } from "./asyncHandler.js";
 import { AppError } from "./appError.js";
@@ -56,7 +57,7 @@ const CLIENT_OWNED_FIELD_BLOCKLIST = ["id", "siteId", "createdAt", "createdBy"];
  * can't turn one dashboard load into an unbounded query. High enough that
  * no real list page hits it under normal use.
  */
-const LIST_SAFETY_LIMIT = 2000;
+const LIST_FILTERS = ["ncrId", "linkedNcrId", "ownerId", "assignedTo", "supplierId", "status", "receivingLineItemId"] as const;
 
 export function stripClientOwnedFields(body: Record<string, unknown>): Record<string, unknown> {
   const clean = { ...body };
@@ -105,14 +106,35 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
   }
 
   const list = asyncHandler(async (req: Request, res: Response) => {
-    const { db } = requireDb(req);
+    if (!req.db) throw AppError.unauthorized("Not signed in");
     const sitePredicate = siteListPredicate(req);
     if (sitePredicate === null) {
       res.json([]);
       return;
     }
-    const where = sitePredicate ?? undefined;
-    const rows = await db.select().from(table).where(where).limit(LIST_SAFETY_LIMIT);
+    const columns = table as unknown as Record<string, unknown>;
+    const predicates: SQL[] = [];
+    if (sitePredicate) predicates.push(sitePredicate);
+    if (options.softDelete && columns.isDeleted) predicates.push(eq(columns.isDeleted as never, false));
+    for (const key of LIST_FILTERS) {
+      const raw = req.query[key];
+      if (typeof raw !== "string" || raw === "" || columns[key] == null) continue;
+      if (key === "status") predicates.push(eq(columns[key] as never, raw));
+      else {
+        const parsed = Number(raw);
+        if (!Number.isInteger(parsed)) continue;
+        predicates.push(eq(columns[key] as never, parsed));
+      }
+    }
+    const statusNot = req.query.statusNot;
+    if (typeof statusNot === "string" && statusNot !== "" && columns.status) predicates.push(sql`${columns.status as never} <> ${statusNot}`);
+    const where = predicates.length > 0 ? and(...predicates) : undefined;
+    const { limit, offset, paginated } = parseLimitOffset(req.query as Record<string, unknown>);
+    const rows = await req.db.select().from(table).where(where).limit(limit).offset(offset);
+    if (paginated) {
+      const [countRow] = await req.db.select({ count: sql<number>`count(*)::int` }).from(table).where(where);
+      res.setHeader("X-Total-Count", String(countRow?.count ?? rows.length));
+    }
     res.json(rows);
   });
 

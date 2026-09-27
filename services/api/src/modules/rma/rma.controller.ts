@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { and, eq, gte, lte, ilike, desc, type SQL } from "drizzle-orm";
+import { and, eq, gte, lte, ilike, desc, sql, type SQL } from "drizzle-orm";
 import { rma, rmaItems } from "../../drizzle/schema/rma.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
@@ -9,6 +9,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
+import { parseLimitOffset } from "../../utils/listQuery.js";
 
 /** Same inline-guard style as inventory.controller.ts/erp.controller.ts's assertDepartment — the department PERMISSION_MATRIX entry is binary (read/edit) and can't express these per-action splits on its own. */
 function assertDepartment(req: Request, allowed: string[]) {
@@ -83,7 +84,7 @@ async function itemsWithContext(req: Request, rmaId: number) {
 }
 
 export const listRmaHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { status, supplierId, reasonCode, dateFrom, dateTo, q } = req.query as Record<string, string | undefined>;
+  const { status, supplierId, reasonCode, dateFrom, dateTo, q, linkedNcrId } = req.query as Record<string, string | undefined>;
   const conditions: SQL[] = [];
   if (status) conditions.push(eq(rma.status, status));
   if (supplierId) conditions.push(eq(rma.supplierId, Number(supplierId)));
@@ -91,6 +92,9 @@ export const listRmaHandler = asyncHandler(async (req: Request, res: Response) =
   if (dateFrom) conditions.push(gte(rma.createdAt, new Date(dateFrom)));
   if (dateTo) conditions.push(lte(rma.createdAt, new Date(dateTo)));
   if (q) conditions.push(ilike(rma.rmaNumber, `%${q}%`));
+  if (linkedNcrId) conditions.push(eq(rma.linkedNcrId, Number(linkedNcrId)));
+  const { limit, offset, paginated } = parseLimitOffset(req.query as Record<string, unknown>);
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
 
   const rows = await req
     .db!.select({
@@ -108,8 +112,14 @@ export const listRmaHandler = asyncHandler(async (req: Request, res: Response) =
     })
     .from(rma)
     .innerJoin(suppliers, eq(rma.supplierId, suppliers.id))
-    .where(and(...conditions))
-    .orderBy(desc(rma.createdAt));
+    .where(where)
+    .orderBy(desc(rma.createdAt))
+    .limit(limit)
+    .offset(offset);
+  if (paginated) {
+    const [countRow] = await req.db!.select({ count: sql<number>`count(*)::int` }).from(rma).where(where);
+    res.setHeader("X-Total-Count", String(countRow?.count ?? rows.length));
+  }
   res.json(rows);
 });
 

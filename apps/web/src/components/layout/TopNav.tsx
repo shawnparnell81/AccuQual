@@ -23,6 +23,7 @@ import {
   type SidebarNode,
 } from "./sidebarStructure";
 import { LayoutDashboard } from "lucide-react";
+import { prefetchRoute } from "../../routes/pages";
 
 const SIDEBAR_KEY = "accuqual-sidebar-collapsed";
 
@@ -194,7 +195,7 @@ export function TopNav() {
       <nav className="aq-sidebar" id="sidebar" aria-label="Main navigation">
         <div className="aq-side-scroll">
           <div className="aq-nav-group">
-            <NavLink to={DASHBOARD_LEAF.path} end title="Dashboard" onClick={closeSide} className={({ isActive }) => clsx("aq-nav-link", isActive && "active")}>
+            <NavLink to={DASHBOARD_LEAF.path} end title="Dashboard" onClick={closeSide} onMouseEnter={() => prefetchRoute(DASHBOARD_LEAF.path)} onFocus={() => prefetchRoute(DASHBOARD_LEAF.path)} className={({ isActive }) => clsx("aq-nav-link", isActive && "active")}>
               <LayoutDashboard size={18} />
               <span className="aq-nav-label">{DASHBOARD_LEAF.label}</span>
             </NavLink>
@@ -204,7 +205,7 @@ export function TopNav() {
           ))}
         </div>
         <div className="aq-side-foot">
-          <NavLink to="/settings" title="Settings" onClick={closeSide} className={({ isActive }) => clsx("aq-nav-link", isActive && "active")}>
+          <NavLink to="/settings" title="Settings" onClick={closeSide} onMouseEnter={() => prefetchRoute("/settings")} onFocus={() => prefetchRoute("/settings")} className={({ isActive }) => clsx("aq-nav-link", isActive && "active")}>
             <Settings size={18} />
             <span className="aq-nav-label">Settings</span>
           </NavLink>
@@ -243,7 +244,7 @@ function FolderBlock({
     <div className={clsx("aq-nav-group", nested && "aq-nav-nested")}>
       <div className={clsx("aq-nav-link aq-nav-folder", active && !node.path && "active")}>
         {node.path ? (
-          <NavLink to={node.path} onClick={onNavigate} className={() => clsx("aq-nav-folder-link", pathMatches(pathname, node.path!) && "active")} title={node.label}>
+          <NavLink to={node.path} onClick={onNavigate} onMouseEnter={() => prefetchRoute(node.path!)} onFocus={() => prefetchRoute(node.path!)} className={() => clsx("aq-nav-folder-link", pathMatches(pathname, node.path!) && "active")} title={node.label}>
             <node.icon size={18} className="shrink-0" />
             <span className="aq-nav-label min-w-0 flex-1 truncate text-left">{node.label}</span>
           </NavLink>
@@ -286,7 +287,7 @@ function LeafLink({ node, onNavigate, pathname }: { node: SidebarNode & { path: 
   if (isFolder(node) || !node.path) return null;
   const active = pathMatches(pathname, node.path);
   return (
-    <NavLink to={node.path} title={node.label} onClick={onNavigate} className={() => clsx("aq-nav-link aq-nav-child", active && "active")}>
+    <NavLink to={node.path} title={node.label} onClick={onNavigate} onMouseEnter={() => prefetchRoute(node.path)} onFocus={() => prefetchRoute(node.path)} className={() => clsx("aq-nav-link aq-nav-child", active && "active")}>
       <node.icon size={16} className="shrink-0" />
       <span className="aq-nav-label min-w-0 flex-1 truncate">{node.label}</span>
     </NavLink>

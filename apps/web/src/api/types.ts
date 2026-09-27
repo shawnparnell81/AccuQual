@@ -5,6 +5,8 @@ export interface AppUser {
   name: string | null;
   roleId: number | null;
   department: string | null;
+  /** Who overdue work escalates to. Null uses a quality manager. */
+  managerId?: number | null;
   isActive: boolean;
   /** Whether the user has two-step sign-in turned on. */
   mfaEnabled?: boolean;
@@ -95,6 +97,8 @@ export interface Capa {
   supplierId: number | null;
   /** Plant this fix belongs to. */
   siteId?: number | null;
+  /** Other NCRs covered when this CAPA was opened from a repeat group. */
+  repeatNcrIds?: number[];
 }
 
 export interface AuditItem {

@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { ncr } from "./ncr.js";
 import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
@@ -30,6 +30,8 @@ export const capa = pgTable("capa", {
   // "No due date" on the Calendar/Workflow Inbox.
   dueDate: timestamp("due_date"),
   closedAt: timestamp("closed_at"),
+  // NCRs covered when this CAPA was opened from a repeat group. The form does not show this list.
+  repeatNcrIds: jsonb("repeat_ncr_ids").$type<number[]>().notNull().default([]),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });

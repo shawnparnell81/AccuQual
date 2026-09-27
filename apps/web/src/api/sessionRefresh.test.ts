@@ -5,6 +5,7 @@ import {
   createSessionRefresher,
   nextProactiveDelayMs,
   proactiveRefreshDelayMs,
+  bootstrapSessionDecision,
   refreshDecision,
   retryDelayMs,
   settleAfterRefresh,
@@ -240,5 +241,13 @@ describe("when a renewal is redundant", () => {
     assert.equal(refreshDecision({ reason: "bootstrap", accessToken: null, now }), "refresh");
     assert.equal(refreshDecision({ reason: "proactive", accessToken: null, now }), "skip");
     assert.equal(refreshDecision({ reason: "unauthorized", accessToken: null, now }), "refresh");
+  });
+});
+
+describe("load-time session check", () => {
+  it("keeps a renewed session and treats every failed check as signed out", () => {
+    assert.equal(bootstrapSessionDecision({ ok: true, accessToken: "tok" }), "ready");
+    assert.equal(bootstrapSessionDecision({ ok: false, logout: true }), "signed-out");
+    assert.equal(bootstrapSessionDecision({ ok: false, logout: false, retryAfterMs: 8_000 }), "signed-out");
   });
 });

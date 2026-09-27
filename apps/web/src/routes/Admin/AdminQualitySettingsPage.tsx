@@ -1,4 +1,5 @@
 import { ReceivingSettingsPanel } from "../Settings/ReceivingSettingsPanel";
+import { QualityAutomationSettingsPanel } from "../Settings/QualityAutomationSettingsPanel";
 
 /**
  * Labeled "Quality Settings" here — not "Receiving Settings" — because its
@@ -16,8 +17,9 @@ export function AdminQualitySettingsPage() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold">Quality Settings</h1>
-        <p className="text-sm text-muted-foreground">NCR auto-trigger rules and CAPA escalation thresholds for receiving inspections.</p>
+        <p className="text-sm text-muted-foreground">Due-date reminders, repeat NCRs, and the receiving rules that open an NCR or CAPA.</p>
       </div>
+      <QualityAutomationSettingsPanel />
       <ReceivingSettingsPanel />
     </div>
   );
