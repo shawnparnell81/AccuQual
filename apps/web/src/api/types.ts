@@ -1051,6 +1051,8 @@ export interface FmeaItem {
   occurrence: number;
   detection: number;
   rpn: string | null;
+  /** Derived from severity, occurrence, and detection on read. Not stored. */
+  actionPriority?: "H" | "M" | "L" | "";
   recommendedAction: string | null;
 }
 
