@@ -2,14 +2,14 @@ import type { FormLayout } from "./types.js";
 
 /**
  * Derived 1:1 from the user-provided "Final Product Inspection List_prior to
- * production.pdf" (Final Inspection & Product Release Checklist — Automotive
- * OEM Production Parts). Lives as a 7th PPAP package document (see
- * PpapDetailPage.tsx) since it's the culmination of a PPAP: releasing
- * production parts against the same drawing/spec/control-plan/PPAP status.
+ * production.pdf" (Final Inspection & Product Release Checklist). Lives as a
+ * 7th PPAP package document (see PpapDetailPage.tsx) since it's the
+ * culmination of a PPAP: releasing production parts against the same
+ * drawing/spec/control-plan/PPAP status.
  */
 export const finalInspectionReleaseChecklistLayout: FormLayout = {
   formType: "final_inspection_release_checklist",
-  title: "FINAL INSPECTION & PRODUCT RELEASE CHECKLIST — AUTOMOTIVE OEM PRODUCTION PARTS",
+  title: "FINAL INSPECTION & PRODUCT RELEASE CHECKLIST",
   sections: [
     {
       number: "1",
