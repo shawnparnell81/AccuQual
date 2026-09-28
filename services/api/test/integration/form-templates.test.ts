@@ -37,7 +37,7 @@ describe("ISO Compliance Documents form templates", () => {
     expect(again.body.templates).toHaveLength(first.body.templates.length);
     expect(first.body.fileNamePattern).toBe("{formId}_{recordNumber}_{date}");
 
-    const templates = first.body.templates as { formKey: string; formId: string; title: string; subjectRoute: string; folderId: number; isoPath: string[] }[];
+    const templates = first.body.templates as { formKey: string; formId: string; title: string; subjectRoute: string; folderId: number; isoPath: string[]; start: { createPath: string; openPath: string; body: Record<string, unknown> } | null }[];
     const csa = templates.find((form) => form.formKey === "frm-val-001");
     const pump = templates.find((form) => form.formKey === "frm-val-007");
     const eightD = templates.find((form) => form.formKey === "8d");
@@ -49,8 +49,12 @@ describe("ISO Compliance Documents form templates", () => {
     expect(csa?.isoPath).toEqual(["Blank Form Templates", "Validation"]);
     expect(pump?.folderId).toBe(csa?.folderId);
     expect(csa?.subjectRoute).toBe("/folders/validation-reports");
+    expect(csa?.start).toEqual({ createPath: "/validation-reports", openPath: "/validation-reports/{id}", body: { data: { formType: "csa", cells: {} } } });
+    expect(pump?.start).toEqual({ createPath: "/validation-reports", openPath: "/validation-reports/{id}", body: { data: { formType: "fuel_pump", cells: {} } } });
     expect(eightD?.isoPath).toEqual(["Blank Form Templates", "Problem Solving"]);
     expect(eightD?.subjectRoute).toBe("/8d");
+    expect(eightD?.start).toEqual({ createPath: "/8d", openPath: "/8d/{id}", body: {} });
+    expect(templates.every((form) => form.start?.openPath.includes("{id}"))).toBe(true);
     expect(ncr?.isoPath).toEqual(["Blank Form Templates", "Nonconformance"]);
     expect(training?.isoPath).toEqual(["Blank Form Templates", "Training"]);
     expect(audit?.isoPath).toEqual(["Blank Form Templates", "Audit"]);

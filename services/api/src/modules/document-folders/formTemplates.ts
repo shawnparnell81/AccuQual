@@ -2,7 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import type { Db } from "../../lib/requestDb.js";
-import { BLANK_FORMS_FOLDER, FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, templateFolderPath } from "./formFiling.js";
+import { BLANK_FORMS_FOLDER, FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, templateFolderPath, type FormStart } from "./formFiling.js";
 
 const PREVIOUS_ISO_ROOT = "ISO Compliance";
 const PREVIOUS_BLANK_FOLDER = "03_Blank_Forms_Templates";
@@ -131,6 +131,7 @@ export interface FormTemplateView {
   subjectRoute: string;
   folderId: number | null;
   isoPath: string[];
+  start: FormStart | null;
 }
 
 export async function listFormTemplates(db: Db): Promise<{ fileNamePattern: string; templates: FormTemplateView[] }> {
@@ -138,6 +139,7 @@ export async function listFormTemplates(db: Db): Promise<{ fileNamePattern: stri
   const templates = await db.select().from(controlledFormTemplates);
   const folders = await db.select().from(documentFolders);
   const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const starts = new Map(FORM_TEMPLATES.map((seed) => [seed.formKey, seed.start]));
 
   function pathOf(folderId: number | null): string[] {
     const names: string[] = [];
@@ -160,6 +162,7 @@ export async function listFormTemplates(db: Db): Promise<{ fileNamePattern: stri
         subjectRoute: template.subjectRoute,
         folderId: template.folderId,
         isoPath: pathOf(template.folderId),
+        start: starts.get(template.formKey) ?? null,
       }))
       .sort((a, b) => a.formId.localeCompare(b.formId)),
   };

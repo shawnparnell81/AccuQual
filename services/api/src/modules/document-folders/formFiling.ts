@@ -6,7 +6,8 @@
  * Folder names:
  * ISO Compliance Documents / Blank Form Templates
  * Topic folders (Validation, Problem Solving, and so on) sit inside the blank-forms folder.
- * A filled record stays in `subjectRoute`. The Forms Library lists these same rows.
+ * A filled record stays in `subjectRoute`. The Forms Library lists these same rows
+ * and starts a new record with `start`.
  */
 export const FILE_NAME_PATTERN = "{formId}_{recordNumber}_{date}";
 
@@ -16,14 +17,26 @@ export const ISO_DOCUMENTS_FOLDER = "ISO Compliance Documents";
 /** Every blank template lives under this folder. No number prefix. */
 export const BLANK_FORMS_FOLDER = "Blank Form Templates";
 
+/** How the Forms Library opens a blank copy of this template. `{id}` is the new record. */
+export interface FormStart {
+  createPath: string;
+  body: Record<string, unknown>;
+  openPath: string;
+}
+
 export interface FormTemplateSeed {
   formKey: string;
   formId: string;
   title: string;
   /** Topic folder inside BLANK_FORMS_FOLDER. */
   topic: string;
-  /** Where a filled record is filed and opened. */
+  /** Where a filled record is filed. */
   subjectRoute: string;
+  start: FormStart;
+}
+
+function blank(createPath: string, openPath: string, body: Record<string, unknown> = {}): FormStart {
+  return { createPath, body, openPath };
 }
 
 const qms = (formType: string, title: string, topic: string): FormTemplateSeed => ({
@@ -32,16 +45,17 @@ const qms = (formType: string, title: string, topic: string): FormTemplateSeed =
   title,
   topic,
   subjectRoute: `/qms-forms/${formType}`,
+  start: blank("/qms-forms", `/qms-forms/${formType}/{id}`, { formType }),
 });
 
 export const FORM_TEMPLATES: FormTemplateSeed[] = [
-  { formKey: "frm-val-001", formId: "FRM-VAL-001", title: "CSA Validation Report", topic: "Validation", subjectRoute: "/folders/validation-reports" },
-  { formKey: "frm-val-007", formId: "FRM-VAL-007", title: "Fuel Pump Validation", topic: "Validation", subjectRoute: "/folders/validation-reports" },
-  { formKey: "8d", formId: "8D", title: "8D Problem Solving", topic: "Problem Solving", subjectRoute: "/8d" },
-  { formKey: "ncr", formId: "NCR", title: "Nonconformance Report", topic: "Nonconformance", subjectRoute: "/ncr" },
-  { formKey: "capa", formId: "CAPA", title: "Corrective Action Request", topic: "Nonconformance", subjectRoute: "/capa" },
-  { formKey: "supplier-ncr", formId: "SUPPLIER-NCR", title: "Supplier NCR", topic: "Nonconformance", subjectRoute: "/ncr" },
-  { formKey: "deviation-waiver", formId: "DEVIATION-WAIVER", title: "Deviation / Waiver Request", topic: "Nonconformance", subjectRoute: "/qms-forms/deviation_waiver_request" },
+  { formKey: "frm-val-001", formId: "FRM-VAL-001", title: "CSA Validation Report", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "csa", cells: {} } }) },
+  { formKey: "frm-val-007", formId: "FRM-VAL-007", title: "Fuel Pump Validation", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "fuel_pump", cells: {} } }) },
+  { formKey: "8d", formId: "8D", title: "8D Problem Solving", topic: "Problem Solving", subjectRoute: "/8d", start: blank("/8d", "/8d/{id}") },
+  { formKey: "ncr", formId: "NCR", title: "Nonconformance Report", topic: "Nonconformance", subjectRoute: "/ncr", start: blank("/ncr", "/ncr/{id}", { title: "Nonconformance Report" }) },
+  { formKey: "capa", formId: "CAPA", title: "Corrective Action Request", topic: "Nonconformance", subjectRoute: "/capa", start: blank("/capa", "/capa/{id}") },
+  { formKey: "supplier-ncr", formId: "SUPPLIER-NCR", title: "Supplier NCR", topic: "Nonconformance", subjectRoute: "/ncr", start: blank("/ncr", "/ncr/{id}", { title: "Supplier NCR" }) },
+  { formKey: "deviation-waiver", formId: "DEVIATION-WAIVER", title: "Deviation / Waiver Request", topic: "Nonconformance", subjectRoute: "/qms-forms/deviation_waiver_request", start: blank("/qms-forms", "/qms-forms/deviation_waiver_request/{id}", { formType: "deviation_waiver_request" }) },
   qms("document_revision_record", "Document Revision Record", "Document Control"),
   qms("master_document_register", "Master Document Register", "Document Control"),
   qms("record_retention_log", "Record Retention Log", "Document Control"),
@@ -59,16 +73,16 @@ export const FORM_TEMPLATES: FormTemplateSeed[] = [
   qms("audit_finding_action_log", "Audit Finding & Action Log", "Audit"),
   qms("incoming_inspection_record", "Incoming Inspection Record", "Incoming Inspection"),
   qms("design_history_form", "Design History Form", "Design & Development"),
-  { formKey: "dcr", formId: "DCR", title: "Document Change Request", topic: "Document Control", subjectRoute: "/document-change-requests" },
-  { formKey: "risk", formId: "RISK", title: "Risk & Opportunity Assessment", topic: "Risk Management", subjectRoute: "/risk" },
-  { formKey: "audit-plan", formId: "AUDIT-PLAN", title: "Internal Audit Plan", topic: "Audit", subjectRoute: "/audits" },
-  { formKey: "audit-report", formId: "AUDIT-REPORT", title: "Internal Audit Report", topic: "Audit", subjectRoute: "/audits" },
-  { formKey: "cal-register", formId: "CAL-REGISTER", title: "Calibration Equipment Register", topic: "Calibration", subjectRoute: "/calibration" },
-  { formKey: "cal-record", formId: "CAL-RECORD", title: "Calibration Record", topic: "Calibration", subjectRoute: "/calibration" },
-  { formKey: "training-record", formId: "TRAINING-RECORD", title: "Training & Competency Record", topic: "Training", subjectRoute: "/training" },
-  { formKey: "complaint", formId: "COMPLAINT", title: "Customer Complaint Record", topic: "Customer Quality", subjectRoute: "/complaints" },
-  { formKey: "ecr", formId: "ECR", title: "Engineering Change Request", topic: "Change Control", subjectRoute: "/change" },
-  { formKey: "eco", formId: "ECO", title: "Engineering Change Order", topic: "Change Control", subjectRoute: "/change" },
+  { formKey: "dcr", formId: "DCR", title: "Document Change Request", topic: "Document Control", subjectRoute: "/document-change-requests", start: blank("/document-change-requests", "/document-change-requests/{id}") },
+  { formKey: "risk", formId: "RISK", title: "Risk & Opportunity Assessment", topic: "Risk Management", subjectRoute: "/risk", start: blank("/risk", "/risk/{id}", { title: "Risk & Opportunity Assessment" }) },
+  { formKey: "audit-plan", formId: "AUDIT-PLAN", title: "Internal Audit Plan", topic: "Audit", subjectRoute: "/audits", start: blank("/audits", "/audits/{id}", { name: "Internal Audit Plan", type: "internal" }) },
+  { formKey: "audit-report", formId: "AUDIT-REPORT", title: "Internal Audit Report", topic: "Audit", subjectRoute: "/audits", start: blank("/audits", "/audits/{id}", { name: "Internal Audit Report", type: "internal" }) },
+  { formKey: "cal-register", formId: "CAL-REGISTER", title: "Calibration Equipment Register", topic: "Calibration", subjectRoute: "/calibration", start: blank("/equipment", "/calibration/{id}", { name: "Calibration Equipment Register" }) },
+  { formKey: "cal-record", formId: "CAL-RECORD", title: "Calibration Record", topic: "Calibration", subjectRoute: "/calibration", start: blank("/equipment", "/calibration/{id}", { name: "Calibration Record" }) },
+  { formKey: "training-record", formId: "TRAINING-RECORD", title: "Training & Competency Record", topic: "Training", subjectRoute: "/training", start: blank("/training", "/training/{id}", { title: "Training & Competency Record" }) },
+  { formKey: "complaint", formId: "COMPLAINT", title: "Customer Complaint Record", topic: "Customer Quality", subjectRoute: "/ncr", start: blank("/ncr", "/ncr/{id}", { title: "Customer Complaint Record" }) },
+  { formKey: "ecr", formId: "ECR", title: "Engineering Change Request", topic: "Change Control", subjectRoute: "/change", start: blank("/change", "/change/{id}", { title: "Engineering Change Request" }) },
+  { formKey: "eco", formId: "ECO", title: "Engineering Change Order", topic: "Change Control", subjectRoute: "/change", start: blank("/change", "/change/{id}", { title: "Engineering Change Order" }) },
 ];
 
 /** Folders under the ISO documents root for one template: blank-forms folder, then its topic. */

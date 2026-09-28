@@ -1,6 +1,13 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../api/client";
+
+interface FormStart {
+  createPath: string;
+  body: Record<string, unknown>;
+  openPath: string;
+}
 
 interface FormTemplateLink {
   formKey: string;
@@ -8,6 +15,7 @@ interface FormTemplateLink {
   title: string;
   subjectRoute: string;
   isoPath: string[];
+  start: FormStart | null;
 }
 
 /**
@@ -16,10 +24,28 @@ interface FormTemplateLink {
  */
 export function QmsFormsLibraryPage() {
   const navigate = useNavigate();
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [startError, setStartError] = useState<string | null>(null);
   const templates = useQuery({
     queryKey: ["form-templates"],
     queryFn: async () => (await apiClient.get<{ templates: FormTemplateLink[] }>("/document-folders/form-templates")).data.templates,
   });
+
+  async function openForm(form: FormTemplateLink) {
+    if (!form.start) {
+      navigate(form.subjectRoute);
+      return;
+    }
+    setPendingKey(form.formKey);
+    setStartError(null);
+    try {
+      const created = await apiClient.post<{ id: number }>(form.start.createPath, form.start.body);
+      navigate(form.start.openPath.replaceAll("{id}", String(created.data.id)));
+    } catch {
+      setStartError(`Couldn't start ${form.title}.`);
+      setPendingKey(null);
+    }
+  }
 
   const byTopic = new Map<string, FormTemplateLink[]>();
   for (const form of templates.data ?? []) {
@@ -38,6 +64,7 @@ export function QmsFormsLibraryPage() {
 
       {templates.isLoading && <p className="text-sm text-muted-foreground">Loading forms…</p>}
       {templates.isError && <p className="text-sm text-destructive">Couldn't load the form templates.</p>}
+      {startError && <p className="text-sm text-destructive">{startError}</p>}
 
       {[...byTopic.entries()].map(([topic, forms]) => (
         <div key={topic} className="rounded-lg border border-border bg-card p-4">
@@ -46,7 +73,8 @@ export function QmsFormsLibraryPage() {
             {forms.map((form) => (
               <button
                 key={form.formKey}
-                onClick={() => navigate(form.subjectRoute)}
+                onClick={() => void openForm(form)}
+                disabled={pendingKey !== null}
                 className="flex items-start justify-between gap-2 rounded-md border border-border p-3 text-left text-sm hover:bg-muted"
                 data-form-key={form.formKey}
               >
