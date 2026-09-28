@@ -281,11 +281,20 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
 
       {isAdmin && (
         <form
-          className="grid gap-2 border-t border-border pt-3 md:grid-cols-5"
+          autoComplete="off"
+          className="relative grid gap-2 border-t border-border pt-3 md:grid-cols-5"
           onSubmit={(e) => {
             e.preventDefault();
+            // Read the fields from the form itself. A password manager can fill the boxes without updating React state, and submitting that empty state was refused as a validation error.
+            const data = new FormData(e.currentTarget);
+            const email = String(data.get("new-user-email") ?? "").trim();
+            const password = String(data.get("new-user-password") ?? "");
+            const name = String(data.get("name") ?? "").trim();
+            const roleId = String(data.get("roleId") ?? "");
+            const department = String(data.get("department") ?? "");
+            const managerId = String(data.get("managerId") ?? "");
             createUser.mutate(
-              { email: form.email, password: form.password, name: form.name || undefined, roleId: form.roleId ? Number(form.roleId) : undefined, department: form.department || undefined, managerId: form.managerId ? Number(form.managerId) : null } as Partial<AppUser> & { password: string },
+              { email, password, name: name || undefined, roleId: roleId ? Number(roleId) : undefined, department: department || undefined, managerId: managerId ? Number(managerId) : null } as Partial<AppUser> & { password: string },
               {
                 onSuccess: () => {
                   toast.success("User created. They'll be asked to choose their own password the first time they sign in.");
@@ -296,18 +305,23 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
             );
           }}
         >
-          <TextField label="Email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <TextField label="Temporary password" type="password" required minLength={12} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-          <TextField label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <SelectField label="Role" value={form.roleId} onChange={(e) => setForm({ ...form, roleId: e.target.value })}>
-            <option value="">No role</option>
+          {/* Decoys sit off-screen so the browser drops the signed-in admin's saved login here instead of into the new person's email and temporary password. The real boxes are not named email/password, which is what triggers that fill. */}
+          <div aria-hidden="true" className="pointer-events-none absolute h-0 w-0 overflow-hidden">
+            <input type="text" tabIndex={-1} autoComplete="username" name="username" defaultValue="" />
+            <input type="password" tabIndex={-1} autoComplete="current-password" name="current-password" defaultValue="" />
+          </div>
+          <TextField label="Email" name="new-user-email" type="text" inputMode="email" required autoComplete="off" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <TextField label="Temporary password" name="new-user-password" type="password" required minLength={12} autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+          <TextField label="Name" name="name" autoComplete="off" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <SelectField label="Role" name="roleId" value={form.roleId} onChange={(e) => setForm({ ...form, roleId: e.target.value })}>
+            <option value="">Choose a role</option>
             {roles.map((r) => (
               <option key={r.id} value={r.id}>
                 {roleLabel(r)}
               </option>
             ))}
           </SelectField>
-          <SelectField label="Manager" value={form.managerId} onChange={(e) => setForm({ ...form, managerId: e.target.value })}>
+          <SelectField label="Manager" name="managerId" value={form.managerId} onChange={(e) => setForm({ ...form, managerId: e.target.value })}>
             <option value="">None</option>
             {users
               .filter((person) => person.isActive)
@@ -317,7 +331,7 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
                 </option>
               ))}
           </SelectField>
-          <SelectField label="Department" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
+          <SelectField label="Department" name="department" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
             <option value="">None</option>
             {DEPARTMENTS.map((d) => (
               <option key={d.key} value={d.key}>
