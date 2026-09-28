@@ -18,6 +18,7 @@ import { loadOfficeActor } from "../onlyoffice/access.js";
 import { onlyOfficeSettings } from "../onlyoffice/settings.js";
 import { signOfficeToken } from "../onlyoffice/token.js";
 import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
+import { ensureFormTemplates, listFormTemplates } from "./formTemplates.js";
 import { UPLOAD_TYPE_ERROR, sniffUpload } from "../../utils/fileSniff.js";
 import { sendStoredFile } from "../../utils/storedFile.js";
 
@@ -197,6 +198,11 @@ async function withLinkedDocumentInfo(db: Db, all: (typeof documentFolders.$infe
   });
 }
 
+/** Blank templates. The Forms Library and ISO Compliance read this same list. */
+export const formTemplates = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await listFormTemplates(req.db!));
+});
+
 /** Full flat folder list for the company, seeding the default department tree on first use. */
 export const list = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
@@ -208,7 +214,9 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     const pool = await ensureLibraryPool(db, seeded.filter((f) => f.parentId === null));
     const all = await ensureAdditionalSubfolders(db, [...seeded, pool]);
     await linkKnownForms(db, all);
-    return res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(all)));
+    await ensureFormTemplates(db);
+    const fresh = await db.select().from(documentFolders);
+    return res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(fresh)));
   }
 
   const pool = await ensureLibraryPool(db, existing.filter((f) => f.parentId === null));
@@ -216,7 +224,9 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
   const withPool = alreadyIncluded ? existing : [...existing, pool];
   const all = await ensureAdditionalSubfolders(db, withPool);
   await linkKnownForms(db, all);
-  res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(all)));
+  await ensureFormTemplates(db);
+  const fresh = await db.select().from(documentFolders);
+  res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(fresh)));
 });
 
 export const create = asyncHandler(async (req: Request, res: Response) => {

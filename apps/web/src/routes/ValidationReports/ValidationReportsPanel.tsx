@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { formatDate } from "../../lib/dates";
 import { cellsFromData as fuelCellsFromData, overallResult as fuelOverall } from "../../lib/fuelPumpReport";
@@ -16,12 +18,24 @@ interface ValidationReport {
 
 const hooks = createResourceHooks<ValidationReport>("validation-reports");
 
+const FORM_IDS: Record<ValidationFormType, string> = { csa: "FRM-VAL-001", fuel_pump: "FRM-VAL-007" };
+
+function filedName(pattern: string, formId: string, recordNumber: number, createdAt?: string | null) {
+  const date = (createdAt ?? "").slice(0, 10);
+  return pattern.replaceAll("{formId}", formId).replaceAll("{recordNumber}", String(recordNumber)).replaceAll("{date}", date);
+}
+
 export function ValidationReportsPanel() {
   const navigate = useNavigate();
   const user = useCurrentUser();
   const { effective } = useEffectivePermissions();
   const canEdit = user?.roleName === "admin" || user?.roleName === "owner" || effective?.documents === "edit";
   const { data: rows = [], isLoading, isError } = hooks.useList();
+  const filing = useQuery({
+    queryKey: ["form-templates"],
+    queryFn: async () => (await apiClient.get<{ fileNamePattern: string }>("/document-folders/form-templates")).data,
+  });
+  const fileNamePattern = filing.data?.fileNamePattern ?? "{formId}_{recordNumber}_{date}";
   const createReport = hooks.useCreate();
   const [pendingKind, setPendingKind] = useState<ValidationFormType | null>(null);
 
@@ -87,7 +101,7 @@ export function ValidationReportsPanel() {
                 const passed = result === "Pass" || result === "Passed";
                 const failed = result === "Fail" || result === "Failed";
                 const color = passed ? (kind === "fuel_pump" ? "#00B050" : "#4EA72E") : failed ? "#FF0000" : "transparent";
-                const name = kind === "fuel_pump" ? `Fuel Pump Validation #${row.id}` : `Validation Report #${row.id}`;
+                const name = filedName(fileNamePattern, FORM_IDS[kind], row.id, row.createdAt);
                 return (
                   <tr key={row.id} className="border-t border-border">
                     <td className="px-3 py-2 font-medium">

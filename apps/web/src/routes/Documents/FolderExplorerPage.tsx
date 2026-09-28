@@ -11,6 +11,14 @@ import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
 import { onlyOfficeFile, previewKind, saveBytes } from "../../lib/filePreview";
 
+interface FormTemplateLink {
+  formKey: string;
+  formId: string;
+  title: string;
+  subjectRoute: string;
+  folderId: number | null;
+}
+
 interface DocumentFolder {
   id: number;
   name: string;
@@ -34,6 +42,13 @@ function useDocumentFolders() {
   return useQuery({
     queryKey: ["document-folders"],
     queryFn: async () => (await apiClient.get<DocumentFolder[]>("/document-folders")).data,
+  });
+}
+
+function useFormTemplates() {
+  return useQuery({
+    queryKey: ["form-templates"],
+    queryFn: async () => (await apiClient.get<{ templates: FormTemplateLink[] }>("/document-folders/form-templates")).data.templates,
   });
 }
 
@@ -108,6 +123,7 @@ function useUploadDocument() {
  */
 export function FolderExplorerPage() {
   const { data: folders = [], isLoading } = useDocumentFolders();
+  const { data: formTemplates = [] } = useFormTemplates();
   const updateFolder = useUpdateFolder();
   const createFolder = useCreateFolder();
   const deleteFolder = useDeleteFolder();
@@ -172,9 +188,17 @@ export function FolderExplorerPage() {
 
   const activeDept = departments.find((d) => d.id === activeDeptId) ?? departments[0];
 
+  function formsIn(folderId: number) {
+    return formTemplates.filter((form) => form.folderId === folderId);
+  }
+
   function countsFor(deptId: number) {
     const subs = byParent.get(deptId) ?? [];
-    const docs = subs.reduce((sum, s) => sum + (byParent.get(s.id)?.length ?? 0), 0);
+    const docs = subs.reduce((sum, sub) => {
+      const children = byParent.get(sub.id) ?? [];
+      const nested = children.reduce((count, child) => count + formsIn(child.id).length, 0);
+      return sum + children.length + formsIn(sub.id).length + nested;
+    }, 0);
     return { subs: subs.length, docs };
   }
 
@@ -334,7 +358,11 @@ export function FolderExplorerPage() {
           </FileDropZone>
 
           {(byParent.get(activeDept.id) ?? []).map((sub) => {
-            const docs = (byParent.get(sub.id) ?? []).filter((d) => !query || d.name.toLowerCase().includes(query));
+            const children = byParent.get(sub.id) ?? [];
+            const topicFolders = children.filter((child) => formsIn(child.id).length > 0 || (byParent.get(child.id)?.length ?? 0) > 0);
+            const topicIds = new Set(topicFolders.map((child) => child.id));
+            const ownForms = formsIn(sub.id).filter((form) => !query || `${form.formId} ${form.title}`.toLowerCase().includes(query));
+            const docs = children.filter((child) => !topicIds.has(child.id) && (!query || child.name.toLowerCase().includes(query)));
             const isCollapsed = collapsed[sub.id];
             const isDropTarget = dropHoverId === sub.id;
             return (
@@ -366,7 +394,7 @@ export function FolderExplorerPage() {
                 >
                   <span className="text-xs text-muted-foreground">{isCollapsed ? "▸" : "▾"}</span>
                   <span className="flex-1 text-sm font-semibold">{sub.name}</span>
-                  <span className="font-mono text-[10px] text-muted-foreground">{(byParent.get(sub.id) ?? []).length}</span>
+                  <span className="font-mono text-[10px] text-muted-foreground">{children.length + formsIn(sub.id).length + topicFolders.reduce((count, topic) => count + formsIn(topic.id).length, 0)}</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -390,8 +418,36 @@ export function FolderExplorerPage() {
                   </button>
                 </div>
                 {!isCollapsed && (
-                  <div className="flex flex-wrap gap-2 p-3">
-                    {docs.length === 0 && <span className="text-xs italic text-muted-foreground">No documents yet — drop one here</span>}
+                  <div className="flex flex-col gap-3 p-3">
+                    {docs.length === 0 && ownForms.length === 0 && topicFolders.length === 0 && <span className="text-xs italic text-muted-foreground">No documents yet — drop one here</span>}
+                    {ownForms.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {ownForms.map((form) => (
+                          <Link key={form.formKey} to={form.subjectRoute} data-form-key={form.formKey} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:opacity-80">
+                            <ArrowUpRight size={12} />
+                            {form.formId} {form.title}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                    {topicFolders.map((topic) => {
+                      const topicForms = formsIn(topic.id).filter((form) => !query || `${form.formId} ${form.title}`.toLowerCase().includes(query));
+                      if (query && topicForms.length === 0 && !topic.name.toLowerCase().includes(query)) return null;
+                      return (
+                        <div key={topic.id}>
+                          <div className="mb-1 text-xs font-semibold">{topic.name}</div>
+                          <div className="flex flex-wrap gap-2">
+                            {topicForms.map((form) => (
+                              <Link key={form.formKey} to={form.subjectRoute} data-form-key={form.formKey} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:opacity-80">
+                                <ArrowUpRight size={12} />
+                                {form.formId} {form.title}
+                              </Link>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div className="flex flex-wrap gap-2">
                     {docs.map((doc) => (
                       <DocPill
                         key={doc.id}
@@ -403,6 +459,7 @@ export function FolderExplorerPage() {
                         onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
                       />
                     ))}
+                    </div>
                   </div>
                 )}
               </FileDropZone>
