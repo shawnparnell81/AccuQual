@@ -7,6 +7,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { deleteRecord } from "../records/recordDeletion.js";
 import { hasPermission } from "../../middleware/requirePermission.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
@@ -30,13 +31,9 @@ export const baseHandlers = crudFactory(equipment, { entityName: "Equipment", id
  * business-rule delete/edit guard in this app already gives (e.g. CRAR's
  * "completed and can no longer be edited" check) instead of a crash.
  */
-export const removeEquipmentHandler = asyncHandler(async (req: Request, res: Response, next) => {
-  const equipmentId = Number(req.params.id);
-  const existing = await req.db!.select({ id: calibrations.id }).from(calibrations).where(and(eq(calibrations.equipmentId, equipmentId))).limit(1);
-  if (existing.length > 0) {
-    throw AppError.badRequest("This equipment has recorded calibration history and cannot be deleted. Remove its calibration records first if it must go.");
-  }
-  return baseHandlers.remove(req, res, next);
+export const removeEquipmentHandler = asyncHandler(async (req: Request, res: Response) => {
+  await deleteRecord(req, "equipment");
+  res.status(204).send();
 });
 
 /**

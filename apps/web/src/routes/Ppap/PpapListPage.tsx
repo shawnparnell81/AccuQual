@@ -8,6 +8,7 @@ export interface PpapPackage {
   partName: string | null;
   customer: string | null;
   status: string;
+  ownerId?: number | null;
 }
 
 export function PpapListPage() {

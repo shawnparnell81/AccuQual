@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { formatDateTime } from "../../lib/dates";
+import { auditEventLabel } from "../../lib/recordDelete";
 import { LoadingPlaceholder } from "./LoadingPlaceholder";
 
 interface AuditRow {
@@ -40,7 +41,7 @@ export function EntityAuditTrailPanel({ entityType, entityId, title = "Audit Tra
         <ul className="flex flex-col gap-1.5 text-sm">
           {sorted.map((r) => (
             <li key={r.id} className="flex items-center justify-between border-b border-border pb-1.5 last:border-0">
-              <span className="capitalize">{r.action.replace(/_/g, " ")}</span>
+              <span className={r.action === "delete" ? undefined : "capitalize"}>{auditEventLabel(r)}</span>
               <span className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>{r.performedByName ?? "System"}</span>
                 <span>{formatDateTime(r.createdAt)}</span>

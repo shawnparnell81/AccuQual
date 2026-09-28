@@ -6,6 +6,7 @@ import { useWorkflowAccessLevel } from "../../hooks/useWorkflowAccess";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WarrantyInspectionPanel } from "./WarrantyInspectionPanel";
 import { WarrantySupplierReviewPanel } from "./WarrantySupplierReviewPanel";
 import { WarrantyCostPanel } from "./WarrantyCostPanel";
@@ -89,9 +90,12 @@ export function WarrantyClaimDetail() {
             <StatusBadge value={claim.status} />
           </div>
         </div>
-        <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-          Print
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+            Print
+          </button>
+          <DeleteRecordButton resource="warranty/claims" id={claim.id} kind="Warranty claim" title={claim.failureDescription} ownerIds={[claim.createdByUserId]} navigateTo="/warranty" />
+        </div>
       </div>
 
       <div className="hidden print:block">

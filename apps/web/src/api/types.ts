@@ -834,6 +834,7 @@ export interface WorkOrder {
   operatorSignedAt: string | null;
   inspectorSignature: string | null;
   inspectorSignedAt: string | null;
+  createdBy: number | null;
   createdAt: string;
   updatedAt: string | null;
   // Detail endpoint only.
@@ -1082,6 +1083,7 @@ export interface RiskAssessment {
   processArea: string | null;
   department: string | null;
   ownerId: number | null;
+  createdBy: number | null;
   status: RiskStatus;
   createdAt: string;
   updatedAt: string | null;

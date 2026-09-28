@@ -12,6 +12,7 @@ import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowA
 import { useToast } from "../../components/shared/ToastProvider";
 import { GripVertical } from "lucide-react";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
@@ -91,6 +92,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
           <StatusBadge value={audit.status} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <DeleteRecordButton resource="audits" id={auditId} kind="Audit" title={audit.name} ownerIds={[audit.auditorId]} navigateTo="/audits" />
           <OpenFormButton formType="audit_plan" entityId={audit.id} title={`Audit #${audit.id} — Audit Plan`} label="Audit Plan" />
           <PrintFormButton formType="audit_plan" entityId={audit.id} label="Print Plan" />
           <OpenFormButton formType="audit_checklist" entityId={audit.id} title={`Audit #${audit.id} — Audit Checklist`} label="Audit Checklist" />

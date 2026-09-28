@@ -8,6 +8,7 @@ import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { TextAreaField } from "../../components/forms/Field";
 import { TrainingAssignmentModal } from "../../components/training/TrainingAssignmentModal";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { TrainingCompletionModal } from "../../components/training/TrainingCompletionModal";
 import { DocumentRetentionPanel } from "../../components/documents/DocumentRetentionPanel";
 import { DocumentHistoryPanel } from "../../components/documents/DocumentHistoryPanel";
@@ -90,11 +91,14 @@ export function TrainingDetailPage() {
         next={next}
         accessNote={mayManage ? null : TRAINING_MANAGE_REASON}
         actions={
-          mayManage ? (
-            <button onClick={() => setAssignOpen(true)} className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">
-              Assign people
-            </button>
-          ) : undefined
+          <>
+            <DeleteRecordButton resource="training" id={course.id} kind="Training course" title={course.title} navigateTo="/training" />
+            {mayManage ? (
+              <button onClick={() => setAssignOpen(true)} className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">
+                Assign people
+              </button>
+            ) : null}
+          </>
         }
       />
       <div className="rounded-lg border border-border bg-card p-3 text-sm">

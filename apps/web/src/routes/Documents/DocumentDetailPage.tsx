@@ -13,6 +13,7 @@ import { DocumentFilesPanel } from "../../components/documents/DocumentFilesPane
 import { DocumentLinkHistory, DocumentLinksPanel } from "../../components/documents/DocumentLinksPanel";
 import { LifecycleBar, VersionDiffViewer, VersionStatusBadge, VersionTimeline } from "../../components/versioning/VersionParts";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { useToast } from "../../components/shared/ToastProvider";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
@@ -280,6 +281,7 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
         trail={<LoopTrail steps={DOC_LOOP} current={loop.index} />}
         actions={
           <>
+            <DeleteRecordButton resource="documents" id={documentId} kind="Document" title={doc.title} ownerIds={[doc.ownerId]} navigateTo="/documents" />
             {doc.tags.map((t) => (
               <span key={t} className="self-center rounded-full bg-muted px-2 py-0.5 text-[11px]">
                 {t}

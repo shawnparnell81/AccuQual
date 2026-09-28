@@ -51,6 +51,7 @@ function resolveVisual(entry: WorkflowHistoryEntry): { icon: LucideIcon; bucket:
 }
 
 function summarize(entry: WorkflowHistoryEntry): string {
+  if (entry.action === "delete" && typeof entry.changes?.summary === "string") return entry.changes.summary;
   if (entry.action === "transition_failed") {
     return typeof entry.changes?.errorMessage === "string" ? entry.changes.errorMessage : "Transition failed";
   }
@@ -147,7 +148,7 @@ export function WorkflowHistoryItem({ entry, highlighted }: { entry: WorkflowHis
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-            <span className={clsx("font-medium", entry.action !== "transition_failed" && "capitalize")}>{summarize(entry)}</span>
+            <span className={clsx("font-medium", entry.action !== "transition_failed" && entry.action !== "delete" && "capitalize")}>{summarize(entry)}</span>
             <span className="flex-none text-xs text-muted-foreground">{formatDateTime(entry.createdAt)}</span>
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">

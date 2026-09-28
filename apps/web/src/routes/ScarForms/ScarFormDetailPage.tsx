@@ -1,6 +1,5 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
@@ -11,7 +10,7 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import { PictureText } from "../../components/forms/PictureText";
 import { usePictureRecord } from "../../components/forms/pictureRecord";
-import { Modal } from "../../components/modals/Modal";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import type { ScarForm, Supplier } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
@@ -33,7 +32,6 @@ export function ScarFormDetailPage() {
   const logoUrl = useAuthStore((s) => s.company?.branding?.logoUrl);
   const { data: scar, isLoading, isError } = scarHooks.useOne(scarId);
   const queryClient = useQueryClient();
-  const [deleteOpen, setDeleteOpen] = useState(false);
   // Phase 7 — a real supplier link (supplierId), added alongside the
   // pre-existing free-text supplierName field so a SCAR can actually
   // surface in that supplier's Supplier Portal / Quality Risk Score
@@ -44,15 +42,6 @@ export function ScarFormDetailPage() {
     mutationFn: async (body: Record<string, unknown>) => (await apiClient.patch(`/scar-forms/${scarId}`, body)).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["scar-forms", scarId] }),
     onError: (err: unknown) => toast.error(extractErrorMessage(err, "Couldn't update.")),
-  });
-
-  const deleteScar = useMutation({
-    mutationFn: async () => apiClient.delete(`/scar-forms/${scarId}`),
-    onSuccess: () => {
-      toast.success("Deleted.");
-      navigate("/scar-forms");
-    },
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't delete.")),
   });
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
@@ -73,9 +62,7 @@ export function ScarFormDetailPage() {
           <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             Print
           </button>
-          <button onClick={() => setDeleteOpen(true)} className="rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/10">
-            Delete
-          </button>
+          <DeleteRecordButton resource="scar-forms" id={scarId} kind="SCAR" title={scar.scarNumber || scar.partNumberDescription} ownerIds={[scar.createdBy]} navigateTo="/scar-forms" />
         </div>
       </div>
 
@@ -205,20 +192,6 @@ export function ScarFormDetailPage() {
         <AttachmentsPanel entityType="scar_forms" entityId={scarId} />
         <WorkflowHistoryPanel moduleName="scar_forms" recordId={scarId} />
       </div>
-
-      <Modal title="Delete SCAR" isOpen={deleteOpen} onClose={() => setDeleteOpen(false)}>
-        <div className="flex flex-col gap-4">
-          <p className="text-sm">Permanently delete this SCAR? This cannot be undone.</p>
-          <div className="flex gap-2">
-            <button onClick={() => deleteScar.mutate()} disabled={deleteScar.isPending} className="rounded-md bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground disabled:opacity-60">
-              {deleteScar.isPending ? "Deleting…" : "Delete permanently"}
-            </button>
-            <button onClick={() => setDeleteOpen(false)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-              Cancel
-            </button>
-          </div>
-        </div>
-      </Modal>
     </div>
     </PictureRecordProvider>
   );

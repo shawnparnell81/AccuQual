@@ -5,6 +5,7 @@ import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createValidationReportSchema, updateValidationReportSchema } from "./validation-reports.validation.js";
 import { baseHandlers } from "./validation-reports.controller.js";
+import { deleteRecordHandler } from "../records/recordDeletion.js";
 
 export const validationReportsRouter = Router();
 
@@ -14,3 +15,4 @@ validationReportsRouter.get("/", baseHandlers.list);
 validationReportsRouter.post("/", validate(createValidationReportSchema), baseHandlers.create);
 validationReportsRouter.get("/:id", baseHandlers.getOne);
 validationReportsRouter.patch("/:id", validate(updateValidationReportSchema), baseHandlers.update);
+validationReportsRouter.delete("/:id", deleteRecordHandler("validation_report"));

@@ -4,6 +4,7 @@ import { qualityInspectionReports, qualityInspectionItems } from "../../drizzle/
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { deleteRecord } from "../records/recordDeletion.js";
 
 async function loadReport(req: Request, id: number) {
   const [row] = await req.db!.select().from(qualityInspectionReports).where(and(eq(qualityInspectionReports.id, id)));
@@ -53,10 +54,7 @@ export const updateReportHandler = asyncHandler(async (req: Request, res: Respon
 });
 
 export const deleteReportHandler = asyncHandler(async (req: Request, res: Response) => {
-  const record = await loadReport(req, Number(req.params.id));
-  await req.db!.delete(qualityInspectionItems).where(and(eq(qualityInspectionItems.reportId, record.id)));
-  await req.db!.delete(qualityInspectionReports).where(and(eq(qualityInspectionReports.id, record.id)));
-  await recordAuditTrail(req.db!, { entityType: "QualityInspectionReport", entityId: record.id, action: "delete", changes: {}, performedBy: req.user?.id });
+  await deleteRecord(req, "quality_inspection");
   res.status(204).send();
 });
 

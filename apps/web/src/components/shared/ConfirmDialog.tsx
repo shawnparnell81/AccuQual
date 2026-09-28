@@ -5,6 +5,7 @@ interface ConfirmOptions {
   title: string;
   message: string;
   confirmLabel?: string;
+  tone?: "default" | "danger";
 }
 
 interface Pending extends ConfirmOptions {
@@ -34,7 +35,16 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}
-      {pending && <ConfirmDialog title={pending.title} message={pending.message} confirmLabel={pending.confirmLabel} onConfirm={() => finish(true)} onCancel={() => finish(false)} />}
+      {pending && (
+        <ConfirmDialog
+          title={pending.title}
+          message={pending.message}
+          confirmLabel={pending.confirmLabel}
+          tone={pending.tone}
+          onConfirm={() => finish(true)}
+          onCancel={() => finish(false)}
+        />
+      )}
     </ConfirmContext.Provider>
   );
 }
@@ -43,12 +53,14 @@ function ConfirmDialog({
   title,
   message,
   confirmLabel = "Confirm",
+  tone = "default",
   onConfirm,
   onCancel,
 }: {
   title: string;
   message: string;
   confirmLabel?: string;
+  tone?: "default" | "danger";
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -75,7 +87,11 @@ function ConfirmDialog({
           <button type="button" onClick={onCancel} className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted">
             Cancel
           </button>
-          <button type="button" onClick={onConfirm} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground">
+          <button
+            type="button"
+            onClick={onConfirm}
+            className={tone === "danger" ? "rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-white" : "rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"}
+          >
             {confirmLabel}
           </button>
         </div>

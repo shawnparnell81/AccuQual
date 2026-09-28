@@ -16,6 +16,7 @@ import {
   createWarrantyCostHandler,
   warrantyAnalyticsHandler,
 } from "./warranty.controller.js";
+import { deleteRecordHandler } from "../records/recordDeletion.js";
 
 export const warrantyRouter = Router();
 // customer_service/quality/engineering get edit, purchasing/material_management
@@ -33,6 +34,7 @@ warrantyRouter.get("/analytics", warrantyAnalyticsHandler);
 warrantyRouter.get("/claims", listWarrantyClaimsHandler);
 warrantyRouter.post("/claims", validate(createWarrantyClaimSchema), createWarrantyClaimHandler);
 warrantyRouter.get("/claims/:id", getWarrantyClaimHandler);
+warrantyRouter.delete("/claims/:id", deleteRecordHandler("warranty"));
 warrantyRouter.post("/claims/:id/update", validate(updateWarrantyClaimSchema), updateWarrantyClaimHandler);
 warrantyRouter.post("/claims/:id/upload", upload.single("file"), uploadWarrantyDocumentHandler);
 warrantyRouter.post("/claims/:id/transition", validate(transitionWarrantyClaimSchema), transitionWarrantyClaimHandler);

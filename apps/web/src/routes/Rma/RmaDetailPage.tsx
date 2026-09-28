@@ -9,6 +9,7 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { useToast } from "../../components/shared/ToastProvider";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { Modal } from "../../components/modals/Modal";
@@ -205,6 +206,7 @@ export function RmaDetailPage() {
               + Add Item
             </button>
           )}
+          <DeleteRecordButton resource="rma" id={record.id} kind="RMA" title={record.rmaNumber} ownerIds={[record.createdByUserId]} navigateTo="/rma" />
         </div>
       </div>
 

@@ -7,6 +7,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextAreaField } from "../../components/forms/Field";
 import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { Modal } from "../../components/modals/Modal";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
@@ -149,6 +150,7 @@ export function NcrWorkspacePage() {
         accessNote={canEdit ? null : READ_ONLY_REASON}
         actions={
           <>
+            <DeleteRecordButton resource="ncr" id={ncrId} kind="NCR" title={ncr.title} ownerIds={[ncr.createdBy]} navigateTo="/ncr" />
             <span className="self-center text-xs text-muted-foreground">{formLoading ? "Loading form…" : isSaving ? "Saving…" : "Saved"}</span>
             <StatusBadge value={ncr.severity} />
             <button onClick={() => setShowHistory(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">

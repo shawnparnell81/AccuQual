@@ -17,8 +17,15 @@ export const REVIEWER_ROLES = new Set(["admin", "owner", "quality_manager", "pre
 /** See every module at least as read, even with no department grant. Not full edit. */
 export const BROAD_VIEW_ROLES = new Set(["president", "vice_president"]);
 
+/** Who may delete a user-created record even when they did not create it. */
+export const RECORD_DELETE_ROLES = new Set(["admin", "owner", "quality_manager"]);
+
 export function isFullAccessRole(roleName: string | null | undefined): boolean {
   return roleName != null && FULL_ACCESS_ROLES.has(roleName);
+}
+
+export function canDeleteAnyRecord(roleName: string | null | undefined): boolean {
+  return roleName != null && RECORD_DELETE_ROLES.has(roleName);
 }
 
 export function isReviewerRole(roleName: string | null | undefined): boolean {

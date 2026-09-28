@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
@@ -8,7 +8,7 @@ import { withDb } from "../../lib/requestDb.js";
 import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmentAccess.js";
 import { withResolvedActors, attachFieldChanges, labelPersonFields } from "./audit-trail.service.js";
 import type { Db } from "../../lib/requestDb.js";
-import { isFullAccessRole } from "../roles/roleAccess.js";
+import { canDeleteAnyRecord, isFullAccessRole } from "../roles/roleAccess.js";
 
 export const auditTrailRouter = Router();
 
@@ -65,6 +65,7 @@ const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   InventoryItem: "inventory",
   InventorySettings: "inventory",
   NCR: "ncr",
+  "Validation Report": "documents",
   "PPAP package": "ppap",
   PurchaseOrder: "erp",
   PurchaseRequisition: "purchase_requisitions",
@@ -99,6 +100,20 @@ const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
 
 /** No business department owns these — admin only, not a ResourceKey lookup. */
 const ADMIN_ONLY_ENTITY_TYPES = new Set(["Company", "Company", "User", "DepartmentPermission", "PermissionRole", "UserPermissionRole"]);
+
+/** Recent history, including deletes, for administrators and quality managers. */
+auditTrailRouter.get(
+  "/",
+  asyncHandler(async (req, res) => {
+    if (!canDeleteAnyRecord(req.user?.roleName)) {
+      throw AppError.forbidden("The audit log is limited to an Owner, Administrator, or Quality Manager.");
+    }
+    const rows = await req.db!.select().from(auditTrail).orderBy(desc(auditTrail.id)).limit(200);
+    const withActors = await withResolvedActors(req.db! as Db, rows);
+    const withFields = await attachFieldChanges(req.db! as Db, withActors);
+    res.json(await labelPersonFields(req.db! as Db, withFields));
+  }),
+);
 
 /** History for a single entity, e.g. GET /audit-trail/ncr/42 */
 auditTrailRouter.get(

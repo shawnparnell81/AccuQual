@@ -5,6 +5,7 @@ import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createPpapSchema } from "./ppap.validation.js";
 import { baseHandlers } from "./ppap.controller.js";
+import { deleteRecordHandler } from "../records/recordDeletion.js";
 
 export const ppapRouter = Router();
 // Phase 3 RBAC verification fix: same gap class as eight-d.routes.ts — no
@@ -15,3 +16,4 @@ ppapRouter.use(requireAuth, withDb, requireDepartmentAccess("ppap"));
 ppapRouter.get("/", baseHandlers.list);
 ppapRouter.post("/", validate(createPpapSchema), baseHandlers.create);
 ppapRouter.get("/:id", baseHandlers.getOne);
+ppapRouter.delete("/:id", deleteRecordHandler("ppap"));

@@ -6,6 +6,7 @@ import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createComplaintSchema, updateComplaintSchema, resolveComplaintSchema } from "./complaints.validation.js";
 import { baseHandlers, verifyReferences, updateHandler, investigateHandler, resolveHandler, closeHandler, escalateToNcrHandler } from "./complaints.controller.js";
+import { deleteRecordHandler } from "../records/recordDeletion.js";
 
 export const complaintsRouter = Router();
 
@@ -26,6 +27,7 @@ complaintsRouter.get("/", baseHandlers.list);
 complaintsRouter.post("/", validate(createComplaintSchema), verifyReferences, baseHandlers.create);
 complaintsRouter.get("/:id", baseHandlers.getOne);
 complaintsRouter.patch("/:id", validate(updateComplaintSchema), verifyReferences, updateHandler);
+complaintsRouter.delete("/:id", deleteRecordHandler("complaint"));
 complaintsRouter.post("/:id/investigate", investigateHandler);
 complaintsRouter.post("/:id/resolve", validate(resolveComplaintSchema), resolveHandler);
 complaintsRouter.post("/:id/close", closeHandler);

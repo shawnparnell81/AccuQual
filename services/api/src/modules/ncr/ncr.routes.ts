@@ -15,6 +15,7 @@ import {
   addNcrQuarantineItemSchema,
   completeNcrDispositionSchema,
 } from "./ncr.validation.js";
+import { deleteRecordHandler } from "../records/recordDeletion.js";
 import {
   baseHandlers,
   listHandler,
@@ -41,6 +42,7 @@ ncrRouter.patch("/bulk", validate(bulkUpdateNcrSchema), baseHandlers.bulkUpdate)
 ncrRouter.get("/:id/repeats", repeatsHandler);
 ncrRouter.get("/:id", baseHandlers.getOne);
 ncrRouter.patch("/:id", validate(updateNcrSchema), baseHandlers.update);
+ncrRouter.delete("/:id", deleteRecordHandler("ncr"));
 
 ncrRouter.post("/:id/assign", validate(assignNcrSchema), assignHandler);
 ncrRouter.post("/:id/containment", validate(containmentNcrSchema), containmentHandler);

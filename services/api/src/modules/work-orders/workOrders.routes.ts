@@ -29,6 +29,7 @@ import {
   updateOperationHandler,
   deleteOperationHandler,
 } from "./workOrders.controller.js";
+import { deleteRecordHandler } from "../records/recordDeletion.js";
 import { workOrderAiPlanHandler } from "./workOrder.ai.js";
 
 export const workOrdersRouter = Router();
@@ -48,6 +49,7 @@ workOrdersRouter.get("/", listWorkOrdersHandler);
 workOrdersRouter.post("/", validate(createWorkOrderSchema), createWorkOrderHandler);
 workOrdersRouter.get("/:id", getWorkOrderHandler);
 workOrdersRouter.patch("/:id", validate(updateWorkOrderSchema), updateWorkOrderHandler);
+workOrdersRouter.delete("/:id", deleteRecordHandler("work_order"));
 workOrdersRouter.post("/:id/start", startWorkOrderHandler);
 workOrdersRouter.post("/:id/complete", validate(completeWorkOrderSchema), completeWorkOrderHandler);
 workOrdersRouter.post("/:id/cancel", cancelWorkOrderHandler);

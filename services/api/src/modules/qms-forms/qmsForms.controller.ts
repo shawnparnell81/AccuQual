@@ -4,6 +4,7 @@ import { qmsForms, qmsFormRows } from "../../drizzle/schema/qmsForms.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { deleteRecord } from "../records/recordDeletion.js";
 import { getQmsFormDefinition, QMS_FORM_DEFINITIONS } from "./qmsFormDefinitions.js";
 
 async function loadForm(req: Request, id: number) {
@@ -49,10 +50,7 @@ export const updateQmsFormHandler = asyncHandler(async (req: Request, res: Respo
 });
 
 export const deleteQmsFormHandler = asyncHandler(async (req: Request, res: Response) => {
-  const record = await loadForm(req, Number(req.params.id));
-  await req.db!.delete(qmsFormRows).where(and(eq(qmsFormRows.formId, record.id)));
-  await req.db!.delete(qmsForms).where(and(eq(qmsForms.id, record.id)));
-  await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: record.id, action: "delete", changes: { formType: record.formType, formNo: record.formNo }, performedBy: req.user?.id });
+  await deleteRecord(req, "qms");
   res.status(204).send();
 });
 

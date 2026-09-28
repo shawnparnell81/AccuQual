@@ -17,6 +17,7 @@ import {
   exportSupplierScorecardHandler,
 } from "./supplier.controller.js";
 import { getSupplierPerformanceHandler, performanceSummaryHandler } from "./supplier.performance.js";
+import { deleteRecordHandler } from "../records/recordDeletion.js";
 
 export const supplierRouter = Router();
 // Suppliers is shared by 4 departments at different levels (Quality: edit,
@@ -51,3 +52,4 @@ supplierRouter.post("/:id/approve", approveHandler);
 supplierRouter.post("/:id/conditional", conditionalHandler);
 supplierRouter.post("/:id/suspend", suspendHandler);
 supplierRouter.post("/:id/remove", removeHandler);
+supplierRouter.delete("/:id", deleteRecordHandler("supplier"));

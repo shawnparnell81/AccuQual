@@ -14,6 +14,7 @@ import {
   createRmaItemHandler,
   updateRmaItemHandler,
 } from "./rma.controller.js";
+import { deleteRecordHandler } from "../records/recordDeletion.js";
 
 export const rmaRouter = Router();
 // purchasing/material_management/quality get edit; engineering gets
@@ -29,6 +30,7 @@ rmaRouter.get("/", listRmaHandler);
 rmaRouter.post("/", validate(createRmaSchema), createRmaHandler);
 rmaRouter.get("/:id", getRmaHandler);
 rmaRouter.patch("/:id", validate(updateRmaSchema), updateRmaHandler);
+rmaRouter.delete("/:id", deleteRecordHandler("rma"));
 rmaRouter.post("/:id/status", validate(changeRmaStatusSchema), changeRmaStatusHandler);
 
 rmaRouter.get("/:id/items", listRmaItemsHandler);

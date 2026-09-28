@@ -46,11 +46,10 @@ calibrationRouter.post("/", manage, validate(createEquipmentSchema), baseHandler
 calibrationRouter.get("/:id", view, getEquipmentHandler);
 // Full-System Audit finding H2 — crudFactory's update/remove existed but
 // were never mounted at all; equipment could be created but never edited
-// or deleted. removeEquipmentHandler wraps baseHandlers.remove with a
-// check for real calibration history first (see its own comment) instead
-// of mounting baseHandlers.remove directly.
+// or deleted. removeEquipmentHandler deletes through the shared record
+// delete path, which refuses the delete when calibration history exists.
 calibrationRouter.patch("/:id", manage, validate(updateEquipmentSchema), baseHandlers.update);
-calibrationRouter.delete("/:id", manage, removeEquipmentHandler);
+calibrationRouter.delete("/:id", removeEquipmentHandler);
 // Status moves (active / inactive / out of service) always carry a reason; returning equipment a failed calibration took out of
 // service without a passing calibration is an override and is checked inside (equipment.override).
 calibrationRouter.post("/:id/status", manage, validate(changeStatusSchema), changeStatusHandler);

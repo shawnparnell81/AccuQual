@@ -9,6 +9,7 @@ import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
@@ -118,6 +119,7 @@ export function CapaDetailPage() {
         accessNote={canEdit ? null : READ_ONLY_REASON}
         actions={
           <>
+            <DeleteRecordButton resource="capa" id={capaId} kind="CAPA" title={capa.actionPlan} ownerIds={[capa.ownerId]} navigateTo="/capa" />
             <OpenFormButton formType="capa" entityId={capa.id} title={`CAPA #${capa.id} Form`} />
             <PrintFormButton formType="capa" entityId={capa.id} />
             <WorkflowActionButton

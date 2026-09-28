@@ -9,6 +9,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
@@ -113,6 +114,7 @@ export function SupplierDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <DeleteRecordButton resource="suppliers" id={supplier.id} kind="Supplier" title={supplier.name} navigateTo="/suppliers" />
           <OpenFormButton formType="supplier" entityId={supplier.id} title={`Supplier #${supplier.id} Record`} label="Supplier Record" />
           <PrintFormButton formType="supplier" entityId={supplier.id} />
           <OpenFormButton

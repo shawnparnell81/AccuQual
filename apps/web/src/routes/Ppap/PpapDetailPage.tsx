@@ -6,6 +6,7 @@ import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import type { PpapPackage } from "./PpapListPage";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 
 const ppapHooks = createResourceHooks<PpapPackage>("ppap");
 
@@ -35,6 +36,7 @@ export function PpapDetailPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
+        <DeleteRecordButton resource="ppap" id={ppap.id} kind="PPAP" title={ppap.partNumber} ownerIds={[ppap.ownerId]} navigateTo="/ppap" />
         <div>
           <h1 className="text-2xl font-semibold">
             PPAP #{ppap.id} — {ppap.partNumber}

@@ -11,6 +11,7 @@ import { RecordCrumbs } from "../../components/records/RecordStatus";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { READ_ONLY_REASON } from "../../lib/opsLanguage";
 import { SaveStatus } from "../../components/shared/SaveStatus";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { EightDWorkbook } from "./EightDSheets";
 import { blank8dFromData, buildSaveData, previousFields, type Blank8DValues } from "../../lib/blank8d";
@@ -206,6 +207,7 @@ export function EightDDetailPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <DeleteRecordButton resource="8d" id={reportId} kind="8D" title={values.blank.partNo || values.blank.problemStatement} navigateTo="/8d" />
             {linkedNcr && canEdit && (
               <AiStructuredSuggestion<EightDSuggestion>
                 endpoint="/ai/8d"
