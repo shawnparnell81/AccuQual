@@ -1151,6 +1151,66 @@ body.side-collapsed .aq-nav-folder-link {
   }
 }
 
+.aq-picture-field {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.aq-picture-field:empty::before {
+  content: attr(data-placeholder);
+  color: hsl(var(--muted-foreground));
+}
+.aq-picture {
+  display: inline-block;
+  position: relative;
+  max-width: 100%;
+  margin: 4px 4px 4px 0;
+  vertical-align: top;
+}
+.aq-picture img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.aq-picture-caption,
+.aq-picture figcaption {
+  display: block;
+  width: 100%;
+  margin-top: 2px;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+}
+.aq-picture-handle {
+  position: absolute;
+  right: 0;
+  bottom: 18px;
+  width: 10px;
+  height: 10px;
+  cursor: nwse-resize;
+  border-right: 2px solid hsl(var(--foreground));
+  border-bottom: 2px solid hsl(var(--foreground));
+}
+.aq-picture-tools {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 1;
+  border-radius: 6px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  padding: 2px 8px;
+  font-size: 11px;
+}
+.aq-picture-handle.aq-picture-tools {
+  right: 0;
+  bottom: 18px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 @media print {
   .aq-topbar,
   .aq-sidebar,
@@ -1189,8 +1249,14 @@ body.side-collapsed .aq-nav-folder-link {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .aq-print-sheet button {
+  .aq-print-sheet button,
+  .aq-picture-tools {
     display: none !important;
+  }
+  .aq-picture img {
+    max-width: 100%;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .bg-card {
     background: #fff !important;

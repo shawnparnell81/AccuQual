@@ -1,4 +1,6 @@
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { ChangeEvent, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import { PictureText } from "./PictureText";
+import { usePictureRecord } from "./pictureRecord";
 
 // border-form-field (not border-border): the one shared spot every text/textarea/select input in
 // the app renders through, so a company's Form Field Color theme setting has a real, single-file effect
@@ -16,7 +18,26 @@ export function TextField({ label, ...props }: { label: string } & InputHTMLAttr
   );
 }
 
-export function TextAreaField({ label, ...props }: { label: string } & TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function TextAreaField({ label, allowPictures = true, ...props }: { label: string; allowPictures?: boolean } & TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const record = usePictureRecord();
+  if (allowPictures && record) {
+    return (
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="text-xs font-semibold text-muted-foreground">{label}</span>
+        <PictureText
+          value={props.value == null ? "" : String(props.value)}
+          readOnly={Boolean(props.readOnly || props.disabled)}
+          className={baseInputClass}
+          rows={typeof props.rows === "number" ? props.rows : 4}
+          placeholder={props.placeholder}
+          ariaLabel={props["aria-label"] ?? (label || undefined)}
+          entityType={record.entityType}
+          entityId={record.entityId}
+          onChange={(next) => props.onChange?.({ target: { value: next } } as ChangeEvent<HTMLTextAreaElement>)}
+        />
+      </label>
+    );
+  }
   return (
     <label className="flex flex-col gap-1 text-sm">
       <span className="text-xs font-semibold text-muted-foreground">{label}</span>

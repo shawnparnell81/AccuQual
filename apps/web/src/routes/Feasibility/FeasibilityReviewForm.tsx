@@ -6,6 +6,8 @@ import { useAuthStore } from "../../store/authStore";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { PictureBoundText } from "../../components/forms/PictureText";
+import { usePictureRecord } from "../../components/forms/pictureRecord";
 import { FEASIBILITY_AREAS, FEASIBILITY_AREA_LABELS } from "../../api/types";
 import type { FeasibilityReview, FeasibleValue, FeasibilityRiskLevel, FeasibilityDetermination, FeasibilitySettings } from "../../api/types";
 
@@ -77,6 +79,15 @@ export function FeasibilityReviewForm({ review }: { review: FeasibilityReview })
       defaultValue: (review[key] as string) ?? "",
       onBlur: (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => e.target.value !== ((review[key] as string) ?? "") && patch.mutate({ [key]: e.target.value || null }),
       disabled: !canEditRecord || isFinal,
+    };
+  }
+
+  function narrative(key: keyof FeasibilityReview) {
+    const saved = (review[key] as string) ?? "";
+    return {
+      defaultValue: saved,
+      disabled: !canEditRecord || isFinal,
+      onSave: (value: string) => value !== saved && patch.mutate({ [key]: value || null }),
     };
   }
 
@@ -168,11 +179,7 @@ export function FeasibilityReviewForm({ review }: { review: FeasibilityReview })
                   </select>
                 </td>
                 <td className="border border-border p-0 align-top print:border-black">
-                  <textarea
-                    className={inputClass}
-                    rows={2}
-                    {...field(`${area}Mitigation` as keyof FeasibilityReview)}
-                  />
+                  <BoundPicture {...narrative(`${area}Mitigation` as keyof FeasibilityReview)} className={inputClass} rows={2} />
                 </td>
               </tr>
             ))}
@@ -182,9 +189,9 @@ export function FeasibilityReviewForm({ review }: { review: FeasibilityReview })
 
       <h2 className={sectionHeaderClass}>Resource &amp; Tooling Requirements</h2>
       <div className="flex flex-col gap-3">
-        <LabeledTextarea label="New Tooling / Equipment Required" {...field("newToolingEquipment")} placeholder="Specify tooling, tooling budget, and lead time, or write 'None'" />
-        <LabeledTextarea label="Inspection / Gaging Needs" {...field("inspectionGagingNeeds")} placeholder="Specify specialized gages, custom fixtures, or third-party lab testing" />
-        <LabeledTextarea label="Special Customer Requirements / Documentation" {...field("specialCustomerRequirements")} placeholder="PPAP Level, FMEA, Control Plan, Certificate of Conformance, Cleanroom Packaging, etc." />
+        <LabeledTextarea label="New Tooling / Equipment Required" {...narrative("newToolingEquipment")} placeholder="Specify tooling, tooling budget, and lead time, or write 'None'" />
+        <LabeledTextarea label="Inspection / Gaging Needs" {...narrative("inspectionGagingNeeds")} placeholder="Specify specialized gages, custom fixtures, or third-party lab testing" />
+        <LabeledTextarea label="Special Customer Requirements / Documentation" {...narrative("specialCustomerRequirements")} placeholder="PPAP Level, FMEA, Control Plan, Certificate of Conformance, Cleanroom Packaging, etc." />
       </div>
 
       <h2 className={sectionHeaderClass}>Feasibility Determination &amp; Conclusion</h2>
@@ -204,7 +211,7 @@ export function FeasibilityReviewForm({ review }: { review: FeasibilityReview })
             </span>
           </label>
         ))}
-        <LabeledTextarea label="Notes / Conditional Requirements Summary" {...field("determinationNotes")} placeholder="Insert notes, assumptions, or specific conditions to include in the formal quote to customer" />
+        <LabeledTextarea label="Notes / Conditional Requirements Summary" {...narrative("determinationNotes")} placeholder="Insert notes, assumptions, or specific conditions to include in the formal quote to customer" />
       </div>
 
       {requiredDocuments.length > 0 && (
@@ -302,16 +309,70 @@ function LabeledInput({
 
 function LabeledTextarea({
   label,
-  ...props
-}: { label: string } & React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  defaultValue,
+  onSave,
+  disabled,
+  placeholder,
+}: {
+  label: string;
+  defaultValue?: string;
+  onSave: (value: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+}) {
   return (
     <label className="flex flex-col gap-1 text-sm">
       <span className="text-xs font-medium uppercase text-muted-foreground print:text-black">{label}</span>
-      <textarea
+      <BoundPicture
+        defaultValue={defaultValue}
+        onSave={onSave}
+        disabled={disabled}
+        placeholder={placeholder}
         rows={2}
-        {...props}
         className="rounded-md border border-form-field bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary disabled:opacity-70 print:border-black print:bg-white print:text-black"
       />
     </label>
+  );
+}
+
+function BoundPicture({
+  defaultValue,
+  onSave,
+  disabled,
+  className,
+  rows,
+  placeholder,
+}: {
+  defaultValue?: string;
+  onSave: (value: string) => void;
+  disabled?: boolean;
+  className?: string;
+  rows?: number;
+  placeholder?: string;
+}) {
+  const record = usePictureRecord();
+  if (!record) {
+    return (
+      <textarea
+        className={className}
+        rows={rows}
+        placeholder={placeholder}
+        defaultValue={defaultValue}
+        disabled={disabled}
+        onBlur={(e) => e.target.value !== (defaultValue ?? "") && onSave(e.target.value)}
+      />
+    );
+  }
+  return (
+    <PictureBoundText
+      saved={defaultValue ?? ""}
+      onSave={onSave}
+      readOnly={Boolean(disabled)}
+      placeholder={placeholder}
+      className={className}
+      rows={rows}
+      entityType={record.entityType}
+      entityId={record.entityId}
+    />
   );
 }

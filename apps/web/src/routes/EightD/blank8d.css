@@ -101,7 +101,7 @@
 }
 
 .b8 input.b8-input,
-.b8 textarea.b8-area {
+.b8 .b8-area {
   width: 100%;
   margin: 0;
   border: 0;
@@ -117,7 +117,7 @@
 }
 
 .b8 input.b8-input:focus,
-.b8 textarea.b8-area:focus {
+.b8 .b8-area:focus {
   box-shadow: inset 0 0 0 2px hsl(var(--ring));
 }
 
@@ -125,13 +125,13 @@
   text-align: center;
 }
 
-.b8 textarea.b8-area {
+.b8 .b8-area {
   resize: vertical;
   min-height: 88px;
   text-align: left;
 }
 
-.b8 .d7-body textarea.b8-area {
+.b8 .d7-body .b8-area {
   min-height: 56px;
 }
 
@@ -147,7 +147,7 @@
   font-weight: 700;
 }
 
-.b8 .d8-body textarea.b8-area {
+.b8 .d8-body .b8-area {
   min-height: 48px;
 }
 
@@ -190,8 +190,8 @@
   grid-row: 2 / 5;
 }
 
-.d1d2 .problem textarea.b8-area,
-.d1d2 .b8-val textarea.b8-area {
+.d1d2 .problem .b8-area,
+.d1d2 .b8-val .b8-area {
   min-height: 0;
   height: 100%;
 }
@@ -273,7 +273,7 @@
   }
 
   .b8 input.b8-input,
-  .b8 textarea.b8-area,
+  .b8 .b8-area,
   .b8-doc-checks,
   .b8-impact label,
   .b8-doc-checks label {
@@ -282,9 +282,9 @@
     font-size: 10px;
   }
 
-  .b8 textarea.b8-area,
-  .b8 .d7-body textarea.b8-area,
-  .b8 .d8-body textarea.b8-area {
+  .b8 .b8-area,
+  .b8 .d7-body .b8-area,
+  .b8 .d8-body .b8-area {
     min-height: 2.4em;
   }
 

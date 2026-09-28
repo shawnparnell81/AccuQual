@@ -13,6 +13,7 @@ import { onlyOfficeSettings } from "../onlyoffice/settings.js";
 import { signOfficeToken } from "../onlyoffice/token.js";
 import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
+import { assertInlinePicture } from "./inlinePicture.js";
 
 /**
  * ONE generic upload/list/download/delete surface reused by every module —
@@ -32,6 +33,11 @@ export const uploadAttachmentHandler = asyncHandler(async (req: Request, res: Re
     throw AppError.badRequest("entityType and entityId must be provided together, or both omitted for a general upload");
   }
 
+  // A picture placed inside a form field. Same folder and row as every other
+  // attachment; only the type and size are narrower.
+  const inline = req.body.inlineImage === "1";
+  const mimeType = inline ? assertInlinePicture(file.buffer, file.size) : file.mimetype;
+
   const dir = `${env.STORAGE_LOCAL_PATH}/attachments`;
   await mkdir(dir, { recursive: true });
   const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -40,7 +46,7 @@ export const uploadAttachmentHandler = asyncHandler(async (req: Request, res: Re
 
   const [created] = await req
     .db!.insert(attachments)
-    .values({ entityType, entityId, fileName: file.originalname, filePath: path, mimeType: file.mimetype, fileSize: file.size, uploadedBy: req.user?.id })
+    .values({ entityType, entityId, fileName: file.originalname, filePath: path, mimeType, fileSize: file.size, uploadedBy: req.user?.id })
     .returning();
 
   await recordAuditTrail(req.db!, {

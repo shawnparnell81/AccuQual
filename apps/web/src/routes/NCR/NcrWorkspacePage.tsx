@@ -24,6 +24,7 @@ import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { NcrQuarantineSection } from "./NcrQuarantineSection";
 import { RepeatNcrBanner } from "./RepeatNcrBanner";
+import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 
 const FORM_TYPE = "ncr";
 
@@ -98,6 +99,7 @@ export function NcrWorkspacePage() {
   const closed = ncr.status === "closed";
 
   return (
+    <PictureRecordProvider entityType="ncr" entityId={ncrId}>
     <div className="flex flex-col gap-4">
       <RecordGlance
         crumbs={[
@@ -242,6 +244,7 @@ export function NcrWorkspacePage() {
         <WorkflowHistoryPanel moduleName="ncr" recordId={ncrId} bare />
       </Modal>
     </div>
+    </PictureRecordProvider>
   );
 }
 

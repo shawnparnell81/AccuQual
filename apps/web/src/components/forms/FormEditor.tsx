@@ -11,6 +11,7 @@ import { GenericFormRenderer } from "./GenericFormRenderer";
 import { getCustomFormComponent } from "./customForms";
 import { useFormEditorState } from "./useFormEditorState";
 import { ProcessFlowDiagramEditor } from "./processFlowDiagram/ProcessFlowDiagramEditor";
+import { PictureRecordProvider, pictureRecordForForm } from "./pictureRecord";
 
 interface FormEditorProps {
   formType: string;
@@ -63,7 +64,10 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading form…</p>;
 
+  const pictureRecord = pictureRecordForForm(formType, entityId);
+
   return (
+    <PictureRecordProvider entityType={pictureRecord.entityType} entityId={pictureRecord.entityId}>
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>{formData ? `Version ${formData.version}` : "New form"}</span>
@@ -102,5 +106,6 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
       {showHistory && <FormVersionHistory formType={formType} entityId={entityId} />}
       {(previewBytes || previewLoading) && <PdfViewer data={previewBytes} isLoading={previewLoading} />}
     </div>
+    </PictureRecordProvider>
   );
 }

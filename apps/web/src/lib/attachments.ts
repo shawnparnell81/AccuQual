@@ -1,11 +1,12 @@
 import { apiClient } from "../api/client";
 
 /** Attaches one file to a record through the generic attachments endpoint (the same one every "Evidence / Attachments" panel uses). */
-export async function uploadAttachmentFor(entityType: string, entityId: number, file: File) {
+export async function uploadAttachmentFor(entityType: string, entityId: number, file: File, options?: { inlineImage?: boolean }) {
   const body = new FormData();
   body.append("file", file);
   body.append("entityType", entityType);
   body.append("entityId", String(entityId));
+  if (options?.inlineImage) body.append("inlineImage", "1");
   return (await apiClient.post("/attachments", body, { headers: { "Content-Type": "multipart/form-data" } })).data;
 }
 

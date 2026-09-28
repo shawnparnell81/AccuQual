@@ -11,6 +11,7 @@ import { Modal } from "../../components/modals/Modal";
 import { getQmsFormDefinition } from "./qmsFormDefinitions";
 import type { QmsForm, QmsFormRow, QmsFormStatus } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { PictureBoundText } from "../../components/forms/PictureText";
 
 const qmsFormHooks = createResourceHooks<QmsForm>("qms-forms");
 const STATUSES: QmsFormStatus[] = ["draft", "active", "obsolete"];
@@ -170,11 +171,13 @@ export function QmsFormRecordPage() {
           <h2 className="mb-2 border-l-4 border-primary bg-muted/50 px-3 py-1.5 text-xs font-bold uppercase tracking-wide print:border-black print:bg-transparent print:text-black">
             Additional Comments / Attachments
           </h2>
-          <textarea
+          <PictureBoundText
             className="w-full rounded-md border border-border bg-background p-2 text-sm print:border-black print:bg-white print:text-black"
             rows={3}
-            defaultValue={record.additionalComments ?? ""}
-            onBlur={(e) => e.target.value !== (record.additionalComments ?? "") && patchHeader.mutate({ additionalComments: e.target.value || null })}
+            saved={record.additionalComments ?? ""}
+            entityType="qms_forms"
+            entityId={formId}
+            onSave={(value) => patchHeader.mutate({ additionalComments: value || null })}
           />
         </div>
       </div>

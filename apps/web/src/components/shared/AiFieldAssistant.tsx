@@ -93,7 +93,7 @@ export function AiFieldAssistant({ module, recordId, buildInitialPrompt, onInser
           <p className="text-xs text-muted-foreground">
             {assistantName} only suggests text — it can't change this record. Review anything below before using it.
           </p>
-          <TextAreaField label="Prompt (edit before generating)" value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={5} />
+          <TextAreaField label="Prompt (edit before generating)" allowPictures={false} value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={5} />
           <button
             type="button"
             onClick={() => generate.mutate()}

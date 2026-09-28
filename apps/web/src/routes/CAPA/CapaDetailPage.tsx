@@ -18,6 +18,7 @@ import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
 import { CAPA_LOOP, READ_ONLY_REASON, capaLoopIndex, capaNextAction, duePhrase, isPastDue, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
+import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 
 const capaHooks = createResourceHooks<Capa>("capa");
 
@@ -66,6 +67,7 @@ export function CapaDetailPage() {
   const closed = capa.status === "closed";
 
   return (
+    <PictureRecordProvider entityType="capa" entityId={capaId}>
     <div className="flex flex-col gap-4">
       <RecordGlance
         crumbs={[
@@ -289,5 +291,6 @@ export function CapaDetailPage() {
         <WorkflowHistoryPanel moduleName="capa" recordId={capaId} />
       </div>
     </div>
+    </PictureRecordProvider>
   );
 }

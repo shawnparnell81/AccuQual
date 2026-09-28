@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { Block, FormLayout, TableColumn } from "./layouts/types.js";
 import { FMEA_PDF_TONE, fmeaCellValue, fmeaComputedTone } from "./fmeaPriority.js";
+import { pictureTextToPlain } from "../attachments/inlinePicture.js";
 
 // Colors sampled from the reference templates (dark navy header bars, pale
 // blue-gray field boxes, thin blue-gray borders) — kept as named constants so
@@ -125,7 +126,7 @@ function drawTextarea(ctx: RenderContext, name: string, label: string, hint: str
   ctx.page.drawRectangle({ x: MARGIN, y: ctx.y - bodyHeight, width: CONTENT_WIDTH, height: bodyHeight, color: WHITE, borderColor: BORDER, borderWidth: 0.5 });
   const value = data[name];
   if (value != null && value !== "") {
-    const lines = wrapText(String(value), ctx.font, 9, CONTENT_WIDTH - 12).slice(0, Math.floor(bodyHeight / 12));
+    const lines = wrapText(pictureTextToPlain(String(value)), ctx.font, 9, CONTENT_WIDTH - 12).slice(0, Math.floor(bodyHeight / 12));
     lines.forEach((line, i) => {
       ctx.page.drawText(line, { x: MARGIN + 6, y: ctx.y - 12 - i * 12, size: 9, font: ctx.font, color: TEXT_DARK });
     });
@@ -224,7 +225,7 @@ function drawTable(
           ctx.page.drawText(opt, { x: x + 15, y: ctx.y - 10 - i * 11, size: 7, font: ctx.font, color: TEXT_DARK });
         });
       } else if (value != null && value !== "") {
-        wrapText(pdfSafe(String(value)), ctx.font, 8, colWidth - 8)
+        wrapText(pictureTextToPlain(pdfSafe(String(value))), ctx.font, 8, colWidth - 8)
           .slice(0, 3)
           .forEach((line, i) => ctx.page.drawText(line, { x: x + 4, y: ctx.y - 12 - i * 10, size: 8, font: ctx.font, color: textColor }));
       }

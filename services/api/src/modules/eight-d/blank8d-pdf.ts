@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { BLANK_8D_LABELS, BLANK_8D_TITLE, type Blank8DValues } from "./blank8dForm.js";
+import { BLANK_8D_LABELS, BLANK_8D_STRING_KEYS, BLANK_8D_TITLE, type Blank8DValues } from "./blank8dForm.js";
+import { pictureTextToPlain } from "../attachments/inlinePicture.js";
 
 const PAGE_W = 595.28;
 const PAGE_H = 841.89;
@@ -112,12 +113,13 @@ function check(ctx: Ctx, x: number, y: number, on: boolean) {
 }
 
 export async function renderBlank8DPdf(input: { id: number; values: Blank8DValues }): Promise<Uint8Array> {
+  const v = { ...input.values };
+  for (const key of BLANK_8D_STRING_KEYS) v[key] = pictureTextToPlain(input.values[key]);
   const doc = await PDFDocument.create();
   const page = doc.addPage([PAGE_W, PAGE_H]);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const ctx: Ctx = { page, font, bold, y: PAGE_H - MARGIN_Y };
-  const v = input.values;
   const L = BLANK_8D_LABELS;
 
   page.drawRectangle({ x: MARGIN_X - 4, y: MARGIN_Y - 4, width: CONTENT_W + 8, height: PAGE_H - MARGIN_Y * 2 + 8, color: SHEET, borderColor: LINE, borderWidth: 0.8 });
