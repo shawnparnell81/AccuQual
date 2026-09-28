@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { rejectSupplierReads, requireRole } from "../../middleware/rbac.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { updateBrandingSchema, updateAiConfigSchema, updateCompanyProfileSchema, updateCompanySecuritySchema, updateOnboardingSchema } from "./company.validation.js";
@@ -8,7 +8,7 @@ import { getBrandingHandler, updateBrandingHandler, getAiConfigHandler, updateAi
 
 /** A company admin's own settings — the settings of the one company. Admin-only (requireRole), not department-gated: branding/AI config aren't a department concern. */
 export const companyRouter = Router();
-companyRouter.use(requireAuth, withDb);
+companyRouter.use(requireAuth, withDb, rejectSupplierReads);
 
 companyRouter.get("/branding", getBrandingHandler);
 companyRouter.patch("/branding", requireRole("admin"), validate(updateBrandingSchema), updateBrandingHandler);

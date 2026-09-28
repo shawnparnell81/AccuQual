@@ -20,6 +20,8 @@ import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
+const DOCX = Buffer.concat([Buffer.from("PK\x03\x04"), Buffer.from("word/document.xml")]);
+const PDF = Buffer.from("%PDF-1.4 scan");
 
 let companyId: number;
 let userId: number;
@@ -68,7 +70,7 @@ describe("Document Folders — real file upload into the library (real DB + real
       .post("/document-folders/upload")
       .set("Authorization", `Bearer ${token}`)
       .field("parentId", String(departmentId))
-      .attach("file", Buffer.from("fake docx bytes"), { filename: "Quality Manual v3.docx", contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+      .attach("file", DOCX, { filename: "Quality Manual v3.docx", contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
 
     expect(res.status).toBe(201);
     expect(res.body.name).toBe("Quality Manual v3");
@@ -87,7 +89,8 @@ describe("Document Folders — real file upload into the library (real DB + real
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toBe("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     expect(res.headers["content-disposition"]).toMatch(/\.docx"/);
-    expect((res.body as Buffer).toString("utf8")).toBe("fake docx bytes");
+    expect(String(res.headers["content-disposition"])).toContain("attachment");
+    expect(Buffer.compare(res.body as Buffer, DOCX)).toBe(0);
   });
 
   it("rejects an upload with no real target folder", async () => {
@@ -104,7 +107,7 @@ describe("Document Folders — real file upload into the library (real DB + real
       .set("Authorization", `Bearer ${token}`)
       .field("parentId", String(departmentId))
       .field("name", "SOP-014 Incoming Inspection")
-      .attach("file", Buffer.from("x"), "scan.pdf");
+      .attach("file", PDF, "scan.pdf");
     expect(res.status).toBe(201);
     expect(res.body.name).toBe("SOP-014 Incoming Inspection");
   });

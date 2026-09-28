@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { rejectSupplierReads, requireRole } from "../../middleware/rbac.js";
 import { requireAnyDepartment } from "../../middleware/departmentAccess.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
@@ -34,7 +34,7 @@ import {
  * Inventory: Production+Purchasing; ERP Sync: Admin only).
  */
 export const settingsRouter = Router();
-settingsRouter.use(requireAuth, withDb);
+settingsRouter.use(requireAuth, withDb, rejectSupplierReads);
 
 settingsRouter.get("/feasibility", getFeasibilitySettingsHandler);
 settingsRouter.post("/feasibility", requireAnyDepartment("quality", "engineering"), validate(updateFeasibilitySettingsSchema), updateFeasibilitySettingsHandler);

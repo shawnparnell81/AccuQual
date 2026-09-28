@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
-import { createReadStream, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { and, eq } from "drizzle-orm";
 import { trainingCourses, trainingAssignments, type TrainingAssignment } from "../../drizzle/schema/training.js";
 import { users } from "../../drizzle/schema/users.js";
@@ -11,6 +11,8 @@ import * as service from "./training.service.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
 import type { Db } from "../../lib/requestDb.js";
+import { PDF_ONLY_ERROR, sniffPdf } from "../../utils/fileSniff.js";
+import { sendStoredFile } from "../../utils/storedFile.js";
 
 // Distinct from "Document" and "DocumentFolder" — see those modules' own
 // comments on why each entity keeps its own entityType.
@@ -109,7 +111,7 @@ export const uploadCertificateHandler = asyncHandler(async (req: Request, res: R
   const assignmentId = Number(req.params.assignmentId);
   const file = req.file;
   if (!file) throw AppError.badRequest("No file uploaded");
-  if (file.mimetype !== "application/pdf") throw AppError.badRequest("Only PDF files are accepted");
+  if (!sniffPdf(file.buffer, file.originalname)) throw AppError.badRequest(PDF_ONLY_ERROR);
 
   const [assignment] = await req.db!.select().from(trainingAssignments).where(and(eq(trainingAssignments.id, assignmentId)));
   if (!assignment) throw AppError.notFound("Training assignment");
@@ -142,9 +144,7 @@ export const downloadCertificateHandler = asyncHandler(async (req: Request, res:
   if (!assignment) throw AppError.notFound("Training assignment");
   if (!assignment.certificatePath || !existsSync(assignment.certificatePath)) throw AppError.notFound("Certificate file");
 
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `inline; filename="training-${assignmentId}-certificate.pdf"`);
-  createReadStream(assignment.certificatePath).pipe(res);
+  await sendStoredFile(res, assignment.certificatePath, `training-${assignmentId}-certificate.pdf`, "application/pdf", "preview");
 });
 
 /** Every training record for one employee, across every course — the data behind TrainingHistoryPanel. */

@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
-import { createReadStream, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { documentFolders, LIBRARY_POOL_NAME } from "../../drizzle/schema/documentFolders.js";
 import { documents } from "../../drizzle/schema/documents.js";
@@ -18,6 +18,8 @@ import { loadOfficeActor } from "../onlyoffice/access.js";
 import { onlyOfficeSettings } from "../onlyoffice/settings.js";
 import { signOfficeToken } from "../onlyoffice/token.js";
 import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
+import { UPLOAD_TYPE_ERROR, sniffUpload } from "../../utils/fileSniff.js";
+import { sendStoredFile } from "../../utils/storedFile.js";
 
 // A separate entityType from "Document" (services/api/src/modules/documents)
 // — document_folders.id and documents.id are different id spaces, and
@@ -341,20 +343,21 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
  * file on `req.file`; this persists it under the company's provisioned
  * `forms/custom` directory (same STORAGE_LOCAL_PATH convention the seeded
  * form templates use) and records the path + real mime type on the folder
- * row. Any file type is accepted — real controlled documents (a Quality
- * Manual, a calibration procedure) are just as often a .docx or .xlsx as a
- * .pdf; the column name (`pdfPath`) predates this and stayed for backward
- * compatibility rather than a column rename. Replacing an existing
- * attachment deletes the old file first.
+ * row. The file has to be on the upload allow-list (the bytes and the
+ * name have to agree). Real controlled documents are often a .docx or
+ * .xlsx as well as a .pdf; the column name (`pdfPath`) predates this and
+ * stayed for backward compatibility rather than a column rename. Replacing
+ * an existing attachment deletes the old file first.
  */
 async function attachFileToFolder(db: Db, folderId: number, file: Express.Multer.File, performedBy: number | undefined) {
   const [folder] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, folderId)));
   if (!folder) throw AppError.notFound("Document folder");
+  const sniffed = sniffUpload(file.buffer, file.originalname);
+  if (!sniffed) throw AppError.badRequest(UPLOAD_TYPE_ERROR);
 
   const dir = `${env.STORAGE_LOCAL_PATH}/forms/custom`;
   await mkdir(dir, { recursive: true });
-  const ext = file.originalname.includes(".") ? file.originalname.slice(file.originalname.lastIndexOf(".")) : "";
-  const path = `${dir}/${folderId}-${Date.now()}${ext}`;
+  const path = `${dir}/${folderId}-${Date.now()}${sniffed.ext}`;
   await writeFile(path, file.buffer);
 
   if (folder.pdfPath && existsSync(folder.pdfPath)) {
@@ -363,7 +366,7 @@ async function attachFileToFolder(db: Db, folderId: number, file: Express.Multer
 
   const [updated] = await db
     .update(documentFolders)
-    .set({ pdfPath: path, pdfMimeType: file.mimetype, updatedAt: new Date() })
+    .set({ pdfPath: path, pdfMimeType: sniffed.mime, updatedAt: new Date() })
     .where(and(eq(documentFolders.id, folderId)))
     .returning();
 
@@ -451,9 +454,8 @@ export const downloadTemplate = asyncHandler(async (req: Request, res: Response)
   if (!folder.pdfPath || !existsSync(folder.pdfPath)) throw AppError.notFound("Attached template file");
 
   const ext = folder.pdfPath.includes(".") ? folder.pdfPath.slice(folder.pdfPath.lastIndexOf(".")) : "";
-  res.setHeader("Content-Type", folder.pdfMimeType ?? "application/octet-stream");
-  res.setHeader("Content-Disposition", `inline; filename="${folder.name.replace(/[^\w.-]+/g, "_")}${ext}"`);
-  createReadStream(folder.pdfPath).pipe(res);
+  const fileName = folder.name.toLowerCase().endsWith(ext.toLowerCase()) ? folder.name : `${folder.name}${ext}`;
+  await sendStoredFile(res, folder.pdfPath, fileName, folder.pdfMimeType, "download");
 });
 
 /**

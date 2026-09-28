@@ -24,25 +24,12 @@ auditTrailRouter.use(requireAuth, withDb);
  * scoping itself was already correct; this was an intra-company
  * information-disclosure gap, not a one).
  *
- * Deliberately does NOT cover every entityType ever recorded — two real
- * categories are left out on purpose, not missed:
- *   1. Types whose own module has no department gate at all today (Digital
- *      Twin/IotDevice, AI usage records, Attachments — polymorphic, can't
- *      be attributed to one department reliably — Report exports/
- *      schedules, Form Templates, SCAR Forms): gating their audit history
- *      more strictly than the records themselves would be a new
- *      restriction this fix isn't meant to introduce. Training and QMS
- *      Forms used to belong on this list too (Full-System Audit findings
- *      C2/C3), but both later gained a real requireDepartmentAccess gate
- *      on their own routes — leaving their entityTypes off this map after
- *      that would have re-opened exactly the intra-company disclosure gap
- *      this fix exists to close, so TrainingAssignment/QmsForm are mapped
- *      below instead. SCAR Forms is still genuinely ungated at the route
- *      level; revisit it here if that ever changes too.
- *   2. Genuinely system/permission-level types (Company, User, department
- *      and role permission grants) — no single business department owns
- *      these, so they require admin outright instead of a
- *      ResourceKey lookup.
+ * Only types on this map, or the admin-only set below, can be read.
+ * Anything else is rejected, including for an administrator. Training and
+ * QMS Forms are mapped because their own routes are department-gated.
+ * System types (Company, User, department and role permission grants)
+ * have no single business department, so they require admin instead of a
+ * ResourceKey lookup.
  */
 const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   "8D Report": "eight_d",
@@ -121,6 +108,10 @@ auditTrailRouter.get(
     const isAdmin = isFullAccessRole(role);
     const entityType = req.params.entityType!;
 
+    if (!ENTITY_TYPE_TO_RESOURCE[entityType] && !ADMIN_ONLY_ENTITY_TYPES.has(entityType)) {
+      throw AppError.badRequest(`Unknown record type "${entityType}"`);
+    }
+
     if (!isAdmin) {
       if (ADMIN_ONLY_ENTITY_TYPES.has(entityType)) {
         throw AppError.forbidden(`No access to '${entityType}' history — admin only`);
@@ -130,9 +121,6 @@ auditTrailRouter.get(
         const level = await getUserAccessLevel(req.db! as Db, req.user!, resourceKey);
         if (level === "none") throw AppError.forbidden(`No access to '${entityType}' history for your department`);
       }
-      // No map entry at all: this entityType's own module has no
-      // department gate today either (see the map's own comment) — read
-      // access here matches that same already-open reality, not a gap.
     }
 
     const rows = await req

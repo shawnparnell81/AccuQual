@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { createReadStream, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { and, eq, sql } from "drizzle-orm";
 import { documents, documentVersions, type Document, type DocumentVersion } from "../../drizzle/schema/documents.js";
 import { roles } from "../../drizzle/schema/roles.js";
@@ -15,6 +15,7 @@ import { blankDocumentPayload } from "./documentPayload.js";
 import { documentAdapter, isInsideStorage } from "./documentVersioning.js";
 import { ARCHIVED_READ_ONLY, isInObsoleteArchive, OBSOLETE_ARCHIVE_CATEGORY } from "./obsoleteArchive.js";
 import { roleCanRestoreArchivedDocuments } from "../roles/roleAccess.js";
+import { sendStoredFile } from "../../utils/storedFile.js";
 
 export const baseHandlers = crudFactory(documents, { entityName: "Document", idColumn: "id", softDelete: true });
 
@@ -213,10 +214,7 @@ export const downloadVersionHandler = asyncHandler(async (req: Request, res: Res
     throw AppError.notFound("Uploaded file for this version");
   }
 
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Content-Disposition", `inline; filename="document-${version.documentId}-rev${version.version}.pdf"`);
-  createReadStream(version.fileUrl).pipe(res);
+  await sendStoredFile(res, version.fileUrl, `document-${version.documentId}-rev${version.version}.pdf`, "application/pdf", "preview");
 });
 
 export const historyHandler = asyncHandler(async (req: Request, res: Response) => {

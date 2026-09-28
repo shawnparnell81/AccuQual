@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
-import { createReadStream, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { and, eq, desc } from "drizzle-orm";
 import { formTemplates } from "../../drizzle/schema/forms.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
@@ -10,6 +10,8 @@ import { logger } from "../../utils/logger.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { FORM_TYPES } from "./forms.validation.js";
 import { loadTemplate } from "./forms.service.js";
+import { PDF_ONLY_ERROR, sniffPdf } from "../../utils/fileSniff.js";
+import { sendStoredFile } from "../../utils/storedFile.js";
 
 /**
  * Company template upload/replace/delete — the write side of a real,
@@ -48,7 +50,7 @@ export const uploadTemplateHandler = asyncHandler(async (req: Request, res: Resp
   if (!(FORM_TYPES as readonly string[]).includes(formType)) throw AppError.badRequest(`Unknown form type "${formType}"`);
   const file = req.file;
   if (!file) throw AppError.badRequest("No file uploaded");
-  if (file.mimetype !== "application/pdf") throw AppError.badRequest("Only PDF files are accepted");
+  if (!sniffPdf(file.buffer, file.originalname)) throw AppError.badRequest(PDF_ONLY_ERROR);
 
   // Carry over the currently-active template's field map — replacing the
   // PDF shouldn't silently blank out where every field is positioned on the
@@ -72,9 +74,7 @@ export const uploadTemplateHandler = asyncHandler(async (req: Request, res: Resp
 export const downloadTemplateHandler = asyncHandler(async (req: Request, res: Response) => {
   const template = await loadTemplate(req.db!, req.params.type!);
   if (!existsSync(template.pdfPath)) throw AppError.notFound("Template file");
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `inline; filename="${req.params.type}.pdf"`);
-  createReadStream(template.pdfPath).pipe(res);
+  await sendStoredFile(res, template.pdfPath, `${req.params.type}.pdf`, "application/pdf", "download");
 });
 
 /** Removes the company's own custom template(s) for this type — the seeded default row is never deleted, so the type reverts to it automatically (loadTemplate just has nothing newer to prefer). */

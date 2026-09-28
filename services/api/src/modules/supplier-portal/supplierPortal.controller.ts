@@ -28,6 +28,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { sendEmail } from "../notifications/notification.service.js";
 import { getSupplierNcrIds, getSupplierCapaIds } from "./supplierLinkage.js";
 import { getSupplierQualityFactors, getSupplierHealth, getSupplierRiskScoreWithTrend, exportSupplierScorecard } from "../supplier/supplier.qualityRisk.js";
+import { UPLOAD_TYPE_ERROR, sniffUpload } from "../../utils/fileSniff.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /**
@@ -102,12 +103,14 @@ async function assertSupplierExists(req: Request, supplierId: number) {
 }
 
 async function storeSupplierFile(req: Request, subdir: string, file: Express.Multer.File): Promise<StoredFile> {
+  const sniffed = sniffUpload(file.buffer, file.originalname);
+  if (!sniffed) throw AppError.badRequest(UPLOAD_TYPE_ERROR);
   const dir = `${env.STORAGE_LOCAL_PATH}/supplier-portal/${subdir}`;
   await mkdir(dir, { recursive: true });
   const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
   const filePath = `${dir}/${Date.now()}-${safeName}`;
   await writeFile(filePath, file.buffer);
-  return { fileName: file.originalname, filePath, mimeType: file.mimetype, fileSize: file.size, uploadedAt: new Date().toISOString() };
+  return { fileName: file.originalname, filePath, mimeType: sniffed.mime, fileSize: file.size, uploadedAt: new Date().toISOString() };
 }
 
 // ---------------------------------------------------------------------------

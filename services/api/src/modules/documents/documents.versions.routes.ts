@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
-import { createReadStream, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { asyncHandler } from "../../utils/asyncHandler.js";
@@ -20,6 +20,7 @@ import type { Actor } from "../versioning/versioning.service.js";
 import { registerVersionRoutes, saveDraftSchema } from "../versioning/versioning.routes.js";
 import { decisionSchema, requestReviewSchema } from "./documents.validation.js";
 import { documentsLinkedTo, documentAdapter, addAttachment, DOCUMENT_ENTITY_TYPE, FILE_LINK_SECONDS, isInsideStorage, MAX_FILE_BYTES, removeAttachment, searchTargets, signFileToken, verifyFileToken } from "./documentVersioning.js";
+import { sendStoredFile } from "../../utils/storedFile.js";
 import { LINK_TYPES, LINK_TYPE_LABEL, normalizeDocumentPayload, type LinkType } from "./documentPayload.js";
 
 const idParam = (req: Request, name = "id") => {
@@ -229,13 +230,6 @@ documentFilesRouter.get(
 
     await recordAuditTrailStandalone(pool, { entityType: DOCUMENT_ENTITY_TYPE, entityId: file.documentId, action: "update", changes: { event: "file_downloaded", fileId: file.id, fileName: file.fileName }, performedBy: t.userId });
 
-    const inline = file.mimeType === "application/pdf" || file.mimeType.startsWith("image/");
-    res.setHeader("Content-Type", file.mimeType);
-    res.setHeader("Content-Length", String(file.sizeBytes));
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("Content-Security-Policy", "sandbox");
-    res.setHeader("Cache-Control", "private, no-store");
-    res.setHeader("Content-Disposition", `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(file.fileName)}`);
-    createReadStream(file.filePath).pipe(res);
+    await sendStoredFile(res, file.filePath, file.fileName, file.mimeType, "preview");
   }),
 );

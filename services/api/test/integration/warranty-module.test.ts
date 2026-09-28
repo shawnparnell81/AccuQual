@@ -123,7 +123,7 @@ describe("Warranty module (real DB + real HTTP path)", () => {
       .set("Authorization", `Bearer ${engineeringToken}`)
       .field("category", "failure_image")
       .field("caption", "Burnt capacitor")
-      .attach("file", Buffer.from("fake jpeg bytes"), "failure.jpg");
+      .attach("file", Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0]), "failure.jpg");
     expect(res.status).toBe(201);
     expect(res.body.claim.failureImages).toHaveLength(1);
     expect(res.body.claim.failureImages[0].caption).toBe("Burnt capacitor");
