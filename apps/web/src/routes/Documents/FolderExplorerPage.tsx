@@ -33,8 +33,7 @@ interface ControlledFormTemplate {
   docId: string;
   title: string;
   route: string;
-  folderIds: number[];
-  categoryKeys: string[];
+  folderId: number | null;
 }
 
 /** Stable accent per department, cycling if there are ever more than 7. */
@@ -191,7 +190,7 @@ export function FolderExplorerPage() {
   const activeDept = departments.find((d) => d.id === activeDeptId) ?? departments[0];
 
   function formsIn(folderId: number) {
-    return formTemplates.filter((form) => form.folderIds.includes(folderId));
+    return formTemplates.filter((form) => form.folderId === folderId);
   }
 
   function countsFor(deptId: number) {

@@ -27,13 +27,13 @@ describe("controlled form templates", () => {
     if (!quality) await db.insert(documentFolders).values({ name: "Quality", sortOrder: 0 });
   });
 
-  it("files each validation form in ISO Compliance, Validation Reports, and the Forms Library list", async () => {
+  it("files each blank template once under ISO Compliance > Validation and lists that same row for the Forms Library", async () => {
     const first = await request(app).get("/document-folders/form-templates").set("Authorization", `Bearer ${token}`);
     expect(first.status).toBe(200);
     const again = await request(app).get("/document-folders/form-templates").set("Authorization", `Bearer ${token}`);
     expect(again.body).toHaveLength(first.body.length);
 
-    const forms = first.body as { formKey: string; docId: string; title: string; route: string; folderIds: number[]; categoryKeys: string[] }[];
+    const forms = first.body as { formKey: string; docId: string; title: string; route: string; folderId: number | null }[];
     const csa = forms.find((form) => form.formKey === "frm-val-001");
     const pump = forms.find((form) => form.formKey === "frm-val-007");
     expect(csa?.docId).toBe("FRM-VAL-001");
@@ -41,8 +41,11 @@ describe("controlled form templates", () => {
     expect(pump?.docId).toBe("FRM-VAL-007");
     expect(pump?.title).toBe("Fuel Pump Validation");
     expect(csa?.route).toBe("/folders/validation-reports");
-    expect(csa?.categoryKeys).toContain("validation-reports");
-    expect(pump?.categoryKeys).toContain("validation-reports");
+    expect(pump?.route).toBe("/folders/validation-reports");
+    expect(forms.filter((form) => form.formKey === "frm-val-001")).toHaveLength(1);
+    expect(forms.filter((form) => form.formKey === "frm-val-007")).toHaveLength(1);
+    expect(csa).not.toHaveProperty("folderIds");
+    expect(csa).not.toHaveProperty("categoryKeys");
 
     const tree = await request(app).get("/document-folders").set("Authorization", `Bearer ${token}`);
     expect(tree.status).toBe(200);
@@ -51,12 +54,12 @@ describe("controlled form templates", () => {
     const quality = folders.find((folder) => folder.parentId === null && folder.name === "Quality");
     expect(iso).toBeTruthy();
     expect(quality).toBeTruthy();
-    const controlled = folders.find((folder) => folder.parentId === iso!.id && folder.name === "Controlled Forms");
-    const validation = folders.find((folder) => folder.parentId === quality!.id && folder.name === "Validation Reports");
-    expect(controlled).toBeTruthy();
+    const validation = folders.find((folder) => folder.parentId === iso!.id && folder.name === "Validation");
     expect(validation).toBeTruthy();
-    expect(csa?.folderIds).toEqual(expect.arrayContaining([controlled!.id, validation!.id]));
-    expect(pump?.folderIds).toEqual(expect.arrayContaining([controlled!.id, validation!.id]));
-    expect(forms.filter((form) => form.formKey === "frm-val-001")).toHaveLength(1);
+    expect(csa?.folderId).toBe(validation!.id);
+    expect(pump?.folderId).toBe(validation!.id);
+    expect(folders.find((folder) => folder.parentId === iso!.id && folder.name === "Controlled Forms")).toBeUndefined();
+    const qualityReports = folders.find((folder) => folder.parentId === quality!.id && folder.name === "Validation Reports");
+    expect(qualityReports).toBeUndefined();
   });
 });

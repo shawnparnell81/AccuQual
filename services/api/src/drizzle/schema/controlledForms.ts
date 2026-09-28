@@ -2,10 +2,11 @@ import { integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 import { documentFolders } from "./documentFolders.js";
 
 /**
- * A controlled form template (FRM-VAL-001, and later an audit checklist or
- * a training record) can be filed in more than one place. The template row
- * is the Forms Library entry. `controlled_form_links` attaches that same
- * template to document-library folders and to Documents-tab categories.
+ * A blank controlled form template (FRM-VAL-001, and later an audit checklist
+ * or a training record). The row is listed once in the Forms Library, where
+ * a new form is started, and filed in exactly one document-library folder
+ * (`folderId`), under ISO Compliance by topic. A filled-in record is a
+ * separate row in its subject folder (for these two, `validation_reports`).
  */
 export const controlledFormTemplates = pgTable("controlled_form_templates", {
   id: serial("id").primaryKey(),
@@ -13,15 +14,8 @@ export const controlledFormTemplates = pgTable("controlled_form_templates", {
   docId: text("doc_id").notNull(),
   title: text("title").notNull(),
   route: text("route").notNull(),
+  folderId: integer("folder_id").references(() => documentFolders.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const controlledFormLinks = pgTable("controlled_form_links", {
-  id: serial("id").primaryKey(),
-  templateId: integer("template_id").references(() => controlledFormTemplates.id).notNull(),
-  folderId: integer("folder_id").references(() => documentFolders.id),
-  categoryKey: text("category_key"),
-});
-
 export type ControlledFormTemplate = typeof controlledFormTemplates.$inferSelect;
-export type ControlledFormLink = typeof controlledFormLinks.$inferSelect;

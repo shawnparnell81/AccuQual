@@ -1,27 +1,24 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { controlledFormLinks, controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
+import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import type { Db } from "../../lib/requestDb.js";
-
-export interface ControlledFormPlacement {
-  parentName: string | null;
-  folderName: string;
-}
 
 export interface ControlledFormSeed {
   formKey: string;
   docId: string;
   title: string;
+  /** Subject folder where a filled-in record is started and filed. */
   route: string;
-  folders: ControlledFormPlacement[];
-  categories: string[];
+  /** Topic subfolder under the ISO Compliance document folder. */
+  topic: string;
 }
 
 /**
- * The controlled templates filed in more than one folder. Add a row here
- * for the next form (internal audit checklist, quarantine notice,
- * concession/deviation, training record) and it shows up in the Forms
- * Library, ISO Compliance, and whatever subject folders are listed.
+ * Blank templates. Each one has a single home under ISO Compliance.
+ * Add a row here for the next form (internal audit checklist, quarantine
+ * notice, concession/deviation, training record) and name its topic folder.
+ * The Forms Library lists these same rows. Filled records are stored by
+ * the subject module, not copied into another folder.
  */
 export const CONTROLLED_FORM_SEEDS: ControlledFormSeed[] = [
   {
@@ -29,24 +26,18 @@ export const CONTROLLED_FORM_SEEDS: ControlledFormSeed[] = [
     docId: "FRM-VAL-001",
     title: "CSA Validation Report",
     route: "/folders/validation-reports",
-    folders: [
-      { parentName: "ISO Compliance", folderName: "Controlled Forms" },
-      { parentName: "Quality", folderName: "Validation Reports" },
-    ],
-    categories: ["validation-reports"],
+    topic: "Validation",
   },
   {
     formKey: "frm-val-007",
     docId: "FRM-VAL-007",
     title: "Fuel Pump Validation",
     route: "/folders/validation-reports",
-    folders: [
-      { parentName: "ISO Compliance", folderName: "Controlled Forms" },
-      { parentName: "Quality", folderName: "Validation Reports" },
-    ],
-    categories: ["validation-reports"],
+    topic: "Validation",
   },
 ];
+
+const ISO_COMPLIANCE = "ISO Compliance";
 
 async function findOrCreateRoot(db: Db, name: string) {
   const [existing] = await db.select().from(documentFolders).where(and(isNull(documentFolders.parentId), eq(documentFolders.name, name)));
@@ -66,44 +57,58 @@ async function findOrCreateChild(db: Db, parentId: number, name: string) {
   return created;
 }
 
-/** Inserts missing folders, templates, and links. Does not remove anything. */
-export async function ensureControlledForms(db: Db): Promise<void> {
-  const iso = await findOrCreateRoot(db, "ISO Compliance");
-  await findOrCreateChild(db, iso.id, "Controlled Forms");
+/** Drops a folder left over from the multi-link filing, when nothing is in it. */
+async function removeEmptyChild(db: Db, parentId: number, name: string) {
+  const [folder] = await db.select().from(documentFolders).where(and(eq(documentFolders.parentId, parentId), eq(documentFolders.name, name)));
+  if (!folder || folder.pdfPath || folder.documentId || folder.linkedPath) return;
+  const children = await db.select({ id: documentFolders.id }).from(documentFolders).where(eq(documentFolders.parentId, folder.id));
+  if (children.length > 0) return;
+  const [held] = await db.select({ id: controlledFormTemplates.id }).from(controlledFormTemplates).where(eq(controlledFormTemplates.folderId, folder.id));
+  if (held) return;
+  await db.delete(documentFolders).where(eq(documentFolders.id, folder.id));
+}
 
-  const [quality] = await db.select().from(documentFolders).where(and(isNull(documentFolders.parentId), eq(documentFolders.name, "Quality")));
-  if (quality) await findOrCreateChild(db, quality.id, "Validation Reports");
+/**
+ * One home per blank template: ISO Compliance, then a topic subfolder.
+ * Corrects databases that still have the earlier multi-folder links by
+ * pointing each template at that single folder and removing the empty
+ * folders that only existed to hold the extra copies.
+ */
+export async function ensureControlledForms(db: Db): Promise<void> {
+  const iso = await findOrCreateRoot(db, ISO_COMPLIANCE);
+  const topics = new Map<string, number>();
 
   for (const seed of CONTROLLED_FORM_SEEDS) {
-    const [existing] = await db.select().from(controlledFormTemplates).where(eq(controlledFormTemplates.formKey, seed.formKey));
-    const template = existing ?? (await db.insert(controlledFormTemplates).values({
-      formKey: seed.formKey,
-      docId: seed.docId,
-      title: seed.title,
-      route: seed.route,
-    }).returning())[0];
-    if (!template) continue;
-
-    const links = await db.select().from(controlledFormLinks).where(eq(controlledFormLinks.templateId, template.id));
-    const linkedFolders = new Set(links.map((link) => link.folderId).filter((id): id is number => id !== null));
-    const linkedCategories = new Set(links.map((link) => link.categoryKey).filter((key): key is string => !!key));
-
-    for (const placement of seed.folders) {
-      const [parent] = placement.parentName
-        ? await db.select().from(documentFolders).where(and(isNull(documentFolders.parentId), eq(documentFolders.name, placement.parentName)))
-        : [null];
-      if (!parent) continue;
-      const [folder] = await db.select().from(documentFolders).where(and(eq(documentFolders.parentId, parent.id), eq(documentFolders.name, placement.folderName)));
-      if (!folder || linkedFolders.has(folder.id)) continue;
-      await db.insert(controlledFormLinks).values({ templateId: template.id, folderId: folder.id });
-      linkedFolders.add(folder.id);
+    let topicId = topics.get(seed.topic);
+    if (topicId === undefined) {
+      topicId = (await findOrCreateChild(db, iso.id, seed.topic)).id;
+      topics.set(seed.topic, topicId);
     }
 
-    for (const categoryKey of seed.categories) {
-      if (linkedCategories.has(categoryKey)) continue;
-      await db.insert(controlledFormLinks).values({ templateId: template.id, categoryKey });
+    const [existing] = await db.select().from(controlledFormTemplates).where(eq(controlledFormTemplates.formKey, seed.formKey));
+    if (!existing) {
+      await db.insert(controlledFormTemplates).values({
+        formKey: seed.formKey,
+        docId: seed.docId,
+        title: seed.title,
+        route: seed.route,
+        folderId: topicId,
+      });
+      continue;
+    }
+    if (existing.folderId !== topicId || existing.docId !== seed.docId || existing.title !== seed.title || existing.route !== seed.route) {
+      await db.update(controlledFormTemplates).set({
+        docId: seed.docId,
+        title: seed.title,
+        route: seed.route,
+        folderId: topicId,
+      }).where(eq(controlledFormTemplates.id, existing.id));
     }
   }
+
+  await removeEmptyChild(db, iso.id, "Controlled Forms");
+  const [quality] = await db.select().from(documentFolders).where(and(isNull(documentFolders.parentId), eq(documentFolders.name, "Quality")));
+  if (quality) await removeEmptyChild(db, quality.id, "Validation Reports");
 }
 
 export interface ControlledFormView {
@@ -112,26 +117,20 @@ export interface ControlledFormView {
   docId: string;
   title: string;
   route: string;
-  folderIds: number[];
-  categoryKeys: string[];
+  folderId: number | null;
 }
 
 export async function listControlledForms(db: Db): Promise<ControlledFormView[]> {
   await ensureControlledForms(db);
   const templates = await db.select().from(controlledFormTemplates);
-  const links = await db.select().from(controlledFormLinks);
   return templates
-    .map((template) => {
-      const mine = links.filter((link) => link.templateId === template.id);
-      return {
-        id: template.id,
-        formKey: template.formKey,
-        docId: template.docId,
-        title: template.title,
-        route: template.route,
-        folderIds: mine.map((link) => link.folderId).filter((id): id is number => id !== null),
-        categoryKeys: mine.map((link) => link.categoryKey).filter((key): key is string => !!key),
-      };
-    })
+    .map((template) => ({
+      id: template.id,
+      formKey: template.formKey,
+      docId: template.docId,
+      title: template.title,
+      route: template.route,
+      folderId: template.folderId,
+    }))
     .sort((a, b) => a.docId.localeCompare(b.docId));
 }

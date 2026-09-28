@@ -198,7 +198,7 @@ async function withLinkedDocumentInfo(db: Db, all: (typeof documentFolders.$infe
   });
 }
 
-/** Forms Library entries and the folders each template is filed in. */
+/** Forms Library entries. Each template is the same row filed in one ISO Compliance topic folder. */
 export const formTemplates = asyncHandler(async (req: Request, res: Response) => {
   res.json(await listControlledForms(req.db!));
 });
