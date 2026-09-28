@@ -8,9 +8,17 @@ export const createEightDSchema = z.object({
   ncrId: z.coerce.number().int().optional(),
 });
 
+const sheetCells = z.record(z.string(), z.string());
+
 export const updateEightDSchema = z.object({
   currentStep: z.coerce.number().int().min(1).max(8).optional(),
   data: z.record(z.string(), z.unknown()).optional(),
+  problemDescriptionD2: sheetCells.optional(),
+  problemSolvingWorksheetD4: sheetCells.optional(),
+  testingPossibleCausesD4: sheetCells.optional(),
+  decisionMaking: sheetCells.optional(),
+  riskAnalysis: sheetCells.optional(),
+  planProblemPrevention: sheetCells.optional(),
 });
 
 export const completeStepSchema = z.object({
