@@ -140,3 +140,151 @@
     print-color-adjust: exact;
   }
 }
+
+/* Fuel Pump Validation Document. Section bars use the same form tokens as the other quality forms. */
+.fp,
+.fp * {
+  box-sizing: border-box;
+}
+
+.fp-wrap {
+  overflow-x: auto;
+}
+
+.fp {
+  width: 100%;
+  min-width: 1280px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: var(--fb), "Inter", system-ui, sans-serif;
+  color: hsl(var(--foreground));
+  background: hsl(var(--card));
+}
+
+.fp col.f-a { width: 22%; }
+.fp col.f-b { width: 10%; }
+.fp col.f-c,
+.fp col.f-d,
+.fp col.f-f,
+.fp col.f-g { width: 6.2%; }
+.fp col.f-e { width: 7.4%; }
+.fp col.f-h { width: 7%; }
+.fp col.f-i { width: 4%; }
+.fp col.f-j,
+.fp col.f-k { width: 6%; }
+.fp col.f-l,
+.fp col.f-m { width: 3.4%; }
+
+.fp td {
+  min-height: 30px;
+  height: 30px;
+  padding: 2px 4px;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: center;
+  vertical-align: middle;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
+.fp tr.short td {
+  height: 16px;
+  min-height: 16px;
+}
+
+.fp td.grid {
+  border: 1px solid hsl(var(--border));
+}
+
+.fp td.gap {
+  border: 0;
+  background: transparent;
+}
+
+.fp .title {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--form-heading, #1d3a5c);
+  background: transparent;
+  letter-spacing: 0.02em;
+}
+
+.fp .section {
+  background: var(--form-bar, #1d3a5c);
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  border-color: var(--form-bar, #1d3a5c);
+}
+
+.fp .note {
+  height: auto;
+  white-space: normal;
+}
+
+.fp .result {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.fp .label {
+  font-weight: 600;
+}
+
+.fp td.blocked {
+  background: #000;
+  border-color: #000;
+}
+
+.fp input.fp-in,
+.fp select.fp-in,
+.fp textarea.fp-in {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  outline: none;
+  box-shadow: none;
+  padding: 2px;
+}
+
+.fp textarea.fp-in {
+  text-align: left;
+  resize: vertical;
+  min-height: 48px;
+}
+
+.fp input.fp-in:focus,
+.fp select.fp-in:focus,
+.fp textarea.fp-in:focus {
+  box-shadow: inset 0 0 0 2px hsl(var(--ring));
+}
+
+.fp input[type="checkbox"] {
+  accent-color: hsl(var(--primary));
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+@media print {
+  .fp-wrap {
+    overflow: visible;
+  }
+  .fp {
+    min-width: 0;
+  }
+  .fp,
+  .fp td,
+  .fp .section {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

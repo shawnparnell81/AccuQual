@@ -51,6 +51,27 @@ describe("validation reports", () => {
     await db.delete(validationReports).where(eq(validationReports.id, id));
   });
 
+  it("stores a fuel pump form on the same record", async () => {
+    const created = await request(app)
+      .post("/validation-reports")
+      .set("Authorization", `Bearer ${qualityToken}`)
+      .send({ data: { formType: "fuel_pump", cells: { B6: "FP-200", G13: 50 } } });
+    expect(created.status).toBe(201);
+    expect(created.body.data.formType).toBe("fuel_pump");
+    expect(created.body.data.cells.B6).toBe("FP-200");
+    const id = created.body.id as number;
+
+    const saved = await request(app)
+      .patch(`/validation-reports/${id}`)
+      .set("Authorization", `Bearer ${qualityToken}`)
+      .send({ data: { formType: "fuel_pump", cells: { B6: "FP-201", G13: 40 } } });
+    expect(saved.status).toBe(200);
+    expect(saved.body.data.formType).toBe("fuel_pump");
+    expect(saved.body.data.cells.G13).toBe(40);
+
+    await db.delete(validationReports).where(eq(validationReports.id, id));
+  });
+
   it("production can read a validation report and cannot change it", async () => {
     const created = await request(app).post("/validation-reports").set("Authorization", `Bearer ${qualityToken}`).send({});
     expect(created.status).toBe(201);

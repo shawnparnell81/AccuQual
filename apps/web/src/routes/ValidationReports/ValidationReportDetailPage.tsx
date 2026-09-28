@@ -6,12 +6,14 @@ import { SaveStatus } from "../../components/shared/SaveStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
-import { cellsFromData, overallResult, type CellValue } from "../../lib/validationReport";
+import { cellsFromData as csaCellsFromData, formTypeOf, overallResult as csaOverall, type CellValue, type ValidationFormType } from "../../lib/validationReport";
+import { cellsFromData as fuelCellsFromData, overallResult as fuelOverall } from "../../lib/fuelPumpReport";
+import { FuelPumpSheet } from "./FuelPumpSheet";
 import { ValidationReportSheet } from "./ValidationReportSheet";
 
 interface ValidationReport {
   id: number;
-  data: { cells?: Record<string, CellValue> };
+  data: { formType?: ValidationFormType; cells?: Record<string, CellValue> };
   createdAt?: string | null;
   updatedAt?: string | null;
 }
@@ -29,9 +31,12 @@ export function ValidationReportDetailPage() {
   const [cells, setCells] = useState<Record<string, CellValue> | null>(null);
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
 
+  const formType: ValidationFormType = formTypeOf(report?.data);
+
   useEffect(() => {
     if (!report || loadedFor === report.id) return;
-    setCells(cellsFromData(report.data));
+    const next = formTypeOf(report.data) === "fuel_pump" ? fuelCellsFromData(report.data) : csaCellsFromData(report.data);
+    setCells(next);
     setLoadedFor(report.id);
   }, [loadedFor, report]);
 
@@ -39,12 +44,17 @@ export function ValidationReportDetailPage() {
   if (isLoading || !report || !cells) return <LoadingPlaceholder />;
 
   const filled = cells;
-  const saved = cellsFromData(report.data);
+  const saved = formType === "fuel_pump" ? fuelCellsFromData(report.data) : csaCellsFromData(report.data);
   const dirty = JSON.stringify(filled) !== JSON.stringify(saved);
-  const result = overallResult(filled);
+  const result = formType === "fuel_pump" ? fuelOverall(filled) : csaOverall(filled);
+  const passed = result === "Pass" || result === "Passed";
+  const failed = result === "Fail" || result === "Failed";
+  const badge = passed ? (formType === "fuel_pump" ? "#00B050" : "#4EA72E") : failed ? "#FF0000" : "transparent";
+  const doc = formType === "fuel_pump" ? "FRM-VAL-007 Rev C" : "FRM-VAL-001 Rev C";
+  const title = formType === "fuel_pump" ? `Fuel Pump Validation #${report.id}` : `Validation Report #${report.id}`;
 
   function saveRecord() {
-    updateReport.mutate({ id: reportId, data: { cells: filled } });
+    updateReport.mutate({ id: reportId, data: { formType, cells: filled } });
   }
 
   return (
@@ -53,14 +63,14 @@ export function ValidationReportDetailPage() {
         <RecordCrumbs
           items={[
             { label: "Validation Reports", to: "/folders/validation-reports" },
-            { label: `Validation Report #${report.id}` },
+            { label: title },
           ]}
         />
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold">Validation Report #{report.id}</h1>
+            <h1 className="text-2xl font-semibold">{title}</h1>
             <p className="text-sm text-muted-foreground">
-              FRM-VAL-001 Rev C
+              {doc}
               {cells.B6 ? ` · ${cells.B6}` : ""}
               {" · "}
               <Link to="/folders/validation-reports" className="text-primary hover:underline">
@@ -69,11 +79,7 @@ export function ValidationReportDetailPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span
-              className="rounded-md px-2 py-1 text-sm font-semibold"
-              style={{ background: result === "Failed" ? "#FF0000" : "#4EA72E", color: "#111" }}
-              data-testid="validation-overall"
-            >
+            <span className="rounded-md px-2 py-1 text-sm font-semibold" style={{ background: badge, color: "#111" }} data-testid="validation-overall">
               {result}
             </span>
             <SaveStatus saving={updateReport.isPending} unsaved={dirty && !updateReport.isPending} />
@@ -95,11 +101,19 @@ export function ValidationReportDetailPage() {
       </div>
 
       <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
-        <ValidationReportSheet
-          cells={cells}
-          readOnly={!canEdit}
-          onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
-        />
+        {formType === "fuel_pump" ? (
+          <FuelPumpSheet
+            cells={cells}
+            readOnly={!canEdit}
+            onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
+          />
+        ) : (
+          <ValidationReportSheet
+            cells={cells}
+            readOnly={!canEdit}
+            onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
+          />
+        )}
       </div>
     </div>
   );
