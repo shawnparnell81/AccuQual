@@ -11,6 +11,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import type { Db } from "../../lib/requestDb.js";
 import { pool } from "../../db/index.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /** A fixed, linear lifecycle matching the field list's own natural progression — see rmaLog.validation.ts's own comment. completed (closed) is terminal. */
 const ALLOWED_NEXT: Record<string, string[]> = {
@@ -30,7 +31,7 @@ function generateRmaLogNumber(id: number): string {
 const LINK_FIELDS = ["warrantyId", "supplierRmaRequestId", "qualityId"] as const;
 
 function isAdmin(req: Request): boolean {
-  return req.user?.roleName === "admin";
+  return isFullAccessRole(req.user?.roleName);
 }
 
 async function loadRmaLog(req: Request, id: number) {
@@ -156,7 +157,7 @@ export const updateRmaLogHandler = asyncHandler(async (req: Request, res: Respon
 
 /**
  * POST /rma-log/:id/status — gated on rma_log_status edit specifically
- * ( "rma_log.status.write"), independent of the base
+ * ("rma_log.status.write"), independent of the base
  * rma_log edit level a user needs just to reach this route at all.
  * Auto-stamps dateReceived/dateClosed the moment the record actually
  * enters those stages — never client-supplied, same "server stamps the

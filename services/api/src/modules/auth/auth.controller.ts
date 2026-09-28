@@ -45,10 +45,13 @@ function sessionCookieOptions() {
 }
 
 /**
- * Browser-session cookie. Closing the browser signs the user out. The server
- * still rejects the refresh token 12 hours after sign-in, even if the browser
- * stays open. The value is encrypted; the refresh token is not stored in the
- * cookie as clear text.
+ * Browser-session cookie. Closing the browser signs the user out. A browser
+ * set to continue where you left off may put the cookie back; the client
+ * treats that as signed out unless a tab from this visit is still open
+ * (browserSession.ts) and calls endBrowserSessionHandler to revoke it.
+ * The server still rejects the refresh token 12 hours after sign-in, even
+ * if the browser stays open. The value is encrypted; the refresh token is
+ * not stored in the cookie as clear text.
  */
 export function setRefreshCookie(res: Response, refreshToken: string) {
   res.cookie(REFRESH_COOKIE_NAME, encryptRefreshCookie(refreshToken), {
@@ -191,6 +194,13 @@ export const revokeTrustedDeviceHandler = asyncHandler(async (req: Request, res:
 export const revokeAllTrustedDevicesHandler = asyncHandler(async (req: Request, res: Response) => {
   await revokeAllTrustedDevices(req.user!.id, "forgotten_by_user", req.user!.id);
   clearTrustedDeviceCookie(res);
+  res.status(204).send();
+});
+
+/** Clears the restored sign-in cookies and revokes that refresh token. Does not clear the trusted-browser cookie. */
+export const endBrowserSessionHandler = asyncHandler(async (req: Request, res: Response) => {
+  await authService.endBrowserSession(refreshCookieFrom(req));
+  clearRefreshCookie(res);
   res.status(204).send();
 });
 

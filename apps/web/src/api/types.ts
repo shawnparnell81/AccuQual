@@ -20,6 +20,11 @@ export interface AppRole {
   id: number;
   name: string;
   description: string | null;
+  /** Smaller numbers are higher in the organization and are listed first. */
+  hierarchyLevel?: number;
+  isProtected?: boolean;
+  permissions?: string[];
+  userCount?: number;
 }
 
 /**
@@ -37,7 +42,7 @@ export interface WorkflowHistoryEntry {
   action: "create" | "update" | "delete" | "status_change" | "transition_failed";
   changes: Record<string, unknown> | null;
   performedBy: number | null;
-  /** Resolved server-side (see audit-trail.service.ts's withResolvedActors) — a name, an email, "Deleted User (ID #x)", or null when performedBy itself is null (a system action, rendered as "System"). Prefer this over the bare performedBy id everywhere history is shown. */
+  /** Resolved server-side (see audit-trail.service.ts's withResolvedActors) — a name, an email, "Jane Doe (inactive)" when the account is turned off, "Deleted User (ID #x)" when the row is gone, or null when performedBy itself is null (a system action, rendered as "System"). Prefer this over the bare performedBy id everywhere history is shown. */
   performedByName: string | null;
   createdAt: string;
   /** Field-level old -> new values the audit_row_change() database trigger recorded in the same transaction as this entry (empty for entries older than the trigger). */
@@ -498,7 +503,7 @@ export interface InventoryAlert {
   currentStock: number;
 }
 
-/** GET /inventory/alerts/routing — real active-user counts per department, not a fictional single "department email" (see the Alerts UI review). */
+/** GET /inventory/alerts/routing — active signed-in user counts per department. */
 export interface InventoryAlertRouting {
   material_management: number;
   purchasing: number;
@@ -594,6 +599,8 @@ export interface CompanyBranding {
 /** GET/PATCH /users/me/theme — any authenticated user, own row only. Unset fields mean "follow the company/default theme" for that field specifically, not an all-or-nothing override. */
 export interface UserThemePreferences {
   mode?: "light" | "dark" | "system";
+  /** AccuQual Classic (default) or DMA Industries. Independent of mode. */
+  scheme?: "classic" | "dma";
   primaryColor?: string;
   accentColor?: string;
 }
@@ -1051,6 +1058,8 @@ export interface FmeaItem {
   occurrence: number;
   detection: number;
   rpn: string | null;
+  /** Derived from severity, occurrence, and detection on read. Not stored. */
+  actionPriority?: "H" | "M" | "L" | "";
   recommendedAction: string | null;
 }
 
@@ -1922,6 +1931,7 @@ export interface PermissionRole {
   id: number;
   roleName: string;
   description: string | null;
+  hierarchyLevel?: number;
   modules: PermissionRoleModuleGrant[];
   memberCount: number;
   createdAt: string;

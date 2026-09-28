@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isFullAccessRole } from "../../lib/fullAccess";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -17,6 +18,7 @@ import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { Modal } from "../../components/modals/Modal";
 import { RISK_CATEGORIES } from "../../components/shared/riskConstants";
 import type { RiskAssessment, RiskMitigation, FmeaItem } from "../../api/types";
+import { FMEA_PRIORITY_LEGEND, FMEA_TONE_CLASS, FMEA_TONE_NAME, apTone, pfmeaActionPriority, rpnTone } from "../../components/forms/fmeaPriority";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const riskHooks = createResourceHooks<RiskAssessment>("risk");
@@ -30,11 +32,9 @@ const SOURCE_LINK: Record<string, (id: number) => string> = {
 };
 
 /**
- * Risk / FMEA detail — the Risk Register record (edit, workflow transitions,
- * AI analysis, mitigation plan) plus the pre-existing FMEA quick-entry table
- * and full FMEA document, unchanged. Full CRUD + workflow + department
- * gating + audit trail all confirmed real end-to-end (see the Risk
- * Management module review) — this page is what makes that reachable.
+ * Risk register detail: edit the record, run workflow transitions, open
+ * AI analysis and the mitigation plan, and open the FMEA quick-entry table
+ * or the full FMEA document.
  */
 export function RiskDetailPage() {
   const { id } = useParams();
@@ -43,7 +43,7 @@ export function RiskDetailPage() {
   const toast = useToast();
   const currentUser = useCurrentUser();
   const canEdit = useCanEditWorkflow("risk");
-  const isAdmin = currentUser?.roleName === "admin";
+  const isAdmin = isFullAccessRole(currentUser?.roleName);
 
   const { data: risk, isLoading, isError } = riskHooks.useOne(riskId);
   const historyKey: unknown[][] = [["workflow-history", "risk", riskId]];
@@ -402,6 +402,16 @@ function MitigationPanel({ riskId, mitigations, canPropose }: { riskId: number; 
   );
 }
 
+function FmeaToneValue({ value, tone }: { value: unknown; tone: ReturnType<typeof rpnTone> }) {
+  if (value === "" || value === null || value === undefined) return <span className="text-muted-foreground">—</span>;
+  if (!tone) return <span className="font-semibold">{String(value)}</span>;
+  return (
+    <span className={`inline-block whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold ${FMEA_TONE_CLASS[tone]}`} title={FMEA_TONE_NAME[tone]}>
+      {String(value)}
+    </span>
+  );
+}
+
 function FmeaTable({ riskId, items }: { riskId: number; items: FmeaItem[] }) {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -430,18 +440,21 @@ function FmeaTable({ riskId, items }: { riskId: number; items: FmeaItem[] }) {
               <th className="pb-2 pr-3">O</th>
               <th className="pb-2 pr-3">D</th>
               <th className="pb-2 pr-3">RPN</th>
+              <th className="pb-2 pr-3" title="Action Priority (AIAG-VDA 2019)">AP</th>
               <th className="pb-2">Recommended Action</th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-3 text-muted-foreground">
+                <td colSpan={9} className="py-3 text-muted-foreground">
                   No failure modes logged yet.
                 </td>
               </tr>
             )}
-            {items.map((i) => (
+            {items.map((i) => {
+              const ap = pfmeaActionPriority(i.severity, i.occurrence, i.detection);
+              return (
               <tr key={i.id} className="border-t border-border">
                 <td className="py-2 pr-3">{i.failureMode}</td>
                 <td className="py-2 pr-3">{i.effect ?? "—"}</td>
@@ -449,13 +462,20 @@ function FmeaTable({ riskId, items }: { riskId: number; items: FmeaItem[] }) {
                 <td className="py-2 pr-3">{i.severity}</td>
                 <td className="py-2 pr-3">{i.occurrence}</td>
                 <td className="py-2 pr-3">{i.detection}</td>
-                <td className="py-2 pr-3 font-semibold">{i.rpn}</td>
+                <td className="py-2 pr-3">
+                  <FmeaToneValue value={i.rpn} tone={rpnTone(i.rpn)} />
+                </td>
+                <td className="py-2 pr-3">
+                  <FmeaToneValue value={ap} tone={apTone(ap)} />
+                </td>
                 <td className="py-2">{i.recommendedAction ?? "—"}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
+      <p className="mb-4 text-[11px] leading-snug text-muted-foreground">{FMEA_PRIORITY_LEGEND}</p>
 
       <form
         className="grid gap-3 md:grid-cols-4"

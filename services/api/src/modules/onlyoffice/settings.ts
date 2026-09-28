@@ -10,6 +10,11 @@ export interface OnlyOfficeSettings {
   jwtSecret: string;
 }
 
+/** Unset URL or secret means the editor is off. Previews then stay in the browser. */
+export function officeEditorConfigured(): boolean {
+  return onlyOfficeSettings() !== null;
+}
+
 /** Unset URL or secret means the editor is off. The rest of the app keeps working. */
 export function onlyOfficeSettings(): OnlyOfficeSettings | null {
   const publicUrl = env.ONLYOFFICE_URL?.replace(/\/$/, "");

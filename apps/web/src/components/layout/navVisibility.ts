@@ -51,7 +51,7 @@ export function extraGrantedLeaves(
  */
 export function useNavVisibility() {
   const user = useCurrentUser();
-  const isAdmin = user?.roleName === "admin";
+  const isAdmin = user?.roleName === "admin" || user?.roleName === "owner";
   const userDept = user?.department as Department | null | undefined;
   const { effective: myEffective } = useEffectivePermissions();
   const departmentPermissionsGrid = useDepartmentPermissionsGrid(isAdmin);

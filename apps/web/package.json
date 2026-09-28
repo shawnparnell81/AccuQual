@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint src",
-    "test": "tsx --test src/lib/*.test.ts src/api/*.test.ts src/components/forms/layouts/apqpSummary.test.ts"
+    "test": "tsx --test src/lib/*.test.ts src/api/*.test.ts src/components/forms/layouts/apqpSummary.test.ts src/components/forms/fmeaPriority.test.ts"
   },
   "dependencies": {
     "@sentry/react": "^10.75.0",
@@ -16,6 +16,8 @@
     "@xyflow/react": "^12.11.6",
     "axios": "^1.7.4",
     "clsx": "^2.1.1",
+    "docx-preview": "^0.4.1",
+    "exceljs": "^4.4.0",
     "lucide-react": "^0.427.0",
     "pdfjs-dist": "^6.3.289",
     "qrcode": "^1.5.4",
@@ -25,6 +27,7 @@
     "react-router-dom": "^7.18.4",
     "recharts": "^2.12.7",
     "swagger-ui-react": "^5.33.0",
+    "xls-reader": "^0.7.0",
     "zustand": "^4.5.4"
   },
   "devDependencies": {

@@ -6,14 +6,13 @@ import type { Db } from "../../lib/requestDb.js";
 import { callLlmDetailed } from "../ai/llm-gateway.js";
 import { onboardingPrompt } from "../ai/prompts.js";
 import { checkUsageLimit, loadCompanyLlmOptions, recordAiSuggestion } from "../ai/ai.usage.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /**
- * Real, honest descriptions of what each module actually does today — no
- * "enabled modules per company" concept exists anywhere in this schema (see
- * the AI Onboarding review), so this is grounded on the one real signal
- * available: getUserAccessLevel, walked for every real module to find which
- * ResourceKeys this specific user can actually reach (their own department
- * baseline plus any custom permission-role grants — see departmentAccess.ts).
+ * What each module does today. The schema has no per-company "enabled
+ * modules" flag, so the list is the ResourceKeys this user can reach via
+ * getUserAccessLevel (department baseline plus any custom permission-role
+ * grants — see departmentAccess.ts).
  */
 const MODULE_DESCRIPTIONS: Partial<Record<ResourceKey, { label: string; description: string }>> = {
   ncr: { label: "NCR", description: "Log and track nonconforming material/product through containment, investigation, and closure." },
@@ -60,7 +59,7 @@ export const onboardingAiGenerateHandler = asyncHandler(async (req: Request, res
   const limitError = await checkUsageLimit(req.db!, co?.aiMonthlyLimit ?? null, co?.aiLimitEnforced ?? false);
   if (limitError) throw AppError.forbidden(limitError);
 
-  const isAdmin = user.roleName === "admin";
+  const isAdmin = isFullAccessRole(user.roleName);
   const inputData = { department: user.department ?? (isAdmin ? "admin" : null), accessibleModules };
   const result = await callLlmDetailed(onboardingPrompt(inputData), { system: "You are AccuQual's onboarding assistant.", ...llmOptions });
 

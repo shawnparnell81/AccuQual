@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { Block, FormLayout, TableColumn } from "./layouts/types.js";
+import { FMEA_PDF_TONE, fmeaCellValue, fmeaComputedTone } from "./fmeaPriority.js";
 
 // Colors sampled from the reference templates (dark navy header bars, pale
 // blue-gray field boxes, thin blue-gray borders) — kept as named constants so
@@ -81,7 +82,7 @@ export function drawBlock(ctx: RenderContext, block: Block, data: Record<string,
     case "yesno":
       return drawYesNo(ctx, block.name, block.label, data);
     case "table":
-      return drawTable(ctx, block.name, block.columns, data, block.fixedRowLabels, block.labelColumnHeader, block.minRows);
+      return drawTable(ctx, block.name, block.columns, data, block.fixedRowLabels, block.labelColumnHeader, block.minRows, block.legend);
   }
 }
 
@@ -160,7 +161,8 @@ function drawTable(
   data: Record<string, unknown>,
   fixedRowLabels: string[] | undefined,
   labelColumnHeader: string | undefined,
-  minRows: number | undefined
+  minRows: number | undefined,
+  legend: string | undefined
 ) {
   const rows = (data[name] as Record<string, unknown>[] | undefined) ?? [];
   const rowCount = fixedRowLabels ? fixedRowLabels.length : Math.max(rows.length, minRows ?? 1);
@@ -180,7 +182,7 @@ function drawTable(
   }
   for (const col of columns) {
     ctx.page.drawRectangle({ x, y: ctx.y - headerHeight, width: colWidth, height: headerHeight, color: LABEL_BG, borderColor: BORDER, borderWidth: 0.5 });
-    ctx.page.drawText(col.label, { x: x + 4, y: ctx.y - 13, size: 8, font: ctx.bold, color: TEXT_DARK });
+    ctx.page.drawText(pdfSafe(col.label), { x: x + 4, y: ctx.y - 13, size: 8, font: ctx.bold, color: TEXT_DARK });
     x += colWidth;
   }
   ctx.y -= headerHeight;
@@ -201,7 +203,19 @@ function drawTable(
     }
 
     for (const col of columns) {
-      ctx.page.drawRectangle({ x, y: ctx.y - rowHeight, width: colWidth, height: rowHeight, color: WHITE, borderColor: BORDER, borderWidth: 0.5 });
+      const value = fmeaCellValue(col.formula, row, row[col.key]);
+      const tone = fmeaComputedTone(col.formula, value);
+      const palette = tone ? FMEA_PDF_TONE[tone] : null;
+      ctx.page.drawRectangle({
+        x,
+        y: ctx.y - rowHeight,
+        width: colWidth,
+        height: rowHeight,
+        color: palette ? rgb(palette.bg[0], palette.bg[1], palette.bg[2]) : WHITE,
+        borderColor: BORDER,
+        borderWidth: 0.5,
+      });
+      const textColor = palette ? rgb(palette.fg[0], palette.fg[1], palette.fg[2]) : TEXT_DARK;
 
       if (col.kind === "checkboxGroup") {
         const selected = (row[col.key] as Record<string, boolean> | undefined) ?? {};
@@ -209,19 +223,31 @@ function drawTable(
           drawCheckbox(ctx, x + 4, ctx.y - 11 - i * 11, Boolean(selected[opt]));
           ctx.page.drawText(opt, { x: x + 15, y: ctx.y - 10 - i * 11, size: 7, font: ctx.font, color: TEXT_DARK });
         });
-      } else {
-        const value = row[col.key];
-        if (value != null && value !== "") {
-          wrapText(String(value), ctx.font, 8, colWidth - 8)
-            .slice(0, 3)
-            .forEach((line, i) => ctx.page.drawText(line, { x: x + 4, y: ctx.y - 12 - i * 10, size: 8, font: ctx.font, color: TEXT_DARK }));
-        }
+      } else if (value != null && value !== "") {
+        wrapText(pdfSafe(String(value)), ctx.font, 8, colWidth - 8)
+          .slice(0, 3)
+          .forEach((line, i) => ctx.page.drawText(line, { x: x + 4, y: ctx.y - 12 - i * 10, size: 8, font: ctx.font, color: textColor }));
       }
       x += colWidth;
     }
 
     ctx.y -= rowHeight;
   }
+
+  if (legend) {
+    const lines = wrapText(pdfSafe(legend), ctx.italic, 8, CONTENT_WIDTH);
+    ensureSpace(ctx, lines.length * 11 + 8);
+    ctx.y -= 8;
+    lines.forEach((line, i) => {
+      ctx.page.drawText(line, { x: MARGIN, y: ctx.y - i * 11, size: 8, font: ctx.italic, color: TEXT_HINT });
+    });
+    ctx.y -= lines.length * 11;
+  }
+}
+
+/** Helvetica is WinAnsi. An em dash in a column label must not abort the export. */
+function pdfSafe(text: string): string {
+  return text.replace(/\u2014/g, "-").replace(/\u2013/g, "-");
 }
 
 /** Greedy word-wrap to a max pixel width for the given font/size. */

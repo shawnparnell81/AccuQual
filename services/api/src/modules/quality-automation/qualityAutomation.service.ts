@@ -256,12 +256,12 @@ export async function runQualityAutomation(db: Db, now = new Date()): Promise<{ 
     const item = { label: doc.title || `Document #${doc.id}`, detail: `In review for ${waiting} day${waiting === 1 ? "" : "s"}`, href: href(`/documents/${doc.id}`) };
     addDigest(doc.ownerId, item);
     for (const person of people) {
-      if (person.roleName === "quality_manager" || person.roleName === "admin") addDigest(person.id, item);
+      if (person.roleName === "quality_manager" || person.roleName === "admin" || person.roleName === "owner" || person.roleName === "president" || person.roleName === "vice_president") addDigest(person.id, item);
     }
     if (waiting < settings.approvalStuckDays) continue;
     const recipients = [
       ownerEmail(doc.ownerId, people),
-      ...people.filter((person) => person.isActive && (person.roleName === "quality_manager" || person.roleName === "admin")).map((person) => person.email),
+      ...people.filter((person) => person.isActive && (person.roleName === "quality_manager" || person.roleName === "admin" || person.roleName === "owner" || person.roleName === "president" || person.roleName === "vice_president")).map((person) => person.email),
     ].filter((email): email is string => !!email);
     remind({ kind: "approval", entityType: "Document", entityId: doc.id, bucket: `stuck:${calendarDay(touched, timeZone)}`, recipients, item });
   }

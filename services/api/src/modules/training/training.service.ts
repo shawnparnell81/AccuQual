@@ -22,6 +22,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { notifyDepartment, notifyRecipients } from "../notifications/notification.service.js";
 import { env } from "../../config/env.js";
 import { appRecordUrl } from "../../lib/recordLink.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /**
  * Training & competency rules, in one place.
@@ -394,7 +395,7 @@ export interface EvaluatorActor {
   roleName: string | null;
 }
 
-const isAdmin = (a: EvaluatorActor) => a.roleName === "admin";
+const isAdmin = (a: EvaluatorActor) => isFullAccessRole(a.roleName);
 
 /** Applies a pass/fail decision to a row (which may be new or a pending one). Enforces the rules that make an evaluation mean something. */
 function checkDecision(course: TrainingCourse, subjectUserId: number, input: DecideInput, actor: EvaluatorActor) {

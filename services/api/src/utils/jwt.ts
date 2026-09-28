@@ -32,7 +32,7 @@ export interface RefreshTokenPayload {
   rm?: boolean;
 }
 
-/** Fixed sign-in window for everyone. Activity does not extend it. Closing the browser ends the sign-in sooner, when the browser drops the session cookie; 12 hours is still the latest it can last. */
+/** Fixed sign-in window for everyone. Activity does not extend it. Closing the browser ends the sign-in sooner. A browser that restores the session cookie still has to sign in again unless a tab from that visit is open. 12 hours after sign-in is the latest a session can last. */
 export const SESSION_MAX_MS = 12 * 60 * 60 * 1000;
 
 export function signAccessToken(payload: AccessTokenPayload): string {

@@ -29,7 +29,7 @@ export function DocumentControlDashboard({ data }: { data: ReturnType<typeof use
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <WorkflowMetricCard label="In Draft" value={inDraft} to="/documents" />
         <WorkflowMetricCard label="Awaiting approval / release" value={awaitingDecision} bucket={awaitingDecision > 0 ? "warning" : "muted"} to="/documents" />
-        <WorkflowMetricCard label="Obsolete, not archived" value={obsoleteNotArchived} bucket={obsoleteNotArchived > 0 ? "warning" : "success"} to="/documents" />
+        <WorkflowMetricCard label="Obsolete, not archived" value={obsoleteNotArchived} bucket={obsoleteNotArchived > 0 ? "warning" : "success"} to="/documents?includeObsolete=1" />
         <WorkflowMetricCard label="Total controlled documents" value={documents.length} to="/documents" />
       </div>
       <div className="rounded-lg border border-border bg-card p-4">

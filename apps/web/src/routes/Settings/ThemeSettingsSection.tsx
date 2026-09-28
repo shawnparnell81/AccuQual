@@ -5,7 +5,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { TextField } from "../../components/forms/Field";
 import { useCurrentUser } from "../../hooks/useAuth";
-import { deriveThemeVars, resolveMode } from "../../lib/theme";
+import { applyTheme, COLOR_SCHEME_LABELS, deriveThemeVars, resolveMode, resolveScheme, type ColorScheme } from "../../lib/theme";
 import type { CompanyBranding, UserThemePreferences } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
@@ -15,17 +15,19 @@ const MODES: Array<{ value: NonNullable<UserThemePreferences["mode"]>; label: st
   { value: "system", label: "Match System" },
 ];
 
+/** Fixed chips so each card still shows its own palette while the other scheme is active. */
+const SCHEME_CARDS: Array<{ id: ColorScheme; blurb: string; chips: [string, string, string] }> = [
+  { id: "classic", blurb: "Cyan on the original deep canvas", chips: ["#0B0F14", "#00F3FF", "#A855F7"] },
+  { id: "dma", blurb: "Navy, steel blue, and logo indigo", chips: ["#0A3C7B", "#507099", "#293170"] },
+];
+
 function useMyTheme() {
   return useQuery<UserThemePreferences>({ queryKey: ["users/me/theme"], queryFn: async () => (await apiClient.get("/users/me/theme")).data });
 }
 
 /**
- * The real dark/light toggle — replaces the disabled "Light" pill that used
- * to sit here doing nothing (see the old comment this file's git history
- * carries: "AccuQual currently ships one committed dark theme..."). Saves
- * straight to PATCH /users/me/theme on click/blur — same field the global
- * theme engine (lib/theme.ts, wired in AppLayout via useThemeSync) reads,
- * so a change here is visible the instant it saves, not on next reload.
+ * Light, dark, and color-scheme controls. Each change saves with
+ * PATCH /users/me/theme, which lib/theme.ts applies immediately.
  */
 export function ThemeSettingsSection() {
   const toast = useToast();
@@ -48,15 +50,28 @@ export function ThemeSettingsSection() {
   }, [prefs]);
 
   const save = useMutation({
-    mutationFn: async (body: UserThemePreferences) => (await apiClient.patch("/users/me/theme", body)).data,
+    mutationFn: async (body: UserThemePreferences) => (await apiClient.patch<UserThemePreferences>("/users/me/theme", body)).data,
+    onMutate: (body) => {
+      const previous = prefs;
+      const optimistic = { ...prefs, ...body };
+      queryClient.setQueryData(["users/me/theme"], optimistic);
+      applyTheme(branding, optimistic);
+      return { previous };
+    },
     onSuccess: (data) => {
       queryClient.setQueryData(["users/me/theme"], data);
+      applyTheme(branding, data);
       toast.success("Theme preference saved.");
     },
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save your theme preference.")),
+    onError: (err, _body, context) => {
+      queryClient.setQueryData(["users/me/theme"], context?.previous);
+      applyTheme(branding, context?.previous);
+      toast.error(extractErrorMessage(err, "Couldn't save your theme preference."));
+    },
   });
 
   const currentMode = prefs?.mode ?? "dark";
+  const currentScheme = resolveScheme(prefs?.scheme);
   const previewStyle = useMemo(() => {
     const vars = deriveThemeVars({
       mode: resolveMode(currentMode),
@@ -75,6 +90,41 @@ export function ThemeSettingsSection() {
     <div className="flex flex-col gap-4">
       <div className="rounded-lg border border-border bg-card p-4">
         <h3 className="mb-2 text-sm font-medium">Appearance</h3>
+        <p className="mb-2 text-xs font-medium text-muted-foreground">Color scheme</p>
+        <div className="mb-2 grid gap-3 sm:grid-cols-2" role="group" aria-label="Color scheme">
+          {SCHEME_CARDS.map((card) => {
+            const selected = currentScheme === card.id;
+            return (
+              <button
+                key={card.id}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => {
+                  if (selected) return;
+                  save.mutate({ scheme: card.id });
+                }}
+                className={
+                  selected
+                    ? "rounded-lg border-2 border-primary bg-primary/10 p-3 text-left"
+                    : "rounded-lg border-2 border-border p-3 text-left hover:bg-muted"
+                }
+              >
+                <span className="mb-2 flex gap-1.5" aria-hidden>
+                  {card.chips.map((color) => (
+                    <span key={color} className="h-8 flex-1 rounded-md border border-border" style={{ backgroundColor: color }} />
+                  ))}
+                </span>
+                <span className="block text-sm font-medium">{COLOR_SCHEME_LABELS[card.id]}</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">{card.blurb}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          One click switches the whole app. AccuQual Classic is the original palette. DMA Industries uses that brand's navy, steel blue,
+          and logo indigo. Light and dark, including the header toggle, apply to either scheme and stay separate from this choice.
+        </p>
+        <p className="mb-2 text-xs font-medium text-muted-foreground">Light or dark</p>
         <div className="flex items-center gap-3">
           {MODES.map((m) => (
             <button
@@ -100,10 +150,11 @@ export function ThemeSettingsSection() {
       <div className="rounded-lg border border-border bg-card p-4">
         <h3 className="mb-2 text-sm font-medium">Your Color Overrides</h3>
         <p className="mb-3 text-xs text-muted-foreground">
-          Optional — leave blank to use your organization's theme colors. Only you see these. Primary recolors buttons, selected
-          navigation, focus rings, and the page around them (background, cards, text, borders) for the Light or Dark mode above —
-          changing a color never flips that mode. Accent recolors the wordmark stripe, role badge, secondary links, and chart markers.
-          Each color is adjusted for contrast in the mode you're in.
+          Optional — leave blank to use your organization's theme colors. Only you see these, and only while AccuQual Classic is
+          selected. DMA Industries keeps its own palette; these colors come back when you switch to Classic. Primary recolors buttons,
+          selected navigation, focus rings, and the page around them (background, cards, text, borders) for the Light or Dark mode
+          above — changing a color never flips that mode or the scheme. Accent recolors the wordmark stripe, role badge, secondary
+          links, and chart markers. Each color is adjusted for contrast in the mode you're in.
         </p>
         <div className="mb-4 rounded-md border border-border bg-background p-3 text-foreground" style={previewStyle}>
           <p className="text-sm">Page text</p>

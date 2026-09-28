@@ -9,6 +9,8 @@
  * per layout, so they always know what their sibling columns are called).
  */
 
+import { pfmeaActionPriority } from "./fmeaPriority";
+
 export type FormulaFn = (row: Record<string, unknown>) => unknown;
 
 function num(v: unknown): number {
@@ -39,6 +41,12 @@ export const FORMULAS: Record<string, FormulaFn> = {
     const d = num(row.detectionRevised);
     return s && o && d ? s * o * d : "";
   },
+
+  /** FMEA: Action Priority (H/M/L) from the AIAG-VDA 2019 PFMEA table, initial ratings. */
+  actionPriority: (row) => pfmeaActionPriority(row.severity, row.occurrence, row.detection),
+
+  /** FMEA: Action Priority after the recommended action, from the revised ratings. */
+  actionPriorityRevised: (row) => pfmeaActionPriority(row.severityRevised, row.occurrenceRevised, row.detectionRevised),
 
   /** Calibration roster: Next Due = Last Cal Date + Interval (months). */
   nextCalDueDate: (row) => {

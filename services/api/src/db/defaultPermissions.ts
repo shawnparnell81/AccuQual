@@ -111,14 +111,13 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // table is Engineering/Quality/Manufacturing/Purchasing/Sales only).
   feasibility: { engineering: "edit", quality: "edit", production: "edit", purchasing: "edit" },
   // Not a sheet row — the new Sales & Marketing module, and sales_and_marketing's
-  // first real PERMISSION_MATRIX entry as a department (see the Sales &
-  // Marketing module review — added as ONE department, not split into
-  // separate Sales/Marketing gates). quality/engineering get read (they
+  // first real PERMISSION_MATRIX entry as a department (added as one
+  // department, not split into separate Sales/Marketing gates). quality/engineering get read (they
   // review customer-requirements-linked documents via the existing Document
   // Control approval flow, not this module's own gate). Delete stays
-  // admin-only, enforced inline — no department gets it, per the module's
-  // own explicit "Admin: delete records" rule (a stricter rule than risk/
-  // feasibility's quality-or-admin, kept as literally specified this time).
+  // admin-only, enforced inline — no department gets delete, per the
+  // "Admin: delete records" rule (stricter than risk and feasibility, where
+  // quality or an admin can delete).
   sales: { quality: "read", engineering: "read" },
   // Not a sheet row — the Customer Onboarding module. sales_and_marketing
   // owns the whole case lifecycle (create through activate), same reasoning

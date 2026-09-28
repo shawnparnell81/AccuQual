@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { isFullAccessRole } from "../../lib/fullAccess";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Paperclip, Download, Trash2, Eye } from "lucide-react";
 import { apiClient } from "../../api/client";
@@ -8,7 +9,7 @@ import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { InAppFilePreview, type PreviewRequest } from "./InAppFilePreview";
 import type { Attachment } from "../../api/types";
 import { formatDateTime } from "../../lib/dates";
-import { canPreview, previewKind, saveBytes } from "../../lib/filePreview";
+import { canPreview, onlyOfficeFile, previewKind, saveBytes } from "../../lib/filePreview";
 import { FileDropZone } from "./FileDropZone";
 import { usePageFileDrop } from "../../hooks/usePageFileDrop";
 import { UploadCloud } from "lucide-react";
@@ -78,7 +79,7 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
     saveBytes(res.data as Blob, file.fileName, file.mimeType ?? undefined);
   }
 
-  const isAdmin = user?.roleName === "admin";
+  const isAdmin = isFullAccessRole(user?.roleName);
 
   const [preview, setPreview] = useState<PreviewRequest | null>(null);
 
@@ -91,8 +92,9 @@ export function AttachmentsPanel({ entityType, entityId, title = "Evidence / Att
     setPreview({
       fileName: file.fileName,
       mimeType: file.mimeType,
+      byteSize: file.fileSize,
       loadBytes: async () => (await apiClient.get(`/attachments/${file.id}/download`, { responseType: "arraybuffer" })).data as ArrayBuffer,
-      officeSource: kind === "office" ? { kind: "attachment", attachmentId: file.id } : undefined,
+      officeSource: onlyOfficeFile(file.fileName, file.mimeType) ? { kind: "attachment", attachmentId: file.id } : undefined,
       download: () => download(file),
     });
   }

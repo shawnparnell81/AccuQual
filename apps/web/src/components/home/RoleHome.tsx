@@ -41,7 +41,7 @@ export function RoleHome() {
   const plantName = plants?.sites.find((site) => site.id === (siteId ?? plants.currentSiteId))?.name;
   const kind = homeKind(user?.roleName);
   const { effective, isLoading: permsLoading } = useEffectivePermissions();
-  const bypass = user?.roleName === "admin";
+  const bypass = user?.roleName === "admin" || user?.roleName === "owner";
   const ready = bypass || !permsLoading;
   const can = (key: string) => ready && (bypass || (!!effective && effective[key] !== undefined && effective[key] !== "none"));
 

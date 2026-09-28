@@ -30,7 +30,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const navigate = useNavigate();
   const openTab = useOpenTab();
   const user = useCurrentUser();
-  const isAdmin = user?.roleName === "admin";
+  const isAdmin = user?.roleName === "admin" || user?.roleName === "owner";
   const dialogRef = useDialogBehavior(open, onClose);
   const debouncedQuery = useDebouncedValue(query.trim(), 250);
 

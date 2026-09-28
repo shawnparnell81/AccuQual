@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
+import { readFileSync } from "node:fs";
 import {
   THEME_MODE_STORAGE_KEY,
+  THEME_SCHEME_STORAGE_KEY,
   THEME_VARS_STORAGE_KEY,
   applyStoredThemeVars,
   applyTheme,
   deriveThemeVars,
+  getStoredScheme,
   normalizeHex,
   resolveMode,
+  resolveScheme,
 } from "./theme.ts";
 
 function lightness(triplet: string | undefined): number {
@@ -184,4 +188,140 @@ describe("applyTheme", () => {
     assert.equal(style.get("--background"), undefined);
     assert.equal(style.get("--primary"), "183 100% 50%");
   });
+
+  it("persists DMA Industries independently of light and dark, and restores Classic colors", () => {
+    installDom();
+    applyTheme(undefined, { mode: "dark", scheme: "classic", primaryColor: "#00f3ff" });
+    const classicVars = store.get(THEME_VARS_STORAGE_KEY);
+    assert.equal(attrs.get("data-scheme"), "classic");
+    assert.ok(style.get("--primary"));
+
+    applyTheme(undefined, { mode: "light", scheme: "dma", primaryColor: "#00f3ff" });
+    assert.equal(attrs.get("data-scheme"), "dma");
+    assert.equal(attrs.get("data-theme"), "light");
+    assert.equal(store.get(THEME_SCHEME_STORAGE_KEY), "dma");
+    assert.equal(store.get(THEME_MODE_STORAGE_KEY), "light");
+    assert.equal(style.get("--primary"), undefined);
+    assert.equal(style.get("--background"), undefined);
+    assert.equal(store.get(THEME_VARS_STORAGE_KEY), classicVars);
+
+    style.clear();
+    applyStoredThemeVars();
+    assert.equal(style.get("--primary"), undefined);
+
+    applyTheme(undefined, { mode: "dark", scheme: "classic", primaryColor: "#00f3ff" });
+    assert.equal(attrs.get("data-scheme"), "classic");
+    assert.equal(attrs.get("data-theme"), "dark");
+    assert.equal(store.get(THEME_SCHEME_STORAGE_KEY), "classic");
+    assert.equal(style.get("--primary"), JSON.parse(store.get(THEME_VARS_STORAGE_KEY) ?? "{}")["--primary"]);
+  });
+
+  it("keeps a stored scheme when the profile has not saved one yet, and ignores junk", () => {
+    installDom();
+    store.set(THEME_SCHEME_STORAGE_KEY, "dma");
+    assert.equal(getStoredScheme(), "dma");
+    assert.equal(resolveScheme(undefined), "dma");
+    applyTheme(undefined, { mode: "dark" });
+    assert.equal(attrs.get("data-scheme"), "dma");
+
+    store.set(THEME_SCHEME_STORAGE_KEY, "nope");
+    assert.equal(getStoredScheme(), null);
+    assert.equal(resolveScheme(undefined), "classic");
+    assert.equal(resolveScheme("classic"), "classic");
+  });
+});
+
+function cssBlock(css: string, marker: string): Record<string, string> {
+  const start = css.indexOf(marker);
+  assert.ok(start >= 0, marker);
+  const open = css.indexOf("{", start);
+  const close = css.indexOf("}", open);
+  const vars: Record<string, string> = {};
+  for (const line of css.slice(open + 1, close).split("\n")) {
+    const match = /^\s*(--[\w-]+):\s*([^;]+);/.exec(line);
+    if (match) vars[match[1]!] = match[2]!.trim();
+  }
+  return vars;
+}
+
+function channel(c: number): number {
+  const v = c / 255;
+  return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+}
+
+function tripletRgb(triplet: string): [number, number, number] {
+  const match = /^(\d+) (\d+)% (\d+)%$/.exec(triplet);
+  assert.ok(match, triplet);
+  const h = Number(match[1]) / 360;
+  const s = Number(match[2]) / 100;
+  const l = Number(match[3]) / 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => {
+    const k = (n + h * 12) % 12;
+    return l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+  };
+  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
+}
+
+function contrast(a: string, b: string): number {
+  const lum = (triplet: string) => {
+    const [r, g, b] = tripletRgb(triplet);
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+  };
+  const hi = Math.max(lum(a), lum(b));
+  const lo = Math.min(lum(a), lum(b));
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+describe("DMA Industries palette", () => {
+  const css = readFileSync(new URL("../styles/globals.css", import.meta.url), "utf8");
+  const html = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
+
+  it("leaves the Classic primary triplets in place", () => {
+    assert.match(css, /--primary:\s*183 100% 50%/);
+    assert.match(css, /--primary:\s*192 91% 36%/);
+    assert.match(css, /--form-heading:\s*#1d3a5c/);
+    assert.match(css, /--chart-critical:\s*#e11d48/);
+  });
+
+  it("paints the scheme before the bundle loads", () => {
+    assert.match(html, /accuqual-color-scheme/);
+    assert.match(html, /data-scheme/);
+    assert.match(html, /scheme === "dma"/);
+  });
+
+  for (const marker of ["/* dma-scheme-dark */", "/* dma-scheme-light */"]) {
+    it(`keeps text at WCAG AA in ${marker}`, () => {
+      const vars = cssBlock(css, marker);
+      const pairs: Array<[string, string]> = [
+        ["--foreground", "--background"],
+        ["--muted-foreground", "--background"],
+        ["--muted-foreground", "--muted"],
+        ["--primary", "--background"],
+        ["--primary-foreground", "--primary"],
+        ["--accent", "--background"],
+        ["--accent-foreground", "--accent"],
+        ["--button-foreground", "--button"],
+        ["--success", "--background"],
+        ["--success-foreground", "--success"],
+        ["--warning", "--background"],
+        ["--warning-foreground", "--warning"],
+        ["--destructive", "--background"],
+        ["--destructive-foreground", "--destructive"],
+        ["--info", "--background"],
+        ["--info-foreground", "--info"],
+      ];
+      for (const [fg, bg] of pairs) {
+        assert.ok(vars[fg] && vars[bg], `${marker} missing ${fg} or ${bg}`);
+        const ratio = contrast(vars[fg]!, vars[bg]!);
+        assert.ok(ratio >= 4.5, `${marker} ${fg} on ${bg} is ${ratio.toFixed(2)}`);
+      }
+      const successHue = Number(vars["--success"]!.split(" ")[0]);
+      const warningHue = Number(vars["--warning"]!.split(" ")[0]);
+      const dangerHue = Number(vars["--destructive"]!.split(" ")[0]);
+      assert.ok(successHue >= 140 && successHue <= 170, "success stays green");
+      assert.ok(warningHue >= 25 && warningHue <= 50, "warning stays amber");
+      assert.ok(dangerHue >= 340 || dangerHue <= 15, "destructive stays red");
+    });
+  }
 });

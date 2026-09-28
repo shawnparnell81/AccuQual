@@ -10,6 +10,9 @@ import { workflowDefinitions, workflowRuns, type WorkflowRun } from "../../drizz
 import { controlledVersions } from "../../drizzle/schema/versioning.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { resumeWorkflow, WorkflowNodeError, type WorkflowDefinition, type WorkflowRunState } from "./workflow-engine.js";
+import { isFullAccessRole, isReviewerRole } from "../roles/roleAccess.js";
+
+const EXECUTIVE_APPROVER_STEPS = new Set(["quality_manager", "president", "vice_president"]);
 
 /**
  * Approval routing for workflow runs. Deliberately NOT behind the Workflow Builder's own department gate: the person
@@ -29,8 +32,9 @@ interface PendingApproval {
 }
 
 function canDecide(user: { roleName: string | null; department: string | null }, pending: PendingApproval): boolean {
-  if (user.roleName === "admin") return true;
+  if (isFullAccessRole(user.roleName)) return true;
   if (pending.approverRole && user.roleName === pending.approverRole) return true;
+  if (isReviewerRole(user.roleName) && pending.approverRole != null && EXECUTIVE_APPROVER_STEPS.has(pending.approverRole)) return true;
   if (pending.approverDepartment && user.department === pending.approverDepartment) return true;
   return false;
 }

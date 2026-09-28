@@ -3,7 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
-import { TextField } from "../../components/forms/Field";
+import { TextField, SelectField } from "../../components/forms/Field";
+import { Modal } from "../../components/modals/Modal";
+import { useConfirm } from "../../components/shared/ConfirmDialog";
 import type { ModuleAccessLevel, PermissionModuleInfo, PermissionRole } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
@@ -20,6 +22,9 @@ export function PermissionsRolesTab() {
   const queryClient = useQueryClient();
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDescription, setNewRoleDescription] = useState("");
+  const [replacing, setReplacing] = useState<PermissionRole | null>(null);
+  const [replacementId, setReplacementId] = useState("");
+  const confirm = useConfirm();
 
   const { data: modules = [] } = useQuery<PermissionModuleInfo[]>({
     queryKey: ["permissions", "modules"],
@@ -44,11 +49,12 @@ export function PermissionsRolesTab() {
   });
 
   const deleteRole = useMutation({
-    mutationFn: async (id: number) => apiClient.delete(`/permissions/roles/${id}`),
+    mutationFn: async (input: { id: number; replacementRoleId?: number }) => apiClient.delete(`/permissions/roles/${input.id}`, { data: input.replacementRoleId ? { replacementRoleId: input.replacementRoleId } : {} }),
     onSuccess: () => {
       invalidate();
       queryClient.invalidateQueries({ queryKey: ["permissions", "effective"] });
       queryClient.invalidateQueries({ queryKey: ["permissions", "user-roles"] });
+      setReplacing(null);
       toast.success("Role deleted.");
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't delete that role.")),
@@ -78,22 +84,67 @@ export function PermissionsRolesTab() {
         </button>
       </form>
 
+      <p className="text-xs text-muted-foreground">Listed from the top of the organization down. A smaller rank number is higher.</p>
       {isLoading ? (
         <LoadingPlaceholder />
       ) : roles.length === 0 ? (
         <p className="text-sm text-muted-foreground">No custom roles yet — everyone's access comes from their department alone.</p>
       ) : (
         <div className="flex flex-col gap-3">
-          {roles.map((role) => (
-            <RoleCard key={role.id} role={role} modules={modules} onDelete={() => deleteRole.mutate(role.id)} />
+          {roles.map((role, index) => (
+            <RoleCard
+              key={role.id}
+              role={role}
+              modules={modules}
+              canMoveUp={index > 0}
+              canMoveDown={index < roles.length - 1}
+              onDelete={() => {
+                if (role.memberCount > 0) {
+                  setReplacing(role);
+                  setReplacementId("");
+                  return;
+                }
+                void confirm({ title: "Delete this role?", message: `${role.roleName} will be removed. This can't be undone.`, confirmLabel: "Delete" }).then((ok) => {
+                  if (ok) deleteRole.mutate({ id: role.id });
+                });
+              }}
+            />
           ))}
         </div>
       )}
+
+      <Modal title={replacing ? `Delete ${replacing.roleName}` : "Delete role"} isOpen={replacing !== null} onClose={() => setReplacing(null)}>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!replacing || !replacementId) return;
+            deleteRole.mutate({ id: replacing.id, replacementRoleId: Number(replacementId) });
+          }}
+        >
+          <p className="text-sm text-muted-foreground">
+            {replacing?.memberCount ?? 0} {(replacing?.memberCount ?? 0) === 1 ? "person has" : "people have"} this role. Choose another role for them first.
+          </p>
+          <SelectField label="Move them to" required value={replacementId} onChange={(e) => setReplacementId(e.target.value)}>
+            <option value="">Choose a role</option>
+            {roles
+              .filter((role) => role.id !== replacing?.id)
+              .map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.roleName}
+                </option>
+              ))}
+          </SelectField>
+          <button type="submit" disabled={!replacementId || deleteRole.isPending} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
+            Move people and delete
+          </button>
+        </form>
+      </Modal>
     </div>
   );
 }
 
-function RoleCard({ role, modules, onDelete }: { role: PermissionRole; modules: PermissionModuleInfo[]; onDelete: () => void }) {
+function RoleCard({ role, modules, onDelete, canMoveUp, canMoveDown }: { role: PermissionRole; modules: PermissionModuleInfo[]; onDelete: () => void; canMoveUp: boolean; canMoveDown: boolean }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [addModule, setAddModule] = useState("");
@@ -131,10 +182,47 @@ function RoleCard({ role, modules, onDelete }: { role: PermissionRole; modules: 
           <p className="mt-0.5 text-xs text-muted-foreground">
             {role.memberCount} {role.memberCount === 1 ? "member" : "members"}
           </p>
+          <label className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+            Rank
+            <input
+              type="number"
+              min={1}
+              max={1000}
+              defaultValue={role.hierarchyLevel ?? 80}
+              key={role.hierarchyLevel ?? 80}
+              className="w-20 rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
+              onBlur={(e) => {
+                const hierarchyLevel = Number(e.target.value);
+                if (!Number.isInteger(hierarchyLevel) || hierarchyLevel === role.hierarchyLevel) return;
+                void apiClient
+                  .patch(`/permissions/roles/${role.id}`, { hierarchyLevel })
+                  .then(invalidate)
+                  .catch((err) => toast.error(extractErrorMessage(err, "Couldn't change that rank.")));
+              }}
+            />
+          </label>
         </div>
-        <button onClick={onDelete} className="rounded-md border border-destructive/30 px-2 py-1 text-xs text-destructive hover:bg-destructive/10">
-          Delete Role
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={!canMoveUp}
+            onClick={() => void apiClient.post(`/permissions/roles/${role.id}/move`, { direction: "up" }).then(invalidate).catch((err) => toast.error(extractErrorMessage(err, "Couldn't change that rank.")))}
+            className="text-xs text-primary hover:underline disabled:opacity-40"
+          >
+            Up
+          </button>
+          <button
+            type="button"
+            disabled={!canMoveDown}
+            onClick={() => void apiClient.post(`/permissions/roles/${role.id}/move`, { direction: "down" }).then(invalidate).catch((err) => toast.error(extractErrorMessage(err, "Couldn't change that rank.")))}
+            className="text-xs text-primary hover:underline disabled:opacity-40"
+          >
+            Down
+          </button>
+          <button onClick={onDelete} className="rounded-md border border-destructive/30 px-2 py-1 text-xs text-destructive hover:bg-destructive/10">
+            Delete Role
+          </button>
+        </div>
       </div>
 
       <div className="mt-3 flex flex-col gap-1.5">

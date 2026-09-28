@@ -48,3 +48,29 @@ export async function openOfficeSource(source: OfficeSource): Promise<OfficeSess
 export async function openOfficeSession(documentId: number, versionId: number, fileId: number): Promise<OfficeSession> {
   return openOfficeSource({ kind: "document", documentId, versionId, fileId });
 }
+
+let configuredCache: Promise<boolean> | null = null;
+let configuredKnown: boolean | null = null;
+
+/** The last answer from /onlyoffice/status, if this page has already asked. */
+export function peekOnlyOfficeEditorConfigured(): boolean | null {
+  return configuredKnown;
+}
+
+/** True when this server has a document server configured. Cached for the page; a failed lookup is treated as off so the browser preview can open. */
+export function onlyOfficeEditorConfigured(): Promise<boolean> {
+  if (configuredKnown !== null) return Promise.resolve(configuredKnown);
+  if (!configuredCache) {
+    configuredCache = apiClient
+      .get<{ configured?: boolean }>("/onlyoffice/status")
+      .then((res) => {
+        configuredKnown = res.data.configured === true;
+        return configuredKnown;
+      })
+      .catch(() => {
+        configuredKnown = false;
+        return false;
+      });
+  }
+  return configuredCache;
+}

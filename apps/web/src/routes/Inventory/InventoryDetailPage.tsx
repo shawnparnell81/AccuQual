@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { isFullAccessRole } from "../../lib/fullAccess";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
@@ -253,7 +254,7 @@ export function InventoryDetailPage() {
   const { data: costing } = useItemCosting(itemId);
   const { data: lots = [] } = useItemLots(itemId);
   const currentUser = useCurrentUser();
-  const canManageReorder = currentUser?.roleName === "admin" || currentUser?.department === "purchasing";
+  const canManageReorder = isFullAccessRole(currentUser?.roleName) || currentUser?.department === "purchasing";
   const updateItem = itemHooks.useUpdate();
   const [editingSupplier, setEditingSupplier] = useState(false);
   const [editingCost, setEditingCost] = useState(false);

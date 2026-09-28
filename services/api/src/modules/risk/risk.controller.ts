@@ -1,11 +1,13 @@
 import type { Request, Response } from "express";
 import { and, eq, desc } from "drizzle-orm";
 import { riskAssessments, fmeaItems, riskMitigations } from "../../drizzle/schema/risk.js";
+import { pfmeaActionPriority } from "../forms/fmeaPriority.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { stripClientOwnedFields } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /**
  * Same inline-guard style as inventory/erp/rma/workOrders.controller.ts's
@@ -16,7 +18,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
  */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin") return;
+  if (isFullAccessRole(role)) return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -26,7 +28,7 @@ function assertDepartment(req: Request, allowed: string[]) {
 /** Admin-only, not a department at all — same convention as platform-admin-gated routes, just scoped to a single company-level action instead of a whole router. */
 function assertAdmin(req: Request) {
   const role = req.user?.roleName;
-  if (role !== "admin") {
+  if (!isFullAccessRole(role)) {
     throw AppError.forbidden("Only an admin can delete a risk.");
   }
 }
@@ -126,16 +128,15 @@ export const getRiskHandler = asyncHandler(async (req: Request, res: Response) =
   const record = await loadRisk(req, Number(req.params.id));
   const mitigations = await req.db!.select().from(riskMitigations).where(and(eq(riskMitigations.riskAssessmentId, record.id)));
   const fmea = await req.db!.select().from(fmeaItems).where(and(eq(fmeaItems.riskAssessmentId, record.id)));
-  res.json({ ...record, mitigations, fmeaItems: fmea });
+  res.json({ ...record, mitigations, fmeaItems: fmea.map(withFmeaActionPriority) });
 });
 
 /**
  * Update — Quality (full control) and Engineering ("update technical
  * fields" per the spec) only; Production/Purchasing/Material Management can
  * still create a risk and propose mitigations, but not edit the risk record
- * itself. Never accepts `status` (see updateRiskSchema's own comment) — a
- * severity/probability change gets its own flagged audit entry per the
- * spec's explicit "severity/probability change" audit requirement, distinct
+ * itself. Never accepts `status` (see updateRiskSchema's own comment). A
+ * severity/probability change gets its own flagged audit entry, distinct
  * from a plain field edit.
  */
 export const updateRiskHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -143,9 +144,8 @@ export const updateRiskHandler = asyncHandler(async (req: Request, res: Response
   const record = await loadRisk(req, Number(req.params.id));
   // Not a real column — a client that just applied an AI suggestion (see
   // risk.ai.ts) passes the suggestion's id back here so the audit entry
-  // below can say "AI suggestion accepted" instead of a plain field edit,
-  // per the spec's explicit requirement to log that distinctly. Stripped
-  // before the DB write either way.
+  // below records "AI suggestion accepted" instead of a plain field edit.
+  // Stripped before the DB write either way.
   const { aiSuggestionId, ...rest } = req.body as { aiSuggestionId?: number } & Record<string, unknown>;
   const body = stripClientOwnedFields(rest) as { severity?: number; probability?: number } & Record<string, unknown>;
   const scoringChanged = body.severity !== undefined || body.probability !== undefined;
@@ -218,15 +218,20 @@ export const addFmeaItemHandler = asyncHandler(async (req: Request, res: Respons
     .values({ ...req.body, riskAssessmentId: risk.id, rpn: String(rpn) })
     .returning();
   await recordAuditTrail(req.db!, { entityType: "RiskAssessment", entityId: risk.id, action: "update", changes: { action: "fmea_item_added", failureMode: item!.failureMode, rpn }, performedBy: req.user?.id });
-  res.status(201).json(item);
+  res.status(201).json(withFmeaActionPriority(item!));
 });
+
+/** Action Priority is derived from S/O/D on read. It is not a column on fmea_items. */
+function withFmeaActionPriority<T extends { severity: number; occurrence: number; detection: number }>(item: T) {
+  return { ...item, actionPriority: pfmeaActionPriority(item.severity, item.occurrence, item.detection) };
+}
 
 export const listFmeaItemsHandler = asyncHandler(async (req: Request, res: Response) => {
   const items = await req
     .db!.select()
     .from(fmeaItems)
     .where(and(eq(fmeaItems.riskAssessmentId, Number(req.params.id))));
-  res.json(items);
+  res.json(items.map(withFmeaActionPriority));
 });
 
 /** Propose a mitigation action — any of the risk-matrix's five departments (each "proposes" per the spec; Quality still separately drives the parent risk's own status transitions above). */

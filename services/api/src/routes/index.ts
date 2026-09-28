@@ -9,7 +9,7 @@ import { sitesRouter } from "../modules/sites/sites.routes.js";
 import { rolesRouter } from "../modules/roles/roles.routes.js";
 import { documentsRouter } from "../modules/documents/documents.routes.js";
 import { documentFilesRouter } from "../modules/documents/documents.versions.routes.js";
-import { onlyOfficePublicRouter, onlyOfficeRouter } from "../modules/onlyoffice/onlyoffice.routes.js";
+import { onlyOfficePublicRouter, onlyOfficeRouter, onlyOfficeStatusRouter } from "../modules/onlyoffice/onlyoffice.routes.js";
 import { documentFoldersRouter } from "../modules/document-folders/document-folders.routes.js";
 import { ncrRouter } from "../modules/ncr/ncr.routes.js";
 import { capaRouter } from "../modules/capa/capa.routes.js";
@@ -59,6 +59,7 @@ import { qualityInspectionReportsRouter } from "../modules/quality-inspection-re
 import { settingsRouter } from "../modules/settings/settings.routes.js";
 import { attachmentsRouter } from "../modules/attachments/attachments.routes.js";
 import { importRouter } from "../modules/import/import.routes.js";
+import { adminImportRouter } from "../modules/import/adminImport.routes.js";
 import { warrantyRouter } from "../modules/warranty/warranty.routes.js";
 import { crarRouter } from "../modules/crar/crar.routes.js";
 import { rmaActivityLogRouter } from "../modules/rma-activity-log/rmaActivityLog.routes.js";
@@ -85,6 +86,8 @@ apiRouter.use("/roles", rolesRouter);
 apiRouter.use("/documents/files", documentFilesRouter);
 // Document Server fetches the file and posts the save callback with a signed token, not a user session, so that router is mounted first.
 apiRouter.use("/onlyoffice", onlyOfficePublicRouter);
+// Before the documents-department router: preview needs this from any signed-in page, not only Documents.
+apiRouter.use("/onlyoffice", onlyOfficeStatusRouter);
 apiRouter.use("/onlyoffice", onlyOfficeRouter);
 apiRouter.use("/documents", documentsRouter);
 apiRouter.use("/document-folders", documentFoldersRouter);
@@ -145,6 +148,7 @@ apiRouter.use("/quality-inspection-reports", qualityInspectionReportsRouter);
 apiRouter.use("/settings", settingsRouter);
 apiRouter.use("/attachments", attachmentsRouter);
 apiRouter.use("/import", importRouter);
+apiRouter.use("/admin/imports", adminImportRouter);
 apiRouter.use("/warranty", warrantyRouter);
 apiRouter.use("/crar", crarRouter);
 apiRouter.use("/rma-activity-log", rmaActivityLogRouter);

@@ -1,12 +1,14 @@
 import type { FormLayout } from "./types";
+import { FMEA_PRIORITY_LEGEND } from "../fmeaPriority";
 
 /**
- * Derived 1:1 from the user-provided fmea.pdf (Potential Failure Mode and
+ * Derived 1:1 from the source fmea.pdf (Potential Failure Mode and
  * Effects Analysis — Process FMEA). The source template spans two PDF pages
  * only because its analysis table is too wide to print on one sheet — R.P.N.
  * (Risk Priority Number) wraps onto page 2. Here it's one continuous table
  * with the R.P.N. columns computed automatically (Severity x Occurrence x
- * Detection), not typed in, per the AIAG FMEA method.
+ * Detection), not typed in, per the AIAG FMEA method. Action Priority (AP)
+ * is the AIAG-VDA 2019 PFMEA table, also computed from those ratings.
  */
 export const fmeaLayout: FormLayout = {
   formType: "fmea",
@@ -73,6 +75,7 @@ export const fmeaLayout: FormLayout = {
             { key: "controlsDetection", label: "Current Controls — Detection", kind: "textarea" },
             { key: "detection", label: "Detection", kind: "number", min: 1, max: 10 },
             { key: "rpn", label: "R.P.N.", kind: "computed", formula: "rpn" },
+            { key: "ap", label: "AP", kind: "computed", formula: "actionPriority" },
             { key: "recommendedActions", label: "Recommended Action(s)", kind: "textarea" },
             { key: "responsibilityTargetDate", label: "Responsibility & Target Date", kind: "text" },
             { key: "actionsTaken", label: "Actions Taken & Completion Date", kind: "textarea" },
@@ -80,7 +83,9 @@ export const fmeaLayout: FormLayout = {
             { key: "occurrenceRevised", label: "Occurrence (Revised)", kind: "number", min: 1, max: 10 },
             { key: "detectionRevised", label: "Detection (Revised)", kind: "number", min: 1, max: 10 },
             { key: "rpnRevised", label: "R.P.N. (Revised)", kind: "computed", formula: "rpnRevised" },
+            { key: "apRevised", label: "AP (Revised)", kind: "computed", formula: "actionPriorityRevised" },
           ],
+          legend: FMEA_PRIORITY_LEGEND,
         },
       ],
     },

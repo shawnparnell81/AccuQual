@@ -9,7 +9,7 @@ import { FileDropZone, isFileDrag } from "../../components/shared/FileDropZone";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
-import { previewKind, saveBytes } from "../../lib/filePreview";
+import { onlyOfficeFile, previewKind, saveBytes } from "../../lib/filePreview";
 
 interface DocumentFolder {
   id: number;
@@ -203,7 +203,7 @@ export function FolderExplorerPage() {
   const deptColorIndex = departments.findIndex((d) => d.id === activeDept.id);
 
   return (
-    <div className="flex flex-col gap-4 pb-28">
+    <div className="flex h-full min-h-0 flex-col gap-4">
       <input
         ref={uploadDocInputRef}
         type="file"
@@ -229,7 +229,7 @@ export function FolderExplorerPage() {
         }}
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Document Folders</h1>
           <p className="text-sm text-muted-foreground">
@@ -242,8 +242,8 @@ export function FolderExplorerPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-[220px_1fr]">
-        <nav className="flex flex-col gap-1 rounded-lg border border-border bg-card p-2">
+      <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto md:grid-cols-[220px_minmax(0,1fr)] md:overflow-hidden">
+        <nav className="flex flex-col gap-1 rounded-lg border border-border bg-card p-2 md:min-h-0 md:overflow-y-auto">
           {departments.map((dept, i) => {
             const counts = countsFor(dept.id);
             const color = DEPARTMENT_COLORS[i % DEPARTMENT_COLORS.length];
@@ -300,8 +300,8 @@ export function FolderExplorerPage() {
           </form>
         </nav>
 
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-col gap-3 md:min-h-0 md:overflow-y-auto">
+          <div className="flex shrink-0 items-center gap-2">
             <span className="h-3 w-3 flex-none rounded-full" style={{ backgroundColor: DEPARTMENT_COLORS[deptColorIndex % DEPARTMENT_COLORS.length] }} />
             <h2 className="text-lg font-semibold">{activeDept.name}</h2>
             <button
@@ -326,7 +326,7 @@ export function FolderExplorerPage() {
           <FileDropZone
             onFiles={(dropped) => void uploadFiles(activeDept.id, dropped)}
             overlay={false}
-            className="rounded-lg border-2 border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground transition-colors hover:border-primary/50"
+            className="shrink-0 rounded-lg border-2 border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground transition-colors hover:border-primary/50"
           >
             <span className="inline-flex items-center gap-2">
               <UploadCloud size={14} /> Drag files from your computer onto {activeDept.name}, or onto any folder below, to add them as documents
@@ -342,7 +342,7 @@ export function FolderExplorerPage() {
                 key={sub.id}
                 onFiles={(dropped) => void uploadFiles(sub.id, dropped)}
                 overlay={false}
-                className={`overflow-hidden rounded-lg border bg-card transition-shadow ${isDropTarget ? "border-primary ring-2 ring-primary" : "border-border"}`}
+                className={`shrink-0 overflow-hidden rounded-lg border bg-card transition-shadow ${isDropTarget ? "border-primary ring-2 ring-primary" : "border-border"}`}
               >
                 <div
                   className="flex cursor-grab items-center gap-2 border-b border-border bg-muted/50 px-3 py-2 active:cursor-grabbing"
@@ -410,7 +410,7 @@ export function FolderExplorerPage() {
           })}
 
           <form
-            className="flex items-center gap-2 pt-1"
+            className="flex shrink-0 items-center gap-2 pt-1"
             onSubmit={(e) => {
               e.preventDefault();
               if (!newFolderName.trim()) return;
@@ -428,9 +428,9 @@ export function FolderExplorerPage() {
         </div>
       </div>
 
-      {/* Library Pool shelf — always visible regardless of which department is
-          selected, so a doc can be dragged out of any open folder and back
-          into any other one without losing sight of the pool. */}
+      {/* In normal flow under the folder library, so the shelf stays on screen
+          without covering Forms & Templates or any other folder card. The
+          folder column scrolls on its own. */}
       {poolFolder && (
         <div
           onDragOver={(e) => {
@@ -446,15 +446,15 @@ export function FolderExplorerPage() {
             if (dragged?.kind === "doc") moveDoc(dragged.id, poolFolder.id);
             setDragged(null);
           }}
-          className={`fixed inset-x-0 bottom-0 z-20 border-t bg-card/95 backdrop-blur transition-colors ${
+          className={`shrink-0 rounded-lg border bg-card transition-colors ${
             poolHover ? "border-primary ring-1 ring-inset ring-primary" : "border-border"
           }`}
         >
-          <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
-            <Inbox size={16} className="flex-none text-muted-foreground" />
-            <span className="flex-none text-sm font-medium">Library Pool</span>
-            <span className="flex-none rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">{poolItems.length}</span>
-            <div className="flex flex-1 flex-wrap gap-2 overflow-x-auto">
+          <div className="flex items-start gap-3 px-4 py-3">
+            <Inbox size={16} className="mt-0.5 flex-none text-muted-foreground" />
+            <span className="mt-0.5 flex-none text-sm font-medium">Library Pool</span>
+            <span className="mt-0.5 flex-none rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">{poolItems.length}</span>
+            <div className="flex max-h-28 min-w-0 flex-1 flex-wrap gap-2 overflow-y-auto">
               {poolItems.length === 0 && <span className="text-xs italic text-muted-foreground">Empty — drag a document here to unassign it</span>}
               {poolItems.map((doc) => (
                 <DocPill
@@ -513,7 +513,7 @@ function DocPill({
       fileName,
       mimeType: doc.pdfMimeType,
       loadBytes: async () => (await apiClient.get(`/document-folders/${doc.id}/template`, { responseType: "arraybuffer" })).data as ArrayBuffer,
-      officeSource: kind === "office" ? { kind: "folder", folderId: doc.id } : undefined,
+      officeSource: onlyOfficeFile(fileName, doc.pdfMimeType) ? { kind: "folder", folderId: doc.id } : undefined,
       download: downloadAttachment,
     });
   }

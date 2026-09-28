@@ -1,7 +1,15 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { users } from "../../drizzle/schema/users.js";
+import { roles } from "../../drizzle/schema/roles.js";
+import { refreshTokens } from "../../drizzle/schema/refreshTokens.js";
+import { trustedDevices } from "../../drizzle/schema/trustedDevices.js";
+import { mfaRecoveryCodes } from "../../drizzle/schema/mfaRecoveryCodes.js";
+import { passwordResetTokens } from "../../drizzle/schema/passwordResetTokens.js";
+import { userIdentities } from "../../drizzle/schema/sso.js";
+import { userPermissionRoles } from "../../drizzle/schema/permissions.js";
+import { userSites } from "../../drizzle/schema/sites.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -9,6 +17,12 @@ import { revokeRefreshTokenRows } from "../auth/auth.service.js";
 import { revokeAllTrustedDevices } from "../auth/trustedDevice.service.js";
 import { clearMfa } from "../auth/mfa.service.js";
 import { assertPasswordAcceptable } from "../../utils/passwordPolicy.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
+import { decideUserRemoval } from "./userRemoval.js";
+import { loadUserHistory } from "./userLinks.js";
+import { loadOpenWork, reassignOpenWork, type OpenWorkGroup } from "./userOpenWork.js";
+import { deleteUserSchema } from "./users.validation.js";
+import type { Db } from "../../lib/requestDb.js";
 
 export const listUsers = asyncHandler(async (req: Request, res: Response) => {
   const rows = await req
@@ -56,26 +70,67 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json(safe);
 });
 
+async function otherActiveFullAccess(db: Db, exceptUserId: number): Promise<number> {
+  const rows = await db
+    .select({ id: users.id, isActive: users.isActive, roleName: roles.name })
+    .from(users)
+    .leftJoin(roles, eq(users.roleId, roles.id))
+    .where(ne(users.id, exceptUserId));
+  return rows.filter((row) => row.isActive && isFullAccessRole(row.roleName)).length;
+}
+
 export const updateUser = asyncHandler(async (req: Request, res: Response) => {
-  const [before] = await req.db!.select({ roleId: users.roleId, department: users.department, isActive: users.isActive }).from(users).where(and(eq(users.id, Number(req.params.id))));
+  const id = Number(req.params.id);
+  const [before] = await req
+    .db!.select({ roleId: users.roleId, roleName: roles.name, department: users.department, isActive: users.isActive, email: users.email })
+    .from(users)
+    .leftJoin(roles, eq(users.roleId, roles.id))
+    .where(eq(users.id, id));
   if (!before) throw AppError.notFound("User");
   // Disabling a user, or changing what they may do, ends their current sessions: bumping token_version makes requireAuth refuse their access token on the very next request and blocks every refresh token. They sign in again and get the new permissions.
-  const body = req.body as { roleId?: number | null; department?: string | null; isActive?: boolean; managerId?: number | null };
+  const body = req.body as { name?: string; email?: string; roleId?: number | null; department?: string | null; isActive?: boolean; managerId?: number | null };
+  if (body.isActive === false && id === req.user?.id) throw new AppError("You can't turn off your own account.", 409);
   if (body.managerId != null) {
-    if (body.managerId === Number(req.params.id)) throw AppError.badRequest("A person can't be their own manager.");
-    const [manager] = await req.db!.select({ id: users.id }).from(users).where(and(eq(users.id, body.managerId)));
+    if (body.managerId === id) throw AppError.badRequest("A person can't be their own manager.");
+    const [manager] = await req.db!.select({ id: users.id }).from(users).where(eq(users.id, body.managerId));
     if (!manager) throw AppError.badRequest("That manager isn't a user.");
+  }
+  if (body.email !== undefined) {
+    const email = body.email.trim().toLowerCase();
+    const [clash] = await req.db!.select({ id: users.id }).from(users).where(sql`lower(${users.email}) = ${email}`);
+    if (clash && clash.id !== id) throw AppError.badRequest("That email is already in use.");
+    body.email = email;
+  }
+  let nextRoleName = before.roleName;
+  if (body.roleId !== undefined && body.roleId !== before.roleId) {
+    if (body.roleId == null) nextRoleName = null;
+    else {
+      const [nextRole] = await req.db!.select({ name: roles.name }).from(roles).where(eq(roles.id, body.roleId));
+      if (!nextRole) throw AppError.badRequest("That role doesn't exist.");
+      nextRoleName = nextRole.name;
+    }
+  }
+  const leavingFullAccess = isFullAccessRole(before.roleName) && before.isActive && ((body.isActive === false) || (body.roleId !== undefined && !isFullAccessRole(nextRoleName)));
+  if (leavingFullAccess && (await otherActiveFullAccess(req.db!, id)) < 1) {
+    throw new AppError("This is the last Owner or Administrator. Give that access to someone else first.", 409);
   }
   const revokeSessions =
     (body.isActive === false && before.isActive) ||
     (body.roleId !== undefined && body.roleId !== before.roleId) ||
-    (body.department !== undefined && body.department !== before.department);
+    (body.department !== undefined && body.department !== before.department) ||
+    (body.email !== undefined && body.email !== before.email);
 
-  const [updated] = await req
-    .db!.update(users)
-    .set({ ...req.body, ...(revokeSessions ? { tokenVersion: sql`${users.tokenVersion} + 1` } : {}), updatedAt: new Date() })
-    .where(and(eq(users.id, Number(req.params.id))))
-    .returning();
+  const patch = {
+    ...(body.name !== undefined ? { name: body.name } : {}),
+    ...(body.email !== undefined ? { email: body.email } : {}),
+    ...(body.roleId !== undefined ? { roleId: body.roleId } : {}),
+    ...(body.department !== undefined ? { department: body.department } : {}),
+    ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+    ...(body.managerId !== undefined ? { managerId: body.managerId } : {}),
+    ...(revokeSessions ? { tokenVersion: sql`${users.tokenVersion} + 1` } : {}),
+    updatedAt: new Date(),
+  };
+  const [updated] = await req.db!.update(users).set(patch).where(eq(users.id, id)).returning();
   if (!updated) throw AppError.notFound("User");
 
   // Previously the only mutating handler in the codebase with zero audit
@@ -86,7 +141,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     entityType: "User",
     entityId: updated.id,
     action: "update",
-    changes: { fieldsChanged: Object.keys(req.body), ...(revokeSessions ? { sessionsRevoked: true } : {}) },
+    changes: { fieldsChanged: Object.keys(body).filter((key) => body[key as keyof typeof body] !== undefined), ...(revokeSessions ? { sessionsRevoked: true } : {}) },
     performedBy: req.user?.id,
   });
   if (revokeSessions) await revokeRefreshTokenRows(updated.id);
@@ -165,17 +220,103 @@ export const updateMySavedViews = asyncHandler(async (req: Request, res: Respons
   res.json(updated.savedViews);
 });
 
+async function clearSignInRows(db: Db, userId: number) {
+  await db.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
+  await db.delete(trustedDevices).where(eq(trustedDevices.userId, userId));
+  await db.delete(mfaRecoveryCodes).where(eq(mfaRecoveryCodes.userId, userId));
+  await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
+  await db.delete(userIdentities).where(eq(userIdentities.userId, userId));
+  await db.delete(userPermissionRoles).where(eq(userPermissionRoles.userId, userId));
+  await db.delete(userSites).where(eq(userSites.userId, userId));
+}
+
+function isForeignKeyError(err: unknown): boolean {
+  const error = err as { code?: string; cause?: { code?: string } };
+  return error.code === "23503" || error.cause?.code === "23503";
+}
+
+function removalAudit(moved: OpenWorkGroup[], replacement: { id: number; name: string | null; email: string } | null) {
+  if (!replacement || moved.length === 0) return {};
+  return {
+    reassignedTo: replacement.id,
+    reassignedToName: replacement.name?.trim() || replacement.email,
+    openWork: moved.map((item) => ({ key: item.key, label: item.label, count: item.count })),
+  };
+}
+
+/** Open work that must be handed to someone else before this account can be removed. */
+export const getUserOpenWork = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const [target] = await req.db!.select({ id: users.id }).from(users).where(eq(users.id, id));
+  if (!target) throw AppError.notFound("User");
+  res.json({ openWork: await loadOpenWork(req.db!, id) });
+});
+
 export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
-  const [updated] = await req
-    .db!.update(users)
-    .set({ isActive: false, tokenVersion: sql`${users.tokenVersion} + 1` })
-    .where(and(eq(users.id, Number(req.params.id))))
-    .returning();
+  const id = Number(req.params.id);
+  const parsed = deleteUserSchema.safeParse(req.body ?? {});
+  if (!parsed.success) throw AppError.badRequest("Choose a person to take their open work.");
+
+  const [target] = await req
+    .db!.select({ id: users.id, name: users.name, email: users.email, isActive: users.isActive, roleName: roles.name })
+    .from(users)
+    .leftJoin(roles, eq(users.roleId, roles.id))
+    .where(eq(users.id, id));
+  if (!target) throw AppError.notFound("User");
+
+  const openWork = await loadOpenWork(req.db!, id);
+  let replacement: { id: number; name: string | null; email: string } | null = null;
+  if (openWork.length > 0 && parsed.data.replacementUserId != null) {
+    const [row] = await req.db!.select({ id: users.id, name: users.name, email: users.email, isActive: users.isActive }).from(users).where(eq(users.id, parsed.data.replacementUserId));
+    if (!row || !row.isActive || row.id === id) throw AppError.badRequest("Choose an active person, other than this one, to take their open work.");
+    replacement = row;
+  }
+
+  const decision = decideUserRemoval({
+    actorId: req.user?.id ?? 0,
+    targetId: id,
+    targetRoleName: target.roleName,
+    otherActiveFullAccess: await otherActiveFullAccess(req.db!, id),
+    history: await loadUserHistory(req.db!, id),
+    openWork,
+    hasReplacement: replacement != null,
+  });
+  if (decision.outcome === "blocked") {
+    throw new AppError(decision.message, decision.status, decision.requiresReplacement ? { requiresReplacement: true, openWork } : undefined);
+  }
+
+  const handoff = replacement ? ` Open work was moved to ${replacement.name?.trim() || replacement.email}.` : "";
+
+  if (decision.outcome === "deleted") {
+    try {
+      await req.db!.transaction(async (tx) => {
+        const moved = replacement ? await reassignOpenWork(tx, id, replacement.id) : [];
+        await clearSignInRows(tx, id);
+        await recordAuditTrail(tx, { entityType: "User", entityId: id, action: "delete", changes: { action: "hard_delete", email: target.email, name: target.name, ...removalAudit(moved, replacement) }, performedBy: req.user?.id });
+        await tx.delete(users).where(eq(users.id, id));
+      });
+      res.status(200).json({ outcome: "deleted", message: `${decision.message}${handoff}` });
+      return;
+    } catch (err) {
+      if (!isForeignKeyError(err)) throw err;
+    }
+  }
+
+  let moved: OpenWorkGroup[] = [];
+  const [updated] = await req.db!.transaction(async (tx) => {
+    moved = replacement ? await reassignOpenWork(tx, id, replacement.id) : [];
+    const [row] = await tx
+      .update(users)
+      .set({ isActive: false, tokenVersion: sql`${users.tokenVersion} + 1`, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return [row];
+  });
   if (!updated) throw AppError.notFound("User");
-  // Deactivation is an access-removal event an auditor asks about — it used to leave no entry at all.
-  await recordAuditTrail(req.db!, { entityType: "User", entityId: updated.id, action: "status_change", changes: { action: "deactivate", sessionsRevoked: true }, performedBy: req.user?.id });
+  const message = `${decision.outcome === "deactivated" ? decision.message : "This person has records tied to them, so the account was turned off instead of erased. Their name stays on those records, and they can no longer sign in."}${handoff}`;
+  await recordAuditTrail(req.db!, { entityType: "User", entityId: updated.id, action: "status_change", changes: { action: "deactivate", sessionsRevoked: true, reason: message, ...removalAudit(moved, replacement) }, performedBy: req.user?.id });
   await revokeRefreshTokenRows(updated.id);
-  res.status(204).send();
+  res.status(200).json({ outcome: "deactivated", message });
 });
 
 /** Admin clears a sign-in lockout without waiting for it to expire (the user can also clear it by resetting their password). */

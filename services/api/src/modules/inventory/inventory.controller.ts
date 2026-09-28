@@ -23,6 +23,7 @@ import { getItemLots, getLotTraceability } from "./inventoryLots.service.js";
 import { loadCompanyForSettings, getInventorySettings } from "../settings/settings.service.js";
 import { isObviousTestName } from "../../utils/testDataGuard.js";
 import { env } from "../../config/env.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 export const baseHandlers = crudFactory(inventoryItems, { entityName: "InventoryItem", idColumn: "id" });
 
@@ -103,7 +104,7 @@ export const listItemsHandler = asyncHandler(async (req: Request, res: Response)
  */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin") return;
+  if (isFullAccessRole(role)) return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);

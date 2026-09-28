@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isFullAccessRole } from "../../lib/fullAccess";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -17,7 +18,7 @@ const userHooks = createResourceHooks<AppUser>("users");
  */
 export function AdminPlantsPage() {
   const user = useCurrentUser();
-  const isAdmin = user?.roleName === "admin";
+  const isAdmin = isFullAccessRole(user?.roleName);
   if (!isAdmin) {
     return (
       <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">

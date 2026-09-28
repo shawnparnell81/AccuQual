@@ -30,8 +30,8 @@ import { users } from "./users.js";
  *  them to specific users. This is ADDITIVE ONLY (a role can only grant
  *  access on top of a user's department baseline, never revoke it) —
  *  deliberately no "negative permission" concept, since that would need
- *  a real precedence/conflict system out of scope for this
- *  app has no other example of. A user's effective level on a module is
+ *  a real precedence/conflict system, which is out of scope, and this
+ *  app has no other example of one. A user's effective level on a module is
  *  MAX(department level, every assigned role's level for that module).
  *
  * moduleName/departmentName are plain `text` columns (matching this app's
@@ -55,6 +55,8 @@ export const permissionRoles = pgTable(
     id: serial("id").primaryKey(),
     roleName: text("role_name").notNull(),
     description: text("description"),
+    /** Smaller numbers are higher in the organization and are listed first. Same ladder as the system roles table. */
+    hierarchyLevel: integer("hierarchy_level").notNull().default(80),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at"),
   },

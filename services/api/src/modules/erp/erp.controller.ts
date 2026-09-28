@@ -23,11 +23,12 @@ import {
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { transitionReceivingLineItem } from "./receivingWorkflow.js";
 import { qualityInspectionReports } from "../../drizzle/schema/qualityInspectionReports.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /** Purchasing owns the PO lifecycle (create/edit/send/cancel); material_management owns receiving — same inline-guard style as inventory.controller.ts's assertDepartment. */
 function assertDepartment(req: Request, allowed: string[]) {
   const role = req.user?.roleName;
-  if (role === "admin") return;
+  if (isFullAccessRole(role)) return;
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
@@ -215,7 +216,7 @@ export const transitionReceivingLineItemHandler = asyncHandler(async (req: Reque
 
   const updated = await transitionReceivingLineItem(req.db!, id, status, {
     department: req.user?.department ?? null,
-    isAdmin: req.user?.roleName === "admin",
+    isAdmin: isFullAccessRole(req.user?.roleName),
     defectCategory: report?.defectCategory ?? undefined,
     notes,
     performedBy: req.user?.id,

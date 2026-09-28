@@ -10,6 +10,7 @@ import { notifyDepartment, notifyRecipients, sendEmail } from "../notifications/
 import { env } from "../../config/env.js";
 import { appRecordUrl } from "../../lib/recordLink.js";
 import type { DiffResult } from "./diff.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 // The shared draft -> review -> publish engine behind workflows, the Management
 // Review record and the Context of the Organization analysis. Everything
@@ -47,6 +48,8 @@ export interface SubjectAdapter {
   bootstrapStatus?(live: LiveState): "published" | "draft" | "in_review";
   /** Refuses starting a new draft or rollback draft (e.g. a retired document). Throw an AppError. */
   guardDraft?(db: Db, subjectId: number): Promise<void>;
+  /** Refuses sending a version for review or publishing it (e.g. a document already marked obsolete). Throw an AppError. */
+  guardAdvance?(db: Db, subjectId: number): Promise<void>;
   /** The content of a new draft or rollback draft, derived from the payload it starts from (e.g. next revision code). */
   seedDraft?(payload: Record<string, unknown>, ctx: { versionNumber: number; rollbackTo?: number; currentPayload: Record<string, unknown> | null }): Record<string, unknown>;
   /**
@@ -274,6 +277,7 @@ export async function discardDraft(db: Db, adapter: SubjectAdapter, subjectId: n
 
 /** draft -> in_review. The content must pass the subject's validation first. */
 export async function submitForReview(db: Db, adapter: SubjectAdapter, subjectId: number, versionId: number, actor: Actor, notes?: string, opts: { reviewerId?: number } = {}): Promise<ControlledVersion> {
+  await adapter.guardAdvance?.(db, subjectId);
   const v = await getVersion(db, adapter, subjectId, versionId);
   if (v.status !== "draft") throw conflict("Only a draft can be sent for review.");
   const report = adapter.validate(v.payload);
@@ -319,7 +323,7 @@ export async function reviewVersion(db: Db, adapter: SubjectAdapter, subjectId: 
   const v = await getVersion(db, adapter, subjectId, versionId);
   if (v.status !== "in_review") throw conflict("Only a version that is in review can be reviewed.");
   const selfReview = v.submittedBy === actor.id;
-  if (selfReview && actor.roleName !== "admin") {
+  if (selfReview && !isFullAccessRole(actor.roleName)) {
     throw AppError.forbidden("You submitted this version, so someone else has to review it.");
   }
   if (decision === "rejected" && !notes?.trim()) throw AppError.badRequest("Say why it is being sent back, so the author knows what to fix.");
@@ -345,6 +349,7 @@ export async function reviewVersion(db: Db, adapter: SubjectAdapter, subjectId: 
  * anywhere leaves the previous version live.
  */
 export async function publishVersion(db: Db, adapter: SubjectAdapter, subjectId: number, versionId: number, actor: Actor): Promise<ControlledVersion> {
+  await adapter.guardAdvance?.(db, subjectId);
   const v = await getVersion(db, adapter, subjectId, versionId);
   if (v.status !== "in_review") throw conflict("Only a version that is in review can be published.");
   if (v.reviewDecision !== "approved") throw conflict("A reviewer has to approve this version before it can be published.");

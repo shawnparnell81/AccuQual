@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { isFullAccessRole } from "../../lib/fullAccess";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { TrendingUp, ShieldQuestion, FileText, Mail } from "lucide-react";
 import { apiClient } from "../../api/client";
@@ -84,7 +85,7 @@ function Card({ icon, title, description, children }: { icon: ReactNode; title: 
 export function AiInsightsPage() {
   const toast = useToast();
   const currentUser = useCurrentUser();
-  const isAdmin = currentUser?.roleName === "admin";
+  const isAdmin = isFullAccessRole(currentUser?.roleName);
 
   const [supplierId, setSupplierId] = useState<number | "">("");
   const { data: suppliers = [] } = useQuery<Supplier[]>({ queryKey: ["suppliers"], queryFn: async () => (await apiClient.get("/suppliers")).data });

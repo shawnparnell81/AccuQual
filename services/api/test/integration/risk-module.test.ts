@@ -144,6 +144,14 @@ describe("Risk Management module (real DB + real HTTP path)", () => {
       .send({ failureMode: "Coating thickness out of spec", severity: 8, occurrence: 3, detection: 5 });
     expect(res.status).toBe(201);
     expect(res.body.rpn).toBe("120");
+    // S=8, O=3, D=5 is medium on the AIAG-VDA 2019 PFMEA Action Priority table. Not stored.
+    expect(res.body.actionPriority).toBe("M");
+
+    const detail = await request(app).get(`/risk/${riskId}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(detail.status).toBe(200);
+    const added = detail.body.fmeaItems.find((row: { failureMode: string }) => row.failureMode === "Coating thickness out of spec");
+    expect(added.actionPriority).toBe("M");
+    expect(added.rpn).toBe("120");
 
     const [row] = await db
       .select()

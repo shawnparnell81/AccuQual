@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isFullAccessRole } from "../../lib/fullAccess";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Play } from "lucide-react";
@@ -53,7 +54,7 @@ export function WorkflowCanvasPage() {
   const other = useVersionPayload<WfPayload>(BASE, wid, shownId !== null && !isSpecial ? shownId : null);
   const shown: VersionFull<WfPayload> | null | undefined = shownId === null ? null : shownId === openId ? current?.open : shownId === publishedId ? current?.published : other.data;
 
-  const isAdmin = user?.roleName === "admin";
+  const isAdmin = isFullAccessRole(user?.roleName);
   const mayEdit = isAdmin || user?.department === "quality" || user?.roleName === "quality_manager";
   const editable = !!shown && shown.status === "draft" && shown.id === openId && mayEdit;
 

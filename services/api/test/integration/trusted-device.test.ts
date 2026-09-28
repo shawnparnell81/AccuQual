@@ -283,4 +283,36 @@ describe("trusted devices (real DB + real HTTP path)", () => {
     expect(needsCode.body.mfaRequired).toBe(true);
     expect(needsCode.body.accessToken).toBeUndefined();
   });
+
+  it("ending the browser session still skips the authenticator code on the next password sign-in", async () => {
+    const user = await makeUser("browser-restart");
+    const secret = await enroll(user.email);
+    const agent = request.agent(app);
+
+    const challenge = await agent.post("/auth/login").send({ email: user.email, password: PASSWORD });
+    const verified = await agent.post("/auth/mfa/verify").set("User-Agent", CHROME).send({ mfaToken: challenge.body.mfaToken, code: codeAt(secret, 1), trustDevice: true });
+    expect(verified.status).toBe(200);
+    expect(setCookieHeader(verified, TRUSTED_DEVICE_COOKIE_NAME)).toBeTruthy();
+    const refreshCookie = setCookieHeader(verified, REFRESH_COOKIE_NAME);
+    expect(refreshCookie).toBeTruthy();
+
+    const ended = await agent.post("/auth/end-browser-session").set(CSRF).send({});
+    expect(ended.status).toBe(204);
+    expect(setCookieHeader(ended, TRUSTED_DEVICE_COOKIE_NAME)).toBeUndefined();
+    expect(setCookieHeader(ended, REFRESH_COOKIE_NAME)).toBeTruthy();
+
+    const replay = await request(app)
+      .post("/auth/refresh")
+      .set(CSRF)
+      .set("Cookie", `${REFRESH_COOKIE_NAME}=${cookieValue(refreshCookie!, REFRESH_COOKIE_NAME)}`);
+    expect(replay.status).toBe(401);
+
+    const again = await agent.post("/auth/login").set(CSRF).send({ email: user.email, password: PASSWORD });
+    expect(again.status).toBe(200);
+    expect(again.body.mfaRequired).toBeUndefined();
+    expect(again.body.accessToken).toBeTruthy();
+
+    const [device] = await db.select().from(trustedDevices).where(eq(trustedDevices.userId, user.id));
+    expect(device!.revokedAt).toBeNull();
+  });
 });

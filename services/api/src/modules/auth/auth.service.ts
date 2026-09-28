@@ -132,7 +132,7 @@ export async function login(input: { email: string; password: string; rememberMe
   }
 
   // When the company has made single sign-on mandatory, passwords no longer work — except for admins, who keep a break-glass way in if the identity provider is down or misconfigured.
-  if (roleName !== "admin") {
+  if (roleName !== "admin" && roleName !== "owner") {
     const [sso] = await db.select({ enabled: ssoConnections.enabled, enforce: ssoConnections.enforceSso }).from(ssoConnections);
     if (sso?.enabled && sso.enforce) throw AppError.forbidden("Your organization requires single sign-on. Use the Single sign-on option on the sign-in page.");
   }
@@ -414,6 +414,28 @@ export async function logout(userId: number) {
     .set({ tokenVersion: (await currentTokenVersion(userId)) + 1 })
     .where(eq(users.id, userId));
   await revokeAllRefreshTokens(userId);
+}
+
+/**
+ * Ends the sign-in carried by this browser's refresh cookie after the
+ * browser was closed and the cookie was put back. Only that refresh token
+ * is revoked. Other browsers stay signed in, and the trusted-browser
+ * cookie is not touched, so a later sign-in on this browser can still skip
+ * the authenticator code.
+ */
+export async function endBrowserSession(refreshToken: string | undefined): Promise<void> {
+  if (!refreshToken) return;
+  let payload;
+  try {
+    payload = verifyRefreshToken(refreshToken);
+  } catch {
+    return;
+  }
+  if (!payload.jti) return;
+  await db
+    .update(refreshTokens)
+    .set({ revokedAt: new Date() })
+    .where(and(eq(refreshTokens.jti, payload.jti), isNull(refreshTokens.revokedAt)));
 }
 
 async function currentTokenVersion(userId: number): Promise<number> {

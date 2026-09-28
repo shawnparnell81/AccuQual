@@ -1,18 +1,18 @@
 import { useEffect } from "react";
 import type { Block, FormLayout, RowBlock, TableBlock, TextareaBlock, YesNoBlock } from "./layouts/types";
 import { materializeRow, STATUS_COLORS } from "./formulas";
+import { FMEA_TONE_CLASS, FMEA_TONE_NAME, fmeaCellValue, fmeaComputedTone } from "./fmeaPriority";
 import { DetailsDisclosure } from "./DetailsDisclosure";
 import { inputTypeForFieldKind } from "./formInputType";
 
-// NAVY (header bars) is matched to the reference templates and kept in sync
-// with schema-pdf-renderer.ts's own constant so the on-screen form and the
-// exported PDF look like the same document — dark navy + white text reads
-// fine against either theme, so unlike the label/border colors below it
-// doesn't need a theme-aware token. Label cells and borders use the app's
-// own `bg-muted`/`border-border`/`text-foreground` tokens instead of a
-// hardcoded hex: those used to be pale-blue-on-dark-text unconditionally,
-// which read as a jarring light patch once dark mode shipped.
-const NAVY = "#1d3a5c";
+// Section bars and the document title use tokens whose Classic values are
+// the same navy as schema-pdf-renderer.ts (#1d3a5c), so the on-screen form
+// and the exported PDF still match in AccuQual Classic. A color scheme can
+// retint the on-screen form through --form-bar / --form-heading without
+// changing the PDF. Label cells and borders use `bg-muted` / `border-border`
+// / `text-foreground`.
+const FORM_BAR = "var(--form-bar, #1d3a5c)";
+const FORM_HEADING = "var(--form-heading, #1d3a5c)";
 
 interface GenericFormRendererProps {
   layout: FormLayout;
@@ -48,7 +48,7 @@ function SectionCard({
 }) {
   return (
     <div className="overflow-hidden rounded-md border border-border">
-      <div className="px-3 py-1.5 text-xs font-bold text-white" style={{ backgroundColor: NAVY }}>
+      <div className="px-3 py-1.5 text-xs font-bold text-white" style={{ backgroundColor: FORM_BAR }}>
         {section.number}. {section.title}
       </div>
       <div className="flex flex-col divide-y divide-border">
@@ -66,7 +66,7 @@ export function GenericFormRenderer({ layout, data, onChange, readOnly = false, 
   const details = layout.sections.filter((section) => parked.has(section.number));
   return (
     <div className="flex flex-col gap-5">
-      <h2 className="text-center text-base font-bold uppercase tracking-wide" style={{ color: NAVY }}>
+      <h2 className="text-center text-base font-bold uppercase tracking-wide" style={{ color: FORM_HEADING }}>
         {layout.title}
       </h2>
       {primary.map((section) => (
@@ -202,23 +202,26 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
     (block.fixedRowLabels ? block.fixedRowLabels.map(() => ({})) : Array.from({ length: block.minRows ?? 1 }, () => ({})));
 
   const hasComputedColumns = block.columns.some((c) => c.kind === "computed" && c.formula);
+  const storedRows = data[block.name];
 
-  // Refresh computed columns once on mount — covers date-driven formulas (e.g.
-  // calibration due-date status) whose answer depends on "today" and can go
-  // stale between visits even when no cell was actually edited this session.
+  // Refresh computed columns when the saved rows arrive and again if that
+  // array is replaced. Covers date-driven formulas (calibration due-date
+  // status) and FMEA Action Priority on an older saved row that has no AP
+  // key yet. A missing array is left alone so placeholder rows for a new
+  // form are not written before the saved document has loaded.
   useEffect(() => {
     // The read-only preview pane must never write — it shares the same
     // in-memory data as the editable pane, which already owns this refresh.
-    if (!hasComputedColumns || readOnly) return;
+    if (!hasComputedColumns || readOnly || !Array.isArray(storedRows)) return;
     let changed = false;
-    const refreshed = rows.map((r) => {
-      const next = materializeRow(r, block.columns);
-      if (next !== r) changed = true;
+    const refreshed = storedRows.map((r) => {
+      const row = r && typeof r === "object" ? (r as Record<string, unknown>) : {};
+      const next = materializeRow(row, block.columns);
+      if (next !== row) changed = true;
       return next;
     });
     if (changed) onChange(block.name, refreshed);
-    // Intentionally runs once on mount only — see the comment above.
-  }, []);
+  }, [storedRows, hasComputedColumns, readOnly]);
 
   function updateCell(rowIndex: number, key: string, value: unknown) {
     const next = rows.map((r, i) => {
@@ -238,7 +241,8 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div>
+      <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
           <tr>
@@ -287,7 +291,7 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
                       })}
                     </div>
                   ) : col.kind === "computed" ? (
-                    <ComputedCell value={row[col.key]} />
+                    <ComputedCell value={fmeaCellValue(col.formula, row, row[col.key])} formula={col.formula} />
                   ) : readOnly ? (
                     <StaticValue value={row[col.key]} />
                   ) : col.kind === "textarea" ? (
@@ -335,19 +339,32 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
           ))}
         </tbody>
       </table>
+      </div>
       {block.addableRows && !readOnly && (
         <button onClick={addRow} className="mt-2 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
           + Add row
         </button>
       )}
+      {block.legend && <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{block.legend}</p>}
     </div>
   );
 }
 
 /** A read-only cell for a computed column — a colored status pill for a known status label, plain bold text otherwise. */
-function ComputedCell({ value }: { value: unknown }) {
+function ComputedCell({ value, formula }: { value: unknown; formula?: string }) {
   if (value === "" || value === undefined || value === null) {
     return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  const tone = fmeaComputedTone(formula, value);
+  if (tone) {
+    return (
+      <span
+        className={`inline-block whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold ${FMEA_TONE_CLASS[tone]}`}
+        title={FMEA_TONE_NAME[tone]}
+      >
+        {String(value)}
+      </span>
+    );
   }
   const label = String(value);
   const colors = STATUS_COLORS[label];

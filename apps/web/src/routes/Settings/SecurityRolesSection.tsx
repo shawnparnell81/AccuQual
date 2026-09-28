@@ -11,9 +11,17 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { DEPARTMENTS } from "../../components/layout/navConfig";
 import type { AppUser, AppRole } from "../../api/types";
 import { useConfirm } from "../../components/shared/ConfirmDialog";
+import { isFullAccessRole } from "../../lib/fullAccess";
 
 const userHooks = createResourceHooks<AppUser>("users");
 const roleHooks = createResourceHooks<AppRole>("roles");
+
+interface OpenWorkGroup {
+  key: string;
+  label: string;
+  count: number;
+  items: { id: number; title: string }[];
+}
 
 /**
  * Real functionality, not a mockup: GET/POST/PATCH/DELETE /users and
@@ -25,25 +33,26 @@ const roleHooks = createResourceHooks<AppRole>("roles");
  */
 export function SecurityRolesSection() {
   const user = useCurrentUser();
-  const canManage = user?.roleName === "admin" || user?.roleName === "quality_manager";
+  const fullAccess = isFullAccessRole(user?.roleName);
+  const canManage = fullAccess || user?.roleName === "quality_manager";
 
   if (!canManage) {
     return (
       <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-        User and role management is limited to Admin and Quality Manager accounts. Ask an administrator if you need a change here.
+        User and role management is limited to Owner, Admin, and Quality Manager accounts. Ask an administrator if you need a change here.
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <UsersPanel isAdmin={user?.roleName === "admin"} />
-      <RolesPanel isAdmin={user?.roleName === "admin"} />
+      <UsersPanel isAdmin={fullAccess} currentUserId={user?.id} />
+      <RolesPanel isAdmin={fullAccess} />
     </div>
   );
 }
 
-function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
+function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserId?: number }) {
   const confirm = useConfirm();
   const { data: users = [] } = userHooks.useList();
   const { data: roles = [] } = roleHooks.useList();
@@ -52,8 +61,9 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
 
   const createUser = userHooks.useCreate();
   const updateUser = userHooks.useUpdate();
-  const removeUser = userHooks.useDelete();
   const queryClient = useQueryClient();
+  const [editing, setEditing] = useState<AppUser | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", email: "", roleId: "", department: "", managerId: "", isActive: true });
 
   async function adminAction(path: string, done: string) {
     try {
@@ -69,6 +79,45 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
   const [resetFor, setResetFor] = useState<AppUser | null>(null);
   const [tempPassword, setTempPassword] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
+  const [removing, setRemoving] = useState<AppUser | null>(null);
+  const [openWork, setOpenWork] = useState<OpenWorkGroup[]>([]);
+  const [replacementId, setReplacementId] = useState("");
+  const [removeBusy, setRemoveBusy] = useState(false);
+
+  async function finishRemove(person: AppUser, replacementUserId?: number) {
+    setRemoveBusy(true);
+    try {
+      const res = await apiClient.delete<{ message?: string }>(`/users/${person.id}`, { data: replacementUserId ? { replacementUserId } : {} });
+      toast.success(res.data.message || "Removed.");
+      setRemoving(null);
+      void queryClient.invalidateQueries({ queryKey: ["users"] });
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't remove that person."));
+    } finally {
+      setRemoveBusy(false);
+    }
+  }
+
+  async function startRemove(person: AppUser) {
+    try {
+      const res = await apiClient.get<{ openWork: OpenWorkGroup[] }>(`/users/${person.id}/open-work`);
+      const items = res.data.openWork ?? [];
+      if (items.length === 0) {
+        const ok = await confirm({
+          title: "Remove this person?",
+          message: `${person.name?.trim() || person.email} will be removed. If they have quality records, the account is turned off instead and their name stays on those records as inactive. Records they created or signed stay editable. They won't be able to sign in.`,
+          confirmLabel: "Remove",
+        });
+        if (ok) await finishRemove(person);
+        return;
+      }
+      setOpenWork(items);
+      setReplacementId("");
+      setRemoving(person);
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't check their open work."));
+    }
+  }
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
@@ -169,12 +218,26 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
                       Reset 2-step
                     </button>
                   )}
-                  {u.isActive && (
-                    <button
-                      onClick={() => removeUser.mutate(u.id)}
-                      className="text-xs text-muted-foreground hover:text-destructive"
-                    >
-                      Deactivate
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditing(u);
+                      setEditForm({
+                        name: u.name ?? "",
+                        email: u.email,
+                        roleId: u.roleId ? String(u.roleId) : "",
+                        department: u.department ?? "",
+                        managerId: u.managerId ? String(u.managerId) : "",
+                        isActive: u.isActive,
+                      });
+                    }}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Edit
+                  </button>
+                  {u.id !== currentUserId && (
+                    <button type="button" onClick={() => void startRemove(u)} className="text-xs text-muted-foreground hover:text-destructive">
+                      Remove
                     </button>
                   )}
                 </td>
@@ -226,6 +289,70 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
         </form>
       )}
 
+      <Modal title={editing ? `Edit ${editing.email}` : "Edit person"} isOpen={editing !== null} onClose={() => setEditing(null)}>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!editing) return;
+            updateUser.mutate(
+              {
+                id: editing.id,
+                name: editForm.name,
+                email: editForm.email,
+                roleId: editForm.roleId ? Number(editForm.roleId) : null,
+                department: editForm.department || null,
+                managerId: editForm.managerId ? Number(editForm.managerId) : null,
+                isActive: editForm.isActive,
+              } as Partial<AppUser> & { id: number },
+              {
+                onSuccess: () => {
+                  toast.success("Saved.");
+                  setEditing(null);
+                },
+                onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save those changes.")),
+              }
+            );
+          }}
+        >
+          <TextField label="Name" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+          <TextField label="Email" type="email" required value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+          <SelectField label="Role" value={editForm.roleId} onChange={(e) => setEditForm({ ...editForm, roleId: e.target.value })}>
+            <option value="">No role</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField label="Department" value={editForm.department} onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}>
+            <option value="">None</option>
+            {DEPARTMENTS.map((d) => (
+              <option key={d.key} value={d.key}>
+                {d.label}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField label="Manager" value={editForm.managerId} onChange={(e) => setEditForm({ ...editForm, managerId: e.target.value })}>
+            <option value="">Quality manager</option>
+            {users
+              .filter((person) => person.id !== editing?.id && person.isActive)
+              .map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name?.trim() || person.email}
+                </option>
+              ))}
+          </SelectField>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={editForm.isActive} onChange={(e) => setEditForm({ ...editForm, isActive: e.target.checked })} />
+            Active — they can sign in
+          </label>
+          <button type="submit" disabled={updateUser.isPending} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
+            {updateUser.isPending ? "Saving…" : "Save"}
+          </button>
+        </form>
+      </Modal>
+
       <Modal title={resetFor ? `Temporary password for ${resetFor.email}` : "Temporary password"} isOpen={resetFor !== null} onClose={() => setResetFor(null)}>
         <form
           className="flex flex-col gap-3"
@@ -252,6 +379,49 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
           </button>
         </form>
       </Modal>
+
+      <Modal title={removing ? `Remove ${removing.name?.trim() || removing.email}` : "Remove this person"} isOpen={removing !== null} onClose={() => { if (!removeBusy) setRemoving(null); }}>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!removing || !replacementId) return;
+            void finishRemove(removing, Number(replacementId));
+          }}
+        >
+          <p className="text-sm text-muted-foreground">
+            They still have open work. Choose who should take it. Records they already created or signed stay as they are, stay editable, and keep their name.
+          </p>
+          <ul className="flex max-h-52 flex-col gap-2 overflow-auto text-sm">
+            {openWork.map((group) => (
+              <li key={group.key}>
+                <span className="font-medium">
+                  {group.count} {group.label}
+                </span>
+                <ul className="ml-4 list-disc text-muted-foreground">
+                  {group.items.map((item) => (
+                    <li key={item.id}>{item.title}</li>
+                  ))}
+                  {group.count > group.items.length && <li>and {group.count - group.items.length} more</li>}
+                </ul>
+              </li>
+            ))}
+          </ul>
+          <SelectField label="Give this work to" required value={replacementId} onChange={(e) => setReplacementId(e.target.value)}>
+            <option value="">Choose a person</option>
+            {users
+              .filter((person) => person.id !== removing?.id && person.isActive)
+              .map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name?.trim() || person.email}
+                </option>
+              ))}
+          </SelectField>
+          <button type="submit" disabled={!replacementId || removeBusy} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
+            {removeBusy ? "Removing…" : "Move work and remove"}
+          </button>
+        </form>
+      </Modal>
     </div>
   );
 }
@@ -259,17 +429,100 @@ function UsersPanel({ isAdmin }: { isAdmin: boolean }) {
 function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
   const { data: roles = [] } = roleHooks.useList();
   const createRole = roleHooks.useCreate();
+  const updateRole = roleHooks.useUpdate();
   const toast = useToast();
+  const confirm = useConfirm();
+  const queryClient = useQueryClient();
   const [form, setForm] = useState({ name: "", description: "" });
+  const [editing, setEditing] = useState<AppRole | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", description: "", hierarchyLevel: "80", canImport: false });
+  const [replacing, setReplacing] = useState<AppRole | null>(null);
+  const [replacementId, setReplacementId] = useState("");
+
+  async function move(role: AppRole, direction: "up" | "down") {
+    try {
+      await apiClient.post(`/roles/${role.id}/move`, { direction });
+      void queryClient.invalidateQueries({ queryKey: ["roles"] });
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't change that rank."));
+    }
+  }
+
+  async function removeRole(role: AppRole, replacementRoleId?: number) {
+    try {
+      await apiClient.delete(`/roles/${role.id}`, { data: replacementRoleId ? { replacementRoleId } : {} });
+      toast.success("Role removed.");
+      setReplacing(null);
+      void queryClient.invalidateQueries({ queryKey: ["roles"] });
+      void queryClient.invalidateQueries({ queryKey: ["users"] });
+    } catch (err) {
+      const message = extractErrorMessage(err, "Couldn't remove that role.");
+      if ((role.userCount ?? 0) > 0) {
+        setReplacing(role);
+        setReplacementId("");
+      }
+      toast.error(message);
+    }
+  }
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
-      <h3 className="mb-3 text-sm font-medium">Roles</h3>
+      <h3 className="mb-1 text-sm font-medium">Roles</h3>
+      <p className="mb-3 text-xs text-muted-foreground">Listed from the top of the organization down. A smaller rank number is higher.</p>
       <ul className="mb-4 flex flex-col gap-2 text-sm">
-        {roles.map((r) => (
-          <li key={r.id} className="flex items-center justify-between border-b border-border pb-1.5 last:border-0">
-            <span className="font-medium">{r.name}</span>
-            <span className="text-xs text-muted-foreground">{r.description ?? "—"}</span>
+        {roles.map((r, index) => (
+          <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-1.5 last:border-0">
+            <span>
+              <span className="font-medium">{r.name}</span>
+              <span className="ml-2 text-xs text-muted-foreground">
+                Rank {r.hierarchyLevel ?? "—"}
+                {r.userCount ? ` · ${r.userCount} ${r.userCount === 1 ? "person" : "people"}` : ""}
+              </span>
+              {r.description && <span className="mt-0.5 block text-xs text-muted-foreground">{r.description}</span>}
+            </span>
+            {isAdmin && (
+              <span className="flex items-center gap-2 text-xs">
+                <button type="button" disabled={index === 0} onClick={() => void move(r, "up")} className="text-primary hover:underline disabled:opacity-40">
+                  Up
+                </button>
+                <button type="button" disabled={index === roles.length - 1} onClick={() => void move(r, "down")} className="text-primary hover:underline disabled:opacity-40">
+                  Down
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(r);
+                    setEditForm({
+                      name: r.name,
+                      description: r.description ?? "",
+                      hierarchyLevel: String(r.hierarchyLevel ?? 80),
+                      canImport: (r.permissions ?? []).includes("import_data"),
+                    });
+                  }}
+                  className="text-primary hover:underline"
+                >
+                  Edit
+                </button>
+                {!r.isProtected && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if ((r.userCount ?? 0) > 0) {
+                        setReplacing(r);
+                        setReplacementId("");
+                        return;
+                      }
+                      void confirm({ title: "Delete this role?", message: `${r.name} will be removed. This can't be undone.`, confirmLabel: "Delete" }).then((ok) => {
+                        if (ok) void removeRole(r);
+                      });
+                    }}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    Delete
+                  </button>
+                )}
+              </span>
+            )}
           </li>
         ))}
       </ul>
@@ -297,6 +550,77 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
           </button>
         </form>
       )}
+
+      <Modal title={editing ? `Edit ${editing.name}` : "Edit role"} isOpen={editing !== null} onClose={() => setEditing(null)}>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!editing) return;
+            const permissions = new Set(editing.permissions ?? []);
+            if (editForm.canImport) permissions.add("import_data");
+            else permissions.delete("import_data");
+            updateRole.mutate(
+              {
+                id: editing.id,
+                name: editing.isProtected ? editing.name : editForm.name,
+                description: editForm.description || null,
+                hierarchyLevel: Number(editForm.hierarchyLevel),
+                permissions: [...permissions],
+              } as Partial<AppRole> & { id: number },
+              {
+                onSuccess: () => {
+                  toast.success("Role saved.");
+                  setEditing(null);
+                },
+                onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save that role.")),
+              }
+            );
+          }}
+        >
+          <TextField label="Name" required disabled={editing?.isProtected} value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+          {editing?.isProtected && <p className="text-xs text-muted-foreground">This role's name is built in and can't be changed.</p>}
+          <TextField label="Description" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+          <TextField label="Rank" type="number" required min={1} max={1000} value={editForm.hierarchyLevel} onChange={(e) => setEditForm({ ...editForm, hierarchyLevel: e.target.value })} />
+          <p className="text-xs text-muted-foreground">A smaller number is listed higher. Owner is 10. Staff is 80.</p>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={editForm.canImport} onChange={(e) => setEditForm({ ...editForm, canImport: e.target.checked })} />
+            Can import data
+          </label>
+          <p className="text-xs text-muted-foreground">Owner and Administrator can always import, even if this is turned off.</p>
+          <button type="submit" disabled={updateRole.isPending} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
+            {updateRole.isPending ? "Saving…" : "Save"}
+          </button>
+        </form>
+      </Modal>
+
+      <Modal title={replacing ? `Delete ${replacing.name}` : "Delete role"} isOpen={replacing !== null} onClose={() => setReplacing(null)}>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!replacing || !replacementId) return;
+            void removeRole(replacing, Number(replacementId));
+          }}
+        >
+          <p className="text-sm text-muted-foreground">
+            {replacing?.userCount ?? 0} {(replacing?.userCount ?? 0) === 1 ? "person has" : "people have"} this role. Choose another role for them first.
+          </p>
+          <SelectField label="Move them to" required value={replacementId} onChange={(e) => setReplacementId(e.target.value)}>
+            <option value="">Choose a role</option>
+            {roles
+              .filter((role) => role.id !== replacing?.id)
+              .map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.name}
+                </option>
+              ))}
+          </SelectField>
+          <button type="submit" disabled={!replacementId} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
+            Move people and delete
+          </button>
+        </form>
+      </Modal>
     </div>
   );
 }

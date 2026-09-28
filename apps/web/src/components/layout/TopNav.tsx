@@ -59,7 +59,7 @@ export function TopNav() {
   const [query, setQuery] = useState("");
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>(() => readOpenFolders(user?.id));
 
-  const isAdmin = user?.roleName === "admin";
+  const isAdmin = user?.roleName === "admin" || user?.roleName === "owner";
   const folders = visibleSidebar(SIDEBAR_FOLDERS, isAdmin);
   const links = flattenSidebarLinks(folders);
   const needle = query.trim().toLowerCase();

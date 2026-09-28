@@ -31,6 +31,10 @@ interface ResourceListPageProps<T extends { id: number }> {
   accessNote?: string | null;
   /** Extra buttons next to "+ New" (for example Import from Excel). */
   headerActions?: ReactNode;
+  /** Extra controls above the table, such as a list filter. Omitted callers are unchanged. */
+  extraFilters?: ReactNode;
+  /** Drops rows before search. Omitted callers show every fetched row. */
+  rowPredicate?: (row: T) => boolean;
   /** Open the create dialog on arrival, used by the dashboard's Schedule audit button. */
   createOnMount?: boolean;
 }
@@ -53,6 +57,8 @@ export function ResourceListPage<T extends { id: number }>({
   accessNote,
   headerActions,
   createOnMount,
+  extraFilters,
+  rowPredicate,
 }: ResourceListPageProps<T>) {
   const [createOpen, setCreateOpen] = useState(false);
   useEffect(() => {
@@ -66,10 +72,11 @@ export function ResourceListPage<T extends { id: number }>({
   const { views, saveView, removeView } = useSavedViews(resource);
 
   const visibleRows = useMemo(() => {
-    if (!searchable || !search.trim()) return rows;
+    const base = rowPredicate ? rows.filter(rowPredicate) : rows;
+    if (!searchable || !search.trim()) return base;
     const needle = search.trim().toLowerCase();
-    return rows.filter((r) => searchable(r).toLowerCase().includes(needle));
-  }, [rows, search, searchable]);
+    return base.filter((r) => searchable(r).toLowerCase().includes(needle));
+  }, [rows, search, searchable, rowPredicate]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -85,6 +92,7 @@ export function ResourceListPage<T extends { id: number }>({
         </div>
       </div>
       {accessNote && <p className="text-sm text-muted-foreground">{accessNote}</p>}
+      {extraFilters}
 
       {searchable && (
         <div className="flex flex-wrap items-center gap-2">

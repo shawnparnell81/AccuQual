@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isFullAccessRole } from "../../lib/fullAccess";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
@@ -62,7 +63,7 @@ const TAB_KEYS = new Set<string>(TABS.map((t) => t.key));
 export function SupplierPortalHome() {
   const currentUser = useCurrentUser();
   const isSupplier = currentUser?.roleName === "supplier";
-  const isReviewer = !isSupplier && (currentUser?.roleName === "admin" || currentUser?.department === "quality" || currentUser?.department === "purchasing");
+  const isReviewer = !isSupplier && (isFullAccessRole(currentUser?.roleName) || currentUser?.department === "quality" || currentUser?.department === "purchasing");
   const { data: suppliers = [] } = useQuery<Supplier[]>({
     queryKey: ["suppliers"],
     queryFn: async () => (await apiClient.get("/suppliers")).data,

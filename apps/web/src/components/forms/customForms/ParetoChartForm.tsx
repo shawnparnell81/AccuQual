@@ -129,8 +129,8 @@ export function ParetoChartForm({ data, onChange }: CustomFormProps) {
                 tick={{ fill: "hsl(var(--muted-foreground))" }}
               />
               <Tooltip />
-              <Bar yAxisId="left" dataKey="quantity" fill="#2451FF" radius={[4, 4, 0, 0]} />
-              <Line yAxisId="right" type="monotone" dataKey="cumulativePct" stroke="#C23B2C" strokeWidth={2} dot={{ r: 3 }} />
+              <Bar yAxisId="left" dataKey="quantity" fill="var(--chart-pareto-bar, #2451ff)" radius={[4, 4, 0, 0]} />
+              <Line yAxisId="right" type="monotone" dataKey="cumulativePct" stroke="var(--chart-pareto-line, #c23b2c)" strokeWidth={2} dot={{ r: 3 }} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>

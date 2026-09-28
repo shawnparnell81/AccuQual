@@ -81,6 +81,6 @@ CREATE POLICY owner_only ON trusted_devices
 
 -- The "supplier" role (external supplier-portal logins) is reference data the app role cannot create (roles is
 -- read-only to it), so it is created here, idempotently, on every migrate.
-INSERT INTO roles (name, description)
-VALUES ('supplier', 'External supplier portal access')
+INSERT INTO roles (name, description, hierarchy_level, is_protected, permissions)
+VALUES ('supplier', 'External supplier portal access', 95, true, '[]'::jsonb)
 ON CONFLICT (name) DO NOTHING;
