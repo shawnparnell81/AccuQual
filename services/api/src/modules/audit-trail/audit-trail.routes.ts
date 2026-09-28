@@ -6,7 +6,7 @@ import { AppError } from "../../utils/appError.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmentAccess.js";
-import { withResolvedActors, attachFieldChanges } from "./audit-trail.service.js";
+import { withResolvedActors, attachFieldChanges, labelPersonFields } from "./audit-trail.service.js";
 import type { Db } from "../../lib/requestDb.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 
@@ -129,6 +129,7 @@ auditTrailRouter.get(
       .where(and(eq(auditTrail.entityId, Number(req.params.entityId))));
     const filtered = rows.filter((r) => r.entityType === entityType);
     const withActors = await withResolvedActors(req.db! as Db, filtered);
-    res.json(await attachFieldChanges(req.db! as Db, withActors));
+    const withFields = await attachFieldChanges(req.db! as Db, withActors);
+    res.json(await labelPersonFields(req.db! as Db, withFields));
   })
 );

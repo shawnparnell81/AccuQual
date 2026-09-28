@@ -195,3 +195,103 @@ export async function attachFieldChanges<T extends { txid: number | null; entity
     return { ...r, fieldChanges };
   });
 }
+
+/** Columns that store a person. Matched with punctuation and case ignored, so assigned_to and assignedTo are the same. */
+const PERSON_FIELD_KEYS = new Set([
+  "assignedto",
+  "createdby",
+  "updatedby",
+  "ownerid",
+  "performedby",
+  "reviewedby",
+  "approvedby",
+  "verifiedby",
+  "publishedby",
+  "submittedby",
+  "closedby",
+  "auditorid",
+  "evaluatorid",
+  "managerid",
+  "userid",
+  "reviewerid",
+  "uploadedby",
+  "uploadedbyuserid",
+  "assignedreviewerid",
+]);
+
+export function isPersonField(key: string): boolean {
+  return PERSON_FIELD_KEYS.has(key.toLowerCase().replace(/[^a-z0-9]/g, ""));
+}
+
+function userIdOf(value: unknown): number | null {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
+  if (typeof value === "string" && /^[1-9]\d*$/.test(value)) return Number(value);
+  return null;
+}
+
+/** Walks history JSON and collects person ids stored as numbers. */
+export function collectPersonIds(value: unknown, ids: number[]): void {
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    for (const item of value) collectPersonIds(item, ids);
+    return;
+  }
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (isPersonField(key)) {
+      if (child && typeof child === "object" && !Array.isArray(child) && ("from" in child || "to" in child)) {
+        const pair = child as { from?: unknown; to?: unknown };
+        const from = userIdOf(pair.from);
+        const to = userIdOf(pair.to);
+        if (from) ids.push(from);
+        if (to) ids.push(to);
+      } else {
+        const id = userIdOf(child);
+        if (id) ids.push(id);
+      }
+    } else {
+      collectPersonIds(child, ids);
+    }
+  }
+}
+
+/** Replaces those ids with the person's name. Other numbers are left alone. */
+export function rewritePersonIds(value: unknown, names: Map<number, string>): unknown {
+  if (!value || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map((item) => rewritePersonIds(item, names));
+  const copy: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (isPersonField(key)) {
+      if (child && typeof child === "object" && !Array.isArray(child) && ("from" in child || "to" in child)) {
+        const pair = child as { from?: unknown; to?: unknown };
+        const next: { from?: unknown; to?: unknown } = { ...pair };
+        const from = userIdOf(pair.from);
+        const to = userIdOf(pair.to);
+        if (from && names.has(from)) next.from = names.get(from);
+        if (to && names.has(to)) next.to = names.get(to);
+        copy[key] = next;
+      } else {
+        const id = userIdOf(child);
+        copy[key] = id && names.has(id) ? names.get(id) : child;
+      }
+    } else {
+      copy[key] = rewritePersonIds(child, names);
+    }
+  }
+  return copy;
+}
+
+/** History reads show people's names instead of the raw user id. */
+export async function labelPersonFields<T extends { changes?: unknown; fieldChanges?: unknown }>(db: Db, rows: T[]): Promise<T[]> {
+  const ids: number[] = [];
+  for (const row of rows) {
+    collectPersonIds(row.changes, ids);
+    collectPersonIds(row.fieldChanges, ids);
+  }
+  if (ids.length === 0) return rows;
+  const names = await resolveUserNames(db, ids);
+  return rows.map((row) => ({
+    ...row,
+    changes: row.changes === undefined ? undefined : rewritePersonIds(row.changes, names),
+    fieldChanges: row.fieldChanges === undefined ? undefined : rewritePersonIds(row.fieldChanges, names),
+  }));
+}

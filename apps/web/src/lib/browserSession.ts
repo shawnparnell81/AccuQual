@@ -1,16 +1,15 @@
 /**
- * Tells a live browser visit apart from a sign-in the browser put back
- * after it was closed.
+ * Marks which tabs of this browser are part of the current sign-in.
  *
- * The refresh cookie is a session cookie. Chrome and Edge, when set to
- * continue where you left off, restore session cookies and can restore
- * sessionStorage too. A restored cookie is not a person still signed in.
+ * The refresh cookie is a session cookie. The browser sends it on a reload,
+ * a new tab, and a typed address in the same browser, and drops it when the
+ * browser closes. That cookie is what keeps the person signed in. This
+ * module must not treat a missing tab marker as a reason to revoke it.
  *
- * Each open tab writes a short-lived heartbeat and holds a browser lock.
- * A reload of the same tab keeps the sign-in. Another tab in the same
- * open browser joins it. A new visit after every tab is gone asks for the
- * password again. The 30-day trusted-browser cookie is not consulted here
- * and is not a sign-in.
+ * A reload or a typed address in the same tab keeps the marker in
+ * sessionStorage. A new tab does not, but a recent heartbeat from another
+ * tab shows the browser is still open. The 30-day trusted-browser cookie
+ * is not consulted here and is not a sign-in.
  */
 
 export const HEARTBEAT_STALE_MS = 3 * 60 * 1000;
@@ -106,8 +105,21 @@ function ageOf(stamp: number | null, now: number): number {
 }
 
 /**
- * Continue only when this visit is still the one that signed in.
- * A restored refresh cookie cannot satisfy this on its own.
+ * A full page load stays signed in when the server accepts the session
+ * cookie. Closing the browser drops that cookie, so the next visit is
+ * signed out. Navigation kind does not change the answer: a reload, a new
+ * tab, and a typed address all keep the cookie while the browser is open.
+ */
+export function coldLoadKeepsSession(input: { refreshCookieAccepted: boolean; navigation?: NavigationKind }): boolean {
+  return input.refreshCookieAccepted;
+}
+
+/**
+ * Continue when this tab, or another tab in this browser, still looks open.
+ * A reload, a typed address, and back/forward in the same tab keep the
+ * session marker. A new tab joins a recent heartbeat from another tab.
+ * An empty visit with no recent tab does not continue. This must not be
+ * used to revoke a session cookie the browser is still sending.
  */
 export function decideBrowserSession(input: BrowserSessionInput): BrowserSessionDecision {
   if (input.peerAlive) return "continue";
@@ -116,31 +128,18 @@ export function decideBrowserSession(input: BrowserSessionInput): BrowserSession
   const ownBeat = input.tabId != null ? input.beats[input.tabId] : undefined;
   const ownAge = ownBeat == null ? Infinity : input.now - ownBeat;
   const sameTab = input.hasSessionMarker;
+  const freshSameTab = stampAge <= HEARTBEAT_STALE_MS || ownAge <= HEARTBEAT_STALE_MS;
 
-  // Reload replaces the document but keeps sessionStorage. pagehide stamps
-  // the time just before that, and the heartbeat from this tab is still new.
-  if (sameTab && input.navigation === "reload" && (stampAge <= RELOAD_GRACE_MS || ownAge <= HEARTBEAT_STALE_MS)) {
-    return "continue";
-  }
-  // Back/forward within the same tab, or a discarded tab the browser brings
-  // back, while the last heartbeat is still inside the window.
-  if (sameTab && input.navigation === "back_forward" && (stampAge <= HEARTBEAT_STALE_MS || ownAge <= HEARTBEAT_STALE_MS)) {
-    return "continue";
-  }
-  if (sameTab && input.resumedDocument && (stampAge <= HEARTBEAT_STALE_MS || ownAge <= HEARTBEAT_STALE_MS)) {
-    return "continue";
-  }
-  if (sameTab && input.navigation === "unknown" && (stampAge <= RELOAD_GRACE_MS || ownAge <= RELOAD_GRACE_MS)) {
+  // Same-tab full loads keep sessionStorage. That includes a reload and an
+  // address typed in this tab (navigation type "navigate").
+  if (sameTab && freshSameTab && (input.navigation === "reload" || input.navigation === "navigate" || input.navigation === "back_forward" || input.navigation === "unknown" || input.resumedDocument)) {
     return "continue";
   }
 
+  // A new tab has no session marker. A heartbeat from another tab in this
+  // browser, still inside the window, means the browser is still open.
   const otherAge = freshestOtherBeatAge(input.beats, input.tabId, input.now);
-  if (otherAge <= HEARTBEAT_STALE_MS) {
-    // No way to ask other tabs: a recent heartbeat is the signal that one is open.
-    if (!input.peerCheckAvailable) return "continue";
-    // The lock may not be visible for a moment after a tab starts.
-    if (otherAge <= LOCK_ACQUIRE_GRACE_MS) return "continue";
-  }
+  if (otherAge <= HEARTBEAT_STALE_MS) return "continue";
   return "sign-in";
 }
 
@@ -317,7 +316,11 @@ function holdLock(): void {
   });
 }
 
-/** Call before using a refresh cookie. A sign-in result must not refresh. */
+/**
+ * Whether this document still looks like an open tab. A cold page load
+ * does not use this to revoke the session cookie — the cookie itself is
+ * the sign-in.
+ */
 export async function evaluateBrowserSessionOnLoad(now = Date.now()): Promise<BrowserSessionDecision> {
   installListeners();
   const base = readLiveInput(now);

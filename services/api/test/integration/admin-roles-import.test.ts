@@ -43,7 +43,16 @@ describe("admin roles, user removal, and data import", () => {
     expect(at("owner")).toBeLessThan(at("admin"));
     expect(at("admin")).toBeLessThan(at("president"));
     expect(at("president")).toBeLessThan(at("vice_president"));
-    expect(at("vice_president")).toBeLessThan(at("quality_manager"));
+    expect(at("vice_president")).toBeLessThan(at("director"));
+    expect(at("director")).toBeLessThan(at("quality_manager"));
+    expect(at("quality_manager")).toBeLessThan(at("lead"));
+    expect(at("staff")).toBeGreaterThan(at("operator"));
+    expect(at("read_only")).toBeGreaterThan(at("staff"));
+    expect(at("read_only")).toBeLessThan(at("auditor"));
+    const vice = (res.body as { name: string; displayName?: string; hierarchyLevel?: number }[]).find((role) => role.name === "vice_president");
+    expect(vice?.displayName).toBe("Vice President");
+    const staff = (res.body as { name: string; hierarchyLevel?: number }[]).find((role) => role.name === "staff");
+    expect(staff?.hierarchyLevel).toBe(80);
     expect(at("quality_manager")).toBeLessThan(at("operator"));
     expect(at("operator")).toBeLessThan(at("auditor"));
     expect(at("auditor")).toBeLessThan(at("supplier"));

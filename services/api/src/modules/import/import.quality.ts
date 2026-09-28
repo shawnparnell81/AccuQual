@@ -66,9 +66,9 @@ interface CustomerValue {
 
 const customerFields: ImportField[] = [
   { key: "legalName", label: "Customer name", required: true, example: "Northwind Medical", aliases: ["customer", "company", "legal name", "name"] },
-  { key: "primaryContactName", label: "Quality contact name", example: "Priya Shah", aliases: ["contact", "contact name", "primary contact"] },
-  { key: "primaryContactEmail", label: "Quality contact email", example: "quality@northwind.example", aliases: ["email", "contact email", "e-mail"] },
-  { key: "primaryContactPhone", label: "Quality contact phone", example: "555-0100", aliases: ["phone", "telephone"] },
+  { key: "primaryContactName", label: "Contact name", example: "Priya Shah", aliases: ["contact", "contact name", "primary contact", "quality contact name"] },
+  { key: "primaryContactEmail", label: "Contact email", example: "quality@northwind.example", aliases: ["email", "contact email", "e-mail", "quality contact email"] },
+  { key: "primaryContactPhone", label: "Phone", example: "555-0100", aliases: ["phone", "telephone", "quality contact phone"] },
 ];
 
 const customerEntity: AnyImportEntity = {
@@ -90,7 +90,7 @@ const customerEntity: AnyImportEntity = {
     if (!legalName) errors.push("Customer name is required.");
     if (legalName.length > 200) errors.push("Customer name is longer than 200 characters.");
     const email = raw.primaryContactEmail?.trim();
-    if (email && !EMAIL.test(email)) errors.push(`Quality contact email "${email}" doesn't look like an email address.`);
+    if (email && !EMAIL.test(email)) errors.push(`Contact email "${email}" doesn't look like an email address.`);
     const value: CustomerValue = {
       legalName,
       primaryContactName: raw.primaryContactName?.trim() || undefined,

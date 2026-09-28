@@ -8,7 +8,7 @@ import { AppError } from "../../utils/appError.js";
 import { executeWorkflow, WorkflowNodeError, getRegisteredActionKinds, type WorkflowDefinition } from "./workflow-engine.js";
 import { createInitialDraft, getCurrent } from "../versioning/versioning.service.js";
 import { toWorkflowPayload, workflowAdapter } from "../versioning/adapters.js";
-import { recordAuditTrail, withResolvedActors, attachFieldChanges } from "../audit-trail/audit-trail.service.js";
+import { recordAuditTrail, withResolvedActors, attachFieldChanges, labelPersonFields } from "../audit-trail/audit-trail.service.js";
 import { RESOURCE_KEYS } from "../../middleware/departmentAccess.js";
 import { WORKFLOW_TEMPLATES } from "./workflow.templates.js";
 import type { Db } from "../../lib/requestDb.js";
@@ -201,7 +201,8 @@ export const historyHandler = asyncHandler(async (req: Request, res: Response) =
 
   const sorted = [...rows].sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
   const withActors = await withResolvedActors(req.db! as Db, sorted);
-  res.json(await attachFieldChanges(req.db! as Db, withActors));
+  const withFields = await attachFieldChanges(req.db! as Db, withActors);
+  res.json(await labelPersonFields(req.db! as Db, withFields));
 });
 
 /** GET /workflow/templates — Phase 9 task 6's starter templates (real, static graphs mirroring each module's own real states/events — see workflow.templates.ts). Loading one into the builder still requires an explicit Save; nothing here has any side effect. */

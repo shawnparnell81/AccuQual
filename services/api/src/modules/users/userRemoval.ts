@@ -40,6 +40,40 @@ export function historyLabel(table: string): string {
   return HISTORY_LABELS[table] ?? table.replace(/_/g, " ");
 }
 
+/** Plural labels the removal message uses, and the singular form of each. */
+const SINGULAR_LABELS: Record<string, string> = {
+  "open NCRs": "open NCR",
+  "open CAPAs": "open CAPA",
+  "open 8D reports": "open 8D report",
+  "documents in draft or review": "document in draft or review",
+  "reviews waiting on them": "review waiting on them",
+  "people who report to them": "person who reports to them",
+  "open complaints": "open complaint",
+  "open investigations": "open investigation",
+  "training assignments": "training assignment",
+  "open risks": "open risk",
+  "risk actions": "risk action",
+  "open audits": "open audit",
+  "feasibility reviews": "feasibility review",
+  "PPAP packages": "PPAP package",
+  "competency evaluations": "competency evaluation",
+  NCRs: "NCR",
+  CAPAs: "CAPA",
+  "8D reports": "8D report",
+  documents: "document",
+  "document approvals": "document approval",
+  "audit log entries": "audit log entry",
+  approvals: "approval",
+  calibrations: "calibration",
+  inspections: "inspection",
+  "supplier scorecards": "supplier scorecard",
+};
+
+export function quantityPhrase(count: number, label: string): string {
+  const word = count === 1 ? (SINGULAR_LABELS[label] ?? label) : label;
+  return `${count} ${word}`;
+}
+
 /** Collapse per-table hits into plain labels for the confirmation message. */
 export function summarizeHistory(hits: { table: string; count: number }[]): HistoryHit[] {
   const totals = new Map<string, number>();
@@ -74,7 +108,7 @@ export function decideUserRemoval(input: {
   if (openWork.length > 0 && !input.hasReplacement) {
     const listed = openWork
       .slice(0, 6)
-      .map((hit) => `${hit.count} ${hit.label}`)
+      .map((hit) => quantityPhrase(hit.count, hit.label))
       .join(", ");
     return {
       outcome: "blocked",
@@ -89,7 +123,7 @@ export function decideUserRemoval(input: {
   }
   const listed = history
     .slice(0, 6)
-    .map((hit) => `${hit.count} ${hit.label}`)
+    .map((hit) => quantityPhrase(hit.count, hit.label))
     .join(", ");
   return {
     outcome: "deactivated",

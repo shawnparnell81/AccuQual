@@ -19,7 +19,7 @@ import { useFormEditorState } from "../../components/forms/useFormEditorState";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
-import { NCR_LOOP, READ_ONLY_REASON, duePhrase, isPastDue, ncrLoopIndex, ncrNextAction, statusPhrase } from "../../lib/opsLanguage";
+import { NCR_LOOP, READ_ONLY_REASON, duePhrase, formatPerson, isPastDue, ncrLoopIndex, ncrNextAction, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { NcrQuarantineSection } from "./NcrQuarantineSection";
@@ -125,7 +125,7 @@ export function NcrWorkspacePage() {
               {!ncr.assignedTo && <option value="">Unassigned</option>}
               {people.map((person) => (
                 <option key={person.id} value={person.id}>
-                  {person.name?.trim() || person.email}
+                  {formatPerson(person)}
                 </option>
               ))}
             </select>

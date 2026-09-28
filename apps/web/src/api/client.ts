@@ -66,7 +66,7 @@ function endSession() {
   useSiteStore.getState().setCurrentSiteId(null);
 }
 
-/** Clears a refresh cookie the browser restored after it was closed. The trusted-browser cookie is left in place. */
+/** Drops this browser's refresh cookie. Used by an explicit sign-out of a restored cookie. A page load does not call this. The trusted-browser cookie is left in place. */
 export async function abandonRestoredBrowserSession(): Promise<void> {
   try {
     await axios.post(

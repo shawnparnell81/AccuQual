@@ -47,14 +47,45 @@ export const ROLE_SEEDS: RoleSeed[] = [
   { name: "admin", description: "Administrator — full access", hierarchyLevel: 15, isProtected: true, permissions: [IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS] },
   { name: "president", description: "President — can view the quality system and approve work", hierarchyLevel: 20, isProtected: true, permissions: [] },
   { name: "vice_president", description: "Vice President — can view the quality system and approve work", hierarchyLevel: 30, isProtected: true, permissions: [] },
+  { name: "director", description: "Director — can view the quality system and approve work", hierarchyLevel: 40, isProtected: true, permissions: [] },
   { name: "quality_manager", description: "Manages NCR/CAPA/Audits/Suppliers", hierarchyLevel: 50, isProtected: true, permissions: [] },
+  { name: "lead", description: "Lead — supervises day-to-day work", hierarchyLevel: 60, isProtected: true, permissions: [] },
   { name: "operator", description: "Shop-floor / production user", hierarchyLevel: 80, isProtected: true, permissions: [] },
+  { name: "staff", description: "Staff — day-to-day work", hierarchyLevel: 80, isProtected: true, permissions: [] },
+  { name: "read_only", description: "Read-only — can view records but not change them", hierarchyLevel: 90, isProtected: true, permissions: [] },
   { name: "auditor", description: "Conducts audits and reviews findings", hierarchyLevel: 92, isProtected: true, permissions: [] },
   { name: "supplier", description: "External supplier portal access", hierarchyLevel: 95, isProtected: true, permissions: [] },
   { name: "customer", description: "External customer portal access", hierarchyLevel: 100, isProtected: true, permissions: [] },
 ];
 
 export const PROTECTED_ROLE_NAMES = new Set(ROLE_SEEDS.map((role) => role.name));
+
+/** Names shown in Users & Roles. The stored name stays the id sign-in checks use. */
+const ROLE_DISPLAY_NAMES: Record<string, string> = {
+  owner: "Owner",
+  admin: "Administrator",
+  president: "President",
+  vice_president: "Vice President",
+  director: "Director",
+  quality_manager: "Quality Manager",
+  lead: "Lead",
+  staff: "Staff",
+  operator: "Operator",
+  read_only: "Read-only",
+  auditor: "Auditor",
+  supplier: "Supplier",
+  customer: "Customer",
+};
+
+export function displayNameForRole(role: { name: string }): string {
+  return ROLE_DISPLAY_NAMES[role.name.trim().toLowerCase()] ?? role.name;
+}
+
+/** True when the title itself starts with VP or Vice President. A title that only mentions VP later is not included. */
+export function nameStartsWithVicePresident(name: string): boolean {
+  const trimmed = name.trim().toLowerCase();
+  return /^vp([^a-z0-9]|$)/.test(trimmed) || /^vice[\s_-]*president([^a-z0-9]|$)/.test(trimmed);
+}
 
 export function roleTokens(name: string): string[] {
   return name
@@ -70,8 +101,8 @@ export function hierarchyLevelForRoleName(name: string): number {
   const has = (word: string) => tokens.includes(word);
   const adjacent = (left: string, right: string) => tokens.some((token, index) => token === left && tokens[index + 1] === right);
 
-  if (has("vp") || adjacent("vice", "president") || has("vicepresident")) return 30;
-  if (has("president")) return 20;
+  if (nameStartsWithVicePresident(name)) return 30;
+  if (has("president") && !adjacent("vice", "president") && !has("vicepresident")) return 20;
   if (has("owner")) return 10;
   if (has("admin") || has("administrator")) return 15;
   if (has("director")) return 40;

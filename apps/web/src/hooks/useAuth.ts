@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { abandonRestoredBrowserSession, apiClient, refreshSession } from "../api/client";
+import { apiClient, refreshSession } from "../api/client";
 import { bootstrapSessionDecision } from "../api/sessionRefresh";
-import { adoptBrowserSession, evaluateBrowserSessionOnLoad, releaseBrowserSessionTab } from "../lib/browserSession";
+import { adoptBrowserSession, coldLoadKeepsSession, releaseBrowserSessionTab } from "../lib/browserSession";
 import { useAuthStore, type AuthUser, type CompanyContext } from "../store/authStore";
 import { useWindowStore } from "../window-manager/useWindowStore";
 import { clearCurrentPlant } from "./useSites";
@@ -85,13 +85,13 @@ export function useCurrentCompany() {
 }
 
 /**
- * A page load starts with no access token in memory (see authStore.ts). The
- * httpOnly refresh cookie may still be present, including when the browser
- * restored it after being closed. That cookie is used only when this visit
- * is still the same open browser (a reload, or another tab). Otherwise the
- * cookie is cleared and the password is required again. The trusted-browser
- * cookie is not cleared. Runs once per app load, before ProtectedRoute has
- * to decide whether to bounce to /login.
+ * A page load starts with no access token in memory (see authStore.ts).
+ * The httpOnly refresh cookie is still sent on a reload, a new tab, and a
+ * typed address in the same browser. Closing the browser drops that cookie,
+ * so the next visit is signed out. This always tries the cookie. It does
+ * not revoke it because a tab marker is missing. The trusted-browser cookie
+ * is not cleared. Runs once per app load, before ProtectedRoute has to
+ * decide whether to bounce to /login.
  */
 export function useAuthBootstrap() {
   const bootstrapped = useAuthStore((s) => s.bootstrapped);
@@ -108,28 +108,20 @@ export function useAuthBootstrap() {
       setBootstrapped();
     };
     void (async () => {
-      let decision: "continue" | "sign-in" = "sign-in";
-      try {
-        decision = await evaluateBrowserSessionOnLoad();
-      } catch {
-        decision = "sign-in";
-      }
-      if (cancelled) return;
-      if (decision === "sign-in") {
-        await abandonRestoredBrowserSession();
-        finishSignedOut();
-        return;
-      }
-      adoptBrowserSession();
       try {
         const result = await refreshSession("bootstrap");
         if (cancelled) return;
         // A server error used to leave `bootstrapped` false, and ProtectedRoute
         // renders nothing until that flag is set — a failed check was a blank page.
-        // Signed out is the fallback. A retry scheduled by the refresher can still
-        // restore the session if the cookie is good.
-        if (bootstrapSessionDecision(result) === "signed-out") finishSignedOut();
-        else setBootstrapped();
+        // Signed out is the fallback when the cookie is missing or refused.
+        // A retry scheduled by the refresher can still restore the session if
+        // the cookie is good.
+        const cookieAccepted = coldLoadKeepsSession({ refreshCookieAccepted: result.ok });
+        if (!cookieAccepted || bootstrapSessionDecision(result) === "signed-out") finishSignedOut();
+        else {
+          adoptBrowserSession();
+          setBootstrapped();
+        }
       } catch {
         finishSignedOut();
       }

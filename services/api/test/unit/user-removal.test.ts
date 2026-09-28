@@ -26,7 +26,8 @@ describe("user removal", () => {
     if (blocked.outcome === "blocked") {
       expect(blocked.requiresReplacement).toBe(true);
       expect(blocked.message).toMatch(/open work/);
-      expect(blocked.message).toMatch(/1 open NCRs/);
+      expect(blocked.message).toMatch(/1 open NCR/);
+      expect(blocked.message).not.toMatch(/1 open NCRs/);
     }
     const ready = decideUserRemoval({ ...base, openWork, hasReplacement: true, history: [{ label: "NCRs", count: 1 }] });
     expect(ready.outcome).toBe("deactivated");

@@ -14,6 +14,7 @@ import { audits } from "../../drizzle/schema/audits.js";
 import { feasibilityReviews } from "../../drizzle/schema/feasibility.js";
 import { ppapPackages } from "../../drizzle/schema/ppap.js";
 import { eightDIsClosed } from "../quality-automation/logic.js";
+import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 
 /**
  * Work still in progress that names this person. Historical authorship,
@@ -122,61 +123,107 @@ export async function loadOpenWork(db: Db, userId: number): Promise<OpenWorkGrou
   return groups.filter((item): item is OpenWorkGroup => item !== null);
 }
 
+export interface ReassignNote {
+  fromName: string;
+  toName: string;
+  performedBy?: number;
+}
+
+async function noteMove(db: Db, note: ReassignNote | undefined, entityType: string, entityId: number) {
+  if (!note) return;
+  await recordAuditTrail(db, {
+    entityType,
+    entityId,
+    action: "status_change",
+    changes: { action: `Reassigned from ${note.fromName} to ${note.toName} when ${note.fromName} was removed` },
+    performedBy: note.performedBy,
+  });
+}
+
 /**
  * Moves the open items onto the replacement. Signature columns (createdBy,
  * approvedBy, reviewedBy, verifiedBy, publishedBy, submittedBy) are left
- * as they were.
+ * as they were. Each moved record gets a history line naming both people.
+ * An open 8D has no owner column; the note is written on the report because
+ * its linked NCR moved with it.
  */
-export async function reassignOpenWork(db: Db, userId: number, replacementId: number): Promise<OpenWorkGroup[]> {
+export async function reassignOpenWork(db: Db, userId: number, replacementId: number, note?: ReassignNote): Promise<OpenWorkGroup[]> {
   const groups = await loadOpenWork(db, userId);
   const keys = new Set(groups.map((item) => item.key));
   const now = new Date();
+  const eightDIds = keys.has("open_eightds") ? (await openEightDs(db, userId)).map((row) => row.id) : [];
 
   if (keys.has("open_ncrs")) {
-    await db.update(ncr).set({ assignedTo: replacementId, updatedAt: now }).where(openNcrWhere(userId));
+    const rows = await db.update(ncr).set({ assignedTo: replacementId, updatedAt: now }).where(openNcrWhere(userId)).returning({ id: ncr.id });
+    for (const row of rows) await noteMove(db, note, "NCR", row.id);
   }
+  for (const id of eightDIds) await noteMove(db, note, "8D Report", id);
   if (keys.has("open_capas")) {
-    await db.update(capa).set({ ownerId: replacementId, updatedAt: now }).where(openCapaWhere(userId));
+    const rows = await db.update(capa).set({ ownerId: replacementId, updatedAt: now }).where(openCapaWhere(userId)).returning({ id: capa.id });
+    for (const row of rows) await noteMove(db, note, "CAPA", row.id);
   }
   if (keys.has("document_reviews")) {
-    await db.update(documents).set({ ownerId: replacementId, updatedAt: now }).where(documentReviewWhere(userId));
+    const rows = await db.update(documents).set({ ownerId: replacementId, updatedAt: now }).where(documentReviewWhere(userId)).returning({ id: documents.id });
+    for (const row of rows) await noteMove(db, note, "Document", row.id);
   }
   if (keys.has("pending_reviews")) {
-    await db
+    const rows = await db
       .update(controlledVersions)
       .set({ metadata: sql`jsonb_set(${controlledVersions.metadata}, '{assignedReviewerId}', to_jsonb(${replacementId}::int))` })
-      .where(reviewerWhere(userId));
+      .where(reviewerWhere(userId))
+      .returning({ id: controlledVersions.id, subjectType: controlledVersions.subjectType, subjectId: controlledVersions.subjectId });
+    for (const row of rows) {
+      if (row.subjectType === "document") await noteMove(db, note, "Document", row.subjectId);
+    }
   }
   if (keys.has("direct_reports")) {
-    await db.update(users).set({ managerId: replacementId, updatedAt: now }).where(and(eq(users.managerId, userId), ne(users.id, replacementId)));
+    const rows = await db.update(users).set({ managerId: replacementId, updatedAt: now }).where(and(eq(users.managerId, userId), ne(users.id, replacementId))).returning({ id: users.id });
+    for (const row of rows) await noteMove(db, note, "User", row.id);
     await db.update(users).set({ managerId: null, updatedAt: now }).where(and(eq(users.id, replacementId), eq(users.managerId, userId)));
   }
   if (keys.has("complaints")) {
-    await db.update(complaints).set({ assignedTo: replacementId, updatedAt: now }).where(and(eq(complaints.assignedTo, userId), inArray(complaints.status, ["open", "investigating"])));
+    const rows = await db.update(complaints).set({ assignedTo: replacementId, updatedAt: now }).where(and(eq(complaints.assignedTo, userId), inArray(complaints.status, ["open", "investigating"]))).returning({ id: complaints.id });
+    for (const row of rows) await noteMove(db, note, "Complaint", row.id);
   }
   if (keys.has("investigations")) {
-    await db.update(discrepancyInvestigations).set({ assignedTo: replacementId, updatedAt: now }).where(and(eq(discrepancyInvestigations.assignedTo, userId), inArray(discrepancyInvestigations.status, ["open", "investigating"])));
+    const rows = await db
+      .update(discrepancyInvestigations)
+      .set({ assignedTo: replacementId, updatedAt: now })
+      .where(and(eq(discrepancyInvestigations.assignedTo, userId), inArray(discrepancyInvestigations.status, ["open", "investigating"])))
+      .returning({ id: discrepancyInvestigations.id });
+    for (const row of rows) await noteMove(db, note, "Discrepancy investigation", row.id);
   }
   if (keys.has("training")) {
-    await db.update(trainingAssignments).set({ userId: replacementId }).where(and(eq(trainingAssignments.userId, userId), inArray(trainingAssignments.status, ["assigned", "in_progress", "overdue"])));
+    const rows = await db
+      .update(trainingAssignments)
+      .set({ userId: replacementId })
+      .where(and(eq(trainingAssignments.userId, userId), inArray(trainingAssignments.status, ["assigned", "in_progress", "overdue"])))
+      .returning({ id: trainingAssignments.id });
+    for (const row of rows) await noteMove(db, note, "TrainingAssignment", row.id);
   }
   if (keys.has("risks")) {
-    await db.update(riskAssessments).set({ ownerId: replacementId, updatedAt: now }).where(and(eq(riskAssessments.ownerId, userId), ne(riskAssessments.status, "closed")));
+    const rows = await db.update(riskAssessments).set({ ownerId: replacementId, updatedAt: now }).where(and(eq(riskAssessments.ownerId, userId), ne(riskAssessments.status, "closed"))).returning({ id: riskAssessments.id });
+    for (const row of rows) await noteMove(db, note, "RiskAssessment", row.id);
   }
   if (keys.has("risk_actions")) {
-    await db.update(riskMitigations).set({ ownerId: replacementId, updatedAt: now }).where(and(eq(riskMitigations.ownerId, userId), ne(riskMitigations.status, "completed")));
+    const rows = await db.update(riskMitigations).set({ ownerId: replacementId, updatedAt: now }).where(and(eq(riskMitigations.ownerId, userId), ne(riskMitigations.status, "completed"))).returning({ id: riskMitigations.id });
+    for (const row of rows) await noteMove(db, note, "RiskMitigation", row.id);
   }
   if (keys.has("audits")) {
-    await db.update(audits).set({ auditorId: replacementId }).where(and(eq(audits.auditorId, userId), ne(audits.status, "completed")));
+    const rows = await db.update(audits).set({ auditorId: replacementId }).where(and(eq(audits.auditorId, userId), ne(audits.status, "completed"))).returning({ id: audits.id });
+    for (const row of rows) await noteMove(db, note, "Audit", row.id);
   }
   if (keys.has("feasibility")) {
-    await db.update(feasibilityReviews).set({ ownerId: replacementId, updatedAt: now }).where(and(eq(feasibilityReviews.ownerId, userId), eq(feasibilityReviews.status, "draft")));
+    const rows = await db.update(feasibilityReviews).set({ ownerId: replacementId, updatedAt: now }).where(and(eq(feasibilityReviews.ownerId, userId), eq(feasibilityReviews.status, "draft"))).returning({ id: feasibilityReviews.id });
+    for (const row of rows) await noteMove(db, note, "FeasibilityReview", row.id);
   }
   if (keys.has("ppap")) {
-    await db.update(ppapPackages).set({ ownerId: replacementId }).where(and(eq(ppapPackages.ownerId, userId), inArray(ppapPackages.status, ["open", "submitted"])));
+    const rows = await db.update(ppapPackages).set({ ownerId: replacementId }).where(and(eq(ppapPackages.ownerId, userId), inArray(ppapPackages.status, ["open", "submitted"]))).returning({ id: ppapPackages.id });
+    for (const row of rows) await noteMove(db, note, "PPAP package", row.id);
   }
   if (keys.has("evaluations")) {
-    await db.update(trainingCompetencies).set({ evaluatorId: replacementId }).where(and(eq(trainingCompetencies.evaluatorId, userId), eq(trainingCompetencies.status, "pending")));
+    const rows = await db.update(trainingCompetencies).set({ evaluatorId: replacementId }).where(and(eq(trainingCompetencies.evaluatorId, userId), eq(trainingCompetencies.status, "pending"))).returning({ id: trainingCompetencies.id });
+    for (const row of rows) await noteMove(db, note, "TrainingCompetency", row.id);
   }
   return groups;
 }

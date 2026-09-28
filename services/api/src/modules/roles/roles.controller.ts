@@ -7,7 +7,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { isFullAccessRole } from "./roleAccess.js";
-import { decideRoleDeletion, hierarchyLevelForRoleName, moveRank, roleIsProtected } from "./roleHierarchy.js";
+import { decideRoleDeletion, displayNameForRole, hierarchyLevelForRoleName, moveRank, PROTECTED_ROLE_NAMES, roleIsProtected } from "./roleHierarchy.js";
 import { deleteRoleSchema } from "./roles.validation.js";
 
 async function loadRole(id: number) {
@@ -36,18 +36,18 @@ export const listRoles = asyncHandler(async (_req: Request, res: Response) => {
     .from(users)
     .groupBy(users.roleId);
   const countByRole = new Map(counts.map((row) => [row.roleId, row.count]));
-  res.json(rows.map((role) => ({ ...role, userCount: countByRole.get(role.id) ?? 0 })));
+  res.json(rows.map((role) => ({ ...role, displayName: displayNameForRole(role), userCount: countByRole.get(role.id) ?? 0 })));
 });
 
 export const getRole = asyncHandler(async (req: Request, res: Response) => {
   const role = await loadRole(Number(req.params.id));
-  res.json({ ...role, userCount: await userCount(role.id) });
+  res.json({ ...role, displayName: displayNameForRole(role), userCount: await userCount(role.id) });
 });
 
 export const createRole = asyncHandler(async (req: Request, res: Response) => {
   const body = req.body as { name: string; description?: string; hierarchyLevel?: number; permissions?: string[] };
-  const normalized = body.name.trim().toLowerCase().replace(/\s+/g, "_");
-  if (["owner", "admin", "president", "vice_president", "quality_manager", "auditor", "operator", "supplier", "customer"].includes(normalized)) {
+  const normalized = body.name.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (PROTECTED_ROLE_NAMES.has(normalized)) {
     throw AppError.badRequest("That name is reserved for a built-in role.");
   }
   const hierarchyLevel = body.hierarchyLevel ?? hierarchyLevelForRoleName(body.name);
@@ -57,7 +57,7 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
     .returning();
   if (!created) throw new AppError("Failed to create role", 500);
   await recordAuditTrail(db, { entityType: "Role", entityId: created.id, action: "create", changes: { name: created.name, hierarchyLevel, permissions: created.permissions }, performedBy: req.user?.id });
-  res.status(201).json({ ...created, userCount: 0 });
+  res.status(201).json({ ...created, displayName: displayNameForRole(created), userCount: 0 });
 });
 
 export const updateRole = asyncHandler(async (req: Request, res: Response) => {
@@ -74,7 +74,7 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   const [updated] = await db.update(roles).set(patch).where(eq(roles.id, role.id)).returning();
   if (!updated) throw AppError.notFound("Role");
   await recordAuditTrail(db, { entityType: "Role", entityId: role.id, action: "update", changes: patch, performedBy: req.user?.id });
-  res.json({ ...updated, userCount: await userCount(role.id) });
+  res.json({ ...updated, displayName: displayNameForRole(updated), userCount: await userCount(role.id) });
 });
 
 export const moveRole = asyncHandler(async (req: Request, res: Response) => {
@@ -83,7 +83,7 @@ export const moveRole = asyncHandler(async (req: Request, res: Response) => {
   const ordered = await db.select({ id: roles.id, hierarchyLevel: roles.hierarchyLevel }).from(roles).orderBy(asc(roles.hierarchyLevel), asc(roles.name));
   const changes = moveRank(ordered, role.id, direction);
   if (changes.length === 0) {
-    res.json({ ...role, userCount: await userCount(role.id) });
+    res.json({ ...role, displayName: displayNameForRole(role), userCount: await userCount(role.id) });
     return;
   }
   for (const change of changes) {
@@ -91,7 +91,7 @@ export const moveRole = asyncHandler(async (req: Request, res: Response) => {
   }
   const updated = await loadRole(role.id);
   await recordAuditTrail(db, { entityType: "Role", entityId: role.id, action: "update", changes: { hierarchyLevel: updated.hierarchyLevel, moved: direction }, performedBy: req.user?.id });
-  res.json({ ...updated, userCount: await userCount(role.id) });
+  res.json({ ...updated, displayName: displayNameForRole(updated), userCount: await userCount(role.id) });
 });
 
 export const deleteRole = asyncHandler(async (req: Request, res: Response) => {

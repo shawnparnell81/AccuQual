@@ -82,7 +82,9 @@ function parseNumber(text: string, label: string, errors: string[], opts: { min?
 
 interface SupplierValue {
   name: string;
+  contactName?: string;
   contactEmail?: string;
+  phone?: string;
 }
 
 const supplierEntity: ImportEntity<SupplierValue> = {
@@ -91,7 +93,9 @@ const supplierEntity: ImportEntity<SupplierValue> = {
   description: "Add suppliers in bulk. Each one starts as an active supplier, the same as adding it by hand.",
   fields: [
     { key: "name", label: "Supplier name", required: true, example: "Acme Fasteners", aliases: ["supplier", "vendor", "vendor name", "company", "name"] },
-    { key: "contactEmail", label: "Contact email", example: "sales@acmefasteners.com", aliases: ["email", "contact", "e-mail"] },
+    { key: "contactName", label: "Contact name", example: "Priya Shah", aliases: ["contact", "contact name", "primary contact"] },
+    { key: "contactEmail", label: "Contact email", example: "sales@acmefasteners.com", aliases: ["email", "e-mail", "contact email"] },
+    { key: "phone", label: "Phone", example: "555-0100", aliases: ["telephone", "phone number", "contact phone"] },
   ],
   async prepare(ctx) {
     const rows = await ctx.db.select({ id: suppliers.id, name: suppliers.name }).from(suppliers);
@@ -105,18 +109,24 @@ const supplierEntity: ImportEntity<SupplierValue> = {
     const name = raw.name?.trim() ?? "";
     if (!name) errors.push("Supplier name is required.");
     if (name.length > 200) errors.push("Supplier name is longer than 200 characters.");
+    const contactName = raw.contactName?.trim();
+    if (contactName && contactName.length > 200) errors.push("Contact name is longer than 200 characters.");
     const contactEmail = raw.contactEmail?.trim();
     if (contactEmail && !EMAIL.test(contactEmail)) errors.push(`Contact email "${contactEmail}" doesn't look like an email address.`);
-    return { errors, value: errors.length ? undefined : { name, contactEmail: contactEmail || undefined }, identity: name.toLowerCase() };
+    const phone = raw.phone?.trim();
+    if (phone && phone.length > 40) errors.push("Phone is longer than 40 characters.");
+    return { errors, value: errors.length ? undefined : { name, contactName: contactName || undefined, contactEmail: contactEmail || undefined, phone: phone || undefined }, identity: name.toLowerCase() };
   },
   async insert(ctx, value) {
-    const [created] = await ctx.db.insert(suppliers).values({ name: value.name, contactEmail: value.contactEmail }).returning();
+    const [created] = await ctx.db.insert(suppliers).values({ name: value.name, contactName: value.contactName, contactEmail: value.contactEmail, phone: value.phone }).returning();
     await recordAuditTrail(ctx.db, { entityType: "Supplier", entityId: created!.id, action: "create", changes: { ...value, source: "excel_import" }, performedBy: ctx.userId });
     return { id: created!.id, label: created!.name };
   },
   async update(ctx, id, value) {
-    const patch: { contactEmail?: string } = {};
+    const patch: { contactName?: string; contactEmail?: string; phone?: string } = {};
+    if (value.contactName !== undefined) patch.contactName = value.contactName;
     if (value.contactEmail !== undefined) patch.contactEmail = value.contactEmail;
+    if (value.phone !== undefined) patch.phone = value.phone;
     await ctx.db.update(suppliers).set(patch).where(eq(suppliers.id, id));
     await recordAuditTrail(ctx.db, { entityType: "Supplier", entityId: id, action: "update", changes: { ...patch, source: "data_import" }, performedBy: ctx.userId });
     return { id, label: value.name };

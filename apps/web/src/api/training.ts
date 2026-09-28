@@ -97,6 +97,7 @@ export interface Person {
   id: number;
   name: string | null;
   email: string;
+  isActive?: boolean;
 }
 
 export const DEPARTMENTS = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management"];

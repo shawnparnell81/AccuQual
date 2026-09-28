@@ -136,15 +136,19 @@ export function statusPhrase(value: string | null | undefined): string {
   return STATUS_PHRASE[value] ?? value.replace(/_/g, " ");
 }
 
+export function formatPerson(person: { name: string | null; email: string; isActive?: boolean }): string {
+  const base = person.name?.trim() || person.email;
+  return person.isActive === false ? `${base} (inactive)` : base;
+}
+
 export function personLabel(
-  people: { id: number; name: string | null; email: string }[] | undefined,
+  people: { id: number; name: string | null; email: string; isActive?: boolean }[] | undefined,
   id: number | null | undefined
 ): string {
   if (id == null) return "Unassigned";
   const person = people?.find((p) => p.id === id);
   if (!person) return "Assigned";
-  const name = person.name?.trim();
-  return name || person.email;
+  return formatPerson(person);
 }
 
 /** `due` is an ISO timestamp. Comparison is the calendar day, matching the date inputs that write UTC midnight. */

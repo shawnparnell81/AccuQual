@@ -9,7 +9,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
-import { duePhrase, isPastDue, statusPhrase } from "../../lib/opsLanguage";
+import { duePhrase, formatPerson, isPastDue, statusPhrase } from "../../lib/opsLanguage";
 
 const COLUMNS: BoardColumn[] = [
   { key: "open", label: "Open", tone: "danger" },
@@ -74,7 +74,7 @@ export function NcrBoard({ ncrs, canEdit }: { ncrs: Ncr[]; canEdit: boolean }) {
             ? `NCRs move one step at a time. #${n.id} goes from ${statusPhrase(n.status)} to ${statusPhrase(next)} first — drop it there.`
             : `#${n.id} is closed and can't move (${statusPhrase(to)}).`;
         }}
-        people={people.map((person) => ({ id: person.id, name: person.name?.trim() || person.email }))}
+        people={people.map((person) => ({ id: person.id, name: formatPerson(person) }))}
         assignedTo={(n) => n.assignedTo}
         onAssign={(n, personId, personName) => {
           apiClient
