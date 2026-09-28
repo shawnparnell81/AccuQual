@@ -17,6 +17,7 @@ export * from "./sales.js";
 export * from "./ppap.js";
 export * from "./quality.js";
 export * from "./documentFolders.js";
+export * from "./controlledForms.js";
 export * from "./supplier.js";
 export * from "./calibration.js";
 export * from "./complaints.js";

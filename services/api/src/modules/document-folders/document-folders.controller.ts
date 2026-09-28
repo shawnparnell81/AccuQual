@@ -11,6 +11,7 @@ import { logger } from "../../utils/logger.js";
 import type { Db } from "../../lib/requestDb.js";
 import { DEFAULT_DOCUMENT_FOLDERS, type DefaultFolderSeed } from "./defaultDocumentFolders.js";
 import { presentDocumentFolders } from "./retiredDocumentFolders.js";
+import { ensureControlledForms, listControlledForms } from "./controlledForms.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { expirationStatus } from "../documents/documents.controller.js";
 import { OFFICE_TYPE_ERROR, officeDocumentType } from "../onlyoffice/editorConfig.js";
@@ -197,6 +198,11 @@ async function withLinkedDocumentInfo(db: Db, all: (typeof documentFolders.$infe
   });
 }
 
+/** Forms Library entries and the folders each template is filed in. */
+export const formTemplates = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await listControlledForms(req.db!));
+});
+
 /** Full flat folder list for the company, seeding the default department tree on first use. */
 export const list = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
@@ -208,7 +214,9 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     const pool = await ensureLibraryPool(db, seeded.filter((f) => f.parentId === null));
     const all = await ensureAdditionalSubfolders(db, [...seeded, pool]);
     await linkKnownForms(db, all);
-    return res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(all)));
+    await ensureControlledForms(db);
+    const fresh = await db.select().from(documentFolders);
+    return res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(fresh)));
   }
 
   const pool = await ensureLibraryPool(db, existing.filter((f) => f.parentId === null));
@@ -216,7 +224,9 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
   const withPool = alreadyIncluded ? existing : [...existing, pool];
   const all = await ensureAdditionalSubfolders(db, withPool);
   await linkKnownForms(db, all);
-  res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(all)));
+  await ensureControlledForms(db);
+  const fresh = await db.select().from(documentFolders);
+  res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(fresh)));
 });
 
 export const create = asyncHandler(async (req: Request, res: Response) => {

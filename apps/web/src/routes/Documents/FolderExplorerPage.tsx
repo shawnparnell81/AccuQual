@@ -27,6 +27,16 @@ interface DocumentFolder {
 
 const LIBRARY_POOL_NAME = "Library Pool";
 
+interface ControlledFormTemplate {
+  id: number;
+  formKey: string;
+  docId: string;
+  title: string;
+  route: string;
+  folderIds: number[];
+  categoryKeys: string[];
+}
+
 /** Stable accent per department, cycling if there are ever more than 7. */
 const DEPARTMENT_COLORS = ["#5B5FEA", "#2451FF", "#0E9F6E", "#C2953B", "#8A4FD6", "#D65F8A", "#2AA7B8"];
 
@@ -34,6 +44,13 @@ function useDocumentFolders() {
   return useQuery({
     queryKey: ["document-folders"],
     queryFn: async () => (await apiClient.get<DocumentFolder[]>("/document-folders")).data,
+  });
+}
+
+function useControlledForms() {
+  return useQuery({
+    queryKey: ["controlled-form-templates"],
+    queryFn: async () => (await apiClient.get<ControlledFormTemplate[]>("/document-folders/form-templates")).data,
   });
 }
 
@@ -108,6 +125,7 @@ function useUploadDocument() {
  */
 export function FolderExplorerPage() {
   const { data: folders = [], isLoading } = useDocumentFolders();
+  const { data: formTemplates = [] } = useControlledForms();
   const updateFolder = useUpdateFolder();
   const createFolder = useCreateFolder();
   const deleteFolder = useDeleteFolder();
@@ -172,9 +190,13 @@ export function FolderExplorerPage() {
 
   const activeDept = departments.find((d) => d.id === activeDeptId) ?? departments[0];
 
+  function formsIn(folderId: number) {
+    return formTemplates.filter((form) => form.folderIds.includes(folderId));
+  }
+
   function countsFor(deptId: number) {
     const subs = byParent.get(deptId) ?? [];
-    const docs = subs.reduce((sum, s) => sum + (byParent.get(s.id)?.length ?? 0), 0);
+    const docs = subs.reduce((sum, s) => sum + (byParent.get(s.id)?.length ?? 0) + formsIn(s.id).length, 0);
     return { subs: subs.length, docs };
   }
 
@@ -334,6 +356,7 @@ export function FolderExplorerPage() {
           </FileDropZone>
 
           {(byParent.get(activeDept.id) ?? []).map((sub) => {
+            const linkedForms = formsIn(sub.id).filter((form) => !query || `${form.docId} ${form.title}`.toLowerCase().includes(query));
             const docs = (byParent.get(sub.id) ?? []).filter((d) => !query || d.name.toLowerCase().includes(query));
             const isCollapsed = collapsed[sub.id];
             const isDropTarget = dropHoverId === sub.id;
@@ -366,7 +389,7 @@ export function FolderExplorerPage() {
                 >
                   <span className="text-xs text-muted-foreground">{isCollapsed ? "▸" : "▾"}</span>
                   <span className="flex-1 text-sm font-semibold">{sub.name}</span>
-                  <span className="font-mono text-[10px] text-muted-foreground">{(byParent.get(sub.id) ?? []).length}</span>
+                  <span className="font-mono text-[10px] text-muted-foreground">{(byParent.get(sub.id) ?? []).length + formsIn(sub.id).length}</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -391,7 +414,18 @@ export function FolderExplorerPage() {
                 </div>
                 {!isCollapsed && (
                   <div className="flex flex-wrap gap-2 p-3">
-                    {docs.length === 0 && <span className="text-xs italic text-muted-foreground">No documents yet — drop one here</span>}
+                    {docs.length === 0 && linkedForms.length === 0 && <span className="text-xs italic text-muted-foreground">No documents yet — drop one here</span>}
+                    {linkedForms.map((form) => (
+                      <Link
+                        key={form.formKey}
+                        to={form.route}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:opacity-80"
+                        data-form-key={form.formKey}
+                      >
+                        <ArrowUpRight size={12} />
+                        {form.docId} {form.title}
+                      </Link>
+                    ))}
                     {docs.map((doc) => (
                       <DocPill
                         key={doc.id}

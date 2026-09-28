@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Eye, Upload } from "lucide-react";
 import { apiClient } from "../../api/client";
@@ -18,6 +18,14 @@ import { TextField } from "../../components/forms/Field";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { ObsoleteArchiveDialog } from "./ObsoleteArchiveDialog";
 import { ValidationReportsPanel } from "../ValidationReports/ValidationReportsPanel";
+
+interface ControlledFormTemplate {
+  formKey: string;
+  docId: string;
+  title: string;
+  route: string;
+  categoryKeys: string[];
+}
 
 /**
  * A single document folder (Drawings, Master Tool List, Shipping, and the other
@@ -39,6 +47,13 @@ export function DocumentCategoryPage() {
   const [preview, setPreview] = useState<PreviewRequest | null>(null);
   const [filter, setFilter] = useState("");
   const isArchive = category === OBSOLETE_ARCHIVE_CATEGORY;
+
+  const controlledForms = useQuery({
+    queryKey: ["controlled-form-templates"],
+    queryFn: async () => (await apiClient.get<ControlledFormTemplate[]>("/document-folders/form-templates")).data,
+    enabled: !!page,
+  });
+  const folderForms = (controlledForms.data ?? []).filter((form) => form.categoryKeys.includes(category));
 
   const documents = useQuery<AccuQualDocument[]>({
     queryKey: ["documents", undefined],
@@ -185,6 +200,25 @@ export function DocumentCategoryPage() {
           </button>
         </div>
       </div>
+
+      {folderForms.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold">Forms</h2>
+          <div className="flex flex-wrap gap-2">
+            {folderForms.map((form) => (
+              <Link
+                key={form.formKey}
+                to={form.route}
+                className="inline-flex items-center gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-primary hover:opacity-80"
+                data-form-key={form.formKey}
+              >
+                <span className="font-medium">{form.title}</span>
+                <span className="text-xs">{form.docId}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {category === "validation-reports" && <ValidationReportsPanel />}
 
