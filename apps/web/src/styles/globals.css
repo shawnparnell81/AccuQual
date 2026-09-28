@@ -53,6 +53,7 @@
   --muted: 217 33% 17%; /* #1E293B — subtle recessed surface, same tone as border */
   --muted-foreground: 215 20% 65%; /* #94A3B8 — Compliance Sub-text Label (slate silver) */
   --destructive: 341 100% 58%; /* #FF2A6D — Non-Conformance / Rejected Flag (Cyber Magenta) */
+  --destructive-foreground: 216 33% 3%;
   --text: 215 30% 88%; /* body copy, a step softer than pure-white headings */
 
   /* Status Color Architecture — for compliance/workflow badges. */
@@ -132,6 +133,7 @@
   --muted: 220 14% 92%;
   --muted-foreground: 220 9% 32%;
   --destructive: 347 77% 50%; /* #E11D48 */
+  --destructive-foreground: 0 0% 100%;
   --success: 160 84% 39%; /* #059669 */
   --success-foreground: 0 0% 100%;
   --warning: 32 95% 44%; /* #D97706 */
@@ -168,6 +170,7 @@
   --muted: 217 33% 17%;
   --muted-foreground: 215 20% 65%;
   --destructive: 341 100% 58%;
+  --destructive-foreground: 216 33% 3%;
   --text: 215 30% 88%;
   --success: 157 100% 50%;
   --success-foreground: 216 33% 3%;
@@ -204,6 +207,7 @@
     --muted: 220 14% 92%;
     --muted-foreground: 220 9% 32%;
     --destructive: 347 77% 50%;
+    --destructive-foreground: 0 0% 100%;
     --text: 210 29% 12%;
     --success: 160 84% 39%;
     --success-foreground: 0 0% 100%;

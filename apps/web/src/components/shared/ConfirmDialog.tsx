@@ -90,7 +90,7 @@ function ConfirmDialog({
           <button
             type="button"
             onClick={onConfirm}
-            className={tone === "danger" ? "rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-white" : "rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"}
+            className={tone === "danger" ? "rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground" : "rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"}
           >
             {confirmLabel}
           </button>

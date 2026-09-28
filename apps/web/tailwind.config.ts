@@ -38,7 +38,10 @@ export default {
           foreground: "hsl(var(--button-foreground))",
         },
         card: "hsl(var(--card))",
-        destructive: "hsl(var(--destructive))",
+        destructive: {
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
+        },
         ring: "hsl(var(--ring))",
         // ACCUQUAL QMS Status Color Architecture — compliance/workflow badges.
         success: {
