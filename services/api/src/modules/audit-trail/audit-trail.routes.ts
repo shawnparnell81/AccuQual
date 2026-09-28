@@ -49,6 +49,7 @@ const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   "Discrepancy investigation": "di",
   Document: "documents",
   DocumentChangeRequest: "documents",
+  DocumentFolder: "documents",
   Equipment: "calibration",
   Quarantine: "quarantine",
   WorkerProfile: "worker_profile",

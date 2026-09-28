@@ -55,10 +55,10 @@ async function seedDefaults(db: Db): Promise<void> {
  * companies that already existed before this feature shipped, and even
  * recreates it if a user ever deletes it.
  */
-async function ensureLibraryPool(db: Db, topLevel: (typeof documentFolders.$inferSelect)[]): Promise<typeof documentFolders.$inferSelect> {
-  const existingPool = topLevel.find((f) => f.name === LIBRARY_POOL_NAME);
+async function ensureLibraryPool(db: Db, folders: (typeof documentFolders.$inferSelect)[]): Promise<typeof documentFolders.$inferSelect> {
+  const existingPool = folders.find((f) => f.name === LIBRARY_POOL_NAME);
   if (existingPool) return existingPool;
-  const siblingCount = topLevel.length;
+  const siblingCount = folders.filter((f) => f.parentId === null).length;
   const [created] = await db.insert(documentFolders).values({ name: LIBRARY_POOL_NAME, sortOrder: siblingCount }).returning();
   if (!created) throw new AppError("Failed to create the library pool folder", 500);
   return created;
@@ -150,7 +150,8 @@ async function ensureAdditionalSubfolders(db: Db, all: (typeof documentFolders.$
     if (!dept) continue; // company doesn't have this department branch (e.g. a customized tree) — skip rather than force it back in
     const parentFolder = list.find((f) => f.parentId === dept.id && f.name === folder);
     if (!parentFolder) continue;
-    if (list.some((f) => f.parentId === parentFolder.id && f.name === subfolder)) continue;
+    // A folder that was moved still has this name. Don't put a second copy back in the old place.
+    if (list.some((f) => f.name === subfolder)) continue;
     const siblingCount = list.filter((f) => f.parentId === parentFolder.id).length;
     const [created] = await db.insert(documentFolders).values({ name: subfolder, parentId: parentFolder.id, sortOrder: siblingCount }).returning();
     if (created) list = [...list, created];
@@ -211,7 +212,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
   if (existing.length === 0) {
     await seedDefaults(db);
     const seeded = await db.select().from(documentFolders);
-    const pool = await ensureLibraryPool(db, seeded.filter((f) => f.parentId === null));
+    const pool = await ensureLibraryPool(db, seeded);
     const all = await ensureAdditionalSubfolders(db, [...seeded, pool]);
     await linkKnownForms(db, all);
     await ensureFormTemplates(db);
@@ -219,7 +220,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     return res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(fresh)));
   }
 
-  const pool = await ensureLibraryPool(db, existing.filter((f) => f.parentId === null));
+  const pool = await ensureLibraryPool(db, existing);
   const alreadyIncluded = existing.some((f) => f.id === pool.id);
   const withPool = alreadyIncluded ? existing : [...existing, pool];
   const all = await ensureAdditionalSubfolders(db, withPool);
@@ -309,11 +310,14 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
     .returning();
   if (!updated) throw AppError.notFound("Document folder");
 
+  const moved = parentId !== undefined && parentId !== current.parentId;
   await recordAuditTrail(db, {
     entityType: AUDIT_ENTITY_TYPE,
     entityId: id,
     action: "update",
-    changes: { name, parentId, sortOrder, documentId },
+    changes: moved
+      ? { event: "moved", name: current.name, fromParentId: current.parentId, toParentId: parentId, ...(name !== undefined && name !== current.name ? { renamedTo: name } : {}) }
+      : { name, parentId, sortOrder, documentId },
     performedBy: req.user?.id,
   });
 

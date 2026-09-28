@@ -624,6 +624,13 @@
       "when": 1791673200000,
       "tag": "0088_iso_quality_forms",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1791759600000,
+      "tag": "0089_sidebar_layout",
+      "breakpoints": true
     }
   ]
 }

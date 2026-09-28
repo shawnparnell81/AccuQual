@@ -209,6 +209,11 @@ export const company = pgTable("company", {
     repeatNcrWindowDays?: number;
     repeatNcrThreshold?: number;
   }>().default({}),
+  /**
+   * Company-wide sidebar order. Null means the built-in arrangement.
+   * Only keys and nesting are stored. Labels and who can open each item stay in the app.
+   */
+  sidebarLayout: jsonb("sidebar_layout").$type<{ key: string; children?: { key: string; children?: unknown[] }[] }[] | null>(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -32,7 +32,7 @@ export function CrossTrainingSheet({ cells, readOnly = false, onChange }: CrossT
   return (
     <div className="rubric" data-testid="cross-training-sheet">
       <h2>GRADING RUBRIC: CROSS-TRAINING EVALUATION</h2>
-      <p className="text-center text-sm text-muted-foreground">Doc ID: FRM-TRN-002 · Rev A · 3/19/2026 · Authorized by Maxwell Tollefson</p>
+      <p className="text-center text-sm text-muted-foreground">Rev A · 3/19/2026 · Authorized by Maxwell Tollefson</p>
 
       <section>
         <h3>1.0 PURPOSE</h3>

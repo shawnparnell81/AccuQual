@@ -19,7 +19,7 @@ export const ISO_FORMS: IsoFormMeta[] = [
   { formKey: "frm-ncr-002", formType: "quarantine_notice", formId: "FRM-NCR-002", title: "Quarantine Notice", rev: "A", layout: quarantineLayout(), photos: true },
   { formKey: "frm-ncr-003", formType: "concession", formId: "FRM-NCR-003", title: "Concession / Deviation Request", rev: "A", layout: concessionLayout(), photos: false },
   { formKey: "frm-trn-001", formType: "competency_training", formId: "FRM-TRN-001", title: "Competency and Training Record", rev: "A", layout: trainingLayout(), photos: false },
-  { formKey: "frm-trn-002", formType: "cross_training", formId: "FRM-TRN-002", title: "Cross-Training Evaluation", rev: "A", layout: null, photos: false },
+  { formKey: "frm-trn-002", formType: "cross_training", formId: "", title: "Cross-Training Evaluation", rev: "A", layout: null, photos: false },
 ];
 
 export function formByKey(formKey: string | undefined): IsoFormMeta | undefined {
