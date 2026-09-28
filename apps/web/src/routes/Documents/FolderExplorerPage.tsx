@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { Paperclip, FileText, Download, X, Inbox, ArrowUpRight, UploadCloud } from "lucide-react";
+import { Paperclip, FileText, Download, X, Inbox, ArrowUpRight, UploadCloud, GripVertical } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
 import { StatusBadge } from "../../components/tables/StatusBadge";
@@ -363,6 +363,7 @@ export function FolderExplorerPage() {
                   dept.id === activeDept.id ? "bg-primary/10 font-medium" : "hover:bg-muted"
                 } ${dropHoverId === dept.id ? "ring-2 ring-primary" : ""}`}
               >
+                <GripVertical size={14} className="text-muted-foreground" />
                 <span className="h-2 w-2 flex-none rounded-full" style={{ backgroundColor: color }} />
                 <span className="flex-1">{dept.name}</span>
                 <span className="font-mono text-[10px] text-muted-foreground">
@@ -476,6 +477,7 @@ export function FolderExplorerPage() {
                     dropOn(e, sub.id);
                   }}
                 >
+                  <GripVertical size={14} className="text-muted-foreground" />
                   <span className="text-xs text-muted-foreground">{isCollapsed ? "▸" : "▾"}</span>
                   <span className="flex-1 text-sm font-semibold">{sub.name}</span>
                   <span className="font-mono text-[10px] text-muted-foreground">{children.length + formsIn(sub.id).length + topicFolders.reduce((count, topic) => count + formsIn(topic.id).length, 0)}</span>
@@ -516,7 +518,7 @@ export function FolderExplorerPage() {
                     {ownForms.length > 0 && (
                       <div className="flex flex-wrap gap-2">
                         {ownForms.map((form) => (
-                          <Link key={form.formKey} to={form.subjectRoute} data-form-key={form.formKey} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:opacity-80">
+                          <Link key={form.formKey} to={form.subjectRoute} draggable={false} data-form-key={form.formKey} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:opacity-80">
                             <ArrowUpRight size={12} />
                             {form.formId ? `${form.formId} ${form.title}` : form.title}
                           </Link>
@@ -535,6 +537,12 @@ export function FolderExplorerPage() {
                         <div
                           key={topic.id}
                           data-folder-id={topic.id}
+                          draggable
+                          onDragStart={(e) => {
+                            e.stopPropagation();
+                            beginDrag(e, topic.id, "folder");
+                          }}
+                          onDragEnd={endDrag}
                           onDragOver={(e) => {
                             if (allowDrop(e, topic.id)) {
                               e.stopPropagation();
@@ -562,11 +570,12 @@ export function FolderExplorerPage() {
                             }}
                             onDragEnd={endDrag}
                           >
+                            <GripVertical size={12} className="text-muted-foreground" />
                             <span className="flex-1">{topic.name}</span>
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {topicForms.map((form) => (
-                              <Link key={form.formKey} to={form.subjectRoute} data-form-key={form.formKey} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:opacity-80">
+                              <Link key={form.formKey} to={form.subjectRoute} draggable={false} data-form-key={form.formKey} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:opacity-80">
                                 <ArrowUpRight size={12} />
                                 {form.formId ? `${form.formId} ${form.title}` : form.title}
                               </Link>
@@ -735,7 +744,10 @@ function DocPill({
   return (
     <span
       draggable
-      onDragStart={(event) => onDragStart(event)}
+      onDragStart={(event) => {
+        event.stopPropagation();
+        onDragStart(event);
+      }}
       onDragEnd={onDragEnd}
       className={`inline-flex cursor-grab items-center gap-1.5 rounded-full border px-3 py-1 text-xs active:cursor-grabbing ${
         doc.linkedPath ? "border-primary/40 bg-primary/10" : "border-border bg-muted"
@@ -745,6 +757,7 @@ function DocPill({
       {doc.linkedPath && (
         <Link
           to={doc.linkedPath}
+          draggable={false}
           className="flex items-center text-primary hover:opacity-80"
           aria-label={`Open the live ${doc.name} module`}
           title={`This is a real module — open ${doc.linkedPath}`}
@@ -754,7 +767,7 @@ function DocPill({
       )}
       {doc.name}
       {doc.documentId && (
-        <Link to={`/documents/${doc.documentId}`} className="hover:opacity-80" title="Open the controlled document (revision history, approval, retention)">
+        <Link to={`/documents/${doc.documentId}`} draggable={false} className="hover:opacity-80" title="Open the controlled document (revision history, approval, retention)">
           <StatusBadge value={doc.documentExpirationStatus ?? doc.documentStatus ?? "draft"} />
         </Link>
       )}
