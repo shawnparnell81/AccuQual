@@ -45,7 +45,7 @@ export function LotLabelPrint() {
         }
         .label-scope { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; }
       `}</style>
-      <div className="flex items-center gap-3 border border-border p-3" style={{ width: "4in" }}>
+      <div className="flex items-center gap-3 border border-neutral-300 bg-white p-3" style={{ width: "4in", color: "#1e293b" }}>
         <QrLabel value={lot.lotNumber} size={90} />
         <div className="min-w-0 flex-1 text-sm leading-tight">
           <p className="truncate text-base font-semibold">{lot.lotNumber}</p>

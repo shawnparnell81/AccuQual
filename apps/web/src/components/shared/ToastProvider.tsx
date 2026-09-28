@@ -56,7 +56,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={t.id}
             role="alert"
             className={clsx(
-              "flex items-start gap-2 rounded-lg border bg-card p-3 text-sm shadow-lg",
+              "aq-menu flex items-start gap-2 rounded-lg border bg-card p-3 text-sm text-foreground shadow-lg",
               t.kind === "success" ? "border-success/30" : "border-destructive/30"
             )}
           >

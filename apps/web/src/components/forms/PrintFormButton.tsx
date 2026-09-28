@@ -45,7 +45,7 @@ export function PrintFormButton({ formType, entityId, label = "Print" }: PrintFo
   }
 
   return (
-    <button onClick={handleClick} disabled={isExporting} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-60">
+    <button type="button" onClick={handleClick} disabled={isExporting} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-60">
       <Printer size={16} /> {isExporting ? "Preparing…" : label}
     </button>
   );

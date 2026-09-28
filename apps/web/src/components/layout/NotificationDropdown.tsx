@@ -42,7 +42,7 @@ export function NotificationDropdown() {
       {open && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => { setOpen(false); buttonRef.current?.focus(); }} />
-          <div className="absolute right-0 top-full z-30 mt-1 w-80 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-card p-1 shadow-lg" role="dialog" aria-label="Notifications">
+          <div className="aq-menu absolute right-0 top-full z-30 mt-1 w-80 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-card p-1 text-foreground shadow-lg" role="dialog" aria-label="Notifications">
             <div className="flex items-center justify-between px-2 py-1.5">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notifications</p>
               <button type="button" className="text-xs text-primary hover:underline disabled:opacity-50" disabled={unreadCount === 0 || markingAll} onClick={() => markAllRead()}>

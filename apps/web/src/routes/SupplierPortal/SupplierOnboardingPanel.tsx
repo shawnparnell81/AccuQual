@@ -106,7 +106,7 @@ function OnboardingRow({ doc, isReviewer, onReview }: { doc: SupplierOnboardingD
         <div className="mt-2 flex flex-col gap-2">
           <TextAreaField label="Review notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
           <div className="flex gap-2">
-            <button onClick={() => onReview("approved", notes || undefined)} className="rounded-md bg-success px-3 py-1.5 text-xs font-medium text-white">
+            <button onClick={() => onReview("approved", notes || undefined)} className="rounded-md bg-success px-3 py-1.5 text-xs font-medium text-success-foreground">
               Approve
             </button>
             <button onClick={() => onReview("rejected", notes || undefined)} className="rounded-md border border-destructive px-3 py-1.5 text-xs text-destructive">

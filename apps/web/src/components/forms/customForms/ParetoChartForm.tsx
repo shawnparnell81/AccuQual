@@ -10,7 +10,8 @@ interface ProblemRow {
   quantity: number;
 }
 
-const INPUT_CLASS = "w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary";
+const INPUT_CLASS =
+  "w-full rounded border border-border bg-[hsl(var(--form-input))] px-2 py-1 text-xs text-[hsl(var(--form-input-foreground))] outline-none focus:ring-1 focus:ring-primary";
 
 /**
  * Pareto chart, derived 1:1 from the source "Pareto_Chart_Template.pdf".
@@ -55,16 +56,18 @@ export function ParetoChartForm({ data, onChange }: CustomFormProps) {
 
   return (
     <div className="flex flex-col gap-5 text-sm">
-      <h2 className="text-center text-base font-bold uppercase tracking-wide text-slate-800">Pareto Chart</h2>
+      <h2 className="text-center text-base font-bold uppercase tracking-wide" style={{ color: "var(--form-heading, #1d3a5c)" }}>
+        Pareto Chart
+      </h2>
 
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-xs">
           <thead>
             <tr>
-              <th className="border border-slate-200 bg-slate-100 px-2 py-1.5 text-left">Problem Description</th>
-              <th className="w-28 border border-slate-200 bg-slate-100 px-2 py-1.5 text-left">Quantity</th>
-              <th className="w-24 border border-slate-200 bg-slate-100 px-2 py-1.5 text-left">Cumulative %</th>
-              <th className="w-8 border border-slate-200 bg-slate-100" />
+              <th className="border border-border bg-[hsl(var(--form-label))] px-2 py-1.5 text-left text-[hsl(var(--form-label-foreground))]">Problem Description</th>
+              <th className="w-28 border border-border bg-[hsl(var(--form-label))] px-2 py-1.5 text-left text-[hsl(var(--form-label-foreground))]">Quantity</th>
+              <th className="w-24 border border-border bg-[hsl(var(--form-label))] px-2 py-1.5 text-left text-[hsl(var(--form-label-foreground))]">Cumulative %</th>
+              <th className="w-8 border border-border bg-[hsl(var(--form-label))]" />
             </tr>
           </thead>
           <tbody>
@@ -73,14 +76,14 @@ export function ParetoChartForm({ data, onChange }: CustomFormProps) {
               const cumPct = rank >= 0 && chartData[rank] ? chartData[rank].cumulativePct : null;
               return (
                 <tr key={i}>
-                  <td className="border border-slate-200 p-0.5">
+                  <td className="border border-border bg-[hsl(var(--form-input))] p-0.5">
                     <input
                       className={INPUT_CLASS}
                       value={row.description}
                       onChange={(e) => updateRow(i, { description: e.target.value })}
                     />
                   </td>
-                  <td className="border border-slate-200 p-0.5">
+                  <td className="border border-border bg-[hsl(var(--form-input))] p-0.5">
                     <input
                       type="number"
                       className={INPUT_CLASS}
@@ -88,8 +91,8 @@ export function ParetoChartForm({ data, onChange }: CustomFormProps) {
                       onChange={(e) => updateRow(i, { quantity: e.target.valueAsNumber || 0 })}
                     />
                   </td>
-                  <td className="border border-slate-200 px-2 py-1 text-slate-600">{cumPct === null ? "—" : `${cumPct}%`}</td>
-                  <td className="border border-slate-200 text-center">
+                  <td className="border border-border bg-[hsl(var(--form-input))] px-2 py-1 text-[hsl(var(--form-input-foreground))]">{cumPct === null ? "—" : `${cumPct}%`}</td>
+                  <td className="border border-border bg-[hsl(var(--form-input))] text-center">
                     <button onClick={() => removeRow(i)} className="text-muted-foreground hover:text-destructive" aria-label="Remove row">
                       ×
                     </button>
@@ -99,7 +102,7 @@ export function ParetoChartForm({ data, onChange }: CustomFormProps) {
             })}
           </tbody>
         </table>
-        <button onClick={addRow} className="mt-2 rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50">
+        <button onClick={addRow} className="mt-2 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
           + Add row
         </button>
       </div>

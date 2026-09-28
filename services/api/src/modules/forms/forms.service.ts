@@ -120,8 +120,8 @@ export async function exportPdf(db: Db, formType: string, entityId?: number) {
 
   const template = await loadTemplate(db, formType);
   const current = await loadData(db, formType, entityId);
-  if (!current) throw AppError.notFound("Form data");
-
-  const pdfBytes = await mergePdfFields(template, current.data);
-  return pdfBytes;
+  // A record can be printed before the form has been saved. A blank sheet
+  // is still the form; refusing with "not found" left the Print button dead.
+  const data = (current?.data ?? {}) as Record<string, unknown>;
+  return mergePdfFields(template, data);
 }

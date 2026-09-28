@@ -136,7 +136,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         aria-modal="true"
         aria-label="Command palette"
         tabIndex={-1}
-        className="modal-in fixed left-1/2 top-24 z-50 w-full max-w-lg -translate-x-1/2 rounded-lg border border-border bg-card shadow-xl outline-none"
+        className="aq-menu modal-in fixed left-1/2 top-24 z-50 w-full max-w-lg -translate-x-1/2 rounded-lg border border-border bg-card text-foreground shadow-xl outline-none"
       >
         <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
           <Search size={15} className="flex-none text-muted-foreground" />

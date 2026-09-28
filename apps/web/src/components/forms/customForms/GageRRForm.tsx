@@ -7,7 +7,8 @@ interface CustomFormProps {
 }
 
 const PARTS = Array.from({ length: PART_COUNT }, (_, i) => i + 1);
-const INPUT_CLASS = "w-full rounded border border-slate-300 bg-white px-1.5 py-1 text-xs outline-none focus:ring-1 focus:ring-primary";
+const INPUT_CLASS =
+  "w-full rounded border border-border bg-[hsl(var(--form-input))] px-1.5 py-1 text-xs text-[hsl(var(--form-input-foreground))] outline-none focus:ring-1 focus:ring-primary";
 
 function numArray(v: unknown): number[] {
   const arr = Array.isArray(v) ? v : [];
@@ -78,7 +79,7 @@ export function GageRRForm({ data, onChange }: CustomFormProps) {
   function headerField(label: string, name: string, type: "text" | "number" | "date" = "text") {
     return (
       <label className="flex flex-col gap-1 text-xs">
-        <span className="font-semibold text-slate-700">{label}</span>
+        <span className="font-semibold text-[hsl(var(--form-label-foreground))]">{label}</span>
         <input
           type={type}
           className={INPUT_CLASS}
@@ -92,9 +93,9 @@ export function GageRRForm({ data, onChange }: CustomFormProps) {
   function measurementRow(label: string, field: "aTrial1" | "aTrial2" | "bTrial1" | "bTrial2", values: number[]) {
     return (
       <tr>
-        <td className="border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium">{label}</td>
+        <td className="border border-border bg-[hsl(var(--form-label))] px-2 py-1 text-xs font-medium text-[hsl(var(--form-label-foreground))]">{label}</td>
         {values.map((v, i) => (
-          <td key={i} className="border border-slate-200 p-0.5">
+          <td key={i} className="border border-border bg-[hsl(var(--form-input))] p-0.5">
             <input
               type="number"
               className={INPUT_CLASS}
@@ -110,9 +111,9 @@ export function GageRRForm({ data, onChange }: CustomFormProps) {
   function derivedRow(label: string, values: number[]) {
     return (
       <tr>
-        <td className="border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium">{label}</td>
+        <td className="border border-border bg-[hsl(var(--form-label))] px-2 py-1 text-xs font-medium text-[hsl(var(--form-label-foreground))]">{label}</td>
         {values.map((v, i) => (
-          <td key={i} className="border border-slate-200 px-2 py-1 text-xs text-slate-600">
+          <td key={i} className="border border-border bg-[hsl(var(--form-input))] px-2 py-1 text-xs text-[hsl(var(--form-input-foreground))]">
             {fmt(v, 2)}
           </td>
         ))}
@@ -122,7 +123,9 @@ export function GageRRForm({ data, onChange }: CustomFormProps) {
 
   return (
     <div className="flex flex-col gap-5 text-sm">
-      <h2 className="text-center text-base font-bold uppercase tracking-wide text-slate-800">Gage R&amp;R (Average and Range Method)</h2>
+      <h2 className="text-center text-base font-bold uppercase tracking-wide" style={{ color: "var(--form-heading, #1d3a5c)" }}>
+        Gage R&amp;R (Average and Range Method)
+      </h2>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {headerField("Device Number", "deviceNumber")}
@@ -138,9 +141,9 @@ export function GageRRForm({ data, onChange }: CustomFormProps) {
         <table className="w-full border-collapse text-xs">
           <thead>
             <tr>
-              <th className="border border-slate-200 bg-slate-100 px-2 py-1 text-left">Part #</th>
+              <th className="border border-border bg-[hsl(var(--form-label))] px-2 py-1 text-left text-[hsl(var(--form-label-foreground))]">Part #</th>
               {PARTS.map((p) => (
-                <th key={p} className="border border-slate-200 bg-slate-100 px-2 py-1">
+                <th key={p} className="border border-border bg-[hsl(var(--form-label))] px-2 py-1 text-[hsl(var(--form-label-foreground))]">
                   {p}
                 </th>
               ))}
@@ -148,7 +151,7 @@ export function GageRRForm({ data, onChange }: CustomFormProps) {
           </thead>
           <tbody>
             <tr>
-              <td colSpan={PART_COUNT + 1} className="bg-slate-200 px-2 py-1 text-xs font-bold">
+              <td colSpan={PART_COUNT + 1} className="bg-[hsl(var(--form-label))] px-2 py-1 text-xs font-bold text-[hsl(var(--form-label-foreground))]">
                 Operator A
               </td>
             </tr>
@@ -157,7 +160,7 @@ export function GageRRForm({ data, onChange }: CustomFormProps) {
             {derivedRow("Mean", result.meanA)}
             {derivedRow("Range", result.rangeA)}
             <tr>
-              <td colSpan={PART_COUNT + 1} className="bg-slate-200 px-2 py-1 text-xs font-bold">
+              <td colSpan={PART_COUNT + 1} className="bg-[hsl(var(--form-label))] px-2 py-1 text-xs font-bold text-[hsl(var(--form-label-foreground))]">
                 Operator B
               </td>
             </tr>
@@ -170,8 +173,8 @@ export function GageRRForm({ data, onChange }: CustomFormProps) {
         </table>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-        <h3 className="mb-3 text-sm font-semibold text-slate-800">Calculation</h3>
+      <div className="rounded-lg border border-border bg-[hsl(var(--form-label))] p-4 text-[hsl(var(--form-label-foreground))]">
+        <h3 className="mb-3 text-sm font-semibold">Calculation</h3>
         <div className="grid gap-x-6 gap-y-1.5 text-xs sm:grid-cols-2">
           <div>
             R̄ (Rśr) = (R̄A + R̄B) / 2 = <strong>{fmt(result.rBar)}</strong>
@@ -195,8 +198,8 @@ export function GageRRForm({ data, onChange }: CustomFormProps) {
             PV (Part Variation) = R̄p × K3 = <strong>{fmt(result.pv)}</strong>
           </div>
           <div>%PV &amp; Tol = {result.pvPctTol === null ? "—" : `${fmt(result.pvPctTol, 1)}%`}</div>
-          <div className="text-sm font-bold text-slate-900">GRR = √(EV² + AV²) = {fmt(result.grr)}</div>
-          <div className="text-sm font-bold text-slate-900">
+          <div className="text-sm font-bold">GRR = √(EV² + AV²) = {fmt(result.grr)}</div>
+          <div className="text-sm font-bold">
             %GRR &amp; Tol = {result.grrPctTol === null ? "—" : `${fmt(result.grrPctTol, 1)}%`}
           </div>
         </div>
