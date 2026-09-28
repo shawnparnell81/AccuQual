@@ -17,6 +17,7 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { TextField } from "../../components/forms/Field";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { ObsoleteArchiveDialog } from "./ObsoleteArchiveDialog";
+import { ValidationReportsPanel } from "../ValidationReports/ValidationReportsPanel";
 
 /**
  * A single document folder (Drawings, Master Tool List, Shipping, and the other
@@ -184,6 +185,8 @@ export function DocumentCategoryPage() {
           </button>
         </div>
       </div>
+
+      {category === "validation-reports" && <ValidationReportsPanel />}
 
       {documents.isLoading && <LoadingPlaceholder />}
       {documents.isError && <p className="text-sm text-destructive">Couldn't load this folder. Refresh the page and try again.</p>}

@@ -60,6 +60,7 @@ const ONE_SEGMENT: RegExp[] = [
   /^\/ncr\/\d+$/,
   /^\/capa\/\d+$/,
   /^\/8d\/\d+$/,
+  /^\/validation-reports\/\d+$/,
   /^\/audits\/\d+$/,
   /^\/folders\/[^/]+$/,
   /^\/documents\/\d+$/,
