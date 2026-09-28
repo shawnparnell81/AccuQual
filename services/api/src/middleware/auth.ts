@@ -5,6 +5,7 @@ import { AppError } from "../utils/appError.js";
 import { db } from "../db/index.js";
 import { users } from "../drizzle/schema/users.js";
 import { enrichRequestContext } from "../modules/monitoring/requestContext.js";
+import { touchSessionActivity } from "../modules/auth/sessionActivity.js";
 
 export interface AuthenticatedUser {
   id: number;
@@ -72,6 +73,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       supplierId: payload.supplierId ?? null,
     };
     enrichRequestContext({ userId: req.user.id });
+    if (typeof payload.sid === "string" && payload.sid.length > 0) await touchSessionActivity(payload.sid);
     next();
   } catch (err) {
     next(err);

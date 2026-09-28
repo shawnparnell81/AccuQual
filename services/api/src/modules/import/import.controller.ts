@@ -5,6 +5,7 @@ import { AppError } from "../../utils/appError.js";
 import { logger } from "../../utils/logger.js";
 import { getImportEntity, type AnyImportEntity, type ImportContext } from "./import.entities.js";
 import { parseSpreadsheet, type ParsedSheet } from "./import.parser.js";
+import { sniffSpreadsheet } from "../../utils/fileSniff.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { requireRole } from "../../middleware/rbac.js";
 
@@ -56,6 +57,7 @@ export function suggestMapping(entity: AnyImportEntity, headers: string[]): Reco
 
 async function readUpload(req: Request): Promise<ParsedSheet> {
   if (!req.file) throw AppError.badRequest("Choose an Excel (.xlsx) or CSV file to import.");
+  if (!sniffSpreadsheet(req.file.buffer, req.file.originalname)) throw AppError.badRequest("Choose an Excel (.xlsx) or CSV file to import.");
   return parseSpreadsheet(req.file.buffer, req.file.originalname);
 }
 

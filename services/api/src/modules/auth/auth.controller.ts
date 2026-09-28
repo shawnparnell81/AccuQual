@@ -39,7 +39,10 @@ function sessionCookieOptions() {
   return {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
-    sameSite: (env.NODE_ENV === "production" ? "none" : "lax") as "none" | "lax",
+    // app.accuqualqms.com and api.accuqualqms.com are the same site
+    // (accuqualqms.com). The browser calls the app host, and /api is
+    // forwarded to the API, so a host-only Lax cookie is sent on that call.
+    sameSite: "lax" as const,
     path: "/",
   };
 }
@@ -49,25 +52,20 @@ function sessionCookieOptions() {
  * set to continue where you left off may put the cookie back; the client
  * treats that as signed out unless a tab from this visit is still open
  * (browserSession.ts) and calls endBrowserSessionHandler to revoke it.
- * The server still rejects the refresh token 12 hours after sign-in, even
- * if the browser stays open. The value is encrypted; the refresh token is
- * not stored in the cookie as clear text.
+ * The server still rejects the refresh token 12 hours after sign-in, and
+ * refuses a refresh after 30 minutes with no activity, even if the browser
+ * stays open. The value is encrypted; the refresh token is not stored in
+ * the cookie as clear text.
  */
 export function setRefreshCookie(res: Response, refreshToken: string) {
   res.cookie(REFRESH_COOKIE_NAME, encryptRefreshCookie(refreshToken), {
     ...sessionCookieOptions(),
-    // SameSite=None (only valid with Secure, which production already sets)
-    // still sends the cookie on the same-origin /api path used by compose
-    // (nginx) and by the private Render deploy (static-site rewrite). It
-    // also keeps a credentialed call working if the browser ever talks to
-    // the API on its own origin.
-    // Dev runs both over plain http on localhost, where SameSite=Lax still
-    // works and doesn't require https.
-    // No Domain attribute, on purpose. The browser talks to
-    // app.accuqualqms.com and the /api rewrite forwards to
-    // api.accuqualqms.com. A host-only cookie is stored for the host the
-    // browser actually called and is sent back on /api/*. Pinning Domain to
-    // the API host would hide it from that call.
+    // SameSite=Lax. The browser talks to app.accuqualqms.com and the /api
+    // rewrite forwards to api.accuqualqms.com, which is the same site, so
+    // the cookie is sent on that call. Dev is the same idea on localhost.
+    // No Domain attribute, on purpose. A host-only cookie is stored for the
+    // host the browser actually called and is sent back on /api/*. Pinning
+    // Domain to the API host would hide it from that call.
     // No maxAge and no expires: those attributes would keep the cookie after
     // the browser closes. The 12-hour limit is on the token, not the cookie.
   });

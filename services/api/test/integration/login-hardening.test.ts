@@ -159,12 +159,23 @@ describe("Login hardening (real DB + real HTTP path)", () => {
   });
 
   describe("sessions", () => {
-    it("does not end a session just because it has been idle", async () => {
+    it("ends a session that has been idle for more than 30 minutes", async () => {
       const u = await makeUser("idle");
       const agent = request.agent(app);
       const res = await agent.post("/auth/login").send({ email: u.email, password: GOOD });
       expect(res.status).toBe(200);
-      await db.update(refreshTokens).set({ createdAt: new Date(Date.now() - 3 * 60 * 60_000) }).where(eq(refreshTokens.userId, u.id));
+      await db.update(refreshTokens).set({ lastActivityAt: new Date(Date.now() - 31 * 60_000) }).where(eq(refreshTokens.userId, u.id));
+      const refreshed = await agent.post("/auth/refresh").set(CSRF);
+      expect(refreshed.status).toBe(401);
+      expect(refreshed.body.message).toMatch(/inactivity|30 minutes/);
+    });
+
+    it("keeps a session that was used in the last 30 minutes even if sign-in was hours ago", async () => {
+      const u = await makeUser("recent");
+      const agent = request.agent(app);
+      const res = await agent.post("/auth/login").send({ email: u.email, password: GOOD });
+      expect(res.status).toBe(200);
+      await db.update(refreshTokens).set({ createdAt: new Date(Date.now() - 3 * 60 * 60_000), lastActivityAt: new Date(Date.now() - 5 * 60_000) }).where(eq(refreshTokens.userId, u.id));
       expect((await agent.post("/auth/refresh").set(CSRF)).status).toBe(200);
     });
 

@@ -1,5 +1,4 @@
 import { Router, type Request, type Response } from "express";
-import { createReadStream } from "node:fs";
 import { unlink } from "node:fs/promises";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
@@ -18,6 +17,7 @@ import { attachments } from "../../drizzle/schema/attachments.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { hasPermission } from "../../middleware/requirePermission.js";
 import { bearerToken, readAttachmentClaims, readCallbackClaims, readFileClaims, readFolderClaims, signOfficeToken, verifyDocumentServerPayload, verifyOfficeToken } from "./token.js";
+import { sendStoredFile } from "../../utils/storedFile.js";
 import { officeViewer, streamStoredFile } from "./viewSession.js";
 
 function requireSettings() {
@@ -97,12 +97,7 @@ onlyOfficePublicRouter.get(
     const access = await authorizeOfficeFile(db, actor, claims);
     if (!access.ok) throw AppError.notFound("File");
 
-    res.setHeader("Content-Type", access.file.mimeType);
-    res.setHeader("Content-Length", String(access.file.sizeBytes));
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("Cache-Control", "private, no-store");
-    res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(access.file.fileName)}`);
-    createReadStream(access.file.filePath).pipe(res);
+    await sendStoredFile(res, access.file.filePath, access.file.fileName, access.file.mimeType, "preview");
   }),
 );
 
@@ -115,7 +110,7 @@ onlyOfficePublicRouter.get(
     if (!actor) throw AppError.notFound("File");
     const [row] = await db.select().from(attachments).where(eq(attachments.id, claims.attachmentId));
     if (!row) throw AppError.notFound("File");
-    streamStoredFile(res, row.filePath, row.mimeType ?? "application/octet-stream", row.fileSize ?? 0, row.fileName);
+    await streamStoredFile(res, row.filePath, row.mimeType ?? "application/octet-stream", row.fileSize ?? 0, row.fileName);
   }),
 );
 
@@ -132,7 +127,7 @@ onlyOfficePublicRouter.get(
     if (!row?.pdfPath) throw AppError.notFound("File");
     const ext = row.pdfPath.includes(".") ? row.pdfPath.slice(row.pdfPath.lastIndexOf(".")) : "";
     const fileName = row.name.toLowerCase().endsWith(ext.toLowerCase()) ? row.name : `${row.name}${ext}`;
-    streamStoredFile(res, row.pdfPath, row.pdfMimeType ?? "application/octet-stream", undefined, fileName);
+    await sendStoredFile(res, row.pdfPath, fileName, row.pdfMimeType, "download");
   }),
 );
 

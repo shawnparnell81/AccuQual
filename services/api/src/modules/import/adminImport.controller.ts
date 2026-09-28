@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { mkdir, unlink } from "node:fs/promises";
+import { mkdir, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
@@ -18,6 +18,7 @@ import { isFullAccessRole, roleHasImportPermission } from "../roles/roleAccess.j
 import { suggestMapping } from "./import.controller.js";
 import { IMPORT_CATALOG, getCatalogEntry } from "./import.catalog.js";
 import { SYNC_ROW_LIMIT, executeImport, scheduleImport } from "./import.job.js";
+import { sniffSpreadsheet } from "../../utils/fileSniff.js";
 import { scanSpreadsheet } from "./import.scan.js";
 
 const optionsSchema = z.object({
@@ -217,6 +218,11 @@ export const uploadImport = asyncHandler(async (req: Request, res: Response) => 
     await unlink(stored).catch(() => undefined);
     throw AppError.badRequest("Upload a CSV or Excel file (.csv, .xlsx, or .xls).");
   }
+  const sniffed = sniffSpreadsheet(await readFile(stored), file.originalname);
+  if (!sniffed) {
+    await unlink(stored).catch(() => undefined);
+    throw AppError.badRequest("Upload a CSV or Excel file (.csv, .xlsx, or .xls).");
+  }
 
   const sample: string[][] = [];
   let scanned: { headers: string[]; totalRows: number };
@@ -237,7 +243,7 @@ export const uploadImport = asyncHandler(async (req: Request, res: Response) => 
       fileName: file.originalname,
       filePath: stored,
       fileSize: file.size,
-      mimeType: file.mimetype,
+      mimeType: sniffed.mime,
       status: "uploaded",
       totalRows: scanned.totalRows,
       headers: scanned.headers,

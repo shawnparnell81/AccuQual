@@ -28,6 +28,7 @@ import { sendEmail } from "../notifications/notification.service.js";
 import { renderTemplate } from "../notifications/templates.js";
 import { logger } from "../../utils/logger.js";
 import { env } from "../../config/env.js";
+import { sessionIsIdle } from "./sessionActivity.js";
 
 // Sign-in runs before a request transaction exists, so — unlike every other
 // module — this service intentionally uses the plain `db` singleton.
@@ -87,6 +88,7 @@ async function issueTokens(user: {
   supplierId?: number | null;
   tokenVersion: number;
 }, sessionExpiresAt: Date) {
+  const jti = randomUUID();
   const accessToken = signAccessToken({
     sub: String(user.id),
     roleId: user.roleId,
@@ -94,10 +96,10 @@ async function issueTokens(user: {
     department: user.department,
     supplierId: user.supplierId ?? null,
     tv: user.tokenVersion,
+    sid: jti,
   });
-  const jti = randomUUID();
   const refreshToken = signRefreshToken({ sub: String(user.id), tokenVersion: user.tokenVersion, jti }, sessionExpiresAt);
-  await db.insert(refreshTokens).values({ userId: user.id, jti, expiresAt: sessionExpiresAt });
+  await db.insert(refreshTokens).values({ userId: user.id, jti, expiresAt: sessionExpiresAt, lastActivityAt: new Date() });
   // refreshJti and sessionExpiresAt never reach a response body —
   // auth.controller.ts's withoutRefreshToken strips them alongside
   // refreshToken itself. refreshJti is only for refresh()'s own internal
@@ -320,6 +322,10 @@ export async function refresh(refreshToken: string) {
     if (tokenRow.expiresAt.getTime() - Date.now() < 1000) {
       await revokeRefreshTokenRows(full.id);
       throw AppError.unauthorized("Your sign-in expired after 12 hours. Please sign in again.");
+    }
+    if (sessionIsIdle(tokenRow.lastActivityAt)) {
+      await db.update(refreshTokens).set({ revokedAt: new Date() }).where(and(eq(refreshTokens.id, tokenRow.id), isNull(refreshTokens.revokedAt)));
+      throw AppError.unauthorized(`Your session timed out after ${env.SESSION_IDLE_TIMEOUT_MINUTES} minutes of inactivity. Please sign in again.`);
     }
     sessionExpiresAt = continuingSessionEnd(tokenRow.expiresAt);
 

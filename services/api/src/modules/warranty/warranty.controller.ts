@@ -16,6 +16,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import type { Db } from "../../lib/requestDb.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
+import { UPLOAD_TYPE_ERROR, sniffUpload } from "../../utils/fileSniff.js";
 
 /** Same inline-guard style as rma.controller.ts/inventory.controller.ts's assertDepartment — used for the one thing left that's a real fixed business rule (which stage of the workflow belongs to whom) rather than a tunable access level. */
 function assertDepartment(req: Request, allowed: string[]) {
@@ -260,6 +261,8 @@ export const uploadWarrantyDocumentHandler = asyncHandler(async (req: Request, r
   await assertWarrantyContentWrite(req);
   const file = req.file;
   if (!file) throw AppError.badRequest("No file uploaded");
+  const sniffed = sniffUpload(file.buffer, file.originalname);
+  if (!sniffed) throw AppError.badRequest(UPLOAD_TYPE_ERROR);
   const category = (req.body.category as string | undefined) === "failure_image" ? "failure_image" : "document";
   const caption = req.body.caption as string | undefined;
 
@@ -276,7 +279,7 @@ export const uploadWarrantyDocumentHandler = asyncHandler(async (req: Request, r
       entityId: record.id,
       fileName: file.originalname,
       filePath: path,
-      mimeType: file.mimetype,
+      mimeType: sniffed.mime,
       fileSize: file.size,
       uploadedBy: req.user?.id,
     })

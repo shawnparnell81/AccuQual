@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
-import { createReadStream, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { and, eq } from "drizzle-orm";
 import { equipment, calibrations, type Calibration } from "../../drizzle/schema/calibration.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
@@ -12,6 +12,8 @@ import { env } from "../../config/env.js";
 import { logger } from "../../utils/logger.js";
 import type { Db } from "../../lib/requestDb.js";
 import * as service from "./calibration.service.js";
+import { PDF_ONLY_ERROR, sniffPdf } from "../../utils/fileSniff.js";
+import { sendStoredFile } from "../../utils/storedFile.js";
 
 export const baseHandlers = crudFactory(equipment, { entityName: "Equipment", idColumn: "id" });
 
@@ -123,7 +125,7 @@ export const uploadCertificateHandler = asyncHandler(async (req: Request, res: R
   const calibrationId = Number(req.params.calibrationId);
   const file = req.file;
   if (!file) throw AppError.badRequest("No file uploaded");
-  if (file.mimetype !== "application/pdf") throw AppError.badRequest("Only PDF files are accepted");
+  if (!sniffPdf(file.buffer, file.originalname)) throw AppError.badRequest(PDF_ONLY_ERROR);
 
   const [calibration] = await req.db!.select().from(calibrations).where(and(eq(calibrations.id, calibrationId)));
   if (!calibration) throw AppError.notFound("Calibration event");
@@ -162,7 +164,5 @@ export const downloadCertificateHandler = asyncHandler(async (req: Request, res:
   if (!calibration) throw AppError.notFound("Calibration event");
   if (!calibration.certificatePath || !existsSync(calibration.certificatePath)) throw AppError.notFound("Certificate file");
 
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `inline; filename="calibration-${calibrationId}-certificate.pdf"`);
-  createReadStream(calibration.certificatePath).pipe(res);
+  await sendStoredFile(res, calibration.certificatePath, `calibration-${calibrationId}-certificate.pdf`, "application/pdf", "preview");
 });
