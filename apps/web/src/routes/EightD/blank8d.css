@@ -1,31 +1,28 @@
+/* Blank 8D fields keep the sheet's order. Colors follow the NCR/CAPA form tokens. */
 .b8,
 .b8 * {
   box-sizing: border-box;
 }
 
 .b8 {
-  --b8-ink: #222;
-  --b8-line: #222;
-  --b8-sheet: #ededed;
-  --b8-header: #d9d9d9;
-  --b8-paper: #fff;
-  font-family: Gadugi, "Segoe UI", Calibri, Arial, sans-serif;
-  color: var(--b8-ink);
-  background: var(--b8-sheet);
-  border: 1px solid var(--b8-line);
-  padding: 10px 8px 12px;
-  max-width: 1040px;
+  font-family: var(--fb), "Inter", system-ui, sans-serif;
+  color: hsl(var(--foreground));
+  background: transparent;
+  max-width: none;
 }
 
 .b8-title {
   text-align: center;
   font-weight: 700;
-  font-size: 22px;
-  line-height: 1.2;
-  background: var(--b8-paper);
-  border: 1px solid var(--b8-line);
-  padding: 10px 8px;
-  margin-bottom: 8px;
+  font-size: 1rem;
+  line-height: 1.3;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  color: var(--form-heading, #1d3a5c);
+  background: transparent;
+  border: 0;
+  padding: 0 8px 4px;
+  margin: 0 0 1.25rem;
 }
 
 .b8-cols {
@@ -33,21 +30,26 @@
   grid-template-columns: 1.36fr 2.56fr 0.07fr 1.85fr 0.82fr 0.82fr 0.82fr 0.82fr 0.89fr;
 }
 
-.b8-header {
-  row-gap: 5px;
+.b8-header,
+.b8-block {
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.375rem;
+  background: hsl(var(--card));
 }
 
 .b8-block {
-  margin-top: 5px;
+  margin-top: 1.25rem;
 }
 
 .b8-lab,
 .b8-val,
 .b8-head,
 .b8-box {
-  border: 1px solid var(--b8-line);
-  min-height: 24px;
+  min-height: 28px;
   min-width: 0;
+  border-right: 1px solid hsl(var(--border));
+  border-bottom: 1px solid hsl(var(--border));
 }
 
 .b8-lab {
@@ -55,21 +57,22 @@
   align-items: center;
   justify-content: flex-end;
   text-align: right;
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 1.15;
-  padding: 2px 4px;
-  background: var(--b8-sheet);
+  padding: 6px 8px;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
 }
 
 .b8-lab.left {
   justify-content: flex-start;
   text-align: left;
-  font-weight: 700;
 }
 
 .b8-lab.tiny {
   font-size: 10px;
-  font-weight: 400;
+  font-weight: 600;
   line-height: 1.1;
   white-space: normal;
 }
@@ -77,28 +80,24 @@
 .b8-head {
   display: flex;
   align-items: center;
-  background: var(--b8-header);
+  background: var(--form-bar, #1d3a5c);
+  color: #fff;
   font-weight: 700;
-  font-size: 12px;
-  line-height: 1.2;
-  padding: 3px 5px;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  padding: 6px 12px;
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .b8-head.center {
   justify-content: center;
   text-align: center;
-  font-size: 11px;
-}
-
-.b8-head.wrap {
-  align-items: flex-start;
-  white-space: normal;
 }
 
 .b8-val,
 .b8-box {
-  background: var(--b8-paper);
   display: flex;
+  background: hsl(var(--card));
 }
 
 .b8 input.b8-input,
@@ -108,13 +107,18 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--b8-ink);
+  color: hsl(var(--foreground));
   font-family: inherit;
-  font-size: 12px;
-  line-height: 1.25;
-  padding: 3px 4px;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  padding: 6px 8px;
   outline: none;
   box-shadow: none;
+}
+
+.b8 input.b8-input:focus,
+.b8 textarea.b8-area:focus {
+  box-shadow: inset 0 0 0 2px hsl(var(--ring));
 }
 
 .b8 input.b8-input.center {
@@ -123,12 +127,12 @@
 
 .b8 textarea.b8-area {
   resize: vertical;
-  min-height: 72px;
+  min-height: 88px;
   text-align: left;
 }
 
 .b8 .d7-body textarea.b8-area {
-  min-height: 48px;
+  min-height: 56px;
 }
 
 .d7-split {
@@ -140,18 +144,18 @@
 
 .d7-split span:last-child {
   text-align: right;
-  font-size: 11px;
+  font-weight: 700;
 }
 
 .b8 .d8-body textarea.b8-area {
-  min-height: 36px;
+  min-height: 48px;
 }
 
 .b8-impact {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 6px;
+  padding: 4px 8px;
   font-size: 12px;
   font-weight: 400;
 }
@@ -160,23 +164,25 @@
 .b8-doc-checks label {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   font-weight: 400;
+  color: hsl(var(--foreground));
 }
 
 .b8 input[type="checkbox"] {
-  accent-color: #111;
-  width: 13px;
-  height: 13px;
+  accent-color: hsl(var(--primary));
+  width: 14px;
+  height: 14px;
   margin: 0;
 }
 
 .b8-or {
   margin: 0 4px 0 10px;
+  color: hsl(var(--muted-foreground));
 }
 
 .d1d2 {
-  grid-template-rows: auto 26px 26px 68px;
+  grid-template-rows: auto 32px 32px 88px;
 }
 
 .d1d2 .problem {
@@ -194,25 +200,103 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 16px;
-  background: var(--b8-paper);
-  border: 1px solid var(--b8-line);
-  border-top: 0;
-  min-height: 28px;
-  padding: 4px 6px;
+  gap: 8px 16px;
+  background: hsl(var(--card));
+  min-height: 36px;
+  padding: 8px 12px;
   font-size: 12px;
+  color: hsl(var(--foreground));
 }
 
 .b8-doc-checks .apply {
   margin-right: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+}
+
+@page eight-d-sheet {
+  size: letter landscape;
+  margin: 0.4in;
+}
+
+.eight-d-print {
+  page: eight-d-sheet;
 }
 
 @media print {
   .no-print {
     display: none !important;
   }
+
+  .b8-cols {
+    grid-template-columns: 1.15fr 1.7fr 0.05fr 1.35fr 1fr 1fr 1.05fr 1.05fr 1.05fr;
+  }
+
+  .b8-header,
+  .b8-block {
+    overflow: visible;
+  }
+
   .b8 {
-    max-width: none;
+    color: #000;
+  }
+
+  .b8-title {
+    color: #000;
+  }
+
+  .b8-header,
+  .b8-block {
+    break-inside: avoid;
+    background: #fff;
     border-color: #000;
+  }
+
+  .b8-lab,
+  .b8-val,
+  .b8-box {
+    border-color: #000;
+    color: #000;
+    background: #fff;
+  }
+
+  .b8-lab {
+    background: #f3f4f6;
+  }
+
+  .b8-head {
+    background: var(--form-bar, #1d3a5c);
+    color: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .b8 input.b8-input,
+  .b8 textarea.b8-area,
+  .b8-doc-checks,
+  .b8-impact label,
+  .b8-doc-checks label {
+    color: #000;
+    background: transparent;
+    font-size: 10px;
+  }
+
+  .b8 textarea.b8-area,
+  .b8 .d7-body textarea.b8-area,
+  .b8 .d8-body textarea.b8-area {
+    min-height: 2.4em;
+  }
+
+  .b8-title {
+    margin-bottom: 6px;
+  }
+
+  .b8-block {
+    margin-top: 6px;
+  }
+
+  .d1d2 {
+    grid-template-rows: auto auto auto auto;
   }
 }

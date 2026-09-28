@@ -1155,15 +1155,59 @@ body.side-collapsed .aq-nav-folder-link {
   .aq-topbar,
   .aq-sidebar,
   .aq-scrim,
-  .aq-skip {
+  .aq-skip,
+  .no-print {
     display: none !important;
   }
   .app-shell,
-  .app-main {
+  .app-main,
+  #main-content,
+  .page-enter {
     height: auto !important;
+    max-width: none !important;
     overflow: visible !important;
     margin: 0 !important;
     padding: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .aq-print-stack {
+    display: block !important;
+  }
+  .aq-print-stack > * {
+    width: 100% !important;
+    max-width: none !important;
+    position: static !important;
+    break-inside: avoid;
+    margin-bottom: 12px;
+  }
+  .aq-print-sheet {
+    background: #fff !important;
+    color: #000 !important;
+    border-color: #000 !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .aq-print-sheet button {
+    display: none !important;
+  }
+  .bg-card {
+    background: #fff !important;
+  }
+  .bg-muted {
+    background: #f3f4f6 !important;
+    color: #000 !important;
+  }
+  .text-foreground,
+  .text-muted-foreground {
+    color: #000 !important;
+  }
+  .text-white {
+    color: #fff !important;
+  }
+  @page {
+    margin: 0.5in;
   }
 }
 

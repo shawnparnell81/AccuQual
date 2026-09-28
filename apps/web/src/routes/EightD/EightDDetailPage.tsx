@@ -3,7 +3,6 @@ import { Link, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
-import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
@@ -124,6 +123,11 @@ export function EightDDetailPage() {
     return () => clearTimeout(timer);
   }, [canEdit, draftDirty, report, reportId, saveDraft, values]);
 
+  function saveRecord() {
+    if (!report || !values) return;
+    updateReport.mutate({ id: reportId, data: buildSaveData(report.data, values) });
+  }
+
   if (isError) return <p className="text-sm text-destructive">Couldn't load this 8D report. Refresh the page and try again.</p>;
   if (isLoading || !report || !values) return <LoadingPlaceholder />;
 
@@ -131,7 +135,7 @@ export function EightDDetailPage() {
   const nextStep = STEPS[report.currentStep - 1];
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="eight-d-print flex flex-col gap-4">
       <div className="no-print flex flex-col gap-4">
         <RecordCrumbs
           items={[
@@ -206,7 +210,19 @@ export function EightDDetailPage() {
               />
             )}
             <SaveStatus saving={updateReport.isPending} unsaved={draftDirty && !updateReport.isPending} />
-            <PrintFormButton formType="eight_d" entityId={report.id} />
+            {canEdit && (
+              <button
+                type="button"
+                onClick={saveRecord}
+                disabled={updateReport.isPending}
+                className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60"
+              >
+                {updateReport.isPending ? "Saving…" : "Save"}
+              </button>
+            )}
+            <button type="button" onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+              Print
+            </button>
           </div>
         </div>
         {!canEdit && <p className="text-sm text-muted-foreground">{READ_ONLY_REASON}</p>}
@@ -237,12 +253,14 @@ export function EightDDetailPage() {
         )}
       </div>
 
-      <Blank8DSheet
-        eightDNo={report.id}
-        values={values}
-        readOnly={!canEdit}
-        onChange={(patch) => setValues((current) => (current ? { ...current, ...patch } : current))}
-      />
+      <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
+        <Blank8DSheet
+          eightDNo={report.id}
+          values={values}
+          readOnly={!canEdit}
+          onChange={(patch) => setValues((current) => (current ? { ...current, ...patch } : current))}
+        />
+      </div>
 
       {earlier.length > 0 && (
         <section className="no-print rounded-lg border border-border bg-card p-4">

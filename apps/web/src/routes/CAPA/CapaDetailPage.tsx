@@ -148,8 +148,8 @@ export function CapaDetailPage() {
         )}
       </p>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-lg border border-border bg-card p-4">
+      <div className="aq-print-stack grid gap-4 lg:grid-cols-2">
+        <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-medium">Cause</h2>
             {canEdit && <AiFieldAssistant
@@ -175,7 +175,7 @@ export function CapaDetailPage() {
           />
         </div>
 
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
           <h2 className="mb-2 text-sm font-medium">What you'll do</h2>
           <TextAreaField
             label=""
@@ -185,7 +185,7 @@ export function CapaDetailPage() {
           />
         </div>
 
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
           <h2 className="mb-2 text-sm font-medium">How you'll keep it from coming back</h2>
           <TextAreaField
             label=""
@@ -195,7 +195,7 @@ export function CapaDetailPage() {
           />
         </div>
 
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
           <h2 className="mb-2 text-sm font-medium">Did the fix work?</h2>
           {capa.status === "open" ? (
             <p className="text-sm text-muted-foreground">Start the work above first. You can't check the fix before that.</p>
@@ -217,7 +217,7 @@ export function CapaDetailPage() {
           )}
         </div>
 
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="no-print rounded-lg border border-border bg-card p-4">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-medium">How solid is this writeup?</h2>
             {canEdit && <AiFieldAssistant
@@ -238,7 +238,7 @@ export function CapaDetailPage() {
           </p>
         </div>
 
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="no-print rounded-lg border border-border bg-card p-4">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-medium">Draft a plan</h2>
             {canEdit && <AiStructuredSuggestion<CapaGeneratedPlan>
@@ -284,8 +284,10 @@ export function CapaDetailPage() {
         </div>
       </div>
 
-      <AttachmentsPanel entityType="capa" entityId={capaId} />
-      <WorkflowHistoryPanel moduleName="capa" recordId={capaId} />
+      <div className="no-print flex flex-col gap-4">
+        <AttachmentsPanel entityType="capa" entityId={capaId} />
+        <WorkflowHistoryPanel moduleName="capa" recordId={capaId} />
+      </div>
     </div>
   );
 }
