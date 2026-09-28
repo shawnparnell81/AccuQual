@@ -5,6 +5,7 @@ import { useAuthStore } from "../../store/authStore";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import type { DocumentChangeRequest, DocumentChangeItem, DocumentChangeReview, DocumentChangeStatus } from "../../api/types";
+import { PictureBoundText } from "../../components/forms/PictureText";
 
 const STATUSES: DocumentChangeStatus[] = ["draft", "active", "obsolete"];
 
@@ -177,11 +178,13 @@ export function DocumentChangeRequestForm({ dcr }: { dcr: DocumentChangeRequest 
       <h2 className="mb-2 mt-6 border-l-4 border-primary bg-muted/50 px-3 py-1.5 text-xs font-bold uppercase tracking-wide print:border-black print:bg-transparent print:text-black">
         Additional Comments / Attachments
       </h2>
-      <textarea
+      <PictureBoundText
         className="w-full rounded-md border border-border bg-background p-2 text-sm print:border-black print:bg-white print:text-black"
         rows={3}
-        defaultValue={dcr.additionalComments ?? ""}
-        onBlur={(e) => e.target.value !== (dcr.additionalComments ?? "") && patchHeader.mutate({ additionalComments: e.target.value || null })}
+        saved={dcr.additionalComments ?? ""}
+        entityType="document_change_requests"
+        entityId={dcr.id}
+        onSave={(value) => patchHeader.mutate({ additionalComments: value || null })}
       />
     </div>
   );

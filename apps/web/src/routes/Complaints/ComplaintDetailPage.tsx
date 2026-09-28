@@ -6,6 +6,7 @@ import { SelectField, TextAreaField, TextField } from "../../components/forms/Fi
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
+import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import { useToast } from "../../components/shared/ToastProvider";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
@@ -70,6 +71,7 @@ export function ComplaintDetailPage() {
     fields.resolution !== (complaint.resolution ?? "");
 
   return (
+    <PictureRecordProvider entityType="complaint" entityId={complaint.id}>
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -177,5 +179,6 @@ export function ComplaintDetailPage() {
       <WorkflowHistoryPanel moduleName="complaints" recordId={complaintId} />
       <AttachmentsPanel entityType="complaint" entityId={complaint.id} />
     </div>
+    </PictureRecordProvider>
   );
 }

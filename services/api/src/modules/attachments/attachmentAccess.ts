@@ -38,6 +38,7 @@ const PARENTS: Record<string, { resource: ResourceKey; table: string; site: bool
   ppap: { resource: "ppap", table: "ppap_packages", site: false },
   rma: { resource: "rma", table: "rma", site: false },
   training: { resource: "training", table: "training_courses", site: false },
+  qms_forms: { resource: "qms_forms", table: "qms_forms", site: false },
   CustomerCommunication: { resource: "customer_communications", table: "customer_communications", site: false },
 };
 

@@ -67,7 +67,7 @@ export function NcrQuarantineSection({ ncrId, canEdit }: { ncrId: number; canEdi
   const showSerial = rows.some((row) => !!row.serialNumber) || canEdit;
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
+    <section className="no-print flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
       <div>
         <h2 className="text-sm font-medium">Quarantined items</h2>
         <p className="text-xs text-muted-foreground">Add every part held for this NCR. When you complete the disposition, they leave the active list and stay in Released.</p>

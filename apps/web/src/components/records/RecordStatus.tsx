@@ -107,7 +107,7 @@ export function RecordGlance({
           <h1 className="text-2xl font-semibold">{title}</h1>
           {standard && <p className="text-xs text-muted-foreground">{standard}</p>}
         </div>
-        {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+        {actions && <div className="no-print flex flex-wrap gap-2">{actions}</div>}
       </div>
       <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-card p-3 sm:grid-cols-5">
         <GlanceCell label="State">

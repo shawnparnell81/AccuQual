@@ -12,6 +12,7 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { SelectField } from "../../components/forms/Field";
 import { CrarFormRenderer } from "./CrarFormRenderer";
+import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import type { CrarClaim, CrarStatus, WarrantyClaim, RmaLogRecord } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
@@ -78,6 +79,7 @@ export function CrarDetailPage() {
   }
 
   return (
+    <PictureRecordProvider entityType="crar" entityId={crarId}>
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-2 print:hidden">
         <div>
@@ -195,5 +197,6 @@ export function CrarDetailPage() {
         <WorkflowHistoryPanel moduleName="crar" recordId={crarId} />
       </div>
     </div>
+    </PictureRecordProvider>
   );
 }

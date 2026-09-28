@@ -11,6 +11,7 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { SelectField } from "../../components/forms/Field";
 import { RmaLogFormRenderer } from "./RmaLogFormRenderer";
+import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import type { RmaLogRecord, RmaLogStatus, WarrantyClaim } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
@@ -72,6 +73,7 @@ export function RmaLogDetailPage() {
   }
 
   return (
+    <PictureRecordProvider entityType="rma_log" entityId={recordId}>
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-2 print:hidden">
         <div>
@@ -172,5 +174,6 @@ export function RmaLogDetailPage() {
           MODULE_ENTITY_TYPES map supports "rma_log" (Phase 9). */}
       <WorkflowHistoryPanel moduleName="rma_log" recordId={recordId} />
     </div>
+    </PictureRecordProvider>
   );
 }

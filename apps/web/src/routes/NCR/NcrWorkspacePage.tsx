@@ -24,6 +24,7 @@ import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { NcrQuarantineSection } from "./NcrQuarantineSection";
 import { RepeatNcrBanner } from "./RepeatNcrBanner";
+import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 
 const FORM_TYPE = "ncr";
 
@@ -98,6 +99,7 @@ export function NcrWorkspacePage() {
   const closed = ncr.status === "closed";
 
   return (
+    <PictureRecordProvider entityType="ncr" entityId={ncrId}>
     <div className="flex flex-col gap-4">
       <RecordGlance
         crumbs={[
@@ -172,9 +174,9 @@ export function NcrWorkspacePage() {
 
       <NcrQuarantineSection ncrId={ncrId} canEdit={canEdit} />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div className="aq-print-stack grid grid-cols-1 gap-4 xl:grid-cols-2">
         {/* Left pane — status/linking controls + the real editable form. */}
-        <div className="flex flex-col gap-4">
+        <div className="no-print flex flex-col gap-4">
           <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
             <p className="text-sm">{ncr.description || "No description provided."}</p>
             <ActionForm
@@ -229,7 +231,7 @@ export function NcrWorkspacePage() {
         </div>
 
         {/* Right pane — live read-only recreation, fed the same in-memory state as the left pane's form (no network round trip, no debounce). */}
-        <div className="rounded-lg border border-border bg-card p-4 xl:sticky xl:top-4 xl:h-fit">
+        <div className="aq-print-sheet rounded-lg border border-border bg-card p-4 xl:sticky xl:top-4 xl:h-fit">
           {formLoading || !layout ? (
             <p className="text-sm text-muted-foreground">Preview will appear once the form loads.</p>
           ) : (
@@ -242,6 +244,7 @@ export function NcrWorkspacePage() {
         <WorkflowHistoryPanel moduleName="ncr" recordId={ncrId} bare />
       </Modal>
     </div>
+    </PictureRecordProvider>
   );
 }
 

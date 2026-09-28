@@ -160,6 +160,8 @@ describe("8D due and closure", () => {
   it("treats a written D8 closure as closed and reads a dated target from the step data", () => {
     expect(eightDIsClosed({ d8_closure: "  " })).toBe(false);
     expect(eightDIsClosed({ d8_closure: "Verified on the floor" })).toBe(true);
+    expect(eightDIsClosed({ recognition: "Team recognized" })).toBe(true);
+    expect(eightDDueDate({ targetCloseDate: "2026-11-02" })?.toISOString().slice(0, 10)).toBe("2026-11-02");
     expect(eightDDueDate({ d4_target_date: "2026-10-01" })?.toISOString().slice(0, 10)).toBe("2026-10-01");
     expect(eightDDueDate({ notes: "due sometime" })).toBeNull();
   });

@@ -44,7 +44,7 @@ export function RepeatNcrBanner({ ncrId, canEdit }: { ncrId: number; canEdit: bo
   const others = data.matches.filter((match) => match.id !== ncrId);
 
   return (
-    <section className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4" aria-label="Repeat issue">
+    <section className="no-print rounded-lg border border-amber-500/40 bg-amber-500/10 p-4" aria-label="Repeat issue">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Repeat issue — consider a CAPA</h2>

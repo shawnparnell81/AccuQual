@@ -6,6 +6,7 @@ import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
+import { applyStepCompletion } from "./blank8dForm.js";
 
 export const baseHandlers = crudFactory(eightD, { entityName: "8D Report", idColumn: "id" });
 
@@ -40,7 +41,8 @@ export const completeStepHandler = asyncHandler(async (req: Request, res: Respon
   if (!existing) throw AppError.notFound("8D Report");
 
   const stepKey = STEP_KEYS[step - 1] ?? "d1_team";
-  const mergedData = { ...(existing.data ?? {}), [stepKey]: req.body.data };
+  const payload = req.body.data as Record<string, unknown>;
+  const mergedData = applyStepCompletion((existing.data ?? {}) as Record<string, unknown>, stepKey, payload);
   const nextStep = Math.min(step + 1, 8);
 
   const [updated] = await req

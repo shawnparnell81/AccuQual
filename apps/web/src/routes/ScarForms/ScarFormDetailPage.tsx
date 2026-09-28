@@ -8,6 +8,9 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
+import { PictureRecordProvider } from "../../components/forms/pictureRecord";
+import { PictureText } from "../../components/forms/PictureText";
+import { usePictureRecord } from "../../components/forms/pictureRecord";
 import { Modal } from "../../components/modals/Modal";
 import type { ScarForm, Supplier } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
@@ -56,6 +59,7 @@ export function ScarFormDetailPage() {
   if (isLoading || !scar) return <LoadingPlaceholder />;
 
   return (
+    <PictureRecordProvider entityType="scar_forms" entityId={scar.id}>
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between print:hidden">
         <button onClick={() => navigate("/scar-forms")} className="text-sm text-muted-foreground hover:text-foreground">
@@ -216,6 +220,7 @@ export function ScarFormDetailPage() {
         </div>
       </Modal>
     </div>
+    </PictureRecordProvider>
   );
 }
 
@@ -243,16 +248,29 @@ function Field({ label, value, onSave, type = "text" }: { label: string; value: 
 }
 
 function TextAreaField({ label, hint, value, onSave }: { label: string; hint?: string; value: string | null | undefined; onSave: (v: string) => void }) {
+  const record = usePictureRecord();
+  const text = value ?? "";
   return (
     <label className="mt-3 flex flex-col gap-1 text-sm">
       <span className="text-xs font-medium uppercase text-muted-foreground print:text-black">{label}</span>
       {hint && <span className="text-xs italic text-muted-foreground print:text-black">{hint}</span>}
-      <textarea
-        defaultValue={value ?? ""}
-        rows={2}
-        onBlur={(e) => e.target.value !== (value ?? "") && onSave(e.target.value)}
-        className="rounded-md border border-form-field bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary print:border-black print:bg-white print:text-black"
-      />
+      {record ? (
+        <PictureText
+          value={text}
+          entityType={record.entityType}
+          entityId={record.entityId}
+          rows={2}
+          className="rounded-md border border-form-field bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary print:border-black print:bg-white print:text-black"
+          onChange={(next) => next !== text && onSave(next)}
+        />
+      ) : (
+        <textarea
+          defaultValue={text}
+          rows={2}
+          onBlur={(e) => e.target.value !== text && onSave(e.target.value)}
+          className="rounded-md border border-form-field bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary print:border-black print:bg-white print:text-black"
+        />
+      )}
     </label>
   );
 }

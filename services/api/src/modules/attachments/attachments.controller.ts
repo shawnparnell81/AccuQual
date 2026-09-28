@@ -14,6 +14,7 @@ import { signOfficeToken } from "../onlyoffice/token.js";
 import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { assertAttachmentAudience } from "./attachmentAccess.js";
+import { assertInlinePicture } from "./inlinePicture.js";
 import { sniffUpload, UPLOAD_TYPE_ERROR } from "../../utils/fileSniff.js";
 import { sendStoredFile } from "../../utils/storedFile.js";
 
@@ -39,6 +40,12 @@ export const uploadAttachmentHandler = asyncHandler(async (req: Request, res: Re
   const sniffed = sniffUpload(file.buffer, file.originalname);
   if (!sniffed) throw AppError.badRequest(UPLOAD_TYPE_ERROR);
 
+  // A picture placed inside a form field. Same folder, row, and parent-record
+  // check as every other attachment. The bytes still have to match the upload
+  // allow-list, and the picture itself has to be an image of 5 MB or less.
+  const inline = req.body.inlineImage === "1";
+  const mimeType = inline ? assertInlinePicture(file.buffer, file.size) : sniffed.mime;
+
   const dir = `${env.STORAGE_LOCAL_PATH}/attachments`;
   await mkdir(dir, { recursive: true });
   const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -47,7 +54,7 @@ export const uploadAttachmentHandler = asyncHandler(async (req: Request, res: Re
 
   const [created] = await req
     .db!.insert(attachments)
-    .values({ entityType, entityId, fileName: file.originalname, filePath: path, mimeType: sniffed.mime, fileSize: file.size, uploadedBy: req.user?.id })
+    .values({ entityType, entityId, fileName: file.originalname, filePath: path, mimeType, fileSize: file.size, uploadedBy: req.user?.id })
     .returning();
 
   await recordAuditTrail(req.db!, {

@@ -13,6 +13,7 @@ import { TextField, TextAreaField, SelectField } from "../../components/forms/Fi
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
+import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { Modal } from "../../components/modals/Modal";
@@ -71,6 +72,7 @@ export function RiskDetailPage() {
   const sourceLink = risk.sourceType && risk.sourceId ? SOURCE_LINK[risk.sourceType]?.(risk.sourceId) : undefined;
 
   return (
+    <PictureRecordProvider entityType="risk" entityId={riskId}>
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -149,6 +151,7 @@ export function RiskDetailPage() {
         </div>
       </Modal>
     </div>
+    </PictureRecordProvider>
   );
 }
 

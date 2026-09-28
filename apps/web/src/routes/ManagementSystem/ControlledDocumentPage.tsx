@@ -3,6 +3,7 @@ import { isFullAccessRole } from "../../lib/fullAccess";
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { GenericFormRenderer } from "../../components/forms/GenericFormRenderer";
+import { PictureRecordProvider, pictureRecordForForm } from "../../components/forms/pictureRecord";
 import { getFormLayout } from "../../components/forms/layouts";
 import { LifecycleBar, VersionDiffViewer, VersionStatusBadge, VersionTimeline } from "../../components/versioning/VersionParts";
 import { useVersioning, useVersionPayload, type VersionFull } from "../../api/versioning";
@@ -153,7 +154,9 @@ export function ControlledDocumentPage({ basePath, formType, title, noun, descri
             {noVersions || !shown ? (
               v.current.isLoading ? <LoadingPlaceholder /> : <p className="text-sm text-muted-foreground">Nothing here yet.</p>
             ) : layout ? (
-              <GenericFormRenderer layout={layout} data={editable ? values : (shown.payload ?? {})} onChange={change} readOnly={!editable} />
+              <PictureRecordProvider {...pictureRecordForForm(formType, RECORD_ID)}>
+                <GenericFormRenderer layout={layout} data={editable ? values : (shown.payload ?? {})} onChange={change} readOnly={!editable} />
+              </PictureRecordProvider>
             ) : (
               <p className="text-sm text-destructive">No layout is registered for this document.</p>
             )}

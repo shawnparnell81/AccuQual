@@ -13,6 +13,7 @@ import { Modal } from "../../components/modals/Modal";
 import { DEFECT_CATEGORIES, INSPECTION_METHODS } from "../../api/types";
 import type { QualityInspectionReport, QualityInspectionItem, InspectionType, InspectionFinalStatus, Supplier, DefectCategory, InspectionMethod } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { PictureBoundText } from "../../components/forms/PictureText";
 
 const reportHooks = createResourceHooks<QualityInspectionReport>("quality-inspection-reports");
 const INSPECTION_TYPES: InspectionType[] = ["incoming", "in_process", "final"];
@@ -267,14 +268,14 @@ export function QualityInspectionReportDetailPage() {
             />
           </div>
         </div>
-        <label className="flex flex-col gap-1 text-sm">
-          <textarea
-            defaultValue={report.notesRemarks ?? ""}
-            rows={2}
-            onBlur={(e) => e.target.value !== (report.notesRemarks ?? "") && patch.mutate({ notesRemarks: e.target.value || null })}
-            className="rounded-md border border-form-field bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary print:border-black print:bg-white print:text-black"
-          />
-        </label>
+        <PictureBoundText
+          saved={report.notesRemarks ?? ""}
+          rows={2}
+          entityType="quality_inspection_reports"
+          entityId={reportId}
+          onSave={(value) => patch.mutate({ notesRemarks: value || null })}
+          className="rounded-md border border-form-field bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary print:border-black print:bg-white print:text-black"
+        />
 
         <h2 className="mb-2 mt-6 border-l-4 border-primary bg-muted/50 px-3 py-1.5 text-xs font-bold uppercase tracking-wide print:border-black print:bg-transparent print:text-black">
           4. Sign-Off

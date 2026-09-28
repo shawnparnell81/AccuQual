@@ -4,6 +4,8 @@ import { materializeRow, STATUS_COLORS } from "./formulas";
 import { FMEA_TONE_CLASS, FMEA_TONE_NAME, fmeaCellValue, fmeaComputedTone } from "./fmeaPriority";
 import { DetailsDisclosure } from "./DetailsDisclosure";
 import { inputTypeForFieldKind } from "./formInputType";
+import { PictureText } from "./PictureText";
+import { usePictureRecord } from "./pictureRecord";
 
 // Section bars and the document title use tokens whose Classic values are
 // the same navy as schema-pdf-renderer.ts (#1d3a5c), so the on-screen form
@@ -150,24 +152,23 @@ function RowBlockView({ block, data, onChange, readOnly }: BlockViewProps<RowBlo
 }
 
 function TextareaBlockView({ block, data, onChange, readOnly }: BlockViewProps<TextareaBlock>) {
+  const record = usePictureRecord();
   return (
     <div>
       <div className="bg-muted px-2 py-1.5">
         <p className="text-[11px] font-semibold text-foreground">{block.label}</p>
         {block.hint && <p className="text-[9px] italic text-muted-foreground">{block.hint}</p>}
       </div>
-      {readOnly ? (
-        <div className="px-2 py-2">
-          <StaticValue value={data[block.name]} />
-        </div>
-      ) : (
-        <textarea
-          className="w-full resize-y bg-transparent px-2 py-2 text-xs outline-none"
-          rows={4}
-          value={(data[block.name] as string) ?? ""}
-          onChange={(e) => onChange(block.name, e.target.value)}
-        />
-      )}
+      <PictureText
+        className="w-full bg-transparent px-2 py-2 text-xs outline-none"
+        rows={4}
+        value={String(data[block.name] ?? "")}
+        readOnly={readOnly}
+        ariaLabel={block.label}
+        entityType={record?.entityType}
+        entityId={record?.entityId}
+        onChange={(value) => onChange(block.name, value)}
+      />
     </div>
   );
 }
@@ -197,6 +198,7 @@ function YesNoBlockView({ block, data, onChange, readOnly }: BlockViewProps<YesN
 }
 
 function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<TableBlock>) {
+  const record = usePictureRecord();
   const rows: Record<string, unknown>[] =
     (data[block.name] as Record<string, unknown>[] | undefined) ??
     (block.fixedRowLabels ? block.fixedRowLabels.map(() => ({})) : Array.from({ length: block.minRows ?? 1 }, () => ({})));
@@ -292,15 +294,19 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
                     </div>
                   ) : col.kind === "computed" ? (
                     <ComputedCell value={fmeaCellValue(col.formula, row, row[col.key])} formula={col.formula} />
+                  ) : col.kind === "textarea" ? (
+                    <PictureText
+                      className="w-full bg-transparent text-xs outline-none"
+                      rows={2}
+                      value={String(row[col.key] ?? "")}
+                      readOnly={readOnly}
+                      ariaLabel={col.label}
+                      entityType={record?.entityType}
+                      entityId={record?.entityId}
+                      onChange={(value) => updateCell(rowIndex, col.key, value)}
+                    />
                   ) : readOnly ? (
                     <StaticValue value={row[col.key]} />
-                  ) : col.kind === "textarea" ? (
-                    <textarea
-                      className="w-full resize-y bg-transparent text-xs outline-none"
-                      rows={2}
-                      value={(row[col.key] as string) ?? ""}
-                      onChange={(e) => updateCell(rowIndex, col.key, e.target.value)}
-                    />
                   ) : col.kind === "select" ? (
                     <select
                       className="w-full bg-transparent text-xs outline-none"

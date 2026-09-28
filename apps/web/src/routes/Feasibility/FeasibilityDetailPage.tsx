@@ -10,6 +10,7 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { Modal } from "../../components/modals/Modal";
 import { FeasibilityReviewForm } from "./FeasibilityReviewForm";
+import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import type { FeasibilityReview } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
@@ -34,6 +35,7 @@ export function FeasibilityDetailPage() {
   if (isLoading || !review) return <LoadingPlaceholder />;
 
   return (
+    <PictureRecordProvider entityType="feasibility" entityId={reviewId}>
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
         <button onClick={() => navigate("/feasibility")} className="text-sm text-muted-foreground hover:text-foreground">
@@ -99,5 +101,6 @@ export function FeasibilityDetailPage() {
         </div>
       </Modal>
     </div>
+    </PictureRecordProvider>
   );
 }
