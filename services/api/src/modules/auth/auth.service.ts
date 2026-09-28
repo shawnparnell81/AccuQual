@@ -416,6 +416,28 @@ export async function logout(userId: number) {
   await revokeAllRefreshTokens(userId);
 }
 
+/**
+ * Ends the sign-in carried by this browser's refresh cookie after the
+ * browser was closed and the cookie was put back. Only that refresh token
+ * is revoked. Other browsers stay signed in, and the trusted-browser
+ * cookie is not touched, so a later sign-in on this browser can still skip
+ * the authenticator code.
+ */
+export async function endBrowserSession(refreshToken: string | undefined): Promise<void> {
+  if (!refreshToken) return;
+  let payload;
+  try {
+    payload = verifyRefreshToken(refreshToken);
+  } catch {
+    return;
+  }
+  if (!payload.jti) return;
+  await db
+    .update(refreshTokens)
+    .set({ revokedAt: new Date() })
+    .where(and(eq(refreshTokens.jti, payload.jti), isNull(refreshTokens.revokedAt)));
+}
+
 async function currentTokenVersion(userId: number): Promise<number> {
   const [row] = await db.select({ tokenVersion: users.tokenVersion }).from(users).where(eq(users.id, userId));
   return row?.tokenVersion ?? 0;

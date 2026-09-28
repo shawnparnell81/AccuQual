@@ -178,6 +178,41 @@ describe("Auth refresh token cookie (real DB + real HTTP path)", () => {
     expect(res.status).toBe(403);
   });
 
+  it("ending a restored browser session revokes only that browser and leaves the trusted-browser cookie alone", async () => {
+    const first = request.agent(app);
+    const second = request.agent(app);
+    const a = await first.post("/auth/login").send({ email, password: PASSWORD });
+    const b = await second.post("/auth/login").send({ email, password: PASSWORD });
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+    const saved = rtCookieFrom(a);
+    const [before] = await db.select({ tokenVersion: users.tokenVersion }).from(users).where(eq(users.id, userId));
+
+    const ended = await first.post("/auth/end-browser-session").set(CSRF).send({});
+    expect(ended.status).toBe(204);
+    const cleared = ended.headers["set-cookie"] as unknown as string[];
+    expect(cleared.some((header) => header.startsWith("accuqual_rt="))).toBe(true);
+    expect(cleared.some((header) => header.startsWith("accuqual_csrf="))).toBe(true);
+    expect(cleared.some((header) => header.startsWith("accuqual_td="))).toBe(false);
+
+    expect((await first.post("/auth/refresh").set(CSRF).send({})).status).toBe(401);
+    expect((await request(app).post("/auth/refresh").set(CSRF).set("Cookie", saved)).status).toBe(401);
+    expect((await second.post("/auth/refresh").set(CSRF).send({})).status).toBe(200);
+
+    const [after] = await db.select({ tokenVersion: users.tokenVersion }).from(users).where(eq(users.id, userId));
+    expect(after!.tokenVersion).toBe(before!.tokenVersion);
+  });
+
+  it("refuses to end a browser session without the anti-CSRF header, and does nothing when there is no sign-in cookie", async () => {
+    const agent = request.agent(app);
+    await agent.post("/auth/login").send({ email, password: PASSWORD });
+    expect((await agent.post("/auth/end-browser-session").send({})).status).toBe(403);
+    expect((await agent.post("/auth/refresh").set(CSRF).send({})).status).toBe(200);
+
+    const empty = await request(app).post("/auth/end-browser-session").set(CSRF).send({});
+    expect(empty.status).toBe(204);
+  });
+
   it("logout clears the refresh cookie — a subsequent refresh attempt on the same client fails", async () => {
     const agent = request.agent(app);
     const loginRes = await agent.post("/auth/login").send({ email, password: PASSWORD });

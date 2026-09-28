@@ -4,7 +4,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requireCsrfHeader } from "../../middleware/csrf.js";
 import { authRateLimiter, refreshRateLimiter } from "../../middleware/rateLimit.js";
 import { loginSchema, forgotPasswordSchema, resetPasswordSchema, changePasswordSchema, mfaVerifySchema, mfaEnrollStartSchema, mfaEnrollConfirmSchema, mfaEnableSchema, mfaReverifySchema } from "./auth.validation.js";
-import { loginHandler, refreshHandler, logoutHandler, meHandler, forgotPasswordHandler, resetPasswordHandler, changePasswordHandler, mfaVerifyHandler, mfaEnrollStartHandler, mfaEnrollConfirmHandler, mfaStatusHandler, mfaSetupHandler, mfaEnableHandler, mfaDisableHandler, mfaRecoveryCodesHandler, listTrustedDevicesHandler, revokeTrustedDeviceHandler, revokeAllTrustedDevicesHandler } from "./auth.controller.js";
+import { loginHandler, refreshHandler, endBrowserSessionHandler, logoutHandler, meHandler, forgotPasswordHandler, resetPasswordHandler, changePasswordHandler, mfaVerifyHandler, mfaEnrollStartHandler, mfaEnrollConfirmHandler, mfaStatusHandler, mfaSetupHandler, mfaEnableHandler, mfaDisableHandler, mfaRecoveryCodesHandler, listTrustedDevicesHandler, revokeTrustedDeviceHandler, revokeAllTrustedDevicesHandler } from "./auth.controller.js";
 
 export const authRouter = Router();
 
@@ -17,6 +17,10 @@ authRouter.post("/login", authRateLimiter, validate(loginSchema), loginHandler);
 // Its own limiter, counted per person — not the sign-in limiter, which is
 // tight on purpose and used to be shared with every renewal from one address.
 authRouter.post("/refresh", refreshRateLimiter, requireCsrfHeader, refreshHandler);
+// The refresh cookie can be restored after the browser closes. This drops
+// that sign-in only. It does not require an access token (there isn't one
+// yet) and it does not clear the trusted-browser cookie.
+authRouter.post("/end-browser-session", requireCsrfHeader, endBrowserSessionHandler);
 authRouter.post("/logout", requireAuth, logoutHandler);
 authRouter.get("/me", requireAuth, meHandler);
 // Same rate limiter as login — this is the one other unauthenticated,

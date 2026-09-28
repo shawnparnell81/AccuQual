@@ -84,13 +84,24 @@ export const useAuthStore = create<AuthState>()(
     {
       name: AUTH_STORAGE_KEY,
       // The access token stays in memory. The refresh token is the httpOnly
-      // browser-session cookie (auth.controller.ts): closing the browser drops
-      // it, and the server still refuses it 12 hours after sign-in. user and
-      // company are display data for this tab, so a reload in the same browser
-      // session can show them before that cookie refresh returns. They are not
-      // a credential, and they do not survive the browser closing.
+      // browser-session cookie (auth.controller.ts). A browser that restores
+      // that cookie after it was closed does not stay signed in — see
+      // browserSession.ts. The server still refuses the token 12 hours after
+      // sign-in. user and company are display data for this tab, so a reload
+      // can show them before the cookie refresh returns. They are not a
+      // credential. A restored copy cannot carry an access token.
       storage: createJSONStorage(tabAuthStorage),
       partialize: (state) => ({ user: state.user, company: state.company }),
+      merge: (persisted, current) => {
+        const stored = (persisted ?? {}) as { user?: AuthUser | null; company?: CompanyContext | null };
+        return {
+          ...current,
+          user: stored.user ?? null,
+          company: stored.company ?? null,
+          accessToken: null,
+          bootstrapped: false,
+        };
+      },
     }
   )
 );
