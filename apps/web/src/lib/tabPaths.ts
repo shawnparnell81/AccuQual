@@ -3,7 +3,9 @@
  * Purchasing screens (/erp, /erp/requisitions, purchase-order detail) and
  * sales accounts (/sales) and customer onboarding (/customers) now redirect
  * home, so restoring them was calling APIs that are no longer part of the
- * app. Feasibility still has its own page, so those tabs stay.
+ * app. The NetSuite connector lives under Settings
+ * (/settings/erp/presets, /settings/erp/sync-errors). Feasibility still has
+ * its own page, so those tabs stay.
  */
 
 interface SavedTab {
@@ -49,6 +51,8 @@ const EXACT = new Set([
   "/digital-twin",
   "/settings",
   "/settings/navigation",
+  "/settings/erp/presets",
+  "/settings/erp/sync-errors",
   "/admin",
   "/admin/company-ai",
   "/admin/ai-usage",
@@ -85,6 +89,7 @@ const ONE_SEGMENT: RegExp[] = [
   /^\/work-orders\/\d+$/,
   /^\/workflow\/\d+$/,
   /^\/admin\/[^/]+$/,
+  /^\/settings\/erp\/presets\/[^/]+$/,
 ];
 
 export function normalizeTabPath(path: string): string {

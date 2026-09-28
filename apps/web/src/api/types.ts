@@ -1219,6 +1219,8 @@ export interface ErpSyncSettings {
   modulesEnabled: string[];
   conflictRules: { resolutionStrategy?: "local_wins" | "remote_wins" | "manual_review" };
   retryPolicy: { maxRetries?: number; backoffSeconds?: number };
+  /** NetSuite account id. Null until someone saves one. */
+  accountId: string | null;
   webhookUrl: string | null;
   hasWebhookSecret: boolean;
   maskedWebhookSecret?: string | null;

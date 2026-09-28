@@ -12,14 +12,36 @@ import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { READ_ONLY_REASON } from "../../lib/opsLanguage";
 import { SaveStatus } from "../../components/shared/SaveStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
-import { Blank8DSheet } from "./Blank8DSheet";
+import { EightDWorkbook } from "./EightDSheets";
 import { blank8dFromData, buildSaveData, previousFields, type Blank8DValues } from "../../lib/blank8d";
+import { worksheetsFromReport, type WorksheetKey, type WorksheetValues } from "../../lib/eightDWorksheets";
 
 interface EightDReport {
   id: number;
   ncrId: number | null;
   currentStep: number;
   data: Record<string, unknown>;
+  problemDescriptionD2?: Record<string, string>;
+  problemSolvingWorksheetD4?: Record<string, string>;
+  testingPossibleCausesD4?: Record<string, string>;
+  decisionMaking?: Record<string, string>;
+  riskAnalysis?: Record<string, string>;
+  planProblemPrevention?: Record<string, string>;
+}
+
+interface EightDDraft {
+  blank: Blank8DValues;
+  sheets: WorksheetValues;
+}
+
+function stableJson(value: unknown): string {
+  return JSON.stringify(value, (_key, item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+    const source = item as Record<string, unknown>;
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(source).sort()) sorted[key] = source[key];
+    return sorted;
+  });
 }
 
 const STEPS = [
@@ -98,7 +120,7 @@ export function EightDDetailPage() {
       (await apiClient.post(`/8d/${reportId}/complete-step/${step}`, { data })).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["8d", reportId] }),
   });
-  const [values, setValues] = useState<Blank8DValues | null>(null);
+  const [values, setValues] = useState<EightDDraft | null>(null);
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
   const updateReport = eightDHooks.useUpdate();
   const { data: linkedNcr } = ncrHooks.useOne(report?.ncrId ?? undefined);
@@ -107,25 +129,42 @@ export function EightDDetailPage() {
 
   useEffect(() => {
     if (!report || loadedFor === report.id) return;
-    setValues(blank8dFromData(report.data));
+    setValues({ blank: blank8dFromData(report.data), sheets: worksheetsFromReport(report) });
     setLoadedFor(report.id);
   }, [loadedFor, report]);
 
-  const baseline = report ? blank8dFromData(report.data) : null;
-  const draftDirty = !!values && !!baseline && JSON.stringify(values) !== JSON.stringify(baseline);
+  const baseline = report ? { blank: blank8dFromData(report.data), sheets: worksheetsFromReport(report) } : null;
+  const draftDirty = !!values && !!baseline && stableJson(values) !== stableJson(baseline);
+
+  function savePayload(draft: EightDDraft) {
+    if (!report) return null;
+    return {
+      id: reportId,
+      data: buildSaveData(report.data, draft.blank),
+      problemDescriptionD2: draft.sheets.problemDescriptionD2,
+      problemSolvingWorksheetD4: draft.sheets.problemSolvingWorksheetD4,
+      testingPossibleCausesD4: draft.sheets.testingPossibleCausesD4,
+      decisionMaking: draft.sheets.decisionMaking,
+      riskAnalysis: draft.sheets.riskAnalysis,
+      planProblemPrevention: draft.sheets.planProblemPrevention,
+    };
+  }
 
   const saveDraft = updateReport.mutate;
   useEffect(() => {
     if (!canEdit || !report || !values || !draftDirty) return;
+    const payload = savePayload(values);
+    if (!payload) return;
     const timer = setTimeout(() => {
-      saveDraft({ id: reportId, data: buildSaveData(report.data, values) });
+      saveDraft(payload);
     }, 1200);
     return () => clearTimeout(timer);
   }, [canEdit, draftDirty, report, reportId, saveDraft, values]);
 
   function saveRecord() {
-    if (!report || !values) return;
-    updateReport.mutate({ id: reportId, data: buildSaveData(report.data, values) });
+    if (!values) return;
+    const payload = savePayload(values);
+    if (payload) updateReport.mutate(payload);
   }
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this 8D report. Refresh the page and try again.</p>;
@@ -185,14 +224,17 @@ export function EightDDetailPage() {
                     current
                       ? {
                           ...current,
-                          teamMembers: output.d1_team,
-                          problemStatement: output.d2_problem,
-                          ica: output.d3_containment,
-                          rootCauses: output.d4_rootCause,
-                          pca: output.d5_correctiveAction,
-                          implementation: output.d6_implementation,
-                          prevention: output.d7_prevention,
-                          recognition: output.d8_closure,
+                          blank: {
+                            ...current.blank,
+                            teamMembers: output.d1_team,
+                            problemStatement: output.d2_problem,
+                            ica: output.d3_containment,
+                            rootCauses: output.d4_rootCause,
+                            pca: output.d5_correctiveAction,
+                            implementation: output.d6_implementation,
+                            prevention: output.d7_prevention,
+                            recognition: output.d8_closure,
+                          },
                         }
                       : current
                   )
@@ -238,10 +280,9 @@ export function EightDDetailPage() {
                 <button
                   key={step.key}
                   onClick={() =>
-                    updateReport.mutate(
-                      { id: reportId, data: buildSaveData(report.data, values) },
-                      { onSuccess: () => completeStep.mutate({ step: stepNumber, data: stepPayload(stepNumber, values) }) }
-                    )
+                    updateReport.mutate(savePayload(values) ?? { id: reportId }, {
+                      onSuccess: () => completeStep.mutate({ step: stepNumber, data: stepPayload(stepNumber, values.blank) }),
+                    })
                   }
                   className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
                 >
@@ -254,11 +295,19 @@ export function EightDDetailPage() {
       </div>
 
       <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
-        <Blank8DSheet
+        <EightDWorkbook
           eightDNo={report.id}
-          values={values}
+          blank={values.blank}
+          sheets={values.sheets}
           readOnly={!canEdit}
-          onChange={(patch) => setValues((current) => (current ? { ...current, ...patch } : current))}
+          onBlankChange={(patch) => setValues((current) => (current ? { ...current, blank: { ...current.blank, ...patch } } : current))}
+          onSheetChange={(key: WorksheetKey, address, value) =>
+            setValues((current) =>
+              current
+                ? { ...current, sheets: { ...current.sheets, [key]: { ...current.sheets[key], [address]: value } } }
+                : current
+            )
+          }
         />
       </div>
 

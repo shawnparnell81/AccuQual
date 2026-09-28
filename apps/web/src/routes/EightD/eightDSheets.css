@@ -1,0 +1,170 @@
+.e8-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.e8-tabs button {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border-radius: 6px 6px 0 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.e8-tabs button[aria-selected="true"] {
+  background: var(--form-bar, #1d3a5c);
+  color: var(--form-bar-foreground, #fff);
+  border-color: var(--form-bar, #1d3a5c);
+}
+
+.e8-panel {
+  display: none;
+}
+
+.e8-panel.active {
+  display: block;
+}
+
+.e8-sheet {
+  font-family: var(--fb), "Inter", system-ui, sans-serif;
+  color: hsl(var(--foreground));
+}
+
+.e8-title {
+  text-align: center;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  color: var(--form-heading, #1d3a5c);
+  margin: 0 0 12px;
+}
+
+.e8-scroll {
+  overflow-x: auto;
+}
+
+.e8-grid {
+  width: 100%;
+  border-collapse: collapse;
+  background: hsl(var(--form-input));
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+}
+
+.e8-grid th,
+.e8-grid td {
+  border: 1px solid hsl(var(--border));
+  vertical-align: top;
+  padding: 0;
+  min-width: 72px;
+}
+
+.e8-h {
+  background: var(--form-bar, #1d3a5c);
+  color: var(--form-bar-foreground, #fff);
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1.25;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.e8-h.center {
+  text-align: center;
+}
+
+.e8-lab {
+  background: hsl(var(--form-label));
+  color: hsl(var(--form-label-foreground));
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 1.25;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+}
+
+.e8-note {
+  font-size: 11px;
+  line-height: 1.35;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+}
+
+.e8-sheet input,
+.e8-sheet textarea {
+  width: 100%;
+  border: 0;
+  background: hsl(var(--form-input));
+  color: hsl(var(--form-input-foreground));
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 6px 8px;
+  outline: none;
+  resize: vertical;
+}
+
+.e8-sheet input:focus,
+.e8-sheet textarea:focus {
+  box-shadow: inset 0 0 0 2px hsl(var(--ring));
+}
+
+.e8-sheet .calc {
+  background: hsl(var(--form-label));
+  color: hsl(var(--form-label-foreground));
+  font-weight: 600;
+}
+
+.e8-tip {
+  position: relative;
+}
+
+.e8-tip::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-style: solid;
+  border-width: 0 8px 8px 0;
+  border-color: transparent #c2410c transparent transparent;
+}
+
+.e8-help p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.e8-help h3 {
+  margin: 14px 0 6px;
+  font-size: 13px;
+}
+
+@media print {
+  .e8-tabs {
+    display: none !important;
+  }
+
+  .e8-panel {
+    display: block !important;
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .e8-panel.first {
+    break-before: auto;
+    page-break-before: auto;
+  }
+
+  .e8-h {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

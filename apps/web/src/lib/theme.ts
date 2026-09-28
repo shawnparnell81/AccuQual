@@ -178,12 +178,12 @@ function deriveSurfaces(seed: Hsl, mode: ResolvedMode): Record<string, string> {
     };
   }
   return {
-    "--background": formatHsl({ h, s: sat(58), l: 88 }),
-    "--foreground": formatHsl({ h, s: sat(28), l: 10 }),
-    "--card": formatHsl({ h, s: sat(62), l: 94 }),
-    "--muted": formatHsl({ h, s: sat(52), l: 84 }),
-    "--muted-foreground": formatHsl({ h, s: sat(22), l: 34 }),
-    "--border": formatHsl({ h, s: sat(42), l: 74 }),
+    "--background": formatHsl({ h, s: sat(6), l: 96 }),
+    "--foreground": formatHsl({ h, s: sat(18), l: 12 }),
+    "--card": formatHsl({ h, s: sat(0), l: 100 }),
+    "--muted": formatHsl({ h, s: sat(6), l: 92 }),
+    "--muted-foreground": formatHsl({ h, s: sat(10), l: 32 }),
+    "--border": formatHsl({ h, s: sat(8), l: 80 }),
     "--brand-header": formatHsl({ h, s: sat(30), l: 12 }),
   };
 }

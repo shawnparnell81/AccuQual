@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
@@ -9,6 +10,7 @@ import { Modal } from "../../components/modals/Modal";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { ErpErrorType, ErpSyncError, ErpSyncErrorsListResult } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { NETSUITE_SETTINGS_PATH } from "./erpPaths";
 
 const ERROR_TYPES: ErpErrorType[] = ["mappingError", "validationError", "transformError", "triggerError", "erpApiError", "unexpectedError"];
 const MODULES = ["inventory", "suppliers", "workOrders", "ncr", "capa", "training", "audits", "documentControl"];
@@ -41,6 +43,7 @@ export function ErpSyncErrorsPage() {
 }
 
 function ErpSyncErrorsPageBody() {
+  const navigate = useNavigate();
   const toast = useToast();
   const queryClient = useQueryClient();
   const [module, setModule] = useState("");
@@ -49,7 +52,7 @@ function ErpSyncErrorsPageBody() {
   const [offset, setOffset] = useState(0);
   const [detail, setDetail] = useState<ErpSyncError | null>(null);
 
-  const { data, isLoading } = useErpSyncErrors({ module, errorType, resolved, offset });
+  const { data, isLoading, isError } = useErpSyncErrors({ module, errorType, resolved, offset });
 
   const resetAndSet = (setter: (v: string) => void) => (v: string) => {
     setter(v);
@@ -85,8 +88,11 @@ function ErpSyncErrorsPageBody() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold">ERP Sync Errors</h1>
-        <p className="text-sm text-muted-foreground">Every mapping, validation, transform, trigger, and delivery failure the ERP sync engine has recorded.</p>
+        <h1 className="text-2xl font-semibold">NetSuite sync errors</h1>
+        <p className="text-sm text-muted-foreground">Mapping, validation, transform, and delivery failures recorded for the NetSuite connector.</p>
+        <button type="button" onClick={() => navigate(NETSUITE_SETTINGS_PATH)} className="mt-1 text-sm text-muted-foreground hover:underline">
+          ← Back to ERP / NetSuite
+        </button>
       </div>
 
       <div className="flex flex-wrap gap-3 rounded-lg border border-border bg-card p-4">
@@ -119,7 +125,9 @@ function ErpSyncErrorsPageBody() {
         </div>
       </div>
 
-      {isLoading || !data ? (
+      {isError ? (
+        <p className="text-sm text-destructive">Couldn't load the sync error log.</p>
+      ) : isLoading || !data ? (
         <LoadingPlaceholder />
       ) : rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No errors match these filters.</p>

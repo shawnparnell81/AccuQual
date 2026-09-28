@@ -131,6 +131,8 @@ export const company = pgTable("company", {
     modulesEnabled?: string[]; // inventory | suppliers | purchaseOrders | workOrders
     conflictRules?: { resolutionStrategy?: "local_wins" | "remote_wins" | "manual_review" };
     retryPolicy?: { maxRetries?: number; backoffSeconds?: number };
+    /** NetSuite account id (for example 1234567 or 1234567_SB1). Unset means not connected. */
+    accountId?: string;
     webhookUrl?: string;
     webhookSecretEncrypted?: string;
     statusHistory?: { at: string; status: "success" | "failed" | "skipped"; modules: string[]; message?: string }[];
