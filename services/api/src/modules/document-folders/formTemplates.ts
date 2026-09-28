@@ -2,9 +2,10 @@ import { and, eq, isNull } from "drizzle-orm";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import type { Db } from "../../lib/requestDb.js";
-import { BLANK_FORMS_FOLDER, FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, ISO_SIBLING_FOLDERS, templateFolderPath } from "./formFiling.js";
+import { BLANK_FORMS_FOLDER, FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, templateFolderPath } from "./formFiling.js";
 
 const PREVIOUS_ISO_ROOT = "ISO Compliance";
+const PREVIOUS_BLANK_FOLDER = "03_Blank_Forms_Templates";
 
 async function findOrCreateRoot(db: Db, name: string) {
   const [existing] = await db.select().from(documentFolders).where(and(isNull(documentFolders.parentId), eq(documentFolders.name, name)));
@@ -24,7 +25,7 @@ async function findOrCreateChild(db: Db, parentId: number, name: string) {
   return created;
 }
 
-/** Files each blank template under ISO Compliance Documents / 03_Blank_Forms_Templates / topic. */
+/** Files each blank template under ISO Compliance Documents / Blank Form Templates / topic. */
 export async function ensureFormTemplates(db: Db): Promise<void> {
   const [legacy] = await db.select().from(documentFolders).where(and(isNull(documentFolders.parentId), eq(documentFolders.name, PREVIOUS_ISO_ROOT)));
   const [named] = await db.select().from(documentFolders).where(and(isNull(documentFolders.parentId), eq(documentFolders.name, ISO_DOCUMENTS_FOLDER)));
@@ -33,11 +34,13 @@ export async function ensureFormTemplates(db: Db): Promise<void> {
   }
 
   const iso = await findOrCreateRoot(db, ISO_DOCUMENTS_FOLDER);
+  const [previousBlanks] = await db.select().from(documentFolders).where(and(eq(documentFolders.parentId, iso.id), eq(documentFolders.name, PREVIOUS_BLANK_FOLDER)));
+  const [currentBlanks] = await db.select().from(documentFolders).where(and(eq(documentFolders.parentId, iso.id), eq(documentFolders.name, BLANK_FORMS_FOLDER)));
+  if (previousBlanks && !currentBlanks) {
+    await db.update(documentFolders).set({ name: BLANK_FORMS_FOLDER }).where(eq(documentFolders.id, previousBlanks.id));
+  }
   const blanks = await findOrCreateChild(db, iso.id, BLANK_FORMS_FOLDER);
   const keep = new Set<number>([blanks.id]);
-  for (const name of ISO_SIBLING_FOLDERS) {
-    keep.add((await findOrCreateChild(db, iso.id, name)).id);
-  }
 
   const folders = new Map<string, number>();
 

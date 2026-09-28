@@ -3,8 +3,8 @@
  * The owner will replace the name pattern later.
  * Tokens: {formId} {recordNumber} {date}
  *
- * Folder names match the company drive:
- * X:\ISO Compliance Documents\03_Blank_Forms_Templates
+ * Folder names:
+ * ISO Compliance Documents / Blank Form Templates
  * Topic folders (Validation, Problem Solving, and so on) sit inside the blank-forms folder.
  * A filled record stays in `subjectRoute`. The Forms Library lists these same rows.
  */
@@ -13,14 +13,8 @@ export const FILE_NAME_PATTERN = "{formId}_{recordNumber}_{date}";
 /** Top Documents folder. */
 export const ISO_DOCUMENTS_FOLDER = "ISO Compliance Documents";
 
-/** Every blank template lives under this folder. */
-export const BLANK_FORMS_FOLDER = "03_Blank_Forms_Templates";
-
-/**
- * Numbered siblings of the blank-forms folder (01_, 02_, …).
- * Leave this empty until the owner supplies each name.
- */
-export const ISO_SIBLING_FOLDERS: string[] = [];
+/** Every blank template lives under this folder. No number prefix. */
+export const BLANK_FORMS_FOLDER = "Blank Form Templates";
 
 export interface FormTemplateSeed {
   formKey: string;
