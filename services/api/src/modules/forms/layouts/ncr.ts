@@ -1,7 +1,7 @@
 import type { FormLayout } from "./types.js";
 
 /**
- * Derived 1:1 from the user-provided "Automotive Non Conformance Report (NCR)
+ * Derived 1:1 from the source "Automotive Non Conformance Report (NCR)
  * Template.pdf" — an 8-section controlled-document NCR, replacing the earlier
  * flat 6-field placeholder. Registering this under formType "ncr" means the
  * existing "Open Form" button on the NCR detail page now renders this real

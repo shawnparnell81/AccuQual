@@ -26,12 +26,8 @@ function useMyTheme() {
 }
 
 /**
- * The real dark/light toggle — replaces the disabled "Light" pill that used
- * to sit here doing nothing (see the old comment this file's git history
- * carries: "AccuQual currently ships one committed dark theme..."). Saves
- * straight to PATCH /users/me/theme on click/blur — same field the global
- * theme engine (lib/theme.ts, wired in AppLayout via useThemeSync) reads,
- * so a change here is visible the instant it saves, not on next reload.
+ * Light, dark, and color-scheme controls. Each change saves with
+ * PATCH /users/me/theme, which lib/theme.ts applies immediately.
  */
 export function ThemeSettingsSection() {
   const toast = useToast();

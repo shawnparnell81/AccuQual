@@ -201,9 +201,7 @@ export const RMA: NavLeaf = {
 };
 
 // Not a sheet row — a new module. Mirrors departmentAccess.ts's
-// PERMISSION_MATRIX.work_orders exactly (see the AI Work Order Planning /
-// PR Justification / Onboarding / ERP Automation review). Per explicit user
-// request (2026-09-15): Customer Service owns it now; Production is
+// PERMISSION_MATRIX.work_orders exactly. Customer Service owns it now; Production is
 // read-only. "General Manager" full access is the existing admin bypass,
 // not a distinct department — see departmentAccess.ts's own comment.
 export const WORK_ORDERS: NavLeaf = {
@@ -346,8 +344,7 @@ const PPAP: NavLeaf = {
 };
 
 // Rebuilt as a bespoke fixed-structure document (see feasibility.ts's own
-// schema comment) and moved here from the System catch-all — per explicit
-// request, scoped down to Engineering's own nav entry plus the Customer
+// schema comment) and moved here from the System catch-all , scoped down to Engineering's own nav entry plus the Customer
 // Onboarding packet's own button, not the 9 cross-module integration
 // points the earlier scoring-based version had.
 const FEASIBILITY: NavLeaf = {

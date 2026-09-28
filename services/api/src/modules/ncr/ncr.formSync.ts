@@ -57,7 +57,7 @@ function setFirstRowField(existing: unknown, columnKey: string, value: string, m
  * Phase 2 NCR unified-data-model fix: the bare ncr row (title/description/
  * containment/rootCause/correctiveAction/status/severity) and the official
  * NCR document (form_data, ~50 fields across 9 fixed sections, "derived 1:1
- * from the user-provided PDF template" — see layouts/ncr.ts) used to be
+ * from the source PDF template" — see layouts/ncr.ts) used to be
  * completely disconnected — nothing ever wrote from one into the other, so
  * a fully-described NCR could sit next to a totally blank official document
  * (the buyer evaluation's exact "NCR duplicate-entry problem" finding,

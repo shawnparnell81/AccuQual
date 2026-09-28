@@ -12,7 +12,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { notifyDepartment } from "../notifications/notification.service.js";
 
 /**
- * "AI-Automated RMA Creation" (module 3 of the brief) is implemented here
+ * "AI-Automated RMA Creation" is implemented here
  * as real, deterministic, synchronous backend automation — triggered the
  * instant a supplier clicks Submit, in the SAME request — not a call to
  * the generative POST /ai/assistant endpoint. Everything this step does
@@ -26,7 +26,7 @@ import { notifyDepartment } from "../notifications/notification.service.js";
  * even THOSE are advisory-only, requiring a human click to actually act;
  * this module goes further only because the human click already
  * happened — it's the supplier's own Submit). The user-facing behavior
- * described in the brief — "the supplier fills out a form, clicks submit,
+ * described — "the supplier fills out a form, clicks submit,
  * and a real numbered RMA exists a moment later with the right people
  * notified" — is delivered exactly as specified; only the literal
  * mechanism differs from an LLM call, and for good reason.

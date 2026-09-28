@@ -8,11 +8,11 @@ import { maybeAutoCreateNcr, checkCapaEscalation } from "./receivingAutomation.j
 import { openFromReceivingLine, resolveFromReceivingLine, linkNcrFromReceiving } from "../quarantine/quarantine.service.js";
 
 /**
- * Phase 8 task 1 — the 7 structured receiving states the brief names,
+ * Phase 8 task 1 — the 7 structured receiving states listed here,
  * modeled as a real state machine on erp_receiving_line_items.status
  * (previously no status/disposition concept existed at all — a line was
  * just "how much arrived"). Quality owns every inspection-outcome
- * transition (pending_inspection → ... → a disposition); material_management
+ * transition (pending_inspection →... → a disposition); material_management
  * (which physically handles the goods) may only move a line from its
  * default "received" into the inspection queue.
  */

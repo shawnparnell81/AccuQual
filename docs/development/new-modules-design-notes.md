@@ -137,7 +137,7 @@ competency (admin excepted, and that exception is itself recorded).
 
 **Known, accepted gaps:** no prerequisite enforcement (course A required
 before course B isn't modeled); the existing "Competency Matrix" *form*
-(the user's own spreadsheet-derived layout, in the generic forms engine)
+(the source spreadsheet layout, in the generic forms engine)
 is intentionally untouched and separate from this module's computed
 "Training status" view — they answer different questions and were never
 meant to be merged.

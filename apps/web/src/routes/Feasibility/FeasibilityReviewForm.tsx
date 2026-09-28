@@ -39,12 +39,11 @@ function useFeasibilitySettings() {
 
 /**
  * The "Contract & Project Feasibility Review Form" (QMS-FR-001) — a real
- * document supplied by the user, mirrored field-for-field (not the app's
+ * document from the source document, mirrored field-for-field (not the app's
  * earlier weighted-dimension-scoring UI — see feasibility.ts's own schema
  * comment). Styled with the app's own theme tokens (bg-card/border-border/
  * border-l-4 border-primary section headers), same convention as Document
- * Change Request/QMS Forms/SCAR — not the mockup's own styling, which the
- * user explicitly said didn't need to be matched.
+ * Change Request/QMS Forms/SCAR — not the mockup's own styling, rather than a separate visual spec.
  */
 export function FeasibilityReviewForm({ review }: { review: FeasibilityReview }) {
   const toast = useToast();

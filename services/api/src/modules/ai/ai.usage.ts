@@ -45,8 +45,7 @@ export function describeAiState(status: AiOutputStatus, okVerb = "AI-suggested")
  * BYOK monthly limit enforcement, shared by every AI endpoint that spends
  * tokens (originally lived only inside ai.assistant.ts's assistantHandler;
  * extracted here once the AI Work Order Planning / PR Justification /
- * ERP Automation pipelines needed the exact same check — see the AI
- * modules review). Checked before every real call, not against a stored
+ * ERP Automation pipelines needed the exact same check). Checked before every real call, not against a stored
  * counter: a single cumulative field can't implement "monthly" without
  * something resetting it, and this app has no background jobs to do that
  * reset, so this instead sums this company's own real audit_trail rows

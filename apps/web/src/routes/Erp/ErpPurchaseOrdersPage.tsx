@@ -21,8 +21,7 @@ const SUGGESTION_LABELS: Record<ErpAutomationSuggestion["type"], string> = {
 /**
  * Each suggestion type's "accept" routes to a real, existing endpoint —
  * POST /erp/requisitions, POST /suppliers/:id/conditional, POST /audits —
- * never a new write path invented for this panel (see the AI ERP
- * Automation review).
+ * never a new write path invented for this panel.
  */
 function ErpAutomationPanel() {
   const toast = useToast();

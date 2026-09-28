@@ -5,8 +5,7 @@ import { bucketByMonth, isTrainingOverdue } from "../../lib/workflowMetrics";
 import type { useWorkflowDashboardData } from "../../hooks/useWorkflowDashboardData";
 
 /**
- * Training dashboard widgets. "Expired" and "awaiting approval" from the
- * brief are both omitted — neither exists in the real schema (no
+ * Training dashboard widgets. "Expired" and "awaiting approval" are both omitted — neither exists in the real schema (no
  * recertification interval, no approval step; see the Outputs/Rules
  * Dictionaries), so there's nothing to compute either from, even
  * client-side. "Overdue" IS computable (dueAt is real) even though nothing

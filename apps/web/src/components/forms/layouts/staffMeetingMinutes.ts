@@ -1,7 +1,7 @@
 import type { FormLayout } from "./types";
 
 /**
- * Derived 1:1 from the user-provided "Monthly Staff Meeting Minutes
+ * Derived 1:1 from the source "Monthly Staff Meeting Minutes
  * Template.pdf" (Operational Staff & Cross-Functional Alignment Log).
  * Modeled as a singleton, same simplification as management_review and
  * management_review_minutes.

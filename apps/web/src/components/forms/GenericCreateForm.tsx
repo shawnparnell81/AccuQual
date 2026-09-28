@@ -34,7 +34,7 @@ function toFieldStrings(fields: FieldSpec[], initialValues?: Record<string, unkn
  * controlled input regardless of type) and converted at submit time
  * instead — a `type: "number"` field submits a real number, not the raw
  * string every backend Zod schema without `.coerce` used to reject with a
- * silent 400 (see the QA sweep review). A field left blank is omitted
+ * silent 400. A field left blank is omitted
  * entirely rather than coerced to 0, preserving "optional means optional"
  * for schemas like calibration's `calibrationIntervalDays`.
  */

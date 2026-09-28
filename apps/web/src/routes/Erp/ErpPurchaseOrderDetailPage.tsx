@@ -233,8 +233,8 @@ function ReceivingLineItemRow({ lineItem, po }: { lineItem: ErpReceivingLineItem
  * Real PO + line items (sku/description live-joined from inventory_items,
  * quantityReceived a real sum over every receiving document — never
  * denormalized), Purchasing's send/cancel actions, and material_management's
- * receiving flow. No inventory_movement is ever created from here — see
- * the ERP module review; this is real paperwork, not a live inventory sync.
+ * receiving flow. No inventory_movement is created from here; this page
+ * records the paperwork, and stock is updated in inventory.
  */
 export function ErpPurchaseOrderDetailPage() {
   const { id } = useParams();

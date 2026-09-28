@@ -5,8 +5,7 @@ import { rma } from "./rma.js";
 
 /**
  * A supplier's own RMA Request, submitted from the Supplier Portal's new
- * "RMA Request" tab — the literal field list the brief gave ("FINAL,
- * CORRECTED LIST"), no more, no less. `supplierId` is never taken from the
+ * "RMA Request" tab — the literal field list ("FINAL, CORRECTED LIST"), no more, no less. `supplierId` is never taken from the
  * request body (same "never trust a client-supplied supplierId" rule every
  * other Supplier Portal table follows — see supplierPortal.controller.ts's
  * resolveSupplierScope) — it's always the submitting login's own
@@ -32,7 +31,7 @@ export const supplierRmaRequests = pgTable("supplier_rma_requests", {
   poDate: timestamp("po_date"), // "Date PO Was Submitted"
   customerClaimNumber: text("customer_claim_number"),
   shortDescription: text("short_description"),
-  description: text("description"), // the one full text block, per the brief
+  description: text("description"), // the one full text block
 
   // Set once the real RMA is created from this request (same request,
   // synchronously) — the actual "AI transfers supplier data into the RMA"

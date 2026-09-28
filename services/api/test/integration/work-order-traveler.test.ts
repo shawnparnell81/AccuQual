@@ -5,7 +5,7 @@ import { ensureTestCompany } from "../helpers/company.js";
 // engine, see workOrders.ts's schema comment): the operations routing
 // sub-resource (add/edit/sign-off/delete), quality gates, and
 // operator/inspector signatures, all gated to Customer Service (or admin —
-// per explicit user request, 2026-09-15; Production was downgraded to
+//  Production was downgraded to
 // read-only, see departmentAccess.ts PERMISSION_MATRIX.work_orders), and
 // all locked once the work order is cancelled — while planning fields
 // (quantityPlanned/dueDate/revision) stay locked to "planned" status only,

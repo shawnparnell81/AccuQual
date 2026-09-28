@@ -392,9 +392,7 @@ export const uploadTemplate = asyncHandler(async (req: Request, res: Response) =
  * older two-step "create an empty folder, then separately attach a file to
  * it" flow uploadTemplate above still supports for an already-existing
  * node. This is what GeneralUploadsPage.tsx and FolderExplorerPage.tsx's own
- * "+ Upload Document" button both call — the real answer to "let the user
- * pick where (which department/folder) an upload goes," per the user's own
- * explicit requirement.
+ * "+ Upload Document" button both call — the upload is filed in the chosen department folder.
  */
 export const uploadDocument = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;

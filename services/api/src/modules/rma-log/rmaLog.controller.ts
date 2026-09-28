@@ -86,7 +86,7 @@ export const listRmaLogHandler = asyncHandler(async (req: Request, res: Response
   res.json(rows);
 });
 
-/** POST /rma-log — the "Add New" button's endpoint. Router already requires rma_log edit; every field is open to whoever has that (no separate create-only carve-out in the brief, unlike CRAR's quality-only rule). Prepopulates rmaNumber + dateIssued exactly as the brief's own "Add New" behavior spec describes. */
+/** POST /rma-log — the "Add New" button's endpoint. Router already requires rma_log edit; every field is open to whoever has that (no separate create-only carve-out, unlike CRAR's quality-only rule). Prepopulates rmaNumber + dateIssued exactly as "Add New" behavior spec describes. */
 export const createRmaLogHandler = asyncHandler(async (req: Request, res: Response) => {
   const body = req.body as Record<string, unknown>;
   await validateLinks(req, body);
@@ -119,7 +119,7 @@ export const getRmaLogHandler = asyncHandler(async (req: Request, res: Response)
  * PATCH /rma-log/:id — router already requires rma_log edit for the
  * content fields (17-column list); the 3 linkage fields (warrantyId/
  * supplierRmaRequestId/qualityId) additionally require rma_log_linkage
- * edit — a real, separate, database-configurable lever per the brief's own
+ * edit — a real, separate, database-configurable lever per
  * "rma_log.linkage.write" permission, same "matrix grants edit, a narrower
  * DB-driven permission gates one subset of fields" pattern CRAR/Warranty
  * already use with hardcoded department arrays, just genuinely
@@ -157,7 +157,7 @@ export const updateRmaLogHandler = asyncHandler(async (req: Request, res: Respon
 
 /**
  * POST /rma-log/:id/status — gated on rma_log_status edit specifically
- * (the brief's own "rma_log.status.write"), independent of the base
+ * ("rma_log.status.write"), independent of the base
  * rma_log edit level a user needs just to reach this route at all.
  * Auto-stamps dateReceived/dateClosed the moment the record actually
  * enters those stages — never client-supplied, same "server stamps the

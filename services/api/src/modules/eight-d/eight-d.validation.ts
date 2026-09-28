@@ -4,7 +4,7 @@ export const createEightDSchema = z.object({
   // .coerce — the quick-create modal (GenericCreateForm) submits every
   // field, matches inventory.validation.ts's own established convention
   // for every optional numeric field. Plain z.number() used to reject a
-  // string here with a silent 400 (see the QA sweep review).
+  // string here with a silent 400.
   ncrId: z.coerce.number().int().optional(),
 });
 

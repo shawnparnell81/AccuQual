@@ -10,7 +10,7 @@ export const createEquipmentSchema = z.object({
   // .coerce — the quick-create modal (GenericCreateForm) submits every
   // field, matches inventory.validation.ts's own established convention
   // for every optional numeric field. Plain z.number() used to reject a
-  // string here with a silent 400 (see the QA sweep review).
+  // string here with a silent 400.
   calibrationIntervalDays: z.coerce.number().int().positive().optional(),
   // A new record starts active or inactive. Out of service is reached only through a failed calibration or the status endpoint (with a reason).
   status: z.enum(["active", "inactive"]).optional(),

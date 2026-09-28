@@ -2,7 +2,7 @@ import type { FormLayout } from "./types.js";
 import { FMEA_PRIORITY_LEGEND } from "../fmeaPriority.js";
 
 /**
- * Derived 1:1 from the user-provided fmea.pdf (Potential Failure Mode and
+ * Derived 1:1 from the source fmea.pdf (Potential Failure Mode and
  * Effects Analysis — Process FMEA). The source template spans two PDF pages
  * only because its analysis table is too wide to print on one sheet — R.P.N.
  * (Risk Priority Number) wraps onto page 2. Here it's one continuous table

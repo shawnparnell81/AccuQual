@@ -28,8 +28,7 @@ export interface QmsFormDefinition {
  * generic shape (header + named table sections + comments) — see
  * qmsForms.ts's schema comment for why forms 01 (Document Change Request)
  * and 37 (Automotive Manufacturing Work Order) are NOT here. Every
- * title/subtitle/section/column below was extracted directly from the
- * user's own supplied .docx/.pdf files, not invented.
+ * title/subtitle/section/column below was extracted directly from the supplied.docx/.pdf files.
  */
 export const QMS_FORM_DEFINITIONS: QmsFormDefinition[] = [
   {

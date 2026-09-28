@@ -11,8 +11,7 @@ import { users } from "./users.js";
  * `ownerId` (the specific person responsible for driving it to closure).
  *
  * Two other real "risk" concepts exist elsewhere in AccuQual and are
- * deliberately NOT merged into this table (see the Risk Management module
- * review): `POST /ai/risk-score` is a standalone LLM-based supplier-risk
+ * deliberately NOT merged into this table: `POST /ai/risk-score` is a standalone LLM-based supplier-risk
  * scorer (AI Insights page), and the Digital Twin's simulation risk heatmap
  * scores twin nodes, not real-world risk records. All three are labeled
  * distinctly in their own UI so they're never confused for one another.

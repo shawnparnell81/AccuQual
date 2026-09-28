@@ -9,11 +9,11 @@ export interface QmsDocumentEntry {
 }
 
 /**
- * The full "ACCUQUAL Forms" batch — all 37 real documents the user supplied
- * (33 .docx + 4 .pdf + one .docx added after the original count), minus the
+ * The full "ACCUQUAL Forms" batch — all 37 real source documents
+ * (33.docx + 4.pdf + one.docx added after the original count), minus the
  * one literal duplicate title ("Automotive Manufacturing Work Order"
- * appears twice, as both a .docx and a .pdf) — 37 unique titles total, per
- * the user's own explicit count. 22 share one generic shape and live on the
+ * appears twice, as both a.docx and a.pdf) — 37 unique titles total, per
+ * the catalog count. 22 share one generic shape and live on the
  * QMS Forms engine (QMS_FORM_DEFINITIONS); the other 15 duplicate an
  * already-real, better module and were deliberately routed there instead of
  * being rebuilt — see qmsFormDefinitions.ts's own comment for exactly why.

@@ -17,22 +17,22 @@ import { users } from "./users.js";
  * improvement over the existing department/roleName fields, which ARE baked
  * into the JWT at login and only refresh then):
  *
- *   1. departmentPermissions — the direct replacement for PERMISSION_MATRIX.
- *      One row per (company, departmentName, moduleName) => accessLevel. A
- *      missing row falls back to the ORIGINAL hardcoded matrix (kept in code
- *      as DEFAULT_PERMISSION_MATRIX) rather than "none" — see that file's
- *      own comment. This is what makes "Customer Service now needs RMA Log
- *      access" a database write instead of a deploy.
+ *  1. departmentPermissions — the direct replacement for PERMISSION_MATRIX.
+ *  One row per (company, departmentName, moduleName) => accessLevel. A
+ *  missing row falls back to the ORIGINAL hardcoded matrix (kept in code
+ *  as DEFAULT_PERMISSION_MATRIX) rather than "none" — see that file's
+ *  own comment. This is what makes "Customer Service now needs RMA Log
+ *  access" a database write instead of a deploy.
  *
- *   2. permissionRoles + permissionRoleModules + userPermissionRoles — a
- *      company can additionally define its own named roles (e.g. "Line
- *      Lead"), each carrying its own per-module access level, and assign
- *      them to specific users. This is ADDITIVE ONLY (a role can only grant
- *      access on top of a user's department baseline, never revoke it) —
- *      deliberately no "negative permission" concept, since that would need
- *      a real precedence/conflict system the brief never asked for and this
- *      app has no other example of. A user's effective level on a module is
- *      MAX(department level, every assigned role's level for that module).
+ *  2. permissionRoles + permissionRoleModules + userPermissionRoles — a
+ *  company can additionally define its own named roles (e.g. "Line
+ *  Lead"), each carrying its own per-module access level, and assign
+ *  them to specific users. This is ADDITIVE ONLY (a role can only grant
+ *  access on top of a user's department baseline, never revoke it) —
+ *  deliberately no "negative permission" concept, since that would need
+ *  a real precedence/conflict system, which is out of scope, and this
+ *  app has no other example of one. A user's effective level on a module is
+ *  MAX(department level, every assigned role's level for that module).
  *
  * moduleName/departmentName are plain `text` columns (matching this app's
  * existing convention for auditTrail.entityType/action — see that schema's
@@ -43,7 +43,7 @@ import { users } from "./users.js";
  *
  * accessLevel uses this app's existing "none"|"read"|"edit" vocabulary
  * (matching AccessLevel in departmentAccess.ts) rather than introducing
- * "write" as a second synonym for the same concept — the brief used
+ * "write" as a second synonym for the same concept — an earlier draft used
  * "write," but this app has said "edit" everywhere (UI copy, PERMISSION_
  * MATRIX, every controller's assertDepartment comment) since it was first
  * built, and keeping one word for one concept avoids permanent confusion.
@@ -66,8 +66,8 @@ export const permissionRoles = pgTable(
 );
 
 /**
- * Collapses the brief's separate "permissions" + "role_permissions" tables
- * into one direct (role, module) => accessLevel join — the brief's own
+ * Collapses separate "permissions" + "role_permissions" tables
+ * into one direct (role, module) => accessLevel join —
  * two-table shape (a standalone `permissions` row per module+level, then a
  * `role_permissions` join to it) adds a layer of indirection with no real
  * benefit here: nothing else ever references a `permissions` row on its
@@ -95,7 +95,7 @@ export const permissionRoleModules = pgTable(
  * A user may hold more than one custom permission role at once (many-to-
  * many) — distinct from, and unrelated to, the existing single users.roleId
  * FK (the coarse system role — admin/quality_manager/etc). Named
- * "userPermissionRoles" rather than the brief's "user_roles" specifically to
+ * "userPermissionRoles" rather than "user_roles" specifically to
  * avoid reading as the same concept as users.roleId in code/DB tooling.
  */
 export const userPermissionRoles = pgTable(

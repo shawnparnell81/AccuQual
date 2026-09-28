@@ -135,9 +135,8 @@ export const getRiskHandler = asyncHandler(async (req: Request, res: Response) =
  * Update — Quality (full control) and Engineering ("update technical
  * fields" per the spec) only; Production/Purchasing/Material Management can
  * still create a risk and propose mitigations, but not edit the risk record
- * itself. Never accepts `status` (see updateRiskSchema's own comment) — a
- * severity/probability change gets its own flagged audit entry per the
- * spec's explicit "severity/probability change" audit requirement, distinct
+ * itself. Never accepts `status` (see updateRiskSchema's own comment). A
+ * severity/probability change gets its own flagged audit entry, distinct
  * from a plain field edit.
  */
 export const updateRiskHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -145,9 +144,8 @@ export const updateRiskHandler = asyncHandler(async (req: Request, res: Response
   const record = await loadRisk(req, Number(req.params.id));
   // Not a real column — a client that just applied an AI suggestion (see
   // risk.ai.ts) passes the suggestion's id back here so the audit entry
-  // below can say "AI suggestion accepted" instead of a plain field edit,
-  // per the spec's explicit requirement to log that distinctly. Stripped
-  // before the DB write either way.
+  // below records "AI suggestion accepted" instead of a plain field edit.
+  // Stripped before the DB write either way.
   const { aiSuggestionId, ...rest } = req.body as { aiSuggestionId?: number } & Record<string, unknown>;
   const body = stripClientOwnedFields(rest) as { severity?: number; probability?: number } & Record<string, unknown>;
   const scoringChanged = body.severity !== undefined || body.probability !== undefined;

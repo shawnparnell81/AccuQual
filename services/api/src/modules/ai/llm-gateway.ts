@@ -187,8 +187,7 @@ async function callOpenAi(prompt: string, options: LlmCallOptions): Promise<LlmC
  * A real, minimal (max_tokens: 1) call to the provider to confirm a key
  * actually works before it's ever encrypted/stored — see
  * company.controller.ts's updateAiConfigHandler. This is a genuine trade-off
- * the reviewed BYOK prompt asked for explicitly ("perform a test request...
- * if invalid, reject"): it spends a trivial, real amount of the company's
+ * Saving a key runs a test request and rejects an invalid key. It spends a trivial, real amount of the company's
  * own provider quota on every key save, unlike every other AI call in this
  * app (which only ever runs on an explicit user action). Returns true/false
  * rather than throwing — a network hiccup and a genuinely bad key both mean

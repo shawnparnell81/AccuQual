@@ -78,7 +78,7 @@ export function getRegisteredActionKinds(): string[] {
 
 /**
  * Phase 9 task 5 — real condition operators beyond the original
- * equals/greaterThan pair, covering the brief's own condition list
+ * equals/greaterThan pair, covering condition list
  * (defect category → equals/in, supplier → equals, recurrence →
  * greaterThan/greaterOrEqual, severity → equals/in, inspection results →
  * equals). `field` supports one level of dot-path (e.g. "breakdown.ncrFactor")

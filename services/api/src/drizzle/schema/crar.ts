@@ -9,8 +9,8 @@ import { customers } from "./customers.js";
 
 /**
  * Customer Return Analysis Report (CRAR) — a real, workflow-driven record
- * of the user's own fillable PDF (Customer_Return_Analysis_Report_Fillable
- * .pdf, fixed for spacing/font-size earlier this session), replicated field
+ * of the source fillable PDF (Customer_Return_Analysis_Report_Fillable
+ * .pdf), replicated field
  * for field with ZERO deviation from that form: every column below is one
  * of that PDF's own real AcroForm fields, same name (camelCased, never
  * renamed in spirit), same grouping into the same 13 numbered subsections,
@@ -46,7 +46,7 @@ export const crarClaims = pgTable("crar", {
   // integration requirement, kept clearly separate from the 54 literal
   // form fields below.
   warrantyId: integer("warranty_id").references(() => warrantyClaims.id),
-  // "qualityId" per the brief — AccuQual's real "Quality" module of record
+  // "qualityId" — AccuQual's real "Quality" module of record
   // for exactly this kind of investigation is the NCR table (there is no
   // separate literal "quality department" entity to link to), so this is
   // an optional link to the NCR this return investigation may already be

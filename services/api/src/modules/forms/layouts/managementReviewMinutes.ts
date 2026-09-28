@@ -1,7 +1,7 @@
 import type { FormLayout } from "./types.js";
 
 /**
- * Derived 1:1 from the user-provided "Mnanager Review Minutes Template.pdf"
+ * Derived 1:1 from the source "Mnanager Review Minutes Template.pdf"
  * (Executive Governance & System Performance Record). A distinct, more
  * detailed document from the earlier "management_review" formType
  * (Management System Performance Evaluation Record) — both are real,

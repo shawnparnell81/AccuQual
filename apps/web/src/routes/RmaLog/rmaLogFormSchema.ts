@@ -37,7 +37,7 @@ export const DISPOSITION_OPTIONS = [
   { value: "credit", label: "Credit" },
 ];
 
-/** Rows of fields, 12-column grid, in the brief's own literal numbered order. */
+/** Rows of fields, 12-column grid, in literal numbered order. */
 export const RMA_LOG_FORM_SCHEMA: RmaLogField[][] = [
   [field("rmaNumber", "RMA Number", "text", 4), field("dateIssued", "Date Issued", "date", 4), field("trackingNumber", "Tracking Number", "text", 4)],
   [field("customerName", "Customer Name", "text", 6), field("originalOrderNumber", "Original Order Number", "text", 6)],

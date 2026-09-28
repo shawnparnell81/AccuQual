@@ -297,7 +297,7 @@ export const sendReorderRequestHandler = asyncHandler(async (req: Request, res: 
  * POST /inventory/reorder-requests/:id/ignore — purchasing-only. Marks the
  * request ignored and recomputes the item's real state (rather than
  * hardcoding "in_stock" or "reorder_pending", neither of which reflects
- * actual on-hand — see the ERP Reorder Request review).
+ * actual on-hand).
  */
 export const ignoreReorderRequestHandler = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
@@ -417,7 +417,7 @@ export const historyHandler = asyncHandler(async (req: Request, res: Response) =
 /**
  * GET /inventory/alerts — every alert for the company, newest first, joined
  * live with the item's identifying + threshold fields (never denormalized
- * onto the alert row — see the Alerts UI review) plus a summed current
+ * onto the alert row) plus a summed current
  * stock, same aggregation approach as listItemsHandler.
  */
 export const listAlertsHandler = asyncHandler(async (req: Request, res: Response) => {
