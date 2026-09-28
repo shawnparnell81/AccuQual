@@ -79,7 +79,7 @@ export const DOCUMENT_FOLDER_PAGES: Record<string, { title: string; blurb: strin
   "internal-audits": { title: "Internal Audits", blurb: "Internal audits. Upload a file to keep it here." },
   shipping: { title: "Shipping", blurb: "Shipping documents. Upload a file to keep it here." },
   receiving: { title: "Receiving", blurb: "Receiving documents. Upload a file to keep it here." },
-  "validation-reports": { title: "Validation Reports", blurb: "Process and product validation reports. Start a fillable Validation Report here, or upload a file to keep it in this folder." },
+  "validation-reports": { title: "Validation Reports", blurb: "Process and product validation reports. Start a fillable CSA Validation Report or Fuel Pump Validation here, or upload a file to keep it in this folder." },
   "product-alerts": { title: "Product Alerts", blurb: "Product alerts. Upload a file to keep it here." },
   recalls: { title: "Recalls", blurb: "Product recalls. Upload a file to keep it here." },
   [OBSOLETE_ARCHIVE_CATEGORY]: { title: "Obsolete / Archive", blurb: "Old documents. Upload a file to keep it here, or move a superseded document into this folder." },

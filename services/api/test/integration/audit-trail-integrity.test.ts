@@ -104,7 +104,7 @@ describe("Audit trail integrity (real DB + real HTTP path)", () => {
 
   describe("credentials are never stored", () => {
     it("a new user's password hash is logged as [redacted], never as the hash", async () => {
-      const res = await request(app).post("/users").set(auth()).send({ email: `audit-int-newuser-${suffix}@test.local`, password: "CorrectHorse9!" });
+      const res = await request(app).post("/users").set(auth()).send({ email: `audit-int-newuser-${suffix}@test.local`, password: "CorrectHorse9!", name: "New Person", roleId: roleIds[0] });
       expect(res.status).toBe(201);
       userIds.push(res.body.id);
 

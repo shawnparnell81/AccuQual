@@ -7,9 +7,18 @@ import { VISIBLE_DEPARTMENTS } from "../../middleware/departmentAccess.js";
 export const departmentSchema = z.enum(VISIBLE_DEPARTMENTS as [string, ...string[]]);
 
 export const createUserSchema = z.object({
-  email: z.string().email(),
+  email: z
+    .string()
+    .trim()
+    .email()
+    .transform((value) => value.toLowerCase()),
   password: passwordSchema,
-  name: z.string().optional(),
+  name: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .transform((value) => (value ? value : undefined)),
   roleId: z.number().int().optional(),
   department: departmentSchema.nullable().optional(),
   managerId: z.number().int().positive().nullable().optional(),

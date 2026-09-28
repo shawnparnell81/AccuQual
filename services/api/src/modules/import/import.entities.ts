@@ -320,7 +320,7 @@ const peopleEntity: ImportEntity<PersonValue, { rolesByName: Map<string, number>
   },
   validate(raw, lookups) {
     const errors: string[] = [];
-    const email = raw.email?.trim() ?? "";
+    const email = (raw.email?.trim() ?? "").toLowerCase();
     if (!email) errors.push("Email is required.");
     else if (!EMAIL.test(email)) errors.push(`"${email}" doesn't look like an email address.`);
 

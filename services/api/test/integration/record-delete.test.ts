@@ -183,4 +183,28 @@ describe("record delete", () => {
     expect((entry!.changes as { summary: string; attachmentFileNames: string[] }).summary).toBe(`Deleted Validation Report #${id} "CSA-VAL-9"`);
     expect((entry!.changes as { attachmentFileNames: string[] }).attachmentFileNames).toEqual([]);
   });
+
+  it("deletes a fuel pump validation and names it in the audit line", async () => {
+    const created = await request(app)
+      .post("/validation-reports")
+      .set("Authorization", `Bearer ${creator.token}`)
+      .send({ data: { formType: "fuel_pump", cells: { B6: "FP-200" } } });
+    expect(created.status).toBe(201);
+    const id = created.body.id as number;
+
+    const removed = await request(app).delete(`/validation-reports/${id}`).set("Authorization", `Bearer ${qualityManager.token}`);
+    expect(removed.status).toBe(204);
+
+    const [entry] = await db
+      .select()
+      .from(auditTrail)
+      .where(and(eq(auditTrail.entityType, "Validation Report"), eq(auditTrail.entityId, id), eq(auditTrail.action, "delete")));
+    expect((entry!.changes as { summary: string }).summary).toBe(`Deleted Fuel Pump Validation #${id} "FP-200"`);
+
+    const csa = await request(app).post("/validation-reports").set("Authorization", `Bearer ${creator.token}`).send({ data: { formType: "csa", cells: { B6: "CSA-KEEP" } } });
+    expect(csa.status).toBe(201);
+    const still = await request(app).get(`/validation-reports/${csa.body.id}`).set("Authorization", `Bearer ${creator.token}`);
+    expect(still.status).toBe(200);
+    expect(still.body.data.formType).toBe("csa");
+  });
 });

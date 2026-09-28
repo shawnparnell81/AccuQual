@@ -56,9 +56,9 @@ export function passwordProblem(password: string, context: { email?: string; nam
 }
 
 /**
- * Zod rule for request bodies. Deliberately only a presence/size bound: the real rules (length, common passwords, email, breach lookup) run in assertPasswordAcceptable inside the handler, because a Zod failure reaches the client as a bare "Request failed validation" while assertPasswordAcceptable can say WHY the password was refused.
+ * Zod rule for request bodies. Only the upper size bound lives here. Length, common passwords, email, and the breach lookup run in assertPasswordAcceptable inside the handler, because a Zod failure reaches the client as a bare "Request failed validation" while assertPasswordAcceptable can say why the password was refused. An empty string is allowed through so that message can be the length rule.
  */
-export const passwordSchema = z.string().min(1).max(PASSWORD_MAX_LENGTH);
+export const passwordSchema = z.string().max(PASSWORD_MAX_LENGTH);
 
 function breachCheckEnabled(): boolean {
   if (env.PASSWORD_BREACH_CHECK) return env.PASSWORD_BREACH_CHECK === "true";

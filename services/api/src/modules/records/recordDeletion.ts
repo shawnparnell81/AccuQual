@@ -316,6 +316,12 @@ function validationTitle(row: Row): string | null {
   return textOf(cells, ["B6"]);
 }
 
+function validationLabel(row: Row): string {
+  const data = row.data;
+  if (data && typeof data === "object" && (data as { formType?: unknown }).formType === "fuel_pump") return "Fuel Pump Validation";
+  return "Validation Report";
+}
+
 const specs: Record<RecordKind, KindSpec> = {
   ncr: {
     entityType: "NCR",
@@ -680,13 +686,14 @@ export async function deleteRecord(req: Request, kind: RecordKind): Promise<void
 
     const title = spec.title(row);
     const recordNumber = recordNumberOf(row, spec.numberFields);
+    const label = kind === "validation_report" ? validationLabel(row) : spec.label;
     await recordAuditTrail(req.db, {
       entityType: spec.entityType,
       entityId: id,
       action: "delete",
       performedBy: req.user.id,
       changes: {
-        summary: deletionSummary(spec.label, recordNumber, title),
+        summary: deletionSummary(label, recordNumber, title),
         title,
         recordNumber,
         snapshot: jsonSnapshot(row),

@@ -78,12 +78,31 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
     const [manager] = await req.db!.select({ id: users.id }).from(users).where(eq(users.id, managerId));
     if (!manager) throw AppError.badRequest("That manager isn't a user.");
   }
+  // Said together so one submit explains every problem. A duplicate used to hit the unique-email rule and come back as a server error.
+  const problems: string[] = [];
+  if (!name?.trim()) problems.push("Enter a name.");
+  if (roleId == null) problems.push("Choose a role.");
+  else {
+    const [role] = await req.db!.select({ id: roles.id }).from(roles).where(eq(roles.id, roleId));
+    if (!role) problems.push("That role doesn't exist.");
+  }
+  const [existing] = await req.db!.select({ id: users.id }).from(users).where(sql`lower(btrim(${users.email})) = ${email}`);
+  if (existing) problems.push("That email is already in use.");
+  if (problems.length > 0) throw AppError.badRequest(problems.join(" "));
   await assertPasswordAcceptable(password, { email, name });
   const passwordHash = await bcrypt.hash(password, 10);
-  const [created] = await req.db!.insert(users).values({ email, passwordHash, name, roleId, department, managerId: managerId ?? null, passwordChangedAt: new Date(), mustChangePassword: true }).returning();
-  if (!created) throw new AppError("Failed to create user", 500);
-  const { passwordHash: _omit, ...safe } = created;
-  res.status(201).json(safe);
+  try {
+    const [created] = await req.db!.insert(users).values({ email, passwordHash, name, roleId, department, managerId: managerId ?? null, passwordChangedAt: new Date(), mustChangePassword: true }).returning();
+    if (!created) throw new AppError("Failed to create user", 500);
+    const { passwordHash: _omit, ...safe } = created;
+    res.status(201).json(safe);
+  } catch (err) {
+    const pg = postgresError(err);
+    if (pg.code === "23505") throw AppError.badRequest("That email is already in use.");
+    if (pg.code === "23503" && pg.constraint?.includes("role")) throw AppError.badRequest("That role doesn't exist.");
+    if (pg.code === "23503" && pg.constraint?.includes("manager")) throw AppError.badRequest("That manager isn't a user.");
+    throw err;
+  }
 });
 
 async function otherActiveFullAccess(db: Db, exceptUserId: number): Promise<number> {
@@ -246,9 +265,13 @@ async function clearSignInRows(db: Db, userId: number) {
   await db.delete(userSites).where(eq(userSites.userId, userId));
 }
 
+function postgresError(err: unknown): { code?: string; constraint?: string } {
+  const error = err as { code?: string; constraint?: string; cause?: { code?: string; constraint?: string } };
+  return { code: error.code ?? error.cause?.code, constraint: error.constraint ?? error.cause?.constraint };
+}
+
 function isForeignKeyError(err: unknown): boolean {
-  const error = err as { code?: string; cause?: { code?: string } };
-  return error.code === "23503" || error.cause?.code === "23503";
+  return postgresError(err).code === "23503";
 }
 
 function removalAudit(moved: OpenWorkGroup[], replacement: { id: number; name: string | null; email: string } | null) {

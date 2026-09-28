@@ -7,6 +7,14 @@
 
 export type CellValue = string | number | boolean;
 
+export type ValidationFormType = "csa" | "fuel_pump";
+
+/** Records saved before the fuel pump form have no formType and stay CSA. */
+export function formTypeOf(data: unknown): ValidationFormType {
+  if (data && typeof data === "object" && (data as { formType?: unknown }).formType === "fuel_pump") return "fuel_pump";
+  return "csa";
+}
+
 export const PASSED_FILL = "#4EA72E";
 export const FAILED_FILL = "#FF0000";
 
