@@ -1,15 +1,19 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useCurrentUser } from "../../hooks/useAuth";
+import { isFullAccessRole } from "../../lib/fullAccess";
+import { NETSUITE_PRESETS_PATH, NETSUITE_SYNC_ERRORS_PATH } from "../Erp/erpPaths";
 import { NavigationSettingsPage } from "./NavigationSettingsPage";
 import { ThemeSettingsSection } from "./ThemeSettingsSection";
 import { MfaSettingsSection, TrustedDevicesSection } from "./MfaSettingsSection";
 import { ChangePasswordSection } from "./ChangePasswordSection";
 import { FeasibilitySettingsPanel } from "./FeasibilitySettingsPanel";
 import { NotificationPreferencesSection } from "./NotificationPreferencesSection";
+import { ERPSyncSettingsPanel } from "./ERPSyncSettingsPanel";
 
-const TABS = ["User Preferences", "Company", "Security", "Theme", "Notifications", "Email Alerts", "Feasibility", "Navigation"] as const;
-type Tab = (typeof TABS)[number];
+const BASE_TABS = ["User Preferences", "Company", "Security", "Theme", "Notifications", "Email Alerts", "Feasibility", "Navigation"] as const;
+const NETSUITE_TAB = "ERP / NetSuite";
+type Tab = (typeof BASE_TABS)[number] | typeof NETSUITE_TAB;
 
 const COMPANY_LINKS = [
   { to: "/admin/company-settings", title: "Company name and logo", detail: "The name people see, the logo, timezone, and contact info." },
@@ -44,15 +48,22 @@ function CompanySettingsLinks() {
  * switches. Email delivery itself is the company's mail connection.
  */
 export function SettingsPage() {
-  const [tab, setTab] = useState<Tab>("User Preferences");
+  const [searchParams] = useSearchParams();
   const user = useCurrentUser();
+  const isAdmin = isFullAccessRole(user?.roleName);
+  const tabs: Tab[] = isAdmin ? [...BASE_TABS, NETSUITE_TAB] : [...BASE_TABS];
+  const [tab, setTab] = useState<Tab>("User Preferences");
+
+  useEffect(() => {
+    if (searchParams.get("section") === "netsuite" && isAdmin) setTab(NETSUITE_TAB);
+  }, [searchParams, isAdmin]);
 
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">Settings</h1>
 
       <div className="flex gap-1 overflow-x-auto border-b border-border">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -78,7 +89,7 @@ export function SettingsPage() {
               <dd className="capitalize">{user?.department && user.department !== "sales_and_marketing" ? user.department.replace(/_/g, " ") : "—"}</dd>
             </dl>
             <p className="mt-3 text-xs text-muted-foreground">
-              Name, role, and department, along with every other organization-wide setting (users &amp; roles, permissions, AI, supplier/quality/receiving settings, company profile), are managed in the{" "}
+              Name, role, and department, along with every other organization-wide setting (users &amp; roles, permissions, supplier, quality, and receiving settings, company profile), are managed in the{" "}
               <Link to="/admin" className="text-accent hover:underline">
                 Admin Console
               </Link>
@@ -111,6 +122,26 @@ export function SettingsPage() {
       {tab === "Notifications" && <NotificationPreferencesSection mode="inApp" />}
       {tab === "Email Alerts" && <NotificationPreferencesSection mode="email" />}
       {tab === "Feasibility" && <FeasibilitySettingsPanel />}
+
+      {tab === NETSUITE_TAB && isAdmin && (
+        <div className="flex flex-col gap-4">
+          <div>
+            <h2 className="text-lg font-medium">ERP / NetSuite</h2>
+            <p className="text-sm text-muted-foreground">
+              Oracle NetSuite is the company ERP. Connection settings, a connection test, and sync status are here. Purchase orders and requisitions stay in NetSuite.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link to={NETSUITE_PRESETS_PATH} className="rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-muted/40">
+              Connection presets
+            </Link>
+            <Link to={NETSUITE_SYNC_ERRORS_PATH} className="rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-muted/40">
+              Sync error log
+            </Link>
+          </div>
+          <ERPSyncSettingsPanel />
+        </div>
+      )}
 
       {tab === "Navigation" && <NavigationSettingsPage />}
     </div>

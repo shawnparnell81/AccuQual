@@ -48,6 +48,9 @@ import {
   DocumentsPage,
   EightDDetailPage,
   EightDPage,
+  ErpPresetEditorPage,
+  ErpPresetsListPage,
+  ErpSyncErrorsPage,
   EmployeeTrainingHistoryPage,
   EquipmentDetailPage,
   FeasibilityDetailPage,
@@ -208,6 +211,9 @@ export function App() {
           <Route path="/ai" element={<AiInsightsPage />} />
           <Route path="/digital-twin" element={<DigitalTwinPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/erp/presets" element={<ErpPresetsListPage />} />
+          <Route path="/settings/erp/presets/:id" element={<ErpPresetEditorPage />} />
+          <Route path="/settings/erp/sync-errors" element={<ErpSyncErrorsPage />} />
           {/* Kept working as its own URL (embedded as SettingsPage's "Navigation" tab) — anyone with this link bookmarked shouldn't get a 404. */}
           <Route path="/settings/navigation" element={<NavigationSettingsPage />} />
           {/* Kept working as their own URLs — now also reachable/embedded via the Admin Console shell below, not replaced. */}

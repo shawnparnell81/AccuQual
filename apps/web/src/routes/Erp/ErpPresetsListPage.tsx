@@ -10,6 +10,7 @@ import { Modal } from "../../components/modals/Modal";
 import { BUCKET_CLASSES } from "../../components/tables/StatusBadge";
 import type { ErpConnectorPreset, ErpPresetModule, ErpPresetVendor } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { NETSUITE_PRESETS_PATH, NETSUITE_SETTINGS_PATH } from "./erpPaths";
 
 const VENDOR_LABELS: Record<ErpPresetVendor, string> = { sap: "SAP", oracle: "Oracle", netsuite: "NetSuite", epicor: "Epicor", dynamics: "Microsoft Dynamics", custom: "Custom" };
 const MODULE_LABELS: Record<ErpPresetModule, string> = {
@@ -40,7 +41,7 @@ function ErpPresetsListPageBody() {
   const navigate = useNavigate();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const { data: presets = [], isLoading } = useErpPresets();
+  const { data: presets = [], isLoading, isError } = useErpPresets();
   const [vendorFilter, setVendorFilter] = useState<string>("");
   const [moduleFilter, setModuleFilter] = useState<string>("");
   const [preview, setPreview] = useState<ErpConnectorPreset | null>(null);
@@ -60,7 +61,7 @@ function ErpPresetsListPageBody() {
     mutationFn: async (id: number) => (await apiClient.post(`/erp/presets/${id}/clone`)).data as ErpConnectorPreset,
     onSuccess: (cloned) => {
       invalidate();
-      navigate(`/erp/presets/${cloned.id}`);
+      navigate(`${NETSUITE_PRESETS_PATH}/${cloned.id}`);
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't customize this preset.")),
   });
@@ -84,10 +85,13 @@ function ErpPresetsListPageBody() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">ERP Connector Presets</h1>
-          <p className="text-sm text-muted-foreground">Vendor field mappings, transforms, and validation rules for the ERP sync engine.</p>
+          <h1 className="text-2xl font-semibold">NetSuite connection presets</h1>
+          <p className="text-sm text-muted-foreground">Field mappings, transforms, and validation rules for the NetSuite connector.</p>
+          <button type="button" onClick={() => navigate(NETSUITE_SETTINGS_PATH)} className="mt-1 text-sm text-muted-foreground hover:underline">
+            ← Back to ERP / NetSuite
+          </button>
         </div>
-        <button onClick={() => navigate("/erp/presets/new")} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
+        <button onClick={() => navigate(`${NETSUITE_PRESETS_PATH}/new`)} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
           + New Preset
         </button>
       </div>
@@ -117,6 +121,8 @@ function ErpPresetsListPageBody() {
 
       {isLoading ? (
         <LoadingPlaceholder />
+      ) : isError ? (
+        <p className="text-sm text-destructive">Couldn't load connection presets.</p>
       ) : byVendor.length === 0 ? (
         <p className="text-sm text-muted-foreground">No presets match these filters.</p>
       ) : (
@@ -145,7 +151,7 @@ function ErpPresetsListPageBody() {
                         Customize
                       </button>
                     ) : (
-                      <button onClick={() => navigate(`/erp/presets/${preset.id}`)} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
+                      <button onClick={() => navigate(`${NETSUITE_PRESETS_PATH}/${preset.id}`)} className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
                         Edit
                       </button>
                     )}

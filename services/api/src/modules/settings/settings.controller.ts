@@ -61,7 +61,7 @@ export const updateInventorySettingsHandler = asyncHandler(async (req: Request, 
 // Settings → ERP Sync Engine
 // ============================================================
 
-/** Never returns the real secret — a masked display string + whether one is set, same convention as company.controller.ts's getAiConfigHandler. */
+/** Never returns the real secret — a masked display string plus whether one is set. */
 export const getErpSyncSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
   const co = await loadCompanyForSettings(req.db!);
   const config = getErpSyncSettings(co);
@@ -71,6 +71,7 @@ export const getErpSyncSettingsHandler = asyncHandler(async (req: Request, res: 
     modulesEnabled: config.modulesEnabled ?? [],
     conflictRules: config.conflictRules ?? {},
     retryPolicy: config.retryPolicy ?? {},
+    accountId: config.accountId ?? null,
     webhookUrl: config.webhookUrl ?? null,
     hasWebhookSecret: !!config.webhookSecretEncrypted,
     maskedWebhookSecret: config.webhookSecretEncrypted ? maskSecret(decryptSecret(config.webhookSecretEncrypted)) : null,
@@ -80,15 +81,24 @@ export const getErpSyncSettingsHandler = asyncHandler(async (req: Request, res: 
 
 export const updateErpSyncSettingsHandler = asyncHandler(async (req: Request, res: Response) => {
   const co = await loadCompanyForSettings(req.db!);
-  const { webhookSecret, webhookUrl, ...rest } = req.body as { webhookSecret?: string; webhookUrl?: string } & Record<string, unknown>;
+  const { webhookSecret, webhookUrl, accountId, ...rest } = req.body as {
+    webhookSecret?: string;
+    webhookUrl?: string;
+    accountId?: string;
+  } & Record<string, unknown>;
 
   const merged = { ...getErpSyncSettings(co), ...rest };
   if (webhookUrl !== undefined) merged.webhookUrl = webhookUrl === "" ? undefined : webhookUrl;
+  if (accountId !== undefined) {
+    const trimmed = accountId.trim();
+    if (trimmed) merged.accountId = trimmed;
+    else delete merged.accountId;
+  }
   if (webhookSecret !== undefined) merged.webhookSecretEncrypted = encryptSecret(webhookSecret);
 
   const [updated] = await req.db!.update(company).set({ erpSyncSettings: merged }).returning();
 
-  // Never log the secret itself, encrypted or not — same convention as company.controller.ts's updateAiConfigHandler.
+  // Never log the secret itself, encrypted or not.
   await recordAuditTrail(req.db!, {
     entityType: "ErpSyncSettings",
     entityId: 1,
@@ -104,9 +114,30 @@ export const updateErpSyncSettingsHandler = asyncHandler(async (req: Request, re
     modulesEnabled: result.modulesEnabled ?? [],
     conflictRules: result.conflictRules ?? {},
     retryPolicy: result.retryPolicy ?? {},
+    accountId: result.accountId ?? null,
     webhookUrl: result.webhookUrl ?? null,
     hasWebhookSecret: !!result.webhookSecretEncrypted,
     statusHistory: result.statusHistory ?? [],
+  });
+});
+
+/**
+ * POST /settings/erp-sync/test — reads the saved NetSuite account details.
+ * Does not call NetSuite or deliver a webhook. A live sync only runs from
+ * POST /settings/erp-sync/trigger, and only when someone clicks it.
+ */
+export const testErpConnectionHandler = asyncHandler(async (req: Request, res: Response) => {
+  const co = await loadCompanyForSettings(req.db!);
+  const config = getErpSyncSettings(co);
+  const accountId = config.accountId?.trim() ?? "";
+  const webhookUrl = config.webhookUrl?.trim() ?? "";
+  if (!accountId && !webhookUrl) {
+    res.json({ connected: false, message: "Not connected yet" });
+    return;
+  }
+  res.json({
+    connected: true,
+    message: accountId ? `NetSuite account ${accountId} is saved.` : "NetSuite webhook URL is saved.",
   });
 });
 
