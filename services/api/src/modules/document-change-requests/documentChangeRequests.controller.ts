@@ -4,6 +4,7 @@ import { documentChangeRequests, documentChangeItems, documentChangeReviews } fr
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { deleteRecord } from "../records/recordDeletion.js";
 
 async function loadDcr(req: Request, id: number) {
   const [row] = await req.db!.select().from(documentChangeRequests).where(and(eq(documentChangeRequests.id, id)));
@@ -40,11 +41,7 @@ export const updateDcrHandler = asyncHandler(async (req: Request, res: Response)
 });
 
 export const deleteDcrHandler = asyncHandler(async (req: Request, res: Response) => {
-  const record = await loadDcr(req, Number(req.params.id));
-  await req.db!.delete(documentChangeItems).where(and(eq(documentChangeItems.documentChangeRequestId, record.id)));
-  await req.db!.delete(documentChangeReviews).where(and(eq(documentChangeReviews.documentChangeRequestId, record.id)));
-  await req.db!.delete(documentChangeRequests).where(and(eq(documentChangeRequests.id, record.id)));
-  await recordAuditTrail(req.db!, { entityType: "DocumentChangeRequest", entityId: record.id, action: "delete", changes: { formNo: record.formNo }, performedBy: req.user?.id });
+  await deleteRecord(req, "dcr");
   res.status(204).send();
 });
 

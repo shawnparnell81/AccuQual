@@ -5,6 +5,7 @@ import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createRmaLogSchema, updateRmaLogSchema, transitionRmaLogSchema } from "./rmaLog.validation.js";
 import { listRmaLogHandler, createRmaLogHandler, getRmaLogHandler, updateRmaLogHandler, transitionRmaLogHandler } from "./rmaLog.controller.js";
+import { deleteRecordHandler } from "../records/recordDeletion.js";
 
 export const rmaLogRouter = Router();
 // rma_log.read/write per the access matrix — Quality/Customer
@@ -19,4 +20,5 @@ rmaLogRouter.get("/", listRmaLogHandler);
 rmaLogRouter.post("/", validate(createRmaLogSchema), createRmaLogHandler);
 rmaLogRouter.get("/:id", getRmaLogHandler);
 rmaLogRouter.patch("/:id", validate(updateRmaLogSchema), updateRmaLogHandler);
+rmaLogRouter.delete("/:id", deleteRecordHandler("rma_log"));
 rmaLogRouter.post("/:id/status", validate(transitionRmaLogSchema), transitionRmaLogHandler);

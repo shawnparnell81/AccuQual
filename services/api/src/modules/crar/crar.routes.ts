@@ -5,6 +5,7 @@ import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createCrarSchema, updateCrarSchema, transitionCrarSchema } from "./crar.validation.js";
 import { listCrarHandler, createCrarHandler, getCrarHandler, updateCrarHandler, transitionCrarHandler } from "./crar.controller.js";
+import { deleteRecordHandler } from "../records/recordDeletion.js";
 
 export const crarRouter = Router();
 // quality edit, customer_service read, engineering/purchasing edit-but-
@@ -17,6 +18,7 @@ crarRouter.get("/", listCrarHandler);
 crarRouter.post("/", validate(createCrarSchema), createCrarHandler);
 crarRouter.get("/:id", getCrarHandler);
 crarRouter.patch("/:id", validate(updateCrarSchema), updateCrarHandler);
+crarRouter.delete("/:id", deleteRecordHandler("crar"));
 // Not in literal 4-route list, but a real transition
 // mechanism is required by its own workflow requirement — same "the route
 // list is a floor, not a ceiling" precedent as every other module added alongside them (e.g. Warranty's /costs, Supplier Portal's /review routes).

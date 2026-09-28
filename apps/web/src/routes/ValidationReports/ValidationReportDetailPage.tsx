@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
 import { SaveStatus } from "../../components/shared/SaveStatus";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
@@ -69,6 +70,7 @@ export function ValidationReportDetailPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <DeleteRecordButton resource="validation-reports" id={reportId} kind="Validation Report" title={cells.B6 == null ? null : String(cells.B6)} navigateTo="/folders/validation-reports" />
             <span
               className="rounded-md px-2 py-1 text-sm font-semibold"
               style={{ background: result === "Failed" ? "#FF0000" : "#4EA72E", color: "#111" }}

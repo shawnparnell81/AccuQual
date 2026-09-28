@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -7,7 +6,7 @@ import { useAuthStore } from "../../store/authStore";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
-import { Modal } from "../../components/modals/Modal";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { getQmsFormDefinition } from "./qmsFormDefinitions";
 import type { QmsForm, QmsFormRow, QmsFormStatus } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
@@ -35,7 +34,6 @@ export function QmsFormRecordPage() {
   const definition = getQmsFormDefinition(formType!);
 
   const { data: record, isLoading, isError } = qmsFormHooks.useOne(formId);
-  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -61,15 +59,6 @@ export function QmsFormRecordPage() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't remove that row.")),
   });
 
-  const deleteForm = useMutation({
-    mutationFn: async () => apiClient.delete(`/qms-forms/${formId}`),
-    onSuccess: () => {
-      toast.success("Deleted.");
-      navigate(`/qms-forms/${formType}`);
-    },
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't delete this record.")),
-  });
-
   if (!definition) return <p className="text-sm text-destructive">Unknown form type "{formType}".</p>;
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !record) return <LoadingPlaceholder />;
@@ -86,9 +75,7 @@ export function QmsFormRecordPage() {
           <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             Print
           </button>
-          <button onClick={() => setDeleteOpen(true)} className="rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/10">
-            Delete
-          </button>
+          <DeleteRecordButton resource="qms-forms" id={formId} kind={definition.title} title={record.formNo} ownerIds={[record.createdBy]} navigateTo={`/qms-forms/${formType}`} />
         </div>
       </div>
 
@@ -185,20 +172,6 @@ export function QmsFormRecordPage() {
       <div className="print:hidden">
         <WorkflowHistoryPanel moduleName="qms_forms" recordId={formId} />
       </div>
-
-      <Modal title="Delete" isOpen={deleteOpen} onClose={() => setDeleteOpen(false)}>
-        <div className="flex flex-col gap-4">
-          <p className="text-sm">Permanently delete this {definition.title}? This cannot be undone.</p>
-          <div className="flex gap-2">
-            <button onClick={() => deleteForm.mutate()} disabled={deleteForm.isPending} className="rounded-md bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground disabled:opacity-60">
-              {deleteForm.isPending ? "Deleting…" : "Delete permanently"}
-            </button>
-            <button onClick={() => setDeleteOpen(false)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-              Cancel
-            </button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }

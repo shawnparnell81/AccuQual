@@ -37,6 +37,8 @@ export interface SidebarLink {
   icon: LucideIcon;
   /** Company administrators only. */
   adminOnly?: boolean;
+  /** Owner, Administrator, and Quality Manager. */
+  auditLog?: boolean;
 }
 
 export interface SidebarFolder {
@@ -46,6 +48,7 @@ export interface SidebarFolder {
   /** When set, the folder name itself opens this page (in addition to its children). */
   path?: string;
   adminOnly?: boolean;
+  auditLog?: boolean;
   children: SidebarNode[];
 }
 
@@ -189,18 +192,20 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
     children: [
       { key: "workflow", label: "Workflow Builder", path: "/workflow", icon: Workflow },
       { key: "ai", label: "AI Insights", path: "/ai", icon: Sparkles },
+      { key: "audit-log", label: "Audit log", path: "/audit-log", icon: ScrollText, auditLog: true },
       { key: "admin", label: "Admin", path: "/admin", icon: Shield, adminOnly: true },
     ],
   },
 ];
 
 /** Drops admin-only entries for everyone else, and folders that would be empty. */
-export function visibleSidebar(nodes: SidebarNode[], isAdmin: boolean): SidebarNode[] {
+export function visibleSidebar(nodes: SidebarNode[], isAdmin: boolean, extras?: { auditLog?: boolean }): SidebarNode[] {
   const out: SidebarNode[] = [];
   for (const node of nodes) {
     if (node.adminOnly && !isAdmin) continue;
+    if (node.auditLog && !extras?.auditLog) continue;
     if (isFolder(node)) {
-      const children = visibleSidebar(node.children, isAdmin);
+      const children = visibleSidebar(node.children, isAdmin, extras);
       if (children.length === 0 && !node.path) continue;
       out.push({ ...node, children });
     } else {

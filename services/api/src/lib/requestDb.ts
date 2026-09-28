@@ -23,8 +23,15 @@ declare global {
       siteId?: number | null;
       /** Plants this caller may open records in. Admins get every plant. */
       allowedSiteIds?: number[];
+      /** Work that must run only after this request's transaction commits (file removal). */
+      afterCommit?: Array<() => Promise<void>>;
     }
   }
+}
+
+/** Runs after a successful COMMIT and before the response is sent. A rollback never runs these. */
+export function scheduleAfterCommit(req: Request, job: () => Promise<void>) {
+  (req.afterCommit ??= []).push(job);
 }
 
 /**
@@ -66,6 +73,11 @@ export function withDb(req: Request, res: Response, next: NextFunction) {
         const wasSuccess = res.statusCode < 400;
         try {
           await client.query(wasSuccess ? "COMMIT" : "ROLLBACK");
+          if (wasSuccess) {
+            for (const job of req.afterCommit ?? []) {
+              await job().catch((err) => logger.error("After-commit job failed", err));
+            }
+          }
           return true;
         } catch (err) {
           logger.error("Failed to finalize request transaction", err);

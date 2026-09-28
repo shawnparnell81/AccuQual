@@ -4,6 +4,7 @@ import { scarForms } from "../../drizzle/schema/scarForms.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { deleteRecord } from "../records/recordDeletion.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 
 async function loadScar(req: Request, id: number) {
@@ -52,8 +53,6 @@ export const updateScarFormHandler = asyncHandler(async (req: Request, res: Resp
 });
 
 export const deleteScarFormHandler = asyncHandler(async (req: Request, res: Response) => {
-  const record = await loadScar(req, Number(req.params.id));
-  await req.db!.delete(scarForms).where(and(eq(scarForms.id, record.id)));
-  await recordAuditTrail(req.db!, { entityType: "ScarForm", entityId: record.id, action: "delete", changes: { scarNumber: record.scarNumber }, performedBy: req.user?.id });
+  await deleteRecord(req, "scar");
   res.status(204).send();
 });

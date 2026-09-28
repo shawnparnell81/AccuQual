@@ -8,6 +8,7 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { useToast } from "../../components/shared/ToastProvider";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { SelectField } from "../../components/forms/Field";
@@ -108,6 +109,7 @@ export function CrarDetailPage() {
               variant="primary"
             />
           )}
+          <DeleteRecordButton resource="crar" id={record.id} kind="CRAR" title={record.customerClaim || record.partNumber} ownerIds={[record.createdByUserId]} navigateTo="/crar" />
         </div>
       </div>
 

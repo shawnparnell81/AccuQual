@@ -23,12 +23,13 @@ const suffix = Date.now();
 let companyId: number;
 const userIds: number[] = [];
 let qualityToken: string;
+let qualityManagerToken: string;
 let engineeringToken: string;
 
-async function makeUser(department: string | null) {
-  const [user] = await db.insert(users).values({ email: `calibration-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
+async function makeUser(department: string | null, roleName = "operator") {
+  const [user] = await db.insert(users).values({ email: `calibration-${roleName}-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
 }
 
 async function createEquipment(token: string, overrides: Record<string, unknown> = {}) {
@@ -44,6 +45,7 @@ describe("Calibration module (real DB + real HTTP path)", () => {
     await seedDefaultPermissions(companyId);
 
     qualityToken = await makeUser("quality");
+    qualityManagerToken = await makeUser("quality", "quality_manager");
     engineeringToken = await makeUser("engineering"); // calibration's default permissions are quality-only
   });
 
@@ -104,9 +106,15 @@ describe("Calibration module (real DB + real HTTP path)", () => {
     expect(trail.some((t) => t.entityType === "Equipment" && t.action === "update")).toBe(true);
   });
 
-  it("equipment with no calibration history can be deleted, and it is a real audited delete", async () => {
+  it("a quality operator cannot delete equipment", async () => {
     const id = await createEquipment(qualityToken);
     const res = await request(app).delete(`/equipment/${id}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it("equipment with no calibration history can be deleted by a quality manager, and it is a real audited delete", async () => {
+    const id = await createEquipment(qualityToken);
+    const res = await request(app).delete(`/equipment/${id}`).set("Authorization", `Bearer ${qualityManagerToken}`);
     expect(res.status).toBe(204);
 
     const getAfter = await request(app).get(`/equipment/${id}`).set("Authorization", `Bearer ${qualityToken}`);
@@ -120,7 +128,7 @@ describe("Calibration module (real DB + real HTTP path)", () => {
     const id = await createEquipment(qualityToken);
     await request(app).post(`/equipment/${id}/calibration`).set("Authorization", `Bearer ${qualityToken}`).send({ performedAt: new Date().toISOString(), result: "pass" });
 
-    const res = await request(app).delete(`/equipment/${id}`).set("Authorization", `Bearer ${qualityToken}`);
+    const res = await request(app).delete(`/equipment/${id}`).set("Authorization", `Bearer ${qualityManagerToken}`);
     expect(res.status).toBe(400);
 
     // Still there afterward — the guard ran before any delete was attempted.

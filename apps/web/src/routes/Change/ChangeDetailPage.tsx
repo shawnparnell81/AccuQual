@@ -6,6 +6,7 @@ import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 
 interface ChangeRequest {
   id: number;
@@ -14,6 +15,7 @@ interface ChangeRequest {
   impactAssessment: string | null;
   status: string;
   approvedAt: string | null;
+  requestedBy?: number | null;
 }
 
 const changeHooks = createResourceHooks<ChangeRequest>("change");
@@ -37,6 +39,7 @@ export function ChangeDetailPage() {
           <StatusBadge value={change.status} />
         </div>
         <div className="flex gap-2">
+          <DeleteRecordButton resource="change" id={change.id} kind="Change request" title={change.title} ownerIds={[change.requestedBy]} navigateTo="/change" />
           <OpenFormButton formType="pcn" entityId={change.id} title={`PCN #${change.id} Form`} label="PCN Document" />
           <PrintFormButton formType="pcn" entityId={change.id} />
           {canEdit && change.status !== "approved" && (

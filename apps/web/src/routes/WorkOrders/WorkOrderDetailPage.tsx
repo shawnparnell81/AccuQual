@@ -4,6 +4,7 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { TextField } from "../../components/forms/Field";
@@ -47,6 +48,7 @@ export function WorkOrderDetailPage() {
           <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             Print
           </button>
+          <DeleteRecordButton resource="work-orders" id={record.id} kind="Work order" title={record.item?.sku} ownerIds={[record.createdBy]} navigateTo="/work-orders" />
         </div>
       </div>
 

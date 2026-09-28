@@ -7,6 +7,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 
 const STATUS_LABEL: Record<QuarantineStatus, string> = { quarantined: "On hold", released: "Released", destroyed: "Removed from stock" };
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "—");
@@ -47,6 +48,7 @@ export function QuarantineDetailPage() {
             {open && <span>· on hold {r.ageDays} {r.ageDays === 1 ? "day" : "days"}</span>}
           </div>
         </div>
+        <DeleteRecordButton resource="quarantine" id={r.id} kind="Quarantine" title={r.itemLabel} ownerIds={[r.createdBy]} navigateTo="/quarantine" />
         {open && (
           <div className="flex flex-wrap gap-2">
             {mayManage && (

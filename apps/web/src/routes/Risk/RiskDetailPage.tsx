@@ -1,10 +1,8 @@
 import { useState } from "react";
-import { isFullAccessRole } from "../../lib/fullAccess";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
-import { useCurrentUser } from "../../hooks/useAuth";
 import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { useToast } from "../../components/shared/ToastProvider";
@@ -17,6 +15,7 @@ import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { Modal } from "../../components/modals/Modal";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { RISK_CATEGORIES } from "../../components/shared/riskConstants";
 import type { RiskAssessment, RiskMitigation, FmeaItem } from "../../api/types";
 import { FMEA_PRIORITY_LEGEND, FMEA_TONE_CLASS, FMEA_TONE_NAME, apTone, pfmeaActionPriority, rpnTone } from "../../components/forms/fmeaPriority";
@@ -40,11 +39,7 @@ const SOURCE_LINK: Record<string, (id: number) => string> = {
 export function RiskDetailPage() {
   const { id } = useParams();
   const riskId = Number(id);
-  const navigate = useNavigate();
-  const toast = useToast();
-  const currentUser = useCurrentUser();
   const canEdit = useCanEditWorkflow("risk");
-  const isAdmin = isFullAccessRole(currentUser?.roleName);
 
   const { data: risk, isLoading, isError } = riskHooks.useOne(riskId);
   const historyKey: unknown[][] = [["workflow-history", "risk", riskId]];
@@ -54,17 +49,7 @@ export function RiskDetailPage() {
   const closeRisk = useWorkflowAction("risk", "close", { successMessage: "Risk closed.", invalidateKeys: historyKey });
 
   const [editOpen, setEditOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
-
-  const deleteRisk = useMutation({
-    mutationFn: async () => apiClient.delete(`/risk/${riskId}`),
-    onSuccess: () => {
-      toast.success("Risk deleted.");
-      navigate("/risk");
-    },
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't delete this risk.")),
-  });
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !risk) return <LoadingPlaceholder />;
@@ -103,11 +88,7 @@ export function RiskDetailPage() {
           <WorkflowActionButton label="Start Mitigation" navKey="risk" action={startMitigation} onClick={() => startMitigation.mutate({ id: riskId })} visible={risk.status === "open"} />
           <WorkflowActionButton label="Start Monitoring" navKey="risk" action={startMonitoring} onClick={() => startMonitoring.mutate({ id: riskId })} visible={risk.status === "mitigation"} />
           <WorkflowActionButton label="Close" navKey="risk" action={closeRisk} onClick={() => closeRisk.mutate({ id: riskId })} visible={risk.status === "monitoring"} variant="primary" />
-          {isAdmin && (
-            <button onClick={() => setDeleteOpen(true)} className="rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/10">
-              Delete
-            </button>
-          )}
+          <DeleteRecordButton resource="risk" id={riskId} kind="Risk" title={risk.title} ownerIds={[risk.createdBy, risk.ownerId]} navigateTo="/risk" />
         </div>
       </div>
 
@@ -132,24 +113,6 @@ export function RiskDetailPage() {
 
       <EditRiskModal risk={risk} isOpen={editOpen} onClose={() => setEditOpen(false)} />
       <AiAnalysisModal riskId={riskId} isOpen={aiOpen} onClose={() => setAiOpen(false)} />
-
-      <Modal title="Delete Risk" isOpen={deleteOpen} onClose={() => setDeleteOpen(false)}>
-        <div className="flex flex-col gap-4">
-          <p className="text-sm">Permanently delete "{risk.title}" and its mitigation actions and FMEA line items? This cannot be undone.</p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => deleteRisk.mutate()}
-              disabled={deleteRisk.isPending}
-              className="rounded-md bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground disabled:opacity-60"
-            >
-              {deleteRisk.isPending ? "Deleting…" : "Delete permanently"}
-            </button>
-            <button onClick={() => setDeleteOpen(false)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-              Cancel
-            </button>
-          </div>
-        </div>
-      </Modal>
     </div>
     </PictureRecordProvider>
   );

@@ -138,6 +138,45 @@ export const VISIBLE_RESOURCE_KEYS: ResourceKey[] = RESOURCE_KEYS.filter((key) =
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+/** Mount paths whose DELETE /:id removes a user-created record, not a nested row. */
+const RECORD_DELETE_MOUNTS = new Set([
+  "/ncr",
+  "/capa",
+  "/8d",
+  "/validation-reports",
+  "/documents",
+  "/audits",
+  "/quarantine",
+  "/suppliers",
+  "/risk",
+  "/complaints",
+  "/change",
+  "/ppap",
+  "/training",
+  "/work-orders",
+  "/rma",
+  "/warranty",
+  "/crar",
+  "/rma-log",
+  "/quality",
+  "/scar-forms",
+  "/qms-forms",
+  "/quality-inspection-reports",
+  "/document-change-requests",
+  "/feasibility",
+  "/equipment",
+]);
+
+const NESTED_DELETE = new Set(["items", "rows", "operations", "calibration", "versions", "attachments", "reviews", "template", "modules"]);
+
+function isRecordDeleteRequest(req: Request): boolean {
+  if (req.method !== "DELETE" || !RECORD_DELETE_MOUNTS.has(req.baseUrl)) return false;
+  const parts = req.path.split("/").filter(Boolean);
+  if (parts.some((part) => NESTED_DELETE.has(part))) return false;
+  const last = parts[parts.length - 1];
+  return last != null && /^\d+$/.test(last) && parts.length <= 2;
+}
+
 const LEVEL_RANK: Record<AccessLevel, number> = { none: 0, read: 1, edit: 2 };
 function higherLevel(a: AccessLevel, b: AccessLevel): AccessLevel {
   return LEVEL_RANK[a] >= LEVEL_RANK[b] ? a : b;
@@ -221,6 +260,9 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
   return asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
     const role = req.user?.roleName;
     if (isFullAccessRole(role)) return next();
+    // Quality managers may delete a record even when their department grant is read-only.
+    // Nested deletes (a checklist row, a calibration, a folder) stay on the normal write check.
+    if (role === "quality_manager" && isRecordDeleteRequest(req)) return next();
     if (!req.user || !req.db) return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
 
     const level = await getUserAccessLevel(req.db as Db, req.user, resourceKey);

@@ -12,6 +12,7 @@ import {
   AdminAiSettingsPage,
   AdminAiUsagePage,
   AdminApiDocsPage,
+  AuditLogPage,
   AdminCompanyAiConfigPage,
   AdminCompanyBrandingPage,
   AdminCompanySettingsPage,
@@ -120,6 +121,7 @@ export function App() {
           <Route path="/" element={<HomeRoute />} />
           <Route path="/home" element={<HomePage />} />
           <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/audit-log" element={<AuditLogPage />} />
 
           <Route path="/ncr" element={<NcrListPage />} />
           <Route path="/ncr/:id" element={<NcrWorkspacePage />} />

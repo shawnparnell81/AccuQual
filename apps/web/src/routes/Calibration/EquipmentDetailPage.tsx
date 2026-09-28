@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, Paperclip } from "lucide-react";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -10,6 +10,7 @@ import { GenericCreateForm, type FieldSpec } from "../../components/forms/Generi
 import { Modal } from "../../components/modals/Modal";
 import { EquipmentStatusBadge, EquipmentStatusModal, LinkedDocumentsPanel, ScheduleCalibrationModal, useMayEditEquipment, type EquipmentState } from "../../components/calibration/EquipmentPanels";
 import { useToast } from "../../components/shared/ToastProvider";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
@@ -87,7 +88,6 @@ function useUploadCertificate(equipmentId: number) {
 export function EquipmentDetailPage() {
   const { id } = useParams();
   const equipmentId = Number(id);
-  const navigate = useNavigate();
   const toast = useToast();
   const { data: equipment, isLoading, isError } = equipmentHooks.useOne(equipmentId);
   useSetAssistantContext("calibration", equipmentId, equipment ? equipment.name : `Equipment #${equipmentId}`);
@@ -96,7 +96,6 @@ export function EquipmentDetailPage() {
   const pendingUploadTarget = useRef<number | null>(null);
 
   const [editOpen, setEditOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const { mayEdit } = useMayEditEquipment();
@@ -111,7 +110,6 @@ export function EquipmentDetailPage() {
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't cancel it.")),
   });
   const updateEquipment = equipmentHooks.useUpdate();
-  const deleteEquipment = equipmentHooks.useDelete();
 
   const { data: calibrations = [] } = useQuery<CalibrationEvent[]>({
     queryKey: ["equipment", equipmentId, "calibration"],
@@ -180,9 +178,7 @@ export function EquipmentDetailPage() {
           <button onClick={() => setEditOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             Edit
           </button>
-          <button onClick={() => setDeleteOpen(true)} className="rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/10">
-            Delete
-          </button>
+          <DeleteRecordButton resource="equipment" id={equipmentId} kind="Equipment" title={equipment.name} navigateTo="/calibration" />
         </div>
       </div>
 
@@ -294,37 +290,6 @@ export function EquipmentDetailPage() {
             )
           }
         />
-      </Modal>
-
-      <Modal title="Delete Equipment" isOpen={deleteOpen} onClose={() => setDeleteOpen(false)}>
-        <div className="flex flex-col gap-4">
-          <p className="text-sm">Permanently delete "{equipment.name}"? This cannot be undone.</p>
-          <div className="flex gap-2">
-            <button
-              onClick={() =>
-                deleteEquipment.mutate(equipmentId, {
-                  onSuccess: () => {
-                    toast.success("Equipment deleted.");
-                    navigate("/calibration");
-                  },
-                  // The backend rejects this with a 400 (not a 500) when
-                  // real calibration history still references this
-                  // equipment (see calibration.controller.ts's
-                  // removeEquipmentHandler) — surfaced here exactly like
-                  // any other validation error, not a generic failure.
-                  onError: (err) => toast.error(extractErrorMessage(err, "Couldn't delete this equipment.")),
-                })
-              }
-              disabled={deleteEquipment.isPending}
-              className="rounded-md bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground disabled:opacity-60"
-            >
-              {deleteEquipment.isPending ? "Deleting…" : "Delete permanently"}
-            </button>
-            <button onClick={() => setDeleteOpen(false)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-              Cancel
-            </button>
-          </div>
-        </div>
       </Modal>
     </div>
   );

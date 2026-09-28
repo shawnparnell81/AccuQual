@@ -4,6 +4,7 @@ import { feasibilityReviews } from "../../drizzle/schema/feasibility.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { deleteRecord } from "../records/recordDeletion.js";
 import { notifyDepartment } from "../notifications/notification.service.js";
 import { loadCompanyForSettings, getFeasibilitySettings, requiredDocumentDisplayNames } from "../settings/settings.service.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
@@ -181,12 +182,8 @@ export const finalizeFeasibilityHandler = asyncHandler(async (req: Request, res:
   res.json(hideSalesSignoff(updated!));
 });
 
-/** Delete — engineering or admin only (this document has no cross-department delete rule, unlike the old version). */
+/** Delete — an administrator, owner, quality manager, or the person who created the review. */
 export const deleteFeasibilityHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertDepartment(req, ["engineering"]);
-  const record = await loadFeasibility(req, Number(req.params.id));
-
-  await req.db!.delete(feasibilityReviews).where(and(eq(feasibilityReviews.id, record.id)));
-  await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: record.id, action: "delete", changes: { partProjectName: record.partProjectName, status: record.status }, performedBy: req.user?.id });
+  await deleteRecord(req, "feasibility");
   res.status(204).send();
 });

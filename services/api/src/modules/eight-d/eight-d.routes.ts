@@ -5,6 +5,7 @@ import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { createEightDSchema, updateEightDSchema, completeStepSchema } from "./eight-d.validation.js";
 import { baseHandlers, completeStepHandler } from "./eight-d.controller.js";
+import { deleteRecordHandler } from "../records/recordDeletion.js";
 
 export const eightDRouter = Router();
 // Phase 3 RBAC verification fix: this router had no requireDepartmentAccess
@@ -19,4 +20,5 @@ eightDRouter.get("/", baseHandlers.list);
 eightDRouter.post("/", validate(createEightDSchema), baseHandlers.create);
 eightDRouter.get("/:id", baseHandlers.getOne);
 eightDRouter.patch("/:id", validate(updateEightDSchema), baseHandlers.update);
+eightDRouter.delete("/:id", deleteRecordHandler("eight_d"));
 eightDRouter.post("/:id/complete-step/:step", validate(completeStepSchema), completeStepHandler);

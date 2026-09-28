@@ -22,6 +22,7 @@ import {
   type SidebarFolder,
   type SidebarNode,
 } from "./sidebarStructure";
+import { canViewAuditLog } from "../../lib/recordDelete";
 import { LayoutDashboard } from "lucide-react";
 import { prefetchRoute } from "../../routes/pages";
 
@@ -60,7 +61,7 @@ export function TopNav() {
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>(() => readOpenFolders(user?.id));
 
   const isAdmin = user?.roleName === "admin" || user?.roleName === "owner";
-  const folders = visibleSidebar(SIDEBAR_FOLDERS, isAdmin);
+  const folders = visibleSidebar(SIDEBAR_FOLDERS, isAdmin, { auditLog: canViewAuditLog(user?.roleName) });
   const links = flattenSidebarLinks(folders);
   const needle = query.trim().toLowerCase();
   const searchResults = needle ? links.filter((leaf) => `${leaf.label} ${leaf.key}`.toLowerCase().includes(needle)) : [];

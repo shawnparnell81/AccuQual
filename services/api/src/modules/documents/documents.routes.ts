@@ -19,6 +19,7 @@ import {
   archiveHandler,
 } from "./documents.controller.js";
 import { registerDocumentVersionRoutes } from "./documents.versions.routes.js";
+import { deleteRecordHandler } from "../records/recordDeletion.js";
 
 // Sprint 1 fix (accuqual-implementation-sequencing.md) — previously had NO
 // RBAC gate at all. Solved without blocking the "read-by-everyone,
@@ -43,6 +44,7 @@ documentsRouter.get("/", baseHandlers.list);
 documentsRouter.post("/", validate(createDocumentSchema), createDocumentHandler);
 documentsRouter.get("/:id", baseHandlers.getOne);
 documentsRouter.patch("/:id", validate(updateDocumentSchema), baseHandlers.update);
+documentsRouter.delete("/:id", deleteRecordHandler("document"));
 
 // Replaced by the draft -> review -> publish flow; they answer 410 with the new route instead of bypassing review.
 documentsRouter.post("/:id/version", retiredRevisionHandler);

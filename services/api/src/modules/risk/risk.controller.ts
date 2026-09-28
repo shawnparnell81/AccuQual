@@ -6,6 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { stripClientOwnedFields } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { deleteRecord } from "../records/recordDeletion.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 
@@ -22,14 +23,6 @@ function assertDepartment(req: Request, allowed: string[]) {
   const department = req.user?.department;
   if (!department || !allowed.includes(department)) {
     throw AppError.forbidden(`This action requires department: ${allowed.join(" or ")}`);
-  }
-}
-
-/** Admin-only, not a department at all — same convention as platform-admin-gated routes, just scoped to a single company-level action instead of a whole router. */
-function assertAdmin(req: Request) {
-  const role = req.user?.roleName;
-  if (!isFullAccessRole(role)) {
-    throw AppError.forbidden("Only an admin can delete a risk.");
   }
 }
 
@@ -189,22 +182,9 @@ export const closeRiskHandler = asyncHandler(async (req: Request, res: Response)
   res.json(await transition(req, Number(req.params.id), "closed"));
 });
 
-/**
- * Delete — admin only (admin), never a
- * department. Hard delete (matches crudFactory's default, and this table
- * has no `isDeleted` column) — mitigations and FMEA items are deleted first
- * to satisfy their FK constraints, all inside the same request transaction,
- * all logged.
- */
+/** Delete — an administrator, owner, quality manager, or the person who created the risk. */
 export const deleteRiskHandler = asyncHandler(async (req: Request, res: Response) => {
-  assertAdmin(req);
-  const record = await loadRisk(req, Number(req.params.id));
-
-  await req.db!.delete(riskMitigations).where(and(eq(riskMitigations.riskAssessmentId, record.id)));
-  await req.db!.delete(fmeaItems).where(and(eq(fmeaItems.riskAssessmentId, record.id)));
-  await req.db!.delete(riskAssessments).where(and(eq(riskAssessments.id, record.id)));
-
-  await recordAuditTrail(req.db!, { entityType: "RiskAssessment", entityId: record.id, action: "delete", changes: { title: record.title, status: record.status }, performedBy: req.user?.id });
+  await deleteRecord(req, "risk");
   res.status(204).send();
 });
 

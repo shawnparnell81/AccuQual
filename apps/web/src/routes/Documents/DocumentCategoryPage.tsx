@@ -17,6 +17,7 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { TextField } from "../../components/forms/Field";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { ObsoleteArchiveDialog } from "./ObsoleteArchiveDialog";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { ValidationReportsPanel } from "../ValidationReports/ValidationReportsPanel";
 
 /**
@@ -244,9 +245,17 @@ export function DocumentCategoryPage() {
                     <button type="button" onClick={() => void openPreview(doc)} className="mr-3 inline-flex items-center gap-1 text-primary hover:underline">
                       <Eye size={14} /> Preview
                     </button>
-                    <button type="button" onClick={() => void downloadDoc(doc).catch((err) => toast.error(extractErrorMessage(err, "Couldn't download that file.")))} className="inline-flex items-center gap-1 text-primary hover:underline">
+                    <button type="button" onClick={() => void downloadDoc(doc).catch((err) => toast.error(extractErrorMessage(err, "Couldn't download that file.")))} className="mr-3 inline-flex items-center gap-1 text-primary hover:underline">
                       <Download size={14} /> Download
                     </button>
+                    <DeleteRecordButton
+                      resource="documents"
+                      id={doc.id}
+                      kind="Document"
+                      title={doc.title}
+                      ownerIds={[doc.ownerId]}
+                      className="inline-flex items-center text-destructive hover:underline disabled:opacity-60"
+                    />
                   </td>
                 </tr>
               ))}
