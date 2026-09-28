@@ -7,6 +7,7 @@ export * from "./documents.js";
 export * from "./ncr.js";
 export * from "./capa.js";
 export * from "./eightD.js";
+export * from "./validationReport.js";
 export * from "./audits.js";
 export * from "./training.js";
 export * from "./change.js";

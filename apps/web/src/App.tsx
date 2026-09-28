@@ -51,6 +51,7 @@ import {
   ErpPresetEditorPage,
   ErpPresetsListPage,
   ErpSyncErrorsPage,
+  ValidationReportDetailPage,
   EmployeeTrainingHistoryPage,
   EquipmentDetailPage,
   FeasibilityDetailPage,
@@ -128,6 +129,8 @@ export function App() {
 
           <Route path="/8d" element={<EightDPage />} />
           <Route path="/8d/:id" element={<EightDDetailPage />} />
+
+          <Route path="/validation-reports/:id" element={<ValidationReportDetailPage />} />
 
           <Route path="/audits" element={<AuditsPage />} />
           <Route path="/audits/:id" element={<AuditDetailPage />} />

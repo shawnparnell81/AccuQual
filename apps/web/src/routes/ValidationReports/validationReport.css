@@ -1,0 +1,142 @@
+/* CSA Validation Report. Chrome uses the same form tokens as the other quality forms. */
+.csa,
+.csa * {
+  box-sizing: border-box;
+}
+
+.csa-wrap {
+  overflow-x: auto;
+}
+
+.csa {
+  width: 100%;
+  min-width: 1080px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: var(--fb), "Inter", system-ui, sans-serif;
+  color: hsl(var(--foreground));
+  background: hsl(var(--card));
+}
+
+.csa col.c-a { width: 20%; }
+.csa col.c-b,
+.csa col.c-c { width: 9.5%; }
+.csa col.c-d,
+.csa col.c-e,
+.csa col.c-f,
+.csa col.c-g { width: 10.2%; }
+.csa col.c-h,
+.csa col.c-i { width: 3.6%; }
+.csa col.c-j { width: 10.2%; }
+
+.csa td {
+  min-height: 30px;
+  height: 30px;
+  padding: 2px 4px;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: center;
+  vertical-align: middle;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
+.csa td.grid {
+  border: 1px solid hsl(var(--border));
+}
+
+.csa td.gap {
+  border: 0;
+  background: transparent;
+}
+
+.csa .title {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--form-heading, #1d3a5c);
+  background: transparent;
+  letter-spacing: 0.02em;
+}
+
+.csa .result {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.csa .section {
+  background: var(--form-bar, #1d3a5c);
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  border-color: var(--form-bar, #1d3a5c);
+}
+
+.csa .label {
+  font-weight: 600;
+}
+
+.csa .wrap {
+  white-space: normal;
+}
+
+.csa input.csa-in,
+.csa select.csa-in,
+.csa textarea.csa-in {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  outline: none;
+  box-shadow: none;
+  padding: 2px;
+}
+
+.csa textarea.csa-in {
+  text-align: left;
+  resize: vertical;
+  min-height: 52px;
+}
+
+.csa input.csa-in:focus,
+.csa select.csa-in:focus,
+.csa textarea.csa-in:focus {
+  box-shadow: inset 0 0 0 2px hsl(var(--ring));
+}
+
+.csa input[type="checkbox"] {
+  accent-color: hsl(var(--primary));
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.csa td.gray {
+  background: #aeaeae;
+  color: #1a1a1a;
+}
+
+.csa td.swatch {
+  border: 1px solid hsl(var(--border));
+}
+
+@media print {
+  .csa-wrap {
+    overflow: visible;
+  }
+  .csa {
+    min-width: 0;
+  }
+  .csa,
+  .csa td,
+  .csa .section {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

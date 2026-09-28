@@ -1,0 +1,460 @@
+/**
+ * CSA Validation Report (FRM-VAL-001 Rev C), sheet "Test Report".
+ * Formula text and conditional-formatting ranges match the workbook.
+ * Passed fill is theme accent6 (#4EA72E). Failed fill is #FF0000.
+ * Row tints are the workbook theme colors at tint 0.8. Gray is lt2 at tint -0.25.
+ */
+
+export type CellValue = string | number | boolean;
+
+export const PASSED_FILL = "#4EA72E";
+export const FAILED_FILL = "#FF0000";
+
+export const FILLS = {
+  passed: PASSED_FILL,
+  failed: FAILED_FILL,
+  gray: "#AEAEAE",
+  gold: "#CAEEFB",
+  orange: "#FBE3D6",
+  lilac: "#F2CFEE",
+  green: "#D9F2D0",
+} as const;
+
+/** Data-validation list sources, copied from the sheet. */
+export const SUPPLIER_LIST_FORMULA = "Sensen, Jinbo,     ----";
+export const INSPECTOR_LIST_FORMULA = "Timothy Therrien, Glen Fulmore, Ron Wertz, Sam Giannetti, Maxwell Tollefson, Lee Beeson";
+
+export function listOptions(formula: string): string[] {
+  return formula
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+export const SUPPLIER_OPTIONS = listOptions(SUPPLIER_LIST_FORMULA);
+export const INSPECTOR_OPTIONS = listOptions(INSPECTOR_LIST_FORMULA);
+
+const ERR_DIV = "#DIV/0!";
+const ERR_VALUE = "#VALUE!";
+const PERCENT = new Set(["B17", "C17", "D17", "E17", "F17"]);
+
+type Value = CellValue | null;
+type Cmp = "=" | ">=" | "<=";
+
+/** Formula text as stored in the workbook, including shared-formula shifts. */
+export const FORMULA_TEXT: Record<string, string> = {
+  A1: 'IF(COUNTIF(F:G, "Failed") > 0, "Failed", "Passed")',
+  F12: 'IF(D12=10, "Passed", "Failed")',
+  G12: 'IF(E12=10, "Passed", "Failed")',
+  F13: 'IF(AND(D13>=B13-C13, D13<=B13+C13), "Passed", "Failed")',
+  G13: 'IF(AND(E13>=B13-C13, E13<=B13+C13), "Passed", "Failed")',
+  B14: "B13-B15",
+  D14: "D13-D15",
+  F14: 'IF(AND(D14>=B14-C14, D14<=B14+C14), "Passed", "Failed")',
+  F15: 'IF(AND(D15>=B15-C15, D15<=B15+C15), "Passed", "Failed")',
+  F16: 'IF(AND(D16>=B16-C16, D16<=B16+C16), "Passed", "Failed")',
+  B17: "B16/B15",
+  D17: "D16/D15",
+  E17: "E16/E15",
+  F18: 'IF(D18>=B18, "Passed", "Failed")',
+  G18: 'IF(E18>=B18, "Passed", "Failed")',
+  F22: 'IF(AND(D22>=B22-C22, D22<=B22+C22), "Passed", "Failed")',
+  F25: 'IF(AND(D25>=B25-C25, D25<=B25+C25), "Passed", "Failed")',
+  F30: 'IF(AND(D30>=B30-C30, D30<=B30+C30), "Passed", "Failed")',
+  F36: 'IF(AND(D36>=B36-C36, D36<=B36+C36), "Passed", "Failed")',
+  F37: 'IF(AND(D37>=B37-C37, D37<=B37+C37), "Passed", "Failed")',
+  F39: 'IF(AND(D39>=B39-C39, D39<=B39+C39), "Passed", "Failed")',
+  F40: 'IF(AND(D40>=B40-C40, D40<=B40+C40), "Passed", "Failed")',
+  F41: 'IF(D41>=B41, "Passed", "Failed")',
+  G41: 'IF(E41>=B41, "Passed", "Failed")',
+  F45: 'IF(D45>=B45, "Passed", "Failed")',
+  G45: 'IF(E45>=B45, "Passed", "Failed")',
+  F46: 'IF(AND(D46>=B46-C46, D46<=B46+C46), "Passed", "Failed")',
+  G46: 'IF(AND(E46>=B46-C46, E46<=B46+C46), "Passed", "Failed")',
+};
+
+export function blankCells(): Record<string, CellValue> {
+  return {
+    G2: "Maxwell Tollefson",
+    B6: "",
+    F6: "",
+    B7: "",
+    F7: "",
+    B8: "",
+    F8: "",
+    B12: 10,
+    C12: "=",
+    D12: "",
+    E12: "",
+    B13: "",
+    C13: 7,
+    D13: "",
+    E13: "",
+    C14: 7,
+    E14: "",
+    B15: "",
+    C15: 5,
+    D15: "",
+    E15: "",
+    B16: "",
+    C16: 10,
+    D16: "",
+    E16: "",
+    B18: 25,
+    C18: "≤",
+    D18: "",
+    E18: "",
+    B22: "",
+    C22: 0.5,
+    D22: "",
+    E22: "",
+    B23: "",
+    D23: "",
+    E23: "",
+    B24: "",
+    D24: "",
+    E24: "",
+    B25: "",
+    C25: "",
+    D25: "",
+    E25: "",
+    B26: "",
+    D26: "",
+    E26: "",
+    B27: "",
+    D27: "",
+    E27: "",
+    B28: "",
+    D28: "",
+    E28: "",
+    B29: "",
+    D29: "",
+    E29: "",
+    B30: "",
+    C30: "",
+    D30: "",
+    E30: "",
+    B31: "",
+    D31: "",
+    E31: "",
+    B32: "",
+    D32: "",
+    E32: "",
+    B36: "",
+    C36: 5,
+    D36: "",
+    E36: "",
+    B37: "",
+    C37: 2.5,
+    D37: "",
+    E37: "",
+    B38: "",
+    D38: "",
+    E38: "",
+    B39: "",
+    C39: 0.1,
+    D39: "",
+    E39: "",
+    B40: "",
+    C40: 5,
+    D40: "",
+    E40: "",
+    B41: 80,
+    C41: "≤",
+    D41: "",
+    E41: "",
+    B45: 25,
+    C45: "≤",
+    D45: "",
+    E45: "",
+    B46: "",
+    C46: 2,
+    D46: "",
+    E46: "",
+    B49: false,
+    D49: false,
+    F49: false,
+    B50: false,
+    D50: false,
+    F50: false,
+    B51: false,
+    D51: false,
+    F51: false,
+    B52: "",
+    G52: "",
+  };
+}
+
+export function cellsFromData(data: unknown): Record<string, CellValue> {
+  const base = blankCells();
+  if (!data || typeof data !== "object") return base;
+  const cells = (data as { cells?: unknown }).cells;
+  if (!cells || typeof cells !== "object") return base;
+  for (const [key, value] of Object.entries(cells as Record<string, unknown>)) {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") base[key] = value;
+    else if (value === null) base[key] = "";
+  }
+  return base;
+}
+
+export function parseInput(raw: string): CellValue {
+  const trimmed = raw.trim();
+  if (trimmed === "") return "";
+  if (trimmed === "≤" || trimmed === "=" || trimmed === "<=") return trimmed;
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  return raw;
+}
+
+function isErr(v: unknown): v is typeof ERR_DIV | typeof ERR_VALUE {
+  return v === ERR_DIV || v === ERR_VALUE;
+}
+
+/** Blank counts as 0. A non-numeric string is null (not a number). */
+function asNum(v: Value): number | string | null {
+  if (v === null || v === "") return 0;
+  if (isErr(v)) return v;
+  if (typeof v === "boolean") return v ? 1 : 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : ERR_VALUE;
+  const t = v.trim();
+  if (t === "") return 0;
+  if (/^-?\d+(\.\d+)?$/.test(t)) return Number(t);
+  return null;
+}
+
+function num(v: Value): number | string {
+  const n = asNum(v);
+  if (n === null) return ERR_VALUE;
+  return n;
+}
+
+function arith(a: Value, b: Value, op: (x: number, y: number) => number | string): number | string {
+  const x = num(a);
+  const y = num(b);
+  if (typeof x === "string") return x;
+  if (typeof y === "string") return y;
+  return op(x, y);
+}
+
+function sub(a: Value, b: Value): number | string {
+  return arith(a, b, (x, y) => x - y);
+}
+
+function add(a: Value, b: Value): number | string {
+  return arith(a, b, (x, y) => x + y);
+}
+
+function div(a: Value, b: Value): number | string {
+  return arith(a, b, (x, y) => (y === 0 ? ERR_DIV : x / y));
+}
+
+function cmp(a: Value, op: Cmp, b: Value | number | string): boolean | string {
+  if (isErr(a)) return a;
+  if (typeof b === "string" && isErr(b)) return b;
+  const right: Value = typeof b === "number" ? b : b;
+  const x = asNum(a);
+  const y = asNum(right);
+  if (typeof x === "string") return x;
+  if (typeof y === "string") return y;
+  if (x === null || y === null) {
+    if (op === "=") return String(a ?? "") === String(right ?? "");
+    return ERR_VALUE;
+  }
+  if (op === "=") return x === y;
+  if (op === ">=") return x >= y;
+  return x <= y;
+}
+
+function and(a: boolean | string, b: boolean | string): boolean | string {
+  if (typeof a === "string") return a;
+  if (typeof b === "string") return b;
+  return a && b;
+}
+
+function passFail(ok: boolean | string): string {
+  if (typeof ok === "string") return ok;
+  return ok ? "Passed" : "Failed";
+}
+
+function band(sample: Value, nominal: Value, tol: Value): string {
+  const low = sub(nominal, tol);
+  const high = add(nominal, tol);
+  return passFail(and(cmp(sample, ">=", low), cmp(sample, "<=", high)));
+}
+
+function atLeast(sample: Value, nominal: Value): string {
+  return passFail(cmp(sample, ">=", nominal));
+}
+
+function equalsTen(sample: Value): string {
+  return passFail(cmp(sample, "=", 10));
+}
+
+export function evaluate(cells: Record<string, CellValue>): Record<string, CellValue> {
+  const computed: Record<string, CellValue> = {};
+  const read = (addr: string): Value => {
+    if (Object.prototype.hasOwnProperty.call(computed, addr)) return computed[addr] ?? null;
+    const v = cells[addr];
+    if (v === undefined || v === "") return null;
+    return v;
+  };
+
+  computed.B14 = sub(read("B13"), read("B15"));
+  computed.D14 = sub(read("D13"), read("D15"));
+  computed.F12 = equalsTen(read("D12"));
+  computed.G12 = equalsTen(read("E12"));
+  computed.F13 = band(read("D13"), read("B13"), read("C13"));
+  computed.G13 = band(read("E13"), read("B13"), read("C13"));
+  computed.F14 = band(read("D14"), read("B14"), read("C14"));
+  computed.F15 = band(read("D15"), read("B15"), read("C15"));
+  computed.F16 = band(read("D16"), read("B16"), read("C16"));
+  computed.B17 = div(read("B16"), read("B15"));
+  computed.D17 = div(read("D16"), read("D15"));
+  computed.E17 = div(read("E16"), read("E15"));
+  computed.F18 = atLeast(read("D18"), read("B18"));
+  computed.G18 = atLeast(read("E18"), read("B18"));
+  computed.F22 = band(read("D22"), read("B22"), read("C22"));
+  computed.F25 = band(read("D25"), read("B25"), read("C25"));
+  computed.F30 = band(read("D30"), read("B30"), read("C30"));
+  computed.F36 = band(read("D36"), read("B36"), read("C36"));
+  computed.F37 = band(read("D37"), read("B37"), read("C37"));
+  computed.F39 = band(read("D39"), read("B39"), read("C39"));
+  computed.F40 = band(read("D40"), read("B40"), read("C40"));
+  computed.F41 = atLeast(read("D41"), read("B41"));
+  computed.G41 = atLeast(read("E41"), read("B41"));
+  computed.F45 = atLeast(read("D45"), read("B45"));
+  computed.G45 = atLeast(read("E45"), read("B45"));
+  computed.F46 = band(read("D46"), read("B46"), read("C46"));
+  computed.G46 = band(read("E46"), read("B46"), read("C46"));
+
+  let failed = 0;
+  const seen = new Set<string>();
+  const consider = (addr: string, val: Value) => {
+    if (!/^[FG]\d+$/.test(addr)) return;
+    if (typeof val === "string" && val.toLowerCase() === "failed") failed += 1;
+  };
+  for (const [addr, val] of Object.entries(computed)) {
+    seen.add(addr);
+    consider(addr, val);
+  }
+  for (const [addr, val] of Object.entries(cells)) {
+    if (seen.has(addr)) continue;
+    consider(addr, val);
+  }
+  computed.A1 = failed > 0 ? "Failed" : "Passed";
+  return computed;
+}
+
+export function showValue(addr: string, value: Value): string {
+  if (value === null || value === undefined || value === "") return "";
+  if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return ERR_VALUE;
+    if (PERCENT.has(addr)) return `${Math.round(value * 100)}%`;
+    const rounded = Math.round(value * 1e8) / 1e8;
+    return String(rounded);
+  }
+  return value;
+}
+
+/** Columns F and G from row 2 down, skipping G6, G52, and row 53, plus A1. */
+export function inPassFailRange(addr: string): boolean {
+  if (addr === "A1") return true;
+  const match = /^([A-Z]+)(\d+)$/.exec(addr);
+  if (!match) return false;
+  const col = match[1]!;
+  const row = Number(match[2]);
+  if (col !== "F" && col !== "G") return false;
+  if (row === 53) return false;
+  if (row >= 2 && row <= 5) return true;
+  if (row === 6) return col === "F";
+  if (row >= 7 && row <= 51) return true;
+  if (row === 52) return col === "F";
+  if (row >= 54) return true;
+  return false;
+}
+
+/**
+ * Conditional formatting. A1 checks Passed first (priority 1), then Failed.
+ * The F/G range checks Failed first (priority 3), then Passed.
+ * Match is case-insensitive, same as Excel SEARCH.
+ */
+export function conditionalFill(addr: string, text: string): string | null {
+  const hasPassed = text.toLowerCase().includes("passed");
+  const hasFailed = text.toLowerCase().includes("failed");
+  if (addr === "A1") {
+    if (hasPassed) return PASSED_FILL;
+    if (hasFailed) return FAILED_FILL;
+    return null;
+  }
+  if (!inPassFailRange(addr)) return null;
+  if (hasFailed) return FAILED_FILL;
+  if (hasPassed) return PASSED_FILL;
+  return null;
+}
+
+export function overallResult(cells: Record<string, CellValue>): string {
+  const value = evaluate(cells).A1;
+  return typeof value === "string" ? value : "";
+}
+
+/** A filled sheet that passes every scored row. */
+export function passingExample(): Record<string, CellValue> {
+  const cells = blankCells();
+  cells.B6 = "CSA-100";
+  cells.F6 = "DWG-100";
+  cells.B7 = "Sensen";
+  cells.F7 = "BATCH-1";
+  cells.B8 = "Maxwell Tollefson";
+  cells.F8 = "2026-03-26";
+  cells.D12 = 10;
+  cells.E12 = 10;
+  cells.B13 = 320;
+  cells.D13 = 320;
+  cells.E13 = 318;
+  cells.B15 = 140;
+  cells.D15 = 140;
+  cells.E15 = 138;
+  cells.B16 = 70;
+  cells.D16 = 70;
+  cells.E16 = 68;
+  cells.D18 = 30;
+  cells.E18 = 28;
+  cells.B22 = 12.5;
+  cells.D22 = 12.5;
+  cells.B25 = 800;
+  cells.C25 = 40;
+  cells.D25 = 790;
+  cells.B30 = 600;
+  cells.C30 = 40;
+  cells.D30 = 610;
+  cells.B36 = 250;
+  cells.D36 = 250;
+  cells.B37 = 80;
+  cells.D37 = 80;
+  cells.B39 = 8;
+  cells.D39 = 8;
+  cells.B40 = 30;
+  cells.D40 = 30;
+  cells.D41 = 90;
+  cells.E41 = 85;
+  cells.D45 = 30;
+  cells.E45 = 26;
+  cells.B46 = 40;
+  cells.D46 = 40;
+  cells.E46 = 39;
+  cells.B49 = true;
+  cells.B50 = true;
+  cells.B51 = true;
+  cells.B52 = "Samples meet the drawing.";
+  return cells;
+}
+
+/** Same as a passing sheet, with two cells outside the limit so both colors show. */
+export function mixedExample(): Record<string, CellValue> {
+  const cells = passingExample();
+  cells.D12 = 8;
+  cells.E18 = 10;
+  cells.D49 = true;
+  cells.B49 = false;
+  return cells;
+}

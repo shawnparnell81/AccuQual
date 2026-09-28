@@ -14,6 +14,7 @@ import { documentFoldersRouter } from "../modules/document-folders/document-fold
 import { ncrRouter } from "../modules/ncr/ncr.routes.js";
 import { capaRouter } from "../modules/capa/capa.routes.js";
 import { eightDRouter } from "../modules/eight-d/eight-d.routes.js";
+import { validationReportsRouter } from "../modules/validation-reports/validation-reports.routes.js";
 import { auditsRouter } from "../modules/audits/audits.routes.js";
 import { trainingRouter } from "../modules/training/training.routes.js";
 import { changeRouter } from "../modules/change/change.routes.js";
@@ -94,6 +95,7 @@ apiRouter.use("/document-folders", documentFoldersRouter);
 apiRouter.use("/ncr", ncrRouter);
 apiRouter.use("/capa", capaRouter);
 apiRouter.use("/8d", eightDRouter);
+apiRouter.use("/validation-reports", validationReportsRouter);
 apiRouter.use("/audits", auditsRouter);
 apiRouter.use("/training", trainingRouter);
 apiRouter.use("/change", changeRouter);

@@ -105,6 +105,7 @@ BEGIN
       ('ncr',                         ARRAY[]::text[]),
       ('capa',                        ARRAY[]::text[]),
       ('eight_d',                     ARRAY[]::text[]),
+      ('validation_reports',          ARRAY[]::text[]),
       ('audits',                      ARRAY[]::text[]),
       ('audit_items',                 ARRAY[]::text[]),
       ('training_courses',            ARRAY[]::text[]),
