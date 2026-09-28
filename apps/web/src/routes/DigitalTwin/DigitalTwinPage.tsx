@@ -7,7 +7,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextField } from "../../components/forms/Field";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { useSetAssistantContext } from "../../hooks/useAssistantContext";
-import { DigitalTwinDiagram, heatColor } from "./DigitalTwinDiagram";
+import { DigitalTwinDiagram, heatColor, heatTextColor } from "./DigitalTwinDiagram";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const twinHooks = createResourceHooks<DigitalTwinModel>("digital-twin/models");
@@ -217,8 +217,8 @@ export function DigitalTwinPage() {
                   {simulate.data.results.riskHeatmap.map((node) => (
                     <span
                       key={node.nodeId}
-                      className="rounded-md px-3 py-1 text-xs text-white"
-                      style={{ backgroundColor: heatColor(node.riskScore) }}
+                      className="rounded-md px-3 py-1 text-xs"
+                      style={{ backgroundColor: heatColor(node.riskScore), color: heatTextColor(node.riskScore) }}
                     >
                       {node.nodeId}: {node.riskScore}%
                     </span>

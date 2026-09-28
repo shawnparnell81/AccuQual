@@ -659,10 +659,27 @@ main table thead th {
   text-transform: uppercase;
 }
 
-input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
 select,
 textarea {
   border-radius: 9px;
+}
+/* Two elements, no class: beats the browser default (black type) without
+   beating a workbook cell or a paper form that sets its own color. */
+body input:where(:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="button"]):not([type="submit"]):not([type="reset"])),
+body select,
+body textarea {
+  color: hsl(var(--form-input-foreground));
+  caret-color: hsl(var(--form-input-foreground));
+}
+input::placeholder,
+textarea::placeholder {
+  color: hsl(var(--muted-foreground));
+  opacity: 1;
+}
+option {
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--card));
 }
 
 input[type="checkbox"],
@@ -782,7 +799,15 @@ input[type="radio"] {
   border-radius: 12px;
   border: 1px solid hsl(var(--border));
   background: hsl(var(--card));
+  color: hsl(var(--foreground));
   box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.7);
+}
+/* The header is white type on a dark bar, including DMA light. A menu that
+   only inherits that color disappears on a light card. */
+.aq-topbar .bg-card,
+.aq-topbar [role="dialog"],
+.aq-menu {
+  color: hsl(var(--foreground));
 }
 .aq-top-tools {
   display: flex;
@@ -1232,11 +1257,47 @@ body.side-collapsed .aq-nav-folder-link {
 }
 
 @media print {
+  /* Paper is light with dark type in either app theme. !important beats a
+     Classic palette stored as inline custom properties. Status fills
+     (red / yellow / green) are their own colors and are not reset here.
+     Section bars keep a dark fill with white type. */
+  :root,
+  :root[data-theme="light"],
+  :root[data-theme="dark"],
+  :root[data-scheme="dma"],
+  :root[data-scheme="dma"][data-theme="light"],
+  :root[data-scheme="dma"][data-theme="dark"] {
+    color-scheme: light !important;
+    --background: 0 0% 100% !important;
+    --foreground: 222 28% 8% !important;
+    --text: 222 16% 10% !important;
+    --card: 0 0% 100% !important;
+    --muted: 220 14% 94% !important;
+    --muted-foreground: 220 9% 28% !important;
+    --border: 220 8% 70% !important;
+    --form-input: 0 0% 100% !important;
+    --form-input-foreground: 222 28% 8% !important;
+    --form-label: 220 14% 93% !important;
+    --form-label-foreground: 222 22% 12% !important;
+    --form-heading: #111111 !important;
+    --form-bar-foreground: #ffffff !important;
+  }
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+    color: #111 !important;
+  }
   .aq-topbar,
   .aq-sidebar,
   .aq-scrim,
   .aq-skip,
-  .no-print {
+  .no-print,
+  button,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"] {
     display: none !important;
   }
   .app-shell,
@@ -1249,7 +1310,7 @@ body.side-collapsed .aq-nav-folder-link {
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
-    color: #000 !important;
+    color: #111 !important;
   }
   .aq-print-stack {
     display: block !important;
@@ -1263,13 +1324,12 @@ body.side-collapsed .aq-nav-folder-link {
   }
   .aq-print-sheet {
     background: #fff !important;
-    color: #000 !important;
-    border-color: #000 !important;
+    color: #111 !important;
+    border-color: #111 !important;
     box-shadow: none !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .aq-print-sheet button,
   .aq-picture-tools {
     display: none !important;
   }
@@ -1283,17 +1343,44 @@ body.side-collapsed .aq-nav-folder-link {
   }
   .bg-muted {
     background: #f3f4f6 !important;
-    color: #000 !important;
+    color: #111 !important;
   }
-  .text-foreground,
-  .text-muted-foreground {
-    color: #000 !important;
+  .csa-wrap,
+  .fp-wrap,
+  .e8-scroll,
+  .wot-table-wrap {
+    overflow: visible !important;
   }
-  .text-white {
-    color: #fff !important;
+  .csa,
+  .fp,
+  .e8-grid {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .csa td,
+  .fp td,
+  .e8-grid th,
+  .e8-grid td {
+    min-width: 0 !important;
+    height: auto !important;
+  }
+  .csa .section,
+  .fp .section,
+  .b8-head,
+  .e8-h {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   @page {
     margin: 0.5in;
+  }
+  @page wide-sheet {
+    size: letter landscape;
+    margin: 0.4in;
+  }
+  .validation-report-print,
+  .aq-print-wide {
+    page: wide-sheet;
   }
 }
 

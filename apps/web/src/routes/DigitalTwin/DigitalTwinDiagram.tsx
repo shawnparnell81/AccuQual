@@ -24,6 +24,13 @@ export function heatColor(riskScore: number): string {
   return "var(--chart-fallback, #64748b)";
 }
 
+/** Amber and orange fills need dark type. Rose and slate stay light type. */
+export function heatTextColor(riskScore: number): string {
+  if (riskScore > 10) return "#ffffff";
+  if (riskScore > 1) return "#1a1a1a";
+  return "#ffffff";
+}
+
 /**
  * Left-to-right auto-layout, ordered by the same real topological order the
  * backend's simulation-engine.ts's own `topologicalOrder` (Kahn's algorithm)

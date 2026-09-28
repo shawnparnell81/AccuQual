@@ -67,7 +67,7 @@ export function ScanToFindDialog() {
             aria-modal="true"
             aria-labelledby="scan-title"
             tabIndex={-1}
-            className="modal-in fixed left-1/2 top-24 z-50 w-full max-w-sm -translate-x-1/2 rounded-lg border border-border bg-card p-4 shadow-xl outline-none"
+            className="aq-menu modal-in fixed left-1/2 top-24 z-50 w-full max-w-sm -translate-x-1/2 rounded-lg border border-border bg-card p-4 text-foreground shadow-xl outline-none"
           >
             <h2 id="scan-title" className="mb-3 text-sm font-medium">
               Scan to find

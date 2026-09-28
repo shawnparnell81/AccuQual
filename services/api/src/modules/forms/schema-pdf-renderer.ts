@@ -18,6 +18,24 @@ export const PAGE_HEIGHT = 792;
 export const MARGIN = 40;
 export const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 
+/** A table this wide does not fit a portrait letter page. NCR's widest table is 7 columns and CAPA's is 4, so both stay portrait. */
+const WIDE_TABLE_COLUMNS = 8;
+
+function contentWidth(ctx: RenderContext): number {
+  return ctx.page.getWidth() - MARGIN * 2;
+}
+
+function pageSizeFor(layout: FormLayout): [number, number] {
+  let widest = 0;
+  for (const section of layout.sections) {
+    for (const block of section.blocks) {
+      if (block.type === "table") widest = Math.max(widest, block.columns.length);
+    }
+  }
+  if (widest >= WIDE_TABLE_COLUMNS) return [PAGE_HEIGHT, PAGE_WIDTH];
+  return [PAGE_WIDTH, PAGE_HEIGHT];
+}
+
 export interface RenderContext {
   doc: PDFDocument;
   page: PDFPage;
@@ -34,7 +52,8 @@ export async function renderFormLayoutAsPdf(layout: FormLayout, data: Record<str
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const italic = await doc.embedFont(StandardFonts.HelveticaOblique);
 
-  const ctx: RenderContext = { doc, page: doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]), y: PAGE_HEIGHT - MARGIN, font, bold, italic };
+  const [pageWidth, pageHeight] = pageSizeFor(layout);
+  const ctx: RenderContext = { doc, page: doc.addPage([pageWidth, pageHeight]), y: pageHeight - MARGIN, font, bold, italic };
 
   drawTitle(ctx, layout.title);
 
@@ -52,16 +71,19 @@ export async function renderFormLayoutAsPdf(layout: FormLayout, data: Record<str
 
 export function ensureSpace(ctx: RenderContext, needed: number) {
   if (ctx.y - needed < MARGIN) {
-    ctx.page = ctx.doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-    ctx.y = PAGE_HEIGHT - MARGIN;
+    const width = ctx.page.getWidth();
+    const height = ctx.page.getHeight();
+    ctx.page = ctx.doc.addPage([width, height]);
+    ctx.y = height - MARGIN;
   }
 }
 
 export function drawTitle(ctx: RenderContext, title: string) {
-  const lines = wrapText(title, ctx.bold, 16, CONTENT_WIDTH);
+  const span = contentWidth(ctx);
+  const lines = wrapText(title, ctx.bold, 16, span);
   for (const line of lines) {
     const width = ctx.bold.widthOfTextAtSize(line, 16);
-    ctx.page.drawText(line, { x: MARGIN + (CONTENT_WIDTH - width) / 2, y: ctx.y, size: 16, font: ctx.bold, color: NAVY });
+    ctx.page.drawText(line, { x: MARGIN + (span - width) / 2, y: ctx.y, size: 16, font: ctx.bold, color: NAVY });
     ctx.y -= 20;
   }
   ctx.y -= 8;
@@ -69,7 +91,8 @@ export function drawTitle(ctx: RenderContext, title: string) {
 
 export function drawSectionHeader(ctx: RenderContext, text: string) {
   const height = 20;
-  ctx.page.drawRectangle({ x: MARGIN, y: ctx.y - height, width: CONTENT_WIDTH, height, color: NAVY });
+  const span = contentWidth(ctx);
+  ctx.page.drawRectangle({ x: MARGIN, y: ctx.y - height, width: span, height, color: NAVY });
   ctx.page.drawText(text, { x: MARGIN + 8, y: ctx.y - height + 6, size: 10.5, font: ctx.bold, color: WHITE });
   ctx.y -= height;
 }
@@ -90,7 +113,8 @@ export function drawBlock(ctx: RenderContext, block: Block, data: Record<string,
 function drawRow(ctx: RenderContext, fields: { name: string; label: string; hint?: string }[], data: Record<string, unknown>) {
   const height = fields.some((f) => f.hint) ? 34 : 26;
   ensureSpace(ctx, height);
-  const pairWidth = CONTENT_WIDTH / fields.length;
+  const span = contentWidth(ctx);
+  const pairWidth = span / fields.length;
   const labelWidth = pairWidth * 0.42;
   const valueWidth = pairWidth * 0.58;
 
@@ -116,17 +140,18 @@ function drawTextarea(ctx: RenderContext, name: string, label: string, hint: str
   const bodyHeight = 70;
   ensureSpace(ctx, headerHeight + bodyHeight);
 
-  ctx.page.drawRectangle({ x: MARGIN, y: ctx.y - headerHeight, width: CONTENT_WIDTH, height: headerHeight, color: LABEL_BG, borderColor: BORDER, borderWidth: 0.5 });
+  const span = contentWidth(ctx);
+  ctx.page.drawRectangle({ x: MARGIN, y: ctx.y - headerHeight, width: span, height: headerHeight, color: LABEL_BG, borderColor: BORDER, borderWidth: 0.5 });
   ctx.page.drawText(label, { x: MARGIN + 4, y: ctx.y - 11, size: 8.5, font: ctx.bold, color: TEXT_DARK });
   if (hint) {
     ctx.page.drawText(hint, { x: MARGIN + 4, y: ctx.y - headerHeight + 6, size: 7, font: ctx.italic, color: TEXT_HINT });
   }
   ctx.y -= headerHeight;
 
-  ctx.page.drawRectangle({ x: MARGIN, y: ctx.y - bodyHeight, width: CONTENT_WIDTH, height: bodyHeight, color: WHITE, borderColor: BORDER, borderWidth: 0.5 });
+  ctx.page.drawRectangle({ x: MARGIN, y: ctx.y - bodyHeight, width: span, height: bodyHeight, color: WHITE, borderColor: BORDER, borderWidth: 0.5 });
   const value = data[name];
   if (value != null && value !== "") {
-    const lines = wrapText(pictureTextToPlain(String(value)), ctx.font, 9, CONTENT_WIDTH - 12).slice(0, Math.floor(bodyHeight / 12));
+    const lines = wrapText(pictureTextToPlain(String(value)), ctx.font, 9, span - 12).slice(0, Math.floor(bodyHeight / 12));
     lines.forEach((line, i) => {
       ctx.page.drawText(line, { x: MARGIN + 6, y: ctx.y - 12 - i * 12, size: 9, font: ctx.font, color: TEXT_DARK });
     });
@@ -137,12 +162,13 @@ function drawTextarea(ctx: RenderContext, name: string, label: string, hint: str
 function drawYesNo(ctx: RenderContext, name: string, label: string, data: Record<string, unknown>) {
   const height = 22;
   ensureSpace(ctx, height);
-  ctx.page.drawRectangle({ x: MARGIN, y: ctx.y - height, width: CONTENT_WIDTH, height, color: LABEL_BG, borderColor: BORDER, borderWidth: 0.5 });
+  const span = contentWidth(ctx);
+  ctx.page.drawRectangle({ x: MARGIN, y: ctx.y - height, width: span, height, color: LABEL_BG, borderColor: BORDER, borderWidth: 0.5 });
   ctx.page.drawText(label, { x: MARGIN + 4, y: ctx.y - 14, size: 8.5, font: ctx.bold, color: TEXT_DARK });
 
   const value = String(data[name] ?? "").toLowerCase();
-  const yesBoxX = MARGIN + CONTENT_WIDTH - 90;
-  const noBoxX = MARGIN + CONTENT_WIDTH - 40;
+  const yesBoxX = MARGIN + span - 90;
+  const noBoxX = MARGIN + span - 40;
   drawCheckbox(ctx, yesBoxX, ctx.y - 15, value === "yes");
   ctx.page.drawText("YES", { x: yesBoxX + 10, y: ctx.y - 14, size: 8, font: ctx.font, color: TEXT_DARK });
   drawCheckbox(ctx, noBoxX, ctx.y - 15, value === "no");
@@ -168,12 +194,23 @@ function drawTable(
   const rows = (data[name] as Record<string, unknown>[] | undefined) ?? [];
   const rowCount = fixedRowLabels ? fixedRowLabels.length : Math.max(rows.length, minRows ?? 1);
 
+  const span = contentWidth(ctx);
   const hasLabelColumn = Boolean(fixedRowLabels);
-  const labelColWidth = hasLabelColumn ? CONTENT_WIDTH * 0.22 : 0;
-  const remainingWidth = CONTENT_WIDTH - labelColWidth;
+  const labelColWidth = hasLabelColumn ? span * 0.22 : 0;
+  const remainingWidth = span - labelColWidth;
   const colWidth = remainingWidth / columns.length;
 
-  const headerHeight = 18;
+  // Narrow tables (NCR, CAPA) keep a single 18pt header line, even when a
+  // label is wider than its column. Wide sheets wrap a label that does not fit.
+  const wide = columns.length >= WIDE_TABLE_COLUMNS;
+  const headerLines = columns.map((col) => {
+    const label = pdfSafe(col.label);
+    if (!wide) return [label];
+    const wrapped = wrapText(label, ctx.bold, 8, Math.max(8, colWidth - 8));
+    return wrapped.length > 0 ? wrapped : [label];
+  });
+  const headerLineCount = Math.max(1, ...headerLines.map((lines) => lines.length));
+  const headerHeight = headerLineCount > 1 ? headerLineCount * 10 + 6 : 18;
   ensureSpace(ctx, headerHeight);
   let x = MARGIN;
   if (hasLabelColumn) {
@@ -181,11 +218,17 @@ function drawTable(
     ctx.page.drawText(labelColumnHeader ?? "Role", { x: x + 4, y: ctx.y - 13, size: 8, font: ctx.bold, color: TEXT_DARK });
     x += labelColWidth;
   }
-  for (const col of columns) {
+  headerLines.forEach((lines, i) => {
     ctx.page.drawRectangle({ x, y: ctx.y - headerHeight, width: colWidth, height: headerHeight, color: LABEL_BG, borderColor: BORDER, borderWidth: 0.5 });
-    ctx.page.drawText(pdfSafe(col.label), { x: x + 4, y: ctx.y - 13, size: 8, font: ctx.bold, color: TEXT_DARK });
+    if (lines.length === 1) {
+      ctx.page.drawText(lines[0]!, { x: x + 4, y: ctx.y - 13, size: 8, font: ctx.bold, color: TEXT_DARK });
+    } else {
+      lines.forEach((line, lineIndex) => {
+        ctx.page.drawText(line, { x: x + 4, y: ctx.y - 11 - lineIndex * 10, size: 8, font: ctx.bold, color: TEXT_DARK });
+      });
+    }
     x += colWidth;
-  }
+  });
   ctx.y -= headerHeight;
 
   for (let r = 0; r < rowCount; r++) {
@@ -236,7 +279,7 @@ function drawTable(
   }
 
   if (legend) {
-    const lines = wrapText(pdfSafe(legend), ctx.italic, 8, CONTENT_WIDTH);
+    const lines = wrapText(pdfSafe(legend), ctx.italic, 8, contentWidth(ctx));
     ensureSpace(ctx, lines.length * 11 + 8);
     ctx.y -= 8;
     lines.forEach((line, i) => {

@@ -42,7 +42,7 @@ export function UserMenu() {
         <span className="aq-avatar">{initial}</span>
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-40 mt-2 w-64 rounded-lg border border-border bg-card p-2 shadow-xl">
+        <div className="aq-menu absolute right-0 top-full z-40 mt-2 w-64 rounded-lg border border-border bg-card p-2 text-foreground shadow-xl">
           <div className="border-b border-border px-3 pb-2 pt-1">
             {user?.name && <p className="truncate text-sm font-medium">{user.name}</p>}
             <p className="truncate text-xs text-muted-foreground">{user?.email}</p>

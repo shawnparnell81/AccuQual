@@ -156,7 +156,7 @@ function PpapCard({ submission, isReviewer }: { submission: SupplierPpapSubmissi
         <div className="mt-2 flex flex-col gap-2">
           <TextAreaField label="Review notes" value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} />
           <div className="flex gap-2">
-            <button onClick={() => review.mutate("approved")} className="rounded-md bg-success px-3 py-1.5 text-xs font-medium text-white">
+            <button onClick={() => review.mutate("approved")} className="rounded-md bg-success px-3 py-1.5 text-xs font-medium text-success-foreground">
               Approve
             </button>
             <button onClick={() => review.mutate("under_review")} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">

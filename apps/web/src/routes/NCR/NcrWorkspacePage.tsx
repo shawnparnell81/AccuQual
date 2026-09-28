@@ -400,7 +400,7 @@ function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTi
               className="w-40 rounded-md border border-border bg-transparent px-2 py-1 text-xs"
             />
             {attachOpen && (
-              <ul id="capa-attach-list" role="listbox" className="absolute right-0 z-20 mt-1 max-h-48 w-64 overflow-auto rounded-md border border-border bg-card p-1 shadow-lg">
+              <ul id="capa-attach-list" role="listbox" className="aq-menu absolute right-0 z-20 mt-1 max-h-48 w-64 overflow-auto rounded-md border border-border bg-card p-1 text-foreground shadow-lg">
                 {attachChoices.length === 0 && <li className="px-2 py-1 text-xs text-muted-foreground">No matching CAPA</li>}
                 {attachChoices.map((c) => (
                   <li key={c.id}>

@@ -48,7 +48,7 @@ export function WhatsNewDropdown() {
       {open && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-30 mt-1 w-80 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-card p-3 shadow-lg">
+          <div className="aq-menu absolute right-0 top-full z-30 mt-1 w-80 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-card p-3 text-foreground shadow-lg">
             <h3 className="mb-2 text-sm font-medium">What's new</h3>
             <div className="flex flex-col gap-3">
               {CHANGELOG.map((entry) => (

@@ -91,7 +91,7 @@ export function Supplier8DForm({ supplierId, isReviewer }: { supplierId?: number
                 <p className="mt-1 text-xs text-muted-foreground">Root cause: {r.data.d4_rootCause || "—"}</p>
                 {isReviewer && (r.status === "submitted" || r.status === "under_review") && (
                   <div className="mt-2 flex gap-2">
-                    <button onClick={() => review.mutate({ id: r.id, status: "accepted" })} className="rounded-md bg-success px-3 py-1.5 text-xs font-medium text-white">
+                    <button onClick={() => review.mutate({ id: r.id, status: "accepted" })} className="rounded-md bg-success px-3 py-1.5 text-xs font-medium text-success-foreground">
                       Accept
                     </button>
                     <button onClick={() => review.mutate({ id: r.id, status: "rejected" })} className="rounded-md border border-destructive px-3 py-1.5 text-xs text-destructive">
