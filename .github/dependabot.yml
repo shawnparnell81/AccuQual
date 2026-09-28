@@ -1,16 +1,21 @@
 version: 2
 updates:
   # One entry covers every npm workspace: they share the root package-lock.json.
+  # The schedule applies to version updates only. Security updates are separate
+  # and still open as they arrive.
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 5
+      interval: "monthly"
+    open-pull-requests-limit: 3
     groups:
-      # Routine minor/patch bumps arrive as one PR a week instead of a dozen.
       minor-and-patch:
+        patterns:
+          - "*"
         update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     labels: ["dependencies"]
 
   - package-ecosystem: "docker"
@@ -21,13 +26,29 @@ updates:
       - "/workers/ai-worker"
       - "/workers/digital-twin-worker"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     labels: ["dependencies"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     labels: ["dependencies"]

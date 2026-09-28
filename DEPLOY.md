@@ -400,7 +400,7 @@ Monday morning (a new vulnerability is published without anyone pushing code, so
 | **Secret scan** (gitleaks) | Credentials committed anywhere in the full git history (`.gitleaks.toml` allowlists only the throwaway test-fixture passwords, by exact value, inside the test folder) | Yes |
 | **Image scan** (Trivy; merges + weekly) | Vulnerabilities in the OS packages and libraries inside each of the five container images | Yes, for CRITICAL issues that have a fix; HIGH are listed |
 
-GitHub's own secret scanning with push protection is also on, **Dependabot** opens a weekly pull request of dependency
+GitHub's own secret scanning with push protection is also on, **Dependabot** opens a monthly pull request of minor and patch dependency
 updates (`.github/dependabot.yml`), security updates are switched on, and `SECURITY.md` tells outsiders how to report a
 problem privately (Security tab → Report a vulnerability).
 
