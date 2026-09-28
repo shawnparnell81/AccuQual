@@ -3,7 +3,7 @@ import { documentFolders } from "./documentFolders.js";
 
 /**
  * One row per blank form template. The Forms Library lists this row.
- * `folderId` is its only home, under ISO Compliance. A filled record is
+ * `folderId` is its only home, under ISO Compliance Documents. A filled record is
  * stored by its own module and opened from `subjectRoute`.
  */
 export const controlledFormTemplates = pgTable("controlled_form_templates", {

@@ -12,7 +12,7 @@ interface FormTemplateLink {
 
 /**
  * Lists the master blank templates. These are the same rows filed under
- * Document Folders > ISO Compliance, not a second copy.
+ * Document Folders > ISO Compliance Documents > 03_Blank_Forms_Templates, not a second copy.
  */
 export function QmsFormsLibraryPage() {
   const navigate = useNavigate();
@@ -23,7 +23,7 @@ export function QmsFormsLibraryPage() {
 
   const byTopic = new Map<string, FormTemplateLink[]>();
   for (const form of templates.data ?? []) {
-    const topic = form.isoPath.join(" / ") || "ISO Compliance";
+    const topic = form.isoPath.at(-1) || "03_Blank_Forms_Templates";
     byTopic.set(topic, [...(byTopic.get(topic) ?? []), form]);
   }
 
@@ -32,7 +32,7 @@ export function QmsFormsLibraryPage() {
       <div>
         <h1 className="text-2xl font-semibold">QMS Forms</h1>
         <p className="text-sm text-muted-foreground">
-          Blank templates live in Document Folders under ISO Compliance. Start one here. A filled record is filed in its subject folder.
+          Blank templates live in Document Folders under ISO Compliance Documents / 03_Blank_Forms_Templates. Start one here. A filled record is filed in its subject folder.
         </p>
       </div>
 

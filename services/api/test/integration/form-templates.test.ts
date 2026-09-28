@@ -15,7 +15,7 @@ const suffix = Date.now();
 
 let token: string;
 
-describe("ISO Compliance form templates", () => {
+describe("ISO Compliance Documents form templates", () => {
   beforeAll(async () => {
     const co = await ensureTestCompany();
     await seedDefaultPermissions(co!.id);
@@ -28,7 +28,7 @@ describe("ISO Compliance form templates", () => {
     if (!quality) await db.insert(documentFolders).values({ name: "Quality", sortOrder: 0 });
   });
 
-  it("files each blank template once under ISO Compliance and names a filled record from the pattern", async () => {
+  it("files each blank template once under 03_Blank_Forms_Templates and names a filled record from the pattern", async () => {
     expect(filedRecordName("FRM-VAL-007", 12, "2026-09-28")).toBe("FRM-VAL-007_12_2026-09-28");
 
     const first = await request(app).get("/document-folders/form-templates").set("Authorization", `Bearer ${token}`);
@@ -41,22 +41,31 @@ describe("ISO Compliance form templates", () => {
     const csa = templates.find((form) => form.formKey === "frm-val-001");
     const pump = templates.find((form) => form.formKey === "frm-val-007");
     const eightD = templates.find((form) => form.formKey === "8d");
+    const ncr = templates.find((form) => form.formKey === "ncr");
+    const training = templates.find((form) => form.formKey === "training-record");
+    const audit = templates.find((form) => form.formKey === "audit-plan");
     expect(csa?.formId).toBe("FRM-VAL-001");
     expect(pump?.formId).toBe("FRM-VAL-007");
-    expect(csa?.isoPath).toEqual(["Quality", "Validation"]);
+    expect(csa?.isoPath).toEqual(["03_Blank_Forms_Templates", "Validation"]);
     expect(pump?.folderId).toBe(csa?.folderId);
     expect(csa?.subjectRoute).toBe("/folders/validation-reports");
-    expect(eightD?.isoPath).toEqual(["Problem Solving"]);
+    expect(eightD?.isoPath).toEqual(["03_Blank_Forms_Templates", "Problem Solving"]);
     expect(eightD?.subjectRoute).toBe("/8d");
+    expect(ncr?.isoPath).toEqual(["03_Blank_Forms_Templates", "Nonconformance"]);
+    expect(training?.isoPath).toEqual(["03_Blank_Forms_Templates", "Training"]);
+    expect(audit?.isoPath).toEqual(["03_Blank_Forms_Templates", "Audit"]);
     expect(templates.filter((form) => form.formKey === "frm-val-001")).toHaveLength(1);
 
     const tree = await request(app).get("/document-folders").set("Authorization", `Bearer ${token}`);
     expect(tree.status).toBe(200);
     const folders = tree.body as { id: number; name: string; parentId: number | null }[];
-    const iso = folders.find((folder) => folder.parentId === null && folder.name === "ISO Compliance");
-    const qualityTopic = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Quality");
-    const validation = folders.find((folder) => folder.parentId === qualityTopic?.id && folder.name === "Validation");
+    const iso = folders.find((folder) => folder.parentId === null && folder.name === "ISO Compliance Documents");
+    const blanks = folders.find((folder) => folder.parentId === iso?.id && folder.name === "03_Blank_Forms_Templates");
+    const validation = folders.find((folder) => folder.parentId === blanks?.id && folder.name === "Validation");
     expect(validation?.id).toBe(csa?.folderId);
+    expect(folders.find((folder) => folder.parentId === null && folder.name === "ISO Compliance")).toBeUndefined();
+    expect(folders.find((folder) => folder.parentId === iso?.id && folder.name.startsWith("01_"))).toBeUndefined();
+    expect(folders.find((folder) => folder.parentId === iso?.id && folder.name.startsWith("02_"))).toBeUndefined();
     const rootQuality = folders.find((folder) => folder.parentId === null && folder.name === "Quality");
     expect(folders.find((folder) => folder.parentId === rootQuality?.id && folder.name === "Validation Reports")).toBeUndefined();
   });

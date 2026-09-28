@@ -198,7 +198,7 @@ async function withLinkedDocumentInfo(db: Db, all: (typeof documentFolders.$infe
   });
 }
 
-/** Blank templates. The Forms Library and ISO Compliance read this same list. */
+/** Blank templates. The Forms Library and ISO Compliance Documents read this same list. */
 export const formTemplates = asyncHandler(async (req: Request, res: Response) => {
   res.json(await listFormTemplates(req.db!));
 });
