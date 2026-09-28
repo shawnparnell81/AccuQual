@@ -12,16 +12,31 @@ export function rememberPictureUrl(id: number, url: string) {
   urls.set(id, url);
 }
 
+/** A picture address is only the blob URL this page created for that file. */
+function pictureSrc(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "blob:") return null;
+    return encodeURI(parsed.href);
+  } catch {
+    return null;
+  }
+}
+
 async function pictureObjectUrl(id: number): Promise<string> {
+  if (!Number.isInteger(id) || id <= 0) throw new Error("Picture unavailable");
   const cached = urls.get(id);
   if (cached) return cached;
   let pending = loading.get(id);
   if (!pending) {
-    pending = apiClient.get(`/attachments/${id}/download`, { responseType: "blob" }).then((res) => {
+    const path = `/attachments/${encodeURIComponent(String(id))}/download`;
+    pending = apiClient.get(path, { responseType: "blob" }).then((res) => {
       const url = URL.createObjectURL(res.data as Blob);
-      urls.set(id, url);
+      const src = pictureSrc(url);
+      if (!src) throw new Error("Picture unavailable");
+      urls.set(id, src);
       loading.delete(id);
-      return url;
+      return src;
     });
     loading.set(id, pending);
   }
@@ -280,7 +295,8 @@ function buildFigure(part: Extract<PicturePart, { kind: "picture" }>, readOnly: 
   image.alt = part.caption || "Picture";
   void pictureObjectUrl(part.id)
     .then((url) => {
-      if (image.isConnected) image.src = url;
+      const src = pictureSrc(url);
+      if (image.isConnected && src) image.src = src;
     })
     .catch(() => {
       image.alt = "Picture unavailable";
