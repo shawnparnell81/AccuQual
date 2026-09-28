@@ -52,6 +52,10 @@ import {
   ErpPresetsListPage,
   ErpSyncErrorsPage,
   ValidationReportDetailPage,
+  IsoFormListPage,
+  IsoFormDetailPage,
+  MasterEquipmentListPage,
+  MasterDocumentListPage,
   EmployeeTrainingHistoryPage,
   EquipmentDetailPage,
   FeasibilityDetailPage,
@@ -131,6 +135,8 @@ export function App() {
           <Route path="/8d/:id" element={<EightDDetailPage />} />
 
           <Route path="/validation-reports/:id" element={<ValidationReportDetailPage />} />
+          <Route path="/iso-forms/record/:id" element={<IsoFormDetailPage />} />
+          <Route path="/iso-forms/:formKey" element={<IsoFormListPage />} />
 
           <Route path="/audits" element={<AuditsPage />} />
           <Route path="/audits/:id" element={<AuditDetailPage />} />
@@ -140,6 +146,7 @@ export function App() {
 
           <Route path="/folders/:category" element={<DocumentCategoryPage />} />
           <Route path="/documents" element={<DocumentsPage />} />
+          <Route path="/documents/master-list" element={<MasterDocumentListPage />} />
           <Route path="/documents/folders" element={<FolderExplorerPage />} />
           <Route path="/documents/uploads" element={<GeneralUploadsPage />} />
           <Route path="/documents/:id" element={<DocumentDetailPage />} />
@@ -186,6 +193,7 @@ export function App() {
           <Route path="/suppliers" element={<SuppliersPage />} />
           <Route path="/suppliers/:id" element={<SupplierDetailPage />} />
           <Route path="/calibration" element={<CalibrationPage />} />
+          <Route path="/calibration/master-list" element={<MasterEquipmentListPage />} />
           <Route path="/calibration/:id" element={<EquipmentDetailPage />} />
           <Route path="/quarantine" element={<QuarantinePage />} />
           <Route path="/quarantine/:id" element={<QuarantineDetailPage />} />

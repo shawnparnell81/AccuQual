@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { AttentionStrip, EquipmentStatusBadge, type EquipmentState } from "../../components/calibration/EquipmentPanels";
 
@@ -19,6 +19,10 @@ export function CalibrationPage() {
   return (
     <div className="flex flex-col gap-4">
       <AttentionStrip />
+      <p className="text-sm text-muted-foreground">
+        <Link to="/calibration/master-list" className="text-primary hover:underline">Master Equipment List (LST-EQP-001)</Link>
+        {" "}is the live gage register, with calibration due colors.
+      </p>
       <ResourceListPage<Equipment>
         title="Calibration"
         resource="equipment"

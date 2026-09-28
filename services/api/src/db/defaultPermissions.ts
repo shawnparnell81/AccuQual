@@ -37,7 +37,7 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   eight_d: { quality: "edit" },
   di: { quality: "edit" },
   audit: { quality: "edit" },
-  calibration: { quality: "edit" },
+  calibration: { quality: "edit", engineering: "read" },
   pareto: { quality: "read" },
   // production added for Supplier Performance Analytics (read-only, same
   // level as purchasing/material_management — it had no access at all

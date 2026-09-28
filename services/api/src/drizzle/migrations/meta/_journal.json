@@ -617,6 +617,13 @@
       "when": 1791586800000,
       "tag": "0087_user_email_case",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1791673200000,
+      "tag": "0088_iso_quality_forms",
+      "breakpoints": true
     }
   ]
 }

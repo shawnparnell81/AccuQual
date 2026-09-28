@@ -18,6 +18,7 @@ import {
   applyRetentionHandler,
   archiveHandler,
 } from "./documents.controller.js";
+import { masterDocumentListHandler } from "./masterDocumentList.js";
 import { registerDocumentVersionRoutes } from "./documents.versions.routes.js";
 
 // Sprint 1 fix (accuqual-implementation-sequencing.md) — previously had NO
@@ -36,6 +37,7 @@ documentsRouter.use(requireAuth, withDb, requireDepartmentAccess("documents"), r
 // Fixed-path routes first — "expiring" and "retention" would otherwise be
 // swallowed by GET/POST "/:id"-shaped routes below.
 documentsRouter.get("/expiring", listExpiringHandler);
+documentsRouter.get("/master-list", masterDocumentListHandler);
 documentsRouter.post("/retention/apply", applyRetentionHandler);
 registerDocumentVersionRoutes(documentsRouter);
 

@@ -1,4 +1,4 @@
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
@@ -29,6 +29,7 @@ export function DocumentsPage() {
           <p className="text-sm text-muted-foreground">Revision, release date, next review, and state for every controlled document. This catalog is shared by every plant.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Link to="/documents/master-list" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">Master Document List</Link>
           <OpenFormButton formType="document_control_index" entityId={DOCUMENT_CONTROL_INDEX_ENTITY_ID} title="Document Control Master Index" label="Open Master Index" />
           <PrintFormButton formType="document_control_index" entityId={DOCUMENT_CONTROL_INDEX_ENTITY_ID} />
         </div>

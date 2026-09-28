@@ -35,6 +35,10 @@ export const CapaDetailPage = lazyNamed("/capa", () => import("./CAPA/CapaDetail
 export const EightDPage = lazyNamed("/8d", () => import("./EightD/EightDPage"), "EightDPage");
 export const EightDDetailPage = lazyNamed("/8d", () => import("./EightD/EightDDetailPage"), "EightDDetailPage");
 export const ValidationReportDetailPage = lazyNamed("/validation-reports", () => import("./ValidationReports/ValidationReportDetailPage"), "ValidationReportDetailPage");
+export const IsoFormListPage = lazyNamed("/iso-forms", () => import("./IsoForms/IsoFormListPage"), "IsoFormListPage");
+export const IsoFormDetailPage = lazyNamed("/iso-forms", () => import("./IsoForms/IsoFormDetailPage"), "IsoFormDetailPage");
+export const MasterEquipmentListPage = lazyNamed("/calibration/master-list", () => import("./Calibration/MasterEquipmentListPage"), "MasterEquipmentListPage");
+export const MasterDocumentListPage = lazyNamed("/documents/master-list", () => import("./Documents/MasterDocumentListPage"), "MasterDocumentListPage");
 export const AuditsPage = lazyNamed("/audits", () => import("./Audits/AuditsPage"), "AuditsPage");
 export const AuditDetailPage = lazyNamed("/audits", () => import("./Audits/AuditDetailPage"), "AuditDetailPage");
 export const DocumentsPage = lazyNamed("/documents", () => import("./Documents/DocumentsPage"), "DocumentsPage");
