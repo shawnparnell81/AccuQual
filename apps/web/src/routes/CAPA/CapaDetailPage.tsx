@@ -15,7 +15,7 @@ import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
-import { CAPA_LOOP, READ_ONLY_REASON, capaLoopIndex, capaNextAction, duePhrase, isPastDue, statusPhrase } from "../../lib/opsLanguage";
+import { CAPA_LOOP, READ_ONLY_REASON, capaLoopIndex, capaNextAction, duePhrase, formatPerson, isPastDue, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
@@ -94,7 +94,7 @@ export function CapaDetailPage() {
               {!capa.ownerId && <option value="">Unassigned</option>}
               {people.map((person) => (
                 <option key={person.id} value={person.id}>
-                  {person.name?.trim() || person.email}
+                  {formatPerson(person)}
                 </option>
               ))}
             </select>

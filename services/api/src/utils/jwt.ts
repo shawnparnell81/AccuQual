@@ -36,7 +36,7 @@ export interface RefreshTokenPayload {
   rm?: boolean;
 }
 
-/** Fixed sign-in window for everyone. Activity does not extend it. Closing the browser ends the sign-in sooner. A browser that restores the session cookie still has to sign in again unless a tab from that visit is open. 12 hours after sign-in is the latest a session can last. A session that sits unused for 30 minutes is also refused on refresh (SESSION_IDLE_TIMEOUT_MINUTES); that idle check does not move this 12-hour end. */
+/** Fixed sign-in window for everyone. Activity does not extend it. Closing the browser drops the session cookie and ends the sign-in sooner. A reload, a new tab, or a typed address in the same browser still has that cookie. 12 hours after sign-in is the latest a session can last. A session that sits unused for 30 minutes is also refused on refresh (SESSION_IDLE_TIMEOUT_MINUTES); that idle check does not move this 12-hour end. */
 export const SESSION_MAX_MS = 12 * 60 * 60 * 1000;
 
 export function signAccessToken(payload: AccessTokenPayload): string {

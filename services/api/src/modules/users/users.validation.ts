@@ -12,6 +12,7 @@ export const createUserSchema = z.object({
   name: z.string().optional(),
   roleId: z.number().int().optional(),
   department: departmentSchema.nullable().optional(),
+  managerId: z.number().int().positive().nullable().optional(),
 });
 
 export const temporaryPasswordSchema = z.object({
@@ -20,6 +21,7 @@ export const temporaryPasswordSchema = z.object({
 
 export const deleteUserSchema = z.object({
   replacementUserId: z.number().int().positive().optional(),
+  reason: z.string().trim().max(500).optional(),
 });
 
 export const updateUserSchema = z.object({

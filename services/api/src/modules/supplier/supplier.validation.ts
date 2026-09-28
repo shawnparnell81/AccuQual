@@ -2,7 +2,9 @@ import { z } from "zod";
 
 export const createSupplierSchema = z.object({
   name: z.string().min(1),
+  contactName: z.string().trim().max(200).optional(),
   contactEmail: z.string().email().optional(),
+  phone: z.string().trim().max(40).optional(),
 });
 
 export const addScorecardSchema = z.object({

@@ -147,8 +147,15 @@ describe("open work when removing a user", () => {
 
     const history = await request(app).get(`/audit-trail/NCR/${openNcr!.id}`).set(auth(adminToken));
     expect(history.status).toBe(200);
-    const signed = (history.body as { performedBy: number; performedByName: string }[]).find((row) => row.performedBy === jane!.id);
+    const signed = (history.body as { performedBy: number; performedByName: string; action: string; changes?: { action?: string }; fieldChanges?: { changes: Record<string, { from?: unknown; to?: unknown }> }[] }[]).find((row) => row.performedBy === jane!.id);
     expect(signed!.performedByName).toBe("Jane Doe (inactive)");
+    const reassigned = (history.body as { changes?: { action?: string }; fieldChanges?: { changes: Record<string, { from?: unknown; to?: unknown }> }[] }[]).find((row) => String(row.changes?.action ?? "").includes("Reassigned from Jane Doe to Sam Lee"));
+    expect(reassigned).toBeTruthy();
+    const assignedChange = (history.body as { fieldChanges?: { changes: Record<string, { from?: unknown; to?: unknown }> }[] }[])
+      .flatMap((row) => row.fieldChanges ?? [])
+      .map((change) => change.changes.assigned_to ?? change.changes.assignedTo)
+      .find((change) => change && (change.to === "Sam Lee" || change.to === "Sam Lee (inactive)"));
+    expect(assignedChange?.to).toBe("Sam Lee");
 
     const removal = await db.select().from(auditTrail).where(eq(auditTrail.entityId, jane!.id));
     const deactivate = removal.find((row) => row.entityType === "User" && row.action === "status_change");
@@ -162,7 +169,7 @@ describe("open work when removing a user", () => {
 
     const blocked = await request(app).delete(`/users/${boss!.id}`).set(auth(adminToken));
     expect(blocked.status).toBe(409);
-    expect(blocked.body.message).toMatch(/people who report/);
+    expect(blocked.body.message).toMatch(/1 person who reports to them/);
 
     const removed = await request(app).delete(`/users/${boss!.id}`).set(auth(adminToken)).send({ replacementUserId: next!.id });
     expect(removed.status).toBe(200);

@@ -17,9 +17,9 @@ authRouter.post("/login", authRateLimiter, validate(loginSchema), loginHandler);
 // Its own limiter, counted per person — not the sign-in limiter, which is
 // tight on purpose and used to be shared with every renewal from one address.
 authRouter.post("/refresh", refreshRateLimiter, requireCsrfHeader, refreshHandler);
-// The refresh cookie can be restored after the browser closes. This drops
-// that sign-in only. It does not require an access token (there isn't one
-// yet) and it does not clear the trusted-browser cookie.
+// Drops this browser's refresh cookie only. Sign-out from the app calls it.
+// A reload, a new tab, or a typed address does not. It does not require an
+// access token and it does not clear the trusted-browser cookie.
 authRouter.post("/end-browser-session", requireCsrfHeader, endBrowserSessionHandler);
 authRouter.post("/logout", requireAuth, logoutHandler);
 authRouter.get("/me", requireAuth, meHandler);

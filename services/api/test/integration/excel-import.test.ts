@@ -71,7 +71,7 @@ describe("Excel / CSV import (real DB + real HTTP path)", () => {
   it("serves a template and describes the fields", async () => {
     const info = await request(app).get("/import/suppliers").set(auth(adminToken));
     expect(info.status).toBe(200);
-    expect(info.body.fields.map((f: { key: string }) => f.key)).toEqual(["name", "contactEmail"]);
+    expect(info.body.fields.map((f: { key: string }) => f.key)).toEqual(["name", "contactName", "contactEmail", "phone"]);
     const tpl = await request(app).get("/import/suppliers/template").set(auth(adminToken)).buffer(true).parse((res, cb) => {
       const chunks: Buffer[] = [];
       res.on("data", (c: Buffer) => chunks.push(c));
@@ -88,7 +88,7 @@ describe("Excel / CSV import (real DB + real HTTP path)", () => {
     const res = await upload("/import/suppliers/preview", adminToken, file);
     expect(res.status).toBe(200);
     expect(res.body.totalRows).toBe(2);
-    expect(res.body.mapping).toEqual({ name: 1, contactEmail: 0 });
+    expect(res.body.mapping).toEqual({ name: 1, contactName: null, contactEmail: 0, phone: null });
     expect(res.body.headers).toEqual(["E-mail", "Vendor Name", "Region"]);
   });
 

@@ -170,11 +170,8 @@ export const employeeHistoryHandler = asyncHandler(async (req: Request, res: Res
   res.json(rows.map(withEffectiveStatus));
 });
 
-/** Employees for the assignment picker (TrainingAssignmentModal) — every active user in the company. */
+/** People for assignment pickers. Inactive accounts stay in the list so their name can be shown with "(inactive)". */
 export const listEmployeesHandler = asyncHandler(async (req: Request, res: Response) => {
-  const rows = await req
-    .db!.select({ id: users.id, name: users.name, email: users.email })
-    .from(users)
-    .where(and(eq(users.isActive, true)));
+  const rows = await req.db!.select({ id: users.id, name: users.name, email: users.email, isActive: users.isActive }).from(users);
   res.json(rows);
 });

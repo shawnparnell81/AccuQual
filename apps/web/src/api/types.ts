@@ -19,6 +19,8 @@ export interface AppUser {
 export interface AppRole {
   id: number;
   name: string;
+  /** Friendly label for a built-in role. Custom roles use the name as typed. */
+  displayName?: string;
   description: string | null;
   /** Smaller numbers are higher in the organization and are listed first. */
   hierarchyLevel?: number;
@@ -197,7 +199,9 @@ export interface DocumentVersion {
 export interface Supplier {
   id: number;
   name: string;
+  contactName?: string | null;
   contactEmail: string | null;
+  phone?: string | null;
   status: "active" | "probation" | "suspended" | "disqualified";
   riskLevel: string | null;
 }

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { decideRoleDeletion, hierarchyLevelForRoleName, moveRank, ROLE_SEEDS } from "../../src/modules/roles/roleHierarchy.js";
+import { decideRoleDeletion, displayNameForRole, hierarchyLevelForRoleName, moveRank, ROLE_SEEDS } from "../../src/modules/roles/roleHierarchy.js";
 
 describe("role hierarchy", () => {
   it("orders the built-in roles from the top of the organization down", () => {
     const ordered = [...ROLE_SEEDS].sort((a, b) => a.hierarchyLevel - b.hierarchyLevel).map((role) => role.name);
-    expect(ordered).toEqual(["owner", "admin", "president", "vice_president", "quality_manager", "operator", "auditor", "supplier", "customer"]);
+    expect(ordered).toEqual(["owner", "admin", "president", "vice_president", "director", "quality_manager", "lead", "operator", "staff", "read_only", "auditor", "supplier", "customer"]);
   });
 
   it("maps titles onto the ladder", () => {
@@ -12,6 +12,14 @@ describe("role hierarchy", () => {
     expect(hierarchyLevelForRoleName("President")).toBe(20);
     expect(hierarchyLevelForRoleName("Vice President")).toBe(30);
     expect(hierarchyLevelForRoleName("VP")).toBe(30);
+    expect(hierarchyLevelForRoleName("VP of Engineering / Quality")).toBe(30);
+    expect(hierarchyLevelForRoleName("VP of Operations")).toBe(30);
+    expect(hierarchyLevelForRoleName("Engineering VP")).toBe(80);
+    expect(displayNameForRole({ name: "vice_president" })).toBe("Vice President");
+    expect(displayNameForRole({ name: "quality_manager" })).toBe("Quality Manager");
+    expect(displayNameForRole({ name: "staff" })).toBe("Staff");
+    expect(displayNameForRole({ name: "read_only" })).toBe("Read-only");
+    expect(displayNameForRole({ name: "VP of Operations" })).toBe("VP of Operations");
     expect(hierarchyLevelForRoleName("Quality Director")).toBe(40);
     expect(hierarchyLevelForRoleName("Plant Manager")).toBe(50);
     expect(hierarchyLevelForRoleName("Line Lead")).toBe(60);

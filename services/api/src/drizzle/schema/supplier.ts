@@ -3,7 +3,9 @@ import { pgTable, serial, text, integer, timestamp, numeric } from "drizzle-orm/
 export const suppliers = pgTable("suppliers", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  contactName: text("contact_name"),
   contactEmail: text("contact_email"),
+  phone: text("phone"),
   status: text("status").notNull().default("active"), // active, probation, disqualified
   riskLevel: text("risk_level").default("unrated"),
   createdAt: timestamp("created_at").defaultNow(),

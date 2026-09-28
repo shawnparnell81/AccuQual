@@ -66,10 +66,21 @@ export const getUser = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const createUser = asyncHandler(async (req: Request, res: Response) => {
-  const { email, password, name, roleId, department } = req.body;
+  const { email, password, name, roleId, department, managerId } = req.body as {
+    email: string;
+    password: string;
+    name?: string;
+    roleId?: number;
+    department?: string | null;
+    managerId?: number | null;
+  };
+  if (managerId != null) {
+    const [manager] = await req.db!.select({ id: users.id }).from(users).where(eq(users.id, managerId));
+    if (!manager) throw AppError.badRequest("That manager isn't a user.");
+  }
   await assertPasswordAcceptable(password, { email, name });
   const passwordHash = await bcrypt.hash(password, 10);
-  const [created] = await req.db!.insert(users).values({ email, passwordHash, name, roleId, department, passwordChangedAt: new Date(), mustChangePassword: true }).returning();
+  const [created] = await req.db!.insert(users).values({ email, passwordHash, name, roleId, department, managerId: managerId ?? null, passwordChangedAt: new Date(), mustChangePassword: true }).returning();
   if (!created) throw new AppError("Failed to create user", 500);
   const { passwordHash: _omit, ...safe } = created;
   res.status(201).json(safe);
@@ -291,13 +302,16 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const handoff = replacement ? ` Open work was moved to ${replacement.name?.trim() || replacement.email}.` : "";
+  const removalReason = parsed.data.reason && parsed.data.reason.length > 0 ? parsed.data.reason : undefined;
+  const fromName = target.name?.trim() || target.email;
+  const note = replacement ? { fromName, toName: replacement.name?.trim() || replacement.email, performedBy: req.user?.id } : undefined;
 
   if (decision.outcome === "deleted") {
     try {
       await req.db!.transaction(async (tx) => {
-        const moved = replacement ? await reassignOpenWork(tx, id, replacement.id) : [];
+        const moved = replacement ? await reassignOpenWork(tx, id, replacement.id, note) : [];
         await clearSignInRows(tx, id);
-        await recordAuditTrail(tx, { entityType: "User", entityId: id, action: "delete", changes: { action: "hard_delete", email: target.email, name: target.name, ...removalAudit(moved, replacement) }, performedBy: req.user?.id });
+        await recordAuditTrail(tx, { entityType: "User", entityId: id, action: "delete", changes: { action: "hard_delete", email: target.email, name: target.name, ...(removalReason ? { removalReason } : {}), ...removalAudit(moved, replacement) }, performedBy: req.user?.id });
         await tx.delete(users).where(eq(users.id, id));
       });
       res.status(200).json({ outcome: "deleted", message: `${decision.message}${handoff}` });
@@ -309,7 +323,7 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
 
   let moved: OpenWorkGroup[] = [];
   const [updated] = await req.db!.transaction(async (tx) => {
-    moved = replacement ? await reassignOpenWork(tx, id, replacement.id) : [];
+    moved = replacement ? await reassignOpenWork(tx, id, replacement.id, note) : [];
     const [row] = await tx
       .update(users)
       .set({ isActive: false, tokenVersion: sql`${users.tokenVersion} + 1`, updatedAt: new Date() })
@@ -319,7 +333,7 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
   });
   if (!updated) throw AppError.notFound("User");
   const message = `${decision.outcome === "deactivated" ? decision.message : "This person has records tied to them, so the account was turned off instead of erased. Their name stays on those records, and they can no longer sign in."}${handoff}`;
-  await recordAuditTrail(req.db!, { entityType: "User", entityId: updated.id, action: "status_change", changes: { action: "deactivate", sessionsRevoked: true, reason: message, ...removalAudit(moved, replacement) }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "User", entityId: updated.id, action: "status_change", changes: { action: "deactivate", sessionsRevoked: true, reason: message, ...(removalReason ? { removalReason } : {}), ...removalAudit(moved, replacement) }, performedBy: req.user?.id });
   await revokeRefreshTokenRows(updated.id);
   res.status(200).json({ outcome: "deactivated", message });
 });

@@ -9,6 +9,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useSites, type PlantSummary } from "../../hooks/useSites";
+import { formatPerson } from "../../lib/opsLanguage";
 
 const userHooks = createResourceHooks<AppUser>("users");
 
@@ -177,11 +178,11 @@ function MembersEditor({ plant, users }: { plant: PlantSummary; users: AppUser[]
         <p className="text-sm text-muted-foreground">Loading people…</p>
       ) : (
         <ul className="mb-3 flex flex-col gap-1 text-sm">
-          {users.filter((person) => person.isActive).map((person) => (
+          {users.map((person) => (
             <li key={person.id}>
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={selected.includes(person.id)} onChange={() => toggle(person.id)} />
-                <span>{person.name || person.email}</span>
+                <span>{formatPerson(person)}</span>
                 <span className="text-xs text-muted-foreground">{person.email}</span>
               </label>
             </li>

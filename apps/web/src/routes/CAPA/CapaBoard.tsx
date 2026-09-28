@@ -8,7 +8,7 @@ import { StepMoveModal, type StepRequest } from "../../components/board/StepMove
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
-import { duePhrase, isPastDue, statusPhrase } from "../../lib/opsLanguage";
+import { duePhrase, formatPerson, isPastDue, statusPhrase } from "../../lib/opsLanguage";
 
 const COLUMNS: BoardColumn[] = [
   { key: "open", label: "Not started", tone: "danger" },
@@ -65,7 +65,7 @@ export function CapaBoard({ capas, canEdit }: { capas: Capa[]; canEdit: boolean 
           const next = NEXT[c.status];
           return next ? `CAPAs move one step at a time. #${c.id} goes from ${statusPhrase(c.status)} to ${statusPhrase(next)} first — drop it there.` : `#${c.id} is closed and can't move (${statusPhrase(to)}).`;
         }}
-        people={people.map((person) => ({ id: person.id, name: person.name?.trim() || person.email }))}
+        people={people.map((person) => ({ id: person.id, name: formatPerson(person) }))}
         assignedTo={(c) => c.ownerId}
         onAssign={(c, personId, personName) => {
           apiClient

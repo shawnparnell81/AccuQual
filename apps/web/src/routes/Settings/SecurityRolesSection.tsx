@@ -16,6 +16,41 @@ import { isFullAccessRole } from "../../lib/fullAccess";
 const userHooks = createResourceHooks<AppUser>("users");
 const roleHooks = createResourceHooks<AppRole>("roles");
 
+function roleLabel(role: AppRole): string {
+  return role.displayName || role.name;
+}
+
+function personOptionLabel(person: AppUser): string {
+  const base = person.name?.trim() || person.email;
+  return person.isActive ? base : `${base} (inactive)`;
+}
+
+function managerLabel(people: AppUser[], managerId: number | null | undefined): string {
+  const manager = people.find((person) => person.id === managerId);
+  return manager ? personOptionLabel(manager) : "—";
+}
+
+function countPhrase(count: number, label: string): string {
+  const singular: Record<string, string> = {
+    "open NCRs": "open NCR",
+    "open CAPAs": "open CAPA",
+    "open 8D reports": "open 8D report",
+    "documents in draft or review": "document in draft or review",
+    "reviews waiting on them": "review waiting on them",
+    "people who report to them": "person who reports to them",
+    "open complaints": "open complaint",
+    "open investigations": "open investigation",
+    "training assignments": "training assignment",
+    "open risks": "open risk",
+    "risk actions": "risk action",
+    "open audits": "open audit",
+    "feasibility reviews": "feasibility review",
+    "PPAP packages": "PPAP package",
+    "competency evaluations": "competency evaluation",
+  };
+  return `${count} ${count === 1 ? (singular[label] ?? label) : label}`;
+}
+
 interface OpenWorkGroup {
   key: string;
   label: string;
@@ -57,7 +92,7 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
   const { data: users = [] } = userHooks.useList();
   const { data: roles = [] } = roleHooks.useList();
   const toast = useToast();
-  const roleNameById = new Map(roles.map((r) => [r.id, r.name]));
+  const roleNameById = new Map(roles.map((r) => [r.id, roleLabel(r)]));
 
   const createUser = userHooks.useCreate();
   const updateUser = userHooks.useUpdate();
@@ -75,20 +110,26 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
     }
   }
 
-  const [form, setForm] = useState({ email: "", password: "", name: "", roleId: "", department: "" });
+  const [form, setForm] = useState({ email: "", password: "", name: "", roleId: "", department: "", managerId: "" });
   const [resetFor, setResetFor] = useState<AppUser | null>(null);
   const [tempPassword, setTempPassword] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
   const [removing, setRemoving] = useState<AppUser | null>(null);
   const [openWork, setOpenWork] = useState<OpenWorkGroup[]>([]);
   const [replacementId, setReplacementId] = useState("");
+  const [removeReason, setRemoveReason] = useState("");
   const [removeBusy, setRemoveBusy] = useState(false);
 
-  async function finishRemove(person: AppUser, replacementUserId?: number) {
+  async function finishRemove(person: AppUser, replacementUserId?: number, reason?: string) {
     setRemoveBusy(true);
     try {
-      const res = await apiClient.delete<{ message?: string }>(`/users/${person.id}`, { data: replacementUserId ? { replacementUserId } : {} });
-      toast.success(res.data.message || "Removed.");
+      const body: { replacementUserId?: number; reason?: string } = {};
+      if (replacementUserId) body.replacementUserId = replacementUserId;
+      const trimmed = reason?.trim();
+      if (trimmed) body.reason = trimmed;
+      const res = await apiClient.delete<{ outcome?: string; message?: string }>(`/users/${person.id}`, { data: body });
+      const fallback = res.data.outcome === "deactivated" ? "This person was deactivated. They can no longer sign in." : "Removed.";
+      toast.success(res.data.message || fallback);
       setRemoving(null);
       void queryClient.invalidateQueries({ queryKey: ["users"] });
     } catch (err) {
@@ -101,18 +142,9 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
   async function startRemove(person: AppUser) {
     try {
       const res = await apiClient.get<{ openWork: OpenWorkGroup[] }>(`/users/${person.id}/open-work`);
-      const items = res.data.openWork ?? [];
-      if (items.length === 0) {
-        const ok = await confirm({
-          title: "Remove this person?",
-          message: `${person.name?.trim() || person.email} will be removed. If they have quality records, the account is turned off instead and their name stays on those records as inactive. Records they created or signed stay editable. They won't be able to sign in.`,
-          confirmLabel: "Remove",
-        });
-        if (ok) await finishRemove(person);
-        return;
-      }
-      setOpenWork(items);
+      setOpenWork(res.data.openWork ?? []);
       setReplacementId("");
+      setRemoveReason("");
       setRemoving(person);
     } catch (err) {
       toast.error(extractErrorMessage(err, "Couldn't check their open work."));
@@ -138,7 +170,7 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
         <tbody>
           {users.map((u) => (
             <tr key={u.id} className="border-t border-border">
-              <td className="py-1.5">{u.name ?? "—"}</td>
+              <td className="py-1.5">{personOptionLabel(u)}</td>
               <td className="py-1.5 text-muted-foreground">{u.email}</td>
               <td className="py-1.5">
                 {isAdmin ? (
@@ -150,7 +182,7 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
                     <option value="">No role</option>
                     {roles.map((r) => (
                       <option key={r.id} value={r.id}>
-                        {r.name}
+                        {roleLabel(r)}
                       </option>
                     ))}
                   </select>
@@ -167,17 +199,17 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
                     value={u.managerId ?? ""}
                     onChange={(e) => updateUser.mutate({ id: u.id, managerId: e.target.value ? Number(e.target.value) : null } as Partial<AppUser> & { id: number })}
                   >
-                    <option value="">Quality manager</option>
+                    <option value="">None</option>
                     {users
-                      .filter((person) => person.id !== u.id && person.isActive)
+                      .filter((person) => person.id !== u.id)
                       .map((person) => (
                         <option key={person.id} value={person.id}>
-                          {person.name?.trim() || person.email}
+                          {personOptionLabel(person)}
                         </option>
                       ))}
                   </select>
                 ) : (
-                  users.find((person) => person.id === u.managerId)?.name ?? "—"
+                  managerLabel(users, u.managerId)
                 )}
               </td>
               <td className="py-1.5">
@@ -253,11 +285,11 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
           onSubmit={(e) => {
             e.preventDefault();
             createUser.mutate(
-              { email: form.email, password: form.password, name: form.name || undefined, roleId: form.roleId ? Number(form.roleId) : undefined, department: form.department || undefined } as Partial<AppUser> & { password: string },
+              { email: form.email, password: form.password, name: form.name || undefined, roleId: form.roleId ? Number(form.roleId) : undefined, department: form.department || undefined, managerId: form.managerId ? Number(form.managerId) : null } as Partial<AppUser> & { password: string },
               {
                 onSuccess: () => {
                   toast.success("User created. They'll be asked to choose their own password the first time they sign in.");
-                  setForm({ email: "", password: "", name: "", roleId: "", department: "" });
+                  setForm({ email: "", password: "", name: "", roleId: "", department: "", managerId: "" });
                 },
                 onError: (err) => toast.error(extractErrorMessage(err, "Couldn't create user.")),
               }
@@ -271,9 +303,19 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
             <option value="">No role</option>
             {roles.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.name}
+                {roleLabel(r)}
               </option>
             ))}
+          </SelectField>
+          <SelectField label="Manager" value={form.managerId} onChange={(e) => setForm({ ...form, managerId: e.target.value })}>
+            <option value="">None</option>
+            {users
+              .filter((person) => person.isActive)
+              .map((person) => (
+                <option key={person.id} value={person.id}>
+                  {personOptionLabel(person)}
+                </option>
+              ))}
           </SelectField>
           <SelectField label="Department" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
             <option value="">None</option>
@@ -307,7 +349,8 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
               } as Partial<AppUser> & { id: number },
               {
                 onSuccess: () => {
-                  toast.success("Saved.");
+                  if (editing.isActive && !editForm.isActive) toast.success("This person was deactivated. They can no longer sign in.");
+                  else toast.success("Saved.");
                   setEditing(null);
                 },
                 onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save those changes.")),
@@ -321,7 +364,7 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
             <option value="">No role</option>
             {roles.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.name}
+                {roleLabel(r)}
               </option>
             ))}
           </SelectField>
@@ -334,12 +377,12 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
             ))}
           </SelectField>
           <SelectField label="Manager" value={editForm.managerId} onChange={(e) => setEditForm({ ...editForm, managerId: e.target.value })}>
-            <option value="">Quality manager</option>
+            <option value="">None</option>
             {users
-              .filter((person) => person.id !== editing?.id && person.isActive)
+              .filter((person) => person.id !== editing?.id)
               .map((person) => (
                 <option key={person.id} value={person.id}>
-                  {person.name?.trim() || person.email}
+                  {personOptionLabel(person)}
                 </option>
               ))}
           </SelectField>
@@ -385,18 +428,22 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
           className="flex flex-col gap-3"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!removing || !replacementId) return;
-            void finishRemove(removing, Number(replacementId));
+            if (!removing) return;
+            if (openWork.length > 0 && !replacementId) return;
+            void finishRemove(removing, replacementId ? Number(replacementId) : undefined, removeReason);
           }}
         >
           <p className="text-sm text-muted-foreground">
-            They still have open work. Choose who should take it. Records they already created or signed stay as they are, stay editable, and keep their name.
+            {openWork.length > 0
+              ? "They still have open work. Choose who should take it. Records they already created or signed stay as they are, stay editable, and keep their name."
+              : "If they have quality records, the account is turned off instead and their name stays on those records as inactive. Records they created or signed stay editable. They won't be able to sign in."}
           </p>
+          {openWork.length > 0 && (
           <ul className="flex max-h-52 flex-col gap-2 overflow-auto text-sm">
             {openWork.map((group) => (
               <li key={group.key}>
                 <span className="font-medium">
-                  {group.count} {group.label}
+                  {countPhrase(group.count, group.label)}
                 </span>
                 <ul className="ml-4 list-disc text-muted-foreground">
                   {group.items.map((item) => (
@@ -407,18 +454,22 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
               </li>
             ))}
           </ul>
+          )}
+          {openWork.length > 0 && (
           <SelectField label="Give this work to" required value={replacementId} onChange={(e) => setReplacementId(e.target.value)}>
             <option value="">Choose a person</option>
             {users
               .filter((person) => person.id !== removing?.id && person.isActive)
               .map((person) => (
                 <option key={person.id} value={person.id}>
-                  {person.name?.trim() || person.email}
+                  {personOptionLabel(person)}
                 </option>
               ))}
           </SelectField>
-          <button type="submit" disabled={!replacementId || removeBusy} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
-            {removeBusy ? "Removing…" : "Move work and remove"}
+          )}
+          <TextField label="Reason (optional)" maxLength={500} value={removeReason} onChange={(e) => setRemoveReason(e.target.value)} />
+          <button type="submit" disabled={(openWork.length > 0 && !replacementId) || removeBusy} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
+            {removeBusy ? "Removing…" : openWork.length > 0 ? "Move work and remove" : "Remove"}
           </button>
         </form>
       </Modal>
@@ -473,7 +524,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
         {roles.map((r, index) => (
           <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-1.5 last:border-0">
             <span>
-              <span className="font-medium">{r.name}</span>
+              <span className="font-medium">{roleLabel(r)}</span>
               <span className="ml-2 text-xs text-muted-foreground">
                 Rank {r.hierarchyLevel ?? "—"}
                 {r.userCount ? ` · ${r.userCount} ${r.userCount === 1 ? "person" : "people"}` : ""}
@@ -512,7 +563,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
                         setReplacementId("");
                         return;
                       }
-                      void confirm({ title: "Delete this role?", message: `${r.name} will be removed. This can't be undone.`, confirmLabel: "Delete" }).then((ok) => {
+                      void confirm({ title: "Delete this role?", message: `${roleLabel(r)} will be removed. This can't be undone.`, confirmLabel: "Delete" }).then((ok) => {
                         if (ok) void removeRole(r);
                       });
                     }}
@@ -551,7 +602,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
         </form>
       )}
 
-      <Modal title={editing ? `Edit ${editing.name}` : "Edit role"} isOpen={editing !== null} onClose={() => setEditing(null)}>
+      <Modal title={editing ? `Edit ${roleLabel(editing)}` : "Edit role"} isOpen={editing !== null} onClose={() => setEditing(null)}>
         <form
           className="flex flex-col gap-3"
           onSubmit={(e) => {
@@ -578,7 +629,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
             );
           }}
         >
-          <TextField label="Name" required disabled={editing?.isProtected} value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+          <TextField label="Name" required disabled={editing?.isProtected} value={editing?.isProtected ? roleLabel(editing) : editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
           {editing?.isProtected && <p className="text-xs text-muted-foreground">This role's name is built in and can't be changed.</p>}
           <TextField label="Description" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
           <TextField label="Rank" type="number" required min={1} max={1000} value={editForm.hierarchyLevel} onChange={(e) => setEditForm({ ...editForm, hierarchyLevel: e.target.value })} />
@@ -612,7 +663,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
               .filter((role) => role.id !== replacing?.id)
               .map((role) => (
                 <option key={role.id} value={role.id}>
-                  {role.name}
+                  {roleLabel(role)}
                 </option>
               ))}
           </SelectField>

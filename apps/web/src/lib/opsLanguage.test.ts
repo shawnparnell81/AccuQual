@@ -82,6 +82,7 @@ describe("ownership and dates", () => {
     assert.equal(personLabel(people, null), "Unassigned");
     assert.equal(personLabel(undefined, 9), "Assigned");
     assert.equal(personLabel([{ id: 2, name: "  ", email: "a@b.c" }], 2), "a@b.c");
+    assert.equal(personLabel([{ id: 5, name: "Jane Doe", email: "jane@x.com", isActive: false }], 5), "Jane Doe (inactive)");
   });
 
   it("treats a past calendar day as late and a closed record as finished", () => {

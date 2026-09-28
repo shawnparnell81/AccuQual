@@ -126,7 +126,7 @@ export function SupplierDetailPage() {
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-        Contact: {supplier.contactEmail ?? "—"}
+        Contact: {[supplier.contactName, supplier.contactEmail, supplier.phone].filter(Boolean).join(" · ") || "—"}
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4">

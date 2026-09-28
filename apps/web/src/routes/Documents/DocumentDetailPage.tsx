@@ -21,7 +21,7 @@ import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { OBSOLETE_ARCHIVE_CATEGORY } from "../../components/layout/sidebarStructure";
 import { ObsoleteArchiveDialog } from "./ObsoleteArchiveDialog";
-import { DOC_EDIT_REASON, DOC_LOOP, documentLoop, duePhrase, isPastDue, statusPhrase } from "../../lib/opsLanguage";
+import { DOC_EDIT_REASON, DOC_LOOP, documentLoop, duePhrase, formatPerson, isPastDue, statusPhrase } from "../../lib/opsLanguage";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import type { TrainingCourse } from "../../api/types";
 
@@ -266,7 +266,7 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
               <option value="">Unassigned</option>
               {people.map((person) => (
                 <option key={person.id} value={person.id}>
-                  {person.name?.trim() || person.email}
+                  {formatPerson(person)}
                 </option>
               ))}
             </select>

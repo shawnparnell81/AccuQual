@@ -48,14 +48,12 @@ function sessionCookieOptions() {
 }
 
 /**
- * Browser-session cookie. Closing the browser signs the user out. A browser
- * set to continue where you left off may put the cookie back; the client
- * treats that as signed out unless a tab from this visit is still open
- * (browserSession.ts) and calls endBrowserSessionHandler to revoke it.
- * The server still rejects the refresh token 12 hours after sign-in, and
- * refuses a refresh after 30 minutes with no activity, even if the browser
- * stays open. The value is encrypted; the refresh token is not stored in
- * the cookie as clear text.
+ * Browser-session cookie. Closing the browser drops it and signs the user
+ * out. A reload, a new tab, and a typed address in the same browser still
+ * send it, and the server accepts it. A browser set to continue where you
+ * left off may put the cookie back; that restored cookie stays valid until
+ * the 12-hour sign-in limit or 30 minutes with no activity. The value is
+ * encrypted; the refresh token is not stored in the cookie as clear text.
  */
 export function setRefreshCookie(res: Response, refreshToken: string) {
   res.cookie(REFRESH_COOKIE_NAME, encryptRefreshCookie(refreshToken), {

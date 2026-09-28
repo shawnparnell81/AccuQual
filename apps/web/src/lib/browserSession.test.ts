@@ -8,6 +8,7 @@ import {
   TAB_BEAT_PREFIX,
   TAB_ID_KEY,
   RELOAD_STAMP_KEY,
+  coldLoadKeepsSession,
   decideBrowserSession,
   freshestOtherBeatAge,
   pruneBeats,
@@ -76,6 +77,31 @@ describe("browser session persistence", () => {
     );
   });
 
+  it("typing an address in the same tab stays signed in", () => {
+    assert.equal(
+      decideBrowserSession(
+        input({
+          navigation: "navigate",
+          tabId: "tab-a",
+          hasSessionMarker: true,
+          reloadStamp: NOW - 2_000,
+          beats: { "tab-a": NOW - 2_000 },
+        }),
+      ),
+      "continue",
+    );
+  });
+
+  it("a reload and a typed address stay signed in when the session cookie is accepted", () => {
+    assert.equal(coldLoadKeepsSession({ navigation: "reload", refreshCookieAccepted: true }), true);
+    assert.equal(coldLoadKeepsSession({ navigation: "navigate", refreshCookieAccepted: true }), true);
+  });
+
+  it("closing the browser signs the user out because the session cookie is gone", () => {
+    assert.equal(coldLoadKeepsSession({ navigation: "navigate", refreshCookieAccepted: false }), false);
+    assert.equal(coldLoadKeepsSession({ navigation: "reload", refreshCookieAccepted: false }), false);
+  });
+
   it("a reload stays signed in when the stamp was missed but this tab's heartbeat is still new", () => {
     assert.equal(
       decideBrowserSession(
@@ -129,15 +155,28 @@ describe("browser session persistence", () => {
     );
   });
 
-  it("opening the site again after the browser closed requires the password", () => {
-    // The refresh cookie and a leftover heartbeat can both be restored.
-    // No tab is open, and this is a new visit, so the password is required.
+  it("a new tab stays signed in while another tab's heartbeat is still new", () => {
     assert.equal(
       decideBrowserSession(
         input({
           navigation: "navigate",
           hasSessionMarker: false,
           beats: { "tab-a": NOW - 30_000 },
+          peerAlive: false,
+          peerCheckAvailable: true,
+        }),
+      ),
+      "continue",
+    );
+  });
+
+  it("a heartbeat older than the window, with no open tab, requires the password", () => {
+    assert.equal(
+      decideBrowserSession(
+        input({
+          navigation: "navigate",
+          hasSessionMarker: false,
+          beats: { "tab-a": NOW - HEARTBEAT_STALE_MS - 1 },
           peerAlive: false,
           peerCheckAvailable: true,
         }),
@@ -257,7 +296,7 @@ describe("browser session persistence", () => {
     assert.deepEqual(record.beats, { "tab-a": NOW - 40 });
   });
 
-  it("a new visit does not see the session marker, so a restored heartbeat is not a sign-in", () => {
+  it("a new tab does not see the session marker, and a recent heartbeat from another tab keeps the sign-in", () => {
     const session = memoryStorage();
     const local = memoryStorage();
     writeBeat(local, "tab-a", NOW - 30_000);
@@ -272,7 +311,7 @@ describe("browser session persistence", () => {
         peerCheckAvailable: true,
         ...record,
       }),
-      "sign-in",
+      "continue",
     );
   });
 });

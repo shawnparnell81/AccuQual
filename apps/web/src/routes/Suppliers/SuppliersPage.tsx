@@ -23,7 +23,9 @@ export function SuppliersPage() {
       ]}
       createFields={[
         { name: "name", label: "Supplier name" },
+        { name: "contactName", label: "Contact name" },
         { name: "contactEmail", label: "Contact email" },
+        { name: "phone", label: "Phone" },
       ]}
     />
   );
