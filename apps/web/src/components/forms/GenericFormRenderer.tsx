@@ -11,10 +11,12 @@ import { usePictureRecord } from "./pictureRecord";
 // the same navy as schema-pdf-renderer.ts (#1d3a5c), so the on-screen form
 // and the exported PDF still match in AccuQual Classic. A color scheme can
 // retint the on-screen form through --form-bar / --form-heading without
-// changing the PDF. Label cells and borders use `bg-muted` / `border-border`
-// / `text-foreground`.
+// changing the PDF. Label cells and input wells use the shared form tokens.
 const FORM_BAR = "var(--form-bar, #1d3a5c)";
 const FORM_HEADING = "var(--form-heading, #1d3a5c)";
+const FORM_BAR_TEXT = "var(--form-bar-foreground, #fff)";
+const labelCell = "bg-[hsl(var(--form-label))] text-[hsl(var(--form-label-foreground))]";
+const valueCell = "bg-[hsl(var(--form-input))] text-[hsl(var(--form-input-foreground))]";
 
 interface GenericFormRendererProps {
   layout: FormLayout;
@@ -50,7 +52,7 @@ function SectionCard({
 }) {
   return (
     <div className="overflow-hidden rounded-md border border-border">
-      <div className="px-3 py-1.5 text-xs font-bold text-white" style={{ backgroundColor: FORM_BAR }}>
+      <div className="px-3 py-1.5 text-xs font-bold" style={{ backgroundColor: FORM_BAR, color: FORM_BAR_TEXT }}>
         {section.number}. {section.title}
       </div>
       <div className="flex flex-col divide-y divide-border">
@@ -116,11 +118,11 @@ function RowBlockView({ block, data, onChange, readOnly }: BlockViewProps<RowBlo
     <div className="grid" style={{ gridTemplateColumns: `repeat(${block.fields.length}, minmax(0, 1fr))` }}>
       {block.fields.map((field) => (
         <div key={field.name} className="grid grid-cols-[2fr_3fr] border-t border-border first:border-t-0">
-          <div className="bg-muted px-2 py-1.5">
-            <p className="text-[11px] font-semibold text-foreground">{field.label}</p>
+          <div className={`${labelCell} px-2 py-1.5`}>
+            <p className="text-[11px] font-semibold">{field.label}</p>
             {field.hint && <p className="text-[9px] italic text-muted-foreground">{field.hint}</p>}
           </div>
-          <div className="px-2 py-1">
+          <div className={`${valueCell} px-2 py-1`}>
             {readOnly || field.readOnly ? (
               <StaticValue value={data[field.name]} />
             ) : field.kind === "select" ? (
@@ -155,12 +157,12 @@ function TextareaBlockView({ block, data, onChange, readOnly }: BlockViewProps<T
   const record = usePictureRecord();
   return (
     <div>
-      <div className="bg-muted px-2 py-1.5">
-        <p className="text-[11px] font-semibold text-foreground">{block.label}</p>
+      <div className={`${labelCell} px-2 py-1.5`}>
+        <p className="text-[11px] font-semibold">{block.label}</p>
         {block.hint && <p className="text-[9px] italic text-muted-foreground">{block.hint}</p>}
       </div>
       <PictureText
-        className="w-full bg-transparent px-2 py-2 text-xs outline-none"
+        className={`w-full px-2 py-2 text-xs outline-none ${valueCell}`}
         rows={4}
         value={String(data[block.name] ?? "")}
         readOnly={readOnly}
@@ -176,8 +178,8 @@ function TextareaBlockView({ block, data, onChange, readOnly }: BlockViewProps<T
 function YesNoBlockView({ block, data, onChange, readOnly }: BlockViewProps<YesNoBlock>) {
   const value = (data[block.name] as string) ?? "";
   return (
-    <div className="flex items-center justify-between bg-muted px-2 py-2">
-      <p className="text-[11px] font-semibold text-foreground">{block.label}</p>
+    <div className={`flex items-center justify-between px-2 py-2 ${labelCell}`}>
+      <p className="text-[11px] font-semibold">{block.label}</p>
       <div className="flex items-center gap-3 text-xs">
         {(["yes", "no"] as const).map((opt) =>
           readOnly ? (
@@ -249,28 +251,28 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
         <thead>
           <tr>
             {block.fixedRowLabels && (
-              <th className="border-t border-border bg-muted px-2 py-1.5 text-left font-semibold text-foreground">
+              <th className={`border-t border-border px-2 py-1.5 text-left font-semibold ${labelCell}`}>
                 {block.labelColumnHeader ?? "Role"}
               </th>
             )}
             {block.columns.map((col) => (
-              <th key={col.key} className="border-t border-border bg-muted px-2 py-1.5 text-left font-semibold text-foreground">
+              <th key={col.key} className={`border-t border-border px-2 py-1.5 text-left font-semibold ${labelCell}`}>
                 {col.label}
               </th>
             ))}
-            {block.addableRows && !readOnly && <th className="w-8 border-t border-border bg-muted" />}
+            {block.addableRows && !readOnly && <th className={`w-8 border-t border-border ${labelCell}`} />}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, rowIndex) => (
             <tr key={rowIndex}>
               {block.fixedRowLabels && (
-                <td className="border-t border-border bg-muted px-2 py-1.5 font-medium text-foreground">
+                <td className={`border-t border-border px-2 py-1.5 font-medium ${labelCell}`}>
                   {block.fixedRowLabels[rowIndex]}
                 </td>
               )}
               {block.columns.map((col) => (
-                <td key={col.key} className="border-t border-border px-2 py-1.5 align-top">
+                <td key={col.key} className={`border-t border-border px-2 py-1.5 align-top ${valueCell}`}>
                   {col.kind === "checkboxGroup" ? (
                     <div className="flex flex-col gap-1">
                       {col.options?.map((opt) => {
