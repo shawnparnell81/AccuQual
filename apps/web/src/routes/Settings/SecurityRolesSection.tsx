@@ -281,13 +281,14 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
 
       {isAdmin && (
         <form
-          className="grid gap-2 border-t border-border pt-3 md:grid-cols-5"
+          autoComplete="off"
+          className="relative grid gap-2 border-t border-border pt-3 md:grid-cols-5"
           onSubmit={(e) => {
             e.preventDefault();
             // Read the fields from the form itself. A password manager can fill the boxes without updating React state, and submitting that empty state was refused as a validation error.
             const data = new FormData(e.currentTarget);
-            const email = String(data.get("email") ?? "").trim();
-            const password = String(data.get("password") ?? "");
+            const email = String(data.get("new-user-email") ?? "").trim();
+            const password = String(data.get("new-user-password") ?? "");
             const name = String(data.get("name") ?? "").trim();
             const roleId = String(data.get("roleId") ?? "");
             const department = String(data.get("department") ?? "");
@@ -304,11 +305,16 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
             );
           }}
         >
-          <TextField label="Email" name="email" type="email" required autoComplete="off" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <TextField label="Temporary password" name="password" type="password" required minLength={12} autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+          {/* Decoys sit off-screen so the browser drops the signed-in admin's saved login here instead of into the new person's email and temporary password. The real boxes are not named email/password, which is what triggers that fill. */}
+          <div aria-hidden="true" className="pointer-events-none absolute h-0 w-0 overflow-hidden">
+            <input type="text" tabIndex={-1} autoComplete="username" name="username" defaultValue="" />
+            <input type="password" tabIndex={-1} autoComplete="current-password" name="current-password" defaultValue="" />
+          </div>
+          <TextField label="Email" name="new-user-email" type="text" inputMode="email" required autoComplete="off" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <TextField label="Temporary password" name="new-user-password" type="password" required minLength={12} autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
           <TextField label="Name" name="name" autoComplete="off" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <SelectField label="Role" name="roleId" value={form.roleId} onChange={(e) => setForm({ ...form, roleId: e.target.value })}>
-            <option value="">No role</option>
+            <option value="">Choose a role</option>
             {roles.map((r) => (
               <option key={r.id} value={r.id}>
                 {roleLabel(r)}

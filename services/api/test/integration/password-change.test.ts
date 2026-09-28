@@ -200,7 +200,7 @@ describe("password change (real DB + real HTTP path)", () => {
     const adminToken = signAccessToken({ sub: String(admin.id), roleId: adminRoleId, roleName: "admin", department: null, tv: 0 });
 
     const email = `pwchange-created-${suffix}@test.local`;
-    const created = await request(app).post("/users").set(bearer(adminToken)).send({ email, password: NEXT, name: "New Person" });
+    const created = await request(app).post("/users").set(bearer(adminToken)).send({ email, password: NEXT, name: "New Person", roleId: adminRoleId });
     expect(created.status).toBe(201);
     expect(created.body.mustChangePassword).toBe(true);
     expect(created.body.passwordHash).toBeUndefined();

@@ -72,26 +72,51 @@ describe("create user", () => {
     expect(signIn.body.user.mustChangePassword).toBe(true);
   });
 
+  it("shows the new person in the user list after they are created", async () => {
+    const email = `listed.${suffix}@yourcompany.com`;
+    const created = await post({ email, password: PASSWORD, name: "Listed Person", roleId: staffRoleId, managerId: null });
+    expect(created.status).toBe(201);
+    const list = await request(app).get("/users").set("Authorization", `Bearer ${ownerToken}`);
+    expect(list.status).toBe(200);
+    expect(list.body.some((row: { email: string }) => row.email === email)).toBe(true);
+  });
+
   it("refuses a second account for the same email, including different capital letters", async () => {
     const email = `pat.lee.${suffix}@yourcompany.com`;
-    const first = await post({ email, password: PASSWORD, name: "Pat Lee", managerId: null });
+    const first = await post({ email, password: PASSWORD, name: "Pat Lee", roleId: staffRoleId, managerId: null });
     expect(first.status).toBe(201);
 
-    const again = await post({ email, password: PASSWORD, managerId: null });
+    const again = await post({ email, password: PASSWORD, name: "Pat Lee", roleId: staffRoleId, managerId: null });
     expect(again.status).toBe(400);
-    expect(again.body.message).toMatch(/already in use/i);
+    expect(again.body.message).toBe("That email is already in use.");
 
-    const differentCase = await post({ email: email.toUpperCase(), password: PASSWORD, managerId: null });
+    const differentCase = await post({ email: email.toUpperCase(), password: PASSWORD, name: "Pat Lee", roleId: staffRoleId, managerId: null });
     expect(differentCase.status).toBe(400);
-    expect(differentCase.body.message).toMatch(/already in use/i);
+    expect(differentCase.body.message).toBe("That email is already in use.");
 
     const rows = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
     expect(rows).toHaveLength(1);
   });
 
-  it("refuses a role that is not in the list", async () => {
-    const res = await post({ email: `nobody.${suffix}@yourcompany.com`, password: PASSWORD, roleId: 999999, managerId: null });
+  it("asks for a name and a role instead of creating an account without them", async () => {
+    const missingName = await post({ email: `noname.${suffix}@yourcompany.com`, password: PASSWORD, roleId: staffRoleId, managerId: null });
+    expect(missingName.status).toBe(400);
+    expect(missingName.body.message).toBe("Enter a name.");
+
+    const missingRole = await post({ email: `norole.${suffix}@yourcompany.com`, password: PASSWORD, name: "No Role", managerId: null });
+    expect(missingRole.status).toBe(400);
+    expect(missingRole.body.message).toBe("Choose a role.");
+  });
+
+  it("explains a reused admin email, a blank name, and no role in one message", async () => {
+    const res = await post({ email: `Create-User-Owner-${suffix}@test.local`, password: PASSWORD, managerId: null });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/role doesn't exist/i);
+    expect(res.body.message).toBe("Enter a name. Choose a role. That email is already in use.");
+  });
+
+  it("refuses a role that is not in the list", async () => {
+    const res = await post({ email: `nobody.${suffix}@yourcompany.com`, password: PASSWORD, name: "Nobody", roleId: 999999, managerId: null });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("That role doesn't exist.");
   });
 });

@@ -78,13 +78,17 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
     const [manager] = await req.db!.select({ id: users.id }).from(users).where(eq(users.id, managerId));
     if (!manager) throw AppError.badRequest("That manager isn't a user.");
   }
-  if (roleId != null) {
+  // Said together so one submit explains every problem. A duplicate used to hit the unique-email rule and come back as a server error.
+  const problems: string[] = [];
+  if (!name?.trim()) problems.push("Enter a name.");
+  if (roleId == null) problems.push("Choose a role.");
+  else {
     const [role] = await req.db!.select({ id: roles.id }).from(roles).where(eq(roles.id, roleId));
-    if (!role) throw AppError.badRequest("That role doesn't exist.");
+    if (!role) problems.push("That role doesn't exist.");
   }
-  // Sign-in compares addresses without regard to capital letters, so the stored address is the lowercase one and a second account for the same inbox is refused here instead of crashing the insert.
   const [existing] = await req.db!.select({ id: users.id }).from(users).where(sql`lower(btrim(${users.email})) = ${email}`);
-  if (existing) throw AppError.badRequest("That email is already in use.");
+  if (existing) problems.push("That email is already in use.");
+  if (problems.length > 0) throw AppError.badRequest(problems.join(" "));
   await assertPasswordAcceptable(password, { email, name });
   const passwordHash = await bcrypt.hash(password, 10);
   try {

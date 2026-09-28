@@ -139,9 +139,10 @@ describe("Login hardening (real DB + real HTTP path)", () => {
     });
 
     it("the API refuses a weak password when creating a user and accepts a strong one", async () => {
-      const weak = await request(app).post("/users").set(auth()).send({ email: `login-hard-weak-${suffix}@test.local`, password: "password1234" });
+      const weak = await request(app).post("/users").set(auth()).send({ email: `login-hard-weak-${suffix}@test.local`, password: "password1234", name: "Weak Password", roleId: roleIds[0] });
       expect(weak.status).toBe(400);
-      const ok = await request(app).post("/users").set(auth()).send({ email: `login-hard-strong-${suffix}@test.local`, password: GOOD });
+      expect(weak.body.message).toMatch(/password|easy|common/i);
+      const ok = await request(app).post("/users").set(auth()).send({ email: `login-hard-strong-${suffix}@test.local`, password: GOOD, name: "Strong Password", roleId: roleIds[0] });
       expect(ok.status).toBe(201);
       userIds.push(ok.body.id);
     });
