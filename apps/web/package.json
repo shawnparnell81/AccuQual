@@ -18,7 +18,7 @@
     "clsx": "^2.1.1",
     "docx-preview": "0.4.1",
     "exceljs": "^4.4.0",
-    "lucide-react": "^0.427.0",
+    "lucide-react": "^1.48.0",
     "pdfjs-dist": "^6.3.289",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
