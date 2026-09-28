@@ -8,8 +8,17 @@ import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { TextField, TextAreaField, SelectField } from "../../components/forms/Field";
 import type { ErpConnectorPreset, ErpFieldMapping, ErpPresetModule, ErpPresetVendor, ErpTransformRule, ErpTriggerRule, ErpValidationRule } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { NETSUITE_PRESETS_PATH } from "./erpPaths";
 
-const VENDORS: ErpPresetVendor[] = ["sap", "oracle", "netsuite", "epicor", "dynamics", "custom"];
+const VENDORS: ErpPresetVendor[] = ["netsuite", "sap", "oracle", "epicor", "dynamics", "custom"];
+const VENDOR_LABELS: Record<ErpPresetVendor, string> = {
+  sap: "SAP",
+  oracle: "Oracle",
+  netsuite: "NetSuite",
+  epicor: "Epicor",
+  dynamics: "Microsoft Dynamics",
+  custom: "Custom",
+};
 const MODULES: ErpPresetModule[] = ["inventory", "suppliers", "workOrders", "ncr", "capa", "training", "audits", "documentControl"];
 const TRANSFORM_KINDS = ["none", "dateFormat", "statusMap", "codeMap", "stringCase", "staticValue", "template", "numeric", "boolean"] as const;
 const TRIGGER_KINDS: ErpTriggerRule["on"][] = ["create", "update", "statusChange", "workflowEvent"];
@@ -101,7 +110,7 @@ function ErpPresetEditorPageBody() {
     enabled: !isNew,
   });
 
-  const [vendor, setVendor] = useState<ErpPresetVendor>("sap");
+  const [vendor, setVendor] = useState<ErpPresetVendor>("netsuite");
   const [module, setModule] = useState<ErpPresetModule>("suppliers");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -133,7 +142,7 @@ function ErpPresetEditorPageBody() {
     onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: ["erp-presets"] });
       toast.success("Preset saved.");
-      if (isNew) navigate(`/erp/presets/${saved.id}`, { replace: true });
+      if (isNew) navigate(`${NETSUITE_PRESETS_PATH}/${saved.id}`, { replace: true });
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save this preset.")),
   });
@@ -150,7 +159,7 @@ function ErpPresetEditorPageBody() {
     onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: ["erp-presets"] });
       toast.success("Preset saved and activated.");
-      navigate(`/erp/presets/${saved.id}`, { replace: true });
+      navigate(`${NETSUITE_PRESETS_PATH}/${saved.id}`, { replace: true });
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't save and activate this preset.")),
   });
@@ -193,14 +202,14 @@ function ErpPresetEditorPageBody() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">{isNew ? "New ERP Preset" : name}</h1>
+          <h1 className="text-2xl font-semibold">{isNew ? "New NetSuite preset" : name}</h1>
           {!isNew && existing && (
             <p className="text-sm text-muted-foreground">
               v{existing.version} {existing.isActive && "· Active"}
             </p>
           )}
         </div>
-        <button onClick={() => navigate("/erp/presets")} className="text-sm text-muted-foreground hover:underline">
+        <button onClick={() => navigate(NETSUITE_PRESETS_PATH)} className="text-sm text-muted-foreground hover:underline">
           ← Back to presets
         </button>
       </div>
@@ -213,12 +222,12 @@ function ErpPresetEditorPageBody() {
             <SelectField label="Vendor" value={vendor} onChange={(e) => setVendor(e.target.value as ErpPresetVendor)}>
               {VENDORS.map((v) => (
                 <option key={v} value={v}>
-                  {v}
+                  {VENDOR_LABELS[v]}
                 </option>
               ))}
             </SelectField>
           ) : (
-            <TextField label="Vendor" value={vendor} disabled />
+            <TextField label="Vendor" value={VENDOR_LABELS[vendor]} disabled />
           )}
           {isNew ? (
             <SelectField label="Module" value={module} onChange={(e) => setModule(e.target.value as ErpPresetModule)}>
@@ -232,8 +241,8 @@ function ErpPresetEditorPageBody() {
             <TextField label="Module" value={module} disabled />
           )}
           <SelectField label="Direction" value={direction} onChange={(e) => setDirection(e.target.value as typeof direction)}>
-            <option value="push">Push (AccuQual → ERP)</option>
-            <option value="pull">Pull (ERP → AccuQual)</option>
+            <option value="push">Push (AccuQual → NetSuite)</option>
+            <option value="pull">Pull (NetSuite → AccuQual)</option>
             <option value="bidirectional">Bidirectional</option>
           </SelectField>
         </div>

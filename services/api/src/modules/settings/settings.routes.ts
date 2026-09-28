@@ -12,6 +12,7 @@ import {
   updateInventorySettingsHandler,
   getErpSyncSettingsHandler,
   updateErpSyncSettingsHandler,
+  testErpConnectionHandler,
   triggerErpSyncHandler,
   getSupplierRiskSettingsHandler,
   updateSupplierRiskSettingsHandler,
@@ -25,7 +26,7 @@ import {
  * Company-wide configuration for three modules (Feasibility/Inventory/ERP
  * Sync) — see companies.ts's own schema comments for why this lives as jsonb
  * on the companies row rather than a separate company_settings table (same
- * "rarely-changed config a human edits" precedent as branding/aiConfig,
+ * "rarely-changed config a human edits" precedent as branding,
  * see modules/company/company.controller.ts). GET is open to any department
  * with real access to that module's records (so e.g. a Quality user can see
  * why a feasibility review defaulted to a given risk level); PATCH is
@@ -44,6 +45,7 @@ settingsRouter.post("/inventory", requireAnyDepartment("production", "purchasing
 
 settingsRouter.get("/erp-sync", requireRole("admin"), getErpSyncSettingsHandler);
 settingsRouter.post("/erp-sync", requireRole("admin"), validate(updateErpSyncSettingsSchema), updateErpSyncSettingsHandler);
+settingsRouter.post("/erp-sync/test", requireRole("admin"), testErpConnectionHandler);
 settingsRouter.post("/erp-sync/trigger", requireRole("admin"), validate(triggerErpSyncSchema), triggerErpSyncHandler);
 
 // Phase 7 — Supplier Risk formula weights. PATCH-equivalent restricted to

@@ -69,9 +69,10 @@ export const updateErpSyncSettingsSchema = z.object({
     })
     .optional(),
   webhookUrl: z.string().url().optional().or(z.literal("")), // "" clears it, same convention as company.validation.ts's hexColor()
-  // Plaintext in the request only — encrypted before it ever touches the
-  // database, same convention as company.validation.ts's updateAiConfigSchema.
+  // Plaintext in the request only — encrypted before it ever touches the database.
   webhookSecret: z.string().min(1).optional(),
+  // "" clears the saved NetSuite account id.
+  accountId: z.string().trim().max(64).optional(),
 });
 
 /**

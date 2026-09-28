@@ -267,6 +267,23 @@ describe("Settings module (real DB + real HTTP path)", () => {
       expect(getRes.status).toBe(403);
       const postRes = await request(app).post("/settings/erp-sync").set("Authorization", `Bearer ${purchasingToken}`).send({ schedule: "daily" });
       expect(postRes.status).toBe(403);
+      const testRes = await request(app).post("/settings/erp-sync/test").set("Authorization", `Bearer ${purchasingToken}`);
+      expect(testRes.status).toBe(403);
+    });
+
+    it("reports not connected when no NetSuite account is saved", async () => {
+      const res = await request(app).post("/settings/erp-sync/test").set("Authorization", `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ connected: false, message: "Not connected yet" });
+    });
+
+    it("saves a NetSuite account id and the connection check reads it back", async () => {
+      const saved = await request(app).post("/settings/erp-sync").set("Authorization", `Bearer ${adminToken}`).send({ accountId: "1234567_SB1" });
+      expect(saved.status).toBe(200);
+      expect(saved.body.accountId).toBe("1234567_SB1");
+      const check = await request(app).post("/settings/erp-sync/test").set("Authorization", `Bearer ${adminToken}`);
+      expect(check.body.connected).toBe(true);
+      expect(check.body.message).toContain("1234567_SB1");
     });
 
     it("triggering a sync with no webhook configured is honestly reported as skipped, not a fake success", async () => {

@@ -29,6 +29,13 @@ describe("saved tabs for removed pages", () => {
     );
     assert.equal(restored.activeId, "a");
     assert.equal(isLiveTabPath("/erp/overview"), false);
+    assert.equal(isLiveTabPath("/erp"), false);
+    assert.equal(isLiveTabPath("/erp/presets"), false);
+    assert.equal(isLiveTabPath("/erp/requisitions"), false);
+    assert.equal(isLiveTabPath("/settings/erp/presets"), true);
+    assert.equal(isLiveTabPath("/settings/erp/presets/4"), true);
+    assert.equal(isLiveTabPath("/settings/erp/presets/new"), true);
+    assert.equal(isLiveTabPath("/settings/erp/sync-errors"), true);
     assert.equal(isLiveTabPath("/ncr/9"), true);
     assert.equal(isLiveTabPath("/inventory/lots/4/label"), false);
     assert.equal(isLiveTabPath("/work-orders/4"), true);
