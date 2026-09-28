@@ -1,7 +1,7 @@
 import type { FormLayout } from "./types.js";
 
 /**
- * Derived 1:1 from the user-provided "Maintenance Work Order Template.pdf"
+ * Derived 1:1 from the source "Maintenance Work Order Template.pdf"
  * (Asset Maintenance Work Order). Total Cost Metrics is computed
  * automatically: (Estimated Labor Hours x Hourly Labor Rate) + Replacement
  * Parts Cost.

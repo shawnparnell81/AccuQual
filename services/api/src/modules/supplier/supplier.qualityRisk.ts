@@ -30,14 +30,14 @@ import { AppError } from "../../utils/appError.js";
  * already attached, in existing comments, to supplier.performance.ts's own
  * delivery-only heuristic below) and deliberately separate from the three
  * OTHER real "risk" concepts already in this codebase:
- *   - `suppliers.riskLevel` — a manual free-text field nobody writes to
- *     programmatically.
- *   - `ai_risk_scores` (POST /ai/risk-score) — the LLM-based 0-100 scorer,
- *     guardrailed/non-deterministic, surfaced on the AI Insights page.
- *   - `risk_assessments`/FMEA (the Risk Register module) — a manual
- *     severity x probability workflow, not an aggregate supplier score.
+ *  - `suppliers.riskLevel` — a manual free-text field nobody writes to
+ *  programmatically.
+ *  - `ai_risk_scores` (POST /ai/risk-score) — the LLM-based 0-100 scorer,
+ *  guardrailed/non-deterministic, surfaced on the AI Insights page.
+ *  - `risk_assessments`/FMEA (the Risk Register module) — a manual
+ *  severity x probability workflow, not an aggregate supplier score.
  * This score instead folds together 7 REAL, already-existing data sources —
- * exactly what the task brief asks for ("a weighted formula based entirely
+ * exactly what the requirement is ("a weighted formula based entirely
  * on existing ACCUQUAL data") — and persists a snapshot per supplier per
  * day so a trend line has real history to show, not just a live number.
  */
@@ -226,8 +226,7 @@ async function loadRiskWeights(db: Db): Promise<Partial<SupplierRiskWeights>> {
  * The one write path for this score — POST /suppliers/:id/risk-score/
  * recompute (internal, Quality/Purchasing/admin only). Upserts today's row
  * (by supplierId+scoreDate, see the schema's unique constraint) rather than
- * inserting unboundedly, and records the exact audit-trail entry the brief
- * asks for.
+ * inserting unboundedly, and records the exact audit-trail entry for the recompute.
  */
 export async function recomputeSupplierRiskScore(db: Db, supplierId: number, performedBy: number | undefined): Promise<SupplierQualityRiskScoreRow> {
   const [factors, weights] = await Promise.all([getSupplierQualityFactors(db, supplierId), loadRiskWeights(db)]);

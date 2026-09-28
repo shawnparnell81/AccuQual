@@ -9,8 +9,7 @@ import type { FormTemplateStatus } from "../../api/types";
 import { FileDropZone } from "../../components/shared/FileDropZone";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
-// The 9 form types this page is explicitly meant to manage (see the Company
-// Template Upload UI review) — a subset of forms.validation.ts's full
+// The 9 form types this page is explicitly meant to manage — a subset of forms.validation.ts's full
 // FORM_TYPES list, matching what was actually asked for. Any of the other
 // ~26 real types can be reached the same way via the backend if needed
 // later; this page just doesn't list every one of them.

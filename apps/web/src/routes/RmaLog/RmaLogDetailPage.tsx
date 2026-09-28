@@ -29,12 +29,11 @@ const NEXT_STATUS: Record<RmaLogStatus, { status: RmaLogStatus; label: string } 
 /**
  * RMA Log detail page — the JSON-schema form (RmaLogFormRenderer) plus
  * RBAC-controlled edit mode, status transitions, a linkage viewer/editor,
- * and an audit trail viewer, exactly as the module-specific RBAC brief's
- * own frontend requirements list them. Three independent, live, DB-driven
+ * and an audit trail viewer, exactly as the module-specific frontend requirements list them. Three independent, live, DB-driven
  * permission checks gate this page (see departmentAccess.ts):
- *   - rma_log (base read/write) — content fields, save button.
- *   - rma_log_status — the transition button.
- *   - rma_log_linkage — the Linked Records panel's own edit controls.
+ *  - rma_log (base read/write) — content fields, save button.
+ *  - rma_log_status — the transition button.
+ *  - rma_log_linkage — the Linked Records panel's own edit controls.
  */
 export function RmaLogDetailPage() {
   const { id } = useParams();

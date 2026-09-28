@@ -33,11 +33,9 @@ const SOURCE_LINK: Record<string, (id: number) => string> = {
 };
 
 /**
- * Risk / FMEA detail — the Risk Register record (edit, workflow transitions,
- * AI analysis, mitigation plan) plus the pre-existing FMEA quick-entry table
- * and full FMEA document, unchanged. Full CRUD + workflow + department
- * gating + audit trail all confirmed real end-to-end (see the Risk
- * Management module review) — this page is what makes that reachable.
+ * Risk register detail: edit the record, run workflow transitions, open
+ * AI analysis and the mitigation plan, and open the FMEA quick-entry table
+ * or the full FMEA document.
  */
 export function RiskDetailPage() {
   const { id } = useParams();

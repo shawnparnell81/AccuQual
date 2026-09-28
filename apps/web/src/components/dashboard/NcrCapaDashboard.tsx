@@ -5,7 +5,7 @@ import { bucketByMonth } from "../../lib/workflowMetrics";
 import type { useWorkflowDashboardData } from "../../hooks/useWorkflowDashboardData";
 
 /**
- * NCR/CAPA dashboard widgets. "CAPAs planned vs. implemented" from the brief
+ * NCR/CAPA dashboard widgets. "CAPAs planned vs. implemented"
  * doesn't map onto the real status enum (open/in_progress/verifying/closed
  * — no separate "planned" vs. "implemented" states; see the State
  * Dictionary), so this shows CAPA's real breakdown instead of inventing

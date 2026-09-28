@@ -23,8 +23,8 @@ const envSchema = z.object({
   // No longer used. Kept so existing environment files still load.
   REMEMBER_ME_TTL: z.string().default("30d"),
 
-  // No longer used. A sign-in ends when the browser closes, and never lasts longer than 12 hours from sign-in (SESSION_MAX_MS in jwt.ts). Kept so existing environment files still load.
-  SESSION_IDLE_TIMEOUT_MINUTES: z.coerce.number().int().min(1).default(60),
+  // POST /auth/refresh refuses a session with no activity for this many minutes. Activity does not extend the 12-hour cap (SESSION_MAX_MS in jwt.ts).
+  SESSION_IDLE_TIMEOUT_MINUTES: z.coerce.number().int().min(1).default(30),
   // This many wrong passwords inside LOGIN_FAILURE_WINDOW_MINUTES lock the account for LOGIN_LOCKOUT_MINUTES.
   LOGIN_MAX_FAILURES: z.coerce.number().int().min(1).default(5),
   LOGIN_FAILURE_WINDOW_MINUTES: z.coerce.number().int().min(1).default(15),

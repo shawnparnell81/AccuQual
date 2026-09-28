@@ -21,7 +21,7 @@ const AUTO_DISMISS_MS = 5000;
 
 /**
  * App-wide toast stack — didn't exist anywhere before this pass (see the
- * Workflow UI Components brief, section 3/4: every transition needs a
+ * Transition UI: every transition needs a
  * success/failure toast, and none of the module detail pages surfaced
  * mutation errors at all until now). Mount once in main.tsx, above <App/>.
  */

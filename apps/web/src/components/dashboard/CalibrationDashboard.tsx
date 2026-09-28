@@ -5,8 +5,7 @@ import type { MonthBucket } from "../../lib/workflowMetrics";
 import type { useWorkflowDashboardData } from "../../hooks/useWorkflowDashboardData";
 
 /**
- * Calibration dashboard widgets. "Awaiting certificate upload" from the
- * brief is deliberately omitted — the equipment list endpoint (listWithStatus)
+ * Calibration dashboard widgets. "Awaiting certificate upload" is deliberately omitted — the equipment list endpoint (listWithStatus)
  * only resolves nextDueAt, not each equipment's latest certificatePath;
  * getting that would mean one extra request per piece of equipment on every
  * dashboard load, an N+1 fan-out this pass chose not to add (see the Audit/

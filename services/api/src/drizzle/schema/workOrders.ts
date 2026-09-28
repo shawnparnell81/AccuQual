@@ -11,8 +11,6 @@ import { ncr } from "./ncr.js";
  * printing, not a queryable record. This table is the genuine production-
  * planning entity AI Work Order Planning needs to read and write against —
  * built because there was nothing real to build the AI feature on top of
- * (see the AI Work Order Planning / PR Justification / Onboarding / ERP
- * Automation review).
  *
  * status: planned | in_progress | completed | cancelled
  *
@@ -26,7 +24,7 @@ import { ncr } from "./ncr.js";
  * signature fields back the real, pixel-specific shop-floor Production Work
  * Order traveler document (a bespoke standalone page, deliberately NOT built
  * through the shared FormLayout/GenericFormRenderer engine every other QMS
- * document uses — see the Work Order Traveler review) — quantityPlanned/
+ * document uses) — quantityPlanned/
  * dueDate/linkedNcrId/notes/revision stay planning-stage-only edits (see
  * workOrders.controller.ts's updateWorkOrderHandler "planned" guard); the
  * quality gates/signatures/operations rows are real shop-floor execution

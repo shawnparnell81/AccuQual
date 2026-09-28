@@ -1,7 +1,7 @@
 import type { FormLayout } from "./types.js";
 
 /**
- * Derived 1:1 from the user-provided CAPA_Fillable_Template.pdf — section
+ * Derived 1:1 from the source CAPA_Fillable_Template.pdf — section
  * numbers, field labels, and hint text are copied verbatim, not paraphrased.
  */
 export const capaLayout: FormLayout = {

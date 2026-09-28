@@ -91,10 +91,11 @@ describe("Audit trail read RBAC — GET /audit-trail/:entityType/:entityId (real
     expect(res.status).toBe(403);
   });
 
-  it("an entity type with no owning department gate today (e.g. DigitalTwinSimulation) stays open, matching that module's own real access level", async () => {
+  it("rejects a record type that is not on the allow-list, including for an admin", async () => {
     const res = await request(app).get(`/audit-trail/DigitalTwinSimulation/999999`).set("Authorization", `Bearer ${engineeringToken}`);
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual([]);
+    expect(res.status).toBe(400);
+    const admin = await request(app).get(`/audit-trail/DigitalTwinSimulation/999999`).set("Authorization", `Bearer ${adminToken}`);
+    expect(admin.status).toBe(400);
   });
 
   // Regression coverage: TrainingAssignment/QmsForm were missing from

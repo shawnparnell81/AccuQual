@@ -48,8 +48,8 @@ export function useLogin() {
     // expired) before this new session's own queries start populating it.
     // Same guarantee useLogout's onSettled gives; needed here too since a
     // login can start a session without one ever having been explicitly
-    // ended first. See the QA sweep review — a stale query cache used to
-    // render a previous user's real NCR/supplier/financial numbers.
+    // ended first. A stale query cache used to render a previous user's
+    // real NCR/supplier/financial numbers.
     // A response that still needs a second step has no session yet — the login page walks the user through it.
     onSuccess: (data) => {
       if (isSession(data)) startSession(data);
@@ -66,8 +66,7 @@ export function useLogout() {
     // Window leakage must be impossible — never let a stale
     // window survive into the next login, even for the same browser tab.
     // The query cache holds the same class of sensitive data (NCRs,
-    // suppliers, financials) and used to survive logout unchanged — see
-    // the QA sweep review.
+    // suppliers, financials) and used to survive logout unchanged.
     onSettled: () => {
       clearWindows();
       queryClient.clear();

@@ -1,7 +1,7 @@
 import type { FormLayout } from "./types";
 
 /**
- * Derived 1:1 from the user-provided "Final Product Inspection List_prior to
+ * Derived 1:1 from the source "Final Product Inspection List_prior to
  * production.pdf" (Final Inspection & Product Release Checklist). Lives as a
  * 7th PPAP package document (see PpapDetailPage.tsx) since it's the
  * culmination of a PPAP: releasing production parts against the same

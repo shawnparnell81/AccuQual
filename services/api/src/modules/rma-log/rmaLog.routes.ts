@@ -7,7 +7,7 @@ import { createRmaLogSchema, updateRmaLogSchema, transitionRmaLogSchema } from "
 import { listRmaLogHandler, createRmaLogHandler, getRmaLogHandler, updateRmaLogHandler, transitionRmaLogHandler } from "./rmaLog.controller.js";
 
 export const rmaLogRouter = Router();
-// rma_log.read/write per the module-specific RBAC brief — Quality/Customer
+// rma_log.read/write per the access matrix — Quality/Customer
 // Service edit by default, Engineering/Purchasing/Material Management
 // read (see db/defaultPermissions.ts). Per-action narrowing beyond this
 // base level (rma_log.status.write, rma_log.linkage.write) is enforced

@@ -1,6 +1,6 @@
 /**
  * AIAG Gage R&R (Average and Range method) formulas, fixed to a 10-part x
- * 2-operator x 2-trial study — the exact configuration in the user-provided
+ * 2-operator x 2-trial study — the exact configuration in the source
  * "MSA Gauge R_R.pdf", whose worked example (D4=3.27, K1=0.8862, K2=0.7071,
  * K3=0.3146) this was checked against value-for-value. Supporting other
  * part/trial counts would need the rest of the AIAG constants table and is

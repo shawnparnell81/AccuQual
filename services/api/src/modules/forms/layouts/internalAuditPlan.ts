@@ -1,7 +1,7 @@
 import type { FormLayout } from "./types.js";
 
 /**
- * Derived 1:1 from the user-provided "Internal_Audit_Plan.pdf" — replaces
+ * Derived 1:1 from the source "Internal_Audit_Plan.pdf" — replaces
  * the earlier flat 3-field placeholder registered under formType
  * "audit_plan" (see AuditDetailPage.tsx's "Audit Plan" button).
  */

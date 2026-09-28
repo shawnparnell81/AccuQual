@@ -1,6 +1,6 @@
 import type { FormLayout } from "./types";
 
-/** Derived 1:1 from the user-provided Appearance_Approval_Report_New.pdf (AAR). */
+/** Derived 1:1 from the source Appearance_Approval_Report_New.pdf (AAR). */
 export const appearanceApprovalLayout: FormLayout = {
   formType: "appearance_approval",
   title: "APPEARANCE APPROVAL REPORT (AAR)",

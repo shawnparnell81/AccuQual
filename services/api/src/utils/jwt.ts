@@ -15,6 +15,10 @@ export interface AccessTokenPayload {
   supplierId?: number | null;
   // users.tokenVersion at issue time — requireAuth compares it with the live value, so logout, a password reset, a role change or a deactivation end this token at once instead of at its expiry. Optional so tokens issued before this field existed still verify.
   tv?: number;
+  // The refresh-token id (jti) this access token belongs to. Used to stamp
+  // that session's last activity. Optional so tokens issued before this
+  // field existed still verify.
+  sid?: string;
 }
 
 export interface RefreshTokenPayload {
@@ -32,7 +36,7 @@ export interface RefreshTokenPayload {
   rm?: boolean;
 }
 
-/** Fixed sign-in window for everyone. Activity does not extend it. Closing the browser ends the sign-in sooner. A browser that restores the session cookie still has to sign in again unless a tab from that visit is open. 12 hours after sign-in is the latest a session can last. */
+/** Fixed sign-in window for everyone. Activity does not extend it. Closing the browser ends the sign-in sooner. A browser that restores the session cookie still has to sign in again unless a tab from that visit is open. 12 hours after sign-in is the latest a session can last. A session that sits unused for 30 minutes is also refused on refresh (SESSION_IDLE_TIMEOUT_MINUTES); that idle check does not move this 12-hour end. */
 export const SESSION_MAX_MS = 12 * 60 * 60 * 1000;
 
 export function signAccessToken(payload: AccessTokenPayload): string {

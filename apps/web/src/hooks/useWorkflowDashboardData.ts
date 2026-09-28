@@ -24,7 +24,7 @@ export interface OverdueItem {
   label: string;
   detail: string;
   link: string;
-  /** Whole days past its due/expiration date — the real, uniformly-available sort key. None of these four modules has a severity field of its own (only NCR/audit findings do, and neither is "overdue"-tracked), so "most overdue first" stands in for the brief's "severity + due date" sort. */
+  /** Whole days past its due/expiration date — the real, uniformly-available sort key. None of these four modules has a severity field of its own (only NCR/audit findings do, and neither is "overdue"-tracked), so "most overdue first" stands in for "severity + due date" sort. */
   daysOverdue: number;
 }
 
@@ -44,7 +44,7 @@ export interface PendingItem {
  * per assignment) and audit findings (one request per AUDIT, not per
  * finding) — both counts are normally small for a QMS company; a bulk
  * "all assignments" or "all findings" endpoint doesn't exist and adding one
- * is out of scope (see the brief's "no new endpoints").
+ * is out of scope (see "no new endpoints").
  */
 export function useWorkflowDashboardData() {
   const ncrQ = ncrHooks.useList();

@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
-import { createReadStream, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { attachments } from "../../drizzle/schema/attachments.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
@@ -13,15 +13,18 @@ import { onlyOfficeSettings } from "../onlyoffice/settings.js";
 import { signOfficeToken } from "../onlyoffice/token.js";
 import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
+import { assertAttachmentAudience } from "./attachmentAccess.js";
 import { assertInlinePicture } from "./inlinePicture.js";
+import { sniffUpload, UPLOAD_TYPE_ERROR } from "../../utils/fileSniff.js";
+import { sendStoredFile } from "../../utils/storedFile.js";
 
 /**
- * ONE generic upload/list/download/delete surface reused by every module —
- * see attachments.ts's own schema comment. No department gate: any
- * authenticated company user may upload, view, and download; delete is
- * restricted to the uploader or an admin (see deleteAttachmentHandler).
- * Same multer memoryStorage + STORAGE_LOCAL_PATH pattern as forms'
- * uploadTemplateHandler and document-folders' uploadTemplate.
+ * ONE generic upload/list/download/delete surface reused by every module.
+ * List and download (and upload and delete) require access to the parent
+ * record: the same department access as that module, and the same plant
+ * check NCR, CAPA, and audits already use. Supplier logins are refused
+ * here; their files stay on the supplier-portal routes.
+ * Delete is still restricted to the uploader or an admin.
  */
 export const uploadAttachmentHandler = asyncHandler(async (req: Request, res: Response) => {
   const file = req.file;
@@ -32,11 +35,16 @@ export const uploadAttachmentHandler = asyncHandler(async (req: Request, res: Re
   if ((entityType && entityId === null) || (!entityType && entityId !== null)) {
     throw AppError.badRequest("entityType and entityId must be provided together, or both omitted for a general upload");
   }
+  await assertAttachmentAudience(req, entityType, entityId);
 
-  // A picture placed inside a form field. Same folder and row as every other
-  // attachment; only the type and size are narrower.
+  const sniffed = sniffUpload(file.buffer, file.originalname);
+  if (!sniffed) throw AppError.badRequest(UPLOAD_TYPE_ERROR);
+
+  // A picture placed inside a form field. Same folder, row, and parent-record
+  // check as every other attachment. The bytes still have to match the upload
+  // allow-list, and the picture itself has to be an image of 5 MB or less.
   const inline = req.body.inlineImage === "1";
-  const mimeType = inline ? assertInlinePicture(file.buffer, file.size) : file.mimetype;
+  const mimeType = inline ? assertInlinePicture(file.buffer, file.size) : sniffed.mime;
 
   const dir = `${env.STORAGE_LOCAL_PATH}/attachments`;
   await mkdir(dir, { recursive: true });
@@ -67,10 +75,13 @@ export const uploadAttachmentHandler = asyncHandler(async (req: Request, res: Re
  */
 export const listAttachmentsHandler = asyncHandler(async (req: Request, res: Response) => {
   const { entityType, entityId } = req.query as Record<string, string | undefined>;
+  const parentType = entityType || null;
+  const parentId = entityId ? Number(entityId) : null;
+  await assertAttachmentAudience(req, parentType, parentId);
 
   const conditions = [];
-  if (entityType && entityId) {
-    conditions.push(eq(attachments.entityType, entityType), eq(attachments.entityId, Number(entityId)));
+  if (parentType && parentId) {
+    conditions.push(eq(attachments.entityType, parentType), eq(attachments.entityId, parentId));
   } else {
     conditions.push(isNull(attachments.entityType));
   }
@@ -83,11 +94,9 @@ export const downloadAttachmentHandler = asyncHandler(async (req: Request, res: 
   const id = Number(req.params.id);
   const [row] = await req.db!.select().from(attachments).where(and(eq(attachments.id, id)));
   if (!row) throw AppError.notFound("Attachment");
+  await assertAttachmentAudience(req, row.entityType, row.entityId);
   if (!existsSync(row.filePath)) throw AppError.notFound("Attachment file");
-
-  res.setHeader("Content-Type", row.mimeType ?? "application/octet-stream");
-  res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(row.fileName)}"`);
-  createReadStream(row.filePath).pipe(res);
+  await sendStoredFile(res, row.filePath, row.fileName, row.mimeType, "preview");
 });
 
 /** Read-only ONLYOFFICE session for a Word, Excel, or PowerPoint attachment. Same audience as download. */
@@ -95,6 +104,7 @@ export const attachmentOfficeSessionHandler = asyncHandler(async (req: Request, 
   const id = Number(req.params.id);
   const [row] = await req.db!.select().from(attachments).where(eq(attachments.id, id));
   if (!row) throw AppError.notFound("Attachment");
+  await assertAttachmentAudience(req, row.entityType, row.entityId);
   if (!officeDocumentType(row.fileName)) throw new AppError(OFFICE_TYPE_ERROR, 415);
   const settings = onlyOfficeSettings();
   if (!settings) throw new AppError("Office editing is not configured on this server.", 503);
@@ -119,6 +129,7 @@ export const deleteAttachmentHandler = asyncHandler(async (req: Request, res: Re
   const id = Number(req.params.id);
   const [row] = await req.db!.select().from(attachments).where(and(eq(attachments.id, id)));
   if (!row) throw AppError.notFound("Attachment");
+  await assertAttachmentAudience(req, row.entityType, row.entityId);
 
   const role = req.user?.roleName;
   const isAdmin = isFullAccessRole(role);

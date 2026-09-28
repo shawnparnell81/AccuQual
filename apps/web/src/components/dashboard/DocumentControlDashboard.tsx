@@ -5,7 +5,7 @@ import { bucketByMonth } from "../../lib/workflowMetrics";
 import type { useWorkflowDashboardData } from "../../hooks/useWorkflowDashboardData";
 
 /**
- * Document Control dashboard widgets. The brief asks for separate "awaiting
+ * Document Control dashboard widgets. Separate "awaiting
  * approval" and "awaiting release" cards — in the real schema those are the
  * same status ("in_review"; see the State Dictionary's Released=approved
  * naming note), so one honest card stands in for both rather than two

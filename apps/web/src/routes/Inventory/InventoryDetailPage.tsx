@@ -159,8 +159,7 @@ function LogMovementModal({ itemId, isOpen, onClose }: { itemId: number; isOpen:
 }
 
 /**
- * One reorder request row — a minimal ERP stub (see the ERP Reorder Request
- * review): created only when Purchasing marks the item reorder_pending,
+ * One reorder request row — a minimal ERP stub: created only when Purchasing marks the item reorder_pending,
  * never by an external ERP integration (none exists). Send/Ignore/notes are
  * all real Purchasing actions on a real row, not a simulated third-party
  * sync.

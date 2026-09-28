@@ -34,9 +34,7 @@ function flattenFolders(folders: DocumentFolder[]): { id: number; label: string 
 }
 
 /**
- * Upload flow with a real destination choice — per the user's explicit
- * requirement ("give the user an option on where to upload it to: Quality,
- * document library, engineering, etc"). Picking a real folder files the
+ * Upload flow with a real destination choice . Picking a real folder files the
  * document straight into the Document Library tree (the same one-step
  * create-a-leaf-and-attach action FolderExplorerPage.tsx's own "Upload
  * Document" button uses — see document-folders.controller.ts's

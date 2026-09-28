@@ -43,6 +43,7 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getUser = asyncHandler(async (req: Request, res: Response) => {
+  if (req.user?.roleName === "supplier") throw AppError.forbidden("Supplier logins can't open staff records.");
   const [row] = await req
     .db!.select({
       id: users.id,
@@ -57,6 +58,10 @@ export const getUser = asyncHandler(async (req: Request, res: Response) => {
     .from(users)
     .where(and(eq(users.id, Number(req.params.id))));
   if (!row) throw AppError.notFound("User");
+  if (!isFullAccessRole(req.user?.roleName)) {
+    res.json({ id: row.id, name: row.name, email: row.email });
+    return;
+  }
   res.json(row);
 });
 

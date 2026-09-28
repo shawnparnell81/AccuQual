@@ -1,8 +1,7 @@
 import { ensureTestCompany } from "../helpers/company.js";
 // Real-DB integration test (see company-isolation.test.ts's header comment
 // for why this category exists). Covers the two new real modules built for
-// AI Work Order Planning / AI PR Justification (see the AI modules
-// review): Work Orders' department gate + status lifecycle + the real
+// AI Work Order Planning / AI PR Justification: Work Orders' department gate + status lifecycle + the real
 // inventory "produce" movement completing one triggers, and Purchase
 // Requisitions' broader-than-usual "any requesting department may create"
 // gate plus its purchasing-only approve/convert-to-PO path.
@@ -96,7 +95,7 @@ describe("Work Orders + Purchase Requisitions (real DB + real HTTP path)", () =>
     expect(res.status).toBe(200);
   });
 
-  // Per explicit user request (2026-09-15): Customer Service now owns the
+  //  Customer Service now owns the
   // work order lifecycle; Production was downgraded to read-only (view
   // what's assigned, no longer create/start/complete/cancel).
   it("production (now read-only in the matrix) cannot create a work order", async () => {

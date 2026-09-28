@@ -9,12 +9,10 @@ import { checkUsageLimit, loadCompanyLlmOptions, recordAiSuggestion } from "../a
 import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /**
- * Real, honest descriptions of what each module actually does today — no
- * "enabled modules per company" concept exists anywhere in this schema (see
- * the AI Onboarding review), so this is grounded on the one real signal
- * available: getUserAccessLevel, walked for every real module to find which
- * ResourceKeys this specific user can actually reach (their own department
- * baseline plus any custom permission-role grants — see departmentAccess.ts).
+ * What each module does today. The schema has no per-company "enabled
+ * modules" flag, so the list is the ResourceKeys this user can reach via
+ * getUserAccessLevel (department baseline plus any custom permission-role
+ * grants — see departmentAccess.ts).
  */
 const MODULE_DESCRIPTIONS: Partial<Record<ResourceKey, { label: string; description: string }>> = {
   ncr: { label: "NCR", description: "Log and track nonconforming material/product through containment, investigation, and closure." },

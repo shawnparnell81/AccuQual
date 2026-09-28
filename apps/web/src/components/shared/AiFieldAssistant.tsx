@@ -27,8 +27,7 @@ interface AiFieldAssistantProps {
 /**
  * The page-embedded counterpart to the global floating AiAssistantPanel.
  * That panel can't reach into a page's own form fields (its "Insert into
- * form" idea was dropped for exactly that reason — see the AI Assistant
- * module review). This component lives ON the page next to the field it
+ * form" idea was dropped for exactly that reason). This component lives ON the page next to the field it
  * helps with, so when `onInsert` is given it really can hand the result
  * straight to that field's own setter — no cross-window plumbing needed.
  *

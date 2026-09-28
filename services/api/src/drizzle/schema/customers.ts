@@ -6,9 +6,7 @@ import { documents } from "./documents.js";
  * Customer Onboarding — ONE table for both the master record AND its
  * onboarding workflow, mirroring suppliers.ts's own established pattern
  * (suppliers doesn't split "Supplier Master" from a separate "Supplier
- * Onboarding" table either — one row, one status lifecycle). See the
- * Customer Onboarding module review for why this consolidates the prompt's
- * originally-separate "Customer Master"/"Customer Onboarding" tables.
+ * Onboarding" table either — one row, one status lifecycle). One table covers what started as separate "Customer Master"/"Customer Onboarding" tables.
  *
  * The five "requirements" sub-forms (Qualification, Requirements, Quality,
  * Logistics, Contract) are deliberately NOT separate tables — they're one

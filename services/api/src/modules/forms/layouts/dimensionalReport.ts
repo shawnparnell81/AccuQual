@@ -1,7 +1,7 @@
 import type { FormLayout } from "./types.js";
 
 /**
- * Derived 1:1 from the user-provided "Dimensional Report.pdf" (Production Part
+ * Derived 1:1 from the source "Dimensional Report.pdf" (Production Part
  * Approval — Dimensional Test Results). The source spans 2 PDF pages only
  * because its 24-row table is too wide to print in one column group; here
  * it's one continuous table.

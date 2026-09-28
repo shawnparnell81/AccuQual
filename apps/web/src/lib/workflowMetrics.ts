@@ -1,6 +1,6 @@
 /**
  * Pure client-side metric helpers shared by the workflow dashboards — no
- * backend change, no new endpoint (see the Workflow Dashboards brief,
+ * backend change, no new endpoint (see the dashboard notes,
  * section 3/4: "compute metrics client-side" from existing list data).
  * Several modules genuinely have no server-computed "overdue"/"expired"
  * concept (Training, Audit — confirmed across the Outputs/Rules/Audit Trail

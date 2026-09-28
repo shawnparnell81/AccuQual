@@ -1,6 +1,6 @@
 import type { FormLayout } from "./types";
 
-/** Derived 1:1 from the user-provided "control_plan_template.pdf". */
+/** Derived 1:1 from the source "control_plan_template.pdf". */
 export const controlPlanLayout: FormLayout = {
   formType: "control_plan",
   title: "CONTROL PLAN",

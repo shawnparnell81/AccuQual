@@ -35,20 +35,13 @@ COPY workers/ai-worker ./workers/ai-worker
 # TypeScript instantiate drizzle-orm's types twice (once per module format)
 # and fail with spurious "private property" incompatibility errors.
 COPY services/api/package.json ./services/api/package.json
-# services/api/src/utils/logger.ts (and the auth/company-scope helpers) read the per-request context from this one file.
-COPY services/api/src/modules/monitoring/requestContext.ts ./services/api/src/modules/monitoring/requestContext.ts
-COPY services/api/src/drizzle ./services/api/src/drizzle
-COPY services/api/src/modules/ai ./services/api/src/modules/ai
-COPY services/api/src/config ./services/api/src/config
-COPY services/api/src/utils ./services/api/src/utils
-# embedding-engine.ts imports the `Db` *type* from lib/requestDb.ts —
-# by design (see that file's own comment), so tsc must still fully resolve
-# requestDb.ts's real imports (db/index.ts, middleware/auth.ts, and
-# transitively express/jsonwebtoken/zod, added to this package's own
-# package.json) even though none of them run at this worker's runtime.
-COPY services/api/src/lib ./services/api/src/lib
-COPY services/api/src/db ./services/api/src/db
-COPY services/api/src/middleware ./services/api/src/middleware
+# The full services/api/src tree, not a hand-picked subset. embedding-engine.ts
+# imports the Db type from lib/requestDb.ts, and tsc follows that into
+# middleware/auth.ts and whatever that file imports next. A narrower copy
+# fails this image the moment one of those files gains an import that was
+# not on the list. This is the build stage only; the runtime image below
+# copies this worker's compiled dist, not the API source.
+COPY services/api/src ./services/api/src
 RUN npm run build --workspace workers/ai-worker
 
 # ---- Stage 3: run ----

@@ -2,7 +2,7 @@ import type { FormLayout } from "./types";
 
 /**
  * Mirrors services/api/src/modules/forms/layouts/capa.ts — derived 1:1 from
- * the user-provided CAPA_Fillable_Template.pdf. Keep the two in sync.
+ * the source CAPA_Fillable_Template.pdf. Keep the two in sync.
  */
 export const capaLayout: FormLayout = {
   formType: "capa",

@@ -1,8 +1,7 @@
 import { createHash } from "node:crypto";
-import { createReadStream, existsSync, statSync } from "node:fs";
 import type { Response } from "express";
 import { AppError } from "../../utils/appError.js";
-import { isInsideStorage } from "../documents/documentVersioning.js";
+import { sendStoredFile } from "../../utils/storedFile.js";
 import { buildEditorConfig } from "./editorConfig.js";
 import { onlyOfficeSettings } from "./settings.js";
 import { signOfficeToken } from "./token.js";
@@ -16,16 +15,9 @@ export function contentKey(...parts: Array<string | number | null | undefined>):
   return createHash("sha256").update(parts.map((part) => String(part ?? "")).join(":")).digest("hex");
 }
 
-/** Streams one stored file to ONLYOFFICE. The signed token is the only way to reach this. */
-export function streamStoredFile(res: Response, filePath: string, mimeType: string, sizeBytes: number | undefined, fileName: string) {
-  if (!isInsideStorage(filePath) || !existsSync(filePath)) throw AppError.notFound("File");
-  const size = sizeBytes && sizeBytes > 0 ? sizeBytes : statSync(filePath).size;
-  res.setHeader("Content-Type", mimeType);
-  res.setHeader("Content-Length", String(size));
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Cache-Control", "private, no-store");
-  res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-  createReadStream(filePath).pipe(res);
+/** Streams one stored file to ONLYOFFICE. The signed token is the only way to reach this. Images and PDFs may display; other types download. */
+export async function streamStoredFile(res: Response, filePath: string, mimeType: string, _sizeBytes: number | undefined, fileName: string) {
+  await sendStoredFile(res, filePath, fileName, mimeType, "preview");
 }
 
 /** A read-only ONLYOFFICE session. Nothing here can save. */

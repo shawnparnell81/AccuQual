@@ -144,7 +144,7 @@ export function ResourceListPage<T extends { id: number }>({
                 },
                 // Previously missing entirely — every module sharing this
                 // component failed dead silent on any validation, permission,
-                // or network error (see the QA sweep review).
+                // or network error.
                 onError: (err) => toast.error(extractErrorMessage(err, `Couldn't create ${title.toLowerCase()}.`)),
               })
             }

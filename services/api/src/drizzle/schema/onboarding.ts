@@ -8,7 +8,7 @@ import { users } from "./users.js";
  * company are at different points), and moduleKey is one of
  * departmentAccess.ts's real ResourceKey values, not a fabricated
  * "enabled module" concept (no such toggle exists anywhere in
- * this schema — see the AI Onboarding review).
+ * this schema).
  *
  * status: not_started | in_progress | completed
  */

@@ -2,7 +2,7 @@ import type { FormLayout } from "./types";
 
 /**
  * Derived 1:1 from Part B ("Document Control Master Index") of the
- * user-provided "Competency Framework_Doc Control Template.pdf" — Part A
+ * source "Competency Framework_Doc Control Template.pdf" — Part A
  * (Operator Station Competency Matrix) is a distinct document, see
  * competencyMatrix.ts.
  */

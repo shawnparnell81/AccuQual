@@ -1,8 +1,28 @@
+import net from "node:net";
 import type { Request } from "express";
 import rateLimit, { MemoryStore } from "express-rate-limit";
 import { env } from "../config/env.js";
 import { verifyRefreshToken } from "../utils/jwt.js";
 import { openRefreshCookie } from "../modules/auth/refreshCookie.js";
+
+function normalizeIp(ip: string): string {
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(ip);
+  return (mapped?.[1] ?? ip).toLowerCase();
+}
+
+/**
+ * The address of the person, not the proxy in front of the API.
+ * Cloudflare sets CF-Connecting-IP to one client address. Anything else
+ * (a list, or a value that is not an IP) is ignored so it cannot pick the
+ * bucket. With that header absent, req.ip is the address Express already
+ * resolved with trust proxy set to 1.
+ */
+export function visitorIp(req: Request): string {
+  const cf = req.header("cf-connecting-ip")?.trim();
+  if (cf && net.isIP(cf)) return normalizeIp(cf);
+  if (req.ip && net.isIP(req.ip)) return normalizeIp(req.ip);
+  return "unknown";
+}
 
 const DEVICE_INGEST_PATH = "/digital-twin/device-ingest";
 
@@ -25,6 +45,7 @@ export const authRateLimiter = rateLimit({
   legacyHeaders: false,
   // Own in-memory counter. This deploy has no Redis; the Render API is one instance.
   store: new MemoryStore(),
+  keyGenerator: (req) => `auth:${visitorIp(req)}`,
   message: { error: "TooManyRequests", message: "Too many auth attempts, try again later" },
 });
 

@@ -9,7 +9,7 @@ import { ncr } from "./ncr.js";
  * build, 2026-09-16) — NOT the automated Supplier RMA Request event trail
  * (see supplierRma.ts's rmaActivityLog, renamed at the same time to free
  * "rma_log" for this table). This is a customer-return register: every
- * field below is the literal, exact column list the brief specified, no
+ * field below is the literal, exact column list specified, no
  * more, no less — comparable in spirit to CRAR (customer-facing return
  * documentation) but a lighter, faster-to-fill front-door record a
  * Customer Service/Quality user opens the moment a return is issued,
@@ -17,10 +17,10 @@ import { ncr } from "./ncr.js";
  *
  * Real integrations, each a nullable FK exactly like CRAR's own pattern
  * (link if applicable, never fabricate one):
- *   - warrantyId -> warranty_claims: this return is warranty-related.
- *   - supplierRmaRequestId -> supplier_rma_requests: root-caused to a
- *     specific supplier's defective part, already tracked on that request.
- *   - qualityId -> ncr: escalated into a formal Nonconformance.
+ *  - warrantyId -> warranty_claims: this return is warranty-related.
+ *  - supplierRmaRequestId -> supplier_rma_requests: root-caused to a
+ *  specific supplier's defective part, already tracked on that request.
+ *  - qualityId -> ncr: escalated into a formal Nonconformance.
  *
  * status is a fixed, linear lifecycle matching the field list's own
  * natural progression (see rmaLog.controller.ts's ALLOWED_NEXT):
@@ -44,7 +44,7 @@ export const rmaLogRecords = pgTable(
     customerReasonForReturn: text("customer_reason_for_return"),
     dateReceived: timestamp("date_received"),
     qualityTeamFindings: text("quality_team_findings"),
-    // "Warranty, scrap, repair, replace, credit" per the brief's own list —
+    // "Warranty, scrap, repair, replace, credit" —
     // kept as free text (not a DB enum) matching this app's established
     // convention for record-status-style fields (see auditTrail.action's
     // own comment); validated to that fixed set at the API boundary

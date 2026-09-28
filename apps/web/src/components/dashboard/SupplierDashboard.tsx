@@ -4,7 +4,7 @@ import { WorkflowStateDistributionChart, type StateDatum } from "../charts/Workf
 import type { useWorkflowDashboardData } from "../../hooks/useWorkflowDashboardData";
 
 /**
- * Supplier dashboard widgets. "Pending approval" from the brief is omitted —
+ * Supplier dashboard widgets. "Pending approval" is omitted —
  * confirmed since the State Dictionary that new suppliers start already
  * "active", with no pending-approval gate in the real schema. "Status trend
  * chart" is also omitted: `suppliers` has no updatedAt column at all (only

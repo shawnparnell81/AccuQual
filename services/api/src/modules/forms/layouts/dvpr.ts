@@ -1,6 +1,6 @@
 import type { FormLayout } from "./types.js";
 
-/** Derived 1:1 from the user-provided "DVPR Template.pdf" (Design Validation Plan and Report). */
+/** Derived 1:1 from the source "DVPR Template.pdf" (Design Validation Plan and Report). */
 export const dvprLayout: FormLayout = {
   formType: "dvpr",
   title: "DESIGN VALIDATION PLAN AND REPORT (DVP&R)",

@@ -503,7 +503,7 @@ export interface InventoryAlert {
   currentStock: number;
 }
 
-/** GET /inventory/alerts/routing — real active-user counts per department, not a fictional single "department email" (see the Alerts UI review). */
+/** GET /inventory/alerts/routing — active signed-in user counts per department. */
 export interface InventoryAlertRouting {
   material_management: number;
   purchasing: number;

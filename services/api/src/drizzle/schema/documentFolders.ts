@@ -4,8 +4,7 @@ import { documents } from "./documents.js";
 /**
  * A generic, self-referencing folder tree for organizing document types by
  * department (Engineering, Quality, Production, Material Management,
- * Shipping & Receiving, Purchasing, Customer Service) — the taxonomy the
- * user handed over as 7 department folder/subfolder lists. `parentId` null
+ * Shipping & Receiving, Purchasing, Customer Service) — the taxonomy seeded from 7 department folder/subfolder lists. `parentId` null
  * means a top-level department; every other row nests under some other row
  * in this same table, to any depth (the seeded default tree is 3 levels:
  * department -> folder -> document type, but nothing enforces that depth).

@@ -1,6 +1,6 @@
 import type { FormLayout } from "./types";
 
-/** Derived 1:1 from the user-provided "APQP Summary.pdf" (Product Quality Planning Summary and Sign-Off). */
+/** Derived 1:1 from the source "APQP Summary.pdf" (Product Quality Planning Summary and Sign-Off). */
 export const apqpSummaryLayout: FormLayout = {
   formType: "apqp_summary",
   title: "PRODUCT QUALITY PLANNING SUMMARY AND SIGN-OFF",
