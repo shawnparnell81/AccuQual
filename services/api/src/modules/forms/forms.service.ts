@@ -2,6 +2,9 @@ import { and, desc, eq } from "drizzle-orm";
 import { formTemplates, formData, formVersions } from "../../drizzle/schema/forms.js";
 import { AppError } from "../../utils/appError.js";
 import type { Db } from "../../lib/requestDb.js";
+import { eightD } from "../../drizzle/schema/eightD.js";
+import { blank8dFromData } from "../eight-d/blank8dForm.js";
+import { renderBlank8DPdf } from "../eight-d/blank8d-pdf.js";
 import { mergePdfFields } from "./pdf-merger.js";
 
 /**
@@ -108,6 +111,13 @@ export async function listVersions(db: Db, formId: number) {
 }
 
 export async function exportPdf(db: Db, formType: string, entityId?: number) {
+  if (formType === "eight_d") {
+    if (entityId == null) throw AppError.notFound("8D Report");
+    const [row] = await db.select().from(eightD).where(eq(eightD.id, entityId));
+    if (!row) throw AppError.notFound("8D Report");
+    return renderBlank8DPdf({ id: row.id, values: blank8dFromData((row.data ?? {}) as Record<string, unknown>) });
+  }
+
   const template = await loadTemplate(db, formType);
   const current = await loadData(db, formType, entityId);
   if (!current) throw AppError.notFound("Form data");

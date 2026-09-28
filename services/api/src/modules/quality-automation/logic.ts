@@ -231,7 +231,9 @@ export function signalsFromNcr(input: {
 /** An 8D is finished once D8 has been written. There is no separate closed flag on the row. */
 export function eightDIsClosed(data: Record<string, unknown> | null | undefined): boolean {
   const closure = data?.d8_closure;
-  return typeof closure === "string" && closure.trim().length > 0;
+  if (typeof closure === "string" && closure.trim().length > 0) return true;
+  const recognition = data?.recognition;
+  return typeof recognition === "string" && recognition.trim().length > 0;
 }
 
 /** Optional target/due text stored inside the 8D step data. The table itself has no due-date column. */

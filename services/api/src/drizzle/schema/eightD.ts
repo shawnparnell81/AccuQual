@@ -2,9 +2,10 @@ import { pgTable, serial, integer, timestamp, jsonb } from "drizzle-orm/pg-core"
 import { ncr } from "./ncr.js";
 
 /**
- * 8D report. `data` holds the D1-D8 step content as structured JSON:
- * { d1_team, d2_problem, d3_containment, d4_rootCause, d5_correctiveAction,
- *   d6_implementation, d7_prevention, d8_closure }
+ * 8D report. `data` holds the Blank 8D sheet (customer, part, D1–D8 boxes,
+ * dates, and the document-review checkboxes) plus the older step keys
+ * d1_team … d8_closure. Older text that matches a box is copied forward.
+ * Text that does not match stays on the row for the Previous fields area.
  */
 export const eightD = pgTable("eight_d", {
   id: serial("id").primaryKey(),
