@@ -18,7 +18,7 @@
 
 .e8-tabs button[aria-selected="true"] {
   background: var(--form-bar, #1d3a5c);
-  color: #fff;
+  color: var(--form-bar-foreground, #fff);
   border-color: var(--form-bar, #1d3a5c);
 }
 
@@ -52,7 +52,7 @@
 .e8-grid {
   width: 100%;
   border-collapse: collapse;
-  background: hsl(var(--card));
+  background: hsl(var(--form-input));
   border: 1px solid hsl(var(--border));
   border-radius: 6px;
 }
@@ -67,7 +67,7 @@
 
 .e8-h {
   background: var(--form-bar, #1d3a5c);
-  color: #fff;
+  color: var(--form-bar-foreground, #fff);
   font-weight: 700;
   font-size: 11px;
   line-height: 1.25;
@@ -80,8 +80,8 @@
 }
 
 .e8-lab {
-  background: hsl(var(--muted));
-  color: hsl(var(--foreground));
+  background: hsl(var(--form-label));
+  color: hsl(var(--form-label-foreground));
   font-weight: 600;
   font-size: 11px;
   line-height: 1.25;
@@ -100,8 +100,8 @@
 .e8-sheet textarea {
   width: 100%;
   border: 0;
-  background: transparent;
-  color: hsl(var(--foreground));
+  background: hsl(var(--form-input));
+  color: hsl(var(--form-input-foreground));
   font: inherit;
   font-size: 12px;
   line-height: 1.35;
@@ -116,7 +116,8 @@
 }
 
 .e8-sheet .calc {
-  background: hsl(var(--muted) / 0.35);
+  background: hsl(var(--form-label));
+  color: hsl(var(--form-label-foreground));
   font-weight: 600;
 }
 

@@ -7,7 +7,7 @@ import { usePictureRecord } from "./pictureRecord";
 // app-wide instead of needing every module's form touched individually — see styles/globals.css's
 // --form-field token (defaults to the same value as --border until a company customizes it).
 const baseInputClass =
-  "w-full rounded-[9px] border border-form-field bg-background/70 px-2.5 py-2 text-sm text-foreground outline-none focus:border-ring";
+  "w-full rounded-[9px] border border-form-field bg-[hsl(var(--form-input))] px-2.5 py-2 text-sm text-[hsl(var(--form-input-foreground))] outline-none focus:border-ring";
 
 export function TextField({ label, ...props }: { label: string } & InputHTMLAttributes<HTMLInputElement>) {
   return (

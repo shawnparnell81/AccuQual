@@ -61,8 +61,8 @@
   font-weight: 600;
   line-height: 1.15;
   padding: 6px 8px;
-  background: hsl(var(--muted));
-  color: hsl(var(--foreground));
+  background: hsl(var(--form-label));
+  color: hsl(var(--form-label-foreground));
 }
 
 .b8-lab.left {
@@ -81,7 +81,7 @@
   display: flex;
   align-items: center;
   background: var(--form-bar, #1d3a5c);
-  color: #fff;
+  color: var(--form-bar-foreground, #fff);
   font-weight: 700;
   font-size: 0.75rem;
   line-height: 1.25;
@@ -97,7 +97,7 @@
 .b8-val,
 .b8-box {
   display: flex;
-  background: hsl(var(--card));
+  background: hsl(var(--form-input));
 }
 
 .b8 input.b8-input,
@@ -107,7 +107,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: hsl(var(--foreground));
+  color: hsl(var(--form-input-foreground));
   font-family: inherit;
   font-size: 0.75rem;
   line-height: 1.35;
@@ -201,7 +201,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 16px;
-  background: hsl(var(--card));
+  background: hsl(var(--form-input));
   min-height: 36px;
   padding: 8px 12px;
   font-size: 12px;
