@@ -108,8 +108,9 @@ export const createPortalAccountHandler = asyncHandler(async (req: Request, res:
   const [supplier] = await req.db!.select().from(suppliers).where(and(eq(suppliers.id, supplierId)));
   if (!supplier) throw AppError.notFound("Supplier");
 
-  const { email, name } = req.body as { email: string; name?: string };
-  const [existing] = await req.db!.select({ id: users.id }).from(users).where(sql`lower(${users.email}) = lower(${email})`);
+  const { name } = req.body as { email: string; name?: string };
+  const email = (req.body as { email: string }).email.trim().toLowerCase();
+  const [existing] = await req.db!.select({ id: users.id }).from(users).where(sql`lower(btrim(${users.email})) = ${email}`);
   if (existing) throw AppError.badRequest("Email already registered");
 
   const supplierRole = await ensureSupplierRole(req.db!);
