@@ -21,6 +21,13 @@ function asciiFileName(fileName: string): string {
   return cleaned.slice(0, 180) || "download";
 }
 
+/** Types a browser will run as a page. Office Open XML names contain "xml" and are not in this set. */
+function unsafeStoredMime(storedMime: string | null | undefined): boolean {
+  if (!storedMime) return false;
+  const mime = storedMime.split(";")[0]!.trim().toLowerCase();
+  return mime === "text/html" || mime === "application/xhtml+xml" || mime === "image/svg+xml" || mime === "text/xml" || mime === "application/xml" || mime === "text/javascript" || mime === "application/javascript" || mime === "application/x-javascript";
+}
+
 /**
  * Sends a stored upload. Images and PDFs may be shown in the browser.
  * Everything else, and every template, is a download. The sandbox policy
@@ -37,7 +44,7 @@ export async function sendStoredFile(
   const head = await readFileHead(filePath);
   const sniffed = inlineMime(head);
   const inline = mode === "preview" && sniffed !== null;
-  const unsafeStored = storedMime != null && /html|svg|xml|javascript/i.test(storedMime);
+  const unsafeStored = unsafeStoredMime(storedMime);
   const contentType = sniffed ?? (storedMime && !unsafeStored ? storedMime : "application/octet-stream");
   const size = (await stat(filePath)).size;
   const disposition = inline ? "inline" : "attachment";
