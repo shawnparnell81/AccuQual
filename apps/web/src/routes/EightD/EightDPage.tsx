@@ -54,7 +54,7 @@ function NcrPicker({ value, onChange }: { value: number | null; onChange: (id: n
         </button>
       )}
       {open && (
-        <ul id="ncr-picker-list" role="listbox" className="absolute left-0 right-0 top-full z-20 mt-1 max-h-52 overflow-auto rounded-md border border-border bg-card p-1 shadow-lg">
+        <ul id="ncr-picker-list" role="listbox" className="mt-1 max-h-52 overflow-auto rounded-md border border-border bg-card p-1 shadow-lg">
           {isLoading && <li className="px-2 py-1 text-xs text-muted-foreground">Loading NCRs…</li>}
           {!isLoading && matches.length === 0 && <li className="px-2 py-1 text-xs text-muted-foreground">No matching NCR</li>}
           {matches.map((ncr) => (
