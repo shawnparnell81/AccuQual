@@ -68,7 +68,7 @@
   --secondary-foreground: var(--muted-foreground);
   --accent: 271 91% 65%; /* #A855F7 — prototype accent; overridden when a user sets one */
   --accent-foreground: 216 33% 3%;
-  --form-field: var(--border);
+  --form-field: 217 16% 32%;
   --button: var(--primary);
   --button-foreground: var(--primary-foreground);
 
@@ -90,8 +90,15 @@
   --chart-fallback: #64748b;
   --chart-pareto-bar: #2451ff;
   --chart-pareto-line: #c23b2c;
-  --form-heading: #1d3a5c;
+  /* Form chrome. Headings and section bars stay readable on the dark canvas.
+     Input wells are darker than label cells, with light text. */
+  --form-heading: #e8eef6;
   --form-bar: #1d3a5c;
+  --form-bar-foreground: #ffffff;
+  --form-input: 220 22% 9%;
+  --form-input-foreground: 210 25% 96%;
+  --form-label: 217 18% 20%;
+  --form-label-foreground: 210 20% 94%;
 
   --fh: "Montserrat", system-ui, sans-serif;
   --fb: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -111,27 +118,19 @@
  */
 :root[data-theme="light"] {
   color-scheme: light;
-  /* background/card/border/muted all carry a real, visible tint of the
-     brand's own neon-cyan primary hue (192°) rather than the neutral
-     slate-gray this palette shipped with — plain-white cards read as
-     "washed out"/"completely white all the way around" against the dark
-     theme's identity; this keeps light mode airy while still looking like
-     the same product. Card stays a touch lighter than background so
-     surfaces still visibly "pop" off the page, same relationship as before.
-     First pass at this (45%/60% sat, 95%/97% lightness) was too close to
-     white to read as "colored" at a glance — pushed saturation up and
-     lightness down a second round so the tint is unmistakable (background
-     ~#CEEAF3, card ~#E2F4F9) without losing legibility of dark text on top. */
-  --background: 195 60% 88%; /* #CEEAF3-ish — clearly-tinted pale sky-blue frame */
-  --foreground: 210 29% 5%; /* #0A0E12 — the dark palette's own background color, reused as light-mode text */
-  --text: 210 29% 12%;
-  --card: 192 65% 93%; /* #E2F4F9-ish — pale cyan-tinted surface, lighter than the background */
-  --border: 195 50% 76%; /* #A3D1E0-ish — a real visible border line, not a hairline */
+  /* Neutral page. Cards and form fields are white; label cells are a
+     gray a step darker so a field reads as a field. Cyan stays on
+     buttons and links, not on the page fill. */
+  --background: 220 16% 96%; /* #F3F4F6 */
+  --foreground: 222 28% 12%;
+  --text: 222 16% 22%;
+  --card: 0 0% 100%;
+  --border: 220 13% 82%;
   --primary: 192 91% 36%; /* #0891B2 — same cyan hue as the dark palette's neon accent, darkened for contrast on white */
   --primary-foreground: 0 0% 100%;
   --ring: var(--primary);
-  --muted: 195 55% 84%; /* #C0E1ED-ish — same cyan tint, a deeper recessed surface (section header bars, etc.) */
-  --muted-foreground: 205 25% 35%; /* deepened further to keep reading as muted text against the now-darker muted background */
+  --muted: 220 14% 92%;
+  --muted-foreground: 220 9% 32%;
   --destructive: 347 77% 50%; /* #E11D48 */
   --success: 160 84% 39%; /* #059669 */
   --success-foreground: 0 0% 100%;
@@ -144,9 +143,16 @@
   --secondary-foreground: var(--muted-foreground);
   --accent: 271 70% 45%;
   --accent-foreground: 0 0% 100%;
-  --form-field: var(--border);
+  --form-field: 220 10% 68%;
   --button: var(--primary);
   --button-foreground: var(--primary-foreground);
+  --form-heading: #1d3a5c;
+  --form-bar: #1d3a5c;
+  --form-bar-foreground: #ffffff;
+  --form-input: 0 0% 100%;
+  --form-input-foreground: 222 28% 12%;
+  --form-label: 220 14% 92%;
+  --form-label-foreground: 222 22% 16%;
 }
 
 /* Explicit dark override — wins even if the OS-preference fallback below would otherwise apply, same reasoning the artifact-design 3-state pattern uses for a toggle vs. prefers-color-scheme. */
@@ -173,23 +179,30 @@
   --secondary-foreground: var(--muted-foreground);
   --accent: 271 91% 65%;
   --accent-foreground: 216 33% 3%;
-  --form-field: var(--border);
+  --form-field: 217 16% 32%;
   --button: var(--primary);
   --button-foreground: var(--primary-foreground);
+  --form-heading: #e8eef6;
+  --form-bar: #1d3a5c;
+  --form-bar-foreground: #ffffff;
+  --form-input: 220 22% 9%;
+  --form-input-foreground: 210 25% 96%;
+  --form-label: 217 18% 20%;
+  --form-label-foreground: 210 20% 94%;
 }
 
 /* Zero-JS fallback for the instant a page loads before lib/theme.ts's applyTheme() stamps a concrete data-theme — real app usage always ends up with an explicit stamp (light/dark/system all resolve to one), so this rarely matters, but it's a real OS-preference match rather than nothing. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --background: 195 60% 88%;
-    --foreground: 210 29% 5%;
-    --card: 192 65% 93%;
-    --border: 195 50% 76%;
+    --background: 220 16% 96%;
+    --foreground: 222 28% 12%;
+    --card: 0 0% 100%;
+    --border: 220 13% 82%;
     --primary: 192 91% 36%;
     --primary-foreground: 0 0% 100%;
     --ring: var(--primary);
-    --muted: 195 55% 84%;
-    --muted-foreground: 205 25% 35%;
+    --muted: 220 14% 92%;
+    --muted-foreground: 220 9% 32%;
     --destructive: 347 77% 50%;
     --text: 210 29% 12%;
     --success: 160 84% 39%;
@@ -202,9 +215,16 @@
     --secondary-foreground: var(--muted-foreground);
     --accent: 271 70% 45%;
     --accent-foreground: 0 0% 100%;
-    --form-field: var(--border);
+    --form-field: 220 10% 68%;
     --button: var(--primary);
     --button-foreground: var(--primary-foreground);
+    --form-heading: #1d3a5c;
+    --form-bar: #1d3a5c;
+    --form-bar-foreground: #ffffff;
+    --form-input: 0 0% 100%;
+    --form-input-foreground: 222 28% 12%;
+    --form-label: 220 14% 92%;
+    --form-label-foreground: 222 22% 16%;
   }
 }
 
@@ -1348,7 +1368,6 @@ body.side-collapsed .aq-nav-folder-link {
   --secondary-foreground: 214 18% 74%;
   --accent: 214 32% 72%; /* #507099 lightened */
   --accent-foreground: 213 45% 8%;
-  --form-field: 213 24% 26%;
   --button: 213 78% 56%;
   --button-foreground: 213 45% 8%;
   --brand-header: 213 85% 26%; /* #0A3C7B */
@@ -1372,8 +1391,14 @@ body.side-collapsed .aq-nav-folder-link {
   --chart-fallback: #9aabbf;
   --chart-pareto-bar: hsl(var(--primary));
   --chart-pareto-line: hsl(var(--destructive));
-  --form-heading: hsl(var(--primary));
+  --form-heading: #e7eef8;
   --form-bar: #0a3c7b;
+  --form-bar-foreground: #ffffff;
+  --form-input: 213 32% 10%;
+  --form-input-foreground: 0 0% 96%;
+  --form-label: 213 22% 20%;
+  --form-label-foreground: 210 20% 94%;
+  --form-field: 213 18% 38%;
 }
 
 /* dma-scheme-light */
@@ -1393,7 +1418,6 @@ body.side-collapsed .aq-nav-folder-link {
   --secondary-foreground: 0 0% 23%; /* #3A3A3A */
   --accent: 214 31% 46%; /* #507099 */
   --accent-foreground: 0 0% 100%;
-  --form-field: 0 0% 80%;
   --button: 213 85% 26%; /* #0A3C7B */
   --button-foreground: 0 0% 100%;
   --brand-header: 213 85% 26%; /* #0A3C7B */
@@ -1419,6 +1443,12 @@ body.side-collapsed .aq-nav-folder-link {
   --chart-pareto-line: hsl(var(--destructive));
   --form-heading: #0a3c7b;
   --form-bar: #0a3c7b;
+  --form-bar-foreground: #ffffff;
+  --form-input: 0 0% 100%;
+  --form-input-foreground: 0 0% 16%;
+  --form-label: 0 0% 93%;
+  --form-label-foreground: 0 0% 16%;
+  --form-field: 0 0% 70%;
 }
 
 @media (prefers-color-scheme: light) {
@@ -1438,7 +1468,6 @@ body.side-collapsed .aq-nav-folder-link {
     --secondary-foreground: 0 0% 23%;
     --accent: 214 31% 46%;
     --accent-foreground: 0 0% 100%;
-    --form-field: 0 0% 80%;
     --button: 213 85% 26%;
     --button-foreground: 0 0% 100%;
     --brand-header: 213 85% 26%;
@@ -1453,10 +1482,16 @@ body.side-collapsed .aq-nav-folder-link {
     --info-foreground: 0 0% 100%;
     --form-heading: #0a3c7b;
     --form-bar: #0a3c7b;
+    --form-bar-foreground: #ffffff;
+    --form-input: 0 0% 100%;
+    --form-input-foreground: 0 0% 16%;
+    --form-label: 0 0% 93%;
+    --form-label-foreground: 0 0% 16%;
+    --form-field: 0 0% 70%;
   }
 }
 
-/* Site header is navy with white type in both modes. Light Classic keeps its pale bar. */
+/* Site header is navy with white type in both modes. */
 :root[data-scheme="dma"] .aq-topbar {
   background: hsl(var(--brand-header));
   color: #fff;
