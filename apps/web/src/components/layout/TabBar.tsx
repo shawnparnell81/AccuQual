@@ -83,8 +83,8 @@ export function TabBar() {
             title={tab.title}
             className={
               isActive
-                ? "relative flex min-w-0 max-w-[12rem] flex-1 basis-0 items-center gap-1.5 overflow-hidden rounded-t-md border border-b-0 border-border bg-background px-2.5 py-1 text-xs text-foreground"
-                : "flex min-w-0 max-w-[12rem] flex-1 basis-0 items-center gap-1.5 overflow-hidden rounded-t-md border border-b-0 border-transparent px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary"
+                ? "relative flex min-w-0 max-w-[12rem] shrink items-center gap-1.5 overflow-hidden rounded-t-md border border-b-0 border-border bg-background px-2.5 py-1 text-xs text-foreground"
+                : "flex min-w-0 max-w-[12rem] shrink items-center gap-1.5 overflow-hidden rounded-t-md border border-b-0 border-transparent px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary"
             }
           >
             {isActive && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" aria-hidden />}
