@@ -34,6 +34,11 @@ export interface FormTemplateSeed {
   subjectRoute: string;
   /** How the Forms Library opens a blank copy. Null means the library opens `subjectRoute` and does not create a record. */
   start: FormStart | null;
+  /**
+   * Filled-copy file name. Defaults to FILE_NAME_PATTERN.
+   * A form with no document number leaves `{formId}` out of this pattern.
+   */
+  fileNamePattern?: string;
 }
 
 function blank(createPath: string, openPath: string, body: Record<string, unknown> = {}): FormStart {
@@ -55,7 +60,7 @@ export const FORM_TEMPLATES: FormTemplateSeed[] = [
   { formKey: "frm-ncr-002", formId: "FRM-NCR-002", title: "Quarantine Notice", topic: "Nonconformance", subjectRoute: "/iso-forms/frm-ncr-002", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "quarantine_notice", data: { cells: {} } }) },
   { formKey: "frm-ncr-003", formId: "FRM-NCR-003", title: "Concession / Deviation Request", topic: "Nonconformance", subjectRoute: "/iso-forms/frm-ncr-003", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "concession", data: { cells: {} } }) },
   { formKey: "frm-trn-001", formId: "FRM-TRN-001", title: "Competency and Training Record", topic: "Training", subjectRoute: "/iso-forms/frm-trn-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "competency_training", data: { cells: {} } }) },
-  { formKey: "frm-trn-002", formId: "FRM-TRN-002", title: "Cross-Training Evaluation", topic: "Training", subjectRoute: "/iso-forms/frm-trn-002", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "cross_training", data: { cells: {} } }) },
+  { formKey: "frm-trn-002", formId: "", title: "Cross-Training Evaluation", topic: "Training", subjectRoute: "/iso-forms/frm-trn-002", fileNamePattern: "CrossTraining_{recordNumber}_{date}", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "cross_training", data: { cells: {} } }) },
   { formKey: "lst-eqp-001", formId: "LST-EQP-001", title: "Master Equipment List", topic: "Calibration", subjectRoute: "/calibration/master-list", start: null },
   { formKey: "lst-gen-001", formId: "LST-GEN-001", title: "Master Document List", topic: "Document Control", subjectRoute: "/documents/master-list", start: null },
   { formKey: "frm-val-001", formId: "FRM-VAL-001", title: "CSA Validation Report", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "csa", cells: {} } }) },
@@ -97,6 +102,10 @@ export const FORM_TEMPLATES: FormTemplateSeed[] = [
 /** Folders under the ISO documents root for one template: blank-forms folder, then its topic. */
 export function templateFolderPath(topic: string): string[] {
   return [BLANK_FORMS_FOLDER, topic];
+}
+
+export function fileNamePatternFor(seed: { fileNamePattern?: string }): string {
+  return seed.fileNamePattern ?? FILE_NAME_PATTERN;
 }
 
 export function filedRecordName(formId: string, recordNumber: number | string, date: string, pattern = FILE_NAME_PATTERN): string {

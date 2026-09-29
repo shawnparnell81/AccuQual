@@ -13,16 +13,14 @@ import { ThemeToggleButton } from "./ThemeToggleButton";
 import { BackButton } from "./BackButton";
 import { DASHBOARD_LEAF } from "./navConfig";
 import {
-  SIDEBAR_FOLDERS,
   flattenSidebarLinks,
   isFolder,
   pathMatches,
   sidebarNodeContainsPath,
-  visibleSidebar,
   type SidebarFolder,
   type SidebarNode,
 } from "./sidebarStructure";
-import { canViewAuditLog } from "../../lib/recordDelete";
+import { SidebarDragChrome, SidebarOrganizeProvider, SidebarResetButton, useArrangedSidebar, useSidebarOrganize, useSidebarRow } from "./sidebarOrganize";
 import { LayoutDashboard } from "lucide-react";
 import { prefetchRoute } from "../../routes/pages";
 
@@ -60,8 +58,7 @@ export function TopNav() {
   const [query, setQuery] = useState("");
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>(() => readOpenFolders(user?.id));
 
-  const isAdmin = user?.roleName === "admin" || user?.roleName === "owner";
-  const folders = visibleSidebar(SIDEBAR_FOLDERS, isAdmin, { auditLog: canViewAuditLog(user?.roleName) });
+  const { arranged, folders, isAdmin } = useArrangedSidebar();
   const links = flattenSidebarLinks(folders);
   const needle = query.trim().toLowerCase();
   const searchResults = needle ? links.filter((leaf) => `${leaf.label} ${leaf.key}`.toLowerCase().includes(needle)) : [];
@@ -193,31 +190,66 @@ export function TopNav() {
       </header>
 
       <div className="aq-scrim" onClick={closeSide} />
-      <nav className="aq-sidebar" id="sidebar" aria-label="Main navigation">
-        <div className="aq-side-scroll">
-          <div className="aq-nav-group">
-            <NavLink to={DASHBOARD_LEAF.path} end title="Dashboard" onClick={closeSide} onMouseEnter={() => prefetchRoute(DASHBOARD_LEAF.path)} onFocus={() => prefetchRoute(DASHBOARD_LEAF.path)} className={({ isActive }) => clsx("aq-nav-link", isActive && "active")}>
-              <LayoutDashboard size={18} />
-              <span className="aq-nav-label">{DASHBOARD_LEAF.label}</span>
-            </NavLink>
-          </div>
-          {folders.filter(isFolder).map((folder) => (
-            <FolderBlock key={folder.key} node={folder} open={folderOpen(folder)} onToggle={() => toggleFolder(folder.key, folderOpen(folder))} isOpen={folderOpen} onToggleKey={toggleFolder} onNavigate={closeSide} pathname={location.pathname} />
-          ))}
-        </div>
-        <div className="aq-side-foot">
-          <NavLink to="/settings" title="Settings" onClick={closeSide} onMouseEnter={() => prefetchRoute("/settings")} onFocus={() => prefetchRoute("/settings")} className={({ isActive }) => clsx("aq-nav-link", isActive && "active")}>
-            <Settings size={18} />
-            <span className="aq-nav-label">Settings</span>
-          </NavLink>
-          {company?.name && <p className="mt-2 truncate">{company.name}</p>}
-          <button type="button" className="aq-collapse" onClick={toggleCollapsed} aria-label={sideCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
-            {sideCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-            <span>Collapse</span>
-          </button>
-        </div>
-      </nav>
+      {isAdmin ? (
+        <SidebarOrganizeProvider arranged={arranged}>
+          <SidebarNav folders={folders} folderOpen={folderOpen} toggleFolder={toggleFolder} closeSide={closeSide} pathname={location.pathname} companyName={company?.name} sideCollapsed={sideCollapsed} toggleCollapsed={toggleCollapsed} />
+        </SidebarOrganizeProvider>
+      ) : (
+        <SidebarNav folders={folders} folderOpen={folderOpen} toggleFolder={toggleFolder} closeSide={closeSide} pathname={location.pathname} companyName={company?.name} sideCollapsed={sideCollapsed} toggleCollapsed={toggleCollapsed} />
+      )}
     </>
+  );
+}
+
+function SidebarNav({
+  folders,
+  folderOpen,
+  toggleFolder,
+  closeSide,
+  pathname,
+  companyName,
+  sideCollapsed,
+  toggleCollapsed,
+}: {
+  folders: SidebarNode[];
+  folderOpen: (node: SidebarFolder) => boolean;
+  toggleFolder: (key: string, currentlyOpen: boolean) => void;
+  closeSide: () => void;
+  pathname: string;
+  companyName?: string;
+  sideCollapsed: boolean;
+  toggleCollapsed: () => void;
+}) {
+  return (
+    <nav className="aq-sidebar" id="sidebar" aria-label="Main navigation">
+      <div className="aq-side-scroll">
+        <div className="aq-nav-group">
+          <NavLink to={DASHBOARD_LEAF.path} end title="Dashboard" onClick={closeSide} onMouseEnter={() => prefetchRoute(DASHBOARD_LEAF.path)} onFocus={() => prefetchRoute(DASHBOARD_LEAF.path)} className={({ isActive }) => clsx("aq-nav-link", isActive && "active")}>
+            <LayoutDashboard size={18} />
+            <span className="aq-nav-label">{DASHBOARD_LEAF.label}</span>
+          </NavLink>
+        </div>
+        {folders.map((node) =>
+          isFolder(node) ? (
+            <FolderBlock key={node.key} node={node} open={folderOpen(node)} onToggle={() => toggleFolder(node.key, folderOpen(node))} isOpen={folderOpen} onToggleKey={toggleFolder} onNavigate={closeSide} pathname={pathname} />
+          ) : (
+            <LeafLink key={node.key} node={node} onNavigate={closeSide} pathname={pathname} />
+          ),
+        )}
+      </div>
+      <div className="aq-side-foot">
+        <NavLink to="/settings" title="Settings" onClick={closeSide} onMouseEnter={() => prefetchRoute("/settings")} onFocus={() => prefetchRoute("/settings")} className={({ isActive }) => clsx("aq-nav-link", isActive && "active")}>
+          <Settings size={18} />
+          <span className="aq-nav-label">Settings</span>
+        </NavLink>
+        {companyName && <p className="mt-2 truncate">{companyName}</p>}
+        <SidebarResetButton />
+        <button type="button" className="aq-collapse" onClick={toggleCollapsed} aria-label={sideCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
+          {sideCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          <span>Collapse</span>
+        </button>
+      </div>
+    </nav>
   );
 }
 
@@ -241,9 +273,11 @@ function FolderBlock({
   nested?: boolean;
 }) {
   const active = sidebarNodeContainsPath(node, pathname);
+  const row = useSidebarRow(node.key, true);
   return (
     <div className={clsx("aq-nav-group", nested && "aq-nav-nested")}>
-      <div className={clsx("aq-nav-link aq-nav-folder", active && !node.path && "active")}>
+      <div className={clsx("aq-nav-link aq-nav-folder", active && !node.path && "active", row.dropClass)} onDragOver={row.onDragOver} onDragLeave={row.onDragLeave} onDrop={row.onDrop}>
+        <SidebarDragChrome itemKey={node.key} label={node.label} />
         {node.path ? (
           <NavLink to={node.path} onClick={onNavigate} onMouseEnter={() => prefetchRoute(node.path!)} onFocus={() => prefetchRoute(node.path!)} className={() => clsx("aq-nav-folder-link", pathMatches(pathname, node.path!) && "active")} title={node.label}>
             <node.icon size={18} className="shrink-0" />
@@ -285,12 +319,25 @@ function FolderBlock({
 }
 
 function LeafLink({ node, onNavigate, pathname }: { node: SidebarNode & { path: string }; onNavigate: () => void; pathname: string }) {
+  const row = useSidebarRow(node.key, false);
+  const organize = useSidebarOrganize();
   if (isFolder(node) || !node.path) return null;
   const active = pathMatches(pathname, node.path);
+  if (!organize) {
+    return (
+      <NavLink to={node.path} title={node.label} onClick={onNavigate} onMouseEnter={() => prefetchRoute(node.path)} onFocus={() => prefetchRoute(node.path)} className={() => clsx("aq-nav-link aq-nav-child", active && "active")}>
+        <node.icon size={16} className="shrink-0" />
+        <span className="aq-nav-label min-w-0 flex-1 truncate">{node.label}</span>
+      </NavLink>
+    );
+  }
   return (
-    <NavLink to={node.path} title={node.label} onClick={onNavigate} onMouseEnter={() => prefetchRoute(node.path)} onFocus={() => prefetchRoute(node.path)} className={() => clsx("aq-nav-link aq-nav-child", active && "active")}>
-      <node.icon size={16} className="shrink-0" />
-      <span className="aq-nav-label min-w-0 flex-1 truncate">{node.label}</span>
-    </NavLink>
+    <div className={clsx("aq-nav-link aq-nav-folder aq-nav-child", active && "active", row.dropClass)} onDragOver={row.onDragOver} onDragLeave={row.onDragLeave} onDrop={row.onDrop}>
+      <SidebarDragChrome itemKey={node.key} label={node.label} />
+      <NavLink to={node.path} title={node.label} onClick={onNavigate} onMouseEnter={() => prefetchRoute(node.path)} onFocus={() => prefetchRoute(node.path)} className={() => clsx("aq-nav-folder-link", active && "active")}>
+        <node.icon size={16} className="shrink-0" />
+        <span className="aq-nav-label min-w-0 flex-1 truncate">{node.label}</span>
+      </NavLink>
+    </div>
   );
 }

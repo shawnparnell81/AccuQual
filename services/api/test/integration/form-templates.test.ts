@@ -66,6 +66,11 @@ describe("ISO Compliance Documents form templates", () => {
     expect(documentList?.subjectRoute).toBe("/documents/master-list");
     expect(documentList?.isoPath).toEqual(["Blank Form Templates", "Document Control"]);
     expect(auditForm?.formId).toBe("FRM-GEN-001");
+    const crossTraining = templates.find((form) => form.formKey === "frm-trn-002");
+    expect(crossTraining?.formId).toBe("");
+    expect(crossTraining?.title).toBe("Cross-Training Evaluation");
+    expect((crossTraining as { fileNamePattern?: string } | undefined)?.fileNamePattern).toBe("CrossTraining_{recordNumber}_{date}");
+    expect(filedRecordName("", 4, "2026-09-28", "CrossTraining_{recordNumber}_{date}")).toBe("CrossTraining_4_2026-09-28");
     expect(auditForm?.start?.createPath).toBe("/iso-quality-forms");
     expect(ncrForm?.subjectRoute).toBe("/iso-forms/frm-ncr-001");
     expect(ncr?.subjectRoute).toBe("/ncr");

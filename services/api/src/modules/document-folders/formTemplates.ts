@@ -2,7 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import type { Db } from "../../lib/requestDb.js";
-import { BLANK_FORMS_FOLDER, FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, templateFolderPath, type FormStart } from "./formFiling.js";
+import { BLANK_FORMS_FOLDER, FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, fileNamePatternFor, type FormStart } from "./formFiling.js";
 
 const PREVIOUS_ISO_ROOT = "ISO Compliance";
 const PREVIOUS_BLANK_FOLDER = "03_Blank_Forms_Templates";
@@ -25,39 +25,64 @@ async function findOrCreateChild(db: Db, parentId: number, name: string) {
   return created;
 }
 
-/** Files each blank template under ISO Compliance Documents / Blank Form Templates / topic. */
+/**
+ * Files each blank template under ISO Compliance Documents / Blank Form Templates / topic
+ * the first time that topic is created. A folder someone has already moved stays where they put it.
+ */
 export async function ensureFormTemplates(db: Db): Promise<void> {
-  const [legacy] = await db.select().from(documentFolders).where(and(isNull(documentFolders.parentId), eq(documentFolders.name, PREVIOUS_ISO_ROOT)));
-  const [named] = await db.select().from(documentFolders).where(and(isNull(documentFolders.parentId), eq(documentFolders.name, ISO_DOCUMENTS_FOLDER)));
+  const all = await db.select().from(documentFolders);
+  const byId = new Map(all.map((folder) => [folder.id, folder]));
+
+  const legacy = all.find((folder) => folder.parentId === null && folder.name === PREVIOUS_ISO_ROOT);
+  const named = all.find((folder) => folder.name === ISO_DOCUMENTS_FOLDER);
   if (legacy && !named) {
     await db.update(documentFolders).set({ name: ISO_DOCUMENTS_FOLDER }).where(eq(documentFolders.id, legacy.id));
+    legacy.name = ISO_DOCUMENTS_FOLDER;
   }
 
-  const iso = await findOrCreateRoot(db, ISO_DOCUMENTS_FOLDER);
-  const [previousBlanks] = await db.select().from(documentFolders).where(and(eq(documentFolders.parentId, iso.id), eq(documentFolders.name, PREVIOUS_BLANK_FOLDER)));
-  const [currentBlanks] = await db.select().from(documentFolders).where(and(eq(documentFolders.parentId, iso.id), eq(documentFolders.name, BLANK_FORMS_FOLDER)));
+  let iso = all.find((folder) => folder.name === ISO_DOCUMENTS_FOLDER);
+  if (!iso) {
+    iso = await findOrCreateRoot(db, ISO_DOCUMENTS_FOLDER);
+    all.push(iso);
+    byId.set(iso.id, iso);
+  }
+
+  const previousBlanks = all.find((folder) => folder.parentId === iso.id && folder.name === PREVIOUS_BLANK_FOLDER);
+  const currentBlanks = all.find((folder) => folder.name === BLANK_FORMS_FOLDER);
   if (previousBlanks && !currentBlanks) {
     await db.update(documentFolders).set({ name: BLANK_FORMS_FOLDER }).where(eq(documentFolders.id, previousBlanks.id));
+    previousBlanks.name = BLANK_FORMS_FOLDER;
   }
-  const blanks = await findOrCreateChild(db, iso.id, BLANK_FORMS_FOLDER);
-  const keep = new Set<number>([blanks.id]);
 
-  const folders = new Map<string, number>();
+  let blanks = all.find((folder) => folder.name === BLANK_FORMS_FOLDER);
+  if (!blanks) {
+    blanks = await findOrCreateChild(db, iso.id, BLANK_FORMS_FOLDER);
+    all.push(blanks);
+    byId.set(blanks.id, blanks);
+  }
+
+  const keep = new Set<number>([blanks.id]);
+  const saved = await db.select().from(controlledFormTemplates);
+  const savedByKey = new Map(saved.map((row) => [row.formKey, row]));
+  const topicFolder = new Map<string, number>();
+  for (const seed of FORM_TEMPLATES) {
+    const existing = savedByKey.get(seed.formKey);
+    if (existing?.folderId != null && byId.has(existing.folderId) && !topicFolder.has(seed.topic)) {
+      topicFolder.set(seed.topic, existing.folderId);
+    }
+  }
 
   for (const seed of FORM_TEMPLATES) {
-    const key = seed.topic;
-    let folderId = folders.get(key);
+    let folderId = topicFolder.get(seed.topic);
     if (folderId === undefined) {
-      let parentId = iso.id;
-      for (const name of templateFolderPath(seed.topic)) {
-        parentId = (await findOrCreateChild(db, parentId, name)).id;
-      }
-      folderId = parentId;
-      folders.set(key, folderId);
-      keep.add(folderId);
+      const created = await findOrCreateChild(db, blanks.id, seed.topic);
+      folderId = created.id;
+      topicFolder.set(seed.topic, folderId);
+      byId.set(created.id, created);
     }
+    keep.add(folderId);
 
-    const [existing] = await db.select().from(controlledFormTemplates).where(eq(controlledFormTemplates.formKey, seed.formKey));
+    const existing = savedByKey.get(seed.formKey);
     if (!existing) {
       await db.insert(controlledFormTemplates).values({
         formKey: seed.formKey,
@@ -68,13 +93,19 @@ export async function ensureFormTemplates(db: Db): Promise<void> {
       });
       continue;
     }
-    if (existing.folderId !== folderId || existing.formId !== seed.formId || existing.title !== seed.title || existing.subjectRoute !== seed.subjectRoute) {
-      await db.update(controlledFormTemplates).set({
-        formId: seed.formId,
-        title: seed.title,
-        subjectRoute: seed.subjectRoute,
-        folderId,
-      }).where(eq(controlledFormTemplates.id, existing.id));
+    const folderGone = existing.folderId == null || !byId.has(existing.folderId);
+    const nextFolderId = folderGone ? folderId : existing.folderId!;
+    keep.add(nextFolderId);
+    if (folderGone || existing.formId !== seed.formId || existing.title !== seed.title || existing.subjectRoute !== seed.subjectRoute) {
+      await db
+        .update(controlledFormTemplates)
+        .set({
+          formId: seed.formId,
+          title: seed.title,
+          subjectRoute: seed.subjectRoute,
+          ...(folderGone ? { folderId: nextFolderId } : {}),
+        })
+        .where(eq(controlledFormTemplates.id, existing.id));
     }
   }
 
@@ -114,6 +145,8 @@ async function pruneEmptyDescendants(db: Db, rootId: number, keep: Set<number>):
     if (keep.has(id) || removed.has(id)) continue;
     const folder = byId.get(id);
     if (!folder || folder.pdfPath || folder.documentId || folder.linkedPath) continue;
+    // Only clear retired numbered placeholders. A folder someone moved stays put, even when it is empty.
+    if (!/^\d/.test(folder.name) && folder.name !== PREVIOUS_BLANK_FOLDER) continue;
     const liveChildren = (childrenOf.get(id) ?? []).filter((childId) => !removed.has(childId));
     if (liveChildren.length > 0) continue;
     const [held] = await db.select({ id: controlledFormTemplates.id }).from(controlledFormTemplates).where(eq(controlledFormTemplates.folderId, id));
@@ -131,6 +164,7 @@ export interface FormTemplateView {
   subjectRoute: string;
   folderId: number | null;
   isoPath: string[];
+  fileNamePattern: string;
   start: FormStart | null;
 }
 
@@ -140,6 +174,7 @@ export async function listFormTemplates(db: Db): Promise<{ fileNamePattern: stri
   const folders = await db.select().from(documentFolders);
   const byId = new Map(folders.map((folder) => [folder.id, folder]));
   const starts = new Map(FORM_TEMPLATES.map((seed) => [seed.formKey, seed.start]));
+  const patterns = new Map(FORM_TEMPLATES.map((seed) => [seed.formKey, fileNamePatternFor(seed)]));
 
   function pathOf(folderId: number | null): string[] {
     const names: string[] = [];
@@ -162,6 +197,7 @@ export async function listFormTemplates(db: Db): Promise<{ fileNamePattern: stri
         subjectRoute: template.subjectRoute,
         folderId: template.folderId,
         isoPath: pathOf(template.folderId),
+        fileNamePattern: patterns.get(template.formKey) ?? FILE_NAME_PATTERN,
         start: starts.get(template.formKey) ?? null,
       }))
       .sort((a, b) => a.formId.localeCompare(b.formId)),

@@ -321,3 +321,49 @@ export const updateOnboardingHandler = asyncHandler(async (req: Request, res: Re
   await req.db!.update(company).set({ onboardingProgress: merged });
   res.json(merged);
 });
+
+function sidebarKeysRepeat(nodes: { key: string; children?: { key: string; children?: unknown[] }[] }[], seen = new Set<string>()): boolean {
+  for (const node of nodes) {
+    if (seen.has(node.key)) return true;
+    seen.add(node.key);
+    const children = (node.children ?? []) as { key: string; children?: { key: string; children?: unknown[] }[] }[];
+    if (sidebarKeysRepeat(children, seen)) return true;
+  }
+  return false;
+}
+
+/** Anyone signed in can read the arrangement. Who can open each item is still decided in the app. */
+export const getSidebarLayoutHandler = asyncHandler(async (req: Request, res: Response) => {
+  const co = await loadCompany(req);
+  res.json({ layout: co.sidebarLayout ?? null });
+});
+
+/** Owner and administrator only. Other roles are rejected before this runs. */
+export const updateSidebarLayoutHandler = asyncHandler(async (req: Request, res: Response) => {
+  const co = await loadCompany(req);
+  const { layout } = req.body as { layout: { key: string; children?: { key: string; children?: unknown[] }[] }[] };
+  if (sidebarKeysRepeat(layout)) throw AppError.badRequest("Each sidebar item can only appear once");
+  await req.db!.update(company).set({ sidebarLayout: layout });
+  await recordAuditTrail(req.db!, {
+    entityType: "Company",
+    entityId: co.id,
+    action: "update",
+    changes: { event: "sidebar_layout" },
+    performedBy: req.user?.id,
+  });
+  res.json({ layout });
+});
+
+/** Puts the sidebar back to the built-in order. */
+export const resetSidebarLayoutHandler = asyncHandler(async (req: Request, res: Response) => {
+  const co = await loadCompany(req);
+  await req.db!.update(company).set({ sidebarLayout: null });
+  await recordAuditTrail(req.db!, {
+    entityType: "Company",
+    entityId: co.id,
+    action: "update",
+    changes: { event: "sidebar_layout_reset" },
+    performedBy: req.user?.id,
+  });
+  res.json({ layout: null });
+});

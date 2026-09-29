@@ -71,3 +71,17 @@ export const updateOnboardingSchema = z.object({
   completedItems: z.array(z.string().min(1).max(60)).max(50).optional(),
   dismissed: z.boolean().optional(),
 });
+
+export type SidebarPlacementInput = { key: string; children?: SidebarPlacementInput[] };
+
+const sidebarPlacementSchema: z.ZodType<SidebarPlacementInput> = z.lazy(() =>
+  z.object({
+    key: z.string().trim().min(1).max(80),
+    children: z.array(sidebarPlacementSchema).max(80).optional(),
+  }),
+);
+
+/** PUT /company/sidebar-layout — the whole arrangement, not a patch. */
+export const updateSidebarLayoutSchema = z.object({
+  layout: z.array(sidebarPlacementSchema).max(80),
+});

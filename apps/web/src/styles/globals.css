@@ -1031,7 +1031,8 @@ a:focus-visible {
   color: hsl(var(--muted-foreground));
   border-top: 1px solid hsl(var(--border));
 }
-.aq-collapse {
+.aq-collapse,
+.aq-side-reset {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1044,6 +1045,77 @@ a:focus-visible {
   color: hsl(var(--muted-foreground));
   cursor: pointer;
   font: inherit;
+}
+.aq-side-reset:hover,
+.aq-collapse:hover {
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--primary));
+}
+.aq-nav-organize {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+.aq-nav-grip,
+.aq-nav-move {
+  display: inline-grid;
+  place-items: center;
+  padding: 8px 2px;
+  color: hsl(var(--muted-foreground));
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.aq-nav-grip {
+  cursor: grab;
+}
+.aq-nav-grip:hover,
+.aq-nav-move:hover {
+  color: hsl(var(--foreground));
+}
+.aq-nav-move-menu {
+  position: absolute;
+  z-index: 40;
+  top: 100%;
+  left: 0;
+  min-width: 220px;
+  max-height: 280px;
+  overflow: auto;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 8px 24px hsl(var(--foreground) / 0.16);
+}
+.aq-nav-move-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.aq-nav-move-menu button:hover,
+.aq-nav-move-menu button:focus-visible {
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--foreground));
+}
+.aq-nav-drop-before {
+  box-shadow: inset 0 2px 0 hsl(var(--primary));
+}
+.aq-nav-drop-after {
+  box-shadow: inset 0 -2px 0 hsl(var(--primary));
+}
+.aq-nav-drop-inside {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: -2px;
 }
 .aq-scrim {
   display: none;
@@ -1079,7 +1151,9 @@ body.side-collapsed .aq-nav-link {
   padding: 11px;
 }
 body.side-collapsed .aq-nav-children,
-body.side-collapsed .aq-nav-chevron-btn {
+body.side-collapsed .aq-nav-chevron-btn,
+body.side-collapsed .aq-nav-organize,
+body.side-collapsed .aq-side-reset {
   display: none;
 }
 body.side-collapsed .aq-nav-folder {

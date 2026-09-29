@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { Paperclip, FileText, Download, X, Inbox, ArrowUpRight, UploadCloud } from "lucide-react";
+import { Paperclip, FileText, Download, X, Inbox, ArrowUpRight, UploadCloud, GripVertical } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
 import { StatusBadge } from "../../components/tables/StatusBadge";
@@ -10,6 +10,10 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
 import { onlyOfficeFile, previewKind, saveBytes } from "../../lib/filePreview";
+import { folderMoveIsBlocked, nextSortOrder } from "../../lib/folderMove";
+
+const DRAG_FOLDER = "application/x-accuqual-folder";
+const DRAG_DOC = "application/x-accuqual-doc";
 
 interface FormTemplateLink {
   formKey: string;
@@ -150,7 +154,7 @@ export function FolderExplorerPage() {
   const [activeDeptId, setActiveDeptId] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
   const [search, setSearch] = useState("");
-  const [dragged, setDragged] = useState<{ id: number; kind: "folder" | "doc" } | null>(null);
+  const dragRef = useRef<{ id: number; kind: "folder" | "doc" } | null>(null);
   const [dropHoverId, setDropHoverId] = useState<number | null>(null);
   const [poolHover, setPoolHover] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
@@ -202,11 +206,63 @@ export function FolderExplorerPage() {
     return { subs: subs.length, docs };
   }
 
-  function moveDoc(docId: number, newFolderId: number) {
-    updateFolder.mutate({ id: docId, parentId: newFolderId });
+  function beginDrag(event: DragEvent, id: number, kind: "folder" | "doc") {
+    dragRef.current = { id, kind };
+    event.dataTransfer.setData(kind === "folder" ? DRAG_FOLDER : DRAG_DOC, String(id));
+    event.dataTransfer.effectAllowed = "move";
   }
-  function moveFolder(folderId: number, newDeptId: number) {
-    updateFolder.mutate({ id: folderId, parentId: newDeptId });
+  function endDrag() {
+    dragRef.current = null;
+    setDropHoverId(null);
+    setPoolHover(false);
+  }
+  function allowDrop(event: DragEvent, targetParentId: number | null) {
+    const drag = dragRef.current;
+    if (!drag || isFileDrag(event)) return false;
+    if (drag.kind === "doc") {
+      if (targetParentId === null) {
+        event.stopPropagation();
+        return false;
+      }
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      return true;
+    }
+    if (folderMoveIsBlocked(folders, drag.id, targetParentId)) {
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "none";
+      return false;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    return true;
+  }
+  async function moveDoc(docId: number, newFolderId: number) {
+    const current = folders.find((folder) => folder.id === docId);
+    if (!current || current.parentId === newFolderId) return;
+    try {
+      await updateFolder.mutateAsync({ id: docId, parentId: newFolderId, sortOrder: nextSortOrder(folders, newFolderId, docId) });
+    } catch (err) {
+      toast.error(await extractErrorMessageAsync(err, "Couldn't move that document"));
+    }
+  }
+  async function moveFolder(folderId: number, newParentId: number | null) {
+    const current = folders.find((folder) => folder.id === folderId);
+    if (!current || current.parentId === newParentId) return;
+    if (folderMoveIsBlocked(folders, folderId, newParentId)) return;
+    try {
+      await updateFolder.mutateAsync({ id: folderId, parentId: newParentId, sortOrder: nextSortOrder(folders, newParentId, folderId) });
+    } catch (err) {
+      toast.error(await extractErrorMessageAsync(err, "Couldn't move that folder"));
+    }
+  }
+  function dropOn(event: DragEvent, targetParentId: number | null) {
+    event.preventDefault();
+    event.stopPropagation();
+    const drag = dragRef.current;
+    if (drag?.kind === "doc" && targetParentId !== null) void moveDoc(drag.id, targetParentId);
+    else if (drag?.kind === "folder" && !folderMoveIsBlocked(folders, drag.id, targetParentId)) void moveFolder(drag.id, targetParentId);
+    endDrag();
   }
   function sendToLibrary(docId: number) {
     if (poolFolder) moveDoc(docId, poolFolder.id);
@@ -257,8 +313,7 @@ export function FolderExplorerPage() {
         <div>
           <h1 className="text-2xl font-semibold">Document Folders</h1>
           <p className="text-sm text-muted-foreground">
-            Drag a document onto a different folder, a folder header onto a different department, or a document down into the
-            Library Pool to remove it without losing it.
+            Drag a folder onto another folder to move it with everything inside, or onto Top level. Drag a document onto a folder to file it there, or into the Library Pool to take it out of a folder.
           </p>
         </div>
         <div className="w-56">
@@ -274,6 +329,8 @@ export function FolderExplorerPage() {
             return (
               <button
                 key={dept.id}
+                draggable
+                data-folder-id={dept.id}
                 onClick={() => {
                   setActiveDeptId(dept.id);
                   setSearchParams((p) => {
@@ -281,24 +338,32 @@ export function FolderExplorerPage() {
                     return p;
                   });
                 }}
+                onDragStart={(e) => beginDrag(e, dept.id, "folder")}
+                onDragEnd={endDrag}
                 onDragOver={(e) => {
-                  if (dragged?.kind === "folder" || isFileDrag(e)) {
+                  if (isFileDrag(e)) {
                     e.preventDefault();
                     setDropHoverId(dept.id);
+                    return;
                   }
+                  if (allowDrop(e, dept.id)) setDropHoverId(dept.id);
                 }}
                 onDragLeave={() => setDropHoverId((h) => (h === dept.id ? null : h))}
                 onDrop={(e) => {
-                  e.preventDefault();
-                  setDropHoverId(null);
-                  if (isFileDrag(e)) void uploadFiles(dept.id, Array.from(e.dataTransfer.files));
-                  else if (dragged?.kind === "folder") moveFolder(dragged.id, dept.id);
-                  setDragged(null);
+                  if (isFileDrag(e)) {
+                    e.preventDefault();
+                    setDropHoverId(null);
+                    void uploadFiles(dept.id, Array.from(e.dataTransfer.files));
+                    endDrag();
+                    return;
+                  }
+                  dropOn(e, dept.id);
                 }}
-                className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
+                className={`flex cursor-grab items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors active:cursor-grabbing ${
                   dept.id === activeDept.id ? "bg-primary/10 font-medium" : "hover:bg-muted"
                 } ${dropHoverId === dept.id ? "ring-2 ring-primary" : ""}`}
               >
+                <GripVertical size={14} className="text-muted-foreground" />
                 <span className="h-2 w-2 flex-none rounded-full" style={{ backgroundColor: color }} />
                 <span className="flex-1">{dept.name}</span>
                 <span className="font-mono text-[10px] text-muted-foreground">
@@ -307,6 +372,18 @@ export function FolderExplorerPage() {
               </button>
             );
           })}
+
+          <div
+            data-testid="folder-drop-root"
+            onDragOver={(e) => {
+              if (allowDrop(e, null)) setDropHoverId(-1);
+            }}
+            onDragLeave={() => setDropHoverId((h) => (h === -1 ? null : h))}
+            onDrop={(e) => dropOn(e, null)}
+            className={`rounded-md border border-dashed px-3 py-2 text-xs ${dropHoverId === -1 ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground"}`}
+          >
+            Top level
+          </div>
 
           <form
             className="flex flex-col gap-1 border-t border-border pt-2 mt-1"
@@ -375,23 +452,32 @@ export function FolderExplorerPage() {
                 <div
                   className="flex cursor-grab items-center gap-2 border-b border-border bg-muted/50 px-3 py-2 active:cursor-grabbing"
                   draggable
-                  onDragStart={() => setDragged({ id: sub.id, kind: "folder" })}
-                  onDragEnd={() => setDragged(null)}
+                  data-folder-id={sub.id}
+                  onDragStart={(e) => {
+                    e.stopPropagation();
+                    beginDrag(e, sub.id, "folder");
+                  }}
+                  onDragEnd={endDrag}
                   onClick={() => setCollapsed((c) => ({ ...c, [sub.id]: !c[sub.id] }))}
                   onDragOver={(e) => {
-                    if (dragged?.kind === "doc") {
-                      e.preventDefault();
+                    if (isFileDrag(e)) return;
+                    if (allowDrop(e, sub.id)) {
+                      e.stopPropagation();
                       setDropHoverId(sub.id);
                     }
                   }}
                   onDragLeave={() => setDropHoverId((h) => (h === sub.id ? null : h))}
                   onDrop={(e) => {
-                    e.preventDefault();
-                    setDropHoverId(null);
-                    if (dragged?.kind === "doc") moveDoc(dragged.id, sub.id);
-                    setDragged(null);
+                    if (isFileDrag(e)) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void uploadFiles(sub.id, Array.from(e.dataTransfer.files));
+                      return;
+                    }
+                    dropOn(e, sub.id);
                   }}
                 >
+                  <GripVertical size={14} className="text-muted-foreground" />
                   <span className="text-xs text-muted-foreground">{isCollapsed ? "▸" : "▾"}</span>
                   <span className="flex-1 text-sm font-semibold">{sub.name}</span>
                   <span className="font-mono text-[10px] text-muted-foreground">{children.length + formsIn(sub.id).length + topicFolders.reduce((count, topic) => count + formsIn(topic.id).length, 0)}</span>
@@ -418,32 +504,116 @@ export function FolderExplorerPage() {
                   </button>
                 </div>
                 {!isCollapsed && (
-                  <div className="flex flex-col gap-3 p-3">
+                  <div
+                    className="flex flex-col gap-3 p-3"
+                    onDragOver={(e) => {
+                      if (allowDrop(e, sub.id)) setDropHoverId(sub.id);
+                    }}
+                    onDrop={(e) => {
+                      if (isFileDrag(e)) return;
+                      dropOn(e, sub.id);
+                    }}
+                  >
                     {docs.length === 0 && ownForms.length === 0 && topicFolders.length === 0 && <span className="text-xs italic text-muted-foreground">No documents yet — drop one here</span>}
                     {ownForms.length > 0 && (
                       <div className="flex flex-wrap gap-2">
                         {ownForms.map((form) => (
-                          <Link key={form.formKey} to={form.subjectRoute} data-form-key={form.formKey} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:opacity-80">
+                          <Link key={form.formKey} to={form.subjectRoute} draggable={false} data-form-key={form.formKey} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:opacity-80">
                             <ArrowUpRight size={12} />
-                            {form.formId} {form.title}
+                            {form.formId ? `${form.formId} ${form.title}` : form.title}
                           </Link>
                         ))}
                       </div>
                     )}
                     {topicFolders.map((topic) => {
                       const topicForms = formsIn(topic.id).filter((form) => !query || `${form.formId} ${form.title}`.toLowerCase().includes(query));
-                      if (query && topicForms.length === 0 && !topic.name.toLowerCase().includes(query)) return null;
+                      const topicChildren = byParent.get(topic.id) ?? [];
+                      const nestedTopics = topicChildren.filter((child) => formsIn(child.id).length > 0 || (byParent.get(child.id)?.length ?? 0) > 0);
+                      const nestedIds = new Set(nestedTopics.map((child) => child.id));
+                      const topicDocs = topicChildren.filter((child) => !nestedIds.has(child.id) && (!query || child.name.toLowerCase().includes(query)));
+                      if (query && topicForms.length === 0 && topicDocs.length === 0 && !topic.name.toLowerCase().includes(query)) return null;
+                      const topicHover = dropHoverId === topic.id;
                       return (
-                        <div key={topic.id}>
-                          <div className="mb-1 text-xs font-semibold">{topic.name}</div>
+                        <div
+                          key={topic.id}
+                          data-folder-id={topic.id}
+                          draggable
+                          onDragStart={(e) => {
+                            e.stopPropagation();
+                            beginDrag(e, topic.id, "folder");
+                          }}
+                          onDragEnd={endDrag}
+                          onDragOver={(e) => {
+                            if (allowDrop(e, topic.id)) {
+                              e.stopPropagation();
+                              setDropHoverId(topic.id);
+                            }
+                          }}
+                          onDragLeave={() => setDropHoverId((h) => (h === topic.id ? null : h))}
+                          onDrop={(e) => {
+                            if (isFileDrag(e)) {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              void uploadFiles(topic.id, Array.from(e.dataTransfer.files));
+                              return;
+                            }
+                            dropOn(e, topic.id);
+                          }}
+                          className={`rounded-md border px-2 py-2 ${topicHover ? "border-primary bg-primary/10" : "border-border"}`}
+                        >
+                          <div
+                            className="mb-1 flex cursor-grab items-center gap-2 text-xs font-semibold active:cursor-grabbing"
+                            draggable
+                            onDragStart={(e) => {
+                              e.stopPropagation();
+                              beginDrag(e, topic.id, "folder");
+                            }}
+                            onDragEnd={endDrag}
+                          >
+                            <GripVertical size={12} className="text-muted-foreground" />
+                            <span className="flex-1">{topic.name}</span>
+                          </div>
                           <div className="flex flex-wrap gap-2">
                             {topicForms.map((form) => (
-                              <Link key={form.formKey} to={form.subjectRoute} data-form-key={form.formKey} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:opacity-80">
+                              <Link key={form.formKey} to={form.subjectRoute} draggable={false} data-form-key={form.formKey} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:opacity-80">
                                 <ArrowUpRight size={12} />
-                                {form.formId} {form.title}
+                                {form.formId ? `${form.formId} ${form.title}` : form.title}
                               </Link>
                             ))}
+                            {topicDocs.map((doc) => (
+                              <DocPill
+                                key={doc.id}
+                                doc={doc}
+                                onDragStart={(e) => beginDrag(e, doc.id, "doc")}
+                                onDragEnd={endDrag}
+                                onSendToLibrary={() => sendToLibrary(doc.id)}
+                                onAttach={() => requestUpload(doc.id)}
+                                onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
+                              />
+                            ))}
                           </div>
+                          {nestedTopics.map((nested) => (
+                            <div
+                              key={nested.id}
+                              data-folder-id={nested.id}
+                              draggable
+                              onDragStart={(e) => {
+                                e.stopPropagation();
+                                beginDrag(e, nested.id, "folder");
+                              }}
+                              onDragEnd={endDrag}
+                              onDragOver={(e) => {
+                                if (allowDrop(e, nested.id)) {
+                                  e.stopPropagation();
+                                  setDropHoverId(nested.id);
+                                }
+                              }}
+                              onDrop={(e) => dropOn(e, nested.id)}
+                              className={`mt-2 cursor-grab rounded-md border px-2 py-1 text-xs font-semibold active:cursor-grabbing ${dropHoverId === nested.id ? "border-primary bg-primary/10" : "border-border"}`}
+                            >
+                              {nested.name}
+                            </div>
+                          ))}
                         </div>
                       );
                     })}
@@ -452,8 +622,8 @@ export function FolderExplorerPage() {
                       <DocPill
                         key={doc.id}
                         doc={doc}
-                        onDragStart={() => setDragged({ id: doc.id, kind: "doc" })}
-                        onDragEnd={() => setDragged(null)}
+                        onDragStart={(e) => beginDrag(e, doc.id, "doc")}
+                        onDragEnd={endDrag}
                         onSendToLibrary={() => sendToLibrary(doc.id)}
                         onAttach={() => requestUpload(doc.id)}
                         onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
@@ -491,17 +661,13 @@ export function FolderExplorerPage() {
       {poolFolder && (
         <div
           onDragOver={(e) => {
-            if (dragged?.kind === "doc") {
-              e.preventDefault();
-              setPoolHover(true);
-            }
+            if (dragRef.current?.kind === "doc" && allowDrop(e, poolFolder.id)) setPoolHover(true);
           }}
           onDragLeave={() => setPoolHover(false)}
           onDrop={(e) => {
-            e.preventDefault();
+            if (dragRef.current?.kind !== "doc") return;
             setPoolHover(false);
-            if (dragged?.kind === "doc") moveDoc(dragged.id, poolFolder.id);
-            setDragged(null);
+            dropOn(e, poolFolder.id);
           }}
           className={`shrink-0 rounded-lg border bg-card transition-colors ${
             poolHover ? "border-primary ring-1 ring-inset ring-primary" : "border-border"
@@ -517,8 +683,8 @@ export function FolderExplorerPage() {
                 <DocPill
                   key={doc.id}
                   doc={doc}
-                  onDragStart={() => setDragged({ id: doc.id, kind: "doc" })}
-                  onDragEnd={() => setDragged(null)}
+                  onDragStart={(e) => beginDrag(e, doc.id, "doc")}
+                  onDragEnd={endDrag}
                   onAttach={() => requestUpload(doc.id)}
                   onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
                 />
@@ -540,7 +706,7 @@ function DocPill({
   onRemoveAttachment,
 }: {
   doc: DocumentFolder;
-  onDragStart: () => void;
+  onDragStart: (event: DragEvent) => void;
   onDragEnd: () => void;
   onSendToLibrary?: () => void;
   onAttach: () => void;
@@ -578,7 +744,10 @@ function DocPill({
   return (
     <span
       draggable
-      onDragStart={onDragStart}
+      onDragStart={(event) => {
+        event.stopPropagation();
+        onDragStart(event);
+      }}
       onDragEnd={onDragEnd}
       className={`inline-flex cursor-grab items-center gap-1.5 rounded-full border px-3 py-1 text-xs active:cursor-grabbing ${
         doc.linkedPath ? "border-primary/40 bg-primary/10" : "border-border bg-muted"
@@ -588,6 +757,7 @@ function DocPill({
       {doc.linkedPath && (
         <Link
           to={doc.linkedPath}
+          draggable={false}
           className="flex items-center text-primary hover:opacity-80"
           aria-label={`Open the live ${doc.name} module`}
           title={`This is a real module — open ${doc.linkedPath}`}
@@ -597,7 +767,7 @@ function DocPill({
       )}
       {doc.name}
       {doc.documentId && (
-        <Link to={`/documents/${doc.documentId}`} className="hover:opacity-80" title="Open the controlled document (revision history, approval, retention)">
+        <Link to={`/documents/${doc.documentId}`} draggable={false} className="hover:opacity-80" title="Open the controlled document (revision history, approval, retention)">
           <StatusBadge value={doc.documentExpirationStatus ?? doc.documentStatus ?? "draft"} />
         </Link>
       )}

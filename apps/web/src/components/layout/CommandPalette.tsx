@@ -6,11 +6,10 @@ import { apiClient } from "../../api/client";
 import type { SearchResult } from "../../api/types";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useOpenTab } from "../../hooks/useOpenTab";
-import { useCurrentUser } from "../../hooks/useAuth";
 import { readRecentRecords, rememberRecord, type RecentRecord } from "../../lib/recentRecords";
-import { canViewAuditLog } from "../../lib/recordDelete";
 import { useDialogBehavior } from "../shared/useDialogBehavior";
-import { flattenSidebarLinks, visibleSidebar, SIDEBAR_FOLDERS } from "./sidebarStructure";
+import { flattenSidebarLinks } from "./sidebarStructure";
+import { useArrangedSidebar } from "./sidebarOrganize";
 
 interface PaletteItem {
   id: string;
@@ -30,13 +29,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [recent, setRecent] = useState<RecentRecord[]>([]);
   const navigate = useNavigate();
   const openTab = useOpenTab();
-  const user = useCurrentUser();
-  const isAdmin = user?.roleName === "admin" || user?.roleName === "owner";
-  const showAuditLog = canViewAuditLog(user?.roleName);
+  const { folders } = useArrangedSidebar();
   const dialogRef = useDialogBehavior(open, onClose);
   const debouncedQuery = useDebouncedValue(query.trim(), 250);
 
-  const pages = useMemo(() => flattenSidebarLinks(visibleSidebar(SIDEBAR_FOLDERS, isAdmin, { auditLog: showAuditLog })), [isAdmin, showAuditLog]);
+  const pages = useMemo(() => flattenSidebarLinks(folders), [folders]);
 
   useEffect(() => {
     if (!open) {

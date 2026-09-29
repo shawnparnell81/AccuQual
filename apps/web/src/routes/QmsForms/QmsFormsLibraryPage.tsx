@@ -79,7 +79,7 @@ export function QmsFormsLibraryPage() {
                 data-form-key={form.formKey}
               >
                 <span className="font-medium">{form.title}</span>
-                <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{form.formId}</span>
+                {form.formId ? <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{form.formId}</span> : null}
               </button>
             ))}
           </div>

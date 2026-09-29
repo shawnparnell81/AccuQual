@@ -24,6 +24,12 @@ function filedName(pattern: string, formId: string, recordNumber: number, create
   return pattern.replaceAll("{formId}", formId).replaceAll("{recordNumber}", String(recordNumber)).replaceAll("{date}", date);
 }
 
+interface FilingTemplate {
+  formKey: string;
+  formId: string;
+  fileNamePattern: string;
+}
+
 function summary(formType: IsoFormType, cells: Record<string, CellValue>): string {
   if (formType === "internal_audit") return showCell(cells.B3) || showCell(cells.F3);
   if (formType === "ncr_report") return showCell(cells.B8) || showCell(cells.D6);
@@ -44,11 +50,13 @@ export function IsoFormListPage() {
   const { data: rows = [], isLoading, isError } = hooks.useList();
   const filing = useQuery({
     queryKey: ["form-templates"],
-    queryFn: async () => (await apiClient.get<{ fileNamePattern: string }>("/document-folders/form-templates")).data,
+    queryFn: async () => (await apiClient.get<{ fileNamePattern: string; templates: FilingTemplate[] }>("/document-folders/form-templates")).data,
   });
   const createForm = hooks.useCreate();
   const [pending, setPending] = useState(false);
-  const pattern = filing.data?.fileNamePattern ?? "{formId}_{recordNumber}_{date}";
+  const filedTemplate = filing.data?.templates?.find((item) => item.formKey === formKey);
+  const pattern = filedTemplate?.fileNamePattern ?? filing.data?.fileNamePattern ?? "{formId}_{recordNumber}_{date}";
+  const filingId = filedTemplate?.formId ?? meta?.formId ?? "";
 
   if (!meta) return <p className="text-sm text-muted-foreground">This form isn't in the library.</p>;
   const form = meta;
@@ -70,12 +78,12 @@ export function IsoFormListPage() {
         <div>
           <h1 className="text-2xl font-semibold">{meta.title}</h1>
           <p className="text-sm text-muted-foreground">
-            {meta.formId} Rev {meta.rev}. The blank template is filed under ISO Compliance Documents / Blank Form Templates. A filled copy is saved here.
+            {meta.formId ? `${meta.formId} Rev ${meta.rev}` : `Rev ${meta.rev}`}. The blank template is filed under ISO Compliance Documents / Blank Form Templates. A filled copy is saved here.
           </p>
         </div>
         {canEdit && (
           <button type="button" onClick={start} disabled={pending} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
-            {pending ? "Creating…" : `New ${meta.formId}`}
+            {pending ? "Creating…" : meta.formId ? `New ${meta.formId}` : `New ${meta.title}`}
           </button>
         )}
       </div>
@@ -99,7 +107,7 @@ export function IsoFormListPage() {
                 <tr key={row.id} className="border-t border-border">
                   <td className="px-3 py-2 font-medium">
                     <button type="button" onClick={() => navigate(`/iso-forms/record/${row.id}`)} className="text-left text-primary hover:underline">
-                      {filedName(pattern, meta.formId, row.id, row.createdAt)}
+                      {filedName(pattern, filingId, row.id, row.createdAt)}
                     </button>
                   </td>
                   <td className="px-3 py-2">{summary(meta.formType, row.data?.cells ?? {}) || "—"}</td>

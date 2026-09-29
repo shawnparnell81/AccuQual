@@ -83,12 +83,12 @@ export function IsoFormDetailPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="no-print flex flex-col gap-4">
-        <RecordCrumbs items={[{ label: meta.title, to: `/iso-forms/${meta.formKey}` }, { label: `${meta.formId} #${record.id}` }]} />
+        <RecordCrumbs items={[{ label: meta.title, to: `/iso-forms/${meta.formKey}` }, { label: meta.formId ? `${meta.formId} #${record.id}` : `Record ${record.id}` }]} />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold">{meta.title}</h1>
             <p className="text-sm text-muted-foreground">
-              {meta.formId} Rev {meta.rev}
+              {meta.formId ? `${meta.formId} Rev ${meta.rev}` : `Rev ${meta.rev}`}
               {" · "}
               <Link to={`/iso-forms/${meta.formKey}`} className="text-primary hover:underline">
                 Filled records
