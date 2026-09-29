@@ -21,12 +21,12 @@ import { SupplierScarList } from "./SupplierScarList";
 import { SupplierInspectionList } from "./SupplierInspectionList";
 import { SupplierLotList } from "./SupplierLotList";
 import { SupplierSettingsPanel } from "./SupplierSettingsPanel";
-import { SupplierRmaRequestForm } from "./SupplierRmaRequestForm";
-import { SupplierRmaRequestStatus } from "./SupplierRmaRequestStatus";
+import { SupplierNcrRequestForm } from "./SupplierNcrRequestForm";
+import { SupplierNcrRequestStatus } from "./SupplierNcrRequestStatus";
 import type { Supplier } from "../../api/types";
 
 const TABS: { key: TabKey; label: string; supplierOnly?: boolean }[] = [
-  { key: "rma_request", label: "RMA Request", supplierOnly: true },
+  { key: "ncr_request", label: "NCR Request" },
   { key: "onboarding", label: "Onboarding" },
   { key: "documents", label: "Documents" },
   { key: "ppap", label: "PPAP" },
@@ -44,11 +44,11 @@ const TABS: { key: TabKey; label: string; supplierOnly?: boolean }[] = [
   { key: "lots", label: "Shipment Lots" },
   { key: "settings", label: "Settings" },
 ];
-type TabKey = "rma_request" | "onboarding" | "documents" | "ppap" | "car" | "8d" | "messages" | "scorecard" | "performance" | "ncr" | "capa" | "rma" | "warranty" | "scar" | "inspections" | "lots" | "settings";
+type TabKey = "ncr_request" | "onboarding" | "documents" | "ppap" | "car" | "8d" | "messages" | "scorecard" | "performance" | "ncr" | "capa" | "rma" | "warranty" | "scar" | "inspections" | "lots" | "settings";
 
 // Panels that make sense listing "every supplier at once" when internal
 // staff hasn't picked one — the rest inherently need exactly one supplier.
-const ALL_SUPPLIER_TABS = new Set<TabKey>(["onboarding", "documents", "ppap", "car", "8d"]);
+const ALL_SUPPLIER_TABS = new Set<TabKey>(["ncr_request", "onboarding", "documents", "ppap", "car", "8d"]);
 
 /**
  * The one entry point for both real audiences (see supplierPortal.controller
@@ -78,7 +78,7 @@ export function SupplierPortalHome() {
   const [searchParams] = useSearchParams();
   const initialSupplierId = !isSupplier ? Number(searchParams.get("supplierId")) || undefined : undefined;
   const initialTabParam = searchParams.get("tab");
-  const initialTab: TabKey = (initialTabParam && TAB_KEYS.has(initialTabParam) ? initialTabParam : isSupplier ? "rma_request" : "onboarding") as TabKey;
+  const initialTab: TabKey = (initialTabParam && TAB_KEYS.has(initialTabParam) ? initialTabParam : isSupplier ? "ncr_request" : "onboarding") as TabKey;
 
   const [supplierId, setSupplierId] = useState<number | undefined>(initialSupplierId);
   const [tab, setTab] = useState<TabKey>(initialTab);
@@ -119,10 +119,10 @@ export function SupplierPortalHome() {
         <p className="text-sm text-muted-foreground">Select a supplier above to view this tab.</p>
       ) : (
         <>
-          {tab === "rma_request" && isSupplier && (
+          {tab === "ncr_request" && (
             <div className="flex flex-col gap-4">
-              <SupplierRmaRequestForm onSubmitted={() => {}} />
-              <SupplierRmaRequestStatus />
+              {isSupplier && <SupplierNcrRequestForm />}
+              <SupplierNcrRequestStatus supplierId={supplierId} />
             </div>
           )}
           {tab === "onboarding" && <SupplierOnboardingPanel supplierId={supplierId} isReviewer={isReviewer} />}

@@ -73,6 +73,7 @@ export const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   SupplierOnboardingDocument: "supplier_portal",
   SupplierPpapSubmission: "supplier_portal",
   SupplierRiskSettings: "suppliers",
+  SupplierNcrRequest: "supplier_portal",
   SupplierRmaRequest: "supplier_portal",
   SupplierScorecard: "suppliers",
   TrainingAssignment: "training",

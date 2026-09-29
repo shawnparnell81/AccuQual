@@ -4,18 +4,11 @@ import { suppliers } from "./supplier.js";
 import { rma } from "./rma.js";
 
 /**
- * A supplier's own RMA Request, submitted from the Supplier Portal's new
- * "RMA Request" tab — the literal field list ("FINAL, CORRECTED LIST"), no more, no less. `supplierId` is never taken from the
- * request body (same "never trust a client-supplied supplierId" rule every
- * other Supplier Portal table follows — see supplierPortal.controller.ts's
- * resolveSupplierScope) — it's always the submitting login's own
- * users.supplierId.
- *
- * status: submitted | rma_created (set once the real RMA below exists —
- * always happens synchronously in the same request as the submission; see
- * rmaRequest.controller.ts's own comment on why this is real, deterministic
- * backend automation rather than a call to the generative /ai/assistant
- * endpoint).
+ * A supplier's portal request. New submissions are NCR requests for Quality
+ * to review (see ncrRequest.controller.ts): status stays "submitted", and
+ * createdRmaId stays empty. Older rows may still say "rma_created" from
+ * before this create path stopped opening an RMA. supplierId is always the
+ * submitting login's own users.supplierId.
  */
 export const supplierRmaRequests = pgTable("supplier_rma_requests", {
   id: serial("id").primaryKey(),
