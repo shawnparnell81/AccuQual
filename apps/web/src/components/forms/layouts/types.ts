@@ -37,6 +37,8 @@ export interface TableColumn {
   label: string;
   kind: "text" | "textarea" | "date" | "checkboxGroup" | "number" | "computed" | "select";
   options?: string[]; // for checkboxGroup and select
+  /** Checkboxes drawn beside one option. They stay disabled until that option is checked, and only one of them can be on. */
+  beside?: { option: string; choices: string[] };
   /**
    * For kind:"number" — bounds shown as a hint and enforced on input (e.g. FMEA's
    * 1-10 Severity/Occurrence/Detection ratings).

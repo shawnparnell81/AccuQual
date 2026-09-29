@@ -233,7 +233,9 @@ function drawTable(
 
   for (let r = 0; r < rowCount; r++) {
     const row = rows[r] ?? {};
-    const rowHeight = 32;
+    const besideLines = columns.reduce((count, col) => count + (col.beside?.choices.length ?? 0), 0);
+    const optionLines = Math.max(0, ...columns.map((col) => (col.kind === "checkboxGroup" ? (col.options?.length ?? 0) : 0)));
+    const rowHeight = besideLines > 0 ? Math.max(32, (optionLines + besideLines) * 11 + 6) : 32;
     ensureSpace(ctx, rowHeight);
 
     x = MARGIN;
@@ -263,10 +265,20 @@ function drawTable(
 
       if (col.kind === "checkboxGroup") {
         const selected = (row[col.key] as Record<string, boolean> | undefined) ?? {};
-        (col.options ?? []).forEach((opt, i) => {
-          drawCheckbox(ctx, x + 4, ctx.y - 11 - i * 11, Boolean(selected[opt]));
-          ctx.page.drawText(opt, { x: x + 15, y: ctx.y - 10 - i * 11, size: 7, font: ctx.font, color: TEXT_DARK });
-        });
+        let line = 0;
+        for (const opt of col.options ?? []) {
+          const parentOn = Boolean(selected[opt]);
+          drawCheckbox(ctx, x + 4, ctx.y - 11 - line * 11, parentOn);
+          ctx.page.drawText(opt, { x: x + 15, y: ctx.y - 10 - line * 11, size: 7, font: ctx.font, color: TEXT_DARK });
+          line += 1;
+          if (col.beside?.option === opt) {
+            for (const choice of col.beside.choices) {
+              drawCheckbox(ctx, x + 16, ctx.y - 11 - line * 11, parentOn && Boolean(selected[choice]));
+              ctx.page.drawText(choice, { x: x + 27, y: ctx.y - 10 - line * 11, size: 7, font: ctx.font, color: TEXT_DARK });
+              line += 1;
+            }
+          }
+        }
       } else if (value != null && value !== "") {
         wrapText(pictureTextToPlain(pdfSafe(String(value))), ctx.font, 8, colWidth - 8)
           .slice(0, 3)

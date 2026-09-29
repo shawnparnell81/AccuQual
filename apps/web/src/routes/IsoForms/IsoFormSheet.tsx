@@ -111,7 +111,13 @@ function Cell({
       )}
       {spec.kind === "check" && (
         <label className="check">
-          <input type="checkbox" aria-label={spec.addr} checked={stored === true} disabled={readOnly} onChange={(event) => onChange(spec.addr, event.target.checked)} />
+          <input
+            type="checkbox"
+            aria-label={spec.addr}
+            checked={stored === true}
+            disabled={readOnly || (spec.enableWhen != null && cells[spec.enableWhen] !== true)}
+            onChange={(event) => onChange(spec.addr, event.target.checked)}
+          />
           <span>{spec.text}</span>
         </label>
       )}

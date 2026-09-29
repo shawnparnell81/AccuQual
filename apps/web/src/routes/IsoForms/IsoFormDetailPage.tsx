@@ -109,6 +109,10 @@ export function IsoFormDetailPage() {
           }
         }
       }
+      if (formType === "ncr_report" && next.B22 !== true) {
+        next.E22 = false;
+        next.F22 = false;
+      }
       return next;
     });
   }

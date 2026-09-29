@@ -119,6 +119,10 @@
   text-align: left;
 }
 
+.iso .check:has(input:disabled) {
+  opacity: 0.45;
+}
+
 .iso .fill-green {
   background: #70ad47;
   color: #1a1a1a;

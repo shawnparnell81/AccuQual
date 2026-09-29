@@ -14,6 +14,8 @@ export interface FormCell {
   align?: "left" | "center";
   /** Static fill. Selects still pick up pass / minor / major colors on their own. */
   paint?: "fill-green" | "fill-red" | "fill-yellow" | "fill-gray";
+  /** Checkbox stays visible, and can be changed only while this address is checked. */
+  enableWhen?: string;
 }
 
 export interface FormLayout {
@@ -95,8 +97,8 @@ export function ncrLayout(): FormLayout {
   rows[19] = [L(1, 1, "A19", "Justification for Acceptance (if keeping):"), A(2, 3, "B19", "Enter technical reason")];
   rows[20] = [];
   rows[21] = [L(1, 4, "A21", "SECTION 4: DISPOSITION (Your Decision)", "section")];
-  rows[22] = [L(1, 1, "A22", "Select Action:"), C(2, 1, "B22", "USE AS-IS (Concession)"), C(3, 1, "C22", "REWORK (In-House)"), C(4, 1, "D22", "RETURN TO VENDOR")];
-  rows[23] = [L(1, 1, "A22b", ""), C(2, 1, "E22", "USE AS-IS (Conditional)")];
+  rows[22] = [L(1, 1, "A22", "Select Action:"), C(2, 1, "B22", "USE AS-IS"), C(3, 1, "C22", "REWORK (In-House)"), C(4, 1, "D22", "RETURN TO VENDOR")];
+  rows[23] = [L(1, 1, "A22b", ""), { ...C(2, 1, "E22", "with concession"), enableWhen: "B22" }, { ...C(3, 1, "F22", "no concession"), enableWhen: "B22" }];
   rows[24] = [L(1, 1, "A23", "Chargeback Cost?"), S(2, 1, "B23", YES_NO), L(3, 1, "C23", "Cost Amount:"), N(4, 1, "D23", "0.00")];
   rows[25] = [];
   rows[26] = [L(1, 4, "A25", "SECTION 5: TIME", "section")];
@@ -227,7 +229,7 @@ export function trainingLayout(): FormLayout {
 }
 
 export const EXCLUSIVE_CHECKS: Record<string, string[][]> = {
-  ncr_report: [["B22", "C22", "D22", "E22"]],
+  ncr_report: [["B22", "C22", "D22"], ["E22", "F22"]],
   quarantine_notice: [["B30", "E30", "F30"]],
   concession: [
     ["B19", "C19", "D19"],

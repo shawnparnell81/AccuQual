@@ -8,8 +8,6 @@ import type { QuarantineItemRow } from "../Quarantine/QuarantinePage";
 
 const DISPOSITIONS = [
   { value: "use_as_is", label: "Use as is" },
-  { value: "use_as_is_concession", label: "Use as is with concession" },
-  { value: "use_as_is_conditional", label: "Use as is conditional" },
   { value: "rework", label: "Rework" },
   { value: "scrap", label: "Scrap" },
   { value: "return_to_supplier", label: "Return to supplier" },
@@ -26,6 +24,7 @@ export function NcrQuarantineSection({ ncrId, canEdit }: { ncrId: number; canEdi
   const [quantity, setQuantity] = useState("");
   const [serialNumber, setSerialNumber] = useState("");
   const [disposition, setDisposition] = useState<(typeof DISPOSITIONS)[number]["value"]>("use_as_is");
+  const [concession, setConcession] = useState<"" | "with" | "none">("");
 
   const items = useQuery<QuarantineItemRow[]>({
     queryKey: ["ncr", ncrId, "quarantine-items"],
@@ -57,7 +56,13 @@ export function NcrQuarantineSection({ ncrId, canEdit }: { ncrId: number; canEdi
   });
 
   const complete = useMutation({
-    mutationFn: async () => (await apiClient.post(`/ncr/${ncrId}/disposition`, { disposition })).data,
+    mutationFn: async () =>
+      (
+        await apiClient.post(`/ncr/${ncrId}/disposition`, {
+          disposition,
+          ...(disposition === "use_as_is" && concession ? { concession } : {}),
+        })
+      ).data,
     onSuccess: () => {
       refresh();
       toast.success("Disposition completed. Those items are no longer on the active quarantine list.");
@@ -124,7 +129,15 @@ export function NcrQuarantineSection({ ncrId, canEdit }: { ncrId: number; canEdi
       {canEdit && (
         <div className="flex flex-wrap items-end gap-3 border-t border-border pt-3">
           <div className="min-w-[14rem]">
-            <SelectField label="Disposition" value={disposition} onChange={(e) => setDisposition(e.target.value as (typeof DISPOSITIONS)[number]["value"])}>
+            <SelectField
+              label="Disposition"
+              value={disposition}
+              onChange={(e) => {
+                const next = e.target.value as (typeof DISPOSITIONS)[number]["value"];
+                setDisposition(next);
+                if (next !== "use_as_is") setConcession("");
+              }}
+            >
               {DISPOSITIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -132,6 +145,19 @@ export function NcrQuarantineSection({ ncrId, canEdit }: { ncrId: number; canEdi
               ))}
             </SelectField>
           </div>
+          {disposition === "use_as_is" && (
+            <fieldset className="flex flex-col gap-1 pb-1">
+              <legend className="text-xs text-muted-foreground">Concession</legend>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={concession === "with"} onChange={() => setConcession((current) => (current === "with" ? "" : "with"))} />
+                with concession
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={concession === "none"} onChange={() => setConcession((current) => (current === "none" ? "" : "none"))} />
+                no concession
+              </label>
+            </fieldset>
+          )}
           <button
             type="button"
             disabled={complete.isPending || rows.length === 0}
