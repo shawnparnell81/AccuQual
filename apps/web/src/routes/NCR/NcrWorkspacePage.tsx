@@ -233,7 +233,7 @@ export function NcrWorkspacePage() {
         </div>
 
         {/* Right pane — live read-only recreation, fed the same in-memory state as the left pane's form (no network round trip, no debounce). */}
-        <div className="ncr-form-preview aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4 xl:sticky xl:top-4 xl:h-fit">
+        <div className="aq-form-copy aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4 xl:sticky xl:top-4 xl:h-fit">
           {formLoading || !layout ? (
             <p className="text-sm text-muted-foreground">Preview will appear once the form loads.</p>
           ) : (

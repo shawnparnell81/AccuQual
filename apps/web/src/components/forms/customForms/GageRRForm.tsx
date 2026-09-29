@@ -120,7 +120,7 @@ export function GageRRForm({ data, onChange, documentNumber = "" }: CustomFormPr
   const pct = (value: number | null, digits: number) => (value == null ? "—" : `${fmt(value, digits)}%`);
 
   return (
-    <div className="iso-wrap aq-print-sheet">
+    <div className="iso-wrap aq-form-copy aq-print-sheet min-w-0">
       <table className="iso" data-testid="gage-rr-sheet" aria-label="Gage R&R">
         <tbody>
           <tr>

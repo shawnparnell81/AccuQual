@@ -58,7 +58,7 @@ export function ParetoChartForm({ data, onChange, documentNumber = "" }: CustomF
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="iso-wrap aq-print-sheet">
+      <div className="iso-wrap aq-form-copy aq-print-sheet min-w-0">
         <table className="iso" data-testid="pareto-sheet" aria-label="Pareto Chart">
           <tbody>
             <tr>

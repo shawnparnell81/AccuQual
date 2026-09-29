@@ -69,7 +69,7 @@ export function GenericFormRenderer({ layout, data, onChange, readOnly = false, 
   const primary = layout.sections.filter((section) => !parked.has(section.number));
   const details = layout.sections.filter((section) => parked.has(section.number));
   return (
-    <div className="flex flex-col gap-5">
+    <div className={`flex flex-col gap-5${readOnly ? " aq-form-copy min-w-0" : ""}`}>
       <h2 className="text-center text-base font-bold uppercase tracking-wide" style={{ color: FORM_HEADING }}>
         {layout.title}
       </h2>

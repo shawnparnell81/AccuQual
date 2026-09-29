@@ -129,6 +129,10 @@
   resize: vertical;
   min-height: 88px;
   text-align: left;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .b8 .d7-body .b8-area {
