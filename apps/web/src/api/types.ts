@@ -1838,6 +1838,21 @@ export interface CrarClaim {
 
 export type SupplierRmaRequestStatus = "submitted" | "rma_created";
 
+/** A supplier NCR request waiting for Quality. Stored on the same request row; it is not an NCR. */
+export interface SupplierNcrRequest {
+  id: number;
+  supplierId: number;
+  status: SupplierRmaRequestStatus;
+  companyName: string;
+  contactName: string;
+  email: string;
+  phoneNumber: string | null;
+  partNumber: string | null;
+  shortDescription: string | null;
+  description: string | null;
+  createdAt: string;
+}
+
 export interface SupplierRmaRequest {
   id: number;
   supplierId: number;

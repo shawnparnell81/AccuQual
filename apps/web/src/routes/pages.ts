@@ -75,6 +75,7 @@ export const NotificationsPage = lazyNamed("/notifications", () => import("./Not
 export const RetiredModulePage = lazyNamed("/production-logs", () => import("./Retired/RetiredModulePage"), "RetiredModulePage");
 export const SuppliersPage = lazyNamed("/suppliers", () => import("./Suppliers/SuppliersPage"), "SuppliersPage");
 export const SupplierDetailPage = lazyNamed("/suppliers", () => import("./Suppliers/SupplierDetailPage"), "SupplierDetailPage");
+export const SupplierPortalHome = lazyNamed("/supplier-portal", () => import("./SupplierPortal/SupplierPortalHome"), "SupplierPortalHome");
 export const CalibrationPage = lazyNamed("/calibration", () => import("./Calibration/CalibrationPage"), "CalibrationPage");
 export const EquipmentDetailPage = lazyNamed("/calibration", () => import("./Calibration/EquipmentDetailPage"), "EquipmentDetailPage");
 export const DocumentCategoryPage = lazyNamed("/folders", () => import("./Documents/DocumentCategoryPage"), "DocumentCategoryPage");

@@ -15,8 +15,8 @@ import {
   sendMessageEmailSchema,
   updateSupplierSettingsSchema,
 } from "./supplierPortal.validation.js";
-import { submitRmaRequestSchema } from "./rmaRequest.validation.js";
-import { submitRmaRequestHandler, rmaRequestStatusHandler } from "./rmaRequest.controller.js";
+import { submitNcrRequestSchema } from "./ncrRequest.validation.js";
+import { submitNcrRequestHandler, listNcrRequestsHandler } from "./ncrRequest.controller.js";
 import {
   uploadOnboardingDocumentHandler,
   onboardingStatusHandler,
@@ -121,8 +121,7 @@ supplierPortalRouter.get("/lots/list", supplierLotListHandler);
 supplierPortalRouter.get("/settings", getSupplierSettingsHandler);
 supplierPortalRouter.post("/settings", validate(updateSupplierSettingsSchema), updateSupplierSettingsHandler);
 
-// RMA Request — supplier-only (see rmaRequest.controller.ts's own checks);
-// internal staff reach the resulting real RMA through the existing RMA
-// module and the new /rma-log feed instead of through this path.
-supplierPortalRouter.post("/rma-request", validate(submitRmaRequestSchema), submitRmaRequestHandler);
-supplierPortalRouter.get("/rma-request/status", rmaRequestStatusHandler);
+// NCR request — a supplier asks Quality to review a problem. This stores the
+// request and notifies Quality. It does not create an NCR or an RMA.
+supplierPortalRouter.post("/ncr-request", validate(submitNcrRequestSchema), submitNcrRequestHandler);
+supplierPortalRouter.get("/ncr-request", listNcrRequestsHandler);

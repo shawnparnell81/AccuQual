@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, Navigate } from "react-router-dom";
 import { NavigationShell } from "./NavigationShell";
 import { TabBar } from "./TabBar";
 import { CommandPalette } from "./CommandPalette";
@@ -18,11 +18,16 @@ import { MfaGraceBanner } from "../auth/MfaGraceBanner";
 import { LoadingPlaceholder } from "../shared/LoadingPlaceholder";
 
 /**
- * Supplier logins used to land in an external portal. That portal is gone.
- * They still do not get the internal app — every internal API already refuses
- * a supplier role — so this screen only tells them to contact the company.
+ * An external Supplier Portal login (roleName:"supplier") gets none of the
+ * internal department chrome — no sidebar, no tabs, no floating
+ * windows, none of which apply to it — and can only
+ * ever land on /supplier-portal, matching the module's own "Only access
+ * supplier portal, never internal modules" requirement. Client-side UX only
+ * (every internal route's own API calls already 403 a supplier login
+ * server-side regardless — see requireSupplierPortalAccess); this just
+ * avoids showing a broken/empty internal page before that 403 lands.
  */
-function SupplierPortalClosed() {
+function SupplierPortalShell() {
   const logout = useLogout();
   return (
     <div className="flex h-screen w-full flex-col">
@@ -34,12 +39,14 @@ function SupplierPortalClosed() {
           Log Out
         </button>
       </header>
-      <main className="flex flex-1 items-center justify-center p-6">
-        <div className="max-w-md rounded-lg border border-border bg-card p-6 text-sm">
-          <h1 className="text-lg font-semibold">The supplier portal has been removed</h1>
-          <p className="mt-2 text-muted-foreground">AccuQual no longer has a separate sign-in for suppliers. Contact your customer if you still need to send documents or a response.</p>
-        </div>
+      <main className="flex-1 overflow-y-auto p-6">
+        <Suspense fallback={<LoadingPlaceholder />}>
+          <Outlet />
+        </Suspense>
       </main>
+      <div className="border-t border-border bg-card px-4 py-1 text-center print:hidden">
+        <StandardsDisclaimer />
+      </div>
     </div>
   );
 }
@@ -108,7 +115,7 @@ export function AppLayout() {
   }, [isSupplierPortal, location.pathname, syncActiveTabLocation]);
 
   if (isSupplierPortal) {
-    return <SupplierPortalClosed />;
+    return location.pathname === "/supplier-portal" ? <SupplierPortalShell /> : <Navigate to="/supplier-portal" replace />;
   }
 
   return (

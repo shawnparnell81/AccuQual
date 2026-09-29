@@ -43,6 +43,7 @@ const ROUTE_PATTERNS: RoutePattern[] = [
   { test: /^\/iso-forms\/frm-cus-001/, icon: "documents", title: () => "Customer Scorecard" },
   { test: /^\/iso-forms\/frm-fae-001/, icon: "documents", title: () => "Failure Effectiveness" },
   { test: /^\/iso-forms/, icon: "documents", title: () => "ISO Form" },
+  { test: /^\/supplier-portal/, icon: "supplier", title: () => "Supplier Portal" },
   { test: /^\/suppliers\/(\d+)$/, icon: "supplier", title: (m) => `Supplier #${m[1]}` },
   { test: /^\/suppliers\/?$/, icon: "supplier", title: () => "Suppliers" },
   { test: /^\/inventory\/(\d+)$/, icon: "inventory", title: (m) => `Item #${m[1]}` },

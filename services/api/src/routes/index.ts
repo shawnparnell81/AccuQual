@@ -63,6 +63,7 @@ import { attachmentsRouter } from "../modules/attachments/attachments.routes.js"
 import { importRouter } from "../modules/import/import.routes.js";
 import { adminImportRouter } from "../modules/import/adminImport.routes.js";
 import { warrantyRouter } from "../modules/warranty/warranty.routes.js";
+import { supplierPortalRouter } from "../modules/supplier-portal/supplierPortal.routes.js";
 import { crarRouter } from "../modules/crar/crar.routes.js";
 import { rmaActivityLogRouter } from "../modules/rma-activity-log/rmaActivityLog.routes.js";
 import { rmaLogRouter } from "../modules/rma-log/rmaLog.routes.js";
@@ -154,6 +155,7 @@ apiRouter.use("/attachments", attachmentsRouter);
 apiRouter.use("/import", importRouter);
 apiRouter.use("/admin/imports", adminImportRouter);
 apiRouter.use("/warranty", warrantyRouter);
+apiRouter.use("/supplier-portal", supplierPortalRouter);
 apiRouter.use("/crar", crarRouter);
 apiRouter.use("/rma-activity-log", rmaActivityLogRouter);
 apiRouter.use("/rma-log", rmaLogRouter);

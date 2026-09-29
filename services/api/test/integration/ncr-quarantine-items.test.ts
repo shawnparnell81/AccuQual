@@ -38,8 +38,8 @@ describe("NCR quarantined items", () => {
     await pool.end();
   });
 
-  it("the supplier portal and the setup wizard are no longer mounted", async () => {
-    expect((await request(app).get("/supplier-portal/scorecard")).status).toBe(404);
+  it("the setup wizard stays unmounted, and the supplier portal requires a sign-in", async () => {
+    expect((await request(app).get("/supplier-portal/scorecard")).status).toBe(401);
     expect((await request(app).get("/onboarding/progress")).status).toBe(404);
   });
 
