@@ -14,6 +14,7 @@ import { downloadSavedFile } from "./download.js";
 import { officeEditorConfigured, onlyOfficeSettings } from "./settings.js";
 import { eq } from "drizzle-orm";
 import { attachments } from "../../drizzle/schema/attachments.js";
+import { assertAttachmentAudience } from "../attachments/attachmentAccess.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { hasPermission } from "../../middleware/requirePermission.js";
 import { bearerToken, readAttachmentClaims, readCallbackClaims, readFileClaims, readFolderClaims, signOfficeToken, verifyDocumentServerPayload, verifyOfficeToken } from "./token.js";
@@ -110,6 +111,22 @@ onlyOfficePublicRouter.get(
     if (!actor) throw AppError.notFound("File");
     const [row] = await db.select().from(attachments).where(eq(attachments.id, claims.attachmentId));
     if (!row) throw AppError.notFound("File");
+    // The signed link was issued only after this same check. Check again so a
+    // link does not keep working after the person's access to that module is gone.
+    await assertAttachmentAudience(
+      {
+        user: {
+          id: actor.id,
+          roleId: null,
+          roleName: actor.supplierId != null ? "supplier" : actor.roleName,
+          department: actor.department,
+          supplierId: actor.supplierId ?? null,
+        },
+        db,
+      } as unknown as Request,
+      row.entityType,
+      row.entityId,
+    );
     await streamStoredFile(res, row.filePath, row.mimeType ?? "application/octet-stream", row.fileSize ?? 0, row.fileName);
   }),
 );

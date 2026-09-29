@@ -28,7 +28,12 @@ describe("refresh rate limit", () => {
   });
 
   it("counts a signed refresh cookie by user, and an invalid one by address", () => {
-    const req = (cookie?: string, ip = "203.0.113.8") => ({ cookies: cookie ? { accuqual_rt: cookie } : {}, ip }) as express.Request;
+    const req = (cookie?: string, ip = "203.0.113.8", cf?: string) =>
+      ({
+        cookies: cookie ? { accuqual_rt: cookie } : {},
+        ip,
+        header: (name: string) => (name.toLowerCase() === "cf-connecting-ip" ? cf : undefined),
+      }) as express.Request;
 
     const a = signRefreshToken({ sub: "15", tokenVersion: 1, jti: "one" });
     const rotated = signRefreshToken({ sub: "15", tokenVersion: 1, jti: "two" });
@@ -41,6 +46,8 @@ describe("refresh rate limit", () => {
     expect(refreshRateLimitKey(req(expired))).toBe("refresh-ip-203.0.113.8");
     expect(refreshRateLimitKey(req(forged))).toBe("refresh-ip-203.0.113.8");
     expect(refreshRateLimitKey(req())).toBe("refresh-ip-203.0.113.8");
+    // A bad cookie falls back to the visitor, not the proxy address in front of the API.
+    expect(refreshRateLimitKey(req(forged, "203.0.113.50", "198.51.100.20"))).toBe("refresh-ip-198.51.100.20");
   });
 
   it("returns 429 with Retry-After once a user passes the limit, without blocking a different user", async () => {

@@ -12,6 +12,7 @@ import { users } from "../../src/drizzle/schema/users.js";
 import { attachments } from "../../src/drizzle/schema/attachments.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
+import { ppapPackages } from "../../src/drizzle/schema/ppap.js";
 import { sites } from "../../src/drizzle/schema/sites.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
@@ -136,6 +137,29 @@ describe("Attachments module — access, sniffing, and download (real DB + real 
     expect(listed.status).toBe(403);
     const downloaded = await request(app).get(`/attachments/${evidenceUploadId}/download`).set("Authorization", `Bearer ${supplierToken}`);
     expect(downloaded.status).toBe(403);
+  });
+
+  it("refuses a quality user and a supplier download of another module's file by id", async () => {
+    // PPAP is engineering-only. Quality can open NCRs and still must not open this file by guessing its id.
+    const [pkg] = await db.insert(ppapPackages).values({ partNumber: `PPAP-${suffix}` }).returning();
+    const uploaded = await request(app)
+      .post("/attachments")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .field("entityType", "ppap")
+      .field("entityId", String(pkg!.id))
+      .attach("file", PDF, "ppap-evidence.pdf");
+    expect(uploaded.status).toBe(201);
+
+    const qualityList = await request(app).get("/attachments").query({ entityType: "ppap", entityId: pkg!.id }).set("Authorization", `Bearer ${uploaderToken}`);
+    expect(qualityList.status).toBe(403);
+    const qualityDownload = await request(app).get(`/attachments/${uploaded.body.id}/download`).set("Authorization", `Bearer ${uploaderToken}`);
+    expect(qualityDownload.status).toBe(403);
+
+    const supplierDownload = await request(app).get(`/attachments/${uploaded.body.id}/download`).set("Authorization", `Bearer ${supplierToken}`);
+    expect(supplierDownload.status).toBe(403);
+
+    const engineeringDownload = await request(app).get(`/attachments/${uploaded.body.id}/download`).set("Authorization", `Bearer ${engineeringToken}`);
+    expect(engineeringDownload.status).toBe(200);
   });
 
   it("hides an NCR that lives at a plant the caller is not assigned to", async () => {

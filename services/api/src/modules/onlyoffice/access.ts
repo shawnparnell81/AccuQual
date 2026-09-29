@@ -28,6 +28,8 @@ export interface OfficeActor {
   roleName: string | null;
   department: string | null;
   name: string;
+  /** Set only for an external supplier login. Null for staff. */
+  supplierId?: number | null;
 }
 
 export interface OfficeTarget {
@@ -136,6 +138,7 @@ export async function loadOfficeActor(db: Db, userId: number): Promise<OfficeAct
       name: users.name,
       email: users.email,
       roleName: roles.name,
+      supplierId: users.supplierId,
     })
     .from(users)
     .leftJoin(roles, eq(users.roleId, roles.id))
@@ -145,6 +148,7 @@ export async function loadOfficeActor(db: Db, userId: number): Promise<OfficeAct
     id: row.id,
     roleName: row.roleName,
     department: row.department,
+    supplierId: row.supplierId,
     name: row.name?.trim() || row.email,
   };
 }

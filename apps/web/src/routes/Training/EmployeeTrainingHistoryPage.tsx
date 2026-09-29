@@ -8,7 +8,7 @@ import { useSetAssistantContext } from "../../hooks/useAssistantContext";
 interface Employee {
   id: number;
   name: string | null;
-  email: string;
+  email?: string;
 }
 
 /** One employee's full training record, across every course — reached from a name link in a course's assignment list (TrainingDetailPage). */

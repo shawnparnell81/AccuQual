@@ -73,8 +73,9 @@ export const getUser = asyncHandler(async (req: Request, res: Response) => {
     .from(users)
     .where(and(eq(users.id, Number(req.params.id))));
   if (!row) throw AppError.notFound("User");
+  // Owner and Administrator see the staff record. Everyone else gets the name only.
   if (!isFullAccessRole(req.user?.roleName)) {
-    res.json({ id: row.id, name: row.name, email: row.email });
+    res.json({ id: row.id, name: row.name });
     return;
   }
   res.json(row);

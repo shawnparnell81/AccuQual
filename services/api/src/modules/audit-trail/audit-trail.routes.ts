@@ -4,6 +4,7 @@ import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { requireAuth } from "../../middleware/auth.js";
+import { rejectSupplierReads } from "../../middleware/rbac.js";
 import { withDb } from "../../lib/requestDb.js";
 import { withResolvedActors, attachFieldChanges, labelPersonFields } from "./audit-trail.service.js";
 import type { Db } from "../../lib/requestDb.js";
@@ -11,13 +12,14 @@ import { ACCOUNT_ENTITY_TYPES, ENTITY_TYPE_TO_RESOURCE, assertCanReadEntityHisto
 
 export const auditTrailRouter = Router();
 
-auditTrailRouter.use(requireAuth, withDb);
+auditTrailRouter.use(requireAuth, withDb, rejectSupplierReads);
 
 /**
- * Recent record history for anyone signed in. Each person sees the record
- * types they can already open. Another person's sign-in and account rows
- * stay with an owner or administrator. A wider scan is filtered down so a
- * department that cannot see the newest rows still gets its own history.
+ * Recent record history for staff who are signed in. Supplier logins are
+ * refused. Each person sees the record types they can already open. Another
+ * person's sign-in and account rows stay with an owner or administrator. A
+ * wider scan is filtered down so a department that cannot see the newest
+ * rows still gets its own history.
  */
 auditTrailRouter.get(
   "/",
