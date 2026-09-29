@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { useCurrentUser } from "../../hooks/useAuth";
 import { formatDateTime } from "../../lib/dates";
-import { auditEventLabel } from "../../lib/recordDelete";
+import { auditEventLabel, canViewAuditLog } from "../../lib/recordDelete";
 
 interface AuditRow {
   id: number;
@@ -15,10 +16,16 @@ interface AuditRow {
 }
 
 export function AuditLogPage() {
+  const user = useCurrentUser();
+  const allowed = canViewAuditLog(user?.roleName);
   const { data: rows = [], isLoading, isError } = useQuery<AuditRow[]>({
     queryKey: ["audit-trail", "recent"],
     queryFn: async () => (await apiClient.get("/audit-trail")).data,
+    enabled: allowed,
   });
+  if (!allowed) {
+    return <p className="text-sm text-muted-foreground">The audit log is limited to an Owner or Administrator.</p>;
+  }
 
   return (
     <div className="flex flex-col gap-4">

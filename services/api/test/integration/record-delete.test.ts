@@ -23,6 +23,7 @@ let creator: { id: number; token: string };
 let otherQuality: { id: number; token: string };
 let production: { id: number; token: string };
 let qualityManager: { id: number; token: string };
+let admin: { id: number; token: string };
 
 async function makeUser(roleName: string, department: string) {
   const [user] = await db
@@ -40,6 +41,7 @@ describe("record delete", () => {
     otherQuality = await makeUser("operator", "quality");
     production = await makeUser("operator", "production");
     qualityManager = await makeUser("quality_manager", "quality");
+    admin = await makeUser("admin", "quality");
   });
 
   afterAll(async () => {
@@ -150,7 +152,10 @@ describe("record delete", () => {
     expect(changes.snapshot.title).toBe(title);
     expect(changes.attachmentFileNames).toEqual(["bent-flange.png"]);
 
-    const log = await request(app).get("/audit-trail").set("Authorization", `Bearer ${qualityManager.token}`);
+    const managerLog = await request(app).get("/audit-trail").set("Authorization", `Bearer ${qualityManager.token}`);
+    expect(managerLog.status).toBe(403);
+
+    const log = await request(app).get("/audit-trail").set("Authorization", `Bearer ${admin.token}`);
     expect(log.status).toBe(200);
     expect((log.body as { action: string; changes?: { summary?: string } }[]).some((row) => row.changes?.summary === changes.summary)).toBe(true);
 

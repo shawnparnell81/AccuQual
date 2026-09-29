@@ -8,7 +8,7 @@ import { withDb } from "../../lib/requestDb.js";
 import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmentAccess.js";
 import { withResolvedActors, attachFieldChanges, labelPersonFields } from "./audit-trail.service.js";
 import type { Db } from "../../lib/requestDb.js";
-import { canDeleteAnyRecord, isFullAccessRole } from "../roles/roleAccess.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 export const auditTrailRouter = Router();
 
@@ -102,12 +102,12 @@ const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
 /** No business department owns these — admin only, not a ResourceKey lookup. */
 const ADMIN_ONLY_ENTITY_TYPES = new Set(["Company", "Company", "User", "DepartmentPermission", "PermissionRole", "UserPermissionRole"]);
 
-/** Recent history, including deletes, for administrators and quality managers. */
+/** Recent history across the company. Owner and Administrator only. */
 auditTrailRouter.get(
   "/",
   asyncHandler(async (req, res) => {
-    if (!canDeleteAnyRecord(req.user?.roleName)) {
-      throw AppError.forbidden("The audit log is limited to an Owner, Administrator, or Quality Manager.");
+    if (!isFullAccessRole(req.user?.roleName)) {
+      throw AppError.forbidden("The audit log is limited to an Owner or Administrator.");
     }
     const rows = await req.db!.select().from(auditTrail).orderBy(desc(auditTrail.id)).limit(200);
     const withActors = await withResolvedActors(req.db! as Db, rows);

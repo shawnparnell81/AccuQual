@@ -5,8 +5,9 @@ export function canDeleteRecord(roleName: string | null | undefined, userId: num
   return ownerIds.some((id) => id != null && id === userId);
 }
 
+/** Company-wide audit log. A record's own history stays on that record. */
 export function canViewAuditLog(roleName: string | null | undefined): boolean {
-  return roleName === "admin" || roleName === "owner" || roleName === "quality_manager";
+  return roleName === "admin" || roleName === "owner";
 }
 
 /** `NCR #3 "Bent flange"` — the name shown in the confirmation and the audit line. */

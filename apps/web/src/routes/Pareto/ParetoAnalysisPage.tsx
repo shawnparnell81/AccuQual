@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ParetoChartForm } from "../../components/forms/customForms/ParetoChartForm";
-import { FormNumberEditor, RecordFolderField, useFormFiling } from "../../components/forms/FormDocumentControls";
+import { fileChosenFolder, FormNumberEditor, RecordFolderField, useFormFiling } from "../../components/forms/FormDocumentControls";
 import { useFormEditorState } from "../../components/forms/useFormEditorState";
 import { SaveStatus } from "../../components/shared/SaveStatus";
 import { revisionLabel } from "../../lib/formDocument";
@@ -9,8 +10,11 @@ import { revisionLabel } from "../../lib/formDocument";
 const SINGLETON_ENTITY_ID = 1;
 
 export function ParetoAnalysisPage() {
-  const { isLoading, values, updateField, isSaving } = useFormEditorState("pareto_chart", SINGLETON_ENTITY_ID);
+  const queryClient = useQueryClient();
+  const { isLoading, values, updateField, saveNow, isSaving } = useFormEditorState("pareto_chart", SINGLETON_ENTITY_ID);
   const filing = useFormFiling("frm-par-001", SINGLETON_ENTITY_ID);
+  const [saveNote, setSaveNote] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
   const documentNumber = filing.data?.snapshotted ? filing.data.formNumber : "";
   const [dirty, setDirty] = useState(false);
   useEffect(() => {
@@ -27,7 +31,27 @@ export function ParetoAnalysisPage() {
           <RecordFolderField formKey="frm-par-001" recordId={SINGLETON_ENTITY_ID} />
         </div>
         <div className="flex items-center gap-2">
-          <SaveStatus saving={isSaving} unsaved={dirty && !isSaving} />
+          <SaveStatus saving={isSaving || pending} unsaved={dirty && !isSaving && !pending} />
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              setPending(true);
+              setSaveNote(null);
+              void saveNow()
+                .then(() => fileChosenFolder(queryClient, "frm-par-001", SINGLETON_ENTITY_ID))
+                .then((path) => {
+                  setDirty(false);
+                  setSaveNote(path ? `Saved in ${path}` : "Saved. Choose a folder to file this copy.");
+                })
+                .catch(() => setSaveNote("Couldn't save this form."))
+                .finally(() => setPending(false));
+            }}
+            className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60"
+          >
+            {pending ? "Saving…" : "Save"}
+          </button>
+          {saveNote && <span className="text-xs text-muted-foreground">{saveNote}</span>}
           <button type="button" onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             Print
           </button>

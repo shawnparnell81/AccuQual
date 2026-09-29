@@ -362,14 +362,16 @@ describe("Controlled documents: draft -> review -> publish (real DB + real HTTP 
     });
 
     it("rolls back by restoring an earlier revision as a NEW draft that still has to be reviewed and published", async () => {
-      const res = await request(app).post(`/documents/${docId}/version/${v1}/rollback`).set(as(author));
+      expect((await request(app).post(`/documents/${docId}/version/${v1}/rollback`).set(as(author))).status).toBe(403);
+      expect((await request(app).post(`/documents/${docId}/version/${v1}/rollback`).set(as(reviewer))).status).toBe(403);
+      const res = await request(app).post(`/documents/${docId}/version/${v1}/rollback`).set(as(admin));
       expect(res.status).toBe(201);
       v3 = res.body.id;
       expect(res.body).toMatchObject({ versionNumber: 3, status: "draft", isRollback: true, basedOnVersion: 1 });
       expect(res.body.payload).toMatchObject({ title: "Torque wrench calibration procedure", revisionCode: "Rev C", links: [{ type: "equipment", id: caliperId }] });
       expect(res.body.payload.content).not.toContain("Sign the calibration sticker");
       expect((await db.select().from(documents).where(eq(documents.id, docId)))[0]!.currentVersion).toBe(2); // nothing changed in force yet
-      expect((await request(app).post(`/documents/${docId}/version/${v1}/rollback`).set(as(author))).status).toBe(409); // one open revision at a time
+      expect((await request(app).post(`/documents/${docId}/version/${v1}/rollback`).set(as(admin))).status).toBe(409); // one open revision at a time
       expect(await hasEvent(docId, "rollback_draft_created")).toBe(true);
 
       await request(app).post(`/documents/${docId}/draft/${v3}/review`).set(as(author)).send({});

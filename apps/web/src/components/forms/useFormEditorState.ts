@@ -22,12 +22,20 @@ export function useFormEditorState(formType: string, entityId: number, windowId?
   const { setDirty, setSaving } = useFormStore();
 
   const [values, setValues] = useState<Record<string, unknown>>({});
+  // Kept off the render path on purpose. Assigning `values` back onto this
+  // ref during render lets a parent re-render (or a burst of summary writes)
+  // replace a just-typed payload with the previous state before it is saved.
+  const valuesRef = useRef(values);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout>>();
   const hydrated = useRef(false);
   const lastServerVersion = useRef<number | undefined>(undefined);
   // True from the first keystroke of an edit until its autosave settles —
   // guards the re-hydrate below from clobbering an in-progress local edit.
   const isDirty = useRef(false);
+  // Bumps on every edit. A save that started earlier must not clear the dirty
+  // flag, and saves run one at a time so an older payload cannot land last.
+  const editGeneration = useRef(0);
+  const saveQueue = useRef(Promise.resolve());
 
   // Hydrate local field state when the current form_data row first loads,
   // and again whenever the server's own version advances from a write this
@@ -37,32 +45,55 @@ export function useFormEditorState(formType: string, entityId: number, windowId?
   useEffect(() => {
     if (!formData) return;
     if (!hydrated.current || (formData.version !== lastServerVersion.current && !isDirty.current)) {
-      setValues(formData.data ?? {});
+      const next = formData.data ?? {};
+      valuesRef.current = next;
+      setValues(next);
       hydrated.current = true;
     }
     lastServerVersion.current = formData.version;
   }, [formData]);
 
+  function flushSave() {
+    const task = saveQueue.current.then(async () => {
+      const generation = editGeneration.current;
+      const payload = valuesRef.current;
+      if (windowId) setSaving(windowId, true);
+      try {
+        await saveForm.mutateAsync(payload);
+        if (editGeneration.current === generation) {
+          isDirty.current = false;
+          if (windowId) setDirty(windowId, false);
+        }
+      } finally {
+        if (windowId) setSaving(windowId, false);
+      }
+    });
+    saveQueue.current = task.then(
+      () => undefined,
+      () => undefined,
+    );
+    return task;
+  }
+
   function updateField(name: string, value: unknown) {
-    const next = { ...values, [name]: value };
+    editGeneration.current += 1;
+    const next = { ...valuesRef.current, [name]: value };
+    valuesRef.current = next;
     setValues(next);
     isDirty.current = true;
     if (windowId) setDirty(windowId, true);
 
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     autosaveTimer.current = setTimeout(() => {
-      if (windowId) setSaving(windowId, true);
-      saveForm.mutate(next, {
-        onSettled: () => {
-          isDirty.current = false;
-          if (windowId) {
-            setSaving(windowId, false);
-            setDirty(windowId, false);
-          }
-        },
-      });
+      void flushSave();
     }, AUTOSAVE_DELAY_MS);
   }
 
-  return { formData, isLoading, values, updateField, isSaving: saveForm.isPending };
+  async function saveNow() {
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    if (!isDirty.current) return;
+    await flushSave();
+  }
+
+  return { formData, isLoading, values, updateField, saveNow, isSaving: saveForm.isPending };
 }

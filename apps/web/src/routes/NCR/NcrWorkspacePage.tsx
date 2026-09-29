@@ -74,7 +74,8 @@ export function NcrWorkspacePage() {
   const closeAction = useWorkflowAction("ncr", "close", { successMessage: "NCR closed.", invalidateKeys: workflowInvalidateKeys });
 
   const layout = getFormLayout(FORM_TYPE);
-  const { isLoading: formLoading, values, updateField, isSaving } = useFormEditorState(FORM_TYPE, ncrId);
+  const { isLoading: formLoading, values, updateField, saveNow, isSaving } = useFormEditorState(FORM_TYPE, ncrId);
+  const [formSaveNote, setFormSaveNote] = useState<string | null>(null);
   const { data: linkedCapaRows = [] } = capaHooks.useList({ ncrId });
   const hasFix = linkedCapaRows.some((capa) => capa.ncrId === ncrId);
 
@@ -151,7 +152,22 @@ export function NcrWorkspacePage() {
         actions={
           <>
             <DeleteRecordButton resource="ncr" id={ncrId} kind="NCR" title={ncr.title} ownerIds={[ncr.createdBy]} navigateTo="/ncr" />
-            <span className="self-center text-xs text-muted-foreground">{formLoading ? "Loading form…" : isSaving ? "Saving…" : "Saved"}</span>
+            <span className="self-center text-xs text-muted-foreground">{formLoading ? "Loading form…" : isSaving ? "Saving…" : formSaveNote ?? "Saved"}</span>
+            {canEdit && (
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => {
+                  setFormSaveNote(null);
+                  void saveNow()
+                    .then(() => setFormSaveNote("Form saved"))
+                    .catch(() => setFormSaveNote("Couldn't save this form."));
+                }}
+                className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-60"
+              >
+                {isSaving ? "Saving…" : "Save"}
+              </button>
+            )}
             <StatusBadge value={ncr.severity} />
             <button onClick={() => setShowHistory(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
               History

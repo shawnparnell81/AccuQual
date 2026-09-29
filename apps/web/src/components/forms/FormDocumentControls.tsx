@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
@@ -22,6 +22,32 @@ export interface FormFilingView {
   suggestedFolderId: number | null;
   suggestedPath: string[];
   fileName: string | null;
+}
+
+function folderChoiceKey(formKey: string, recordId: number) {
+  return ["form-folder-choice", formKey, recordId] as const;
+}
+
+/** The folder shown in Save to folder. An empty string means the user cleared it. */
+export function rememberFolderChoice(queryClient: QueryClient, formKey: string, recordId: number, folderId: number | "") {
+  queryClient.setQueryData(folderChoiceKey(formKey, recordId), folderId);
+}
+
+/**
+ * Files this filled copy in the folder currently chosen. A cleared choice does not fall back to the suggestion.
+ * Returns the folder path when the copy is already there or was just filed.
+ */
+export async function fileChosenFolder(queryClient: QueryClient, formKey: string, recordId: number): Promise<string | null> {
+  const stored = queryClient.getQueryData<number | "">(folderChoiceKey(formKey, recordId));
+  const current = queryClient.getQueryData<FormFilingView>(["form-filing", formKey, recordId]);
+  const folderId = typeof stored === "number" ? stored : stored === "" ? null : (current?.parentId ?? current?.suggestedFolderId ?? null);
+  if (folderId == null) return null;
+  if (current?.parentId === folderId) return current.parentPath.join(" / ");
+  const saved = (await apiClient.post<FormFilingView>("/document-folders/form-filings", { formKey, recordId, folderId })).data;
+  queryClient.setQueryData(["form-filing", formKey, recordId], saved);
+  await queryClient.invalidateQueries({ queryKey: ["form-filing", formKey, recordId] });
+  await queryClient.invalidateQueries({ queryKey: ["document-folders"] });
+  return saved.parentPath.join(" / ");
 }
 
 function useCanControlDocuments() {
@@ -147,8 +173,9 @@ export function RecordFolderField({ formKey, recordId }: { formKey: string; reco
     if (!filing.data || synced === signature) return;
     const next = filing.data.parentId ?? filing.data.suggestedFolderId ?? "";
     setSelected(next === "" ? "" : next);
+    rememberFolderChoice(queryClient, formKey, recordId, next === "" ? "" : next);
     setSynced(signature);
-  }, [filing.data, signature, synced]);
+  }, [filing.data, formKey, queryClient, recordId, signature, synced]);
 
   const file = useMutation({
     mutationFn: async (folderId: number) =>
@@ -175,7 +202,11 @@ export function RecordFolderField({ formKey, recordId }: { formKey: string; reco
           <select
             aria-label="Save to folder"
             value={selected}
-            onChange={(event) => setSelected(event.target.value === "" ? "" : Number(event.target.value))}
+            onChange={(event) => {
+              const next = event.target.value === "" ? "" : Number(event.target.value);
+              setSelected(next);
+              rememberFolderChoice(queryClient, formKey, recordId, next);
+            }}
             className="max-w-xl rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
           >
             <option value="">Choose a folder</option>

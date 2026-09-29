@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { PictureText } from "../../components/forms/PictureText";
@@ -6,7 +7,7 @@ import { RecordCrumbs } from "../../components/records/RecordStatus";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { SaveStatus } from "../../components/shared/SaveStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
-import { RecordFolderField, useFormFiling } from "../../components/forms/FormDocumentControls";
+import { fileChosenFolder, RecordFolderField, useFormFiling } from "../../components/forms/FormDocumentControls";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { FORM_KEY_BY_TYPE, revisionLabel } from "../../lib/formDocument";
@@ -129,8 +130,8 @@ export function IsoFormDetailPage() {
     return data;
   }
 
-  function saveRecord() {
-    updateRecord.mutate({ id: recordId, data: payload() });
+  async function saveRecord() {
+    await updateRecord.mutateAsync({ id: recordId, data: payload() });
   }
 
   const summary = showCell(cells.B3) || showCell(cells.B5) || showCell(cells.D2) || showCell(cells.F3) || showCell(cells.D4);
@@ -189,9 +190,28 @@ function IsoFormDetailBody({
   setMonths: (months: string[]) => void;
   recordId: number;
 }) {
+  const queryClient = useQueryClient();
+  const [saveNote, setSaveNote] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
   const filing = useFormFiling(formKey, record.id);
   const formType = record.formType;
   const documentNumber = filing.data?.snapshotted ? filing.data.formNumber : "";
+
+  async function save() {
+    setPending(true);
+    setSaveNote(null);
+    try {
+      await onSave();
+      if (!formKey) {
+        setSaveNote("Saved");
+        return;
+      }
+      const path = await fileChosenFolder(queryClient, formKey, recordId);
+      setSaveNote(path ? `Saved in ${path}` : "Saved. Choose a folder to file this copy.");
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <div className={`flex flex-col gap-4 ${WIDE.has(formType) ? "aq-print-wide" : ""}`}>
@@ -213,10 +233,11 @@ function IsoFormDetailBody({
             <DeleteRecordButton resource="iso-quality-forms" id={recordId} kind={meta.title} title={summary || null} navigateTo={`/iso-forms/${meta.formKey}`} />
             <SaveStatus saving={saving} unsaved={dirty && !saving} />
             {canEdit && (
-              <button type="button" onClick={onSave} disabled={saving} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
-                {saving ? "Saving…" : "Save"}
+              <button type="button" onClick={() => void save().catch(() => setSaveNote("Couldn't save this form."))} disabled={saving || pending} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
+                {saving || pending ? "Saving…" : "Save"}
               </button>
             )}
+            {saveNote && <span className="text-xs text-muted-foreground">{saveNote}</span>}
             <button type="button" onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
               Print
             </button>

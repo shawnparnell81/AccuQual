@@ -22,6 +22,7 @@ import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { OBSOLETE_ARCHIVE_CATEGORY } from "../../components/layout/sidebarStructure";
 import { ObsoleteArchiveDialog } from "./ObsoleteArchiveDialog";
+import { isFullAccessRole } from "../../lib/fullAccess";
 import { DOC_EDIT_REASON, DOC_LOOP, documentLoop, duePhrase, formatPerson, isPastDue, statusPhrase } from "../../lib/opsLanguage";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import type { TrainingCourse } from "../../api/types";
@@ -201,7 +202,7 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
           : personName(doc.ownerId);
 
   const versionList = v.versions.data ?? [];
-  const canRollback = mayEdit && !current?.open && doc.status !== "obsolete";
+  const canRollback = isFullAccessRole(user?.roleName) && !current?.open && doc.status !== "obsolete";
   const canRetire = isReviewer && doc.status === "approved" && !current?.open;
   const firstError = report?.errors[0]?.message ?? null;
   const shownValues: DocumentPayload = editable ? values : { ...blankPayload(doc.title), ...(shown?.payload ?? {}) };

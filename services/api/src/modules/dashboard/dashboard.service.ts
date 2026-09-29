@@ -14,6 +14,7 @@ import { sites, userSites } from "../../drizzle/schema/sites.js";
 import { users } from "../../drizzle/schema/users.js";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { listEquipmentWithSummary } from "../calibration/calibration.service.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 import {
   buildDashboardOverview,
   type DashActivity,
@@ -225,6 +226,7 @@ export async function loadDashboardOverview(
       if (found == null) continue;
       siteId = found;
     }
+    if (!isFullAccessRole(user.roleName) && row.performedBy !== user.id) continue;
     activity.push({
       id: row.id,
       entityType: row.entityType,

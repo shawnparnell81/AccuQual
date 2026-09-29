@@ -407,7 +407,9 @@ describe("Version control: workflows, Management Review, Context of the Organiza
     });
 
     it("rolls back through a new draft that goes through review again", async () => {
-      const rb = await request(app).post(`/${path}/1/rollback`).set(as(author)).send({ versionNumber: 1 });
+      expect((await request(app).post(`/${path}/1/rollback`).set(as(author)).send({ versionNumber: 1 })).status).toBe(403);
+      expect((await request(app).post(`/${path}/1/rollback`).set(as(reviewer)).send({ versionNumber: 1 })).status).toBe(403);
+      const rb = await request(app).post(`/${path}/1/rollback`).set(as(admin)).send({ versionNumber: 1 });
       expect(rb.status).toBe(201);
       expect(rb.body.payload).toEqual(sample);
       await request(app).post(`/${path}/1/review`).set(as(author)).send({ versionId: rb.body.id, action: "request" });

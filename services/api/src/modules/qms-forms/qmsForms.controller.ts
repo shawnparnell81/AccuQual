@@ -5,6 +5,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { deleteRecord } from "../records/recordDeletion.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 import { getQmsFormDefinition, QMS_FORM_DEFINITIONS } from "./qmsFormDefinitions.js";
 
 async function loadForm(req: Request, id: number) {
@@ -44,6 +45,10 @@ export const getQmsFormHandler = asyncHandler(async (req: Request, res: Response
 
 export const updateQmsFormHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadForm(req, Number(req.params.id));
+  const nextStatus = (req.body as { status?: string }).status;
+  if (record.status === "obsolete" && nextStatus && nextStatus !== "obsolete" && !isFullAccessRole(req.user?.roleName)) {
+    throw AppError.forbidden("Only an Owner or Administrator can restore an obsolete form.");
+  }
   const [updated] = await req.db!.update(qmsForms).set({ ...req.body, updatedAt: new Date() }).where(eq(qmsForms.id, record.id)).returning();
   await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
   res.json(updated);
