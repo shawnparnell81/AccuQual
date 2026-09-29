@@ -96,17 +96,18 @@ export function ncrLayout(): FormLayout {
   rows[20] = [];
   rows[21] = [L(1, 4, "A21", "SECTION 4: DISPOSITION (Your Decision)", "section")];
   rows[22] = [L(1, 1, "A22", "Select Action:"), C(2, 1, "B22", "USE AS-IS (Concession)"), C(3, 1, "C22", "REWORK (In-House)"), C(4, 1, "D22", "RETURN TO VENDOR")];
-  rows[23] = [L(1, 1, "A23", "Chargeback Cost?"), S(2, 1, "B23", YES_NO), L(3, 1, "C23", "Cost Amount:"), N(4, 1, "D23", "0.00")];
-  rows[24] = [];
-  rows[25] = [L(1, 4, "A25", "SECTION 5: TIME", "section")];
-  rows[26] = [L(1, 1, "A26", "Time Spent Investigating/Resolving (hours)"), N(2, 3, "B26", "Time in Hours")];
-  rows[27] = [];
-  rows[28] = [L(1, 4, "A28", "SECTION 6: AUTHORIZATION", "section")];
-  rows[29] = [L(1, 1, "A29", "Engineering Manager Approval:"), I(2, 1, "B29", "Sign Here"), L(3, 1, "C29", "Date:"), D(4, 1, "D29")];
-  rows[30] = [L(1, 1, "A30", "Quality Manger Approval:"), L(2, 1, "B30", "Ron Wertz"), L(3, 1, "C30", "Date:"), L(4, 1, "D30", "2026-04-30")];
-  rows[31] = [];
-  rows[32] = [L(1, 4, "A32", "SECTION 7: SUPPLIER FEEDBACK", "section")];
-  rows[33] = [L(1, 1, "A33", "Was a SCAR (Supplier Corrective Action) issued?"), S(2, 1, "B33", YES_NO), L(3, 1, "C33", "SCAR Number:"), I(4, 1, "D33", "If applicable")];
+  rows[23] = [L(1, 1, "A22b", ""), C(2, 1, "E22", "USE AS-IS (Conditional)")];
+  rows[24] = [L(1, 1, "A23", "Chargeback Cost?"), S(2, 1, "B23", YES_NO), L(3, 1, "C23", "Cost Amount:"), N(4, 1, "D23", "0.00")];
+  rows[25] = [];
+  rows[26] = [L(1, 4, "A25", "SECTION 5: TIME", "section")];
+  rows[27] = [L(1, 1, "A26", "Time Spent Investigating/Resolving (hours)"), N(2, 3, "B26", "Time in Hours")];
+  rows[28] = [];
+  rows[29] = [L(1, 4, "A28", "SECTION 6: AUTHORIZATION", "section")];
+  rows[30] = [L(1, 1, "A29", "Engineering Manager Approval:"), I(2, 1, "B29", "Sign Here"), L(3, 1, "C29", "Date:"), D(4, 1, "D29")];
+  rows[31] = [L(1, 1, "A30", "Quality Manger Approval:"), L(2, 1, "B30", "Ron Wertz"), L(3, 1, "C30", "Date:"), L(4, 1, "D30", "2026-04-30")];
+  rows[32] = [];
+  rows[33] = [L(1, 4, "A32", "SECTION 7: SUPPLIER FEEDBACK", "section")];
+  rows[34] = [L(1, 1, "A33", "Was a SCAR (Supplier Corrective Action) issued?"), S(2, 1, "B33", YES_NO), L(3, 1, "C33", "SCAR Number:"), I(4, 1, "D33", "If applicable")];
   return { columns: 4, widths: ["32%", "23%", "23%", "22%"], rows };
 }
 
@@ -226,7 +227,7 @@ export function trainingLayout(): FormLayout {
 }
 
 export const EXCLUSIVE_CHECKS: Record<string, string[][]> = {
-  ncr_report: [["B22", "C22", "D22"]],
+  ncr_report: [["B22", "C22", "D22", "E22"]],
   quarantine_notice: [["B30", "E30", "F30"]],
   concession: [
     ["B19", "C19", "D19"],

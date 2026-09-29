@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditLayout, ncrLayout, quarantineLayout } from "./isoFormLayouts";
+import { auditLayout, EXCLUSIVE_CHECKS, ncrLayout, quarantineLayout } from "./isoFormLayouts";
 import { crossTrainingScores, quarantineTotal, resultFill } from "./isoFormLogic";
 
 test("quarantine total adds the five quantity cells", () => {
@@ -31,6 +31,11 @@ test("audit results use pass, minor, and major colors", () => {
 test("each workbook keeps its title and the quarantine total cell", () => {
   assert.equal(auditLayout().rows[1]?.[0]?.text, "INTERNAL AUDIT CHECKLIST");
   assert.equal(ncrLayout().rows[1]?.[0]?.text, "NON-CONFORMANCE REPORT (NCR)");
+  const conditional = ncrLayout().rows.flat().find((cell) => cell?.text === "USE AS-IS (Conditional)");
+  assert.equal(conditional?.kind, "check");
+  assert.equal(conditional?.addr, "E22");
+  assert.ok(EXCLUSIVE_CHECKS.ncr_report?.some((group) => group.includes("B22") && group.includes("E22")));
+  assert.equal(ncrLayout().rows.flat().find((cell) => cell?.addr === "A23")?.text, "Chargeback Cost?");
   assert.equal(quarantineLayout().rows[22]?.find((cell) => cell.addr === "B22")?.kind, "calc");
   assert.equal(auditLayout().rows[6]?.find((cell) => cell.addr === "F6")?.kind, "select");
 });

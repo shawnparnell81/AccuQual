@@ -35,5 +35,5 @@ export const addNcrQuarantineItemSchema = z.object({
 });
 
 export const completeNcrDispositionSchema = z.object({
-  disposition: z.enum(["use_as_is", "rework", "scrap", "return_to_supplier"]),
+  disposition: z.enum(["use_as_is", "use_as_is_concession", "use_as_is_conditional", "rework", "scrap", "return_to_supplier"]),
 });

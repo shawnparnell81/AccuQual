@@ -8,6 +8,8 @@ import type { QuarantineItemRow } from "../Quarantine/QuarantinePage";
 
 const DISPOSITIONS = [
   { value: "use_as_is", label: "Use as is" },
+  { value: "use_as_is_concession", label: "Use as is with concession" },
+  { value: "use_as_is_conditional", label: "Use as is conditional" },
   { value: "rework", label: "Rework" },
   { value: "scrap", label: "Scrap" },
   { value: "return_to_supplier", label: "Return to supplier" },

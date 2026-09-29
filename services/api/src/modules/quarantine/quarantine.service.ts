@@ -383,11 +383,13 @@ export async function linkNcrFromReceiving(db: Db, quarantineId: number, ncrId: 
 // ---- NCR quarantined items ------------------------------------------------------------------------------------------------------------------------
 
 /** What an NCR disposition can do to the material it quarantined. Mapped onto the existing release/destroy dispositions. */
-export const NCR_ITEM_DISPOSITIONS = ["use_as_is", "rework", "scrap", "return_to_supplier"] as const;
+export const NCR_ITEM_DISPOSITIONS = ["use_as_is", "use_as_is_concession", "use_as_is_conditional", "rework", "scrap", "return_to_supplier"] as const;
 export type NcrItemDisposition = (typeof NCR_ITEM_DISPOSITIONS)[number];
 
 const NCR_DISPOSITION_RESOLVE: Record<NcrItemDisposition, { action: "release" | "destroy"; disposition: string; label: string }> = {
   use_as_is: { action: "release", disposition: "use_as_is", label: "Use as is" },
+  use_as_is_concession: { action: "release", disposition: "use_as_is", label: "Use as is with concession" },
+  use_as_is_conditional: { action: "release", disposition: "use_as_is", label: "Use as is conditional" },
   rework: { action: "release", disposition: "reworked", label: "Rework" },
   scrap: { action: "destroy", disposition: "scrapped", label: "Scrap" },
   return_to_supplier: { action: "destroy", disposition: "returned_to_supplier", label: "Return to supplier" },
@@ -395,6 +397,8 @@ const NCR_DISPOSITION_RESOLVE: Record<NcrItemDisposition, { action: "release" | 
 
 export const DISPOSITION_LABEL: Record<string, string> = {
   use_as_is: "Use as is",
+  use_as_is_concession: "Use as is with concession",
+  use_as_is_conditional: "Use as is conditional",
   reworked: "Rework",
   rework: "Rework",
   scrapped: "Scrap",
@@ -498,13 +502,13 @@ export async function addNcrQuarantineItem(
 
 /**
  * Completing the NCR disposition releases every item still quarantined against that NCR.
- * Use-as-is and rework go back into use; scrap and return-to-supplier leave stock.
+ * Use-as-is, including with concession or conditional, and rework go back into use; scrap and return-to-supplier leave stock.
  * Either way they leave the active list and stay in the released history.
  * The person working the NCR is allowed to finish this — it is the disposition, not a second person deciding a hold they opened.
  */
 export async function completeNcrDisposition(db: Db, ncrId: number, disposition: NcrItemDisposition, actor: ResolveActor): Promise<{ disposition: NcrItemDisposition; items: QuarantineItemView[] }> {
   const mapped = NCR_DISPOSITION_RESOLVE[disposition];
-  if (!mapped) throw AppError.badRequest("Choose a disposition: use as is, rework, scrap, or return to supplier.");
+  if (!mapped) throw AppError.badRequest("Choose a disposition: use as is, use as is with concession, use as is conditional, rework, scrap, or return to supplier.");
   const [row] = await db.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, ncrId), eq(ncr.isDeleted, false)));
   if (!row) throw AppError.notFound("NCR");
   const open = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.ncrId, ncrId), eq(quarantineRecords.status, "quarantined")));

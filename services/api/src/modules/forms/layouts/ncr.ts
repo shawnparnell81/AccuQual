@@ -143,7 +143,7 @@ export const ncrLayout: FormLayout = {
               key: "disposition",
               label: "Suspect Material Disposition",
               kind: "checkboxGroup",
-              options: ["Use As-Is (with concession)", "Rework", "Repair", "Scrap", "Return to Supplier", "Sort"],
+              options: ["Use As-Is (with concession)", "Use As-Is (conditional)", "Rework", "Repair", "Scrap", "Return to Supplier", "Sort"],
             },
           ],
         },

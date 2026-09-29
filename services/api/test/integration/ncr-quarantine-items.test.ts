@@ -107,6 +107,35 @@ describe("NCR quarantined items", () => {
     expect(itemAudits.some((row) => row.entityType === "Quarantine" && row.action === "status_change")).toBe(true);
   });
 
+  it("releases held material for use as is with concession or conditional", async () => {
+    for (const disposition of ["use_as_is_concession", "use_as_is_conditional"] as const) {
+      const created = await request(app).post("/ncr").set("Authorization", `Bearer ${qualityToken}`).send({ title: `Disposition ${disposition}` });
+      expect(created.status).toBe(201);
+      const ncrId = created.body.id as number;
+      const added = await request(app)
+        .post(`/ncr/${ncrId}/quarantine-items`)
+        .set("Authorization", `Bearer ${qualityToken}`)
+        .send({ partNumber: "PN-UAI", quantity: 1 });
+      expect(added.status).toBe(201);
+
+      const released = await request(app).post(`/ncr/${ncrId}/disposition`).set("Authorization", `Bearer ${qualityToken}`).send({ disposition });
+      expect(released.status).toBe(200);
+      expect(released.body.disposition).toBe(disposition);
+      expect(released.body.items).toHaveLength(1);
+      expect(released.body.items[0].disposition).toBe("use_as_is");
+
+      const stillActive = await request(app).get(`/quarantine/items?view=active&ncrId=${ncrId}`).set("Authorization", `Bearer ${qualityToken}`);
+      expect(stillActive.body).toEqual([]);
+
+      const audits = await db.select().from(auditTrail).where(eq(auditTrail.entityId, ncrId));
+      const change = audits.find((row) => row.entityType === "NCR" && (row.changes as { event?: string } | null)?.event === "ncr_quarantine_released")?.changes as
+        | { disposition?: string; dispositionLabel?: string }
+        | null;
+      expect(change?.disposition).toBe(disposition);
+      expect(change?.dispositionLabel).toMatch(/concession|conditional/);
+    }
+  });
+
   it("refuses a quarantined item with no part number or a zero quantity", async () => {
     const created = await request(app).post("/ncr").set("Authorization", `Bearer ${qualityToken}`).send({ title: "Bad item" });
     const blank = await request(app)
