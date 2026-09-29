@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
+import { withSiteContext } from "../sites/siteContext.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createWorkflowSchema, updateWorkflowSchema, runWorkflowSchema } from "./workflow.validation.js";
@@ -11,7 +12,7 @@ import { getHandler, listHandler, createHandler, updateHandler, deleteHandler, r
 export const workflowRouter = Router();
 workflowRouter.use(requireAuth, withDb);
 // Record history follows the record's own module, not the workflow builder.
-workflowRouter.get("/history/:moduleName/:recordId", historyHandler);
+workflowRouter.get("/history/:moduleName/:recordId", withSiteContext, historyHandler);
 // Creating or running a definition still needs the workflow module.
 workflowRouter.use(requireDepartmentAccess("workflow"));
 workflowRouter.get("/health", healthHandler);

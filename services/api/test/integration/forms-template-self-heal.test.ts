@@ -23,7 +23,8 @@ import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
-const FORM_TYPE = `no-template-yet-${suffix}`; // a form type deliberately never seeded a template row
+// A real module form. Unknown type names are refused; self-heal is for a mapped type whose template row was never seeded.
+const FORM_TYPE = "five_why";
 
 let companyId: number;
 let userId: number;
@@ -35,9 +36,10 @@ describe("Forms engine — template self-healing (real DB + real HTTP path)", ()
     companyId = co!.id;
 
     await seedDefaultPermissions(companyId);
-    const [user] = await db.insert(users).values({ email: `forms-heal-test-${suffix}@test.local`, passwordHash: "unused" }).returning();
+    await db.delete(formTemplates).where(eq(formTemplates.formType, FORM_TYPE));
+    const [user] = await db.insert(users).values({ email: `forms-heal-test-${suffix}@test.local`, passwordHash: "unused", department: "quality" }).returning();
     userId = user!.id;
-    token = signAccessToken({ sub: String(userId), roleId: null, roleName: "operator", department: null });
+    token = signAccessToken({ sub: String(userId), roleId: null, roleName: "operator", department: "quality" });
   });
 
   afterAll(async () => {
