@@ -1,10 +1,12 @@
 import { useEffect, useMemo } from "react";
+import { sheetRevision } from "../../../lib/formDocument";
 import { computeGageRR, gageEvaluationFill, PART_COUNT } from "./gageRRMath";
 import "../../../routes/IsoForms/isoForm.css";
 
 interface CustomFormProps {
   data: Record<string, unknown>;
   onChange: (name: string, value: unknown) => void;
+  documentNumber?: string;
 }
 
 const PARTS = Array.from({ length: PART_COUNT }, (_, i) => i + 1);
@@ -30,7 +32,7 @@ function fmt(n: number, digits = 3): string {
  * (services/api's layouts/gageRR.ts) prints the final computed values on PDF
  * export, since that path doesn't run this component.
  */
-export function GageRRForm({ data, onChange }: CustomFormProps) {
+export function GageRRForm({ data, onChange, documentNumber = "" }: CustomFormProps) {
   // Memoized on the actual stored reference (not recreated every render) so
   // the sync effect below only re-fires when the underlying data really
   // changes, not on every render.
@@ -127,7 +129,7 @@ export function GageRRForm({ data, onChange }: CustomFormProps) {
             </td>
           </tr>
           <tr>
-            <td colSpan={4}>Rev: A</td>
+            <td colSpan={4}>{sheetRevision(documentNumber)}</td>
             <td colSpan={PART_COUNT - 2}>Average and range method · D4 = 3.27 · K1 = 0.8862 · K2 = 0.7071 · K3 = 0.3146</td>
           </tr>
           <tr>

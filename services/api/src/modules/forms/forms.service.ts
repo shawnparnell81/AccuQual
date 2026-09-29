@@ -6,6 +6,7 @@ import { eightD } from "../../drizzle/schema/eightD.js";
 import { blank8dFromData } from "../eight-d/blank8dForm.js";
 import { renderBlank8DPdf } from "../eight-d/blank8d-pdf.js";
 import { mergePdfFields } from "./pdf-merger.js";
+import { snapshotFormDataNumber } from "../document-folders/formRecordFiling.js";
 
 /**
  * Self-healing (same pattern as document-folders.controller.ts's
@@ -76,6 +77,7 @@ export async function saveData(db: Db, input: SaveInput) {
       createdBy: input.userId,
     })
     .returning();
+  if (created && input.entityId != null) await snapshotFormDataNumber(db, input.formType, input.entityId);
   return created;
 }
 

@@ -13,6 +13,7 @@ import {
   vocFill,
   type ScorecardRow,
 } from "../../lib/qualitySheetLogic";
+import { sheetRevision } from "../../lib/formDocument";
 import "./isoForm.css";
 
 interface ScorecardSheetProps {
@@ -21,6 +22,7 @@ interface ScorecardSheetProps {
   readOnly?: boolean;
   onCell: (addr: string, value: CellValue) => void;
   onCustomers: (customers: ScorecardRow[]) => void;
+  documentNumber?: string;
 }
 
 function textOf(value: CellValue | undefined): string {
@@ -36,7 +38,7 @@ function Num({ label, value, readOnly, onChange }: { label: string; value: strin
   return <input className="iso-in center" inputMode="decimal" aria-label={label} value={value} disabled={readOnly} onChange={(event) => onChange(event.target.value)} />;
 }
 
-export function ScorecardSheet({ cells, customers, readOnly = false, onCell, onCustomers }: ScorecardSheetProps) {
+export function ScorecardSheet({ cells, customers, readOnly = false, onCell, onCustomers, documentNumber = "" }: ScorecardSheetProps) {
   const rows = visibleRows(customers);
 
   function edit(index: number, patch: Partial<ScorecardRow>) {
@@ -63,7 +65,7 @@ export function ScorecardSheet({ cells, customers, readOnly = false, onCell, onC
               </td>
             </tr>
             <tr>
-              <td>Rev: A</td>
+              <td>{sheetRevision(documentNumber)}</td>
               <td>Month / Year</td>
               <td colSpan={2}>
                 <input className="iso-in" aria-label="Month and year" placeholder="April 2021" value={textOf(cells.B2)} disabled={readOnly} onChange={(event) => onCell("B2", event.target.value)} />

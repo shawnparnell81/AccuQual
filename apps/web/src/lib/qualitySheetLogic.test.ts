@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { gageEvaluationFill, systemEvaluationFor } from "../components/forms/customForms/gageRRMath";
 import { pswLayout, qualityAlertLayout, turtleLayout } from "./qualitySheetLayouts";
+import { sheetRevision } from "./formDocument";
 import { faiFill, faiResult, formatRatio, lowerBetterFill, lowerIsBetter, nbhFill, pcaFill, plusDays, sumNumbers, vocFill } from "./qualitySheetLogic";
 
 test("first article pass/fail uses nominal and tolerance", () => {
@@ -79,4 +80,10 @@ test("new sheet layouts keep their titles and do not invent a document number", 
   const ok = qualityAlertLayout().rows.flat().find((cell) => cell.text === "OK");
   assert.equal(nok?.paint, "fill-red");
   assert.equal(ok?.paint, "fill-green");
+});
+
+test("a filled copy prints its stored document number and stays blank when it has none", () => {
+  assert.equal(sheetRevision(""), "Rev: A");
+  assert.equal(sheetRevision("   "), "Rev: A");
+  assert.equal(sheetRevision("QA-14"), "Doc ID: QA-14 · Rev: A");
 });

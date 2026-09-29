@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import type { CellValue } from "../../lib/isoFormLogic";
+import { sheetRevision } from "../../lib/formDocument";
 import { blankFaiLine, faiFill, faiResult, type FaiLine } from "../../lib/qualitySheetLogic";
 import "./isoForm.css";
 
@@ -9,6 +10,7 @@ interface FaiSheetProps {
   readOnly?: boolean;
   onCell: (addr: string, value: CellValue) => void;
   onLines: (lines: FaiLine[]) => void;
+  documentNumber?: string;
 }
 
 const HEADER: Array<Array<{ label: string; addr: string }>> = [
@@ -38,7 +40,7 @@ function visibleLines(lines: FaiLine[]): FaiLine[] {
   return Array.from({ length: 8 }, (_, index) => ({ ...blankFaiLine(), balloon: String(index + 1) }));
 }
 
-export function FaiSheet({ cells, lines, readOnly = false, onCell, onLines }: FaiSheetProps) {
+export function FaiSheet({ cells, lines, readOnly = false, onCell, onLines, documentNumber = "" }: FaiSheetProps) {
   const rows = visibleLines(lines);
 
   function commit(next: FaiLine[]) {
@@ -59,7 +61,7 @@ export function FaiSheet({ cells, lines, readOnly = false, onCell, onLines }: Fa
             </td>
           </tr>
           <tr>
-            <td>Rev: A</td>
+            <td>{sheetRevision(documentNumber)}</td>
             <td colSpan={3}>First Article Inspection Report</td>
             <td>Page</td>
             <td>

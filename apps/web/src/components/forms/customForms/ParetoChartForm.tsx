@@ -1,9 +1,11 @@
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { sheetRevision } from "../../../lib/formDocument";
 import "../../../routes/IsoForms/isoForm.css";
 
 interface CustomFormProps {
   data: Record<string, unknown>;
   onChange: (name: string, value: unknown) => void;
+  documentNumber?: string;
 }
 
 interface ProblemRow {
@@ -23,7 +25,7 @@ interface ProblemRow {
  * rows are persisted; the sort and cumulative % are always re-derived so
  * they can never go stale relative to the raw counts.
  */
-export function ParetoChartForm({ data, onChange }: CustomFormProps) {
+export function ParetoChartForm({ data, onChange, documentNumber = "" }: CustomFormProps) {
   const rows: ProblemRow[] = Array.isArray(data.problems) ? (data.problems as ProblemRow[]) : [{ description: "", quantity: 0 }];
 
   const total = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
@@ -65,7 +67,7 @@ export function ParetoChartForm({ data, onChange }: CustomFormProps) {
               </td>
             </tr>
             <tr>
-              <td colSpan={4}>Rev: A</td>
+              <td colSpan={4}>{sheetRevision(documentNumber)}</td>
             </tr>
             <tr>
               <td className="header">Problem description</td>

@@ -6,8 +6,10 @@ import { RecordCrumbs } from "../../components/records/RecordStatus";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { SaveStatus } from "../../components/shared/SaveStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { RecordFolderField, useFormFiling } from "../../components/forms/FormDocumentControls";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { FORM_KEY_BY_TYPE, revisionLabel } from "../../lib/formDocument";
 import { formByType, type IsoFormType } from "../../lib/isoFormCatalog";
 import { EXCLUSIVE_CHECKS } from "../../lib/isoFormLayouts";
 import { showCell, quarantineTotal, type CellValue } from "../../lib/isoFormLogic";
@@ -128,28 +130,87 @@ export function IsoFormDetailPage() {
   }
 
   const summary = showCell(cells.B3) || showCell(cells.B5) || showCell(cells.D2) || showCell(cells.F3) || showCell(cells.D4);
+  const formKey = FORM_KEY_BY_TYPE[formType] ?? null;
+  return <IsoFormDetailBody meta={meta} record={record} formKey={formKey} summary={summary} canEdit={canEdit} dirty={dirty} saving={updateRecord.isPending} onSave={saveRecord} sheet={sheet} setSheet={setSheet} cells={cells} photos={photos} setPhotos={setPhotos} lines={lines} customers={customers} problems={problems} months={months} calculated={calculated} changeCell={changeCell} setLines={setLines} setCustomers={setCustomers} setProblems={setProblems} setMonths={setMonths} recordId={recordId} />;
+}
+
+function IsoFormDetailBody({
+  meta,
+  record,
+  formKey,
+  summary,
+  canEdit,
+  dirty,
+  saving,
+  onSave,
+  sheet,
+  setSheet,
+  cells,
+  photos,
+  setPhotos,
+  lines,
+  customers,
+  problems,
+  months,
+  calculated,
+  changeCell,
+  setLines,
+  setCustomers,
+  setProblems,
+  setMonths,
+  recordId,
+}: {
+  meta: NonNullable<ReturnType<typeof formByType>>;
+  record: IsoQualityForm;
+  formKey: string | null;
+  summary: string;
+  canEdit: boolean;
+  dirty: boolean;
+  saving: boolean;
+  onSave: () => void;
+  sheet: "form" | "photos";
+  setSheet: (sheet: "form" | "photos") => void;
+  cells: Record<string, CellValue>;
+  photos: string;
+  setPhotos: (value: string) => void;
+  lines: FaiLine[];
+  customers: ScorecardRow[];
+  problems: FailureRow[];
+  months: string[];
+  calculated: Record<string, CellValue>;
+  changeCell: (addr: string, value: CellValue) => void;
+  setLines: (lines: FaiLine[]) => void;
+  setCustomers: (rows: ScorecardRow[]) => void;
+  setProblems: (rows: FailureRow[]) => void;
+  setMonths: (months: string[]) => void;
+  recordId: number;
+}) {
+  const filing = useFormFiling(formKey, record.id);
+  const formType = record.formType;
+  const documentNumber = filing.data?.snapshotted ? filing.data.formNumber : "";
 
   return (
     <div className={`flex flex-col gap-4 ${WIDE.has(formType) ? "aq-print-wide" : ""}`}>
       <div className="no-print flex flex-col gap-4">
-        <RecordCrumbs items={[{ label: meta.title, to: `/iso-forms/${meta.formKey}` }, { label: meta.formId ? `${meta.formId} #${record.id}` : `Record ${record.id}` }]} />
+        <RecordCrumbs items={[{ label: meta.title, to: `/iso-forms/${meta.formKey}` }, { label: documentNumber ? `${documentNumber} #${record.id}` : `Record ${record.id}` }]} />
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+          <div className="flex flex-col gap-2">
             <h1 className="text-2xl font-semibold">{meta.title}</h1>
             <p className="text-sm text-muted-foreground">
-              {meta.formId ? `${meta.formId} Rev ${meta.rev}` : `Rev ${meta.rev}`}
+              {revisionLabel(documentNumber, meta.rev)}
               {" · "}
               <Link to={`/iso-forms/${meta.formKey}`} className="text-primary hover:underline">
                 Filled records
               </Link>
             </p>
+            {formKey && <RecordFolderField formKey={formKey} recordId={recordId} />}
           </div>
           <div className="flex items-center gap-2">
             <DeleteRecordButton resource="iso-quality-forms" id={recordId} kind={meta.title} title={summary || null} navigateTo={`/iso-forms/${meta.formKey}`} />
-            <SaveStatus saving={updateRecord.isPending} unsaved={dirty && !updateRecord.isPending} />
+            <SaveStatus saving={saving} unsaved={dirty && !saving} />
             {canEdit && (
-              <button type="button" onClick={saveRecord} disabled={updateRecord.isPending} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
-                {updateRecord.isPending ? "Saving…" : "Save"}
+              <button type="button" onClick={onSave} disabled={saving} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
+                {saving ? "Saving…" : "Save"}
               </button>
             )}
             <button type="button" onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
@@ -173,16 +234,16 @@ export function IsoFormDetailPage() {
         {formType === "cross_training" ? (
           <CrossTrainingSheet cells={cells} readOnly={!canEdit} onChange={changeCell} />
         ) : formType === "first_article" ? (
-          <FaiSheet cells={cells} lines={lines} readOnly={!canEdit} onCell={changeCell} onLines={setLines} />
+          <FaiSheet cells={cells} lines={lines} readOnly={!canEdit} onCell={changeCell} onLines={setLines} documentNumber={documentNumber} />
         ) : formType === "customer_scorecard" ? (
-          <ScorecardSheet cells={cells} customers={customers} readOnly={!canEdit} onCell={changeCell} onCustomers={setCustomers} />
+          <ScorecardSheet cells={cells} customers={customers} readOnly={!canEdit} onCell={changeCell} onCustomers={setCustomers} documentNumber={documentNumber} />
         ) : formType === "failure_effectiveness" ? (
-          <FailureChartSheet months={months} problems={problems} readOnly={!canEdit} onMonths={setMonths} onProblems={setProblems} />
+          <FailureChartSheet months={months} problems={problems} readOnly={!canEdit} onMonths={setMonths} onProblems={setProblems} documentNumber={documentNumber} />
         ) : (
           <>
             {meta.layout && (
               <div className={sheet === "photos" ? "iso-offscreen" : undefined}>
-                <IsoFormSheet layout={meta.layout} cells={cells} calculated={calculated} readOnly={!canEdit} onChange={changeCell} label={meta.title} />
+                <IsoFormSheet layout={meta.layout} cells={cells} calculated={calculated} readOnly={!canEdit} onChange={changeCell} label={meta.title} documentNumber={formKey ? documentNumber : ""} />
               </div>
             )}
             {meta.photos && (

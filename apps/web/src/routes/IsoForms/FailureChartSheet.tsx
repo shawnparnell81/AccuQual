@@ -11,6 +11,7 @@ import {
   topFailureProblems,
   type FailureRow,
 } from "../../lib/qualitySheetLogic";
+import { sheetRevision } from "../../lib/formDocument";
 import "./isoForm.css";
 
 interface FailureChartSheetProps {
@@ -19,6 +20,7 @@ interface FailureChartSheetProps {
   readOnly?: boolean;
   onMonths: (months: string[]) => void;
   onProblems: (problems: FailureRow[]) => void;
+  documentNumber?: string;
 }
 
 function visibleMonths(months: string[]): string[] {
@@ -35,7 +37,7 @@ function visibleProblems(problems: FailureRow[], monthCount: number): FailureRow
   return Array.from({ length: 8 }, () => blankFailureRow(monthCount));
 }
 
-export function FailureChartSheet({ months, problems, readOnly = false, onMonths, onProblems }: FailureChartSheetProps) {
+export function FailureChartSheet({ months, problems, readOnly = false, onMonths, onProblems, documentNumber = "" }: FailureChartSheetProps) {
   const headers = visibleMonths(months);
   const rows = visibleProblems(problems, headers.length);
   const totals = failureColumnTotals(rows, headers.length);
@@ -73,7 +75,7 @@ export function FailureChartSheet({ months, problems, readOnly = false, onMonths
               </td>
             </tr>
             <tr>
-              <td colSpan={headers.length + 6}>Rev: A</td>
+              <td colSpan={headers.length + 6}>{sheetRevision(documentNumber)}</td>
             </tr>
             <tr>
               <td className="header">No.</td>

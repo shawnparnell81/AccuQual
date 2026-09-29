@@ -7,8 +7,10 @@ import { formatDate } from "../../lib/dates";
 import { formByKey, type IsoFormType } from "../../lib/isoFormCatalog";
 import { showCell, type CellValue } from "../../lib/isoFormLogic";
 import type { FailureRow, ScorecardRow } from "../../lib/qualitySheetLogic";
+import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { EDITABLE_FORM_KEYS, revisionLabel } from "../../lib/formDocument";
 
 interface IsoQualityForm {
   id: number;
@@ -65,6 +67,7 @@ export function IsoFormListPage() {
   const filedTemplate = filing.data?.templates?.find((item) => item.formKey === formKey);
   const pattern = filedTemplate?.fileNamePattern ?? filing.data?.fileNamePattern ?? "{formId}_{recordNumber}_{date}";
   const filingId = filedTemplate?.formId ?? meta?.formId ?? "";
+  const liveFormId = filedTemplate?.formId ?? meta?.formId ?? "";
 
   if (!meta) return <p className="text-sm text-muted-foreground">This form isn't in the library.</p>;
   const form = meta;
@@ -86,12 +89,13 @@ export function IsoFormListPage() {
         <div>
           <h1 className="text-2xl font-semibold">{meta.title}</h1>
           <p className="text-sm text-muted-foreground">
-            {meta.formId ? `${meta.formId} Rev ${meta.rev}` : `Rev ${meta.rev}`}. The blank template is filed under ISO Compliance Documents / Blank Form Templates. A filled copy is saved here.
+            {revisionLabel(liveFormId, meta.rev)}. The blank template is filed under ISO Compliance Documents / Blank Form Templates. A filled copy can be saved into any Documents folder.
           </p>
+          {EDITABLE_FORM_KEYS.has(form.formKey) && <FormNumberEditor formKey={form.formKey} />}
         </div>
         {canEdit && (
           <button type="button" onClick={start} disabled={pending} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
-            {pending ? "Creating…" : meta.formId ? `New ${meta.formId}` : `New ${meta.title}`}
+            {pending ? "Creating…" : liveFormId ? `New ${liveFormId}` : `New ${meta.title}`}
           </button>
         )}
       </div>

@@ -4,8 +4,8 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
-import { createDocumentFolderSchema, updateDocumentFolderSchema } from "./document-folders.validation.js";
-import { list, create, update, remove, uploadTemplate, uploadDocument, downloadTemplate, folderOfficeSessionHandler, removeTemplate, formTemplates } from "./document-folders.controller.js";
+import { createDocumentFolderSchema, fileFormRecordSchema, updateDocumentFolderSchema, updateFormNumberSchema } from "./document-folders.validation.js";
+import { list, create, update, remove, uploadTemplate, uploadDocument, downloadTemplate, folderOfficeSessionHandler, removeTemplate, formTemplates, setFormNumber, formFiling, fileForm } from "./document-folders.controller.js";
 
 export const documentFoldersRouter = Router();
 // Security audit finding (high): this router had no RBAC gate at all — any
@@ -23,6 +23,9 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 
 
 documentFoldersRouter.get("/", list);
 documentFoldersRouter.get("/form-templates", formTemplates);
+documentFoldersRouter.patch("/form-templates/:formKey", validate(updateFormNumberSchema), setFormNumber);
+documentFoldersRouter.get("/form-filings", formFiling);
+documentFoldersRouter.post("/form-filings", validate(fileFormRecordSchema), fileForm);
 documentFoldersRouter.post("/", validate(createDocumentFolderSchema), create);
 // Fixed literal path before ":id"-shaped ones — the one-step "create a
 // leaf + attach a file" upload, not scoped to an existing node.

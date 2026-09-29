@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../api/client";
+import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
+import { EDITABLE_FORM_KEYS } from "../../lib/formDocument";
 
 interface FormStart {
   createPath: string;
@@ -58,7 +60,7 @@ export function QmsFormsLibraryPage() {
       <div>
         <h1 className="text-2xl font-semibold">QMS Forms</h1>
         <p className="text-sm text-muted-foreground">
-          Blank templates live in Document Folders under ISO Compliance Documents / Blank Form Templates. Start one here. A filled record is filed in its subject folder.
+          Blank templates live in Document Folders under ISO Compliance Documents / Blank Form Templates. Start one here. When you save a filled copy, the subject folder is suggested and you can choose another folder.
         </p>
       </div>
 
@@ -71,16 +73,17 @@ export function QmsFormsLibraryPage() {
           <h2 className="mb-3 text-sm font-semibold">{topic}</h2>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {forms.map((form) => (
-              <button
-                key={form.formKey}
-                onClick={() => void openForm(form)}
-                disabled={pendingKey !== null}
-                className="flex items-start justify-between gap-2 rounded-md border border-border p-3 text-left text-sm hover:bg-muted"
-                data-form-key={form.formKey}
-              >
-                <span className="font-medium">{form.title}</span>
-                {form.formId ? <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{form.formId}</span> : null}
-              </button>
+              <div key={form.formKey} className="flex flex-col gap-2 rounded-md border border-border p-3" data-form-key={form.formKey}>
+                <button
+                  onClick={() => void openForm(form)}
+                  disabled={pendingKey !== null}
+                  className="flex items-start justify-between gap-2 text-left text-sm hover:underline"
+                >
+                  <span className="font-medium">{form.title}</span>
+                  {form.formId ? <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{form.formId}</span> : null}
+                </button>
+                {EDITABLE_FORM_KEYS.has(form.formKey) && <FormNumberEditor formKey={form.formKey} compact />}
+              </div>
             ))}
           </div>
         </div>

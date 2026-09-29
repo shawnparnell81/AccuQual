@@ -9,6 +9,7 @@ import { PdfViewer } from "./PdfViewer";
 import { getFormLayout } from "./layouts";
 import { GenericFormRenderer } from "./GenericFormRenderer";
 import { getCustomFormComponent } from "./customForms";
+import { FormNumberEditor, RecordFolderField, useFormFiling } from "./FormDocumentControls";
 import { useFormEditorState } from "./useFormEditorState";
 import { ProcessFlowDiagramEditor } from "./processFlowDiagram/ProcessFlowDiagramEditor";
 import { PictureRecordProvider, pictureRecordForForm } from "./pictureRecord";
@@ -25,6 +26,8 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
   const CustomComponent = getCustomFormComponent(formType);
   const fields = FORM_FIELD_SPECS[formType] ?? [];
   const { formData, isLoading, values, updateField, isSaving } = useFormEditorState(formType, entityId, windowId);
+  const gageFiling = useFormFiling(formType === "gage_rr" ? "frm-msa-001" : null, entityId);
+  const gageNumber = gageFiling.data?.snapshotted ? gageFiling.data.formNumber : "";
   const createVersion = useCreateFormVersion(formType, entityId);
   const toast = useToast();
 
@@ -73,13 +76,19 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
         <span>{formData ? `Version ${formData.version}` : "New form"}</span>
         <span>{isSaving ? "Saving…" : "Auto-saved"}</span>
       </div>
+      {formType === "gage_rr" && (
+        <div className="flex flex-col gap-2">
+          <FormNumberEditor formKey="frm-msa-001" />
+          <RecordFolderField formKey="frm-msa-001" recordId={entityId} />
+        </div>
+      )}
 
       {formType === "process_flow_diagram" && <ProcessFlowDiagramEditor data={values} onChange={updateField} />}
 
       {layout ? (
         <GenericFormRenderer layout={layout} data={values} onChange={updateField} />
       ) : CustomComponent ? (
-        <CustomComponent data={values} onChange={updateField} />
+        <CustomComponent data={values} onChange={updateField} documentNumber={formType === "gage_rr" ? gageNumber : undefined} />
       ) : (
         <div className="flex flex-col gap-3">
           {fields.map((field) => (
