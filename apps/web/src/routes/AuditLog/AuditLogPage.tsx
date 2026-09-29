@@ -23,15 +23,12 @@ export function AuditLogPage() {
     queryFn: async () => (await apiClient.get("/audit-trail")).data,
     enabled: allowed,
   });
-  if (!allowed) {
-    return <p className="text-sm text-muted-foreground">The audit log is limited to an Owner or Administrator.</p>;
-  }
 
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold">Audit log</h1>
-        <p className="text-sm text-muted-foreground">Who changed or deleted a record, and when.</p>
+        <p className="text-sm text-muted-foreground">Who changed or deleted a record you can open, and when.</p>
       </div>
       {isLoading ? (
         <LoadingPlaceholder />

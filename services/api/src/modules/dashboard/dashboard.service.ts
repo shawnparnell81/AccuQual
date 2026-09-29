@@ -14,7 +14,7 @@ import { sites, userSites } from "../../drizzle/schema/sites.js";
 import { users } from "../../drizzle/schema/users.js";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { listEquipmentWithSummary } from "../calibration/calibration.service.js";
-import { isFullAccessRole } from "../roles/roleAccess.js";
+import { canSeeCompanyAuditRow, visibleEntityTypes } from "../audit-trail/auditTrailVisibility.js";
 import {
   buildDashboardOverview,
   type DashActivity,
@@ -26,7 +26,8 @@ import {
 } from "./dashboard.metrics.js";
 
 const ROW_CAP = 5000;
-const ACTIVITY_SCAN = 40;
+const ACTIVITY_LIMIT = 40;
+const ACTIVITY_SCAN = 200;
 
 const READ_KEYS = ["ncr", "capa", "documents", "training", "audit", "calibration", "change", "ppap", "scar"] as const satisfies readonly ResourceKey[];
 
@@ -201,6 +202,7 @@ export async function loadDashboardOverview(
       : [];
   if (itemRows.length >= ROW_CAP) truncated.value = true;
 
+  const visibleActivity = await visibleEntityTypes(db, user);
   const activityRows = await db
     .select({
       id: auditTrail.id,
@@ -226,7 +228,7 @@ export async function loadDashboardOverview(
       if (found == null) continue;
       siteId = found;
     }
-    if (!isFullAccessRole(user.roleName) && row.performedBy !== user.id) continue;
+    if (!canSeeCompanyAuditRow(visibleActivity, row, user.id)) continue;
     activity.push({
       id: row.id,
       entityType: row.entityType,
@@ -237,6 +239,7 @@ export async function loadDashboardOverview(
       createdAt: row.createdAt,
       siteId,
     });
+    if (activity.length >= ACTIVITY_LIMIT) break;
   }
 
   const siteRefs: SiteRef[] = siteRows.map((row) => ({ id: row.id, name: row.name, code: row.code }));

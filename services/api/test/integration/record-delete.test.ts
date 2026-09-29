@@ -152,15 +152,33 @@ describe("record delete", () => {
     expect(changes.snapshot.title).toBe(title);
     expect(changes.attachmentFileNames).toEqual(["bent-flange.png"]);
 
+    await db.insert(auditTrail).values({
+      entityType: "User",
+      entityId: admin.id,
+      action: "status_change",
+      changes: { action: "password_changed" },
+      performedBy: admin.id,
+    });
+
     const managerLog = await request(app).get("/audit-trail").set("Authorization", `Bearer ${qualityManager.token}`);
-    expect(managerLog.status).toBe(403);
+    expect(managerLog.status).toBe(200);
+    const managerRows = managerLog.body as { entityType: string; entityId: number; changes?: { summary?: string; action?: string } }[];
+    expect(managerRows.some((row) => row.changes?.summary === changes.summary)).toBe(true);
+    expect(managerRows.some((row) => row.entityType === "User" && row.entityId === admin.id)).toBe(false);
+
+    const creatorLog = await request(app).get("/audit-trail").set("Authorization", `Bearer ${creator.token}`);
+    expect(creatorLog.status).toBe(200);
+    expect((creatorLog.body as { changes?: { summary?: string } }[]).some((row) => row.changes?.summary === changes.summary)).toBe(true);
+
+    const productionLog = await request(app).get("/audit-trail").set("Authorization", `Bearer ${production.token}`);
+    expect(productionLog.status).toBe(200);
+    expect((productionLog.body as { changes?: { summary?: string } }[]).some((row) => row.changes?.summary === changes.summary)).toBe(false);
 
     const log = await request(app).get("/audit-trail").set("Authorization", `Bearer ${admin.token}`);
     expect(log.status).toBe(200);
-    expect((log.body as { action: string; changes?: { summary?: string } }[]).some((row) => row.changes?.summary === changes.summary)).toBe(true);
-
-    const hidden = await request(app).get("/audit-trail").set("Authorization", `Bearer ${creator.token}`);
-    expect(hidden.status).toBe(403);
+    const adminRows = log.body as { entityType: string; entityId: number; changes?: { summary?: string; action?: string } }[];
+    expect(adminRows.some((row) => row.changes?.summary === changes.summary)).toBe(true);
+    expect(adminRows.some((row) => row.entityType === "User" && row.entityId === admin.id && row.changes?.action === "password_changed")).toBe(true);
 
     const [still] = await db.select({ id: ncr.id }).from(ncr).where(eq(ncr.id, kept.body.id));
     expect(still).toBeTruthy();

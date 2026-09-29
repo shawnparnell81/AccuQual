@@ -12,11 +12,12 @@ test("only an administrator, owner, quality manager, or the record owner can del
   assert.equal(canDeleteRecord("read_only", 5, []), false);
 });
 
-test("only an owner or administrator can open the company audit log", () => {
+test("any signed-in role can open the company audit log", () => {
   assert.equal(canViewAuditLog("admin"), true);
   assert.equal(canViewAuditLog("owner"), true);
-  assert.equal(canViewAuditLog("quality_manager"), false);
-  assert.equal(canViewAuditLog("operator"), false);
+  assert.equal(canViewAuditLog("quality_manager"), true);
+  assert.equal(canViewAuditLog("operator"), true);
+  assert.equal(canViewAuditLog(undefined), false);
 });
 
 test("the confirmation and the audit line name the record", () => {
