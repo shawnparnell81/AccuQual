@@ -1,9 +1,10 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
 import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmentAccess.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { audits, auditItems } from "../../drizzle/schema/audits.js";
+import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { AppError } from "../../utils/appError.js";
@@ -159,8 +160,23 @@ async function loadSiteIds(db: Db, entityType: string, ids: number[]): Promise<M
   return new Map();
 }
 
-/** Drop company-list rows for a plant this person cannot open. Owners and administrators see every plant. */
-export async function filterCompanyAuditBySite<T extends { entityType: string; entityId: number }>(
+/** Plant stamped on a delete snapshot once the record itself is gone. */
+function snapshotSiteId(changes: unknown): number | null | undefined {
+  if (!changes || typeof changes !== "object") return undefined;
+  const snapshot = (changes as { snapshot?: unknown }).snapshot;
+  if (!snapshot || typeof snapshot !== "object" || !("siteId" in snapshot)) return undefined;
+  const siteId = (snapshot as { siteId?: unknown }).siteId;
+  if (siteId == null) return null;
+  const id = Number(siteId);
+  return Number.isInteger(id) && id > 0 ? id : undefined;
+}
+
+function onCallerPlant(siteId: number | null | undefined, allowedSiteIds: number[]): boolean {
+  return siteId != null && allowedSiteIds.includes(siteId);
+}
+
+/** Drop company-list rows for a plant this person cannot open. Owners and administrators see every plant. A deleted record keeps the plant from its snapshot. */
+export async function filterCompanyAuditBySite<T extends { entityType: string; entityId: number; changes?: unknown }>(
   db: Db,
   rows: T[],
   user: Viewer,
@@ -182,15 +198,30 @@ export async function filterCompanyAuditBySite<T extends { entityType: string; e
   );
   return rows.filter((row) => {
     if (!isSiteBearing(row.entityType)) return true;
-    const siteId = sitesByType.get(row.entityType)?.get(row.entityId);
-    return siteId != null && allowedSiteIds.includes(siteId);
+    const known = sitesByType.get(row.entityType);
+    if (known?.has(row.entityId)) return onCallerPlant(known.get(row.entityId), allowedSiteIds);
+    const fromSnapshot = snapshotSiteId(row.changes);
+    if (fromSnapshot === undefined) return true;
+    return onCallerPlant(fromSnapshot, allowedSiteIds);
   });
 }
 
 async function assertHistoryOnAllowedSite(db: Db, entityType: string, entityId: number, allowedSiteIds: number[] | undefined): Promise<void> {
   if (!allowedSiteIds || !isSiteBearing(entityType)) return;
   const sites = await loadSiteIds(db, entityType, [entityId]);
-  assertRecordOnAllowedSite(sites.get(entityId), allowedSiteIds, entityType);
+  if (sites.has(entityId)) {
+    assertRecordOnAllowedSite(sites.get(entityId), allowedSiteIds, entityType);
+    return;
+  }
+  const [latest] = await db
+    .select({ changes: auditTrail.changes })
+    .from(auditTrail)
+    .where(and(eq(auditTrail.entityType, entityType), eq(auditTrail.entityId, entityId)))
+    .orderBy(desc(auditTrail.id))
+    .limit(1);
+  const fromSnapshot = snapshotSiteId(latest?.changes);
+  if (fromSnapshot === undefined) return;
+  assertRecordOnAllowedSite(fromSnapshot, allowedSiteIds, entityType);
 }
 
 /** One record's history. The caller must already be allowed to open that record, including its plant. */
