@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { useCurrentUser } from "../../hooks/useAuth";
 import { formatDateTime } from "../../lib/dates";
-import { auditEventLabel } from "../../lib/recordDelete";
+import { auditEventLabel, canViewAuditLog } from "../../lib/recordDelete";
 
 interface AuditRow {
   id: number;
@@ -15,16 +16,19 @@ interface AuditRow {
 }
 
 export function AuditLogPage() {
+  const user = useCurrentUser();
+  const allowed = canViewAuditLog(user?.roleName);
   const { data: rows = [], isLoading, isError } = useQuery<AuditRow[]>({
     queryKey: ["audit-trail", "recent"],
     queryFn: async () => (await apiClient.get("/audit-trail")).data,
+    enabled: allowed,
   });
 
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold">Audit log</h1>
-        <p className="text-sm text-muted-foreground">Who changed or deleted a record, and when.</p>
+        <p className="text-sm text-muted-foreground">Who changed or deleted a record you can open, and when.</p>
       </div>
       {isLoading ? (
         <LoadingPlaceholder />

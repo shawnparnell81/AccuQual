@@ -417,8 +417,13 @@ async function notifyReview(db: Db, adapter: SubjectAdapter, subjectId: number, 
   await notifyRecipients(db, await emailsOf(author), subject, body, adapter.entityType, subjectId);
 }
 
+const RESTORE_ADMIN_SUBJECTS = new Set(["document", "management_review", "context_of_organization"]);
+
 /** Rollback: a new draft whose content is an earlier version's. It still goes through review and publishing like any other change. */
 export async function rollbackTo(db: Db, adapter: SubjectAdapter, subjectId: number, versionNumber: number, actor: Actor): Promise<ControlledVersion> {
+  if (RESTORE_ADMIN_SUBJECTS.has(adapter.subject) && !isFullAccessRole(actor.roleName)) {
+    throw AppError.forbidden("Only an Owner or Administrator can restore an older revision.");
+  }
   await ensureBootstrapped(db, adapter, subjectId);
   const [target] = await db
     .select()

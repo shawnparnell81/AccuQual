@@ -52,6 +52,7 @@ import { qmsFormRows, qmsForms } from "../../drizzle/schema/qmsForms.js";
 import { documentChangeItems, documentChangeRequests, documentChangeReviews } from "../../drizzle/schema/documentChangeRequests.js";
 import { feasibilityReviews } from "../../drizzle/schema/feasibility.js";
 import { calibrations, equipment } from "../../drizzle/schema/calibration.js";
+import { isoQualityForms } from "../../drizzle/schema/isoQualityForms.js";
 import { customers } from "../../drizzle/schema/customers.js";
 import { salesQuotes } from "../../drizzle/schema/sales.js";
 
@@ -82,7 +83,8 @@ export type RecordKind =
   | "quality_inspection"
   | "dcr"
   | "feasibility"
-  | "equipment";
+  | "equipment"
+  | "iso_quality_form";
 
 type Row = Record<string, unknown>;
 
@@ -658,7 +660,46 @@ const specs: Record<RecordKind, KindSpec> = {
     cleanup: async () => undefined,
     remove: (db, id) => removeWhere(db, equipment, equipment.id, id),
   },
+  iso_quality_form: {
+    entityType: "ISO form",
+    label: "ISO form",
+    attachmentTypes: ["iso_quality_form"],
+    formKeys: ["iso_quality_form"],
+    title: (row) => isoFormTitle(row),
+    load: (db, id) => loadOne(db, isoQualityForms, isoQualityForms.id, id),
+    cleanup: async () => undefined,
+    remove: (db, id) => removeWhere(db, isoQualityForms, isoQualityForms.id, id),
+  },
 };
+
+const ISO_FORM_LABELS: Record<string, string> = {
+  internal_audit: "Internal Audit Checklist",
+  ncr_report: "Non-Conformance Report",
+  quarantine_notice: "Quarantine Notice",
+  concession: "Concession / Deviation Request",
+  competency_training: "Competency and Training Record",
+  cross_training: "Cross-Training Evaluation",
+  psw: "Part Submission Warrant",
+  turtle_diagram: "Turtle Diagram",
+  quality_alert: "Quality Alert",
+  first_article: "First Article Inspection Report",
+  customer_scorecard: "Customer Scorecard",
+  failure_effectiveness: "Failure Action Effectiveness Chart",
+};
+
+function isoFormTitle(row: Row): string | null {
+  const data = row.data as { cells?: Record<string, unknown> } | undefined;
+  const cells = data?.cells ?? {};
+  for (const key of ["B3", "B5", "D2", "F3", "B2", "D4"]) {
+    const value = cells[key];
+    if (typeof value === "string" && value.trim()) return value.trim().slice(0, 160);
+  }
+  return null;
+}
+
+function isoFormLabel(row: Row): string {
+  return ISO_FORM_LABELS[String(row.formType ?? "")] ?? "ISO form";
+}
 
 export async function deleteRecord(req: Request, kind: RecordKind): Promise<void> {
   if (!req.db || !req.user) throw AppError.unauthorized("Not signed in");
@@ -686,7 +727,7 @@ export async function deleteRecord(req: Request, kind: RecordKind): Promise<void
 
     const title = spec.title(row);
     const recordNumber = recordNumberOf(row, spec.numberFields);
-    const label = kind === "validation_report" ? validationLabel(row) : spec.label;
+    const label = kind === "validation_report" ? validationLabel(row) : kind === "iso_quality_form" ? isoFormLabel(row) : spec.label;
     await recordAuditTrail(req.db, {
       entityType: spec.entityType,
       entityId: id,

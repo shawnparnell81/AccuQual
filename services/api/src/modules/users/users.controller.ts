@@ -39,7 +39,22 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
       createdAt: users.createdAt,
     })
     .from(users);
-  res.json(rows);
+  if (isFullAccessRole(req.user?.roleName)) {
+    res.json(rows);
+    return;
+  }
+  res.json(
+    rows.map((person) => ({
+      id: person.id,
+      email: person.email,
+      name: person.name,
+      roleId: person.roleId,
+      department: person.department,
+      managerId: person.managerId,
+      isActive: person.isActive,
+      createdAt: person.createdAt,
+    })),
+  );
 });
 
 export const getUser = asyncHandler(async (req: Request, res: Response) => {

@@ -5,6 +5,7 @@ import { ParetoChartForm } from "./ParetoChartForm";
 export interface CustomFormProps {
   data: Record<string, unknown>;
   onChange: (name: string, value: unknown) => void;
+  documentNumber?: string;
 }
 
 /**

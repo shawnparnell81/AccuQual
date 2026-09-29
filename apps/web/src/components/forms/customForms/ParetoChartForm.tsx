@@ -1,8 +1,11 @@
-import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { sheetRevision } from "../../../lib/formDocument";
+import "../../../routes/IsoForms/isoForm.css";
 
 interface CustomFormProps {
   data: Record<string, unknown>;
   onChange: (name: string, value: unknown) => void;
+  documentNumber?: string;
 }
 
 interface ProblemRow {
@@ -10,11 +13,10 @@ interface ProblemRow {
   quantity: number;
 }
 
-const INPUT_CLASS =
-  "w-full rounded border border-border bg-[hsl(var(--form-input))] px-2 py-1 text-xs text-[hsl(var(--form-input-foreground))] outline-none focus:ring-1 focus:ring-primary";
-
 /**
- * Pareto chart, derived 1:1 from the source "Pareto_Chart_Template.pdf".
+ * Pareto chart, derived from the source Pareto template.
+ * Cumulative % is SUM(quantity so far) / SUM(all quantities), the sheet formula
+ * SUM($C$8:Cn)/SUM($C$8:$C$18), after the rows are ordered by quantity.
  * Sort order and cumulative % are inherently whole-table computations (every
  * row's % depends on every other row's quantity and the sort order they
  * produce), which doesn't fit the row-by-row computed-column model the rest
@@ -23,7 +25,7 @@ const INPUT_CLASS =
  * rows are persisted; the sort and cumulative % are always re-derived so
  * they can never go stale relative to the raw counts.
  */
-export function ParetoChartForm({ data, onChange }: CustomFormProps) {
+export function ParetoChartForm({ data, onChange, documentNumber = "" }: CustomFormProps) {
   const rows: ProblemRow[] = Array.isArray(data.problems) ? (data.problems as ProblemRow[]) : [{ description: "", quantity: 0 }];
 
   const total = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
@@ -55,45 +57,38 @@ export function ParetoChartForm({ data, onChange }: CustomFormProps) {
   }
 
   return (
-    <div className="flex flex-col gap-5 text-sm">
-      <h2 className="text-center text-base font-bold uppercase tracking-wide" style={{ color: "var(--form-heading, #1d3a5c)" }}>
-        Pareto Chart
-      </h2>
-
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
-          <thead>
-            <tr>
-              <th className="border border-border bg-[hsl(var(--form-label))] px-2 py-1.5 text-left text-[hsl(var(--form-label-foreground))]">Problem Description</th>
-              <th className="w-28 border border-border bg-[hsl(var(--form-label))] px-2 py-1.5 text-left text-[hsl(var(--form-label-foreground))]">Quantity</th>
-              <th className="w-24 border border-border bg-[hsl(var(--form-label))] px-2 py-1.5 text-left text-[hsl(var(--form-label-foreground))]">Cumulative %</th>
-              <th className="w-8 border border-border bg-[hsl(var(--form-label))]" />
-            </tr>
-          </thead>
+    <div className="flex flex-col gap-4">
+      <div className="iso-wrap aq-form-copy aq-print-sheet min-w-0">
+        <table className="iso" data-testid="pareto-sheet" aria-label="Pareto Chart">
           <tbody>
-            {rows.map((row, i) => {
-              const rank = sorted.findIndex((r) => r === row || (r.description === row.description && r.quantity === row.quantity));
-              const cumPct = rank >= 0 && chartData[rank] ? chartData[rank].cumulativePct : null;
+            <tr>
+              <td className="title" colSpan={4}>
+                PARETO DYNAMIC DIAGRAM
+              </td>
+            </tr>
+            <tr>
+              <td colSpan={4}>{sheetRevision(documentNumber)}</td>
+            </tr>
+            <tr>
+              <td className="header">Problem description</td>
+              <td className="header">Quantity</td>
+              <td className="header">%</td>
+              <td className="header no-print" />
+            </tr>
+            {rows.map((row, index) => {
+              const rank = sorted.findIndex((item) => item === row || (item.description === row.description && item.quantity === row.quantity));
+              const cumulative = rank >= 0 && chartData[rank] ? chartData[rank].cumulativePct : null;
               return (
-                <tr key={i}>
-                  <td className="border border-border bg-[hsl(var(--form-input))] p-0.5">
-                    <input
-                      className={INPUT_CLASS}
-                      value={row.description}
-                      onChange={(e) => updateRow(i, { description: e.target.value })}
-                    />
+                <tr key={index}>
+                  <td>
+                    <input className="iso-in" aria-label={`Problem ${index + 1}`} value={row.description} onChange={(event) => updateRow(index, { description: event.target.value })} />
                   </td>
-                  <td className="border border-border bg-[hsl(var(--form-input))] p-0.5">
-                    <input
-                      type="number"
-                      className={INPUT_CLASS}
-                      value={row.quantity || ""}
-                      onChange={(e) => updateRow(i, { quantity: e.target.valueAsNumber || 0 })}
-                    />
+                  <td>
+                    <input className="iso-in center" type="number" aria-label={`Quantity ${index + 1}`} value={row.quantity || ""} onChange={(event) => updateRow(index, { quantity: event.target.valueAsNumber || 0 })} />
                   </td>
-                  <td className="border border-border bg-[hsl(var(--form-input))] px-2 py-1 text-[hsl(var(--form-input-foreground))]">{cumPct === null ? "—" : `${cumPct}%`}</td>
-                  <td className="border border-border bg-[hsl(var(--form-input))] text-center">
-                    <button onClick={() => removeRow(i)} className="text-muted-foreground hover:text-destructive" aria-label="Remove row">
+                  <td className="center">{cumulative == null ? "" : `${cumulative.toFixed(1)}%`}</td>
+                  <td className="center no-print">
+                    <button type="button" onClick={() => removeRow(index)} className="text-muted-foreground hover:text-destructive" aria-label={`Remove row ${index + 1}`}>
                       ×
                     </button>
                   </td>
@@ -102,38 +97,24 @@ export function ParetoChartForm({ data, onChange }: CustomFormProps) {
             })}
           </tbody>
         </table>
-        <button onClick={addRow} className="mt-2 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
-          + Add row
+        <button type="button" onClick={addRow} className="no-print mt-2 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
+          Add row
         </button>
       </div>
 
       {chartData.length > 0 && (
-        <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="mb-2 text-sm font-medium">Pareto Diagram</h3>
+        <div className="sheet-chart rounded-lg border border-border bg-card p-4">
+          <h3 className="mb-2 text-sm font-medium">Pareto dynamic diagram</h3>
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-              <XAxis
-                dataKey="description"
-                angle={-35}
-                textAnchor="end"
-                interval={0}
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                height={70}
-              />
-              <YAxis yAxisId="left" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: "hsl(var(--muted-foreground))" }} />
-              <YAxis
-                yAxisId="right"
-                orientation="right"
-                domain={[0, 100]}
-                tickFormatter={(v: number) => `${v}%`}
-                tickLine={false}
-                axisLine={false}
-                tick={{ fill: "hsl(var(--muted-foreground))" }}
-              />
+              <XAxis dataKey="description" angle={-35} textAnchor="end" interval={0} tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} height={70} />
+              <YAxis yAxisId="left" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: "hsl(var(--foreground))" }} />
+              <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tickFormatter={(value: number) => `${value}%`} tickLine={false} axisLine={false} tick={{ fill: "hsl(var(--foreground))" }} />
               <Tooltip />
-              <Bar yAxisId="left" dataKey="quantity" fill="var(--chart-pareto-bar, #2451ff)" radius={[4, 4, 0, 0]} />
-              <Line yAxisId="right" type="monotone" dataKey="cumulativePct" stroke="var(--chart-pareto-line, #c23b2c)" strokeWidth={2} dot={{ r: 3 }} />
+              <Legend />
+              <Bar yAxisId="left" dataKey="quantity" name="Quantity" fill="#2451ff" radius={[4, 4, 0, 0]} />
+              <Line yAxisId="right" type="monotone" dataKey="cumulativePct" name="Cumulative %" stroke="#c23b2c" strokeWidth={2} dot={{ r: 3 }} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>

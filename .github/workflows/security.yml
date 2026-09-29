@@ -41,9 +41,13 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # Static analysis for security bugs (injection, unsafe deserialization, path traversal, weak crypto, ...).
-  # Findings appear under the repository's Security tab and as annotations on pull requests.
+  # Stays off until GitHub Advanced Security / code scanning is enabled on this private repo.
+  # Running the job with continue-on-error still leaves a red CodeQL check: the analysis finishes, then the
+  # upload is rejected because code scanning is not enabled. if: false skips the job so that check is not a
+  # failure. Delete `if: false` (and keep security-events: write) once code scanning is turned on.
   codeql:
     name: CodeQL
+    if: false
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -64,6 +68,9 @@ jobs:
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:

@@ -23,6 +23,7 @@ let creator: { id: number; token: string };
 let otherQuality: { id: number; token: string };
 let production: { id: number; token: string };
 let qualityManager: { id: number; token: string };
+let admin: { id: number; token: string };
 
 async function makeUser(roleName: string, department: string) {
   const [user] = await db
@@ -40,6 +41,7 @@ describe("record delete", () => {
     otherQuality = await makeUser("operator", "quality");
     production = await makeUser("operator", "production");
     qualityManager = await makeUser("quality_manager", "quality");
+    admin = await makeUser("admin", "quality");
   });
 
   afterAll(async () => {
@@ -150,12 +152,33 @@ describe("record delete", () => {
     expect(changes.snapshot.title).toBe(title);
     expect(changes.attachmentFileNames).toEqual(["bent-flange.png"]);
 
-    const log = await request(app).get("/audit-trail").set("Authorization", `Bearer ${qualityManager.token}`);
-    expect(log.status).toBe(200);
-    expect((log.body as { action: string; changes?: { summary?: string } }[]).some((row) => row.changes?.summary === changes.summary)).toBe(true);
+    await db.insert(auditTrail).values({
+      entityType: "User",
+      entityId: admin.id,
+      action: "status_change",
+      changes: { action: "password_changed" },
+      performedBy: admin.id,
+    });
 
-    const hidden = await request(app).get("/audit-trail").set("Authorization", `Bearer ${creator.token}`);
-    expect(hidden.status).toBe(403);
+    const managerLog = await request(app).get("/audit-trail").set("Authorization", `Bearer ${qualityManager.token}`);
+    expect(managerLog.status).toBe(200);
+    const managerRows = managerLog.body as { entityType: string; entityId: number; changes?: { summary?: string; action?: string } }[];
+    expect(managerRows.some((row) => row.changes?.summary === changes.summary)).toBe(true);
+    expect(managerRows.some((row) => row.entityType === "User" && row.entityId === admin.id)).toBe(false);
+
+    const creatorLog = await request(app).get("/audit-trail").set("Authorization", `Bearer ${creator.token}`);
+    expect(creatorLog.status).toBe(200);
+    expect((creatorLog.body as { changes?: { summary?: string } }[]).some((row) => row.changes?.summary === changes.summary)).toBe(true);
+
+    const productionLog = await request(app).get("/audit-trail").set("Authorization", `Bearer ${production.token}`);
+    expect(productionLog.status).toBe(200);
+    expect((productionLog.body as { changes?: { summary?: string } }[]).some((row) => row.changes?.summary === changes.summary)).toBe(false);
+
+    const log = await request(app).get("/audit-trail").set("Authorization", `Bearer ${admin.token}`);
+    expect(log.status).toBe(200);
+    const adminRows = log.body as { entityType: string; entityId: number; changes?: { summary?: string; action?: string } }[];
+    expect(adminRows.some((row) => row.changes?.summary === changes.summary)).toBe(true);
+    expect(adminRows.some((row) => row.entityType === "User" && row.entityId === admin.id && row.changes?.action === "password_changed")).toBe(true);
 
     const [still] = await db.select({ id: ncr.id }).from(ncr).where(eq(ncr.id, kept.body.id));
     expect(still).toBeTruthy();

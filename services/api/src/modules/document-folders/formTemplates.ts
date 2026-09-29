@@ -3,6 +3,7 @@ import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import type { Db } from "../../lib/requestDb.js";
 import { BLANK_FORMS_FOLDER, FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, fileNamePatternFor, type FormStart } from "./formFiling.js";
+import { EDITABLE_FORM_NUMBER_KEYS } from "./editableForms.js";
 
 const PREVIOUS_ISO_ROOT = "ISO Compliance";
 const PREVIOUS_BLANK_FOLDER = "03_Blank_Forms_Templates";
@@ -96,11 +97,14 @@ export async function ensureFormTemplates(db: Db): Promise<void> {
     const folderGone = existing.folderId == null || !byId.has(existing.folderId);
     const nextFolderId = folderGone ? folderId : existing.folderId!;
     keep.add(nextFolderId);
-    if (folderGone || existing.formId !== seed.formId || existing.title !== seed.title || existing.subjectRoute !== seed.subjectRoute) {
+    // An admin can change the document number on the eight quality forms.
+    // The seed stays blank; do not put that blank back over a number they saved.
+    const nextFormId = EDITABLE_FORM_NUMBER_KEYS.has(seed.formKey) ? existing.formId : seed.formId;
+    if (folderGone || existing.formId !== nextFormId || existing.title !== seed.title || existing.subjectRoute !== seed.subjectRoute) {
       await db
         .update(controlledFormTemplates)
         .set({
-          formId: seed.formId,
+          formId: nextFormId,
           title: seed.title,
           subjectRoute: seed.subjectRoute,
           ...(folderGone ? { folderId: nextFolderId } : {}),

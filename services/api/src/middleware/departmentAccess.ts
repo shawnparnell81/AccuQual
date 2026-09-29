@@ -165,9 +165,21 @@ const RECORD_DELETE_MOUNTS = new Set([
   "/document-change-requests",
   "/feasibility",
   "/equipment",
+  "/iso-quality-forms",
 ]);
 
 const NESTED_DELETE = new Set(["items", "rows", "operations", "calibration", "versions", "attachments", "reviews", "template", "modules"]);
+
+function isFormNumberWrite(req: Request): boolean {
+  return req.baseUrl === "/document-folders" && req.method === "PATCH" && req.path.startsWith("/form-templates/");
+}
+
+/** Quality managers may set a form number or file one of the eight quality forms even when Documents is read-only for their department. Engineering may set a form number the same way. */
+function isQualityFormControlWrite(req: Request): boolean {
+  if (req.baseUrl !== "/document-folders") return false;
+  if (req.method !== "POST" && req.method !== "PATCH") return false;
+  return req.path === "/form-filings" || req.path.startsWith("/form-templates/");
+}
 
 function isRecordDeleteRequest(req: Request): boolean {
   if (req.method !== "DELETE" || !RECORD_DELETE_MOUNTS.has(req.baseUrl)) return false;
@@ -262,7 +274,8 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
     if (isFullAccessRole(role)) return next();
     // Quality managers may delete a record even when their department grant is read-only.
     // Nested deletes (a checklist row, a calibration, a folder) stay on the normal write check.
-    if (role === "quality_manager" && isRecordDeleteRequest(req)) return next();
+    if (role === "quality_manager" && (isRecordDeleteRequest(req) || isQualityFormControlWrite(req))) return next();
+    if (req.user?.department === "engineering" && isFormNumberWrite(req)) return next();
     if (!req.user || !req.db) return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
 
     const level = await getUserAccessLevel(req.db as Db, req.user, resourceKey);

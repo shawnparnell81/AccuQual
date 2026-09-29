@@ -296,7 +296,7 @@ export function EightDDetailPage() {
         )}
       </div>
 
-      <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
+      <div className="aq-form-copy aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4">
         <EightDWorkbook
           eightDNo={report.id}
           blank={values.blank}

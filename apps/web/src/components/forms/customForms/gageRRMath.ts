@@ -43,11 +43,21 @@ function at(values: number[], i: number): number {
   return values[i] ?? 0;
 }
 
-/** %GRR&Tol bands per the AIAG guideline (also what the reference document's own worked example — 18% — lands in). */
+/**
+ * %GRR&Tol bands from the source sheet:
+ * under 11% is "system O.K.", under 30% is conditionally acceptable, otherwise unacceptable.
+ */
 export function systemEvaluationFor(grrPct: number): string {
-  if (grrPct < 10) return "Acceptable system";
-  if (grrPct <= 30) return "Conditionally acceptable system";
-  return "Unacceptable system — needs improvement";
+  if (grrPct < 11) return "system O.K.";
+  if (grrPct < 30) return "conditionally acceptable system";
+  return "unacceptable system";
+}
+
+export function gageEvaluationFill(text: string): "fill-green" | "fill-yellow" | "fill-red" | "" {
+  if (text === "system O.K.") return "fill-green";
+  if (text === "conditionally acceptable system") return "fill-yellow";
+  if (text === "unacceptable system") return "fill-red";
+  return "";
 }
 
 /** trial1[i]/trial2[i] are the 10 part readings for one trial, for one operator. */

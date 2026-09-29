@@ -9,15 +9,11 @@ import { workflowAdapter } from "../versioning/adapters.js";
 import { getHandler, listHandler, createHandler, updateHandler, deleteHandler, runHandler, historyHandler, healthHandler, templatesHandler, actionKindsHandler } from "./workflow.controller.js";
 
 export const workflowRouter = Router();
-// Phase 9 — previously requireAuth only (any authenticated user of any
-// department could create/run a definition that fires real actions
-// against this company's data — see defaultPermissions.ts's own comment on
-// the new "workflow" ResourceKey this now uses).
-workflowRouter.use(requireAuth, withDb, requireDepartmentAccess("workflow"));
-
-// Fixed literal paths before "/:id"-shaped ones, same convention used
-// everywhere else in the app.
+workflowRouter.use(requireAuth, withDb);
+// Record history follows the record's own module, not the workflow builder.
 workflowRouter.get("/history/:moduleName/:recordId", historyHandler);
+// Creating or running a definition still needs the workflow module.
+workflowRouter.use(requireDepartmentAccess("workflow"));
 workflowRouter.get("/health", healthHandler);
 workflowRouter.get("/templates", templatesHandler);
 workflowRouter.get("/action-kinds", actionKindsHandler);

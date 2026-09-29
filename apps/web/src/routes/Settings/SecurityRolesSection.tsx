@@ -163,7 +163,7 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
             <th className="pb-2">Department</th>
             <th className="pb-2">Manager</th>
             <th className="pb-2">Status</th>
-            <th className="pb-2">2-step</th>
+            {isAdmin && <th className="pb-2">2-step</th>}
             {isAdmin && <th className="pb-2" />}
           </tr>
         </thead>
@@ -214,9 +214,9 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
               </td>
               <td className="py-1.5">
                 <StatusBadge value={u.isActive ? "active" : "disqualified"} label={u.isActive ? "Active" : "Deactivated"} />
-                {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && <span className="ml-2 text-xs text-destructive">Locked</span>}
+                {isAdmin && u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && <span className="ml-2 text-xs text-destructive">Locked</span>}
               </td>
-              <td className="py-1.5 text-xs text-muted-foreground">{u.mfaEnabled ? "On" : "Off"}</td>
+              {isAdmin && <td className="py-1.5 text-xs text-muted-foreground">{u.mfaEnabled ? "On" : "Off"}</td>}
               {isAdmin && (
                 <td className="space-x-3 py-1.5 text-right">
                   {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && (

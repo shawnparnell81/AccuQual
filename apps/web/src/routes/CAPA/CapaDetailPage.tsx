@@ -152,7 +152,7 @@ export function CapaDetailPage() {
         )}
       </p>
 
-      <div className="aq-print-stack grid gap-4 lg:grid-cols-2">
+      <div className="aq-form-copy aq-print-stack grid min-w-0 gap-4 lg:grid-cols-2">
         <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-medium">Cause</h2>

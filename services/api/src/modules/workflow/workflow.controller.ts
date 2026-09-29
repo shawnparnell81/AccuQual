@@ -9,6 +9,7 @@ import { executeWorkflow, WorkflowNodeError, getRegisteredActionKinds, type Work
 import { createInitialDraft, getCurrent } from "../versioning/versioning.service.js";
 import { toWorkflowPayload, workflowAdapter } from "../versioning/adapters.js";
 import { recordAuditTrail, withResolvedActors, attachFieldChanges, labelPersonFields } from "../audit-trail/audit-trail.service.js";
+import { assertCanReadEntityHistory } from "../audit-trail/auditTrailVisibility.js";
 import { RESOURCE_KEYS } from "../../middleware/departmentAccess.js";
 import { WORKFLOW_TEMPLATES } from "./workflow.templates.js";
 import type { Db } from "../../lib/requestDb.js";
@@ -188,11 +189,12 @@ const MODULE_ENTITY_TYPES: Record<string, string> = {
   rma_log: "RmaLog",
 };
 
-/** GET /workflow/history/:moduleName/:recordId — read-only, backed entirely by the existing audit_trail table. */
+/** GET /workflow/history/:moduleName/:recordId — read-only, backed entirely by the existing audit_trail table. Anyone who can open the record can read it. */
 export const historyHandler = asyncHandler(async (req: Request, res: Response) => {
   const { moduleName, recordId } = req.params as { moduleName: string; recordId: string };
   const entityType = MODULE_ENTITY_TYPES[moduleName];
   if (!entityType) throw AppError.badRequest(`Unknown moduleName "${moduleName}" — expected one of: ${Object.keys(MODULE_ENTITY_TYPES).join(", ")}`);
+  await assertCanReadEntityHistory(req.db! as Db, req.user!, entityType, Number(recordId));
 
   const rows = await req
     .db!.select()

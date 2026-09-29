@@ -72,7 +72,7 @@ export function TabBar() {
   }
 
   return (
-    <div className="hidden items-center gap-0.5 overflow-x-auto border-b border-border bg-card px-2 pt-1 md:flex">
+    <div className="hidden w-full min-w-0 max-w-full items-center gap-0.5 overflow-hidden border-b border-border bg-card px-2 pt-1 md:flex">
       {tabs.map((tab) => {
         const Icon = TAB_ICONS[tab.icon] ?? TAB_ICONS.default!;
         const isActive = tab.id === activeId;
@@ -83,13 +83,13 @@ export function TabBar() {
             title={tab.title}
             className={
               isActive
-                ? "relative flex max-w-[12rem] shrink-0 items-center gap-1.5 rounded-t-md border border-b-0 border-border bg-background px-2.5 py-1 text-xs text-foreground"
-                : "flex max-w-[12rem] shrink-0 items-center gap-1.5 rounded-t-md border border-b-0 border-transparent px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary"
+                ? "relative flex min-w-0 max-w-[12rem] shrink items-center gap-1.5 overflow-hidden rounded-t-md border border-b-0 border-border bg-background px-2.5 py-1 text-xs text-foreground"
+                : "flex min-w-0 max-w-[12rem] shrink items-center gap-1.5 overflow-hidden rounded-t-md border border-b-0 border-transparent px-2.5 py-1 text-xs text-muted-foreground hover:bg-secondary"
             }
           >
             {isActive && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" aria-hidden />}
             <Icon size={14} className={isActive ? "shrink-0 text-accent" : "shrink-0"} />
-            <span className="truncate">{tab.title}</span>
+            <span className="min-w-0 flex-1 truncate text-left">{tab.title}</span>
             <span
               role="button"
               tabIndex={0}
@@ -98,7 +98,8 @@ export function TabBar() {
                 if (e.key === "Enter" || e.key === " ") handleClose(e as unknown as React.MouseEvent, tab.id);
               }}
               aria-label={`Close ${tab.title}`}
-              className="ml-1 flex-none rounded p-0.5 hover:bg-muted-foreground/20"
+              title={tab.title}
+              className="ml-1 shrink-0 rounded p-0.5 hover:bg-muted-foreground/20"
             >
               <X size={12} />
             </span>

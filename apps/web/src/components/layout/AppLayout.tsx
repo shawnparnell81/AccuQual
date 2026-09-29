@@ -119,7 +119,7 @@ export function AppLayout() {
         <NavigationShell />
       </div>
       <div className="app-main print:block print:h-auto">
-        <div className="print:hidden">
+        <div className="w-full min-w-0 print:hidden">
           <TabBar />
           <MfaGraceBanner />
         </div>

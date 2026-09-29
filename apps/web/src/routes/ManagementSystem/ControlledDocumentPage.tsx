@@ -93,7 +93,7 @@ export function ControlledDocumentPage({ basePath, formType, title, noun, descri
 
   const noVersions = !current || (!current.published && !current.open);
   const versionList = v.versions.data ?? [];
-  const canRollback = mayEdit && !current?.open;
+  const canRollback = isAdmin && !current?.open;
 
   const actions = useMemo(
     () => ({

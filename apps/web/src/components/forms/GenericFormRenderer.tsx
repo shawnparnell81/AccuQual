@@ -69,7 +69,7 @@ export function GenericFormRenderer({ layout, data, onChange, readOnly = false, 
   const primary = layout.sections.filter((section) => !parked.has(section.number));
   const details = layout.sections.filter((section) => parked.has(section.number));
   return (
-    <div className="flex flex-col gap-5">
+    <div className={`flex flex-col gap-5${readOnly ? " aq-form-copy min-w-0" : ""}`}>
       <h2 className="text-center text-base font-bold uppercase tracking-wide" style={{ color: FORM_HEADING }}>
         {layout.title}
       </h2>
@@ -277,20 +277,64 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
                     <div className="flex flex-col gap-1">
                       {col.options?.map((opt) => {
                         const selected = (row[col.key] as Record<string, boolean> | undefined) ?? {};
-                        return readOnly ? (
-                          <span key={opt} className={selected[opt] ? "font-semibold text-foreground" : "text-muted-foreground"}>
-                            {selected[opt] ? "☑ " : "☐ "}
-                            {opt}
-                          </span>
-                        ) : (
-                          <label key={opt} className="flex items-center gap-1">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(selected[opt])}
-                              onChange={(e) => updateCell(rowIndex, col.key, { ...selected, [opt]: e.target.checked })}
-                            />
-                            {opt}
-                          </label>
+                        const beside = col.beside?.option === opt ? col.beside : undefined;
+                        const parentOn = Boolean(selected[opt]);
+                        function write(next: Record<string, boolean>) {
+                          updateCell(rowIndex, col.key, next);
+                        }
+                        return (
+                          <div key={opt} className="flex flex-col gap-1">
+                            {readOnly ? (
+                              <span className={parentOn ? "font-semibold text-foreground" : "text-muted-foreground"}>
+                                {parentOn ? "☑ " : "☐ "}
+                                {opt}
+                              </span>
+                            ) : (
+                              <label className="flex items-center gap-1">
+                                <input
+                                  type="checkbox"
+                                  checked={parentOn}
+                                  onChange={(e) => {
+                                    const next = { ...selected, [opt]: e.target.checked };
+                                    if (!e.target.checked && beside) {
+                                      for (const choice of beside.choices) next[choice] = false;
+                                    }
+                                    write(next);
+                                  }}
+                                />
+                                {opt}
+                              </label>
+                            )}
+                            {beside && (
+                              <div className="ml-5 flex flex-col gap-1">
+                                {beside.choices.map((choice) => {
+                                  const on = parentOn && Boolean(selected[choice]);
+                                  return readOnly ? (
+                                    <span key={choice} className={on ? "font-semibold text-foreground" : parentOn ? "text-muted-foreground" : "text-muted-foreground opacity-50"}>
+                                      {on ? "☑ " : "☐ "}
+                                      {choice}
+                                    </span>
+                                  ) : (
+                                    <label key={choice} className={`flex items-center gap-1 ${parentOn ? "" : "opacity-50"}`}>
+                                      <input
+                                        type="checkbox"
+                                        checked={on}
+                                        disabled={!parentOn}
+                                        onChange={(e) => {
+                                          const next = { ...selected, [choice]: e.target.checked };
+                                          for (const other of beside.choices) {
+                                            if (other !== choice) next[other] = false;
+                                          }
+                                          write(next);
+                                        }}
+                                      />
+                                      {choice}
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         );
                       })}
                     </div>

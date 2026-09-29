@@ -86,6 +86,7 @@ export const addNcrQuarantineItemHandler = asyncHandler(async (req: Request, res
 
 export const completeNcrDispositionHandler = asyncHandler(async (req: Request, res: Response) => {
   const actor = { id: req.user?.id ?? 0, roleName: req.user?.roleName ?? null };
-  const result = await quarantineService.completeNcrDisposition(req.db!, Number(req.params.id), req.body.disposition, actor);
+  const concession = req.body.disposition === "use_as_is" ? req.body.concession : undefined;
+  const result = await quarantineService.completeNcrDisposition(req.db!, Number(req.params.id), req.body.disposition, actor, concession);
   res.json(result);
 });

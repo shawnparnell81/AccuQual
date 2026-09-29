@@ -385,6 +385,7 @@ export async function linkNcrFromReceiving(db: Db, quarantineId: number, ncrId: 
 /** What an NCR disposition can do to the material it quarantined. Mapped onto the existing release/destroy dispositions. */
 export const NCR_ITEM_DISPOSITIONS = ["use_as_is", "rework", "scrap", "return_to_supplier"] as const;
 export type NcrItemDisposition = (typeof NCR_ITEM_DISPOSITIONS)[number];
+export type NcrConcession = "with" | "none";
 
 const NCR_DISPOSITION_RESOLVE: Record<NcrItemDisposition, { action: "release" | "destroy"; disposition: string; label: string }> = {
   use_as_is: { action: "release", disposition: "use_as_is", label: "Use as is" },
@@ -498,13 +499,21 @@ export async function addNcrQuarantineItem(
 
 /**
  * Completing the NCR disposition releases every item still quarantined against that NCR.
- * Use-as-is and rework go back into use; scrap and return-to-supplier leave stock.
+ * Use-as-is (with or without a concession) and rework go back into use; scrap and return-to-supplier leave stock.
  * Either way they leave the active list and stay in the released history.
  * The person working the NCR is allowed to finish this — it is the disposition, not a second person deciding a hold they opened.
  */
-export async function completeNcrDisposition(db: Db, ncrId: number, disposition: NcrItemDisposition, actor: ResolveActor): Promise<{ disposition: NcrItemDisposition; items: QuarantineItemView[] }> {
+export async function completeNcrDisposition(
+  db: Db,
+  ncrId: number,
+  disposition: NcrItemDisposition,
+  actor: ResolveActor,
+  concession?: NcrConcession,
+): Promise<{ disposition: NcrItemDisposition; concession?: NcrConcession; items: QuarantineItemView[] }> {
   const mapped = NCR_DISPOSITION_RESOLVE[disposition];
   if (!mapped) throw AppError.badRequest("Choose a disposition: use as is, rework, scrap, or return to supplier.");
+  const appliedConcession = disposition === "use_as_is" ? concession : undefined;
+  const label = appliedConcession === "with" ? "Use as is with concession" : appliedConcession === "none" ? "Use as is, no concession" : mapped.label;
   const [row] = await db.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, ncrId), eq(ncr.isDeleted, false)));
   if (!row) throw AppError.notFound("NCR");
   const open = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.ncrId, ncrId), eq(quarantineRecords.status, "quarantined")));
@@ -515,7 +524,7 @@ export async function completeNcrDisposition(db: Db, ncrId: number, disposition:
       db,
       record.id,
       mapped.action,
-      { disposition: mapped.disposition, notes: `NCR #${ncrId} disposition completed: ${mapped.label}.` },
+      { disposition: mapped.disposition, notes: `NCR #${ncrId} disposition completed: ${label}.` },
       { ...actor, skipFourEyes: true },
     );
     items.push(toItemView(updated, mapped.disposition, false));
@@ -524,8 +533,8 @@ export async function completeNcrDisposition(db: Db, ncrId: number, disposition:
     entityType: "NCR",
     entityId: ncrId,
     action: "status_change",
-    changes: { event: "ncr_quarantine_released", disposition, dispositionLabel: mapped.label, itemIds: items.map((item) => item.id) },
+    changes: { event: "ncr_quarantine_released", disposition, ...(appliedConcession ? { concession: appliedConcession } : {}), dispositionLabel: label, itemIds: items.map((item) => item.id) },
     performedBy: actor.id > 0 ? actor.id : undefined,
   });
-  return { disposition, items };
+  return { disposition, ...(appliedConcession ? { concession: appliedConcession } : {}), items };
 }

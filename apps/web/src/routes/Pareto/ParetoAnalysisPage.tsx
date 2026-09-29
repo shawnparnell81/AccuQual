@@ -1,21 +1,74 @@
-import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ParetoChartForm } from "../../components/forms/customForms/ParetoChartForm";
+import { fileChosenFolder, FormNumberEditor, RecordFolderField, useFormFiling } from "../../components/forms/FormDocumentControls";
+import { useFormEditorState } from "../../components/forms/useFormEditorState";
+import { SaveStatus } from "../../components/shared/SaveStatus";
+import { revisionLabel } from "../../lib/formDocument";
 
-/** A standalone analysis tool, not tied to any other record — a fixed singleton document, same pattern as the Production Logs page. */
+/** A standalone analysis tool, not tied to any other record — a fixed singleton document. */
 const SINGLETON_ENTITY_ID = 1;
 
 export function ParetoAnalysisPage() {
-  return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">Pareto Analysis</h1>
+  const queryClient = useQueryClient();
+  const { isLoading, values, updateField, saveNow, isSaving } = useFormEditorState("pareto_chart", SINGLETON_ENTITY_ID);
+  const filing = useFormFiling("frm-par-001", SINGLETON_ENTITY_ID);
+  const [saveNote, setSaveNote] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const documentNumber = filing.data?.snapshotted ? filing.data.formNumber : "";
+  const [dirty, setDirty] = useState(false);
+  useEffect(() => {
+    if (!isSaving) setDirty(false);
+  }, [isSaving]);
 
-      <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
-        <h2 className="text-sm font-medium">Pareto Chart</h2>
-        <p className="text-sm text-muted-foreground">
-          Log problem counts, and the chart sorts them by frequency and calculates the cumulative % line
-          automatically — the 80/20 view of which few problems drive most of the defects.
-        </p>
-        <OpenFormButton formType="pareto_chart" entityId={SINGLETON_ENTITY_ID} title="Pareto Chart" label="Open Pareto Chart" />
+  return (
+    <div className="aq-print-wide flex flex-col gap-4">
+      <div className="no-print flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-2xl font-semibold">Pareto Analysis</h1>
+          <p className="text-sm text-muted-foreground">{revisionLabel(documentNumber)}. Problem counts sort by frequency and the cumulative % line is calculated from the total.</p>
+          <FormNumberEditor formKey="frm-par-001" />
+          <RecordFolderField formKey="frm-par-001" recordId={SINGLETON_ENTITY_ID} />
+        </div>
+        <div className="flex items-center gap-2">
+          <SaveStatus saving={isSaving || pending} unsaved={dirty && !isSaving && !pending} />
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              setPending(true);
+              setSaveNote(null);
+              void saveNow()
+                .then(() => fileChosenFolder(queryClient, "frm-par-001", SINGLETON_ENTITY_ID))
+                .then((path) => {
+                  setDirty(false);
+                  setSaveNote(path ? `Saved in ${path}` : "Saved. Choose a folder to file this copy.");
+                })
+                .catch(() => setSaveNote("Couldn't save this form."))
+                .finally(() => setPending(false));
+            }}
+            className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60"
+          >
+            {pending ? "Saving…" : "Save"}
+          </button>
+          {saveNote && <span className="text-xs text-muted-foreground">{saveNote}</span>}
+          <button type="button" onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+            Print
+          </button>
+        </div>
       </div>
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading the chart…</p>
+      ) : (
+        <ParetoChartForm
+          data={values}
+          documentNumber={documentNumber}
+          onChange={(name, value) => {
+            setDirty(true);
+            updateField(name, value);
+          }}
+        />
+      )}
     </div>
   );
 }

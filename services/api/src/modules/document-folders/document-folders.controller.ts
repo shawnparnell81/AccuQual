@@ -19,6 +19,7 @@ import { onlyOfficeSettings } from "../onlyoffice/settings.js";
 import { signOfficeToken } from "../onlyoffice/token.js";
 import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
 import { ensureFormTemplates, listFormTemplates } from "./formTemplates.js";
+import { fileFormRecord, filingQuery, getFormFiling, updateFormNumber } from "./formRecordFiling.js";
 import { UPLOAD_TYPE_ERROR, sniffUpload } from "../../utils/fileSniff.js";
 import { sendStoredFile } from "../../utils/storedFile.js";
 
@@ -104,7 +105,12 @@ const FORM_LINK_RULES: { pattern: RegExp; path: string }[] = [
   { pattern: /\bsupplier qualification\b/i, path: "/qms-forms/supplier_qualification_evaluation" },
   { pattern: /\bpo quality requirements\b/i, path: "/qms-forms/po_quality_requirements" },
   { pattern: /\bincoming inspection record\b|\breceiving inspection form\b/i, path: "/qms-forms/incoming_inspection_record" },
-  { pattern: /\bfirst article inspection\b/i, path: "/qms-forms/first_article_inspection" },
+  { pattern: /\bpart submission warrant\b/i, path: "/iso-forms/frm-psw-001" },
+  { pattern: /\bturtle diagram\b/i, path: "/iso-forms/frm-prc-001" },
+  { pattern: /\bquality alert\b/i, path: "/iso-forms/frm-qa-001" },
+  { pattern: /\bfirst article inspection\b/i, path: "/iso-forms/frm-fai-001" },
+  { pattern: /\bcustomer scorecard\b/i, path: "/iso-forms/frm-cus-001" },
+  { pattern: /\bfailure action effectiveness\b/i, path: "/iso-forms/frm-fae-001" },
   { pattern: /\bin-process inspection\b/i, path: "/qms-forms/in_process_inspection" },
   { pattern: /\bfinal inspection\b/i, path: "/qms-forms/final_inspection_release" },
   { pattern: /\btraining matrix\b/i, path: "/qms-forms/training_matrix" },
@@ -202,6 +208,26 @@ async function withLinkedDocumentInfo(db: Db, all: (typeof documentFolders.$infe
 /** Blank templates. The Forms Library and ISO Compliance Documents read this same list. */
 export const formTemplates = asyncHandler(async (req: Request, res: Response) => {
   res.json(await listFormTemplates(req.db!));
+});
+
+/** Sets the document number on one of the eight quality forms. Filled copies keep the number they already stored. */
+export const setFormNumber = asyncHandler(async (req: Request, res: Response) => {
+  const formKey = String(req.params.formKey ?? "");
+  const { formId } = req.body as { formId: string };
+  const updated = await updateFormNumber(req.db!, formKey, formId, req.user?.id, req.user);
+  res.json(updated);
+});
+
+/** Where a filled copy is filed, the number stored on that copy, and the suggested subject folder. */
+export const formFiling = asyncHandler(async (req: Request, res: Response) => {
+  const query = filingQuery(req.query.formKey, req.query.recordId);
+  res.json(await getFormFiling(req.db!, query.formKey, query.recordId));
+});
+
+/** Files a filled copy into the chosen Documents folder, or moves it there. */
+export const fileForm = asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body as { formKey: string; recordId: number; folderId: number };
+  res.status(201).json(await fileFormRecord(req.db!, body, req.user?.id));
 });
 
 /** Full flat folder list for the company, seeding the default department tree on first use. */
