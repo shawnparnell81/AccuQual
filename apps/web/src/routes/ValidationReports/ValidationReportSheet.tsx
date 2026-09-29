@@ -48,53 +48,46 @@ export function ValidationReportSheet({ cells, readOnly = false, onChange }: Val
 
   return (
     <div className="csa-wrap">
-      <table className="csa" data-testid="validation-report-sheet" aria-label="CSA Validation Report">
-        <colgroup>
-          <col className="c-a" />
-          <col className="c-b" />
-          <col className="c-c" />
-          <col className="c-d" />
-          <col className="c-e" />
-          <col className="c-f" />
-          <col className="c-g" />
-          <col className="c-h" />
-          <col className="c-i" />
-          <col className="c-j" />
-        </colgroup>
-        <tbody>
-          {grid.map((row, rowIndex) => (
-            <tr key={rowIndex + 1}>
-              {row.map((slot, colIndex) => {
-                if (slot === "covered") return null;
-                if (slot === "gap") return <td key={colIndex} className="gap" />;
-                if (slot === "empty") return <td key={colIndex} className="grid" />;
-                return (
-                  <Cell
-                    key={slot.addr}
-                    spec={slot}
-                    cells={cells}
-                    calculated={calculated}
-                    readOnly={readOnly}
-                    onChange={onChange}
-                  />
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div
+        className="csa csa-sheet"
+        data-testid="validation-report-sheet"
+        role="table"
+        aria-label="CSA Validation Report"
+        style={{ display: "grid", gridTemplateColumns: "300px 128px 128px 136px 136px 136px 136px 16px 28px 176px", width: "max-content" }}
+      >
+        {grid.map((row, rowIndex) =>
+          row.map((slot, colIndex) => {
+            if (slot === "covered" || slot === "gap") return null;
+            const place: CSSProperties = { gridColumn: colIndex + 1, gridRow: rowIndex + 1 };
+            if (slot === "empty") return <div key={`e-${rowIndex}-${colIndex}`} className="csa-cell" style={place} />;
+            return (
+              <Cell
+                key={slot.addr}
+                spec={slot}
+                place={place}
+                cells={cells}
+                calculated={calculated}
+                readOnly={readOnly}
+                onChange={onChange}
+              />
+            );
+          }),
+        )}
+      </div>
     </div>
   );
 }
 
 function Cell({
   spec,
+  place,
   cells,
   calculated,
   readOnly,
   onChange,
 }: {
   spec: SheetCell;
+  place: CSSProperties;
   cells: Record<string, CellValue>;
   calculated: Record<string, CellValue>;
   readOnly: boolean;
@@ -104,18 +97,20 @@ function Cell({
   const cf = conditionalFill(spec.addr, spec.kind === "calc" || spec.kind === "label" || spec.kind === "input" ? text : "");
   const pastel = spec.fill;
   const className = [
-    spec.col <= 7 || spec.kind === "label" ? "grid" : "gap",
+    "csa-cell",
+    spec.col === 1 && spec.kind === "label" && spec.size !== "title" && spec.size !== "section" ? "col-a" : "",
     spec.size === "title" ? "title" : "",
     spec.size === "result" ? "result" : "",
     spec.size === "section" ? "section" : "",
-    spec.kind === "label" && spec.size !== "title" && spec.size !== "section" ? "label" : "",
     spec.kind === "gray" ? "gray" : "",
     pastel && spec.col === 9 ? "swatch" : "",
     spec.wrap ? "wrap" : "",
   ]
     .filter(Boolean)
     .join(" ");
-  const style: CSSProperties = {};
+  const style: CSSProperties = { ...place };
+  if (spec.span > 1) style.gridColumn = `${spec.col} / span ${spec.span}`;
+  if (spec.rowSpan && spec.rowSpan > 1) style.gridRow = `${place.gridRow} / span ${spec.rowSpan}`;
   if (cf) {
     style.background = cf;
     style.color = "#111";
@@ -128,13 +123,7 @@ function Cell({
   const inputValue = value === undefined || value === null ? "" : typeof value === "boolean" ? "" : String(value);
 
   return (
-    <td
-      className={className}
-      style={style}
-      colSpan={spec.span > 1 ? spec.span : undefined}
-      rowSpan={spec.rowSpan && spec.rowSpan > 1 ? spec.rowSpan : undefined}
-      data-addr={spec.addr}
-    >
+    <div className={className} style={style} role="cell" data-addr={spec.addr}>
       {spec.kind === "input" && (
         <input
           className="csa-in"
@@ -181,6 +170,6 @@ function Cell({
       )}
       {spec.kind === "calc" && <span data-result={spec.addr === "A1" ? text : undefined}>{text}</span>}
       {(spec.kind === "label" || spec.kind === "gray" || spec.kind === "empty") && text}
-    </td>
+    </div>
   );
 }
