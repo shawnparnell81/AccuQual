@@ -73,7 +73,7 @@ export function FailureChartSheet({ months, problems, readOnly = false, onMonths
               </td>
             </tr>
             <tr>
-              <td colSpan={headers.length + 6}>Doc ID: FRM-FAE-001 · Rev: A</td>
+              <td colSpan={headers.length + 6}>Rev: A</td>
             </tr>
             <tr>
               <td className="header">No.</td>

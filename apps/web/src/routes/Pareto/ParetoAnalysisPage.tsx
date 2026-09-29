@@ -18,7 +18,7 @@ export function ParetoAnalysisPage() {
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Pareto Analysis</h1>
-          <p className="text-sm text-muted-foreground">FRM-PAR-001. Problem counts sort by frequency and the cumulative % line is calculated from the total.</p>
+          <p className="text-sm text-muted-foreground">Problem counts sort by frequency and the cumulative % line is calculated from the total.</p>
         </div>
         <div className="flex items-center gap-2">
           <SaveStatus saving={isSaving} unsaved={dirty && !isSaving} />

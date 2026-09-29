@@ -63,13 +63,12 @@ export function ScorecardSheet({ cells, customers, readOnly = false, onCell, onC
               </td>
             </tr>
             <tr>
-              <td>Doc ID: FRM-CUS-001</td>
               <td>Rev: A</td>
               <td>Month / Year</td>
               <td colSpan={2}>
                 <input className="iso-in" aria-label="Month and year" placeholder="April 2021" value={textOf(cells.B2)} disabled={readOnly} onChange={(event) => onCell("B2", event.target.value)} />
               </td>
-              <td colSpan={3} className="note">
+              <td colSpan={4} className="note">
                 Green: no escalation. Yellow: minor escalation. Red: escalation that affects a certification body.
               </td>
             </tr>

@@ -59,9 +59,8 @@ export function FaiSheet({ cells, lines, readOnly = false, onCell, onLines }: Fa
             </td>
           </tr>
           <tr>
-            <td>Doc ID: FRM-FAI-001</td>
             <td>Rev: A</td>
-            <td colSpan={2}>First Article Inspection Report</td>
+            <td colSpan={3}>First Article Inspection Report</td>
             <td>Page</td>
             <td>
               <span className="check">

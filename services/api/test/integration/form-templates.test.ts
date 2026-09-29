@@ -56,7 +56,10 @@ describe("ISO Compliance Documents form templates", () => {
     expect(eightD?.start).toEqual({ createPath: "/8d", openPath: "/8d/{id}", body: {} });
     const linked = templates.filter((form) => form.start == null);
     expect(linked.map((form) => form.formKey).sort()).toEqual(["frm-msa-001", "frm-par-001", "lst-eqp-001", "lst-gen-001"]);
-    expect(templates.find((form) => form.formKey === "frm-psw-001")?.formId).toBe("FRM-PSW-001");
+    expect(templates.find((form) => form.formKey === "frm-psw-001")?.formId).toBe("");
+    expect((templates.find((form) => form.formKey === "frm-psw-001") as { fileNamePattern?: string } | undefined)?.fileNamePattern).toBe("PSW_{recordNumber}_{date}");
+    expect(templates.find((form) => form.formKey === "frm-msa-001")?.formId).toBe("");
+    expect((templates.find((form) => form.formKey === "frm-par-001") as { fileNamePattern?: string } | undefined)?.fileNamePattern).toBe("Pareto_{recordNumber}_{date}");
     expect(templates.find((form) => form.formKey === "frm-fai-001")?.start?.body).toMatchObject({ formType: "first_article" });
     expect(templates.find((form) => form.formKey === "frm-fae-001")?.subjectRoute).toBe("/iso-forms/frm-fae-001");
     expect(templates.filter((form) => form.formKey === "frm-psw-001")).toHaveLength(1);

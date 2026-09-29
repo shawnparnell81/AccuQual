@@ -63,14 +63,17 @@ test("gage evaluation bands follow the sheet thresholds", () => {
   assert.equal(gageEvaluationFill("unacceptable system"), "fill-red");
 });
 
-test("new sheet layouts keep their document numbers and section titles", () => {
+test("new sheet layouts keep their titles and do not invent a document number", () => {
   assert.equal(pswLayout().rows[1]?.[0]?.text, "PART SUBMISSION WARRANT");
-  assert.match(pswLayout().rows[2]?.[0]?.text ?? "", /FRM-PSW-001/);
+  assert.equal(pswLayout().rows[2]?.[0]?.text, "Rev: A");
+  assert.equal(pswLayout().rows.flat().some((cell) => /FRM-/.test(cell.text ?? "")), false);
   assert.equal(turtleLayout().rows[1]?.[0]?.text, "TURTLE DIAGRAM");
-  assert.match(turtleLayout().rows[2]?.[0]?.text ?? "", /FRM-PRC-001/);
+  assert.equal(turtleLayout().rows[2]?.[0]?.text, "Rev: A");
+  assert.equal(turtleLayout().rows.flat().some((cell) => /FRM-/.test(cell.text ?? "")), false);
   assert.equal(turtleLayout().rows[8]?.[0]?.text, "Context");
   assert.equal(turtleLayout().rows[22]?.[0]?.text, "Finance");
   assert.equal(qualityAlertLayout().rows[1]?.[0]?.text, "QUALITY ALERT");
+  assert.equal(qualityAlertLayout().rows.flat().some((cell) => /FRM-/.test(cell.text ?? "")), false);
   assert.equal(qualityAlertLayout().rows.find((row) => row?.some((cell) => cell.addr === "D3"))?.[3]?.kind, "calc");
   const nok = qualityAlertLayout().rows.flat().find((cell) => cell.text === "NOK");
   const ok = qualityAlertLayout().rows.flat().find((cell) => cell.text === "OK");

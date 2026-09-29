@@ -127,7 +127,7 @@ export function GageRRForm({ data, onChange }: CustomFormProps) {
             </td>
           </tr>
           <tr>
-            <td colSpan={4}>Doc ID: FRM-MSA-001 · Rev: A</td>
+            <td colSpan={4}>Rev: A</td>
             <td colSpan={PART_COUNT - 2}>Average and range method · D4 = 3.27 · K1 = 0.8862 · K2 = 0.7071 · K3 = 0.3146</td>
           </tr>
           <tr>

@@ -51,7 +51,7 @@ export const QUALITY_EXCLUSIVE_CHECKS: Record<string, string[][]> = {
 export function pswLayout(): FormLayout {
   const rows: FormCell[][] = [];
   rows[1] = [L(1, 4, "A1", "PART SUBMISSION WARRANT", "title")];
-  rows[2] = [L(1, 1, "A2", "Doc ID: FRM-PSW-001"), L(2, 1, "B2", "Rev: A"), L(3, 2, "C2", "Location: ISO Compliance Documents / Blank Form Templates", undefined, "left")];
+  rows[2] = [L(1, 2, "A2", "Rev: A"), L(3, 2, "C2", "Location: ISO Compliance Documents / Blank Form Templates", undefined, "left")];
   rows[3] = [L(1, 1, "A3", "Part Name"), I(2, 1, "B3"), L(3, 1, "C3", "Customer Part Number"), I(4, 1, "D3")];
   rows[4] = [L(1, 1, "A4", "Shown on Drawing No."), I(2, 1, "B4"), L(3, 1, "C4", "Organization Part Number"), I(4, 1, "D4")];
   rows[5] = [L(1, 1, "A5", "Engineering Change Level"), I(2, 1, "B5"), L(3, 1, "C5", "Dated"), D(4, 1, "D5")];
@@ -110,7 +110,7 @@ export function pswLayout(): FormLayout {
 export function turtleLayout(): FormLayout {
   const rows: FormCell[][] = [];
   rows[1] = [L(1, 4, "A1", "TURTLE DIAGRAM", "title")];
-  rows[2] = [L(1, 1, "A2", "Doc ID: FRM-PRC-001"), L(2, 1, "B2", "Rev: A"), L(3, 2, "C2", "Location: ISO Compliance Documents / Blank Form Templates", undefined, "left")];
+  rows[2] = [L(1, 2, "A2", "Rev: A"), L(3, 2, "C2", "Location: ISO Compliance Documents / Blank Form Templates", undefined, "left")];
   rows[3] = [L(1, 2, "A3", "MATERIAL RESOURCES", "header"), L(3, 2, "C3", "HR RESOURCES", "header")];
   rows[4] = [A(1, 2, "A4", "1.\n2."), A(3, 2, "C4", "1.\n2.")];
   rows[5] = [L(1, 1, "A5", "Process"), I(2, 1, "B5", "Process name"), L(3, 1, "C5", "Process Owner"), I(4, 1, "D5")];
@@ -133,7 +133,7 @@ export function turtleLayout(): FormLayout {
 export function qualityAlertLayout(): FormLayout {
   const rows: FormCell[][] = [];
   rows[1] = [L(1, 4, "A1", "QUALITY ALERT", "title")];
-  rows[2] = [L(1, 1, "A2", "Doc ID: FRM-QA-001"), L(2, 1, "B2", "Rev: A"), L(3, 1, "C2", "Quality Alert number"), I(4, 1, "D2")];
+  rows[2] = [L(1, 2, "A2", "Rev: A"), L(3, 1, "C2", "Quality Alert number"), I(4, 1, "D2")];
   rows[3] = [L(1, 1, "A3", "Issue date"), D(2, 1, "B3"), L(3, 1, "C3", "Closing date (30 days from issue date)", undefined, "left"), K(4, 1, "D3")];
   rows[4] = [L(1, 1, "A4", "Review date"), D(2, 1, "B4"), L(3, 1, "C4", "SC / CC Symbol"), I(4, 1, "D4")];
   rows[5] = [L(1, 4, "A5", "CONCERN", "section")];

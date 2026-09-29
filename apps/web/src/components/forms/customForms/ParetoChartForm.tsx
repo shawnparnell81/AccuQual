@@ -65,7 +65,7 @@ export function ParetoChartForm({ data, onChange }: CustomFormProps) {
               </td>
             </tr>
             <tr>
-              <td colSpan={4}>Doc ID: FRM-PAR-001 · Rev: A</td>
+              <td colSpan={4}>Rev: A</td>
             </tr>
             <tr>
               <td className="header">Problem description</td>
