@@ -1,5 +1,10 @@
+import { eq, inArray } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
 import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmentAccess.js";
+import { ncr } from "../../drizzle/schema/ncr.js";
+import { capa } from "../../drizzle/schema/capa.js";
+import { audits, auditItems } from "../../drizzle/schema/audits.js";
+import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { AppError } from "../../utils/appError.js";
 
@@ -108,8 +113,94 @@ export function canSeeCompanyAuditRow(visible: Set<string> | "all", row: { entit
   return visible.has(row.entityType);
 }
 
-/** One record's history. The caller must already be allowed to open that record. */
-export async function assertCanReadEntityHistory(db: Db, user: Viewer, entityType: string, entityId: number): Promise<void> {
+/**
+ * Record types whose row carries a plant, same tables attachments already
+ * check. An audit finding lives on audit_items; the plant is the parent audit.
+ */
+const SITE_COLUMN: Record<string, "ncr" | "capa" | "audits"> = {
+  NCR: "ncr",
+  CAPA: "capa",
+  Audit: "audits",
+};
+
+function isAuditFinding(entityType: string): boolean {
+  return entityType === "Audit Finding" || entityType === "audit_finding";
+}
+
+function isSiteBearing(entityType: string): boolean {
+  return SITE_COLUMN[entityType] != null || isAuditFinding(entityType);
+}
+
+/** id -> plant. Missing ids are absent from the map (the row is gone). */
+async function loadSiteIds(db: Db, entityType: string, ids: number[]): Promise<Map<number, number | null>> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return new Map();
+  if (isAuditFinding(entityType)) {
+    const rows = await db
+      .select({ id: auditItems.id, siteId: audits.siteId })
+      .from(auditItems)
+      .leftJoin(audits, eq(audits.id, auditItems.auditId))
+      .where(inArray(auditItems.id, unique));
+    return new Map(rows.map((row) => [row.id, row.siteId]));
+  }
+  const table = SITE_COLUMN[entityType];
+  if (table === "ncr") {
+    const rows = await db.select({ id: ncr.id, siteId: ncr.siteId }).from(ncr).where(inArray(ncr.id, unique));
+    return new Map(rows.map((row) => [row.id, row.siteId]));
+  }
+  if (table === "capa") {
+    const rows = await db.select({ id: capa.id, siteId: capa.siteId }).from(capa).where(inArray(capa.id, unique));
+    return new Map(rows.map((row) => [row.id, row.siteId]));
+  }
+  if (table === "audits") {
+    const rows = await db.select({ id: audits.id, siteId: audits.siteId }).from(audits).where(inArray(audits.id, unique));
+    return new Map(rows.map((row) => [row.id, row.siteId]));
+  }
+  return new Map();
+}
+
+/** Drop company-list rows for a plant this person cannot open. Owners and administrators see every plant. */
+export async function filterCompanyAuditBySite<T extends { entityType: string; entityId: number }>(
+  db: Db,
+  rows: T[],
+  user: Viewer,
+  allowedSiteIds: number[] | undefined,
+): Promise<T[]> {
+  if (isFullAccessRole(user.roleName) || !allowedSiteIds) return rows;
+  const idsByType = new Map<string, number[]>();
+  for (const row of rows) {
+    if (!isSiteBearing(row.entityType)) continue;
+    const list = idsByType.get(row.entityType) ?? [];
+    list.push(row.entityId);
+    idsByType.set(row.entityType, list);
+  }
+  const sitesByType = new Map<string, Map<number, number | null>>();
+  await Promise.all(
+    [...idsByType.entries()].map(async ([entityType, ids]) => {
+      sitesByType.set(entityType, await loadSiteIds(db, entityType, ids));
+    }),
+  );
+  return rows.filter((row) => {
+    if (!isSiteBearing(row.entityType)) return true;
+    const siteId = sitesByType.get(row.entityType)?.get(row.entityId);
+    return siteId != null && allowedSiteIds.includes(siteId);
+  });
+}
+
+async function assertHistoryOnAllowedSite(db: Db, entityType: string, entityId: number, allowedSiteIds: number[] | undefined): Promise<void> {
+  if (!allowedSiteIds || !isSiteBearing(entityType)) return;
+  const sites = await loadSiteIds(db, entityType, [entityId]);
+  assertRecordOnAllowedSite(sites.get(entityId), allowedSiteIds, entityType);
+}
+
+/** One record's history. The caller must already be allowed to open that record, including its plant. */
+export async function assertCanReadEntityHistory(
+  db: Db,
+  user: Viewer,
+  entityType: string,
+  entityId: number,
+  allowedSiteIds?: number[],
+): Promise<void> {
   if (isFullAccessRole(user.roleName)) return;
   if (entityType === "User" && entityId === user.id) return;
   if (ACCOUNT_ENTITY_TYPES.has(entityType)) {
@@ -119,4 +210,5 @@ export async function assertCanReadEntityHistory(db: Db, user: Viewer, entityTyp
   if (!resource) throw AppError.badRequest(`Unknown record type "${entityType}"`);
   const level = await getUserAccessLevel(db, user, resource);
   if (level === "none") throw AppError.forbidden(`No access to '${entityType}' history for your department`);
+  await assertHistoryOnAllowedSite(db, entityType, entityId, allowedSiteIds);
 }

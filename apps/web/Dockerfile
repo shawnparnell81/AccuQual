@@ -32,7 +32,6 @@ ENV API_UPSTREAM_URL=http://api:3000 \
     NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1 \
     NGINX_ENVSUBST_FILTER=^(API_UPSTREAM_URL|CF_ACCESS_CLIENT_ID|CF_ACCESS_CLIENT_SECRET|NGINX_LOCAL_RESOLVERS)$$
 COPY apps/web/nginx.conf.template /etc/nginx/templates/default.conf.template
-COPY apps/web/nginx-security-headers.conf /etc/nginx/accuqual-security-headers.conf
 COPY apps/web/18-accuqual-proxy.envsh /docker-entrypoint.d/18-accuqual-proxy.envsh
 RUN chmod +x /docker-entrypoint.d/18-accuqual-proxy.envsh && rm -f /etc/nginx/conf.d/default.conf
 EXPOSE 80

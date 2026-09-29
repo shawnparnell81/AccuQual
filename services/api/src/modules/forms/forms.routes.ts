@@ -4,16 +4,32 @@ import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
 import { AppError } from "../../utils/appError.js";
+import { asyncHandler } from "../../utils/asyncHandler.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
-import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
+import { getUserAccessLevel, requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { saveFormSchema, FORM_TYPES } from "./forms.validation.js";
 import { getTemplate, getForm, saveForm, createVersion, getHistory, exportForm } from "./forms.controller.js";
 import { listTemplatesHandler, uploadTemplateHandler, downloadTemplateHandler, deleteTemplateHandler } from "./formTemplates.controller.js";
 import type { ResourceKey } from "../../middleware/departmentAccess.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 
 export const formsRouter = Router();
-formsRouter.use(requireAuth, withDb);
+
+/**
+ * Supplier logins do not read or export company forms. rejectSupplierReads
+ * only covers GET/HEAD, and export is a POST, so this router refuses the
+ * role on every method.
+ */
+function rejectSupplierForms(req: Request, _res: Response, next: NextFunction) {
+  if (req.user?.roleName === "supplier") {
+    next(AppError.forbidden("Supplier logins can't open this."));
+    return;
+  }
+  next();
+}
+
+formsRouter.use(requireAuth, withDb, rejectSupplierForms);
 
 // memoryStorage: files are small (PDF forms), and uploadTemplateHandler
 // decides the on-disk path itself — same convention as document-folders'
@@ -21,28 +37,14 @@ formsRouter.use(requireAuth, withDb);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 /**
- * This router is shared by all 35 form types (NCR, CAPA, training, ...). A
- * prior comment here claimed "most aren't in the department matrix and stay
- * gated by their owning record's own permissions" — that was false: this
- * router applied NO gate at all for any type except the Production Log
- * family below, so POST /forms/ncr/:id/save (and every other type's save)
- * could rewrite that record's form content regardless of the caller's real
- * department access to the NCR/CAPA/etc module itself (Full-System Audit
- * finding B1 — a bypass of every other module's own direct-route RBAC).
- *
- * Only mapped here: form types with a CONFIRMED real, actively-enforced
- * module elsewhere in the app (verified by finding a live
- * requireDepartmentAccess(<key>) call on that module's own router) — the
- * exact same access level that module's own direct route already enforces,
- * so this closes the bypass without changing who could already edit that
- * record through its real page. The remaining ~20 form types (bespoke QMS
- * documents like Control Plan, DVP&R, Management Review Minutes, ...) have
- * no corresponding module at all — same "no single owning department"
- * reality already established for qms_forms/document_change_requests, not
- * a new gap introduced by leaving them out of this map.
+ * Form type -> the module that already gates that record. Reads, history,
+ * and export use the same audience as that module (anyone with read or
+ * edit). Saves and new versions still require edit. A type with no module
+ * is refused.
  */
 const FORM_TYPE_TO_RESOURCE: Partial<Record<(typeof FORM_TYPES)[number], ResourceKey>> = {
   ncr: "ncr",
+  five_why: "ncr",
   capa: "capa",
   eight_d: "eight_d",
   audit_checklist: "audit",
@@ -50,31 +52,62 @@ const FORM_TYPE_TO_RESOURCE: Partial<Record<(typeof FORM_TYPES)[number], Resourc
   lpa: "audit",
   discrepancy_inspection: "di",
   supplier: "suppliers",
+  approved_vendor_list: "suppliers",
   training: "training",
+  competency_matrix: "training",
   change: "change",
-  pcn: "change", // Process Change Notice — the same module MODULE_LABELS itself calls "Change / PCN Control"
+  pcn: "change",
   calibration: "calibration",
+  gage_rr: "calibration",
+  maintenance_work_order: "calibration",
   complaint: "complaints",
-  fmea: "risk", // MODULE_LABELS itself calls this ResourceKey "Risk / FMEA"
+  fmea: "risk",
   document_control_index: "documents",
-  // Multi-department (Production: read-only, Customer Service: edit — see
-  // departmentAccess.ts) — this app's one form-type family that already
-  // had a real, working gate before this fix; folded into the same
-  // mechanism instead of keeping a second, parallel one.
   production_log: "production_log",
   daily_production_log: "production_log",
   production_output_log: "production_log",
+  appearance_approval: "ppap",
+  apqp_summary: "ppap",
+  control_plan: "ppap",
+  dimensional_report: "ppap",
+  process_flow_diagram: "ppap",
+  dvpr: "ppap",
+  final_inspection_release_checklist: "ppap",
+  management_review: "management_review",
+  management_review_minutes: "management_review",
+  staff_meeting_minutes: "management_review",
+  context_of_organization: "context_of_org",
+  pareto_chart: "ncr",
 };
 
-/**
- * Write-path only (POST save/version), matching this finding's own scope
- * and the pre-existing production_log gate's own scope — reads stay open
- * to any authenticated company user, unchanged, same as before this fix.
- */
+function resourceFor(req: Request): ResourceKey | undefined {
+  const type = req.params.type as (typeof FORM_TYPES)[number] | undefined;
+  if (!type) return undefined;
+  return FORM_TYPE_TO_RESOURCE[type];
+}
+
+/** Saves and versions. Unmapped types are refused. Read access is not enough to write. */
 function gateKnownFormTypes(req: Request, res: Response, next: NextFunction) {
-  const resourceKey = req.params.type ? FORM_TYPE_TO_RESOURCE[req.params.type as (typeof FORM_TYPES)[number]] : undefined;
-  if (!resourceKey) return next();
+  const resourceKey = resourceFor(req);
+  if (!resourceKey) return next(AppError.forbidden("That form isn't available."));
   return requireDepartmentAccess(resourceKey)(req, res, next);
+}
+
+/**
+ * Opening, history, and export. Export is a POST, so the write gate would
+ * treat a read-only department as blocked. Read or edit on the owning
+ * module is enough. Unmapped types are refused.
+ */
+function gateFormRead(req: Request, res: Response, next: NextFunction) {
+  const resourceKey = resourceFor(req);
+  if (!resourceKey) return next(AppError.forbidden("That form isn't available."));
+  return asyncHandler(async (inner: Request, _res: Response, innerNext: NextFunction) => {
+    if (isFullAccessRole(inner.user?.roleName)) return innerNext();
+    if (!inner.user || !inner.db) return innerNext(AppError.forbidden(`No access to '${resourceKey}' for your department`));
+    const level = await getUserAccessLevel(inner.db, inner.user, resourceKey);
+    if (level === "none") return innerNext(AppError.forbidden(`No access to '${resourceKey}' for your department`));
+    innerNext();
+  })(req, res, next);
 }
 
 /**
@@ -98,8 +131,8 @@ formsRouter.get("/:type/template", getTemplate);
 formsRouter.post("/:type/template", requireRole("admin"), upload.single("file"), uploadTemplateHandler);
 formsRouter.delete("/:type/template", requireRole("admin"), deleteTemplateHandler);
 formsRouter.get("/:type/template/file", downloadTemplateHandler);
-formsRouter.get("/:type/:id", getForm);
+formsRouter.get("/:type/:id", gateFormRead, getForm);
 formsRouter.post("/:type/:id/save", refuseControlledForms, gateKnownFormTypes, validate(saveFormSchema), saveForm);
 formsRouter.post("/:type/:id/version", refuseControlledForms, gateKnownFormTypes, createVersion);
-formsRouter.get("/:type/:id/history", getHistory);
-formsRouter.post("/:type/:id/export", exportForm);
+formsRouter.get("/:type/:id/history", gateFormRead, getHistory);
+formsRouter.post("/:type/:id/export", gateFormRead, exportForm);

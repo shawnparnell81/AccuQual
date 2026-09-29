@@ -194,7 +194,7 @@ export const historyHandler = asyncHandler(async (req: Request, res: Response) =
   const { moduleName, recordId } = req.params as { moduleName: string; recordId: string };
   const entityType = MODULE_ENTITY_TYPES[moduleName];
   if (!entityType) throw AppError.badRequest(`Unknown moduleName "${moduleName}" — expected one of: ${Object.keys(MODULE_ENTITY_TYPES).join(", ")}`);
-  await assertCanReadEntityHistory(req.db! as Db, req.user!, entityType, Number(recordId));
+  await assertCanReadEntityHistory(req.db! as Db, req.user!, entityType, Number(recordId), req.allowedSiteIds);
 
   const rows = await req
     .db!.select()

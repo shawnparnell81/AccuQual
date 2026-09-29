@@ -63,10 +63,9 @@ const REFRESH_COOKIE = "accuqual_rt";
 /**
  * Count renewals per person, not per IP address. The user id is taken from a
  * signature check — a forged cookie cannot pick its own bucket. A missing or
- * invalid cookie falls back to the visitor address (CF-Connecting-IP, else the
- * address Express resolved). The id is the user, not the token id: each
- * successful renewal rotates that id, and keying on it would hand every
- * renewal a fresh budget.
+ * invalid cookie falls back to the caller's address. The id is the user, not
+ * the token id: each successful renewal rotates that id, and keying on it
+ * would hand every renewal a fresh budget.
  */
 export function refreshRateLimitKey(req: Request): string {
   const raw = req.cookies?.[REFRESH_COOKIE];
@@ -77,7 +76,7 @@ export function refreshRateLimitKey(req: Request): string {
   } catch {
     // missing, unsigned, expired, or tampered — count by address instead
   }
-  return `refresh-ip-${visitorIp(req)}`;
+  return `refresh-ip-${req.ip ?? "unknown"}`;
 }
 
 export function createRefreshRateLimiter(options?: { limit?: number; windowMs?: number }) {

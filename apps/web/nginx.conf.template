@@ -30,7 +30,6 @@ server {
   # MIME table.
   location ~* \.mjs$ {
     default_type application/javascript;
-    include /etc/nginx/accuqual-security-headers.conf;
   }
 
   # Source maps are not part of the public site. Refuse them even if a build emits one.
@@ -42,7 +41,6 @@ server {
   # old browser tab can only ever reference an asset that's actually still
   # on disk under that exact name — safe to cache hard and forever.
   location ~* ^/assets/ {
-    include /etc/nginx/accuqual-security-headers.conf;
     add_header Cache-Control "public, max-age=31536000, immutable" always;
     try_files $uri =404;
   }
@@ -56,13 +54,11 @@ server {
   # revalidate with the server (a cheap 304 when nothing changed) before
   # ever using it.
   location = /index.html {
-    include /etc/nginx/accuqual-security-headers.conf;
     add_header Cache-Control "no-cache" always;
     try_files $uri =404;
   }
 
   location / {
-    include /etc/nginx/accuqual-security-headers.conf;
     try_files $uri $uri/ /index.html;
   }
 

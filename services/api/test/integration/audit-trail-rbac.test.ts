@@ -14,6 +14,8 @@ import { db, pool } from "../../src/db/index.js";
 import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
+import { audits, auditItems } from "../../src/drizzle/schema/audits.js";
+import { sites } from "../../src/drizzle/schema/sites.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
@@ -122,5 +124,36 @@ describe("Audit trail read RBAC — GET /audit-trail/:entityType/:entityId (real
   it("engineering (downgraded to no qms_forms access) CANNOT read a QmsForm's audit history", async () => {
     const res = await request(app).get("/audit-trail/QmsForm/424242").set("Authorization", `Bearer ${engineeringToken}`);
     expect(res.status).toBe(403);
+  });
+
+  it("hides an NCR and an audit finding that live at a plant the caller is not assigned to", async () => {
+    const [west] = await db.insert(sites).values({ name: "West plant", code: `west-${suffix}`, status: "active", isDefault: false }).returning();
+    const [westNcr] = await db.insert(ncr).values({ title: "West issue", siteId: west!.id }).returning();
+    await db.insert(auditTrail).values({ entityType: "NCR", entityId: westNcr!.id, action: "create", changes: { title: westNcr!.title } });
+    const [westAudit] = await db.insert(audits).values({ name: "West audit", siteId: west!.id }).returning();
+    const [finding] = await db.insert(auditItems).values({ auditId: westAudit!.id, finding: "West finding" }).returning();
+    await db.insert(auditTrail).values({ entityType: "Audit Finding", entityId: finding!.id, action: "create", changes: {} });
+
+    const hiddenNcr = await request(app).get(`/audit-trail/NCR/${westNcr!.id}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(hiddenNcr.status).toBe(404);
+    const hiddenFinding = await request(app).get(`/audit-trail/${encodeURIComponent("Audit Finding")}/${finding!.id}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(hiddenFinding.status).toBe(404);
+
+    const visibleNcr = await request(app).get(`/audit-trail/NCR/${westNcr!.id}`).set("Authorization", `Bearer ${adminToken}`);
+    expect(visibleNcr.status).toBe(200);
+    const visibleFinding = await request(app).get(`/audit-trail/${encodeURIComponent("Audit Finding")}/${finding!.id}`).set("Authorization", `Bearer ${adminToken}`);
+    expect(visibleFinding.status).toBe(200);
+
+    const list = await request(app).get("/audit-trail").set("Authorization", `Bearer ${qualityToken}`);
+    expect(list.status).toBe(200);
+    const listed = list.body as { entityType: string; entityId: number }[];
+    expect(listed.some((row) => row.entityType === "NCR" && row.entityId === westNcr!.id)).toBe(false);
+    expect(listed.some((row) => row.entityType === "Audit Finding" && row.entityId === finding!.id)).toBe(false);
+    expect(listed.some((row) => row.entityType === "NCR" && row.entityId === ncrId)).toBe(true);
+
+    const adminList = await request(app).get("/audit-trail").set("Authorization", `Bearer ${adminToken}`);
+    expect(adminList.status).toBe(200);
+    const adminRows = adminList.body as { entityType: string; entityId: number }[];
+    expect(adminRows.some((row) => row.entityType === "NCR" && row.entityId === westNcr!.id)).toBe(true);
   });
 });
