@@ -17,6 +17,7 @@ const suffix = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 let qualityToken: string;
 let productionToken: string;
 let managerToken: string;
+let engineeringToken: string;
 
 describe("editable form numbers and folder filing", () => {
   beforeAll(async () => {
@@ -25,9 +26,11 @@ describe("editable form numbers and folder filing", () => {
     const [quality] = await db.insert(users).values({ email: `form-number-q-${suffix}@test.local`, passwordHash: "unused" }).returning();
     const [production] = await db.insert(users).values({ email: `form-number-p-${suffix}@test.local`, passwordHash: "unused" }).returning();
     const [manager] = await db.insert(users).values({ email: `form-number-m-${suffix}@test.local`, passwordHash: "unused" }).returning();
+    const [engineering] = await db.insert(users).values({ email: `form-number-e-${suffix}@test.local`, passwordHash: "unused" }).returning();
     qualityToken = signAccessToken({ sub: String(quality!.id), roleId: null, roleName: "operator", department: "quality" });
     productionToken = signAccessToken({ sub: String(production!.id), roleId: null, roleName: "operator", department: "production" });
     managerToken = signAccessToken({ sub: String(manager!.id), roleId: null, roleName: "quality_manager", department: "production" });
+    engineeringToken = signAccessToken({ sub: String(engineering!.id), roleId: null, roleName: "operator", department: "engineering" });
   });
 
   it("keeps an edited number, leaves older copies blank, and files into a chosen folder", async () => {
@@ -35,21 +38,24 @@ describe("editable form numbers and folder filing", () => {
     expect(templates.status).toBe(200);
     expect(templates.body.templates.find((form: { formKey: string }) => form.formKey === "frm-ncr-001")?.formId).toBe("FRM-NCR-001");
 
-    const blocked = await request(app).patch("/document-folders/form-templates/frm-ncr-001").set("Authorization", `Bearer ${qualityToken}`).send({ formId: "NOPE" });
+    const blocked = await request(app).patch("/document-folders/form-templates/frm-ncr-001").set("Authorization", `Bearer ${engineeringToken}`).send({ formId: "NOPE" });
     expect(blocked.status).toBe(400);
 
     const denied = await request(app).patch("/document-folders/form-templates/frm-qa-001").set("Authorization", `Bearer ${productionToken}`).send({ formId: "QA-1" });
     expect(denied.status).toBe(403);
 
+    const qualityStaff = await request(app).patch("/document-folders/form-templates/frm-qa-001").set("Authorization", `Bearer ${qualityToken}`).send({ formId: "QA-1" });
+    expect(qualityStaff.status).toBe(403);
+
     const managerSet = await request(app).patch("/document-folders/form-templates/frm-qa-001").set("Authorization", `Bearer ${managerToken}`).send({ formId: "QA-14" });
     expect(managerSet.status).toBe(200);
     expect(managerSet.body.formId).toBe("QA-14");
 
-    const cleared = await request(app).patch("/document-folders/form-templates/frm-qa-001").set("Authorization", `Bearer ${qualityToken}`).send({ formId: "  " });
+    const cleared = await request(app).patch("/document-folders/form-templates/frm-qa-001").set("Authorization", `Bearer ${engineeringToken}`).send({ formId: "  " });
     expect(cleared.status).toBe(200);
     expect(cleared.body.formId).toBe("");
 
-    const setAgain = await request(app).patch("/document-folders/form-templates/frm-qa-001").set("Authorization", `Bearer ${qualityToken}`).send({ formId: "QA-14" });
+    const setAgain = await request(app).patch("/document-folders/form-templates/frm-qa-001").set("Authorization", `Bearer ${engineeringToken}`).send({ formId: "QA-14" });
     expect(setAgain.status).toBe(200);
 
     const again = await request(app).get("/document-folders/form-templates").set("Authorization", `Bearer ${qualityToken}`);
@@ -71,7 +77,7 @@ describe("editable form numbers and folder filing", () => {
     expect(fresh.body.formNumber).toBe("QA-14");
     expect(fresh.body.snapshotted).toBe(true);
 
-    await request(app).patch("/document-folders/form-templates/frm-qa-001").set("Authorization", `Bearer ${qualityToken}`).send({ formId: "QA-99" });
+    await request(app).patch("/document-folders/form-templates/frm-qa-001").set("Authorization", `Bearer ${engineeringToken}`).send({ formId: "QA-99" });
     const still = await request(app).get(`/document-folders/form-filings?formKey=frm-qa-001&recordId=${created.body.id}`).set("Authorization", `Bearer ${qualityToken}`);
     expect(still.body.formNumber).toBe("QA-14");
     const library = await request(app).get("/document-folders/form-templates").set("Authorization", `Bearer ${qualityToken}`);

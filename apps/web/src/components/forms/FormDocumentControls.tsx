@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
-import { EDITABLE_FORM_KEYS } from "../../lib/formDocument";
+import { EDITABLE_FORM_KEYS, canEditFormNumber } from "../../lib/formDocument";
 
 interface FolderRow {
   id: number;
@@ -57,7 +57,8 @@ function folderChoices(folders: FolderRow[], excludeId: number | null): { id: nu
 
 /** Sets the document number on the blank master. Filled copies keep the number they were given. */
 export function FormNumberEditor({ formKey, compact = false }: { formKey: string; compact?: boolean }) {
-  const canEdit = useCanControlDocuments();
+  const user = useCurrentUser();
+  const canEdit = canEditFormNumber(user);
   const queryClient = useQueryClient();
   const templates = useQuery({
     queryKey: ["form-number", formKey],
@@ -85,7 +86,15 @@ export function FormNumberEditor({ formKey, compact = false }: { formKey: string
     onError: () => setMessage("Couldn't save the form number."),
   });
 
-  if (!EDITABLE_FORM_KEYS.has(formKey) || !canEdit) return null;
+  if (!EDITABLE_FORM_KEYS.has(formKey)) return null;
+
+  if (!canEdit) {
+    return (
+      <p className="text-xs text-muted-foreground" data-testid="form-number-readonly" data-form-key={formKey}>
+        Form number <span className="text-sm text-foreground">{current.trim() || "None"}</span>
+      </p>
+    );
+  }
 
   return (
     <form

@@ -9,6 +9,7 @@ import { AppError } from "../../utils/appError.js";
 import { filedRecordName, fileNamePatternFor, FORM_TEMPLATES } from "./formFiling.js";
 import { ensureFormTemplates } from "./formTemplates.js";
 import {
+  canEditFormNumber,
   EDITABLE_FORM_NUMBER_KEYS,
   FORM_DATA_TYPE_TO_FORM_KEY,
   ISO_TYPE_TO_FORM_KEY,
@@ -107,7 +108,14 @@ export async function snapshotFormDataNumber(db: Db, formType: string, entityId:
   await snapshotFormNumber(db, formKey, entityId);
 }
 
-export async function updateFormNumber(db: Db, formKey: string, formId: string, performedBy: number | undefined) {
+export async function updateFormNumber(
+  db: Db,
+  formKey: string,
+  formId: string,
+  performedBy: number | undefined,
+  actor: { roleName?: string | null; department?: string | null } | null | undefined,
+) {
+  if (!canEditFormNumber(actor)) throw AppError.forbidden("Only Engineering, a quality manager, or an administrator can change a form number");
   if (!EDITABLE_FORM_NUMBER_KEYS.has(formKey)) {
     throw AppError.badRequest("This form's document number is fixed");
   }

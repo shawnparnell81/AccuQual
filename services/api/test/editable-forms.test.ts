@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { resolveFolderPath, folderPathNames } from "../src/modules/document-folders/editableForms.js";
+import { canEditFormNumber, resolveFolderPath, folderPathNames } from "../src/modules/document-folders/editableForms.js";
+
+describe("form number editors", () => {
+  it("allows engineering, quality managers, and administrators", () => {
+    expect(canEditFormNumber({ roleName: "admin", department: "quality" })).toBe(true);
+    expect(canEditFormNumber({ roleName: "owner", department: null })).toBe(true);
+    expect(canEditFormNumber({ roleName: "quality_manager", department: "production" })).toBe(true);
+    expect(canEditFormNumber({ roleName: "operator", department: "engineering" })).toBe(true);
+    expect(canEditFormNumber({ roleName: "operator", department: "quality" })).toBe(false);
+    expect(canEditFormNumber({ roleName: "staff", department: "production" })).toBe(false);
+  });
+});
 
 describe("subject folder suggestion", () => {
   const folders = [

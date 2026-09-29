@@ -1,8 +1,14 @@
 /**
- * The eight quality and engineering forms whose document number can be
- * changed in the app. Other templates, including NCR and CAPA, keep the
- * number they were given in the seed.
+ * Who may change a document number: Engineering, a quality manager, and an
+ * administrator or owner. Everyone else may read the number.
  */
+export function canEditFormNumber(user: { roleName?: string | null; department?: string | null } | null | undefined): boolean {
+  const role = user?.roleName;
+  if (role === "admin" || role === "owner" || role === "quality_manager") return true;
+  return user?.department === "engineering";
+}
+
+/** The eight quality and engineering forms. Other templates, including NCR and CAPA, keep their seeded number. */
 export const EDITABLE_FORM_NUMBER_KEYS = new Set([
   "frm-psw-001",
   "frm-prc-001",

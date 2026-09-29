@@ -214,7 +214,7 @@ export const formTemplates = asyncHandler(async (req: Request, res: Response) =>
 export const setFormNumber = asyncHandler(async (req: Request, res: Response) => {
   const formKey = String(req.params.formKey ?? "");
   const { formId } = req.body as { formId: string };
-  const updated = await updateFormNumber(req.db!, formKey, formId, req.user?.id);
+  const updated = await updateFormNumber(req.db!, formKey, formId, req.user?.id, req.user);
   res.json(updated);
 });
 
