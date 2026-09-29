@@ -90,6 +90,7 @@ import {
   ScarFormsPage,
   SettingsPage,
   SupplierDetailPage,
+  SupplierPortalHome,
   SuppliersPage,
   TrainingDetailPage,
   TrainingPage,
@@ -214,7 +215,7 @@ export function App() {
           <Route path="/rma-activity-log" element={<RetiredModulePage name="RMA activity" />} />
           <Route path="/rma-log/*" element={<RetiredModulePage name="RMA log" />} />
           <Route path="/rma-log" element={<RetiredModulePage name="RMA log" />} />
-          <Route path="/supplier-portal" element={<Navigate to="/suppliers" replace />} />
+          <Route path="/supplier-portal" element={<SupplierPortalHome />} />
           <Route path="/work-orders" element={<RetiredModulePage name="Work orders" />} />
           <Route path="/work-orders/:id" element={<WorkOrderDetailPage />} />
           <Route path="/onboarding" element={<Navigate to="/settings" replace />} />

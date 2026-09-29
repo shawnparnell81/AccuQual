@@ -4,7 +4,11 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { Supplier } from "../../api/types";
 import { ImportButton } from "../../components/import/ImportDialog";
 
-/** Internal supplier roster. Scorecards and risk stay on each supplier's own page. */
+/**
+ * A scorecards summary lives on the Dashboard; this page manages the
+ * supplier roster. "View Scorecard" deep-links into the Supplier Portal
+ * scorecard tab for that supplier.
+ */
 export function SuppliersPage() {
   const navigate = useNavigate();
   return (
@@ -20,6 +24,20 @@ export function SuppliersPage() {
         { header: "Name", accessor: (s) => s.name },
         { header: "Status", accessor: (s) => <StatusBadge value={s.status} /> },
         { header: "Risk Level", accessor: (s) => <StatusBadge value={s.riskLevel} /> },
+        {
+          header: "Scorecard",
+          accessor: (s) => (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/supplier-portal?supplierId=${s.id}&tab=scorecard`);
+              }}
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              View Scorecard
+            </button>
+          ),
+        },
       ]}
       createFields={[
         { name: "name", label: "Supplier name" },

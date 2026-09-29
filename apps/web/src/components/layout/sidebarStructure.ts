@@ -188,7 +188,10 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
         label: "Suppliers",
         icon: Truck,
         path: "/suppliers",
-        children: [{ key: "scar", label: "SCAR", path: "/scar-forms", icon: ClipboardList }],
+        children: [
+          { key: "supplier_portal", label: "Supplier Portal", path: "/supplier-portal", icon: Building2 },
+          { key: "scar", label: "SCAR", path: "/scar-forms", icon: ClipboardList },
+        ],
       },
       {
         key: "ncr-capa",
