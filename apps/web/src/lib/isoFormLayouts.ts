@@ -12,6 +12,8 @@ export interface FormCell {
   placeholder?: string;
   role?: "title" | "section" | "note" | "header";
   align?: "left" | "center";
+  /** Static fill. Selects still pick up pass / minor / major colors on their own. */
+  paint?: "fill-green" | "fill-red" | "fill-yellow" | "fill-gray";
 }
 
 export interface FormLayout {

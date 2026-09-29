@@ -6,13 +6,14 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { formatDate } from "../../lib/dates";
 import { formByKey, type IsoFormType } from "../../lib/isoFormCatalog";
 import { showCell, type CellValue } from "../../lib/isoFormLogic";
+import type { FailureRow, ScorecardRow } from "../../lib/qualitySheetLogic";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 
 interface IsoQualityForm {
   id: number;
   formType: IsoFormType;
-  data: { cells?: Record<string, CellValue> };
+  data: { cells?: Record<string, CellValue>; customers?: ScorecardRow[]; problems?: FailureRow[] };
   createdAt?: string | null;
   updatedAt?: string | null;
 }
@@ -30,13 +31,20 @@ interface FilingTemplate {
   fileNamePattern: string;
 }
 
-function summary(formType: IsoFormType, cells: Record<string, CellValue>): string {
+function summary(formType: IsoFormType, data: IsoQualityForm["data"]): string {
+  const cells = data.cells ?? {};
   if (formType === "internal_audit") return showCell(cells.B3) || showCell(cells.F3);
   if (formType === "ncr_report") return showCell(cells.B8) || showCell(cells.D6);
   if (formType === "quarantine_notice") return showCell(cells.B6);
   if (formType === "concession") return showCell(cells.B8) || showCell(cells.B7);
   if (formType === "competency_training") return showCell(cells.B4);
   if (formType === "cross_training") return showCell(cells.PN) || showCell(cells.PT);
+  if (formType === "psw") return showCell(cells.B3) || showCell(cells.D3);
+  if (formType === "turtle_diagram") return showCell(cells.B5) || showCell(cells.D5);
+  if (formType === "quality_alert") return showCell(cells.D2) || showCell(cells.B10);
+  if (formType === "first_article") return showCell(cells.F3) || showCell(cells.D4);
+  if (formType === "customer_scorecard") return showCell(cells.B2) || data.customers?.find((row) => row.name)?.name || "";
+  if (formType === "failure_effectiveness") return data.problems?.find((row) => row.problem)?.problem || "";
   return "";
 }
 
@@ -110,7 +118,7 @@ export function IsoFormListPage() {
                       {filedName(pattern, filingId, row.id, row.createdAt)}
                     </button>
                   </td>
-                  <td className="px-3 py-2">{summary(meta.formType, row.data?.cells ?? {}) || "—"}</td>
+                  <td className="px-3 py-2">{summary(meta.formType, row.data ?? {}) || "—"}</td>
                   <td className="px-3 py-2 text-muted-foreground">{row.updatedAt || row.createdAt ? formatDate(row.updatedAt ?? row.createdAt) : ""}</td>
                 </tr>
               ))}

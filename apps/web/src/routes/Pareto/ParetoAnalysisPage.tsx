@@ -1,21 +1,43 @@
-import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { useEffect, useState } from "react";
+import { ParetoChartForm } from "../../components/forms/customForms/ParetoChartForm";
+import { useFormEditorState } from "../../components/forms/useFormEditorState";
+import { SaveStatus } from "../../components/shared/SaveStatus";
 
-/** A standalone analysis tool, not tied to any other record — a fixed singleton document, same pattern as the Production Logs page. */
+/** A standalone analysis tool, not tied to any other record — a fixed singleton document. */
 const SINGLETON_ENTITY_ID = 1;
 
 export function ParetoAnalysisPage() {
-  return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">Pareto Analysis</h1>
+  const { isLoading, values, updateField, isSaving } = useFormEditorState("pareto_chart", SINGLETON_ENTITY_ID);
+  const [dirty, setDirty] = useState(false);
+  useEffect(() => {
+    if (!isSaving) setDirty(false);
+  }, [isSaving]);
 
-      <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-4">
-        <h2 className="text-sm font-medium">Pareto Chart</h2>
-        <p className="text-sm text-muted-foreground">
-          Log problem counts, and the chart sorts them by frequency and calculates the cumulative % line
-          automatically — the 80/20 view of which few problems drive most of the defects.
-        </p>
-        <OpenFormButton formType="pareto_chart" entityId={SINGLETON_ENTITY_ID} title="Pareto Chart" label="Open Pareto Chart" />
+  return (
+    <div className="aq-print-wide flex flex-col gap-4">
+      <div className="no-print flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Pareto Analysis</h1>
+          <p className="text-sm text-muted-foreground">FRM-PAR-001. Problem counts sort by frequency and the cumulative % line is calculated from the total.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <SaveStatus saving={isSaving} unsaved={dirty && !isSaving} />
+          <button type="button" onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+            Print
+          </button>
+        </div>
       </div>
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading the chart…</p>
+      ) : (
+        <ParetoChartForm
+          data={values}
+          onChange={(name, value) => {
+            setDirty(true);
+            updateField(name, value);
+          }}
+        />
+      )}
     </div>
   );
 }

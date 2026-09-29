@@ -78,7 +78,7 @@ function Cell({
 }) {
   const stored = cells[spec.addr];
   const text = spec.kind === "label" ? spec.text ?? "" : spec.kind === "calc" ? showCell(calculated[spec.addr]) : showCell(stored);
-  const fill = spec.kind === "select" ? resultFill(text) : "";
+  const fill = spec.paint || (spec.kind === "select" ? resultFill(text) : "");
   const className = [spec.role ?? "", spec.align ?? "", spec.kind === "area" ? "area" : "", fill].filter(Boolean).join(" ");
   const style: CSSProperties = {};
   const inputValue = stored == null || typeof stored === "boolean" ? "" : String(stored);

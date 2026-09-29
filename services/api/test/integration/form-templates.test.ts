@@ -55,7 +55,11 @@ describe("ISO Compliance Documents form templates", () => {
     expect(eightD?.subjectRoute).toBe("/8d");
     expect(eightD?.start).toEqual({ createPath: "/8d", openPath: "/8d/{id}", body: {} });
     const linked = templates.filter((form) => form.start == null);
-    expect(linked.map((form) => form.formKey).sort()).toEqual(["lst-eqp-001", "lst-gen-001"]);
+    expect(linked.map((form) => form.formKey).sort()).toEqual(["frm-msa-001", "frm-par-001", "lst-eqp-001", "lst-gen-001"]);
+    expect(templates.find((form) => form.formKey === "frm-psw-001")?.formId).toBe("FRM-PSW-001");
+    expect(templates.find((form) => form.formKey === "frm-fai-001")?.start?.body).toMatchObject({ formType: "first_article" });
+    expect(templates.find((form) => form.formKey === "frm-fae-001")?.subjectRoute).toBe("/iso-forms/frm-fae-001");
+    expect(templates.filter((form) => form.formKey === "frm-psw-001")).toHaveLength(1);
     expect(templates.filter((form) => form.start).every((form) => form.start?.openPath.includes("{id}"))).toBe(true);
     const equipmentList = templates.find((form) => form.formKey === "lst-eqp-001");
     const documentList = templates.find((form) => form.formKey === "lst-gen-001");

@@ -119,18 +119,23 @@
   text-align: left;
 }
 
-.iso td.fill-green {
+.iso .fill-green {
   background: #70ad47;
   color: #1a1a1a;
 }
 
-.iso td.fill-yellow {
+.iso .fill-yellow {
   background: #ffe566;
   color: #1a1a1a;
 }
 
-.iso td.fill-red {
+.iso .fill-red {
   background: #ff5050;
+  color: #1a1a1a;
+}
+
+.iso .fill-gray {
+  background: #d9d9d9;
   color: #1a1a1a;
 }
 
@@ -205,20 +210,55 @@
     background: #e8eef6 !important;
     color: #111 !important;
   }
-  .iso td.fill-green,
-  .iso th.fill-green {
+  .iso .fill-green,
+  .iso td.header.fill-green {
     background: #70ad47 !important;
     color: #1a1a1a !important;
   }
-  .iso td.fill-yellow,
-  .iso th.fill-yellow {
+  .iso .fill-yellow {
     background: #ffe566 !important;
     color: #1a1a1a !important;
   }
-  .iso td.fill-red,
-  .iso th.fill-red {
+  .iso .fill-red,
+  .iso td.header.fill-red {
     background: #ff5050 !important;
     color: #1a1a1a !important;
+  }
+  .iso .fill-gray,
+  .iso .fill-gray input,
+  .iso .fill-gray select,
+  .iso .fill-green input,
+  .iso .fill-green select,
+  .iso .fill-yellow input,
+  .iso .fill-yellow select,
+  .iso .fill-red input,
+  .iso .fill-red select,
+  .iso .fill-gray input,
+  .iso .fill-gray select {
+    color: #1a1a1a !important;
+  }
+  .iso .fill-green input,
+  .iso .fill-green select {
+    background: #70ad47 !important;
+  }
+  .iso .fill-yellow input,
+  .iso .fill-yellow select {
+    background: #ffe566 !important;
+  }
+  .iso .fill-red input,
+  .iso .fill-red select {
+    background: #ff5050 !important;
+  }
+  .iso .fill-gray input,
+  .iso .fill-gray select {
+    background: #d9d9d9 !important;
+  }
+  .sheet-chart {
+    break-inside: avoid;
+    background: #fff !important;
+  }
+  .sheet-chart .recharts-text {
+    fill: #111 !important;
   }
   .iso-print-title,
   .iso-offscreen {

@@ -165,6 +165,7 @@ const RECORD_DELETE_MOUNTS = new Set([
   "/document-change-requests",
   "/feasibility",
   "/equipment",
+  "/iso-quality-forms",
 ]);
 
 const NESTED_DELETE = new Set(["items", "rows", "operations", "calibration", "versions", "attachments", "reviews", "template", "modules"]);

@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
-import { computeGageRR, PART_COUNT } from "./gageRRMath";
+import { computeGageRR, gageEvaluationFill, PART_COUNT } from "./gageRRMath";
+import "../../../routes/IsoForms/isoForm.css";
 
 interface CustomFormProps {
   data: Record<string, unknown>;
@@ -7,9 +8,6 @@ interface CustomFormProps {
 }
 
 const PARTS = Array.from({ length: PART_COUNT }, (_, i) => i + 1);
-const INPUT_CLASS =
-  "w-full rounded border border-border bg-[hsl(var(--form-input))] px-1.5 py-1 text-xs text-[hsl(var(--form-input-foreground))] outline-none focus:ring-1 focus:ring-primary";
-
 function numArray(v: unknown): number[] {
   const arr = Array.isArray(v) ? v : [];
   return PARTS.map((_, i) => (typeof arr[i] === "number" ? (arr[i] as number) : 0));
@@ -76,142 +74,167 @@ export function GageRRForm({ data, onChange }: CustomFormProps) {
     onChange(field, next);
   }
 
-  function headerField(label: string, name: string, type: "text" | "number" | "date" = "text") {
+  function field(label: string, name: string, type: "text" | "number" | "date" = "text") {
     return (
-      <label className="flex flex-col gap-1 text-xs">
-        <span className="font-semibold text-[hsl(var(--form-label-foreground))]">{label}</span>
-        <input
-          type={type}
-          className={INPUT_CLASS}
-          value={(data[name] as string | number) ?? ""}
-          onChange={(e) => onChange(name, type === "number" ? e.target.valueAsNumber : e.target.value)}
-        />
-      </label>
+      <input
+        className="iso-in"
+        type={type}
+        aria-label={label}
+        value={(data[name] as string | number) ?? ""}
+        onChange={(event) => onChange(name, type === "number" ? event.target.valueAsNumber : event.target.value)}
+      />
     );
   }
 
-  function measurementRow(label: string, field: "aTrial1" | "aTrial2" | "bTrial1" | "bTrial2", values: number[]) {
+  function measurementRow(label: string, fieldName: "aTrial1" | "aTrial2" | "bTrial1" | "bTrial2", values: number[]) {
     return (
       <tr>
-        <td className="border border-border bg-[hsl(var(--form-label))] px-2 py-1 text-xs font-medium text-[hsl(var(--form-label-foreground))]">{label}</td>
-        {values.map((v, i) => (
-          <td key={i} className="border border-border bg-[hsl(var(--form-input))] p-0.5">
-            <input
-              type="number"
-              className={INPUT_CLASS}
-              value={v || ""}
-              onChange={(e) => updateCell(field, i, e.target.valueAsNumber || 0)}
-            />
+        <td>{label}</td>
+        {values.map((value, index) => (
+          <td key={index}>
+            <input className="iso-in center" type="number" aria-label={`${label} part ${index + 1}`} value={value || ""} onChange={(event) => updateCell(fieldName, index, event.target.valueAsNumber || 0)} />
           </td>
         ))}
+        <td className="center">{fmt(values.reduce((sum, value) => sum + value, 0) / (values.length || 1), 3)}</td>
       </tr>
     );
   }
 
-  function derivedRow(label: string, values: number[]) {
+  function derivedRow(label: string, values: number[], average: number) {
     return (
       <tr>
-        <td className="border border-border bg-[hsl(var(--form-label))] px-2 py-1 text-xs font-medium text-[hsl(var(--form-label-foreground))]">{label}</td>
-        {values.map((v, i) => (
-          <td key={i} className="border border-border bg-[hsl(var(--form-input))] px-2 py-1 text-xs text-[hsl(var(--form-input-foreground))]">
-            {fmt(v, 2)}
+        <td>{label}</td>
+        {values.map((value, index) => (
+          <td key={index} className="center">
+            {fmt(value, 2)}
           </td>
         ))}
+        <td className="center">{fmt(average, 3)}</td>
       </tr>
     );
   }
+
+  const evaluation = result.systemEvaluation;
+  const pct = (value: number | null, digits: number) => (value == null ? "—" : `${fmt(value, digits)}%`);
 
   return (
-    <div className="flex flex-col gap-5 text-sm">
-      <h2 className="text-center text-base font-bold uppercase tracking-wide" style={{ color: "var(--form-heading, #1d3a5c)" }}>
-        Gage R&amp;R (Average and Range Method)
-      </h2>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {headerField("Device Number", "deviceNumber")}
-        {headerField("Part Number", "partNumber")}
-        {headerField("Characteristic", "characteristic")}
-        {headerField("Tolerance", "tolerance", "number")}
-        {headerField("Operator A Name", "operatorAName")}
-        {headerField("Operator B Name", "operatorBName")}
-        {headerField("Study Date", "studyDate", "date")}
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
-          <thead>
-            <tr>
-              <th className="border border-border bg-[hsl(var(--form-label))] px-2 py-1 text-left text-[hsl(var(--form-label-foreground))]">Part #</th>
-              {PARTS.map((p) => (
-                <th key={p} className="border border-border bg-[hsl(var(--form-label))] px-2 py-1 text-[hsl(var(--form-label-foreground))]">
-                  {p}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td colSpan={PART_COUNT + 1} className="bg-[hsl(var(--form-label))] px-2 py-1 text-xs font-bold text-[hsl(var(--form-label-foreground))]">
-                Operator A
+    <div className="iso-wrap aq-print-sheet">
+      <table className="iso" data-testid="gage-rr-sheet" aria-label="Gage R&R">
+        <tbody>
+          <tr>
+            <td className="title" colSpan={PART_COUNT + 2}>
+              GAGE R&amp;R
+            </td>
+          </tr>
+          <tr>
+            <td colSpan={4}>Doc ID: FRM-MSA-001 · Rev: A</td>
+            <td colSpan={PART_COUNT - 2}>Average and range method · D4 = 3.27 · K1 = 0.8862 · K2 = 0.7071 · K3 = 0.3146</td>
+          </tr>
+          <tr>
+            <td>Device number</td>
+            <td colSpan={3}>{field("Device number", "deviceNumber")}</td>
+            <td>Part number</td>
+            <td colSpan={3}>{field("Part number", "partNumber")}</td>
+            <td>Characteristic</td>
+            <td colSpan={2}>{field("Characteristic", "characteristic")}</td>
+            <td>{field("Unit", "unit")}</td>
+          </tr>
+          <tr>
+            <td>Operator A</td>
+            <td colSpan={3}>{field("Operator A", "operatorAName")}</td>
+            <td>Operator B</td>
+            <td colSpan={3}>{field("Operator B", "operatorBName")}</td>
+            <td>Tolerance</td>
+            <td>{field("Tolerance", "tolerance", "number")}</td>
+            <td>Date</td>
+            <td>{field("Study date", "studyDate", "date")}</td>
+          </tr>
+          <tr>
+            <td className="section" colSpan={PART_COUNT + 2}>
+              MEASUREMENTS
+            </td>
+          </tr>
+          <tr>
+            <td className="header">Part</td>
+            {PARTS.map((part) => (
+              <td key={part} className="header">
+                {part}
               </td>
-            </tr>
-            {measurementRow("Trial 1", "aTrial1", aTrial1)}
-            {measurementRow("Trial 2", "aTrial2", aTrial2)}
-            {derivedRow("Mean", result.meanA)}
-            {derivedRow("Range", result.rangeA)}
-            <tr>
-              <td colSpan={PART_COUNT + 1} className="bg-[hsl(var(--form-label))] px-2 py-1 text-xs font-bold text-[hsl(var(--form-label-foreground))]">
-                Operator B
-              </td>
-            </tr>
-            {measurementRow("Trial 1", "bTrial1", bTrial1)}
-            {measurementRow("Trial 2", "bTrial2", bTrial2)}
-            {derivedRow("Mean", result.meanB)}
-            {derivedRow("Range", result.rangeB)}
-            {derivedRow("Part Average (A & B)", result.partAvg)}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="rounded-lg border border-border bg-[hsl(var(--form-label))] p-4 text-[hsl(var(--form-label-foreground))]">
-        <h3 className="mb-3 text-sm font-semibold">Calculation</h3>
-        <div className="grid gap-x-6 gap-y-1.5 text-xs sm:grid-cols-2">
-          <div>
-            R̄ (Rśr) = (R̄A + R̄B) / 2 = <strong>{fmt(result.rBar)}</strong>
-          </div>
-          <div>
-            X̄ Diff = |mean A − mean B| = <strong>{fmt(result.xBarDiff)}</strong>
-          </div>
-          <div>
-            UCL_R = R̄ × D4 (3.27) = <strong>{fmt(result.uclR)}</strong>
-          </div>
-          <div className="sm:row-span-1" />
-          <div>
-            EV (Equipment Variation) = R̄ × K1 = <strong>{fmt(result.ev)}</strong>
-          </div>
-          <div>%EV &amp; Tol = {result.evPctTol === null ? "—" : `${fmt(result.evPctTol, 1)}%`}</div>
-          <div>
-            AV (Appraiser Variation) = <strong>{fmt(result.av)}</strong>
-          </div>
-          <div>%AV &amp; Tol = {result.avPctTol === null ? "—" : `${fmt(result.avPctTol, 1)}%`}</div>
-          <div>
-            PV (Part Variation) = R̄p × K3 = <strong>{fmt(result.pv)}</strong>
-          </div>
-          <div>%PV &amp; Tol = {result.pvPctTol === null ? "—" : `${fmt(result.pvPctTol, 1)}%`}</div>
-          <div className="text-sm font-bold">GRR = √(EV² + AV²) = {fmt(result.grr)}</div>
-          <div className="text-sm font-bold">
-            %GRR &amp; Tol = {result.grrPctTol === null ? "—" : `${fmt(result.grrPctTol, 1)}%`}
-          </div>
-        </div>
-        <div className="mt-4 rounded-md bg-primary/10 px-3 py-2 text-sm font-semibold text-primary">
-          System evaluation: {result.systemEvaluation || "Enter a tolerance to evaluate the system."}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        {headerField("Approval — Date", "approvalDate", "date")}
-        {headerField("Approval — Signature", "approvalSignature")}
-      </div>
+            ))}
+            <td className="header">Average</td>
+          </tr>
+          <tr>
+            <td className="header" colSpan={PART_COUNT + 2}>
+              Operator A
+            </td>
+          </tr>
+          {measurementRow("Trial 1", "aTrial1", aTrial1)}
+          {measurementRow("Trial 2", "aTrial2", aTrial2)}
+          {derivedRow("Mean X", result.meanA, result.meanA.reduce((sum, value) => sum + value, 0) / PART_COUNT)}
+          {derivedRow("Range RA", result.rangeA, result.raBar)}
+          <tr>
+            <td className="header" colSpan={PART_COUNT + 2}>
+              Operator B
+            </td>
+          </tr>
+          {measurementRow("Trial 1", "bTrial1", bTrial1)}
+          {measurementRow("Trial 2", "bTrial2", bTrial2)}
+          {derivedRow("Mean X", result.meanB, result.meanB.reduce((sum, value) => sum + value, 0) / PART_COUNT)}
+          {derivedRow("Range RB", result.rangeB, result.rbBar)}
+          {derivedRow("X p (part average)", result.partAvg, result.partAvg.reduce((sum, value) => sum + value, 0) / PART_COUNT)}
+          <tr>
+            <td className="section" colSpan={PART_COUNT + 2}>
+              CALCULATION
+            </td>
+          </tr>
+          <tr>
+            <td colSpan={4}>R = (RA + RB) / 2</td>
+            <td colSpan={2}>{fmt(result.rBar)}</td>
+            <td colSpan={3}>X diff = max mean − min mean</td>
+            <td colSpan={3}>{fmt(result.xBarDiff)}</td>
+          </tr>
+          <tr>
+            <td colSpan={4}>UCL R = R × D4</td>
+            <td colSpan={2}>{fmt(result.uclR)}</td>
+            <td colSpan={3}>Rp = max part average − min part average</td>
+            <td colSpan={3}>{fmt(Math.max(...result.partAvg) - Math.min(...result.partAvg))}</td>
+          </tr>
+          <tr>
+            <td colSpan={4}>EV = R × K1</td>
+            <td colSpan={2}>{fmt(result.ev, 4)}</td>
+            <td colSpan={3}>%EV &amp; Tol = 100 × (EV / Tol)</td>
+            <td colSpan={3}>{pct(result.evPctTol, 1)}</td>
+          </tr>
+          <tr>
+            <td colSpan={4}>AV = √[(X diff × K2)² − (EV² / nr)]</td>
+            <td colSpan={2}>{fmt(result.av, 4)}</td>
+            <td colSpan={3}>%AV &amp; Tol = 100 × (AV / Tol)</td>
+            <td colSpan={3}>{pct(result.avPctTol, 1)}</td>
+          </tr>
+          <tr>
+            <td colSpan={4}>PV = Rp × K3</td>
+            <td colSpan={2}>{fmt(result.pv, 4)}</td>
+            <td colSpan={3}>%PV &amp; Tol = 100 × (PV / Tol)</td>
+            <td colSpan={3}>{pct(result.pvPctTol, 1)}</td>
+          </tr>
+          <tr>
+            <td colSpan={4}>GRR = √(EV² + AV²)</td>
+            <td colSpan={2}>{fmt(result.grr, 4)}</td>
+            <td colSpan={3}>%GRR &amp; Tol = 100 × (GRR / Tol)</td>
+            <td colSpan={3}>{pct(result.grrPctTol, 0)}</td>
+          </tr>
+          <tr>
+            <td>System evaluation</td>
+            <td className={gageEvaluationFill(evaluation)} colSpan={PART_COUNT - 3} data-testid="gage-evaluation">
+              {evaluation || "Enter a tolerance to evaluate the system."}
+            </td>
+            <td>Approval date</td>
+            <td>{field("Approval date", "approvalDate", "date")}</td>
+            <td>Signature</td>
+            <td>{field("Approval signature", "approvalSignature")}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }

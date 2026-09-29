@@ -1,13 +1,35 @@
 import { pgTable, serial, text, timestamp, jsonb } from "drizzle-orm/pg-core";
 
 /** Filled copies of the ISO blank forms. `data.cells` holds the typed fields. Quarantine photos live in `data.photos`. */
-export const ISO_FORM_TYPES = ["internal_audit", "ncr_report", "quarantine_notice", "concession", "competency_training", "cross_training"] as const;
+export const ISO_FORM_TYPES = [
+  "internal_audit",
+  "ncr_report",
+  "quarantine_notice",
+  "concession",
+  "competency_training",
+  "cross_training",
+  "psw",
+  "turtle_diagram",
+  "quality_alert",
+  "first_article",
+  "customer_scorecard",
+  "failure_effectiveness",
+] as const;
 export type IsoFormType = (typeof ISO_FORM_TYPES)[number];
 
 export const isoQualityForms = pgTable("iso_quality_forms", {
   id: serial("id").primaryKey(),
   formType: text("form_type").$type<IsoFormType>().notNull(),
-  data: jsonb("data").$type<{ cells?: Record<string, string | number | boolean | null>; photos?: string }>().default({}),
+  data: jsonb("data")
+    .$type<{
+      cells?: Record<string, string | number | boolean | null>;
+      photos?: string;
+      lines?: Array<Record<string, string | number | null | undefined>>;
+      customers?: Array<Record<string, string | number | null | undefined>>;
+      problems?: Array<Record<string, unknown>>;
+      months?: string[];
+    }>()
+    .default({}),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });
