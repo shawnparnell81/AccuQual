@@ -93,6 +93,13 @@ describe("new blank forms", () => {
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-trn-002")).toMatchObject({ formId: "FRM-TRN-002", title: "GRADING RUBRIC: CROSS-TRAINING EVALUATION" });
     expect(SUGGESTED_SUBJECT_PATH["frm-ecr-001"]).toEqual(["Engineering", "Engineering Change Control", "Engineering Change Requests (ECR)"]);
     expect(SUGGESTED_SUBJECT_PATH["frm-dev-009"]).toEqual(["Engineering", "Design & Development"]);
+    expect(SUGGESTED_SUBJECT_PATH["frm-val-001"]).toEqual(["Engineering", "CSA", "Validation"]);
+    expect(SUGGESTED_SUBJECT_PATH["frm-dev-001"]).toEqual(["Engineering", "CSA", "Development"]);
+    expect(SUGGESTED_SUBJECT_PATH["frm-val-005"]).toEqual(["Engineering", "Gas/Electric Lifts", "Validation"]);
+    expect(SUGGESTED_SUBJECT_PATH["frm-fai-001"]).toEqual(["Quality", "FAI"]);
+    expect(SUGGESTED_SUBJECT_PATH["frm-qa-001"]).toEqual(["Quality", "Product Alerts"]);
+    expect(FILEABLE_FORM_KEYS.has("ncr")).toBe(false);
+    expect(FILEABLE_FORM_KEYS.has("8d")).toBe(false);
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-car-001")?.title).toBe("SUPPLIER CORRECTIVE ACTION REQUEST (SCAR)");
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-ncr-003")?.title).toBe("CONCESSION / DEVIATION REQUEST");
     expect(recordLinkedPath("frm-tst-001", 19)).toBe("/iso-forms/record/19");

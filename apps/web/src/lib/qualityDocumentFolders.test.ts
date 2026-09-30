@@ -10,11 +10,12 @@ describe("Quality document folders", () => {
     const quality = SIDEBAR_FOLDERS.find((folder) => folder.key === "quality");
     assert.ok(quality);
     const labels = quality.children.map((child) => child.label);
-    const fai = labels.indexOf("FAI");
+    const reports = labels.indexOf("Validation Reports");
     const alerts = labels.indexOf("Product Alerts");
     const recalls = labels.indexOf("Recalls");
     const warranty = labels.indexOf("Warranty");
-    assert.ok(fai >= 0 && alerts === fai + 1 && recalls === alerts + 1 && warranty === recalls + 1);
+    assert.ok(reports >= 0 && alerts === reports + 1 && recalls === alerts + 1 && warranty === recalls + 1);
+    assert.equal(labels.includes("FAI"), false);
 
     const links = flattenSidebarLinks(quality.children);
     assert.deepEqual(
@@ -37,7 +38,7 @@ describe("Quality document folders", () => {
     assert.ok(audits && isFolder(audits));
     assert.deepEqual(
       audits.children.map((child) => child.label),
-      ["Internal Audits", "Audit Plan", "Audit Schedule", "Audit Checklist", "FRM-GEN-001 INTERNAL AUDIT CHECKLIST", "INTERNAL AUDIT SUMMARY REPORT", "Audit Report"],
+      ["Internal Audits", "Audit Plan", "Audit Schedule", "Audit Checklist", "Audit Report"],
     );
 
     const links = flattenSidebarLinks([audits]);
@@ -63,5 +64,20 @@ describe("Quality document folders", () => {
 
     const link = flattenSidebarLinks(quality.children).find((item) => item.key === "obsolete-archive");
     assert.deepEqual(link && { label: link.label, path: link.path }, { label: "Obsolete / Archive", path: "/folders/obsolete-archive" });
+  });
+
+  it("lists Blank Forms under Workspace and keeps individual blanks out of the sidebar", () => {
+    const workspace = SIDEBAR_FOLDERS.find((folder) => folder.key === "workspace");
+    assert.ok(workspace);
+    const blank = workspace.children.find((child) => child.key === "blank-forms");
+    assert.ok(blank && !isFolder(blank));
+    assert.deepEqual({ label: blank.label, path: blank.path }, { label: "Blank Forms", path: "/blank-forms" });
+
+    const links = flattenSidebarLinks();
+    assert.equal(links.filter((link) => link.path.startsWith("/iso-forms/")).length, 0);
+    assert.equal(links.filter((link) => link.label === "Blank Forms").length, 1);
+    const engineering = SIDEBAR_FOLDERS.find((folder) => folder.key === "engineering");
+    assert.ok(engineering);
+    assert.equal(engineering.children.some((child) => child.key.startsWith("frm-")), false);
   });
 });

@@ -28,7 +28,7 @@ export function ParetoAnalysisPage() {
           <h1 className="text-2xl font-semibold">Pareto Analysis</h1>
           <p className="text-sm text-muted-foreground">{revisionLabel(documentNumber)}. Problem counts sort by frequency and the cumulative % line is calculated from the total.</p>
           <FormNumberEditor formKey="frm-par-001" />
-          <RecordFolderField formKey="frm-par-001" recordId={SINGLETON_ENTITY_ID} />
+          <RecordFolderField formKey="frm-par-001" recordId={SINGLETON_ENTITY_ID} prepare={() => saveNow()} />
         </div>
         <div className="flex items-center gap-2">
           <SaveStatus saving={isSaving || pending} unsaved={dirty && !isSaving && !pending} />

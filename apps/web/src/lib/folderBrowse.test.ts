@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { documentsFolderHref, filingLocation, folderChain, listFolder, openTarget, type BrowseFolder } from "./folderBrowse.ts";
+import { documentsFolderHref, filingLocation, folderChain, listFolder, openTarget, saveAsFolders, type BrowseFolder } from "./folderBrowse.ts";
 
 const tree: BrowseFolder[] = [
   { id: 1, name: "Quality", parentId: null, sortOrder: 0 },
@@ -48,5 +48,20 @@ describe("folder browse", () => {
     });
     assert.equal(filingLocation(null, [], null), null);
     assert.equal(documentsFolderHref(2), "/documents/folders?folder=2");
+  });
+
+  it("offers Documents folders for Save as and leaves the blank template library out", () => {
+    const library: BrowseFolder[] = [
+      ...tree,
+      { id: 10, name: "ISO Compliance Documents", parentId: null, sortOrder: 1 },
+      { id: 11, name: "Blank Form Templates", parentId: 10, sortOrder: 0 },
+      { id: 12, name: "Validation", parentId: 11, sortOrder: 0 },
+      { id: 13, name: "CSA", parentId: 1, sortOrder: 1 },
+      { id: 14, name: "Validation", parentId: 13, sortOrder: 0 },
+    ];
+    assert.deepEqual(
+      saveAsFolders(library).map((folder) => folder.id),
+      [1, 2, 3, 10, 13, 14],
+    );
   });
 });

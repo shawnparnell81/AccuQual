@@ -16,6 +16,7 @@ interface SavedTab {
 const EXACT = new Set([
   "/",
   "/home",
+  "/blank-forms",
   "/calendar",
   "/ncr",
   "/capa",
