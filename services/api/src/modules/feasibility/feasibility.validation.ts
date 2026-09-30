@@ -74,6 +74,10 @@ export const updateSignoffSchema = z.object({
   manufacturingSignoffSignature: z.string().nullable().optional(),
   purchasingSignoffName: z.string().optional(),
   purchasingSignoffSignature: z.string().nullable().optional(),
+});
+
+/** Document fields plus the signature PIN. The PIN is not part of the form structure. */
+export const signoffRequestSchema = updateSignoffSchema.extend({
   pin: z.string().regex(/^\d{4}$/).optional(),
   certified: z.literal(true).optional(),
 });

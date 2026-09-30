@@ -3,7 +3,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
-import { createFeasibilitySchema, updateFeasibilitySchema, updateSignoffSchema } from "./feasibility.validation.js";
+import { createFeasibilitySchema, updateFeasibilitySchema, signoffRequestSchema } from "./feasibility.validation.js";
 import {
   listFeasibilityHandler,
   createFeasibilityHandler,
@@ -34,6 +34,6 @@ feasibilityRouter.get("/", listFeasibilityHandler);
 feasibilityRouter.post("/", validate(createFeasibilitySchema), createFeasibilityHandler);
 feasibilityRouter.get("/:id", getFeasibilityHandler);
 feasibilityRouter.put("/:id", validate(updateFeasibilitySchema), updateFeasibilityHandler);
-feasibilityRouter.patch("/:id/signoff", validate(updateSignoffSchema), updateSignoffHandler);
+feasibilityRouter.patch("/:id/signoff", validate(signoffRequestSchema), updateSignoffHandler);
 feasibilityRouter.post("/:id/finalize", finalizeFeasibilityHandler);
 feasibilityRouter.delete("/:id", deleteFeasibilityHandler);
