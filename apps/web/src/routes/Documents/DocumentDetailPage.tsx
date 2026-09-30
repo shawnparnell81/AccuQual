@@ -23,6 +23,7 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { OBSOLETE_ARCHIVE_CATEGORY } from "../../components/layout/sidebarStructure";
 import { ObsoleteArchiveDialog } from "./ObsoleteArchiveDialog";
 import { isFullAccessRole } from "../../lib/fullAccess";
+import { documentControlStandard, revisionCodeFieldHint, revisionCodeFieldLabel, showingVersionLabel } from "../../lib/documentRevision";
 import { DOC_EDIT_REASON, DOC_LOOP, documentLoop, duePhrase, formatPerson, isPastDue, statusPhrase } from "../../lib/opsLanguage";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import type { TrainingCourse } from "../../api/types";
@@ -253,7 +254,7 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
       <RecordGlance
         crumbs={[{ label: "Documents", to: "/documents" }, { label: doc.title }]}
         title={doc.title}
-        standard={doc.currentVersion > 0 ? `${doc.revisionCode ?? `Rev ${doc.currentVersion}`} · document control` : "Not released yet · document control"}
+        standard={documentControlStandard(doc, current?.open ? { versionNumber: current.open.versionNumber, status: current.open.status, revisionCode: current.open.payload?.revisionCode } : null)}
         stateValue={doc.status}
         stateLabel={statusPhrase(doc.status)}
         owner={personName(doc.ownerId)}
@@ -354,9 +355,7 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
 
       {tab !== "versions" && tab !== "compliance" && shown && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span>
-            Showing <strong>version {shown.versionNumber}</strong> ({shown.payload?.revisionCode ?? "—"})
-          </span>
+          <span>{showingVersionLabel({ versionNumber: shown.versionNumber, status: shown.status, revisionCode: shown.payload?.revisionCode })}</span>
           <VersionStatusBadge status={shown.status} />
           {!editable && <span className="text-xs text-muted-foreground">Read-only{shown.status === "published" ? " — this is the released revision" : shown.status === "draft" && !mayEdit ? " — you can't edit documents" : ""}</span>}
           {viewId !== null && (
@@ -369,7 +368,7 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
 
       {tab === "details" && (
         <div className="rounded-lg border border-border bg-card p-4">
-          {!shown ? (v.current.isLoading ? <LoadingPlaceholder /> : <p className="text-sm text-muted-foreground">Nothing here yet. Start a draft above to write this document.</p>) : <DocumentDetailsPanel values={shownValues} editable={editable} onChange={change} summary={summary} onSummaryChange={(s) => { dirty.current = true; setSummary(s); }} />}
+          {!shown ? (v.current.isLoading ? <LoadingPlaceholder /> : <p className="text-sm text-muted-foreground">Nothing here yet. Start a draft above to write this document.</p>) : <DocumentDetailsPanel values={shownValues} editable={editable} onChange={change} summary={summary} onSummaryChange={(s) => { dirty.current = true; setSummary(s); }} revisionLabel={revisionCodeFieldLabel(shown.status)} revisionHint={revisionCodeFieldHint(shown.status)} />}
           {editable && report && report.errors.length > 0 && (
             <ul className="mt-3 list-disc pl-5 text-xs text-destructive">
               {report.errors.map((e) => (

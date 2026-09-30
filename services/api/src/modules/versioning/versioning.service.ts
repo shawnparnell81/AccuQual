@@ -119,13 +119,21 @@ export async function listVersions(db: Db, adapter: SubjectAdapter, subjectId: n
     .orderBy(desc(controlledVersions.versionNumber));
   const names = await userNames(db, rows.flatMap((r) => [r.createdBy, r.submittedBy, r.reviewedBy, r.publishedBy]));
   // The list omits payloads (they can be large); GET one version returns it.
-  return rows.map(({ payload: _payload, ...v }) => ({
+  // revisionCode is the one field the document screens need on every version,
+  // including a draft, so the list and the history can name it without a second fetch.
+  return rows.map(({ payload, ...v }) => ({
     ...v,
+    revisionCode: revisionCodeOf(payload),
     createdByName: nameOf(names, v.createdBy),
     submittedByName: nameOf(names, v.submittedBy),
     reviewedByName: nameOf(names, v.reviewedBy),
     publishedByName: nameOf(names, v.publishedBy),
   }));
+}
+
+function revisionCodeOf(payload: Record<string, unknown> | null | undefined): string | null {
+  const code = payload?.revisionCode;
+  return typeof code === "string" && code.trim() ? code.trim() : null;
 }
 
 async function userNames(db: Db, ids: (number | null)[]): Promise<Map<number, string>> {

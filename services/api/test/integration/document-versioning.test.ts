@@ -133,6 +133,12 @@ describe("Controlled documents: draft -> review -> publish (real DB + real HTTP 
       expect(c.open).toMatchObject({ id: v1, status: "draft", versionNumber: 1 });
       expect(c.open.payload).toMatchObject({ title: "Torque wrench calibration procedure", revisionCode: "Rev A", attachments: [], links: [] });
       expect(await hasEvent(docId, "draft_created")).toBe(true);
+      // The versioning list is the version history, including this unreleased draft.
+      // The release ledger stays empty until publish, so it must not be read as "no versions".
+      const versions = (await request(app).get(`/documents/${docId}/versions`).set(as(author))).body as { versionNumber: number; status: string; revisionCode: string | null }[];
+      expect(versions).toHaveLength(1);
+      expect(versions[0]).toMatchObject({ versionNumber: 1, status: "draft", revisionCode: "Rev A" });
+      expect((await request(app).get(`/documents/${docId}/history`).set(as(author))).body).toEqual([]);
     });
 
     it("won't send an empty draft for review", async () => {

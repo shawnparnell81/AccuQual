@@ -217,6 +217,12 @@ export const downloadVersionHandler = asyncHandler(async (req: Request, res: Res
   await sendStoredFile(res, version.fileUrl, `document-${version.documentId}-rev${version.version}.pdf`, "application/pdf", "preview");
 });
 
+/**
+ * Release ledger (document_versions): a row is written when a version is published.
+ * It is the source for retention age-out and for downloading a released file.
+ * It is not the version list. Drafts live in the versioning engine
+ * (GET /documents/:id/versions) and are absent here until they are published.
+ */
 export const historyHandler = asyncHandler(async (req: Request, res: Response) => {
   const versions = await req
     .db!.select()
