@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import clsx from "clsx";
+import { AuditFacts } from "./AuditFacts";
 import { WorkflowMetadataViewer } from "./WorkflowMetadataViewer";
 import { formatDateTime } from "../../lib/dates";
 import type { FieldChange, WorkflowHistoryEntry } from "../../api/types";
@@ -48,22 +49,6 @@ function resolveVisual(entry: WorkflowHistoryEntry): { icon: LucideIcon; bucket:
   if (/expire/i.test(specific)) return { icon: Clock, bucket: "warning" };
   if (/suspend|disqualif|remove/i.test(specific)) return { icon: Ban, bucket: "destructive" };
   return { icon: RefreshCw, bucket: "info" };
-}
-
-function summarize(entry: WorkflowHistoryEntry): string {
-  if (entry.action === "delete" && typeof entry.changes?.summary === "string") return entry.changes.summary;
-  if (entry.action === "transition_failed") {
-    return typeof entry.changes?.errorMessage === "string" ? entry.changes.errorMessage : "Transition failed";
-  }
-  const label = typeof entry.changes?.action === "string" ? (entry.changes.action as string) : entry.action;
-  return label.replace(/_/g, " ");
-}
-
-/** Best-effort resulting status, when the writer included one — see the Audit Trail Dictionary section 1: there's no stored "fromState", only whatever the write actually changed. */
-function resultingStatus(entry: WorkflowHistoryEntry): string | null {
-  const patch = entry.changes?.patch as Record<string, unknown> | undefined;
-  const status = patch?.status ?? entry.changes?.status ?? entry.changes?.to;
-  return typeof status === "string" ? status : null;
 }
 
 const HIDDEN = "[redacted]";
@@ -133,8 +118,6 @@ function FieldChangeList({ rows, limit }: { rows: FieldRow[]; limit?: number }) 
 export function WorkflowHistoryItem({ entry, highlighted }: { entry: WorkflowHistoryEntry; highlighted?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const { icon: Icon, bucket } = resolveVisual(entry);
-  const toStatus = resultingStatus(entry);
-  const editRows = toRows(entry.fieldChanges, ["UPDATE", "DELETE"]);
   const allRows = toRows(entry.fieldChanges, ["INSERT", "UPDATE", "DELETE"]);
 
   return (
@@ -147,18 +130,12 @@ export function WorkflowHistoryItem({ entry, highlighted }: { entry: WorkflowHis
           <Icon size={14} />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-            <span className={clsx("font-medium", entry.action !== "transition_failed" && entry.action !== "delete" && "capitalize")}>{summarize(entry)}</span>
-            <span className="flex-none text-xs text-muted-foreground">{formatDateTime(entry.createdAt)}</span>
-          </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            <span>{entry.performedByName ?? "System"}</span>
-            {toStatus && <span>→ now {toStatus.replace(/_/g, " ")}</span>}
-            <button onClick={() => setExpanded((e) => !e)} className="ml-auto flex items-center gap-1 text-accent hover:underline">
+          <AuditFacts entry={entry} when={formatDateTime(entry.createdAt)} whenIso={entry.createdAt} />
+          <div className="mt-1 flex justify-end">
+            <button type="button" onClick={() => setExpanded((e) => !e)} className="flex items-center gap-1 text-xs text-accent hover:underline">
               Details <ChevronDown size={12} className={clsx("transition-transform", expanded && "rotate-180")} />
             </button>
           </div>
-          <FieldChangeList rows={editRows} limit={5} />
           {expanded && (
             <div className="mt-2 rounded-md border border-border bg-card p-3">
               {allRows.length > 0 && (

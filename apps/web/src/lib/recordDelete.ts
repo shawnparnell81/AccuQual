@@ -10,14 +10,9 @@ export function canViewAuditLog(roleName: string | null | undefined): boolean {
   return !!roleName;
 }
 
-/** `NCR #3 "Bent flange"` — the name shown in the confirmation and the audit line. */
+/** `NCR #3 "Bent flange"` — the name shown in the delete confirmation. The audit line uses this same wording when the delete is recorded. */
 export function recordDeleteLabel(kind: string, id: number | string, title?: string | null): string {
   const trimmed = title?.trim();
   if (trimmed) return `${kind} #${id} "${trimmed}"`;
   return `${kind} #${id}`;
-}
-
-export function auditEventLabel(entry: { action: string; changes?: Record<string, unknown> | null }): string {
-  if (entry.action === "delete" && typeof entry.changes?.summary === "string") return entry.changes.summary;
-  return entry.action.replace(/_/g, " ");
 }

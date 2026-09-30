@@ -1,13 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { formatDateTime } from "../../lib/dates";
-import { auditEventLabel } from "../../lib/recordDelete";
+import type { AuditFieldChange } from "../../lib/auditLine";
+import { AuditFacts } from "./AuditFacts";
 import { LoadingPlaceholder } from "./LoadingPlaceholder";
 
 interface AuditRow {
   id: number;
   action: string;
   changes: Record<string, unknown> | null;
+  fieldChanges?: AuditFieldChange[] | null;
   performedByName: string | null;
   createdAt: string;
 }
@@ -38,14 +40,10 @@ export function EntityAuditTrailPanel({ entityType, entityId, title = "Audit Tra
       ) : sorted.length === 0 ? (
         <p className="text-sm text-muted-foreground">No history yet.</p>
       ) : (
-        <ul className="flex flex-col gap-1.5 text-sm">
+        <ul className="flex flex-col gap-3 text-sm">
           {sorted.map((r) => (
-            <li key={r.id} className="flex items-center justify-between border-b border-border pb-1.5 last:border-0">
-              <span className={r.action === "delete" ? undefined : "capitalize"}>{auditEventLabel(r)}</span>
-              <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>{r.performedByName ?? "System"}</span>
-                <span>{formatDateTime(r.createdAt)}</span>
-              </span>
+            <li key={r.id} className="border-b border-border pb-3 last:border-0">
+              <AuditFacts entry={r} when={formatDateTime(r.createdAt)} whenIso={r.createdAt} />
             </li>
           ))}
         </ul>
