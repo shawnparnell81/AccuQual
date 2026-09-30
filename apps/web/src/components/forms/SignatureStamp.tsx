@@ -37,10 +37,10 @@ export function SignatureStamp({
   const sheet = variant === "sheet";
 
   if (stamped) {
-    return <p className={sheet ? "whitespace-pre-wrap px-2 py-1.5 text-xs text-slate-900" : "whitespace-pre-wrap text-xs text-foreground"}>{stamped}</p>;
+    return <p className={sheet ? "whitespace-pre-wrap px-2 py-1.5 text-xs text-foreground" : "whitespace-pre-wrap text-xs text-foreground"}>{stamped}</p>;
   }
   if (disabled) {
-    return <p className={sheet ? "px-2 py-1.5 text-xs text-slate-500" : "text-xs text-muted-foreground"}>—</p>;
+    return <p className={sheet ? "px-2 py-1.5 text-xs text-muted-foreground" : "text-xs text-muted-foreground"}>—</p>;
   }
 
   async function submit(event: FormEvent) {
@@ -69,7 +69,7 @@ export function SignatureStamp({
 
   return (
     <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-1.5 py-1">
-      <label className={`flex items-start gap-2 text-[11px] leading-snug ${sheet ? "text-slate-800" : "text-foreground"}`}>
+      <label className="flex items-start gap-2 text-[11px] leading-snug text-foreground">
         <input type="checkbox" checked={certified} onChange={(event) => setCertified(event.target.checked)} className="mt-0.5" />
         <span>{certify}</span>
       </label>
@@ -85,7 +85,7 @@ export function SignatureStamp({
           onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
           className={
             sheet
-              ? "w-16 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs tracking-widest text-slate-900 outline-none"
+              ? "w-16 rounded border border-border bg-background px-1.5 py-0.5 text-xs tracking-widest text-foreground outline-none"
               : "w-20 rounded border border-border bg-background px-2 py-1 text-xs tracking-widest outline-none focus:ring-1 focus:ring-primary"
           }
           placeholder="PIN"
@@ -95,7 +95,7 @@ export function SignatureStamp({
           disabled={busy}
           className={
             sheet
-              ? "rounded bg-slate-900 px-2 py-0.5 text-xs font-medium text-white disabled:opacity-60"
+              ? "rounded bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground disabled:opacity-60"
               : "rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-60"
           }
         >
