@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage, extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
-import { AdminOnlyGuard } from "../../components/shared/AdminOnlyGuard";
+import { canEditFormStructure } from "../../lib/formStructureAccess";
+import { useCurrentUser } from "../../hooks/useAuth";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { FormTemplateStatus } from "../../api/types";
 import { FileDropZone } from "../../components/shared/FileDropZone";
@@ -141,12 +142,17 @@ function TemplatesTable() {
 }
 
 export function AdminCompanyTemplatesPage() {
+  const user = useCurrentUser();
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">Company Templates</h1>
-      <AdminOnlyGuard>
+      {canEditFormStructure(user) ? (
         <TemplatesTable />
-      </AdminOnlyGuard>
+      ) : (
+        <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+          Changing a form template is limited to quality and engineering roles. You can still fill a form.
+        </div>
+      )}
     </div>
   );
 }

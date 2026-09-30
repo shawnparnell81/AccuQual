@@ -6,6 +6,7 @@ import { AppError } from "../../utils/appError.js";
 import { getFormLayout } from "../forms/layouts/index.js";
 import { validateWorkflow } from "../workflow/workflow-graph.js";
 import type { WorkflowEdge, WorkflowNode } from "../workflow/workflow-engine.js";
+import { answersWithTemplateStamp, stripTemplateStamp } from "../forms/templateRevision.js";
 import { diffFormVersions, diffWorkflowVersions, type DiffResult, type WorkflowPayload } from "./diff.js";
 import * as engine from "./versioning.service.js";
 import type { Actor, SubjectAdapter } from "./versioning.service.js";
@@ -90,8 +91,9 @@ export function createFormAdapter(config: { subject: "management_review" | "cont
         .select()
         .from(formData)
         .where(and(eq(formData.formType, config.formType), eq(formData.entityId, subjectId)));
-      // version stays null: the record's own edit counter is not a version number in this scheme.
-      return { payload: row?.data ?? {}, version: null, author: row?.createdBy ?? null, exists: !!row };
+      // version stays null: the filled row's version column is not this document's review number.
+      // The template stamp is not part of the reviewed answers.
+      return { payload: stripTemplateStamp((row?.data ?? {}) as Record<string, unknown>), version: null, author: row?.createdBy ?? null, exists: !!row };
     },
 
     validate(payload) {
@@ -104,12 +106,14 @@ export function createFormAdapter(config: { subject: "management_review" | "cont
         .select()
         .from(formData)
         .where(and(eq(formData.formType, config.formType), eq(formData.entityId, subjectId)));
+      const data = answersWithTemplateStamp(`form:${config.formType}`, existing?.data, payload, !existing);
       if (existing) {
-        // The live form_data keeps its own snapshot trail too, so the forms module's history still tells the truth.
+        // Publishing reviewed answers does not change the form template revision.
         await db.insert(formVersions).values({ formId: existing.id, version: existing.version, data: existing.data, createdBy: info.actor });
-        await db.update(formData).set({ data: payload, version: existing.version + 1, updatedAt: new Date() }).where(eq(formData.id, existing.id));
+        await db.update(formData).set({ data, updatedAt: new Date() }).where(eq(formData.id, existing.id));
       } else {
-        await db.insert(formData).values({ formType: config.formType, entityId: subjectId, data: payload, version: 1, createdBy: info.actor });
+        const version = (data._formTemplate as { version: number }).version;
+        await db.insert(formData).values({ formType: config.formType, entityId: subjectId, data, version, createdBy: info.actor });
       }
     },
 

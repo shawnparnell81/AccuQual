@@ -6,6 +6,7 @@ import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { deleteRecord } from "../records/recordDeletion.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
+import { keptRevision, templateRevisionFor } from "../forms/templateRevision.js";
 import { getQmsFormDefinition, QMS_FORM_DEFINITIONS } from "./qmsFormDefinitions.js";
 
 async function loadForm(req: Request, id: number) {
@@ -31,7 +32,8 @@ export const createQmsFormHandler = asyncHandler(async (req: Request, res: Respo
   const { formType } = req.body as { formType: string };
   const definition = getQmsFormDefinition(formType);
   if (!definition) throw AppError.badRequest(`Unknown form type "${formType}"`);
-  const [created] = await req.db!.insert(qmsForms).values({ ...req.body, createdBy: req.user?.id }).returning();
+  const revision = templateRevisionFor(`qms:${formType}`).revision;
+  const [created] = await req.db!.insert(qmsForms).values({ ...req.body, revision, createdBy: req.user?.id }).returning();
   await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);
 });
@@ -49,7 +51,10 @@ export const updateQmsFormHandler = asyncHandler(async (req: Request, res: Respo
   if (record.status === "obsolete" && nextStatus && nextStatus !== "obsolete" && !isFullAccessRole(req.user?.roleName)) {
     throw AppError.forbidden("Only an Owner or Administrator can restore an obsolete form.");
   }
-  const [updated] = await req.db!.update(qmsForms).set({ ...req.body, updatedAt: new Date() }).where(eq(qmsForms.id, record.id)).returning();
+  const body = { ...(req.body as Record<string, unknown>) };
+  delete body.revision;
+  const revision = keptRevision(record.revision, templateRevisionFor(`qms:${record.formType}`).revision);
+  const [updated] = await req.db!.update(qmsForms).set({ ...body, revision, updatedAt: new Date() }).where(eq(qmsForms.id, record.id)).returning();
   await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
   res.json(updated);
 });

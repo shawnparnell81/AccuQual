@@ -86,6 +86,7 @@ test("a filled copy prints its stored document number and stays blank when it ha
   assert.equal(sheetRevision(""), "Rev: A");
   assert.equal(sheetRevision("   "), "Rev: A");
   assert.equal(sheetRevision("QA-14"), "Doc ID: QA-14 · Rev: A");
+  assert.equal(sheetRevision("QA-14", "C"), "Doc ID: QA-14 · Rev: C");
 });
 
 test("engineering, quality managers, and administrators can change a form number", () => {

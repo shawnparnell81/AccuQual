@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
+import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { PictureText } from "../../components/forms/PictureText";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
@@ -10,7 +11,7 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { fileChosenFolder, RecordFolderField, useFormFiling } from "../../components/forms/FormDocumentControls";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
-import { FORM_KEY_BY_TYPE, revisionLabel } from "../../lib/formDocument";
+import { FORM_KEY_BY_TYPE, instanceRevision, revisionLabel } from "../../lib/formDocument";
 import { formByType, type IsoFormType } from "../../lib/isoFormCatalog";
 import { EXCLUSIVE_CHECKS } from "../../lib/isoFormLayouts";
 import { showCell, quarantineTotal, type CellValue } from "../../lib/isoFormLogic";
@@ -194,8 +195,15 @@ function IsoFormDetailBody({
   const [saveNote, setSaveNote] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const filing = useFormFiling(formKey, record.id);
+  const templates = useQuery({
+    queryKey: ["form-templates"],
+    queryFn: async () => (await apiClient.get<{ templates: { formKey: string; formId: string }[] }>("/document-folders/form-templates")).data.templates,
+    enabled: !!formKey,
+  });
   const formType = record.formType;
-  const documentNumber = filing.data?.snapshotted ? filing.data.formNumber : "";
+  const liveFormId = templates.data?.find((item) => item.formKey === formKey)?.formId ?? "";
+  const documentNumber = filing.data?.snapshotted ? filing.data.formNumber : liveFormId;
+  const revision = instanceRevision(record.data, meta.rev);
 
   async function save() {
     setPending(true);
@@ -221,7 +229,7 @@ function IsoFormDetailBody({
           <div className="flex flex-col gap-2">
             <h1 className="text-2xl font-semibold">{meta.title}</h1>
             <p className="text-sm text-muted-foreground">
-              {revisionLabel(documentNumber, meta.rev)}
+              {revisionLabel(documentNumber, revision)}
               {" · "}
               <Link to={`/iso-forms/${meta.formKey}`} className="text-primary hover:underline">
                 Filled records
@@ -259,16 +267,16 @@ function IsoFormDetailBody({
         {formType === "cross_training" ? (
           <CrossTrainingSheet cells={cells} readOnly={!canEdit} onChange={changeCell} />
         ) : formType === "first_article" ? (
-          <FaiSheet cells={cells} lines={lines} readOnly={!canEdit} onCell={changeCell} onLines={setLines} documentNumber={documentNumber} />
+          <FaiSheet cells={cells} lines={lines} readOnly={!canEdit} onCell={changeCell} onLines={setLines} documentNumber={documentNumber} revision={revision} />
         ) : formType === "customer_scorecard" ? (
-          <ScorecardSheet cells={cells} customers={customers} readOnly={!canEdit} onCell={changeCell} onCustomers={setCustomers} documentNumber={documentNumber} />
+          <ScorecardSheet cells={cells} customers={customers} readOnly={!canEdit} onCell={changeCell} onCustomers={setCustomers} documentNumber={documentNumber} revision={revision} />
         ) : formType === "failure_effectiveness" ? (
-          <FailureChartSheet months={months} problems={problems} readOnly={!canEdit} onMonths={setMonths} onProblems={setProblems} documentNumber={documentNumber} />
+          <FailureChartSheet months={months} problems={problems} readOnly={!canEdit} onMonths={setMonths} onProblems={setProblems} documentNumber={documentNumber} revision={revision} />
         ) : (
           <>
             {meta.layout && (
               <div className={sheet === "photos" ? "iso-offscreen" : undefined}>
-                <IsoFormSheet layout={meta.layout} cells={cells} calculated={calculated} readOnly={!canEdit} onChange={changeCell} label={meta.title} documentNumber={formKey ? documentNumber : ""} />
+                <IsoFormSheet layout={meta.layout} cells={cells} calculated={calculated} readOnly={!canEdit} onChange={changeCell} label={meta.title} documentNumber={formKey ? documentNumber : ""} revision={revision} />
               </div>
             )}
             {meta.photos && (

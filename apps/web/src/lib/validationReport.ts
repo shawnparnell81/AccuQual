@@ -1,5 +1,6 @@
 /**
- * CSA Validation Report (FRM-VAL-001 Rev C), sheet "Test Report".
+ * CSA Validation (Rev C), sheet "Test Report".
+ * Later Excel workbooks should follow this same cell model: one address, a formula or fill, answers in data.cells.
  * Formula text and conditional-formatting ranges match the workbook.
  * Passed fill is theme accent6 (#4EA72E). Failed fill is #FF0000.
  * Row tints are the workbook theme colors at tint 0.8. Gray is lt2 at tint -0.25.
@@ -40,7 +41,8 @@ export function listOptions(formula: string): string[] {
 }
 
 export const SUPPLIER_OPTIONS = listOptions(SUPPLIER_LIST_FORMULA);
-export const INSPECTOR_OPTIONS = listOptions(INSPECTOR_LIST_FORMULA);
+export const DEFAULT_INSPECTOR = "Shawn Parnell";
+export const INSPECTOR_OPTIONS = [DEFAULT_INSPECTOR, ...listOptions(INSPECTOR_LIST_FORMULA)];
 
 const ERR_DIV = "#DIV/0!";
 const ERR_VALUE = "#VALUE!";
@@ -88,7 +90,7 @@ export function blankCells(): Record<string, CellValue> {
     F6: "",
     B7: "",
     F7: "",
-    B8: "",
+    B8: DEFAULT_INSPECTOR,
     F8: "",
     B12: 10,
     C12: "=",

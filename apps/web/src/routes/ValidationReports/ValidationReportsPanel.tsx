@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
+import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { formatDate } from "../../lib/dates";
 import { cellsFromData as fuelCellsFromData, overallResult as fuelOverall } from "../../lib/fuelPumpReport";
@@ -18,12 +19,7 @@ interface ValidationReport {
 
 const hooks = createResourceHooks<ValidationReport>("validation-reports");
 
-const FORM_IDS: Record<ValidationFormType, string> = { csa: "FRM-VAL-001", fuel_pump: "FRM-VAL-007" };
-
-function filedName(pattern: string, formId: string, recordNumber: number, createdAt?: string | null) {
-  const date = (createdAt ?? "").slice(0, 10);
-  return pattern.replaceAll("{formId}", formId).replaceAll("{recordNumber}", String(recordNumber)).replaceAll("{date}", date);
-}
+const FORM_KEYS: Record<ValidationFormType, string> = { csa: "frm-val-001", fuel_pump: "frm-val-007" };
 
 export function ValidationReportsPanel() {
   const navigate = useNavigate();
@@ -33,9 +29,8 @@ export function ValidationReportsPanel() {
   const { data: rows = [], isLoading, isError } = hooks.useList();
   const filing = useQuery({
     queryKey: ["form-templates"],
-    queryFn: async () => (await apiClient.get<{ fileNamePattern: string }>("/document-folders/form-templates")).data,
+    queryFn: async () => (await apiClient.get<{ templates: { formKey: string; formId: string }[] }>("/document-folders/form-templates")).data,
   });
-  const fileNamePattern = filing.data?.fileNamePattern ?? "{formId}_{recordNumber}_{date}";
   const createReport = hooks.useCreate();
   const [pendingKind, setPendingKind] = useState<ValidationFormType | null>(null);
 
@@ -51,8 +46,12 @@ export function ValidationReportsPanel() {
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Validation Report records</h2>
-          <p className="text-sm text-muted-foreground">Fill in FRM-VAL-001 or FRM-VAL-007, save it, and open it again from this folder.</p>
+          <h2 className="text-lg font-semibold">CSA Validation and Fuel Pump Validation</h2>
+          <p className="text-sm text-muted-foreground">Start a CSA Validation or a Fuel Pump Validation, save it, and open it again from this folder.</p>
+          <div className="mt-2 flex flex-wrap gap-4">
+            <FormNumberEditor formKey="frm-val-001" compact />
+            <FormNumberEditor formKey="frm-val-007" compact />
+          </div>
         </div>
         {canEdit && (
           <div className="flex flex-wrap gap-2">
@@ -62,7 +61,7 @@ export function ValidationReportsPanel() {
               disabled={createReport.isPending}
               className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
             >
-              {pendingKind === "csa" ? "Creating…" : "New Validation Report"}
+              {pendingKind === "csa" ? "Creating…" : "New CSA Validation"}
             </button>
             <button
               type="button"
@@ -79,7 +78,7 @@ export function ValidationReportsPanel() {
       {isError && <p className="text-sm text-destructive">Couldn't load validation reports.</p>}
       {!isLoading && !isError && rows.length === 0 && (
         <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-          No validation reports yet. Use New Validation Report or New Fuel Pump Validation to start one.
+          No validation reports yet. Use New CSA Validation or New Fuel Pump Validation to start one.
         </div>
       )}
       {rows.length > 0 && (
@@ -101,7 +100,8 @@ export function ValidationReportsPanel() {
                 const passed = result === "Pass" || result === "Passed";
                 const failed = result === "Fail" || result === "Failed";
                 const color = passed ? (kind === "fuel_pump" ? "#00B050" : "#4EA72E") : failed ? "#FF0000" : "transparent";
-                const name = filedName(fileNamePattern, FORM_IDS[kind], row.id, row.createdAt);
+                const number = filing.data?.templates.find((item) => item.formKey === FORM_KEYS[kind])?.formId?.trim() ?? "";
+                const name = number ? `${number} #${row.id}` : kind === "fuel_pump" ? `Fuel Pump Validation #${row.id}` : `CSA Validation #${row.id}`;
                 return (
                   <tr key={row.id} className="border-t border-border">
                     <td className="px-3 py-2 font-medium">

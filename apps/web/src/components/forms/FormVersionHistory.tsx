@@ -6,6 +6,20 @@ interface FormVersionHistoryProps {
   entityId: number;
 }
 
+function historyLabel(data: Record<string, unknown>): string {
+  const stamp = data._formTemplate;
+  if (stamp && typeof stamp === "object" && typeof (stamp as { revision?: unknown }).revision === "string") {
+    return `Rev ${(stamp as { revision: string }).revision}`;
+  }
+  return "Saved copy";
+}
+
+function previewData(data: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...data };
+  delete next._formTemplate;
+  return next;
+}
+
 /** Version list sidebar — view-only (no rollback yet, see README TODOs). */
 export function FormVersionHistory({ formType, entityId }: FormVersionHistoryProps) {
   const { data: versions = [], isLoading } = useFormHistory(formType, entityId);
@@ -19,11 +33,11 @@ export function FormVersionHistory({ formType, entityId }: FormVersionHistoryPro
       {versions.map((v) => (
         <li key={v.id} className="rounded border border-border p-2">
           <button className="flex w-full items-center justify-between" onClick={() => setExpanded(expanded === v.id ? null : v.id)}>
-            <span className="font-medium">Version {v.version}</span>
+            <span className="font-medium">{historyLabel(v.data)}</span>
             <span className="text-muted-foreground">{new Date(v.createdAt).toLocaleString()}</span>
           </button>
           {expanded === v.id && (
-            <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded bg-muted p-2">{JSON.stringify(v.data, null, 2)}</pre>
+            <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded bg-muted p-2">{JSON.stringify(previewData(v.data), null, 2)}</pre>
           )}
         </li>
       ))}

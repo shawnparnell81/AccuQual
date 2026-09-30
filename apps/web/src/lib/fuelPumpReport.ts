@@ -1,11 +1,11 @@
 /**
- * Fuel Pump Validation Document (FRM-VAL-007 Rev C).
+ * Fuel Pump Validation (Rev C).
  * Formula text matches the workbook, including both array formulas.
  * Blank cells in the containsBlanks range are #FFFF00.
  * Fail is #FF0000 and is checked before Pass (#00B050).
  */
 
-import type { CellValue } from "./validationReport";
+import { DEFAULT_INSPECTOR, type CellValue } from "./validationReport";
 
 export type { CellValue };
 
@@ -88,7 +88,7 @@ export function blankCells(): Record<string, CellValue> {
     G6: "",
     B7: "",
     G7: "",
-    B8: "",
+    B8: DEFAULT_INSPECTOR,
     G8: "",
     B29: "[Input Pressure Value From Drawing Here]",
     B30: "",

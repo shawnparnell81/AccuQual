@@ -21,6 +21,7 @@ interface FailureChartSheetProps {
   onMonths: (months: string[]) => void;
   onProblems: (problems: FailureRow[]) => void;
   documentNumber?: string;
+  revision?: string;
 }
 
 function visibleMonths(months: string[]): string[] {
@@ -37,7 +38,7 @@ function visibleProblems(problems: FailureRow[], monthCount: number): FailureRow
   return Array.from({ length: 8 }, () => blankFailureRow(monthCount));
 }
 
-export function FailureChartSheet({ months, problems, readOnly = false, onMonths, onProblems, documentNumber = "" }: FailureChartSheetProps) {
+export function FailureChartSheet({ months, problems, readOnly = false, onMonths, onProblems, documentNumber = "", revision = "A" }: FailureChartSheetProps) {
   const headers = visibleMonths(months);
   const rows = visibleProblems(problems, headers.length);
   const totals = failureColumnTotals(rows, headers.length);
@@ -75,7 +76,7 @@ export function FailureChartSheet({ months, problems, readOnly = false, onMonths
               </td>
             </tr>
             <tr>
-              <td colSpan={headers.length + 6}>{sheetRevision(documentNumber)}</td>
+              <td colSpan={headers.length + 6}>{sheetRevision(documentNumber, revision)}</td>
             </tr>
             <tr>
               <td className="header">No.</td>

@@ -11,14 +11,17 @@ import { parseApqpSummaryData } from "./apqpSummary.validation.js";
 import { noteRepeatNcr } from "../quality-automation/qualityAutomation.service.js";
 
 export const getTemplate = asyncHandler(async (req: Request, res: Response) => {
-  const template = await formsService.loadTemplate(req.db!, req.params.type!);
-  res.json(template);
+  const formType = req.params.type!;
+  const template = await formsService.loadTemplate(req.db!, formType);
+  const presented = formsService.presentForm(formType, { data: {} });
+  res.json({ ...template, templateRevision: presented?.templateRevision, templateVersion: presented?.templateVersion });
 });
 
 export const getForm = asyncHandler(async (req: Request, res: Response) => {
   const entityId = req.params.id ? Number(req.params.id) : undefined;
-  const form = await formsService.loadData(req.db!, req.params.type!, entityId);
-  res.json(form);
+  const formType = req.params.type!;
+  const form = await formsService.loadData(req.db!, formType, entityId);
+  res.json(formsService.presentForm(formType, form));
 });
 
 export const saveForm = asyncHandler(async (req: Request, res: Response) => {

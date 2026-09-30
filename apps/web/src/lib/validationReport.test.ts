@@ -28,7 +28,8 @@ test("workbook formulas are all present", () => {
 
 test("dropdown lists come from the sheet's data validation", () => {
   assert.deepEqual(SUPPLIER_OPTIONS, ["Sensen", "Jinbo", "----"]);
-  assert.deepEqual(INSPECTOR_OPTIONS, ["Timothy Therrien", "Glen Fulmore", "Ron Wertz", "Sam Giannetti", "Maxwell Tollefson", "Lee Beeson"]);
+  assert.deepEqual(INSPECTOR_OPTIONS, ["Shawn Parnell", "Timothy Therrien", "Glen Fulmore", "Ron Wertz", "Sam Giannetti", "Maxwell Tollefson", "Lee Beeson"]);
+  assert.equal(blankCells().B8, "Shawn Parnell");
   assert.deepEqual(listOptions("Sensen, Jinbo,     ----"), SUPPLIER_OPTIONS);
 });
 
@@ -95,7 +96,8 @@ test("the sheet keeps the workbook labels, including the original spelling", () 
     .filter(Boolean)
     .join("\n");
   assert.match(text, /CSA VALIDATION REPORT/);
-  assert.match(text, /Doc ID: FRM-VAL-001/);
+  assert.match(text, /Doc ID:/);
+  assert.equal(/FRM-VAL-/.test(text), false);
   assert.match(text, /Rev: C/);
   assert.match(text, /Effective Date: 03\/26\/2026/);
   assert.match(text, /athe approved DMA engineering drawing/);

@@ -2,8 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import type { Db } from "../../lib/requestDb.js";
-import { BLANK_FORMS_FOLDER, FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, fileNamePatternFor, type FormStart } from "./formFiling.js";
-import { EDITABLE_FORM_NUMBER_KEYS } from "./editableForms.js";
+import { BLANK_FORMS_FOLDER, FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, LEGACY_ASSIGNED_FORM_IDS, fileNamePatternFor, type FormStart } from "./formFiling.js";
 
 const PREVIOUS_ISO_ROOT = "ISO Compliance";
 const PREVIOUS_BLANK_FOLDER = "03_Blank_Forms_Templates";
@@ -97,9 +96,8 @@ export async function ensureFormTemplates(db: Db): Promise<void> {
     const folderGone = existing.folderId == null || !byId.has(existing.folderId);
     const nextFolderId = folderGone ? folderId : existing.folderId!;
     keep.add(nextFolderId);
-    // An admin can change the document number on the eight quality forms.
-    // The seed stays blank; do not put that blank back over a number they saved.
-    const nextFormId = EDITABLE_FORM_NUMBER_KEYS.has(seed.formKey) ? existing.formId : seed.formId;
+    // A number someone saved stays. A leftover FRM-xxx (or other invented seed) is cleared.
+    const nextFormId = LEGACY_ASSIGNED_FORM_IDS.has(existing.formId) ? "" : existing.formId;
     if (folderGone || existing.formId !== nextFormId || existing.title !== seed.title || existing.subjectRoute !== seed.subjectRoute) {
       await db
         .update(controlledFormTemplates)

@@ -45,7 +45,8 @@ export function useFormEditorState(formType: string, entityId: number, windowId?
   useEffect(() => {
     if (!formData) return;
     if (!hydrated.current || (formData.version !== lastServerVersion.current && !isDirty.current)) {
-      const next = formData.data ?? {};
+      const next = { ...(formData.data ?? {}) };
+      delete next._formTemplate;
       valuesRef.current = next;
       setValues(next);
       hydrated.current = true;

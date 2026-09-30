@@ -59,6 +59,7 @@ describe("Document Change Request (real DB + real HTTP path)", () => {
       .send({ formNo: "SOP-014", revision: "REV C", preparedBy: "J. Smith" });
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("draft");
+    expect(res.body.revision).toBe("A");
     dcrId = res.body.id;
 
     const [row] = await db.select().from(auditTrail).where(eq(auditTrail.entityType, "DocumentChangeRequest"));
@@ -67,10 +68,11 @@ describe("Document Change Request (real DB + real HTTP path)", () => {
   });
 
   it("updates the header, including the status checkboxes", async () => {
-    const res = await request(app).patch(`/document-change-requests/${dcrId}`).set("Authorization", `Bearer ${productionToken}`).send({ status: "active", approvedBy: "R. Lee" });
+    const res = await request(app).patch(`/document-change-requests/${dcrId}`).set("Authorization", `Bearer ${productionToken}`).send({ status: "active", approvedBy: "R. Lee", revision: "REV Z" });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("active");
     expect(res.body.approvedBy).toBe("R. Lee");
+    expect(res.body.revision).toBe("A");
   });
 
   it("adds a Change Request row", async () => {

@@ -18,6 +18,11 @@ export const formData = pgTable("form_data", {
   entityType: text("entity_type"), // ncr, capa, eight_d, audits, ...
   entityId: integer("entity_id"),
   data: jsonb("data").$type<Record<string, unknown>>().notNull(),
+  /**
+   * Template version captured when the instance was created.
+   * Saving answers does not change it. Rows saved before that rule may still
+   * hold an old edit count; the form shows data._formTemplate instead.
+   */
   version: integer("version").notNull().default(1),
   createdBy: integer("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),

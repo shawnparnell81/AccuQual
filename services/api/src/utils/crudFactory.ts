@@ -25,6 +25,10 @@ interface CrudOptions {
    */
   afterCreate?: (created: Record<string, unknown>, req: Request) => Promise<void>;
   afterUpdate?: (updated: Record<string, unknown>, req: Request) => Promise<void>;
+  /** Rewrites a create body before insert. Used to stamp a form's template revision. */
+  prepareCreate?: (body: Record<string, unknown>) => Record<string, unknown>;
+  /** Rewrites an update patch using the row already stored. Answer saves keep the template revision. */
+  mergeUpdate?: (existing: Record<string, unknown>, patch: Record<string, unknown>) => Record<string, unknown>;
   /**
    * Plant-scoped tables (issues, fixes, audits). Lists and creates use the
    * current plant (`req.siteId`). Get/update/delete allow any plant the
@@ -155,9 +159,10 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
   const create = asyncHandler(async (req: Request, res: Response) => {
     const { db } = requireDb(req);
     if (options.siteScoped && !req.siteId) throw AppError.forbidden("You aren't assigned to a plant, so you can't add records here.");
+    const createBody = options.prepareCreate ? options.prepareCreate(stripClientOwnedFields(req.body)) : stripClientOwnedFields(req.body);
     const [created] = await db
       .insert(table)
-      .values({ ...stripClientOwnedFields(req.body), createdBy: req.user?.id, ...(options.siteScoped ? { siteId: req.siteId } : {}) })
+      .values({ ...createBody, createdBy: req.user?.id, ...(options.siteScoped ? { siteId: req.siteId } : {}) })
       .returning();
     const createdId = (created as { id: number }).id;
     await recordAuditTrail(req.db!, {
@@ -187,9 +192,16 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
     const where = sitePredicate
       ? and(eq(idCol as never, id), sitePredicate)
       : eq(idCol as never, id);
+    let patch = stripClientOwnedFields(req.body);
+    if (options.mergeUpdate) {
+      const rows = await db.select().from(table).where(where);
+      const existing = rows[0] as Record<string, unknown> | undefined;
+      if (!existing) throw AppError.notFound(options.entityName);
+      patch = options.mergeUpdate(existing, patch);
+    }
     const [updated] = await db
       .update(table)
-      .set({ ...stripClientOwnedFields(req.body), updatedAt: new Date() })
+      .set({ ...patch, updatedAt: new Date() })
       .where(where)
       .returning();
     if (!updated) throw AppError.notFound(options.entityName);

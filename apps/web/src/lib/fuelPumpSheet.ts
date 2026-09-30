@@ -54,7 +54,7 @@ export function buildFuelPumpRows(): FuelCell[][] {
   const rows: FuelCell[][] = [];
   rows[1] = [label(1, 8, "A1", "FUEL PUMP VALIDATION DOCUMENT", "title"), label(10, 2, "J1", "Sample Pass/Fail")];
   rows[2] = [
-    label(1, 1, "A2", "Doc ID: FRM-VAL-007"),
+    label(1, 1, "A2", "Doc ID:"),
     label(2, 3, "B2", "Rev: C"),
     label(5, 1, "E2", "Effective Date:"),
     input(6, 1, "F2", { inputType: "date" }),

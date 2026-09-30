@@ -1,6 +1,7 @@
 import { eq, and } from "drizzle-orm";
 import { formData } from "../../drizzle/schema/forms.js";
 import type { Db } from "../../lib/requestDb.js";
+import { answersWithTemplateStamp, readTemplateStamp, templateRevisionFor } from "../forms/templateRevision.js";
 
 const FORM_TYPE = "ncr";
 const ENTITY_TYPE = "ncr";
@@ -96,9 +97,11 @@ export async function syncNcrFormData(db: Db, ncrId: number, patch: NcrFormSyncP
   if (patch.ncrClosureDate !== undefined) data.ncrClosureDate = patch.ncrClosureDate;
   if (patch.finalDispositionConfirmed !== undefined) data.finalDispositionConfirmed = patch.finalDispositionConfirmed;
 
+  const stamped = answersWithTemplateStamp(`form:${FORM_TYPE}`, existing?.data, data, !existing);
   if (existing) {
-    await db.update(formData).set({ data, updatedAt: new Date() }).where(eq(formData.id, existing.id));
+    await db.update(formData).set({ data: stamped, updatedAt: new Date() }).where(eq(formData.id, existing.id));
   } else {
-    await db.insert(formData).values({ formType: FORM_TYPE, entityType: ENTITY_TYPE, entityId: ncrId, data, createdBy });
+    const stamp = readTemplateStamp(stamped) ?? templateRevisionFor(`form:${FORM_TYPE}`);
+    await db.insert(formData).values({ formType: FORM_TYPE, entityType: ENTITY_TYPE, entityId: ncrId, data: stamped, version: stamp.version, createdBy });
   }
 }

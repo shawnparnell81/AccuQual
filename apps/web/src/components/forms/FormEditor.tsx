@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCreateFormVersion, exportFormPdf } from "../../api/formHooks";
+import { useCreateFormVersion, exportFormPdf, useFormTemplate } from "../../api/formHooks";
 import { useToast } from "../shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { FORM_FIELD_SPECS } from "./formFieldSpecs";
@@ -28,6 +28,7 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
   const fields = FORM_FIELD_SPECS[formType] ?? [];
   const queryClient = useQueryClient();
   const { formData, isLoading, values, updateField, saveNow, isSaving } = useFormEditorState(formType, entityId, windowId);
+  const templateQuery = useFormTemplate(formType);
   const [saveNote, setSaveNote] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const gageFiling = useFormFiling(formType === "gage_rr" ? "frm-msa-001" : null, entityId);
@@ -77,7 +78,7 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
     <PictureRecordProvider entityType={pictureRecord.entityType} entityId={pictureRecord.entityId}>
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>{formData ? `Version ${formData.version}` : "New form"}</span>
+        <span>{`Rev ${formData?.templateRevision ?? templateQuery.data?.templateRevision ?? "A"}`}</span>
         <span>{isSaving || pending ? "Saving…" : saveNote ?? "Auto-saved"}</span>
         {formType === "gage_rr" && (
           <button

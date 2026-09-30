@@ -6,9 +6,28 @@ import { AppError } from "../../utils/appError.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
+import { answersWithTemplateStamp } from "../forms/templateRevision.js";
 import { applyStepCompletion } from "./blank8dForm.js";
 
-export const baseHandlers = crudFactory(eightD, { entityName: "8D Report", idColumn: "id" });
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+export const baseHandlers = crudFactory(eightD, {
+  entityName: "8D Report",
+  idColumn: "id",
+  prepareCreate: (body) => ({
+    ...body,
+    data: answersWithTemplateStamp("form:eight_d", undefined, asRecord(body.data), true),
+  }),
+  mergeUpdate: (existing, patch) => {
+    if (!patch.data || typeof patch.data !== "object" || Array.isArray(patch.data)) return patch;
+    return {
+      ...patch,
+      data: answersWithTemplateStamp("form:eight_d", existing.data, patch.data as Record<string, unknown>, false),
+    };
+  },
+});
 
 /** D1-D8 step keys, in order. Completing D8 marks the report closed. */
 const STEP_KEYS = [
@@ -41,8 +60,13 @@ export const completeStepHandler = asyncHandler(async (req: Request, res: Respon
   if (!existing) throw AppError.notFound("8D Report");
 
   const stepKey = STEP_KEYS[step - 1] ?? "d1_team";
-  const payload = req.body.data as Record<string, unknown>;
-  const mergedData = applyStepCompletion((existing.data ?? {}) as Record<string, unknown>, stepKey, payload);
+  const payload = (req.body.data ?? {}) as Record<string, unknown>;
+  const mergedData = answersWithTemplateStamp(
+    "form:eight_d",
+    existing.data,
+    applyStepCompletion((existing.data ?? {}) as Record<string, unknown>, stepKey, payload),
+    false,
+  );
   const nextStep = Math.min(step + 1, 8);
 
   const [updated] = await req

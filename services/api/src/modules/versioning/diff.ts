@@ -186,7 +186,8 @@ export function diffFormVersions(layout: FormLayout | undefined, before: Record<
     }
   }
   // Anything stored that the layout doesn't describe still gets compared, labelled by its key.
-  for (const k of new Set([...Object.keys(before), ...Object.keys(after)])) if (!seen.has(k)) push(k, k, before[k], after[k]);
+  // The template stamp is the master revision, not an answer.
+  for (const k of new Set([...Object.keys(before), ...Object.keys(after)])) if (!seen.has(k) && k !== "_formTemplate") push(k, k, before[k], after[k]);
 
   return summarize(entries);
 }

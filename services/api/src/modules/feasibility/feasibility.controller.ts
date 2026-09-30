@@ -7,6 +7,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { deleteRecord } from "../records/recordDeletion.js";
 import { notifyDepartment } from "../notifications/notification.service.js";
 import { loadCompanyForSettings, getFeasibilitySettings, requiredDocumentDisplayNames } from "../settings/settings.service.js";
+import { keptRevision, templateRevisionFor } from "../forms/templateRevision.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 
 /** Full-record edit — engineering owns this document; same pattern as risk/workOrders/erp/rma.controller.ts's assertDepartment. */
@@ -91,7 +92,7 @@ export const createFeasibilityHandler = asyncHandler(async (req: Request, res: R
 
   const [created] = await req
     .db!.insert(feasibilityReviews)
-    .values({ ...areaDefaults, ...req.body, ownerId, createdBy: req.user?.id })
+    .values({ ...areaDefaults, ...req.body, ownerId, revision: templateRevisionFor("feasibility").revision, createdBy: req.user?.id })
     .returning();
   await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(hideSalesSignoff(created!));
@@ -107,9 +108,12 @@ export const updateFeasibilityHandler = asyncHandler(async (req: Request, res: R
   const record = await loadFeasibility(req, Number(req.params.id));
   if (record.status === "final") throw AppError.badRequest("This review is finalized — no further edits.");
 
+  const body = { ...(req.body as Record<string, unknown>) };
+  delete body.revision;
+  const revision = keptRevision(record.revision, templateRevisionFor("feasibility").revision);
   const [updated] = await req
     .db!.update(feasibilityReviews)
-    .set({ ...req.body, updatedAt: new Date() })
+    .set({ ...body, revision, updatedAt: new Date() })
     .where(eq(feasibilityReviews.id, record.id))
     .returning();
 
@@ -130,7 +134,9 @@ export const updateSignoffHandler = asyncHandler(async (req: Request, res: Respo
   if (record.status === "final") throw AppError.badRequest("This review is finalized — sign-offs are locked.");
   assertSignoffFieldsAllowed(req, req.body);
 
-  const patch: Record<string, unknown> = { ...req.body, updatedAt: new Date() };
+  const body = { ...(req.body as Record<string, unknown>) };
+  delete body.revision;
+  const patch: Record<string, unknown> = { ...body, revision: keptRevision(record.revision, templateRevisionFor("feasibility").revision), updatedAt: new Date() };
   for (const prefix of ["engineering", "quality", "manufacturing", "purchasing", "sales"]) {
     const sigKey = `${prefix}SignoffSignature`;
     const dateKey = `${prefix}SignoffDate`;

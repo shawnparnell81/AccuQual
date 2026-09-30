@@ -7,6 +7,8 @@ interface ValidationReportSheetProps {
   cells: Record<string, CellValue>;
   readOnly?: boolean;
   onChange: (addr: string, value: CellValue) => void;
+  documentNumber?: string;
+  revision?: string;
 }
 
 type Slot = SheetCell | "covered" | "empty" | "gap";
@@ -22,15 +24,20 @@ function occupy(grid: Slot[][], row: number, spec: SheetCell) {
   }
 }
 
-function shownText(spec: SheetCell, cells: Record<string, CellValue>, calculated: Record<string, CellValue>): string {
-  if (spec.kind === "label") return spec.text ?? "";
+function shownText(spec: SheetCell, cells: Record<string, CellValue>, calculated: Record<string, CellValue>, documentNumber: string, revision: string): string {
+  if (spec.kind === "label") {
+    const raw = spec.text ?? "";
+    if (raw.startsWith("Doc ID:")) return documentNumber.trim() ? `Doc ID: ${documentNumber.trim()}` : "Doc ID:";
+    if (/^Rev:\s/.test(raw)) return `Rev: ${revision}`;
+    return raw;
+  }
   if (spec.kind === "calc") return showValue(spec.addr, calculated[spec.addr] ?? null);
   if (spec.kind === "check") return "";
   if (spec.kind === "gray" || spec.kind === "empty") return "";
   return showValue(spec.addr, cells[spec.addr] ?? "");
 }
 
-export function ValidationReportSheet({ cells, readOnly = false, onChange }: ValidationReportSheetProps) {
+export function ValidationReportSheet({ cells, readOnly = false, onChange, documentNumber = "", revision = "C" }: ValidationReportSheetProps) {
   const rows = useMemo(() => buildSheetRows(), []);
   const calculated = useMemo(() => evaluate(cells), [cells]);
   const grid = useMemo(() => {
@@ -69,6 +76,8 @@ export function ValidationReportSheet({ cells, readOnly = false, onChange }: Val
                 calculated={calculated}
                 readOnly={readOnly}
                 onChange={onChange}
+                documentNumber={documentNumber}
+                revision={revision}
               />
             );
           }),
@@ -85,6 +94,8 @@ function Cell({
   calculated,
   readOnly,
   onChange,
+  documentNumber,
+  revision,
 }: {
   spec: SheetCell;
   place: CSSProperties;
@@ -92,8 +103,10 @@ function Cell({
   calculated: Record<string, CellValue>;
   readOnly: boolean;
   onChange: (addr: string, value: CellValue) => void;
+  documentNumber: string;
+  revision: string;
 }) {
-  const text = shownText(spec, cells, calculated);
+  const text = shownText(spec, cells, calculated, documentNumber, revision);
   const cf = conditionalFill(spec.addr, spec.kind === "calc" || spec.kind === "label" || spec.kind === "input" ? text : "");
   const pastel = spec.fill;
   const className = [

@@ -10,7 +10,7 @@ import type { FailureRow, ScorecardRow } from "../../lib/qualitySheetLogic";
 import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
-import { EDITABLE_FORM_KEYS, revisionLabel } from "../../lib/formDocument";
+import { revisionLabel } from "../../lib/formDocument";
 
 interface IsoQualityForm {
   id: number;
@@ -91,7 +91,7 @@ export function IsoFormListPage() {
           <p className="text-sm text-muted-foreground">
             {revisionLabel(liveFormId, meta.rev)}. The blank template is filed under ISO Compliance Documents / Blank Form Templates. A filled copy can be saved into any Documents folder.
           </p>
-          {EDITABLE_FORM_KEYS.has(form.formKey) && <FormNumberEditor formKey={form.formKey} />}
+          <FormNumberEditor formKey={form.formKey} />
         </div>
         {canEdit && (
           <button type="button" onClick={start} disabled={pending} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
