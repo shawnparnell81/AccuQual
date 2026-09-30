@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { ISO_FORMS } from "./isoFormCatalog";
+import { BATCH6_SHEET_TITLE, blankBatch6, evaluateElectronicCsa } from "./batch6Reports";
+
+test("electronic CSA and shock development stay separate from the earlier forms", () => {
+  assert.equal(BATCH6_SHEET_TITLE.dev_electronic_csa, "ELECTRONIC CSA DEVELOPMENT DOCUMENT");
+  assert.equal(BATCH6_SHEET_TITLE.dev_shock, "SHOCK ABSORBER DEVELOPMENT DOCUMENT");
+  assert.equal(BATCH6_SHEET_TITLE.engineering_change, "ENGINEERING CHANGE REQUEST (ECR)");
+  assert.equal(ISO_FORMS.find((form) => form.formKey === "frm-dev-012")?.formType, "dev_electronic_csa");
+  assert.equal(ISO_FORMS.find((form) => form.formKey === "frm-dev-013")?.formType, "dev_shock");
+  assert.equal(ISO_FORMS.find((form) => form.formKey === "frm-dev-001")?.formType, "dev_csa");
+  assert.equal(ISO_FORMS.find((form) => form.formKey === "frm-dev-008")?.formType, "dev_electronic_shock");
+  assert.equal(ISO_FORMS.filter((form) => form.formType === "internal_audit").length, 1);
+  assert.equal(ISO_FORMS.filter((form) => form.formType === "ncr_report").length, 1);
+  assert.equal(ISO_FORMS.filter((form) => form.formType === "quarantine_notice").length, 1);
+  assert.equal(ISO_FORMS.find((form) => form.formKey === "frm-ecr-001")?.formId, "");
+  assert.equal(blankBatch6("dev_electronic_csa").B10, "Shawn Parnell");
+  assert.equal(blankBatch6("dev_electronic_csa").E2, "Maxwell Tollefson");
+  assert.equal(blankBatch6("engineering_change").D5, "Shawn Parnell");
+});
+
+test("electronic CSA development matches the workbook spring formulas", () => {
+  const cells = blankBatch6("dev_electronic_csa");
+  assert.equal(evaluateElectronicCsa(cells).B30, "#DIV/0!");
+  cells.B8 = 4000;
+  cells.D8 = 50;
+  cells.B9 = 1;
+  cells.B33 = 10;
+  cells.B27 = 20;
+  cells.B24 = 2;
+  cells.B22 = 200;
+  cells.B34 = 100;
+  cells.B38 = 50;
+  cells.B40 = 10;
+  const result = evaluateElectronicCsa(cells);
+  assert.equal(result.B30, 4450);
+  const wheelMass = (4450 * 1) / 9.81;
+  const expectedHz = (1 / (2 * Math.PI)) * Math.sqrt((10 * 1000) / wheelMass);
+  assert.ok(Math.abs(Number(result.B31) - expectedHz) < 1e-9);
+  const index = (20 - 2) / 2;
+  const wahl = (4 * index - 1) / (4 * index - 4) + 0.615 / index;
+  const forceMax = (4450 * 3.25) / 2;
+  const expectedStress = (8 * 18 * forceMax * wahl) / (Math.PI * 2 ** 3);
+  assert.ok(Math.abs(Number(result.B32) - expectedStress) < 1e-6);
+  assert.equal(result.B39, 2);
+  assert.equal(result.B41, 0.2);
+});

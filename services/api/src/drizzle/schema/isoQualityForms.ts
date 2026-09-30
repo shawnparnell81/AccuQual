@@ -32,6 +32,9 @@ export const ISO_FORM_TYPES = [
   "dev_air_strut",
   "dev_brake_wear",
   "dev_electronic_shock",
+  "dev_electronic_csa",
+  "dev_shock",
+  "engineering_change",
   "scar_request",
 ] as const;
 export type IsoFormType = (typeof ISO_FORM_TYPES)[number];
@@ -57,6 +60,7 @@ export const isoQualityForms = pgTable("iso_quality_forms", {
       approvedSignature?: string;
       engineeringSignoffSignature?: string;
       managerSignature?: string;
+      supplierRepSignature?: string;
     }>()
     .default({}),
   createdAt: timestamp("created_at").defaultNow(),

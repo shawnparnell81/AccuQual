@@ -33,6 +33,9 @@ export const ISO_FORM_TYPES = [
   "dev_air_strut",
   "dev_brake_wear",
   "dev_electronic_shock",
+  "dev_electronic_csa",
+  "dev_shock",
+  "engineering_change",
   "scar_request",
 ] as const;
 export type IsoFormType = (typeof ISO_FORM_TYPES)[number];
@@ -78,6 +81,9 @@ export const ISO_FORMS: IsoFormMeta[] = [
   { formKey: "frm-dev-009", formType: "dev_air_compressor", formId: "", title: "Air Compressor Development Document", rev: "A", layout: null, photos: false },
   { formKey: "frm-dev-010", formType: "dev_fuel_injector", formId: "", title: "Fuel Injector Development Document", rev: "A", layout: null, photos: false },
   { formKey: "frm-dev-011", formType: "dev_electric_lift", formId: "", title: "Electric Lift Support Development Document", rev: "B", layout: null, photos: false },
+  { formKey: "frm-dev-012", formType: "dev_electronic_csa", formId: "", title: "Electronic CSA Development Document", rev: "A", layout: null, photos: false },
+  { formKey: "frm-dev-013", formType: "dev_shock", formId: "", title: "Shock Absorber Development Document", rev: "A", layout: null, photos: false },
+  { formKey: "frm-ecr-001", formType: "engineering_change", formId: "", title: "Engineering Change Request (ECR)", rev: "A", layout: null, photos: false },
   { formKey: "frm-car-001", formType: "scar_request", formId: "", title: "Supplier Corrective Action Request (SCAR)", rev: "A", layout: null, photos: false },
 ];
 

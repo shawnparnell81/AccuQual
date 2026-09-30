@@ -52,6 +52,9 @@ export const FILEABLE_FORM_KEYS = new Set<string>([
   "frm-dev-009",
   "frm-dev-010",
   "frm-dev-011",
+  "frm-dev-012",
+  "frm-dev-013",
+  "frm-ecr-001",
   "frm-car-001",
 ]);
 
@@ -82,6 +85,9 @@ export const FORM_KEY_BY_TYPE: Record<string, string> = {
   dev_air_compressor: "frm-dev-009",
   dev_fuel_injector: "frm-dev-010",
   dev_electric_lift: "frm-dev-011",
+  dev_electronic_csa: "frm-dev-012",
+  dev_shock: "frm-dev-013",
+  engineering_change: "frm-ecr-001",
   scar_request: "frm-car-001",
 };
 

@@ -55,6 +55,9 @@ export const FILEABLE_FORM_KEYS = new Set<string>([
   "frm-dev-009",
   "frm-dev-010",
   "frm-dev-011",
+  "frm-dev-012",
+  "frm-dev-013",
+  "frm-ecr-001",
   "frm-car-001",
 ]);
 
@@ -84,6 +87,9 @@ export const ISO_TYPE_TO_FORM_KEY: Record<string, string> = {
   dev_air_compressor: "frm-dev-009",
   dev_fuel_injector: "frm-dev-010",
   dev_electric_lift: "frm-dev-011",
+  dev_electronic_csa: "frm-dev-012",
+  dev_shock: "frm-dev-013",
+  engineering_change: "frm-ecr-001",
   scar_request: "frm-car-001",
 };
 
@@ -135,6 +141,9 @@ export const SUGGESTED_SUBJECT_PATH: Record<string, string[]> = {
   "frm-dev-009": ["Engineering", "Design & Development"],
   "frm-dev-010": ["Engineering", "Design & Development"],
   "frm-dev-011": ["Engineering", "Design & Development"],
+  "frm-dev-012": ["Engineering", "Design & Development"],
+  "frm-dev-013": ["Engineering", "Design & Development"],
+  "frm-ecr-001": ["Engineering", "Engineering Change Control", "Engineering Change Requests (ECR)"],
   "frm-car-001": ["Quality", "Corrective & Preventive Actions"],
 };
 

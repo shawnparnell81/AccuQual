@@ -53,6 +53,10 @@ const FORM_SIGNATURES: Record<string, Record<string, string>> = {
   scar_request: {
     managerSignature: "I certify that I verified this supplier corrective action request.",
   },
+  engineering_change: {
+    managerSignature: "I certify that I approve this engineering change request.",
+    supplierRepSignature: "I certify that I represent the supplier on this engineering change request.",
+  },
 };
 
 export const signIsoQualityForm = asyncHandler(async (req: Request, res: Response) => {

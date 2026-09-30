@@ -79,6 +79,13 @@ describe("new blank forms", () => {
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-dev-006")?.start?.body).toEqual({ formType: "dev_air_strut", data: { cells: { F2: "Maxwell Tollefson", B9: "Shawn Parnell" } } });
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-val-010")?.start?.body).toEqual({ data: { formType: "air_strut", cells: {} } });
     expect(FILEABLE_FORM_KEYS.has("frm-dev-011")).toBe(true);
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-dev-012")).toMatchObject({ formId: "", title: "Electronic CSA Development Document" });
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-dev-013")?.title).toBe("Shock Absorber Development Document");
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-ecr-001")).toMatchObject({ formId: "", title: "Engineering Change Request (ECR)", subjectRoute: "/iso-forms/frm-ecr-001" });
+    expect(FORM_TEMPLATES.filter((form) => form.formKey === "frm-ncr-001")).toHaveLength(1);
+    expect(FORM_TEMPLATES.filter((form) => form.formKey === "frm-ncr-002")).toHaveLength(1);
+    expect(FORM_TEMPLATES.filter((form) => form.formKey === "frm-gen-001")).toHaveLength(1);
+    expect(SUGGESTED_SUBJECT_PATH["frm-ecr-001"]).toEqual(["Engineering", "Engineering Change Control", "Engineering Change Requests (ECR)"]);
     expect(SUGGESTED_SUBJECT_PATH["frm-dev-009"]).toEqual(["Engineering", "Design & Development"]);
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-car-001")?.title).toBe("Supplier Corrective Action Request (SCAR)");
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-ncr-003")?.title).toBe("Concession / Deviation Request");
