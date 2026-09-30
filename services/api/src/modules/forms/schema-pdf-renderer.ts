@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { Block, FormLayout, TableColumn } from "./layouts/types.js";
+import { hydrateDimensionalRow, measuredCellValue, passFailPdfPalette } from "../../utils/passFail.js";
 import { FMEA_PDF_TONE, fmeaCellValue, fmeaComputedTone } from "./fmeaPriority.js";
 import { pictureTextToPlain } from "../attachments/inlinePicture.js";
 
@@ -191,7 +192,10 @@ function drawTable(
   minRows: number | undefined,
   legend: string | undefined
 ) {
-  const rows = (data[name] as Record<string, unknown>[] | undefined) ?? [];
+  const source = (data[name] as Record<string, unknown>[] | undefined) ?? [];
+  const rows = columns.some((col) => col.formula === "dimensionalPassFail")
+    ? source.map((row) => hydrateDimensionalRow(row && typeof row === "object" ? row : {}))
+    : source;
   const rowCount = fixedRowLabels ? fixedRowLabels.length : Math.max(rows.length, minRows ?? 1);
 
   const span = contentWidth(ctx);
@@ -249,9 +253,9 @@ function drawTable(
     }
 
     for (const col of columns) {
-      const value = fmeaCellValue(col.formula, row, row[col.key]);
+      const value = measuredCellValue(col.formula, row, fmeaCellValue(col.formula, row, row[col.key]));
       const tone = fmeaComputedTone(col.formula, value);
-      const palette = tone ? FMEA_PDF_TONE[tone] : null;
+      const palette = tone ? FMEA_PDF_TONE[tone] : col.kind === "computed" ? passFailPdfPalette(value) : null;
       ctx.page.drawRectangle({
         x,
         y: ctx.y - rowHeight,

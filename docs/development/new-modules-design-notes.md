@@ -141,3 +141,50 @@ before course B isn't modeled); the existing "Competency Matrix" *form*
 is intentionally untouched and separate from this module's computed
 "Training status" view — they answer different questions and were never
 meant to be merged.
+
+## Pass/Fail is calculated
+
+Every AccuQual form that has a Pass/Fail result (or the same kind of
+disposition) calculates that result from the requirement and the
+measured value. Inside the tolerance is Pass, shown green. Outside the
+tolerance is Fail, shown red. The cell stays blank until both sides of
+the comparison are filled, and it is not a dropdown.
+
+The check lives in `services/api/src/utils/passFail.ts` (re-exported for
+grids from `apps/web/src/lib/passFail.ts`). A new measured grid calls
+`rowPassFail` — or adds a `kind: "computed"` column whose formula is
+`dimensionalPassFail` or `characteristicStatus` — instead of a Pass/Fail
+select. Screen, saved JSON, and PDF all use that result. No migration:
+the word is stored on the row that already holds the readings.
+
+Reference sheet: Production Part Approval — Dimensional Test Results
+(`dimensional_report`). Each row's Nominal, Tolerance, and Actual fill
+Pass / Fail. An older row that still has Specification / Limits and
+Organization Measurement Results is copied into those three columns the
+next time the form opens.
+
+Also calculated:
+
+- First Article Inspection (same dimensional sheet) — already calculated
+  on screen; the word is now stored on the line when the record is saved.
+- Final Inspection key characteristics — Specification & Tolerance
+  against Actual Result(s).
+- Quality Inspection checklist rows — when Min, Max, and Actual Value
+  are filled. A row with no numbers (a visual check) still uses the
+  Pass/Fail choice.
+
+Already calculated, left as they are: CSA Validation Report row results,
+and Fuel Pump measured results plus the section 6 Pass/Fail.
+
+Left as a manual choice, because the row is a judgment rather than a
+tolerance check, or because the sheet already has a deliberate override:
+
+- NCR corrective-action effectiveness, and the rest of NCR / CAPA / 8D.
+- DVP&R OK / KO, Appearance Approval OK / NOT OK, calibration
+  pass / fail / adjusted.
+- Final inspection prerequisite, product, and packaging rows
+  (Pass / Fail / N/A).
+- Fuel Pump section 7 further review (a later human decision after a
+  failed sample).
+- CSA overall disposition, which includes Conditional Pass.
+- Quality inspection rows that have no numeric min, max, and actual.

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import type { Block, FormLayout, RowBlock, TableBlock, TextareaBlock, YesNoBlock } from "./layouts/types";
+import { passFailPaint } from "../../lib/passFail";
 import { materializeRow, STATUS_COLORS } from "./formulas";
 import { FMEA_TONE_CLASS, FMEA_TONE_NAME, fmeaCellValue, fmeaComputedTone } from "./fmeaPriority";
 import { DetailsDisclosure } from "./DetailsDisclosure";
@@ -410,6 +411,7 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
                       type={inputTypeForFieldKind(col.kind)}
                       min={col.min}
                       max={col.max}
+                      placeholder={col.placeholder}
                       className="w-full bg-transparent text-xs outline-none"
                       value={(row[col.key] as string | number) ?? ""}
                       onChange={(e) =>
@@ -491,6 +493,14 @@ function ComputedCell({ value, formula }: { value: unknown; formula?: string }) 
     );
   }
   const label = String(value);
+  const measured = passFailPaint(label);
+  if (measured) {
+    return (
+      <span className="inline-block whitespace-nowrap rounded-sm px-2 py-0.5 text-center text-xs font-semibold" style={{ backgroundColor: measured.bg, color: measured.fg }}>
+        {label}
+      </span>
+    );
+  }
   const colors = STATUS_COLORS[label];
   if (colors) {
     return (

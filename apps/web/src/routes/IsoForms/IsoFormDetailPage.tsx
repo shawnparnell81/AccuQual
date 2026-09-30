@@ -16,6 +16,7 @@ import { formByType, type IsoFormType } from "../../lib/isoFormCatalog";
 import { EXCLUSIVE_CHECKS } from "../../lib/isoFormLayouts";
 import { showCell, quarantineTotal, type CellValue } from "../../lib/isoFormLogic";
 import { QUALITY_EXCLUSIVE_CHECKS } from "../../lib/qualitySheetLayouts";
+import { faiResult } from "../../lib/passFail";
 import { plusDays, type FailureRow, type FaiLine, type ScorecardRow } from "../../lib/qualitySheetLogic";
 import { CrossTrainingSheet } from "./CrossTrainingSheet";
 import { FailureChartSheet } from "./FailureChartSheet";
@@ -80,10 +81,13 @@ export function IsoFormDetailPage() {
 
   const saved = record.data ?? {};
   const formType = record.formType;
+  const scoredLines = (rows: FaiLine[]) => rows.map((line) => ({ ...line, result: faiResult(line.nominal, line.tolerance, line.actual) }));
+  const currentLines = formType === "first_article" ? scoredLines(lines) : lines;
+  const savedLines = formType === "first_article" ? scoredLines(saved.lines ?? []) : (saved.lines ?? []);
   const dirty =
     JSON.stringify(cells) !== JSON.stringify(saved.cells ?? {}) ||
     photos !== (saved.photos ?? "") ||
-    JSON.stringify(lines) !== JSON.stringify(saved.lines ?? []) ||
+    JSON.stringify(currentLines) !== JSON.stringify(savedLines) ||
     JSON.stringify(customers) !== JSON.stringify(saved.customers ?? []) ||
     JSON.stringify(problems) !== JSON.stringify(saved.problems ?? []) ||
     JSON.stringify(months) !== JSON.stringify(saved.months ?? []);
@@ -122,7 +126,7 @@ export function IsoFormDetailPage() {
   function payload(): IsoFormData {
     const data: IsoFormData = { cells: cells ?? {} };
     if (meta?.photos) data.photos = photos;
-    if (formType === "first_article") data.lines = lines;
+    if (formType === "first_article") data.lines = currentLines;
     if (formType === "customer_scorecard") data.customers = customers;
     if (formType === "failure_effectiveness") {
       data.problems = problems;

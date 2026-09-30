@@ -4,7 +4,8 @@ import type { FormLayout } from "./types";
  * Derived 1:1 from the source "Dimensional Report.pdf" (Production Part
  * Approval — Dimensional Test Results). The source spans 2 PDF pages only
  * because its 24-row table is too wide to print in one column group; here
- * it's one continuous table.
+ * it's one continuous table. Pass / Fail is calculated from Nominal,
+ * Tolerance, and Actual (see services/api/src/utils/passFail.ts).
  */
 export const dimensionalReportLayout: FormLayout = {
   formType: "dimensional_report",
@@ -56,12 +57,14 @@ export const dimensionalReportLayout: FormLayout = {
           minRows: 24,
           columns: [
             { key: "dimensionSpecification", label: "Dimension / Specification", kind: "textarea" },
-            { key: "specificationLimits", label: "Specification / Limits", kind: "text" },
+            { key: "nominal", label: "Nominal", kind: "text" },
+            { key: "tolerance", label: "Tolerance", kind: "text", placeholder: "±0.10" },
+            { key: "actual", label: "Actual", kind: "text" },
+            { key: "passFail", label: "Pass / Fail", kind: "computed", formula: "dimensionalPassFail" },
             { key: "testDate", label: "Test Date", kind: "date" },
             { key: "qtyTested", label: "Qty. Tested", kind: "number" },
-            { key: "measurementResults", label: "Organization Measurement Results (Data)", kind: "text" },
-            { key: "okNotOk", label: "OK / Not OK", kind: "checkboxGroup", options: ["OK", "Not OK"] },
           ],
+          legend: "Pass / Fail is calculated from Nominal, Tolerance, and Actual. Inside the tolerance is Pass (green). Outside is Fail (red).",
         },
         {
           type: "row",
