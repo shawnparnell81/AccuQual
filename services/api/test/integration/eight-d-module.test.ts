@@ -66,7 +66,8 @@ describe("8D report module (real DB + real HTTP path)", () => {
     const id = await create8D(qualityToken);
     const res = await request(app).get(`/8d/${id}`).set("Authorization", `Bearer ${qualityToken}`);
     expect(res.body.currentStep).toBe(1);
-    expect(res.body.data).toEqual({});
+    expect(res.body.data.d1_team).toBeUndefined();
+    expect(res.body.data._formTemplate).toMatchObject({ version: 1, revision: "A" });
   });
 
   it("completing a step stores its data under the right D-key and advances currentStep", async () => {
