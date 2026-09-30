@@ -26,6 +26,12 @@ export const ISO_FORM_TYPES = [
   "dev_gas_lift",
   "dev_coil",
   "dev_air_spring",
+  "dev_air_compressor",
+  "dev_fuel_injector",
+  "dev_electric_lift",
+  "dev_air_strut",
+  "dev_brake_wear",
+  "dev_electronic_shock",
   "scar_request",
 ] as const;
 export type IsoFormType = (typeof ISO_FORM_TYPES)[number];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canEditFormNumber, resolveFolderPath, folderPathNames, recordLinkedPath, FILEABLE_FORM_KEYS, validationKind } from "../src/modules/document-folders/editableForms.js";
+import { canEditFormNumber, resolveFolderPath, folderPathNames, recordLinkedPath, FILEABLE_FORM_KEYS, SUGGESTED_SUBJECT_PATH, validationKind } from "../src/modules/document-folders/editableForms.js";
 import { FORM_TEMPLATES } from "../src/modules/document-folders/formFiling.js";
 
 describe("form number editors", () => {
@@ -75,6 +75,11 @@ describe("new blank forms", () => {
     expect(recordLinkedPath("frm-val-002", 13)).toBe("/validation-reports/13");
     expect(FILEABLE_FORM_KEYS.has("frm-val-006")).toBe(true);
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-dev-001")).toMatchObject({ formId: "", title: "CSA Development Document" });
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-dev-006")).toMatchObject({ formId: "", title: "Air Strut Development Document", subjectRoute: "/iso-forms/frm-dev-006" });
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-dev-006")?.start?.body).toEqual({ formType: "dev_air_strut", data: { cells: { F2: "Maxwell Tollefson", B9: "Shawn Parnell" } } });
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-val-010")?.start?.body).toEqual({ data: { formType: "air_strut", cells: {} } });
+    expect(FILEABLE_FORM_KEYS.has("frm-dev-011")).toBe(true);
+    expect(SUGGESTED_SUBJECT_PATH["frm-dev-009"]).toEqual(["Engineering", "Design & Development"]);
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-car-001")?.title).toBe("Supplier Corrective Action Request (SCAR)");
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-ncr-003")?.title).toBe("Concession / Deviation Request");
     expect(recordLinkedPath("frm-tst-001", 19)).toBe("/iso-forms/record/19");

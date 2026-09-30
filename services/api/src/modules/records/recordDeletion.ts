@@ -707,6 +707,12 @@ const ISO_FORM_LABELS: Record<string, string> = {
   dev_gas_lift: "Gas Lift Support Development Document",
   dev_coil: "Coil Spring Development Document",
   dev_air_spring: "Air Spring Development Document",
+  dev_air_strut: "Air Strut Development Document",
+  dev_brake_wear: "Brake Wear Sensor Development Document",
+  dev_electronic_shock: "Electronic Shock Absorber Development Document",
+  dev_air_compressor: "Air Compressor Development Document",
+  dev_fuel_injector: "Fuel Injector Development Document",
+  dev_electric_lift: "Electric Lift Support Development Document",
   scar_request: "Supplier Corrective Action Request (SCAR)",
 };
 

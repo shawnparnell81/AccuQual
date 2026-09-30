@@ -27,6 +27,12 @@ export const ISO_FORM_TYPES = [
   "dev_gas_lift",
   "dev_coil",
   "dev_air_spring",
+  "dev_air_compressor",
+  "dev_fuel_injector",
+  "dev_electric_lift",
+  "dev_air_strut",
+  "dev_brake_wear",
+  "dev_electronic_shock",
   "scar_request",
 ] as const;
 export type IsoFormType = (typeof ISO_FORM_TYPES)[number];
@@ -66,6 +72,12 @@ export const ISO_FORMS: IsoFormMeta[] = [
   { formKey: "frm-dev-003", formType: "dev_gas_lift", formId: "", title: "Gas Lift Support Development Document", rev: "B", layout: null, photos: false },
   { formKey: "frm-dev-004", formType: "dev_coil", formId: "", title: "Coil Spring Development Document", rev: "A", layout: null, photos: false },
   { formKey: "frm-dev-005", formType: "dev_air_spring", formId: "", title: "Air Spring Development Document", rev: "A", layout: null, photos: false },
+  { formKey: "frm-dev-006", formType: "dev_air_strut", formId: "", title: "Air Strut Development Document", rev: "B", layout: null, photos: false },
+  { formKey: "frm-dev-007", formType: "dev_brake_wear", formId: "", title: "Brake Wear Sensor Development Document", rev: "B", layout: null, photos: false },
+  { formKey: "frm-dev-008", formType: "dev_electronic_shock", formId: "", title: "Electronic Shock Absorber Development Document", rev: "A", layout: null, photos: false },
+  { formKey: "frm-dev-009", formType: "dev_air_compressor", formId: "", title: "Air Compressor Development Document", rev: "A", layout: null, photos: false },
+  { formKey: "frm-dev-010", formType: "dev_fuel_injector", formId: "", title: "Fuel Injector Development Document", rev: "A", layout: null, photos: false },
+  { formKey: "frm-dev-011", formType: "dev_electric_lift", formId: "", title: "Electric Lift Support Development Document", rev: "B", layout: null, photos: false },
   { formKey: "frm-car-001", formType: "scar_request", formId: "", title: "Supplier Corrective Action Request (SCAR)", rev: "A", layout: null, photos: false },
 ];
 

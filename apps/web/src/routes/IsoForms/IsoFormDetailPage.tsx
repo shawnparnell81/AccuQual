@@ -14,12 +14,14 @@ import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { FORM_KEY_BY_TYPE, instanceRevision, revisionLabel } from "../../lib/formDocument";
 import { auditScore, auditSignatures } from "../../lib/auditSummary";
 import { isBatch4, summaryBatch4 } from "../../lib/batch4Reports";
+import { isBatch5, summaryBatch5 } from "../../lib/batch5Reports";
 import { formByType, type IsoFormType } from "../../lib/isoFormCatalog";
 import { EXCLUSIVE_CHECKS } from "../../lib/isoFormLayouts";
 import { showCell, quarantineTotal, type CellValue } from "../../lib/isoFormLogic";
 import { QUALITY_EXCLUSIVE_CHECKS } from "../../lib/qualitySheetLayouts";
 import { plusDays, type FailureRow, type FaiLine, type ScorecardRow } from "../../lib/qualitySheetLogic";
 import { Batch4Sheet } from "./Batch4Sheet";
+import { Batch5Sheet } from "./Batch5Sheet";
 import { MonthlyEngineeringSheet } from "./MonthlyEngineeringSheet";
 import { VisitorLogSheet } from "./VisitorLogSheet";
 import { CrossTrainingSheet } from "./CrossTrainingSheet";
@@ -145,7 +147,7 @@ export function IsoFormDetailPage() {
     await updateRecord.mutateAsync({ id: recordId, data: payload() });
   }
 
-  const summary = isBatch4(formType) ? summaryBatch4(formType, cells) : showCell(cells.D5) || showCell(cells.B6) || showCell(cells.B3) || showCell(cells.B5) || showCell(cells.D2) || showCell(cells.F3) || showCell(cells.D4);
+  const summary = isBatch4(formType) ? summaryBatch4(formType, cells) : isBatch5(formType) ? summaryBatch5(formType, cells) : showCell(cells.D5) || showCell(cells.B6) || showCell(cells.B3) || showCell(cells.B5) || showCell(cells.D2) || showCell(cells.F3) || showCell(cells.D4);
   const formKey = FORM_KEY_BY_TYPE[formType] ?? null;
   const signatures = formType === "audit_summary" ? auditSignatures(record.data) : {};
 
@@ -341,6 +343,8 @@ function IsoFormDetailBody({
             approvedSignature={signatureText(record.data, formType === "prototype_strut" ? "engineeringSignoffSignature" : formType === "scar_request" ? "managerSignature" : "approvedSignature")}
             onSign={onSign}
           />
+        ) : isBatch5(formType) ? (
+          <Batch5Sheet variant={formType} cells={cells} readOnly={!canEdit} onChange={changeCell} documentNumber={documentNumber} />
         ) : formType === "first_article" ? (
           <FaiSheet cells={cells} lines={lines} readOnly={!canEdit} onCell={changeCell} onLines={setLines} documentNumber={documentNumber} revision={revision} />
         ) : formType === "customer_scorecard" ? (

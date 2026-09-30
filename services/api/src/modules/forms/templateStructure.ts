@@ -57,6 +57,12 @@ export const FIXED_TEMPLATE_REVISIONS: Record<string, { version: number; revisio
   "iso:dev_gas_lift": { version: 1, revision: "B" },
   "iso:dev_coil": { version: 1, revision: "A" },
   "iso:dev_air_spring": { version: 1, revision: "A" },
+  "iso:dev_air_strut": { version: 1, revision: "B" },
+  "iso:dev_brake_wear": { version: 1, revision: "B" },
+  "iso:dev_electronic_shock": { version: 1, revision: "A" },
+  "iso:dev_air_compressor": { version: 1, revision: "A" },
+  "iso:dev_fuel_injector": { version: 1, revision: "A" },
+  "iso:dev_electric_lift": { version: 1, revision: "B" },
   "iso:scar_request": { version: 1, revision: "A" },
 };
 
