@@ -160,7 +160,7 @@ export function buildSheetRows(): SheetCell[][] {
     { col: 2, span: 6, addr: "B1", kind: "label", text: "CSA VALIDATION REPORT ", size: "title", bold: true },
   ]);
   put(2, [
-    { col: 1, span: 1, addr: "A2", kind: "label", text: "Doc ID: FRM-VAL-001" },
+    { col: 1, span: 1, addr: "A2", kind: "label", text: "Doc ID:" },
     { col: 2, span: 3, addr: "B2", kind: "label", text: "Rev: C" },
     { col: 5, span: 1, addr: "E2", kind: "label", text: "Effective Date: 03/26/2026" },
     { col: 6, span: 1, addr: "F2", kind: "label", text: "Approved By:" },

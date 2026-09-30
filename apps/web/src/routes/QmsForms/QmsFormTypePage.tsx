@@ -24,7 +24,7 @@ export function QmsFormTypePage() {
   const columns: Column<QmsForm>[] = [
     { header: "ID", accessor: (r) => `#${r.id}` },
     { header: "Form No.", accessor: (r) => r.formNo ?? "—" },
-    { header: "Revision", accessor: (r) => r.revision ?? "—" },
+    { header: "Revision", accessor: (r) => r.revision ?? "A" },
     { header: "Prepared By", accessor: (r) => r.preparedBy ?? "—" },
     { header: "Approved By", accessor: (r) => r.approvedBy ?? "—" },
     { header: "Status", accessor: (r) => <StatusBadge value={r.status} /> },

@@ -1,7 +1,7 @@
 import { useMemo, type CSSProperties } from "react";
 import type { FormCell, FormLayout } from "../../lib/isoFormLayouts";
 import { resultFill, showCell, type CellValue } from "../../lib/isoFormLogic";
-import { sheetRevision } from "../../lib/formDocument";
+import { documentIdText, sheetRevision } from "../../lib/formDocument";
 import "./isoForm.css";
 
 interface IsoFormSheetProps {
@@ -12,6 +12,7 @@ interface IsoFormSheetProps {
   onChange: (addr: string, value: CellValue) => void;
   label: string;
   documentNumber?: string;
+  revision?: string;
 }
 
 type Slot = FormCell | "covered" | "empty";
@@ -24,7 +25,7 @@ function occupy(grid: Slot[][], row: number, spec: FormCell) {
   }
 }
 
-export function IsoFormSheet({ layout, cells, calculated = {}, readOnly = false, onChange, label, documentNumber = "" }: IsoFormSheetProps) {
+export function IsoFormSheet({ layout, cells, calculated = {}, readOnly = false, onChange, label, documentNumber = "", revision = "A" }: IsoFormSheetProps) {
   const rowCount = layout.rows.length - 1;
   const grid = useMemo(() => {
     const next: Slot[][] = Array.from({ length: rowCount }, () => Array.from({ length: layout.columns }, () => "empty" as Slot));
@@ -54,7 +55,7 @@ export function IsoFormSheet({ layout, cells, calculated = {}, readOnly = false,
                   : row.map((slot, colIndex) => {
                       if (slot === "covered") return null;
                       if (slot === "empty") return <td key={colIndex} />;
-                      return <Cell key={slot.addr} spec={slot} cells={cells} calculated={calculated} readOnly={readOnly} onChange={onChange} documentNumber={documentNumber} />;
+                      return <Cell key={slot.addr} spec={slot} cells={cells} calculated={calculated} readOnly={readOnly} onChange={onChange} documentNumber={documentNumber} revision={revision} />;
                     })}
               </tr>
             );
@@ -72,6 +73,7 @@ function Cell({
   readOnly,
   onChange,
   documentNumber,
+  revision,
 }: {
   spec: FormCell;
   cells: Record<string, CellValue>;
@@ -79,10 +81,18 @@ function Cell({
   readOnly: boolean;
   onChange: (addr: string, value: CellValue) => void;
   documentNumber: string;
+  revision: string;
 }) {
   const stored = cells[spec.addr];
   const raw = spec.kind === "label" ? spec.text ?? "" : spec.kind === "calc" ? showCell(calculated[spec.addr]) : showCell(stored);
-  const text = spec.kind === "label" && raw === "Rev: A" ? sheetRevision(documentNumber) : raw;
+  const text =
+    spec.kind !== "label"
+      ? raw
+      : raw === "Rev: A"
+        ? sheetRevision(documentNumber, revision)
+        : /^Rev:\s\S+$/.test(raw)
+          ? `Rev: ${revision}`
+          : documentIdText(raw, documentNumber, spec.documentSlot === true);
   const fill = spec.paint || (spec.kind === "select" ? resultFill(text) : "");
   const className = [spec.role ?? "", spec.align ?? "", spec.kind === "area" ? "area" : "", fill].filter(Boolean).join(" ");
   const style: CSSProperties = {};

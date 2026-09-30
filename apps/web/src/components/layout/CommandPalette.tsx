@@ -58,7 +58,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       { id: "new-capa", label: "New CAPA", hint: "Action", run: () => navigate("/capa?new=1") },
       { id: "start-validation", label: "Start validation", hint: "Action", run: () => navigate("/workflow?template=validation") },
       { id: "upload-validation", label: "Upload to Validation Reports", hint: "Action", run: () => navigate("/folders/validation-reports") },
-      { id: "new-validation-report", label: "New Validation Report", hint: "Action", run: () => navigate("/folders/validation-reports") },
+      { id: "new-validation-report", label: "New CSA Validation", hint: "Action", run: () => navigate("/folders/validation-reports") },
       { id: "new-fuel-pump", label: "New Fuel Pump Validation", hint: "Action", run: () => navigate("/folders/validation-reports") },
       { id: "assignments", label: "Go to my assignments", hint: "Action", run: () => navigate("/home") },
       { id: "theme", label: "Toggle theme", hint: "Action", run: () => window.dispatchEvent(new Event("accuqual-toggle-theme")) },

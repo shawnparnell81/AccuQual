@@ -89,7 +89,7 @@ export function FormNumberEditor({ formKey, compact = false }: { formKey: string
   const templates = useQuery({
     queryKey: ["form-number", formKey],
     queryFn: async () => (await apiClient.get<{ templates: { formKey: string; formId: string }[] }>("/document-folders/form-templates")).data.templates,
-    enabled: EDITABLE_FORM_KEYS.has(formKey),
+    enabled: formKey.length > 0,
   });
   const current = templates.data?.find((item) => item.formKey === formKey)?.formId ?? "";
   const [value, setValue] = useState(current);
@@ -111,8 +111,6 @@ export function FormNumberEditor({ formKey, compact = false }: { formKey: string
     },
     onError: () => setMessage("Couldn't save the form number."),
   });
-
-  if (!EDITABLE_FORM_KEYS.has(formKey)) return null;
 
   if (!canEdit) {
     return (

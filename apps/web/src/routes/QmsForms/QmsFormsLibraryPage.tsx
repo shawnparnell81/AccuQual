@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../api/client";
 import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
-import { EDITABLE_FORM_KEYS } from "../../lib/formDocument";
 
 interface FormStart {
   createPath: string;
@@ -82,7 +81,7 @@ export function QmsFormsLibraryPage() {
                   <span className="font-medium">{form.title}</span>
                   {form.formId ? <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{form.formId}</span> : null}
                 </button>
-                {EDITABLE_FORM_KEYS.has(form.formKey) && <FormNumberEditor formKey={form.formKey} compact />}
+                <FormNumberEditor formKey={form.formKey} compact />
               </div>
             ))}
           </div>

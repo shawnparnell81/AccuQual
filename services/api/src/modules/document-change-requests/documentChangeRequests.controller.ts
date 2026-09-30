@@ -4,6 +4,7 @@ import { documentChangeRequests, documentChangeItems, documentChangeReviews } fr
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { keptRevision, templateRevisionFor } from "../forms/templateRevision.js";
 import { deleteRecord } from "../records/recordDeletion.js";
 
 async function loadDcr(req: Request, id: number) {
@@ -21,7 +22,8 @@ export const listDcrHandler = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const createDcrHandler = asyncHandler(async (req: Request, res: Response) => {
-  const [created] = await req.db!.insert(documentChangeRequests).values({ ...req.body, createdBy: req.user?.id }).returning();
+  const revision = templateRevisionFor("dcr").revision;
+  const [created] = await req.db!.insert(documentChangeRequests).values({ ...req.body, revision, createdBy: req.user?.id }).returning();
   await recordAuditTrail(req.db!, { entityType: "DocumentChangeRequest", entityId: created!.id, action: "create", changes: req.body, performedBy: req.user?.id });
   res.status(201).json(created);
 });
@@ -35,7 +37,10 @@ export const getDcrHandler = asyncHandler(async (req: Request, res: Response) =>
 
 export const updateDcrHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadDcr(req, Number(req.params.id));
-  const [updated] = await req.db!.update(documentChangeRequests).set({ ...req.body, updatedAt: new Date() }).where(eq(documentChangeRequests.id, record.id)).returning();
+  const body = { ...(req.body as Record<string, unknown>) };
+  delete body.revision;
+  const revision = keptRevision(record.revision, templateRevisionFor("dcr").revision);
+  const [updated] = await req.db!.update(documentChangeRequests).set({ ...body, revision, updatedAt: new Date() }).where(eq(documentChangeRequests.id, record.id)).returning();
   await recordAuditTrail(req.db!, { entityType: "DocumentChangeRequest", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
   res.json(updated);
 });

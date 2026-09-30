@@ -1,4 +1,4 @@
-import { IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS } from "./roleAccess.js";
+import { IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, isFullAccessRole } from "./roleAccess.js";
 
 /**
  * Organizational ladder. A smaller number is higher and is listed first.
@@ -193,4 +193,29 @@ export function decideRoleDeletion(input: RoleDeletionInput): { ok: true; reassi
     return { ok: true, reassign: true };
   }
   return { ok: true, reassign: false };
+}
+
+/**
+ * Who may change a form's structure (layout, fields, formulas — the master
+ * that carries VERSION/REV). Filling answers is a different permission.
+ *
+ * Built-in names: owner, admin, quality_manager, vice_president.
+ * Custom titles map onto Quality Manager, Engineering Manager, Engineer,
+ * Quality, VP of Quality and Engineering, and Product Engineer.
+ */
+export function canEditFormStructure(user: { roleName?: string | null } | null | undefined): boolean {
+  const roleName = user?.roleName?.trim();
+  if (!roleName) return false;
+  if (isFullAccessRole(roleName)) return true;
+  const key = roleName.toLowerCase();
+  if (key === "quality_manager" || key === "vice_president") return true;
+  const tokens = roleTokens(roleName);
+  const has = (word: string) => tokens.includes(word);
+  const engineer = tokens.some((token) => token === "engineer" || token === "engineers");
+  if (has("quality") && has("manager")) return true;
+  if (has("manager") && (has("engineering") || engineer)) return true;
+  if (engineer) return true;
+  if (tokens.length === 1 && tokens[0] === "quality") return true;
+  if (nameStartsWithVicePresident(roleName) && (has("quality") || has("engineering") || engineer)) return true;
+  return false;
 }

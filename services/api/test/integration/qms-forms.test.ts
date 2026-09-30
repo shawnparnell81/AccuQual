@@ -74,6 +74,7 @@ describe("Generic QMS Simple Form engine (real DB + real HTTP path)", () => {
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("draft");
     expect(res.body.formType).toBe("record_retention_log");
+    expect(res.body.revision).toBe("A");
     formId = res.body.id;
 
     const [row] = await db.select().from(auditTrail).where(eq(auditTrail.entityType, "QmsForm"));
@@ -89,10 +90,11 @@ describe("Generic QMS Simple Form engine (real DB + real HTTP path)", () => {
   });
 
   it("updates the header, including the status checkboxes", async () => {
-    const res = await request(app).patch(`/qms-forms/${formId}`).set("Authorization", `Bearer ${productionToken}`).send({ status: "active", preparedBy: "J. Smith" });
+    const res = await request(app).patch(`/qms-forms/${formId}`).set("Authorization", `Bearer ${productionToken}`).send({ status: "active", preparedBy: "J. Smith", revision: "Z" });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("active");
     expect(res.body.preparedBy).toBe("J. Smith");
+    expect(res.body.revision).toBe("A");
   });
 
   it("rejects a row for a section that doesn't exist on this form type", async () => {

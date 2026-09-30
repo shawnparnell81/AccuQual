@@ -100,7 +100,7 @@ export function QmsFormRecordPage() {
 
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
           <HeaderField label="Form No." value={record.formNo} onSave={(v) => patchHeader.mutate({ formNo: v || null })} />
-          <HeaderField label="Revision" value={record.revision} onSave={(v) => patchHeader.mutate({ revision: v || null })} />
+          <HeaderField label="Revision" value={record.revision || "A"} readOnly />
           <HeaderField label="Effective Date" type="date" value={record.effectiveDate ? record.effectiveDate.slice(0, 10) : ""} onSave={(v) => patchHeader.mutate({ effectiveDate: v || null })} />
           <HeaderField label="Prepared By" value={record.preparedBy} onSave={(v) => patchHeader.mutate({ preparedBy: v || null })} />
           <HeaderField label="Approved By" value={record.approvedBy} onSave={(v) => patchHeader.mutate({ approvedBy: v || null })} />
@@ -176,15 +176,16 @@ export function QmsFormRecordPage() {
   );
 }
 
-function HeaderField({ label, value, onSave, type = "text" }: { label: string; value: string | null | undefined; onSave: (v: string) => void; type?: string }) {
+function HeaderField({ label, value, onSave, type = "text", readOnly = false }: { label: string; value: string | null | undefined; onSave?: (v: string) => void; type?: string; readOnly?: boolean }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
       <span className="text-xs font-medium uppercase text-muted-foreground print:text-black">{label}</span>
       <input
         type={type}
         defaultValue={value ?? ""}
-        onBlur={(e) => e.target.value !== (value ?? "") && onSave(e.target.value)}
-        className="rounded-md border border-form-field bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary print:border-black print:bg-white print:text-black"
+        readOnly={readOnly}
+        onBlur={(e) => !readOnly && onSave && e.target.value !== (value ?? "") && onSave(e.target.value)}
+        className="rounded-md border border-form-field bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary read-only:bg-muted print:border-black print:bg-white print:text-black"
       />
     </label>
   );

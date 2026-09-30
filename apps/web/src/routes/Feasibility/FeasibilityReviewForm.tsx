@@ -119,7 +119,7 @@ export function FeasibilityReviewForm({ review }: { review: FeasibilityReview })
       <h2 className={sectionHeaderClass}>Document Control</h2>
       <div className="grid gap-4 sm:grid-cols-4">
         <LabeledInput label="Document ID" {...field("documentId")} />
-        <LabeledInput label="Revision" {...field("revision")} />
+        <LabeledInput label="Revision" value={review.revision?.trim() || "1.0"} readOnly disabled />
         <LabeledInput label="Effective Date" type="date" {...field("effectiveDate")} value={review.effectiveDate ? review.effectiveDate.slice(0, 10) : undefined} />
         <LabeledInput label="Process Owner" {...field("processOwner")} />
       </div>

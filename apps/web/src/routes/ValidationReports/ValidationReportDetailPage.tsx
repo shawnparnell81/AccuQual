@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
+import { apiClient } from "../../api/client";
+import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
 import { SaveStatus } from "../../components/shared/SaveStatus";
@@ -7,6 +10,7 @@ import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { instanceRevision } from "../../lib/formDocument";
 import { cellsFromData as csaCellsFromData, formTypeOf, overallResult as csaOverall, type CellValue, type ValidationFormType } from "../../lib/validationReport";
 import { cellsFromData as fuelCellsFromData, overallResult as fuelOverall } from "../../lib/fuelPumpReport";
 import { FuelPumpSheet } from "./FuelPumpSheet";
@@ -33,6 +37,12 @@ export function ValidationReportDetailPage() {
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
 
   const formType: ValidationFormType = formTypeOf(report?.data);
+  const formKey = formType === "fuel_pump" ? "frm-val-007" : "frm-val-001";
+  const templates = useQuery({
+    queryKey: ["form-templates"],
+    queryFn: async () => (await apiClient.get<{ templates: { formKey: string; formId: string }[] }>("/document-folders/form-templates")).data.templates,
+  });
+  const documentNumber = templates.data?.find((item) => item.formKey === formKey)?.formId ?? "";
 
   useEffect(() => {
     if (!report || loadedFor === report.id) return;
@@ -51,8 +61,9 @@ export function ValidationReportDetailPage() {
   const passed = result === "Pass" || result === "Passed";
   const failed = result === "Fail" || result === "Failed";
   const badge = passed ? (formType === "fuel_pump" ? "#00B050" : "#4EA72E") : failed ? "#FF0000" : "transparent";
-  const doc = formType === "fuel_pump" ? "FRM-VAL-007 Rev C" : "FRM-VAL-001 Rev C";
-  const title = formType === "fuel_pump" ? `Fuel Pump Validation #${report.id}` : `Validation Report #${report.id}`;
+  const rev = instanceRevision(report.data, "C");
+  const doc = documentNumber.trim() ? `${documentNumber.trim()} Rev ${rev}` : `Rev ${rev}`;
+  const title = formType === "fuel_pump" ? `Fuel Pump Validation #${report.id}` : `CSA Validation #${report.id}`;
 
   function saveRecord() {
     updateReport.mutate({ id: reportId, data: { formType, cells: filled } });
@@ -70,6 +81,7 @@ export function ValidationReportDetailPage() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold">{title}</h1>
+            <FormNumberEditor formKey={formKey} compact />
             <p className="text-sm text-muted-foreground">
               {doc}
               {cells.B6 ? ` · ${cells.B6}` : ""}
@@ -83,7 +95,7 @@ export function ValidationReportDetailPage() {
             <DeleteRecordButton
               resource="validation-reports"
               id={reportId}
-              kind={formType === "fuel_pump" ? "Fuel Pump Validation" : "Validation Report"}
+              kind={formType === "fuel_pump" ? "Fuel Pump Validation" : "CSA Validation"}
               title={cells.B6 == null ? null : String(cells.B6)}
               navigateTo="/folders/validation-reports"
             />
@@ -113,12 +125,16 @@ export function ValidationReportDetailPage() {
           <FuelPumpSheet
             cells={cells}
             readOnly={!canEdit}
+            documentNumber={documentNumber}
+            revision={rev}
             onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
           />
         ) : (
           <ValidationReportSheet
             cells={cells}
             readOnly={!canEdit}
+            documentNumber={documentNumber}
+            revision={rev}
             onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
           />
         )}

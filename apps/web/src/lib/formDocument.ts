@@ -31,10 +31,28 @@ export const FORM_KEY_BY_TYPE: Record<string, string> = {
   pareto_chart: "frm-par-001",
 };
 
-/** Print and sheet header. A blank number stays "Rev: A". */
-export function sheetRevision(formNumber: string | undefined): string {
+/** Print and sheet header. A blank number stays a revision with no document id. */
+export function sheetRevision(formNumber: string | undefined, rev = "A"): string {
+  const letter = rev.trim().replace(/^Rev:\s*/i, "") || "A";
   const number = (formNumber ?? "").trim();
-  return number ? `Doc ID: ${number} · Rev: A` : "Rev: A";
+  return number ? `Doc ID: ${number} · Rev: ${letter}` : `Rev: ${letter}`;
+}
+
+/** The template revision stored on a filled instance. Falls back when the row has no stamp yet. */
+export function instanceRevision(data: unknown, fallback = "A"): string {
+  if (!data || typeof data !== "object") return fallback;
+  const stamp = (data as { _formTemplate?: { revision?: unknown } })._formTemplate;
+  const revision = stamp && typeof stamp.revision === "string" ? stamp.revision.trim().replace(/^Rev:\s*/i, "") : "";
+  return revision || fallback;
+}
+
+/** Header document-id cell. A hardcoded FRM number is not shown until someone sets one. */
+export function documentIdText(label: string | undefined, documentNumber: string | undefined, slot = false): string {
+  const number = (documentNumber ?? "").trim();
+  const text = label ?? "";
+  if (slot || /^FRM-[A-Z0-9-]+$/.test(text)) return number;
+  if (text === "Doc ID:" || /^Doc ID:\s/.test(text)) return number ? `Doc ID: ${number}` : "Doc ID:";
+  return text;
 }
 
 export function revisionLabel(formNumber: string | undefined, rev = "A"): string {

@@ -14,6 +14,8 @@ export interface FormCell {
   align?: "left" | "center";
   /** Static fill. Selects still pick up pass / minor / major colors on their own. */
   paint?: "fill-green" | "fill-red" | "fill-yellow" | "fill-gray";
+  /** This cell is the document number. It stays blank until that number is set. */
+  documentSlot?: boolean;
   /** Checkbox stays visible, and can be changed only while this address is checked. */
   enableWhen?: string;
 }
@@ -56,7 +58,7 @@ const AUDIT_ROWS: Array<[string, string, string, string]> = [
 export function auditLayout(): FormLayout {
   const rows: FormCell[][] = [];
   rows[1] = [L(1, 6, "A1", "INTERNAL AUDIT CHECKLIST", "title")];
-  rows[2] = [L(1, 1, "A2", "Doc ID:"), L(2, 1, "B2", "FRM-GEN-001"), L(3, 1, "C2", "Rev:", undefined, "center"), L(4, 1, "D2", "A"), L(5, 1, "E2", "Title:"), L(6, 1, "F2", "Internal Audit Checklist")];
+  rows[2] = [L(1, 1, "A2", "Doc ID:"), { ...L(2, 1, "B2", ""), documentSlot: true }, L(3, 1, "C2", "Rev:", undefined, "center"), L(4, 1, "D2", "A"), L(5, 1, "E2", "Title:"), L(6, 1, "F2", "Internal Audit Checklist")];
   rows[3] = [L(1, 1, "A3", "Auditor Name:"), I(2, 1, "B3"), L(3, 1, "C3", "Audit Date:", undefined, "center"), D(4, 1, "D3"), L(5, 1, "E3", "Auditee Depts:"), I(6, 1, "F3")];
   rows[4] = [];
   rows[5] = [
@@ -77,7 +79,7 @@ export function auditLayout(): FormLayout {
 export function ncrLayout(): FormLayout {
   const rows: FormCell[][] = [];
   rows[1] = [L(1, 4, "A1", "NON-CONFORMANCE REPORT (NCR)", "title")];
-  rows[2] = [L(1, 1, "A2", "Doc ID: FRM-NCR-001"), L(2, 1, "B2", "Rev: C"), L(3, 2, "C2", "Location: ISO Compliance Documents / Blank Form Templates", undefined, "left")];
+  rows[2] = [L(1, 1, "A2", "Doc ID:"), L(2, 1, "B2", "Rev: C"), L(3, 2, "C2", "Location: ISO Compliance Documents / Blank Form Templates", undefined, "left")];
   rows[3] = [L(1, 1, "A3", "Approved By:"), L(2, 1, "B3", "Maxwell Tollefson/ Ron Wertz", undefined, "left"), L(3, 1, "C3", "Date:"), L(4, 1, "D3", "2026-03-18")];
   rows[4] = [];
   rows[5] = [L(1, 4, "A5", "SECTION 1: IDENTIFICATION (Incoming/Outgoing Inspection)", "section")];
@@ -116,7 +118,7 @@ export function ncrLayout(): FormLayout {
 export function quarantineLayout(): FormLayout {
   const rows: FormCell[][] = [];
   rows[1] = [L(1, 6, "A1", "QUARANTINE NOTICE", "title")];
-  rows[2] = [L(1, 1, "A2", "Doc ID:"), L(2, 1, "B2", "FRM-NCR-002"), L(3, 1, "C2", "Rev:"), L(4, 1, "D2", "A"), L(5, 1, "E2", "Title:"), L(6, 1, "F2", "Quarantine Notice")];
+  rows[2] = [L(1, 1, "A2", "Doc ID:"), { ...L(2, 1, "B2", ""), documentSlot: true }, L(3, 1, "C2", "Rev:"), L(4, 1, "D2", "A"), L(5, 1, "E2", "Title:"), L(6, 1, "F2", "Quarantine Notice")];
   rows[3] = [L(1, 1, "A3", "Date:"), D(2, 3, "B3"), L(5, 1, "E3", "Approved By:"), I(6, 1, "F3")];
   rows[4] = [];
   rows[5] = [L(1, 6, "A5", "1.0 ISSUE IDENTIFICATION", "section")];
@@ -151,7 +153,7 @@ export function quarantineLayout(): FormLayout {
 export function concessionLayout(): FormLayout {
   const rows: FormCell[][] = [];
   rows[1] = [L(1, 4, "A1", "CONCESSION / DEVIATION REQUEST", "title")];
-  rows[2] = [L(1, 1, "A2", "Doc ID: FRM-NCR-003"), L(2, 1, "B2", "Rev: A"), L(3, 2, "C2", "Location: ISO Compliance Documents / Blank Form Templates", undefined, "left")];
+  rows[2] = [L(1, 1, "A2", "Doc ID:"), L(2, 1, "B2", "Rev: A"), L(3, 2, "C2", "Location: ISO Compliance Documents / Blank Form Templates", undefined, "left")];
   rows[3] = [L(1, 1, "A3", "Approved By:"), L(2, 1, "B3", "Maxwell Tollefson/ Ron Wertz", undefined, "left"), L(3, 1, "C3", "Date:"), I(4, 1, "D3", "Date")];
   rows[4] = [];
   rows[5] = [L(1, 4, "A5", "SECTION 1: IDENTIFICATION (Outbound to Customer)", "section")];
@@ -192,7 +194,7 @@ function trainingLines(start: number, count: number, kinds: Array<(row: number, 
 export function trainingLayout(): FormLayout {
   const rows: FormCell[][] = [];
   rows[1] = [L(1, 7, "A1", "COMPETENCY AND TRAINING RECORD", "title")];
-  rows[2] = [L(1, 1, "A2", "Doc ID: FRM-TRN-001"), L(2, 1, "B2", "Rev: A"), L(3, 2, "C2", "Location: ISO Compliance Documents / Blank Form Templates", undefined, "left"), L(5, 1, "E2", "Authorized By:"), L(6, 2, "F2", "Maxwell Tollefson", undefined, "left")];
+  rows[2] = [L(1, 1, "A2", "Doc ID:"), L(2, 1, "B2", "Rev: A"), L(3, 2, "C2", "Location: ISO Compliance Documents / Blank Form Templates", undefined, "left"), L(5, 1, "E2", "Authorized By:"), L(6, 2, "F2", "Maxwell Tollefson", undefined, "left")];
   rows[3] = [];
   rows[4] = [L(1, 1, "A4", "Employee Name:"), I(2, 2, "B4", "Name"), L(4, 1, "D4", "Job Title:"), I(5, 3, "E4", "Job Title")];
   rows[5] = [L(1, 1, "A5", "Start Date:"), D(2, 2, "B5"), L(4, 1, "D5", "Manager:"), I(5, 3, "E5", "Engineering/Quality Manager")];

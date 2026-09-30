@@ -116,9 +116,7 @@ export async function updateFormNumber(
   actor: { roleName?: string | null; department?: string | null } | null | undefined,
 ) {
   if (!canEditFormNumber(actor)) throw AppError.forbidden("Only Engineering, a quality manager, or an administrator can change a form number");
-  if (!EDITABLE_FORM_NUMBER_KEYS.has(formKey)) {
-    throw AppError.badRequest("This form's document number is fixed");
-  }
+  if (!seedFor(formKey)) throw AppError.badRequest("Unknown form");
   const next = formId.trim();
   if (next.length > 40) throw AppError.badRequest("Form number must be 40 characters or fewer");
   await ensureFormTemplates(db);

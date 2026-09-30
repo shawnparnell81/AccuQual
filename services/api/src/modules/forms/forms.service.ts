@@ -7,6 +7,7 @@ import { blank8dFromData } from "../eight-d/blank8dForm.js";
 import { renderBlank8DPdf } from "../eight-d/blank8d-pdf.js";
 import { mergePdfFields } from "./pdf-merger.js";
 import { snapshotFormDataNumber } from "../document-folders/formRecordFiling.js";
+import { answersWithTemplateStamp, readTemplateStamp, templateRevisionFor } from "./templateRevision.js";
 
 /**
  * Self-healing (same pattern as document-folders.controller.ts's
@@ -57,23 +58,27 @@ interface SaveInput {
 export async function saveData(db: Db, input: SaveInput) {
   const existing = await loadData(db, input.formType, input.entityId);
 
+  const data = answersWithTemplateStamp(`form:${input.formType}`, existing?.data, input.data, !existing);
+
   if (existing) {
+    // Answer saves keep the template revision this instance was filled against.
     const [updated] = await db
       .update(formData)
-      .set({ data: input.data, updatedAt: new Date() })
+      .set({ data, updatedAt: new Date() })
       .where(and(eq(formData.id, existing.id)))
       .returning();
     return updated;
   }
 
+  const stamp = readTemplateStamp(data) ?? templateRevisionFor(`form:${input.formType}`);
   const [created] = await db
     .insert(formData)
     .values({
       formType: input.formType,
       entityType: input.entityType,
       entityId: input.entityId,
-      data: input.data,
-      version: 1,
+      data,
+      version: stamp.version,
       createdBy: input.userId,
     })
     .returning();
@@ -81,14 +86,18 @@ export async function saveData(db: Db, input: SaveInput) {
   return created;
 }
 
-/** Deliberate snapshot: bumps `version` and writes an immutable form_versions row. */
+/**
+ * Snapshot of the filled answers. Does not change VERSION/REV: that identity
+ * belongs to the form template, not to this save. Calibration and training
+ * still use the call as their "finalize" action.
+ */
 export async function createVersion(db: Db, formId: number, userId?: number) {
   const [current] = await db.select().from(formData).where(and(eq(formData.id, formId)));
   if (!current) throw AppError.notFound("Form");
 
-  const nextVersion = current.version + 1;
+  const data = answersWithTemplateStamp(`form:${current.formType}`, current.data, current.data, false);
   await db.insert(formVersions).values({ formId, version: current.version, data: current.data, createdBy: userId });
-  const [updated] = await db.update(formData).set({ version: nextVersion, updatedAt: new Date() }).where(eq(formData.id, formId)).returning();
+  const [updated] = await db.update(formData).set({ data, updatedAt: new Date() }).where(eq(formData.id, formId)).returning();
   return updated;
 }
 
@@ -109,7 +118,14 @@ export async function listVersions(db: Db, formId: number) {
     .select()
     .from(formVersions)
     .where(and(eq(formVersions.formId, formId)))
-    .orderBy(desc(formVersions.version));
+    .orderBy(desc(formVersions.id));
+}
+
+/** What the form screen shows: the template revision this instance was filled against. */
+export function presentForm<T extends { data: unknown }>(formType: string, row: T | null): (T & { templateRevision: string; templateVersion: number }) | null {
+  if (!row) return null;
+  const stamp = readTemplateStamp(row.data) ?? templateRevisionFor(`form:${formType}`);
+  return { ...row, templateRevision: stamp.revision, templateVersion: stamp.version };
 }
 
 export async function exportPdf(db: Db, formType: string, entityId?: number) {

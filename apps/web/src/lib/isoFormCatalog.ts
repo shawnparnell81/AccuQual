@@ -28,11 +28,11 @@ export interface IsoFormMeta {
 }
 
 export const ISO_FORMS: IsoFormMeta[] = [
-  { formKey: "frm-gen-001", formType: "internal_audit", formId: "FRM-GEN-001", title: "Internal Audit Checklist", rev: "A", layout: auditLayout(), photos: false },
-  { formKey: "frm-ncr-001", formType: "ncr_report", formId: "FRM-NCR-001", title: "Non-Conformance Report", rev: "C", layout: ncrLayout(), photos: false },
-  { formKey: "frm-ncr-002", formType: "quarantine_notice", formId: "FRM-NCR-002", title: "Quarantine Notice", rev: "A", layout: quarantineLayout(), photos: true },
-  { formKey: "frm-ncr-003", formType: "concession", formId: "FRM-NCR-003", title: "Concession / Deviation Request", rev: "A", layout: concessionLayout(), photos: false },
-  { formKey: "frm-trn-001", formType: "competency_training", formId: "FRM-TRN-001", title: "Competency and Training Record", rev: "A", layout: trainingLayout(), photos: false },
+  { formKey: "frm-gen-001", formType: "internal_audit", formId: "", title: "Internal Audit Checklist", rev: "A", layout: auditLayout(), photos: false },
+  { formKey: "frm-ncr-001", formType: "ncr_report", formId: "", title: "Non-Conformance Report", rev: "C", layout: ncrLayout(), photos: false },
+  { formKey: "frm-ncr-002", formType: "quarantine_notice", formId: "", title: "Quarantine Notice", rev: "A", layout: quarantineLayout(), photos: true },
+  { formKey: "frm-ncr-003", formType: "concession", formId: "", title: "Concession / Deviation Request", rev: "A", layout: concessionLayout(), photos: false },
+  { formKey: "frm-trn-001", formType: "competency_training", formId: "", title: "Competency and Training Record", rev: "A", layout: trainingLayout(), photos: false },
   { formKey: "frm-trn-002", formType: "cross_training", formId: "", title: "Cross-Training Evaluation", rev: "A", layout: null, photos: false },
   { formKey: "frm-psw-001", formType: "psw", formId: "", title: "Part Submission Warrant", rev: "A", layout: pswLayout(), photos: false },
   { formKey: "frm-prc-001", formType: "turtle_diagram", formId: "", title: "Turtle Diagram", rev: "A", layout: turtleLayout(), photos: false },

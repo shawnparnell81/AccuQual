@@ -2,7 +2,6 @@ import type { NextFunction, Request, Response } from "express";
 import { Router } from "express";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
 import { AppError } from "../../utils/appError.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { withDb } from "../../lib/requestDb.js";
@@ -12,6 +11,7 @@ import { saveFormSchema, FORM_TYPES } from "./forms.validation.js";
 import { getTemplate, getForm, saveForm, createVersion, getHistory, exportForm } from "./forms.controller.js";
 import { listTemplatesHandler, uploadTemplateHandler, downloadTemplateHandler, deleteTemplateHandler } from "./formTemplates.controller.js";
 import type { ResourceKey } from "../../middleware/departmentAccess.js";
+import { canEditFormStructure } from "../roles/roleHierarchy.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 
 export const formsRouter = Router();
@@ -125,11 +125,20 @@ function refuseControlledForms(req: Request, _res: Response, next: NextFunction)
 
 // Fixed literal path before ":type"-shaped ones, same convention used
 // throughout this app.
-formsRouter.get("/templates", requireRole("admin"), listTemplatesHandler);
+/** Replacing the master template file. Filling a form does not use this gate. */
+function requireFormStructureEditor(req: Request, _res: Response, next: NextFunction) {
+  if (!req.user) return next(AppError.unauthorized());
+  if (!canEditFormStructure(req.user)) {
+    return next(AppError.forbidden("Changing a form template is limited to quality and engineering roles."));
+  }
+  next();
+}
+
+formsRouter.get("/templates", requireFormStructureEditor, listTemplatesHandler);
 
 formsRouter.get("/:type/template", getTemplate);
-formsRouter.post("/:type/template", requireRole("admin"), upload.single("file"), uploadTemplateHandler);
-formsRouter.delete("/:type/template", requireRole("admin"), deleteTemplateHandler);
+formsRouter.post("/:type/template", requireFormStructureEditor, upload.single("file"), uploadTemplateHandler);
+formsRouter.delete("/:type/template", requireFormStructureEditor, deleteTemplateHandler);
 formsRouter.get("/:type/template/file", downloadTemplateHandler);
 formsRouter.get("/:type/:id", gateFormRead, getForm);
 formsRouter.post("/:type/:id/save", refuseControlledForms, gateKnownFormTypes, validate(saveFormSchema), saveForm);

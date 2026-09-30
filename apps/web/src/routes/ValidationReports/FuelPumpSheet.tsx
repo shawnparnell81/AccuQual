@@ -7,6 +7,8 @@ interface FuelPumpSheetProps {
   cells: Record<string, CellValue>;
   readOnly?: boolean;
   onChange: (addr: string, value: CellValue) => void;
+  documentNumber?: string;
+  revision?: string;
 }
 
 type Slot = FuelCell | "covered" | "empty" | "gap";
@@ -21,15 +23,20 @@ function occupy(grid: Slot[][], row: number, spec: FuelCell) {
   }
 }
 
-function shownText(spec: FuelCell, cells: Record<string, CellValue>, calculated: Record<string, CellValue>): string {
-  if (spec.kind === "label") return spec.text ?? "";
+function shownText(spec: FuelCell, cells: Record<string, CellValue>, calculated: Record<string, CellValue>, documentNumber: string, revision: string): string {
+  if (spec.kind === "label") {
+    const raw = spec.text ?? "";
+    if (raw.startsWith("Doc ID:")) return documentNumber.trim() ? `Doc ID: ${documentNumber.trim()}` : "Doc ID:";
+    if (/^Rev:\s/.test(raw)) return `Rev: ${revision}`;
+    return raw;
+  }
   if (spec.kind === "calc") return showValue(calculated[spec.addr] ?? null);
   if (spec.kind === "check" || spec.kind === "blocked" || spec.kind === "spacer") return "";
   const value = cells[spec.addr];
   return showValue(value ?? "");
 }
 
-export function FuelPumpSheet({ cells, readOnly = false, onChange }: FuelPumpSheetProps) {
+export function FuelPumpSheet({ cells, readOnly = false, onChange, documentNumber = "", revision = "C" }: FuelPumpSheetProps) {
   const rows = useMemo(() => buildFuelPumpRows(), []);
   const calculated = useMemo(() => evaluate(cells), [cells]);
   const grid = useMemo(() => {
@@ -63,7 +70,7 @@ export function FuelPumpSheet({ cells, readOnly = false, onChange }: FuelPumpShe
             const place: CSSProperties = { gridColumn: colIndex + 1, gridRow: rowIndex + 1 };
             if (slot === "empty") return <div key={`e-${rowIndex}-${colIndex}`} className="fp-cell" style={place} />;
             if (slot.kind === "spacer") return null;
-            return <Cell key={slot.addr} spec={slot} place={place} cells={cells} calculated={calculated} readOnly={readOnly} onChange={onChange} />;
+            return <Cell key={slot.addr} spec={slot} place={place} cells={cells} calculated={calculated} readOnly={readOnly} onChange={onChange} documentNumber={documentNumber} revision={revision} />;
           }),
         )}
       </div>
@@ -78,6 +85,8 @@ function Cell({
   calculated,
   readOnly,
   onChange,
+  documentNumber,
+  revision,
 }: {
   spec: FuelCell;
   place: CSSProperties;
@@ -85,8 +94,10 @@ function Cell({
   calculated: Record<string, CellValue>;
   readOnly: boolean;
   onChange: (addr: string, value: CellValue) => void;
+  documentNumber: string;
+  revision: string;
 }) {
-  const text = shownText(spec, cells, calculated);
+  const text = shownText(spec, cells, calculated, documentNumber, revision);
   const cf = spec.kind === "blocked" || spec.kind === "check" || spec.kind === "spacer" ? null : conditionalFill(spec.addr, text);
   const className = [
     "fp-cell",

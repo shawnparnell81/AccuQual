@@ -390,8 +390,8 @@ describe("Version control: workflows, Management Review, Context of the Organiza
       expect((await request(app).post(`/${path}/1/publish`).set(as(reviewer)).send({ versionId: v2 })).status).toBe(200);
 
       const [live] = await db.select().from(formData).where(and(eq(formData.formType, formType)));
-      expect(live!.data).toEqual(changed);
-      expect(live!.version).toBe(4);
+      expect(live!.data).toMatchObject(changed);
+      expect(live!.version).toBe(3);
       const snaps = await db.select().from(formVersions).where(eq(formVersions.formId, live!.id));
       expect(snaps.map((s) => s.data)).toContainEqual(sample); // (jsonb reorders keys, so compare structurally)
 
@@ -416,7 +416,7 @@ describe("Version control: workflows, Management Review, Context of the Organiza
       await request(app).post(`/${path}/1/review`).set(as(reviewer)).send({ versionId: rb.body.id, action: "approve" });
       await request(app).post(`/${path}/1/publish`).set(as(reviewer)).send({ versionId: rb.body.id });
       const [live] = await db.select().from(formData).where(and(eq(formData.formType, formType)));
-      expect(live!.data).toEqual(sample);
+      expect(live!.data).toMatchObject(sample);
       expect((await request(app).get(`/${path}/1/versions`).set(as(author))).body[0]).toMatchObject({ versionNumber: 3, isRollback: true });
     });
 

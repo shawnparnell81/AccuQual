@@ -10,6 +10,8 @@ export interface FormTemplate {
   pdfPath: string;
   fieldMap: Record<string, string>;
   isDefault: string;
+  templateRevision?: string;
+  templateVersion?: number;
 }
 
 export interface FormDataRecord {
@@ -19,6 +21,8 @@ export interface FormDataRecord {
   entityId: number | null;
   data: Record<string, unknown>;
   version: number;
+  templateRevision?: string;
+  templateVersion?: number;
   updatedAt: string | null;
 }
 

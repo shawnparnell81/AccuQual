@@ -5,6 +5,7 @@ import type { FormTemplate } from "../../drizzle/schema/forms.js";
 import { getFormLayout } from "./layouts/index.js";
 import { renderFormLayoutAsPdf } from "./schema-pdf-renderer.js";
 import { renderProcessFlowDiagramAsPdf } from "./diagram-pdf-renderer.js";
+import { TEMPLATE_STAMP_KEY, readTemplateStamp } from "./templateRevision.js";
 
 /**
  * Fills a template's AcroForm fields with `data` per `fieldMap` (DB field ->
@@ -75,11 +76,15 @@ async function renderPlainPdf(formType: string, data: Record<string, unknown>): 
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
+  const stamp = readTemplateStamp(data);
   let y = 740;
   page.drawText(`AccuQual — ${formType.toUpperCase()} Form`, { x: 50, y, size: 16, font: bold, color: rgb(0.1, 0.1, 0.1) });
+  y -= 22;
+  page.drawText(`Rev ${stamp?.revision ?? "A"}`, { x: 50, y, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
   y -= 30;
 
   for (const [key, value] of Object.entries(data)) {
+    if (key === TEMPLATE_STAMP_KEY) continue;
     if (y < 60) break; // single-page fallback is fine for a scaffold
     const text = `${key}: ${typeof value === "object" ? JSON.stringify(value) : String(value)}`;
     page.drawText(text.slice(0, 100), { x: 50, y, size: 11, font, color: rgb(0.2, 0.2, 0.2) });

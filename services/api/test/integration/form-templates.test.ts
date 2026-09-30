@@ -44,8 +44,10 @@ describe("ISO Compliance Documents form templates", () => {
     const ncr = templates.find((form) => form.formKey === "ncr");
     const training = templates.find((form) => form.formKey === "training-record");
     const audit = templates.find((form) => form.formKey === "audit-plan");
-    expect(csa?.formId).toBe("FRM-VAL-001");
-    expect(pump?.formId).toBe("FRM-VAL-007");
+    expect(csa?.formId).toBe("");
+    expect(csa?.title).toBe("CSA Validation");
+    expect(pump?.formId).toBe("");
+    expect(pump?.title).toBe("Fuel Pump Validation");
     expect(csa?.isoPath).toEqual(["Blank Form Templates", "Validation"]);
     expect(pump?.folderId).toBe(csa?.folderId);
     expect(csa?.subjectRoute).toBe("/folders/validation-reports");
@@ -72,7 +74,7 @@ describe("ISO Compliance Documents form templates", () => {
     expect(equipmentList?.isoPath).toEqual(["Blank Form Templates", "Calibration"]);
     expect(documentList?.subjectRoute).toBe("/documents/master-list");
     expect(documentList?.isoPath).toEqual(["Blank Form Templates", "Document Control"]);
-    expect(auditForm?.formId).toBe("FRM-GEN-001");
+    expect(auditForm?.formId).toBe("");
     const crossTraining = templates.find((form) => form.formKey === "frm-trn-002");
     expect(crossTraining?.formId).toBe("");
     expect(crossTraining?.title).toBe("Cross-Training Evaluation");
