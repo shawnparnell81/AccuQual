@@ -36,6 +36,8 @@ export const FIXED_TEMPLATE_REVISIONS: Record<string, { version: number; revisio
   "iso:failure_effectiveness": { version: 1, revision: "A" },
   "validation:csa": { version: 3, revision: "C" },
   "validation:fuel_pump": { version: 3, revision: "C" },
+  "validation:air_strut": { version: 1, revision: "A" },
+  "iso:audit_summary": { version: 1, revision: "A" },
 };
 
 export function structureHash(value: unknown): string {

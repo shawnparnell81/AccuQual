@@ -21,7 +21,7 @@ export const EDITABLE_FORM_KEYS = new Set([
 ]);
 
 /** Filled copies that can be saved into a Documents folder and opened from Folder Explorer. */
-export const FILEABLE_FORM_KEYS = new Set<string>([...EDITABLE_FORM_KEYS, "frm-val-001", "frm-val-007"]);
+export const FILEABLE_FORM_KEYS = new Set<string>([...EDITABLE_FORM_KEYS, "frm-val-001", "frm-val-007", "frm-val-010", "frm-gen-002"]);
 
 export const FORM_KEY_BY_TYPE: Record<string, string> = {
   psw: "frm-psw-001",
@@ -32,6 +32,7 @@ export const FORM_KEY_BY_TYPE: Record<string, string> = {
   failure_effectiveness: "frm-fae-001",
   gage_rr: "frm-msa-001",
   pareto_chart: "frm-par-001",
+  audit_summary: "frm-gen-002",
 };
 
 /** Print and sheet header. A blank number stays a revision with no document id. */

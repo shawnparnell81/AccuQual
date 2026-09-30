@@ -104,6 +104,7 @@ export const LEGACY_ASSIGNED_FORM_IDS = new Set([
 
 export const FORM_TEMPLATES: FormTemplateSeed[] = [
   { formKey: "frm-gen-001", formId: "", title: "Internal Audit Checklist", topic: "Audit", subjectRoute: "/iso-forms/frm-gen-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "internal_audit", data: { cells: { F3: "Quality & Engineering" } } }) },
+  { formKey: "frm-gen-002", formId: "", title: "Internal Audit Summary Report", topic: "Audit", subjectRoute: "/iso-forms/frm-gen-002", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "audit_summary", data: { cells: { D5: "Shawn Parnell" } } }) },
   { formKey: "frm-ncr-001", formId: "", title: "Non-Conformance Report", topic: "Nonconformance", subjectRoute: "/iso-forms/frm-ncr-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "ncr_report", data: { cells: {} } }) },
   { formKey: "frm-ncr-002", formId: "", title: "Quarantine Notice", topic: "Nonconformance", subjectRoute: "/iso-forms/frm-ncr-002", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "quarantine_notice", data: { cells: {} } }) },
   { formKey: "frm-ncr-003", formId: "", title: "Concession / Deviation Request", topic: "Nonconformance", subjectRoute: "/iso-forms/frm-ncr-003", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "concession", data: { cells: {} } }) },
@@ -121,6 +122,7 @@ export const FORM_TEMPLATES: FormTemplateSeed[] = [
   { formKey: "lst-gen-001", formId: "", title: "Master Document List", topic: "Document Control", subjectRoute: "/documents/master-list", start: null },
   { formKey: "frm-val-001", formId: "", title: "CSA Validation", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "csa", cells: {} } }) },
   { formKey: "frm-val-007", formId: "", title: "Fuel Pump Validation", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "fuel_pump", cells: {} } }) },
+  { formKey: "frm-val-010", formId: "", title: "Air Strut Validation", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "air_strut", cells: {} } }) },
   { formKey: "8d", formId: "", title: "8D Problem Solving", topic: "Problem Solving", subjectRoute: "/8d", start: blank("/8d", "/8d/{id}") },
   { formKey: "ncr", formId: "", title: "Nonconformance Report", topic: "Nonconformance", subjectRoute: "/ncr", start: blank("/ncr", "/ncr/{id}", { title: "Nonconformance Report" }) },
   { formKey: "capa", formId: "", title: "Corrective Action Request", topic: "Nonconformance", subjectRoute: "/capa", start: blank("/capa", "/capa/{id}") },

@@ -14,6 +14,7 @@ export const ISO_FORM_TYPES = [
   "first_article",
   "customer_scorecard",
   "failure_effectiveness",
+  "audit_summary",
 ] as const;
 export type IsoFormType = (typeof ISO_FORM_TYPES)[number];
 
@@ -28,6 +29,12 @@ export const isoQualityForms = pgTable("iso_quality_forms", {
       customers?: Array<Record<string, string | number | null | undefined>>;
       problems?: Array<Record<string, unknown>>;
       months?: string[];
+      leadAuditorSignature?: string;
+      managementSignature?: string;
+      auditeeSignature1?: string;
+      auditeeSignature2?: string;
+      auditeeSignature3?: string;
+      auditeeSignature4?: string;
     }>()
     .default({}),
   createdAt: timestamp("created_at").defaultNow(),

@@ -73,7 +73,8 @@
   text-align: center;
 }
 
-.iso td.area {
+.iso td.area,
+.iso td.sig {
   height: auto;
   vertical-align: top;
 }

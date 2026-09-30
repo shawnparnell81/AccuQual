@@ -8,13 +8,20 @@
 
 export type CellValue = string | number | boolean;
 
-export type ValidationFormType = "csa" | "fuel_pump";
+export type ValidationFormType = "csa" | "fuel_pump" | "air_strut";
 
 /** Records saved before the fuel pump form have no formType and stay CSA. */
 export function formTypeOf(data: unknown): ValidationFormType {
-  if (data && typeof data === "object" && (data as { formType?: unknown }).formType === "fuel_pump") return "fuel_pump";
+  const raw = data && typeof data === "object" ? (data as { formType?: unknown }).formType : undefined;
+  if (raw === "fuel_pump" || raw === "air_strut") return raw;
   return "csa";
 }
+
+export const VALIDATION_FORMS: Record<ValidationFormType, { formKey: string; title: string; pass: string; revision: string }> = {
+  csa: { formKey: "frm-val-001", title: "CSA Validation", pass: "#4EA72E", revision: "C" },
+  fuel_pump: { formKey: "frm-val-007", title: "Fuel Pump Validation", pass: "#00B050", revision: "C" },
+  air_strut: { formKey: "frm-val-010", title: "Air Strut Validation", pass: "#0EBB5F", revision: "A" },
+};
 
 export const PASSED_FILL = "#4EA72E";
 export const FAILED_FILL = "#FF0000";

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { formatDate } from "../../lib/dates";
+import { auditSummaryStarter } from "../../lib/auditSummary";
 import { formByKey, type IsoFormType } from "../../lib/isoFormCatalog";
 import { showCell, type CellValue } from "../../lib/isoFormLogic";
 import type { FailureRow, ScorecardRow } from "../../lib/qualitySheetLogic";
@@ -47,6 +48,7 @@ function summary(formType: IsoFormType, data: IsoQualityForm["data"]): string {
   if (formType === "first_article") return showCell(cells.F3) || showCell(cells.D4);
   if (formType === "customer_scorecard") return showCell(cells.B2) || data.customers?.find((row) => row.name)?.name || "";
   if (formType === "failure_effectiveness") return data.problems?.find((row) => row.problem)?.problem || "";
+  if (formType === "audit_summary") return showCell(cells.D5) || showCell(cells.B6) || showCell(cells.B7);
   return "";
 }
 
@@ -76,7 +78,7 @@ export function IsoFormListPage() {
 
   function start() {
     setPending(true);
-    const cells = form.formType === "internal_audit" ? { F3: "Quality & Engineering" } : {};
+    const cells = form.formType === "internal_audit" ? { F3: "Quality & Engineering" } : form.formType === "audit_summary" ? auditSummaryStarter() : {};
     createForm.mutate({ formType: form.formType, data: { cells } } as never, {
       onSuccess: (created) => navigate(`/iso-forms/record/${created.id}`),
       onSettled: () => setPending(false),

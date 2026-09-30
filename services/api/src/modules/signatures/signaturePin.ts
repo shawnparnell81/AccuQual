@@ -19,6 +19,12 @@ export const SIGNATURE_FIELD_KEYS = new Set([
   "manufacturingSignoffSignature",
   "purchasingSignoffSignature",
   "salesSignoffSignature",
+  "leadAuditorSignature",
+  "managementSignature",
+  "auditeeSignature1",
+  "auditeeSignature2",
+  "auditeeSignature3",
+  "auditeeSignature4",
 ]);
 
 const DATE_SIBLING: Record<string, string> = {

@@ -19,6 +19,8 @@ import {
   folderPathNames,
   recordLinkedPath,
   resolveFolderPath,
+  validationKind,
+  validationKindForKey,
   type FolderNode,
 } from "./editableForms.js";
 
@@ -142,12 +144,11 @@ async function assertRecord(db: Db, formKey: string, recordId: number): Promise<
     return null;
   }
   if (formKey === "frm-msa-001") return null;
-  if (formKey === "frm-val-001" || formKey === "frm-val-007") {
+  const validationExpected = validationKindForKey(formKey);
+  if (validationExpected) {
     const [record] = await db.select().from(validationReports).where(eq(validationReports.id, recordId));
     if (!record) throw AppError.notFound("Filled form");
-    const formType = record.data?.formType === "fuel_pump" ? "fuel_pump" : "csa";
-    const expected = formKey === "frm-val-007" ? "fuel_pump" : "csa";
-    if (formType !== expected) throw AppError.notFound("Filled form");
+    if (validationKind(record.data) !== validationExpected) throw AppError.notFound("Filled form");
     return record.createdAt ? record.createdAt.toISOString().slice(0, 10) : null;
   }
   const formType = Object.entries(ISO_TYPE_TO_FORM_KEY).find(([, key]) => key === formKey)?.[0];

@@ -5,8 +5,9 @@ import { apiClient } from "../../api/client";
 import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { formatDate } from "../../lib/dates";
+import { cellsFromData as airCellsFromData, overallResult as airOverall } from "../../lib/airStrutReport";
 import { cellsFromData as fuelCellsFromData, overallResult as fuelOverall } from "../../lib/fuelPumpReport";
-import { cellsFromData, formTypeOf, overallResult, type CellValue, type ValidationFormType } from "../../lib/validationReport";
+import { cellsFromData, formTypeOf, overallResult, VALIDATION_FORMS, type CellValue, type ValidationFormType } from "../../lib/validationReport";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 
@@ -19,7 +20,11 @@ interface ValidationReport {
 
 const hooks = createResourceHooks<ValidationReport>("validation-reports");
 
-const FORM_KEYS: Record<ValidationFormType, string> = { csa: "frm-val-001", fuel_pump: "frm-val-007" };
+const FORM_KEYS: Record<ValidationFormType, string> = {
+  csa: VALIDATION_FORMS.csa.formKey,
+  fuel_pump: VALIDATION_FORMS.fuel_pump.formKey,
+  air_strut: VALIDATION_FORMS.air_strut.formKey,
+};
 
 export function ValidationReportsPanel() {
   const navigate = useNavigate();
@@ -46,13 +51,14 @@ export function ValidationReportsPanel() {
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">CSA Validation and Fuel Pump Validation</h2>
+          <h2 className="text-lg font-semibold">CSA Validation, Fuel Pump Validation, and Air Strut Validation</h2>
           <p className="text-sm text-muted-foreground">
-            Start a CSA Validation or a Fuel Pump Validation, choose a Documents folder, and save. Open folder on the save line takes you there. You can also browse Quality, Document Control, Folder Explorer.
+            Start a validation, choose a Documents folder, and save. Open folder on the save line takes you there. You can also browse Quality, Document Control, Folder Explorer.
           </p>
           <div className="mt-2 flex flex-wrap gap-4">
             <FormNumberEditor formKey="frm-val-001" compact />
             <FormNumberEditor formKey="frm-val-007" compact />
+            <FormNumberEditor formKey="frm-val-010" compact />
           </div>
         </div>
         {canEdit && (
@@ -73,6 +79,14 @@ export function ValidationReportsPanel() {
             >
               {pendingKind === "fuel_pump" ? "Creating…" : "New Fuel Pump Validation"}
             </button>
+            <button
+              type="button"
+              onClick={() => start("air_strut")}
+              disabled={createReport.isPending}
+              className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+            >
+              {pendingKind === "air_strut" ? "Creating…" : "New Air Strut Validation"}
+            </button>
           </div>
         )}
       </div>
@@ -80,7 +94,7 @@ export function ValidationReportsPanel() {
       {isError && <p className="text-sm text-destructive">Couldn't load validation reports.</p>}
       {!isLoading && !isError && rows.length === 0 && (
         <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-          No validation reports yet. Use New CSA Validation or New Fuel Pump Validation to start one.
+          No validation reports yet. Use New CSA Validation, New Fuel Pump Validation, or New Air Strut Validation to start one.
         </div>
       )}
       {rows.length > 0 && (
@@ -97,13 +111,13 @@ export function ValidationReportsPanel() {
             <tbody>
               {rows.map((row) => {
                 const kind = formTypeOf(row.data);
-                const cells = kind === "fuel_pump" ? fuelCellsFromData(row.data) : cellsFromData(row.data);
-                const result = kind === "fuel_pump" ? fuelOverall(cells) : overallResult(cells);
+                const cells = kind === "fuel_pump" ? fuelCellsFromData(row.data) : kind === "air_strut" ? airCellsFromData(row.data) : cellsFromData(row.data);
+                const result = kind === "fuel_pump" ? fuelOverall(cells) : kind === "air_strut" ? airOverall(cells) : overallResult(cells);
                 const passed = result === "Pass" || result === "Passed";
                 const failed = result === "Fail" || result === "Failed";
-                const color = passed ? (kind === "fuel_pump" ? "#00B050" : "#4EA72E") : failed ? "#FF0000" : "transparent";
+                const color = passed ? VALIDATION_FORMS[kind].pass : failed ? "#FF0000" : "transparent";
                 const number = filing.data?.templates.find((item) => item.formKey === FORM_KEYS[kind])?.formId?.trim() ?? "";
-                const name = number ? `${number} #${row.id}` : kind === "fuel_pump" ? `Fuel Pump Validation #${row.id}` : `CSA Validation #${row.id}`;
+                const name = number ? `${number} #${row.id}` : `${VALIDATION_FORMS[kind].title} #${row.id}`;
                 return (
                   <tr key={row.id} className="border-t border-border">
                     <td className="px-3 py-2 font-medium">

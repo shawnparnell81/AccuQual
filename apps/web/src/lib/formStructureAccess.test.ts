@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { canEditFormStructure } from "./formStructureAccess";
+import { blankCells as airBlank } from "./airStrutReport";
+import { buildAirStrutRows } from "./airStrutSheet";
 import { blankCells as fuelBlank } from "./fuelPumpReport";
 import { buildFuelPumpRows } from "./fuelPumpSheet";
 import { ISO_FORMS } from "./isoFormCatalog";
@@ -32,12 +34,16 @@ test("structure edits stay open to quality and engineering titles", () => {
 test("validation masters do not print a form number until one is set, and new fills name Shawn Parnell", () => {
   const csa = buildSheetRows().flat().map((cell) => cell.text ?? "").join("\n");
   const fuel = buildFuelPumpRows().flat().map((cell) => cell.text ?? "").join("\n");
+  const air = buildAirStrutRows().flat().map((cell) => cell?.text ?? "").join("\n");
   assert.equal(/FRM-VAL-/.test(csa), false);
   assert.equal(/FRM-VAL-/.test(fuel), false);
+  assert.equal(/FRM-VAL-/.test(air), false);
   assert.match(csa, /CSA VALIDATION REPORT/);
   assert.match(fuel, /FUEL PUMP VALIDATION DOCUMENT/);
+  assert.match(air, /AIR STRUT VALIDATION DOCUMENT/);
   assert.equal(csaBlank().B8, "Shawn Parnell");
   assert.equal(fuelBlank().B8, "Shawn Parnell");
+  assert.equal(airBlank().B8, "Shawn Parnell");
 });
 
 test("published ISO letters stay on the masters", () => {

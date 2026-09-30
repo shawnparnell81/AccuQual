@@ -68,3 +68,9 @@ export const createIsoQualityFormSchema = z.object({
 export const updateIsoQualityFormSchema = z.object({
   data: formData,
 });
+
+export const signIsoQualityFormSchema = z.object({
+  field: z.string().max(40),
+  pin: z.string(),
+  certified: z.literal(true),
+});

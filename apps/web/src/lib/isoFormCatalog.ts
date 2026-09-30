@@ -1,3 +1,4 @@
+import { auditSummaryLayout } from "./auditSummary";
 import { auditLayout, concessionLayout, ncrLayout, quarantineLayout, trainingLayout, type FormLayout } from "./isoFormLayouts";
 import { pswLayout, qualityAlertLayout, turtleLayout } from "./qualitySheetLayouts";
 
@@ -14,6 +15,7 @@ export const ISO_FORM_TYPES = [
   "first_article",
   "customer_scorecard",
   "failure_effectiveness",
+  "audit_summary",
 ] as const;
 export type IsoFormType = (typeof ISO_FORM_TYPES)[number];
 
@@ -40,6 +42,7 @@ export const ISO_FORMS: IsoFormMeta[] = [
   { formKey: "frm-fai-001", formType: "first_article", formId: "", title: "First Article Inspection Report", rev: "A", layout: null, photos: false },
   { formKey: "frm-cus-001", formType: "customer_scorecard", formId: "", title: "Customer Scorecard", rev: "A", layout: null, photos: false },
   { formKey: "frm-fae-001", formType: "failure_effectiveness", formId: "", title: "Failure Action Effectiveness Chart", rev: "A", layout: null, photos: false },
+  { formKey: "frm-gen-002", formType: "audit_summary", formId: "", title: "Internal Audit Summary Report", rev: "A", layout: auditSummaryLayout(), photos: false },
 ];
 
 export function formByKey(formKey: string | undefined): IsoFormMeta | undefined {

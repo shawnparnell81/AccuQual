@@ -24,7 +24,7 @@ export const EDITABLE_FORM_NUMBER_KEYS = new Set([
  * Filled copies that can be saved into any Documents folder and opened again from there.
  * CSA Validation and Fuel Pump Validation keep their seeded numbers; they are filed the same way.
  */
-export const FILEABLE_FORM_KEYS = new Set<string>([...EDITABLE_FORM_NUMBER_KEYS, "frm-val-001", "frm-val-007"]);
+export const FILEABLE_FORM_KEYS = new Set<string>([...EDITABLE_FORM_NUMBER_KEYS, "frm-val-001", "frm-val-007", "frm-val-010", "frm-gen-002"]);
 
 /** ISO form_type -> blank-template key. Only the six records stored on iso_quality_forms. */
 export const ISO_TYPE_TO_FORM_KEY: Record<string, string> = {
@@ -34,6 +34,7 @@ export const ISO_TYPE_TO_FORM_KEY: Record<string, string> = {
   first_article: "frm-fai-001",
   customer_scorecard: "frm-cus-001",
   failure_effectiveness: "frm-fae-001",
+  audit_summary: "frm-gen-002",
 };
 
 export const FORM_DATA_TYPE_TO_FORM_KEY: Record<string, string> = {
@@ -57,12 +58,40 @@ export const SUGGESTED_SUBJECT_PATH: Record<string, string[]> = {
   "frm-par-001": ["Quality", "Production & Inspection", "Pareto Charts"],
   "frm-val-001": ["Engineering", "Design & Development", "Design Validation"],
   "frm-val-007": ["Engineering", "Manufacturing Engineering", "Process Validation"],
+  "frm-val-010": ["Engineering", "Design & Development", "Design Validation"],
+  "frm-gen-002": ["Quality", "Audits", "Internal Audit Reports"],
 };
+
+export type ValidationKind = "csa" | "fuel_pump" | "air_strut";
+
+/** Missing formType stays CSA so older rows keep their sheet. */
+export function validationKind(data: unknown): ValidationKind {
+  const raw = data && typeof data === "object" ? (data as { formType?: unknown }).formType : undefined;
+  if (raw === "fuel_pump" || raw === "air_strut") return raw;
+  return "csa";
+}
+
+export function validationFormKeyFor(data: unknown): string {
+  const kind = validationKind(data);
+  if (kind === "fuel_pump") return "frm-val-007";
+  if (kind === "air_strut") return "frm-val-010";
+  return "frm-val-001";
+}
+
+const VALIDATION_KEY_KIND: Record<string, ValidationKind> = {
+  "frm-val-001": "csa",
+  "frm-val-007": "fuel_pump",
+  "frm-val-010": "air_strut",
+};
+
+export function validationKindForKey(formKey: string): ValidationKind | null {
+  return VALIDATION_KEY_KIND[formKey] ?? null;
+}
 
 export function recordLinkedPath(formKey: string, recordId: number): string {
   if (formKey === "frm-msa-001") return `/calibration/${recordId}`;
   if (formKey === "frm-par-001") return "/pareto";
-  if (formKey === "frm-val-001" || formKey === "frm-val-007") return `/validation-reports/${recordId}`;
+  if (formKey === "frm-val-001" || formKey === "frm-val-007" || formKey === "frm-val-010") return `/validation-reports/${recordId}`;
   return `/iso-forms/record/${recordId}`;
 }
 

@@ -28,6 +28,17 @@
   border-left: 1px solid #64748b;
 }
 
+.fp-sheet.as-sheet {
+  grid-template-columns: 268px 104px 148px 72px 72px 72px 72px 96px;
+}
+
+.fp-cell.spacer {
+  border: 0;
+  background: transparent;
+  min-height: 8px;
+  padding: 0;
+}
+
 .fp-sheet {
   display: grid;
   grid-template-columns: 306px 141px 141px 141px 92px 92px 92px 86px 16px 74px 74px;
