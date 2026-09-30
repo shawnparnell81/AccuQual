@@ -96,12 +96,17 @@ jobs:
   # Docker images had zero CI coverage on a normal push/PR. This is a
   # separate, always-on, registry-free build-only job (no push, no
   # credentials needed) so a broken worker Dockerfile fails CI immediately.
+  # The web image is here for the same reason. "Build Web" typechecks the
+  # full checkout, so it stayed green while apps/web/Dockerfile omitted
+  # services/api/src/utils/passFail.ts and Image scan failed with TS2307.
+  # That failed check is what blocks Render (autoDeployTrigger: checksPass).
   build-worker-images:
     needs: build-and-test
     runs-on: ubuntu-latest
     strategy:
       matrix:
         service:
+          - { name: web, dockerfile: apps/web/Dockerfile }
           - { name: workflow-worker, dockerfile: workers/workflow-worker/Dockerfile }
           - { name: ai-worker, dockerfile: workers/ai-worker/Dockerfile }
           - { name: digital-twin-worker, dockerfile: workers/digital-twin-worker/Dockerfile }
