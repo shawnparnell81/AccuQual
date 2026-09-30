@@ -6,6 +6,15 @@ COPY apps/web/package.json apps/web/package.json
 RUN npm install --workspace apps/web --include-workspace-root
 COPY tsconfig.base.json ./
 COPY apps/web ./apps/web
+# Screen and PDF share one Pass/Fail function. apps/web/src/lib/passFail.ts
+# re-exports services/api/src/utils/passFail.ts, which is a leaf module (it
+# imports nothing). Copy it after npm install so the services/* workspace
+# glob does not pull the API into that install. services/api/package.json
+# ("type": "module") has to sit next to the copied source so TypeScript's
+# package lookup matches the API, same as the worker images. CI's "Build Web"
+# step typechecks the full checkout and will not catch a missing COPY here.
+COPY services/api/package.json ./services/api/package.json
+COPY services/api/src/utils/passFail.ts ./services/api/src/utils/passFail.ts
 ARG VITE_API_BASE_URL=/api
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 # Optional browser error tracking (see apps/web/src/lib/errorTracking.ts). Empty = the Sentry code is never loaded.
