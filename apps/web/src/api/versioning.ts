@@ -31,6 +31,8 @@ export interface VersionSummary {
   publishedBy: number | null;
   publishedAt: string | null;
   publishedByName?: string | null;
+  /** Set for controlled documents. Null for versioned records that have no revision code. */
+  revisionCode?: string | null;
 }
 
 export interface VersionFull<P = Record<string, unknown>> extends VersionSummary {

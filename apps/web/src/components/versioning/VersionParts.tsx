@@ -6,6 +6,7 @@ import { useToast } from "../shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { REVIEWER_ROLES, type CurrentState, type DiffEntry, type ValidationIssue, type VersionDiff, type VersionStatus, type VersionSummary, useVersionDiff } from "../../api/versioning";
+import { versionActivityLine, versionRevisionNote } from "../../lib/documentRevision";
 
 const STATUS_LABEL: Record<VersionStatus, string> = { draft: "Draft", in_review: "In review", published: "Published", archived: "Archived" };
 const STATUS_CLASS: Record<VersionStatus, string> = {
@@ -37,7 +38,9 @@ export function VersionTimeline({ versions, selectedId, onSelect, onCompare, onR
   if (versions.length === 0) return <p className="text-sm text-muted-foreground">No versions yet.</p>;
   return (
     <ol className="flex flex-col">
-      {versions.map((v, i) => (
+      {versions.map((v, i) => {
+        const revisionNote = versionRevisionNote(v);
+        return (
         <li key={v.id} className="relative flex gap-3 pb-4 last:pb-0">
           <div className="flex flex-col items-center">
             <span className={clsx("mt-1 h-2.5 w-2.5 rounded-full", v.status === "published" ? "bg-success" : v.status === "draft" ? "bg-warning" : v.status === "in_review" ? "bg-primary" : "bg-muted-foreground/50")} />
@@ -51,10 +54,9 @@ export function VersionTimeline({ versions, selectedId, onSelect, onCompare, onR
               <VersionStatusBadge status={v.status} />
               {v.isRollback && <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"><RotateCcw size={11} /> restores v{v.basedOnVersion}</span>}
             </div>
+            {revisionNote && <p className="mt-0.5 text-xs text-muted-foreground">{revisionNote}</p>}
             {v.metadata?.summary && <p className="mt-0.5 text-xs">{v.metadata.summary}</p>}
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {v.publishedAt ? `Published ${when(v.publishedAt)} by ${v.publishedByName ?? "—"}` : v.status === "in_review" ? `Submitted ${when(v.submittedAt)} by ${v.submittedByName ?? "—"}` : `Started ${when(v.createdAt)} by ${v.createdByName ?? "—"}`}
-            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{versionActivityLine(v)}</p>
             {v.reviewedAt && (
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {v.reviewDecision === "approved" ? "Approved" : "Sent back"} by {v.reviewedByName ?? "—"}
@@ -73,7 +75,8 @@ export function VersionTimeline({ versions, selectedId, onSelect, onCompare, onR
             </div>
           </div>
         </li>
-      ))}
+        );
+      })}
     </ol>
   );
 }

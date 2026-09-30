@@ -280,7 +280,9 @@ export const documentAdapter: SubjectAdapter = {
       })
       .where(and(eq(documents.id, id)));
 
-    // Keep the long-standing revision ledger (history, retention age-out, legacy file download) true for every release.
+    // The release ledger is written only on publish. Retention age-out and the released-file
+    // download read it. On-screen version history reads controlled versions, so a draft is
+    // listed before it is released and this ledger can stay empty until then.
     const [already] = await db.select({ id: documentVersions.id }).from(documentVersions).where(and(eq(documentVersions.documentId, id), eq(documentVersions.version, info.versionNumber)));
     if (!already) {
       const primary = p.attachments.find((a) => a.mimeType === "application/pdf") ?? p.attachments[0];
