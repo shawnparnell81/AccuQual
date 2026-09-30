@@ -5,6 +5,7 @@ import { safeTimeZone, calendarDay } from "../quality-automation/logic.js";
 export const SIGNATURE_FIELD_KEYS = new Set([
   "signature",
   "authorizedSignature",
+  "furtherSignature",
   "approvalSignature",
   "signatureTitle",
   "operatorSignature",

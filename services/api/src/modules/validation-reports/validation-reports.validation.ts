@@ -3,7 +3,7 @@ import { z } from "zod";
 const cellValue = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 
 const reportData = {
-  formType: z.enum(["csa", "fuel_pump", "air_strut"]).optional(),
+  formType: z.enum(["csa", "fuel_pump", "air_strut", "air_spring", "fuel_injector", "brake_wear"]).optional(),
   cells: z.record(z.string(), cellValue).optional(),
 };
 
@@ -13,12 +13,13 @@ export const createValidationReportSchema = z.object({
 
 export const updateValidationReportSchema = z.object({
   data: z.object({
-    formType: z.enum(["csa", "fuel_pump", "air_strut"]).optional(),
+    formType: z.enum(["csa", "fuel_pump", "air_strut", "air_spring", "fuel_injector", "brake_wear"]).optional(),
     cells: z.record(z.string(), cellValue),
   }),
 });
 
 export const signValidationReportSchema = z.object({
+  field: z.enum(["authorizedSignature", "furtherSignature"]).optional(),
   pin: z.string(),
   certified: z.literal(true),
 });

@@ -1,6 +1,6 @@
 import { useMemo, type CSSProperties } from "react";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
-import { AIR_STRUT_CERTIFY, evaluate, parseInput, showValue, statusFill, type CellValue } from "../../lib/airStrutReport";
+import { AIR_STRUT_CERTIFY, evaluate as evaluateAirStrut, parseInput, showValue, statusFill, type CellValue } from "../../lib/airStrutReport";
 import { AIR_STRUT_ROWS, buildAirStrutRows, type AirCell } from "../../lib/airStrutSheet";
 import "./validationReport.css";
 
@@ -12,6 +12,17 @@ interface AirStrutSheetProps {
   revision?: string;
   signature?: string;
   onSign?: (pin: string) => Promise<unknown>;
+}
+
+interface DenseAirSheetProps extends AirStrutSheetProps {
+  rows: AirCell[][];
+  rowCount: number;
+  evaluateCells: (cells: Record<string, CellValue>) => Record<string, CellValue>;
+  certify: string;
+  testId: string;
+  label: string;
+  resultAddrs: string[];
+  sheetClass?: string;
 }
 
 type Slot = AirCell | "covered" | "empty";
@@ -38,21 +49,52 @@ function shownText(spec: AirCell, cells: Record<string, CellValue>, calculated: 
   return "";
 }
 
-export function AirStrutSheet({ cells, readOnly = false, onChange, documentNumber = "", revision = "A", signature = "", onSign }: AirStrutSheetProps) {
+export function AirStrutSheet(props: AirStrutSheetProps) {
   const rows = useMemo(() => buildAirStrutRows(), []);
-  const calculated = useMemo(() => evaluate(cells), [cells]);
+  return (
+    <DenseAirSheet
+      {...props}
+      rows={rows}
+      rowCount={AIR_STRUT_ROWS}
+      evaluateCells={evaluateAirStrut}
+      certify={AIR_STRUT_CERTIFY}
+      testId="air-strut-sheet"
+      label="Air Strut Validation Document"
+      resultAddrs={["G7", "B84"]}
+    />
+  );
+}
+
+export function DenseAirSheet({
+  cells,
+  readOnly = false,
+  onChange,
+  documentNumber = "",
+  revision = "A",
+  signature = "",
+  onSign,
+  rows,
+  rowCount,
+  evaluateCells,
+  certify,
+  testId,
+  label,
+  resultAddrs,
+  sheetClass = "as-sheet",
+}: DenseAirSheetProps) {
+  const calculated = useMemo(() => evaluateCells(cells), [cells, evaluateCells]);
   const grid = useMemo(() => {
-    const next: Slot[][] = Array.from({ length: AIR_STRUT_ROWS }, () => Array.from({ length: 8 }, () => "empty" as Slot));
+    const next: Slot[][] = Array.from({ length: rowCount }, () => Array.from({ length: 8 }, () => "empty" as Slot));
     rows.forEach((specs, index) => {
       if (!specs) return;
       for (const spec of specs) occupy(next, index, spec);
     });
     return next;
-  }, [rows]);
+  }, [rowCount, rows]);
 
   return (
     <div className="fp-wrap">
-      <div className="fp-sheet as-sheet" data-testid="air-strut-sheet" role="table" aria-label="Air Strut Validation Document">
+      <div className={`fp-sheet ${sheetClass}`} data-testid={testId} role="table" aria-label={label}>
         {grid.map((row, rowIndex) =>
           row.map((slot, colIndex) => {
             if (slot === "covered" || slot === "empty") return null;
@@ -70,6 +112,8 @@ export function AirStrutSheet({ cells, readOnly = false, onChange, documentNumbe
                 revision={revision}
                 signature={signature}
                 onSign={onSign}
+                certify={certify}
+                resultAddrs={resultAddrs}
               />
             );
           }),
@@ -90,6 +134,8 @@ function Cell({
   revision,
   signature,
   onSign,
+  certify,
+  resultAddrs,
 }: {
   spec: AirCell;
   place: CSSProperties;
@@ -101,6 +147,8 @@ function Cell({
   revision: string;
   signature: string;
   onSign?: (pin: string) => Promise<unknown>;
+  certify: string;
+  resultAddrs: string[];
 }) {
   const text = shownText(spec, cells, calculated, documentNumber, revision);
   const fill = spec.kind === "calc" ? statusFill(text) : null;
@@ -147,7 +195,7 @@ function Cell({
       {spec.kind === "sign" && (
         <SignatureStamp
           value={signature}
-          certify={AIR_STRUT_CERTIFY}
+          certify={certify}
           disabled={readOnly || !onSign}
           variant="sheet"
           onSign={async (pin) => {
@@ -155,7 +203,7 @@ function Cell({
           }}
         />
       )}
-      {spec.kind === "calc" && <span data-result={spec.addr === "G7" || spec.addr === "B84" ? text : undefined}>{text}</span>}
+      {spec.kind === "calc" && <span data-result={resultAddrs.includes(spec.addr) ? text : undefined}>{text}</span>}
       {(spec.kind === "label" || spec.kind === "spacer") && text}
     </div>
   );

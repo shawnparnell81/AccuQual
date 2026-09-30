@@ -274,3 +274,39 @@
     color: #111 !important;
   }
 }
+
+.dense-log {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  color: #111;
+  font-size: 12px;
+}
+.dense-log td,
+.dense-log th {
+  border: 1px solid #64748b;
+  padding: 3px 4px;
+  vertical-align: top;
+}
+.dense-log .title {
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+}
+.dense-log .section {
+  background: #1f4e79;
+  color: #fff;
+  font-weight: 700;
+}
+.dense-log input,
+.dense-log textarea,
+.dense-log select {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+}
+.dense-log textarea {
+  min-height: 42px;
+}

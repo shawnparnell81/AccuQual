@@ -24,7 +24,18 @@ export const EDITABLE_FORM_NUMBER_KEYS = new Set([
  * Filled copies that can be saved into any Documents folder and opened again from there.
  * CSA Validation and Fuel Pump Validation keep their seeded numbers; they are filed the same way.
  */
-export const FILEABLE_FORM_KEYS = new Set<string>([...EDITABLE_FORM_NUMBER_KEYS, "frm-val-001", "frm-val-007", "frm-val-010", "frm-gen-002"]);
+export const FILEABLE_FORM_KEYS = new Set<string>([
+  ...EDITABLE_FORM_NUMBER_KEYS,
+  "frm-val-001",
+  "frm-val-007",
+  "frm-val-008",
+  "frm-val-009",
+  "frm-val-010",
+  "frm-val-011",
+  "frm-gen-002",
+  "lst-vis-001",
+  "rpt-eng-001",
+]);
 
 /** ISO form_type -> blank-template key. Only the six records stored on iso_quality_forms. */
 export const ISO_TYPE_TO_FORM_KEY: Record<string, string> = {
@@ -35,6 +46,8 @@ export const ISO_TYPE_TO_FORM_KEY: Record<string, string> = {
   customer_scorecard: "frm-cus-001",
   failure_effectiveness: "frm-fae-001",
   audit_summary: "frm-gen-002",
+  visitor_log: "lst-vis-001",
+  monthly_engineering: "rpt-eng-001",
 };
 
 export const FORM_DATA_TYPE_TO_FORM_KEY: Record<string, string> = {
@@ -59,39 +72,57 @@ export const SUGGESTED_SUBJECT_PATH: Record<string, string[]> = {
   "frm-val-001": ["Engineering", "Design & Development", "Design Validation"],
   "frm-val-007": ["Engineering", "Manufacturing Engineering", "Process Validation"],
   "frm-val-010": ["Engineering", "Design & Development", "Design Validation"],
+  "frm-val-011": ["Engineering", "Design & Development", "Design Validation"],
+  "frm-val-008": ["Engineering", "Manufacturing Engineering", "Process Validation"],
+  "frm-val-009": ["Engineering", "Manufacturing Engineering", "Process Validation"],
   "frm-gen-002": ["Quality", "Audits", "Internal Audit Reports"],
+  "lst-vis-001": ["Quality", "Records", "Inspection Records"],
+  "rpt-eng-001": ["Engineering", "Technical Records"],
 };
 
-export type ValidationKind = "csa" | "fuel_pump" | "air_strut";
+export type ValidationKind = "csa" | "fuel_pump" | "air_strut" | "air_spring" | "fuel_injector" | "brake_wear";
+
+const NAMED_KINDS = new Set<ValidationKind>(["fuel_pump", "air_strut", "air_spring", "fuel_injector", "brake_wear"]);
 
 /** Missing formType stays CSA so older rows keep their sheet. */
 export function validationKind(data: unknown): ValidationKind {
   const raw = data && typeof data === "object" ? (data as { formType?: unknown }).formType : undefined;
-  if (raw === "fuel_pump" || raw === "air_strut") return raw;
+  if (typeof raw === "string" && NAMED_KINDS.has(raw as ValidationKind)) return raw as ValidationKind;
   return "csa";
 }
 
+const KIND_KEY: Record<ValidationKind, string> = {
+  csa: "frm-val-001",
+  fuel_pump: "frm-val-007",
+  air_strut: "frm-val-010",
+  air_spring: "frm-val-011",
+  fuel_injector: "frm-val-008",
+  brake_wear: "frm-val-009",
+};
+
 export function validationFormKeyFor(data: unknown): string {
-  const kind = validationKind(data);
-  if (kind === "fuel_pump") return "frm-val-007";
-  if (kind === "air_strut") return "frm-val-010";
-  return "frm-val-001";
+  return KIND_KEY[validationKind(data)];
 }
 
 const VALIDATION_KEY_KIND: Record<string, ValidationKind> = {
   "frm-val-001": "csa",
   "frm-val-007": "fuel_pump",
+  "frm-val-008": "fuel_injector",
+  "frm-val-009": "brake_wear",
   "frm-val-010": "air_strut",
+  "frm-val-011": "air_spring",
 };
 
 export function validationKindForKey(formKey: string): ValidationKind | null {
   return VALIDATION_KEY_KIND[formKey] ?? null;
 }
 
+const VALIDATION_RECORD_KEYS = new Set(Object.keys(VALIDATION_KEY_KIND));
+
 export function recordLinkedPath(formKey: string, recordId: number): string {
   if (formKey === "frm-msa-001") return `/calibration/${recordId}`;
   if (formKey === "frm-par-001") return "/pareto";
-  if (formKey === "frm-val-001" || formKey === "frm-val-007" || formKey === "frm-val-010") return `/validation-reports/${recordId}`;
+  if (VALIDATION_RECORD_KEYS.has(formKey)) return `/validation-reports/${recordId}`;
   return `/iso-forms/record/${recordId}`;
 }
 

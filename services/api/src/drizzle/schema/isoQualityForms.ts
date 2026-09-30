@@ -15,6 +15,8 @@ export const ISO_FORM_TYPES = [
   "customer_scorecard",
   "failure_effectiveness",
   "audit_summary",
+  "visitor_log",
+  "monthly_engineering",
 ] as const;
 export type IsoFormType = (typeof ISO_FORM_TYPES)[number];
 

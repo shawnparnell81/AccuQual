@@ -36,23 +36,38 @@ export const baseHandlers = crudFactory(validationReports, {
   },
 });
 
+const SIGNATURE_COPY: Record<string, Record<string, string>> = {
+  air_strut: { authorizedSignature: "I certify that this air strut validation is accurate and I authorize the disposition." },
+  air_spring: { authorizedSignature: "I certify that this air spring validation is accurate and I authorize the disposition." },
+  fuel_injector: {
+    authorizedSignature: "I certify that this fuel injector validation is accurate and I authorize the disposition.",
+    furtherSignature: "I certify that the further review of this fuel injector is accurate and I authorize the later disposition.",
+  },
+  brake_wear: {
+    authorizedSignature: "I certify that this brake wear sensor validation is accurate and I authorize the disposition.",
+    furtherSignature: "I certify that the further review of this brake wear sensor is accurate and I authorize the later disposition.",
+  },
+};
+
 export const signValidationReport = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
+  const field = req.body.field === "furtherSignature" ? "furtherSignature" : "authorizedSignature";
   const [record] = await req.db!.select().from(validationReports).where(eq(validationReports.id, id));
   if (!record) throw AppError.notFound("Validation Report");
-  if (validationKind(record.data) !== "air_strut") throw AppError.badRequest("This validation report has no signature block.");
+  const description = SIGNATURE_COPY[validationKind(record.data)]?.[field];
+  if (!description) throw AppError.badRequest("This validation report has no signature block.");
   const previous = asRecord(record.data);
-  const current = previous.authorizedSignature;
+  const current = previous[field];
   if (typeof current === "string" && current.trim()) throw AppError.badRequest("This signature is already recorded.");
   const stamp = await requireSignatureStamp(req, {
     pin: req.body.pin,
     certified: req.body.certified,
     entityType: "Validation Report",
     entityId: id,
-    field: "authorizedSignature",
-    description: "I certify that this air strut validation is accurate and I authorize the disposition.",
+    field,
+    description,
   });
-  const next = { ...previous, authorizedSignature: stamp.stamp };
+  const next = { ...previous, [field]: stamp.stamp };
   const [updated] = await req.db!.update(validationReports).set({ data: next, updatedAt: new Date() }).where(eq(validationReports.id, id)).returning();
   res.json(updated);
 });

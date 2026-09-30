@@ -18,6 +18,8 @@ import { EXCLUSIVE_CHECKS } from "../../lib/isoFormLayouts";
 import { showCell, quarantineTotal, type CellValue } from "../../lib/isoFormLogic";
 import { QUALITY_EXCLUSIVE_CHECKS } from "../../lib/qualitySheetLayouts";
 import { plusDays, type FailureRow, type FaiLine, type ScorecardRow } from "../../lib/qualitySheetLogic";
+import { MonthlyEngineeringSheet } from "./MonthlyEngineeringSheet";
+import { VisitorLogSheet } from "./VisitorLogSheet";
 import { CrossTrainingSheet } from "./CrossTrainingSheet";
 import { FailureChartSheet } from "./FailureChartSheet";
 import { FaiSheet } from "./FaiSheet";
@@ -315,6 +317,10 @@ function IsoFormDetailBody({
       <div className="aq-form-copy aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4">
         {formType === "cross_training" ? (
           <CrossTrainingSheet cells={cells} readOnly={!canEdit} onChange={changeCell} />
+        ) : formType === "visitor_log" ? (
+          <VisitorLogSheet cells={cells} readOnly={!canEdit} onChange={changeCell} documentNumber={documentNumber} revision={revision} />
+        ) : formType === "monthly_engineering" ? (
+          <MonthlyEngineeringSheet cells={cells} readOnly={!canEdit} onChange={changeCell} revision={revision} />
         ) : formType === "first_article" ? (
           <FaiSheet cells={cells} lines={lines} readOnly={!canEdit} onCell={changeCell} onLines={setLines} documentNumber={documentNumber} revision={revision} />
         ) : formType === "customer_scorecard" ? (

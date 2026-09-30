@@ -196,3 +196,48 @@
     print-color-adjust: exact;
   }
 }
+
+.insp {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  color: #111;
+  font-size: 12px;
+}
+.insp td,
+.insp th {
+  border: 1px solid #64748b;
+  padding: 2px 4px;
+  vertical-align: middle;
+}
+.insp .title {
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+}
+.insp .section {
+  background: #1f4e79;
+  color: #fff;
+  font-weight: 700;
+}
+.insp .note {
+  background: #fff3cd;
+  font-size: 11px;
+}
+.insp input,
+.insp textarea,
+.insp select {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.insp textarea {
+  min-height: 48px;
+  resize: vertical;
+}
+.insp .muted {
+  background: #e5e7eb;
+}

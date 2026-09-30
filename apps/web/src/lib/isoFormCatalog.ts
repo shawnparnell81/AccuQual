@@ -16,6 +16,8 @@ export const ISO_FORM_TYPES = [
   "customer_scorecard",
   "failure_effectiveness",
   "audit_summary",
+  "visitor_log",
+  "monthly_engineering",
 ] as const;
 export type IsoFormType = (typeof ISO_FORM_TYPES)[number];
 
@@ -43,6 +45,8 @@ export const ISO_FORMS: IsoFormMeta[] = [
   { formKey: "frm-cus-001", formType: "customer_scorecard", formId: "", title: "Customer Scorecard", rev: "A", layout: null, photos: false },
   { formKey: "frm-fae-001", formType: "failure_effectiveness", formId: "", title: "Failure Action Effectiveness Chart", rev: "A", layout: null, photos: false },
   { formKey: "frm-gen-002", formType: "audit_summary", formId: "", title: "Internal Audit Summary Report", rev: "A", layout: auditSummaryLayout(), photos: false },
+  { formKey: "lst-vis-001", formType: "visitor_log", formId: "", title: "DMA Laboratory Visitor Log", rev: "A", layout: null, photos: false },
+  { formKey: "rpt-eng-001", formType: "monthly_engineering", formId: "", title: "Monthly Engineering Development Report", rev: "A", layout: null, photos: false },
 ];
 
 export function formByKey(formKey: string | undefined): IsoFormMeta | undefined {

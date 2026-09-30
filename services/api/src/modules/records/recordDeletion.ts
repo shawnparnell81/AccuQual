@@ -323,6 +323,9 @@ function validationLabel(row: Row): string {
   const kind = data && typeof data === "object" ? (data as { formType?: unknown }).formType : undefined;
   if (kind === "fuel_pump") return "Fuel Pump Validation";
   if (kind === "air_strut") return "Air Strut Validation";
+  if (kind === "air_spring") return "Air Spring Validation";
+  if (kind === "fuel_injector") return "Fuel Injector Validation";
+  if (kind === "brake_wear") return "Brake Wear Sensor Validation";
   return "Validation Report";
 }
 
@@ -688,6 +691,8 @@ const ISO_FORM_LABELS: Record<string, string> = {
   customer_scorecard: "Customer Scorecard",
   failure_effectiveness: "Failure Action Effectiveness Chart",
   audit_summary: "Internal Audit Summary Report",
+  visitor_log: "DMA Laboratory Visitor Log",
+  monthly_engineering: "Monthly Engineering Development Report",
 };
 
 function isoFormTitle(row: Row): string | null {

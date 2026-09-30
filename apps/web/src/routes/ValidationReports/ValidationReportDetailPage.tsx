@@ -11,11 +11,15 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { instanceRevision } from "../../lib/formDocument";
+import { cellsFromData as springCellsFromData, overallResult as springOverall } from "../../lib/airSpringReport";
 import { authorizedSignatureOf, cellsFromData as airCellsFromData, overallResult as airOverall } from "../../lib/airStrutReport";
-import { cellsFromData as csaCellsFromData, formTypeOf, overallResult as csaOverall, VALIDATION_FORMS, type CellValue, type ValidationFormType } from "../../lib/validationReport";
 import { cellsFromData as fuelCellsFromData, overallResult as fuelOverall } from "../../lib/fuelPumpReport";
+import { blankBrakeCells, blankInjectorCells, cellsFromData as inspectionCells, furtherSignatureOf, overallBrake, overallInjector } from "../../lib/partInspection";
+import { cellsFromData as csaCellsFromData, formTypeOf, overallResult as csaOverall, VALIDATION_FORMS, type CellValue, type ValidationFormType } from "../../lib/validationReport";
+import { AirSpringSheet } from "./AirSpringSheet";
 import { AirStrutSheet } from "./AirStrutSheet";
 import { FuelPumpSheet } from "./FuelPumpSheet";
+import { PartInspectionSheet } from "./PartInspectionSheet";
 import { ValidationReportSheet } from "./ValidationReportSheet";
 
 interface ValidationReport {
@@ -30,12 +34,18 @@ const hooks = createResourceHooks<ValidationReport>("validation-reports");
 function loadCells(formType: ValidationFormType, data: unknown): Record<string, CellValue> {
   if (formType === "fuel_pump") return fuelCellsFromData(data);
   if (formType === "air_strut") return airCellsFromData(data);
+  if (formType === "air_spring") return springCellsFromData(data);
+  if (formType === "fuel_injector") return inspectionCells(data, blankInjectorCells);
+  if (formType === "brake_wear") return inspectionCells(data, blankBrakeCells);
   return csaCellsFromData(data);
 }
 
 function loadOverall(formType: ValidationFormType, cells: Record<string, CellValue>): string {
   if (formType === "fuel_pump") return fuelOverall(cells);
   if (formType === "air_strut") return airOverall(cells);
+  if (formType === "air_spring") return springOverall(cells);
+  if (formType === "fuel_injector") return overallInjector(cells);
+  if (formType === "brake_wear") return overallBrake(cells);
   return csaOverall(cells);
 }
 
@@ -77,8 +87,8 @@ export function ValidationReportDetailPage() {
   const saved = loadCells(formType, report.data);
   const dirty = JSON.stringify(filled) !== JSON.stringify(saved);
   const result = loadOverall(formType, filled);
-  const passed = result === "Pass" || result === "Passed";
-  const failed = result === "Fail" || result === "Failed";
+  const passed = result === "Pass" || result === "Passed" || result === "PASS";
+  const failed = result === "Fail" || result === "Failed" || result === "FAIL";
   const badge = passed ? meta.pass : failed ? "#FF0000" : "transparent";
   const rev = instanceRevision(report.data, meta.revision);
   const doc = documentNumber.trim() ? `${documentNumber.trim()} Rev ${rev}` : `Rev ${rev}`;
@@ -175,6 +185,35 @@ export function ValidationReportDetailPage() {
             signature={authorizedSignatureOf(report.data)}
             onSign={async (pin) => {
               await signReport.mutateAsync({ id: reportId, pin, certified: true });
+            }}
+            onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
+          />
+        ) : formType === "air_spring" ? (
+          <AirSpringSheet
+            cells={cells}
+            readOnly={!canEdit}
+            documentNumber={documentNumber}
+            revision={rev}
+            signature={authorizedSignatureOf(report.data)}
+            onSign={async (pin) => {
+              await signReport.mutateAsync({ id: reportId, pin, certified: true });
+            }}
+            onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
+          />
+        ) : formType === "fuel_injector" || formType === "brake_wear" ? (
+          <PartInspectionSheet
+            variant={formType}
+            cells={cells}
+            readOnly={!canEdit}
+            documentNumber={documentNumber}
+            revision={rev}
+            signature={authorizedSignatureOf(report.data)}
+            furtherSignature={furtherSignatureOf(report.data)}
+            onSign={async (pin) => {
+              await signReport.mutateAsync({ id: reportId, pin, certified: true });
+            }}
+            onFurtherSign={async (pin) => {
+              await signReport.mutateAsync({ id: reportId, field: "furtherSignature", pin, certified: true });
             }}
             onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
           />

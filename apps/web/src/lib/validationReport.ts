@@ -8,12 +8,14 @@
 
 export type CellValue = string | number | boolean;
 
-export type ValidationFormType = "csa" | "fuel_pump" | "air_strut";
+export type ValidationFormType = "csa" | "fuel_pump" | "air_strut" | "air_spring" | "fuel_injector" | "brake_wear";
+
+const NAMED_KINDS = new Set<ValidationFormType>(["fuel_pump", "air_strut", "air_spring", "fuel_injector", "brake_wear"]);
 
 /** Records saved before the fuel pump form have no formType and stay CSA. */
 export function formTypeOf(data: unknown): ValidationFormType {
   const raw = data && typeof data === "object" ? (data as { formType?: unknown }).formType : undefined;
-  if (raw === "fuel_pump" || raw === "air_strut") return raw;
+  if (typeof raw === "string" && NAMED_KINDS.has(raw as ValidationFormType)) return raw as ValidationFormType;
   return "csa";
 }
 
@@ -21,6 +23,9 @@ export const VALIDATION_FORMS: Record<ValidationFormType, { formKey: string; tit
   csa: { formKey: "frm-val-001", title: "CSA Validation", pass: "#4EA72E", revision: "C" },
   fuel_pump: { formKey: "frm-val-007", title: "Fuel Pump Validation", pass: "#00B050", revision: "C" },
   air_strut: { formKey: "frm-val-010", title: "Air Strut Validation", pass: "#0EBB5F", revision: "A" },
+  air_spring: { formKey: "frm-val-011", title: "Air Spring Validation", pass: "#0EBB5F", revision: "A" },
+  fuel_injector: { formKey: "frm-val-008", title: "Fuel Injector Validation", pass: "#00B050", revision: "B" },
+  brake_wear: { formKey: "frm-val-009", title: "Brake Wear Sensor Validation", pass: "#00B050", revision: "A" },
 };
 
 export const PASSED_FILL = "#4EA72E";
