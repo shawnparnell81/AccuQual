@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { folderChain, listFolder, openTarget } from "../../lib/folderBrowse";
 import { Paperclip, FileText, Download, X, Inbox, ArrowUpRight, UploadCloud, GripVertical } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
@@ -227,6 +228,12 @@ export function FolderExplorerPage() {
   // `departments` itself, which is a new array reference every render and
   // would re-fire this on every render if listed directly.
   useEffect(() => {
+    const folderParam = searchParams.get("folder");
+    if (folderParam && /^\d+$/.test(folderParam)) {
+      const root = folderChain(folders, Number(folderParam))[0];
+      if (root && departments.some((dept) => dept.id === root.id)) setActiveDeptId(root.id);
+      return;
+    }
     const deptParam = searchParams.get("dept");
     if (deptParam && departments.some((d) => d.id === Number(deptParam))) {
       setActiveDeptId(Number(deptParam));
@@ -319,6 +326,28 @@ export function FolderExplorerPage() {
     uploadDocInputRef.current?.click();
   }
 
+  function showFolder(id: number) {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("folder", String(id));
+      const root = folderChain(folders, id)[0];
+      if (root) next.set("dept", String(root.id));
+      return next;
+    });
+  }
+
+  function showDepartmentList() {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("folder");
+      return next;
+    });
+  }
+
+  const folderParam = searchParams.get("folder");
+  const requestedFolderId = folderParam != null && /^\d+$/.test(folderParam) ? Number(folderParam) : null;
+  const openFolder = requestedFolderId == null ? undefined : folders.find((folder) => folder.id === requestedFolderId);
+
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading folder tree…</p>;
   if (!activeDept) return <p className="text-sm text-muted-foreground">No departments found.</p>;
 
@@ -356,7 +385,7 @@ export function FolderExplorerPage() {
         <div>
           <h1 className="text-2xl font-semibold">Document Folders</h1>
           <p className="text-sm text-muted-foreground">
-            Drag a folder onto another folder to move it with everything inside, or onto Top level. Drag a document onto a folder to file it there, or into the Library Pool to take it out of a folder.
+            Open a folder to see the forms and files inside it. A saved form opens in the app. Drag a folder onto another folder to move it with everything inside, or onto Top level. Drag a document onto a folder to file it there, or into the Library Pool to take it out of a folder.
           </p>
         </div>
         <div className="w-56">
@@ -376,9 +405,11 @@ export function FolderExplorerPage() {
                 data-folder-id={dept.id}
                 onClick={() => {
                   setActiveDeptId(dept.id);
-                  setSearchParams((p) => {
-                    p.set("dept", String(dept.id));
-                    return p;
+                  setSearchParams((current) => {
+                    const next = new URLSearchParams(current);
+                    next.set("dept", String(dept.id));
+                    next.delete("folder");
+                    return next;
                   });
                 }}
                 onDragStart={(e) => beginDrag(e, dept.id, "folder")}
@@ -445,9 +476,42 @@ export function FolderExplorerPage() {
         </nav>
 
         <div className="flex min-w-0 flex-col gap-3 md:min-h-0 md:overflow-y-auto">
+          {requestedFolderId != null && !openFolder ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-muted-foreground">That folder is not in Documents.</p>
+              <button type="button" onClick={showDepartmentList} className="w-fit text-sm text-primary hover:underline">
+                Back to departments
+              </button>
+            </div>
+          ) : openFolder ? (
+            <FolderBrowser
+              folder={openFolder}
+              folders={folders}
+              forms={formTemplates}
+              query={query}
+              dropHoverId={dropHoverId}
+              onOpenFolder={showFolder}
+              onBackToDepartments={showDepartmentList}
+              onBeginDrag={beginDrag}
+              onEndDrag={endDrag}
+              onAllowDrop={allowDrop}
+              onDrop={dropOn}
+              onHover={setDropHoverId}
+              onUploadFiles={uploadFiles}
+              onUploadClick={requestDocumentUpload}
+              onCreateFolder={(name, parentId) => createFolder.mutate({ name, parentId })}
+              onSendToLibrary={sendToLibrary}
+              onAttach={requestUpload}
+              onRemoveAttachment={(id) => removeTemplate.mutate(id)}
+            />
+          ) : (
+          <>
           <div className="flex shrink-0 items-center gap-2">
             <span className="h-3 w-3 flex-none rounded-full" style={{ backgroundColor: DEPARTMENT_COLORS[deptColorIndex % DEPARTMENT_COLORS.length] }} />
             <h2 className="text-lg font-semibold">{activeDept.name}</h2>
+            <button type="button" onClick={() => showFolder(activeDept.id)} className="text-xs text-primary hover:underline">
+              Open
+            </button>
             <button
               onClick={() => requestDocumentUpload(activeDept.id)}
               className="ml-1 flex items-center gap-1 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
@@ -523,6 +587,16 @@ export function FolderExplorerPage() {
                   <GripVertical size={14} className="text-muted-foreground" />
                   <span className="text-xs text-muted-foreground">{isCollapsed ? "▸" : "▾"}</span>
                   <span className="flex-1 text-sm font-semibold">{sub.name}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      showFolder(sub.id);
+                    }}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Open
+                  </button>
                   <span className="font-mono text-[10px] text-muted-foreground">{children.length + formsIn(sub.id).length + topicFolders.reduce((count, topic) => count + formsIn(topic.id).length, 0)}</span>
                   <button
                     onClick={(e) => {
@@ -612,6 +686,16 @@ export function FolderExplorerPage() {
                           >
                             <GripVertical size={12} className="text-muted-foreground" />
                             <span className="flex-1">{topic.name}</span>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                showFolder(topic.id);
+                              }}
+                              className="text-xs font-medium text-primary hover:underline"
+                            >
+                              Open
+                            </button>
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {topicForms.map((form) => (
@@ -646,9 +730,19 @@ export function FolderExplorerPage() {
                                 }
                               }}
                               onDrop={(e) => dropOn(e, nested.id)}
-                              className={`mt-2 cursor-grab rounded-md border px-2 py-1 text-xs font-semibold active:cursor-grabbing ${dropHoverId === nested.id ? "border-primary bg-primary/10" : "border-border"}`}
+                              className={`mt-2 flex cursor-grab items-center gap-2 rounded-md border px-2 py-1 text-xs font-semibold active:cursor-grabbing ${dropHoverId === nested.id ? "border-primary bg-primary/10" : "border-border"}`}
                             >
-                              {nested.name}
+                              <span className="flex-1">{nested.name}</span>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  showFolder(nested.id);
+                                }}
+                                className="font-medium text-primary hover:underline"
+                              >
+                                Open
+                              </button>
                             </div>
                           ))}
                         </div>
@@ -689,6 +783,8 @@ export function FolderExplorerPage() {
               + Add folder to {activeDept.name}
             </button>
           </form>
+          </>
+          )}
         </div>
       </div>
 
@@ -791,18 +887,13 @@ function DocPill({
       }`}
       title={doc.pdfPath ? "Has an attached file — click the file icon to view/download it" : "No file attached yet"}
     >
-      {doc.linkedPath && (
-        <Link
-          to={doc.linkedPath}
-          draggable={false}
-          className="flex items-center text-primary hover:opacity-80"
-          aria-label={`Open the live ${doc.name} module`}
-          title={`This is a real module — open ${doc.linkedPath}`}
-        >
-          <ArrowUpRight size={12} />
+      {doc.linkedPath ? (
+        <Link to={doc.linkedPath} draggable={false} className="text-primary hover:underline" title="Open">
+          {doc.name}
         </Link>
+      ) : (
+        doc.name
       )}
-      {doc.name}
       {doc.documentId && (
         <Link to={`/documents/${doc.documentId}`} draggable={false} className="hover:opacity-80" title="Open the controlled document (revision history, approval, retention)">
           <StatusBadge value={doc.documentExpirationStatus ?? doc.documentStatus ?? "draft"} />
@@ -832,5 +923,214 @@ function DocPill({
         </button>
       )}
     </span>
+  );
+}
+
+function FolderBrowser({
+  folder,
+  folders,
+  forms,
+  query,
+  dropHoverId,
+  onOpenFolder,
+  onBackToDepartments,
+  onBeginDrag,
+  onEndDrag,
+  onAllowDrop,
+  onDrop,
+  onHover,
+  onUploadFiles,
+  onUploadClick,
+  onCreateFolder,
+  onSendToLibrary,
+  onAttach,
+  onRemoveAttachment,
+}: {
+  folder: DocumentFolder;
+  folders: DocumentFolder[];
+  forms: FormTemplateLink[];
+  query: string;
+  dropHoverId: number | null;
+  onOpenFolder: (id: number) => void;
+  onBackToDepartments: () => void;
+  onBeginDrag: (event: DragEvent, id: number, kind: "folder" | "doc") => void;
+  onEndDrag: () => void;
+  onAllowDrop: (event: DragEvent, targetParentId: number | null) => boolean;
+  onDrop: (event: DragEvent, targetParentId: number | null) => void;
+  onHover: (id: number | null) => void;
+  onUploadFiles: (parentId: number, files: File[]) => Promise<void>;
+  onUploadClick: (parentId: number) => void;
+  onCreateFolder: (name: string, parentId: number) => void;
+  onSendToLibrary: (id: number) => void;
+  onAttach: (id: number) => void;
+  onRemoveAttachment: (id: number) => void;
+}) {
+  const [name, setName] = useState("");
+  const chain = folderChain(folders, folder.id);
+  const listing = listFolder(folders, folder.id);
+  const parent = chain.length > 1 ? chain[chain.length - 2] : undefined;
+  const subfolders = listing.folders.filter((row) => !query || row.name.toLowerCase().includes(query));
+  const files = listing.files.filter((row) => !query || row.name.toLowerCase().includes(query));
+  const blanks = forms.filter((form) => form.folderId === folder.id && (!query || `${form.formId} ${form.title}`.toLowerCase().includes(query)));
+  const empty = subfolders.length === 0 && files.length === 0 && blanks.length === 0;
+
+  return (
+    <div className="flex flex-col gap-3" data-testid="folder-browser">
+      <nav aria-label="Folder path" data-testid="folder-breadcrumbs" className="flex flex-wrap items-center gap-1 text-sm">
+        <button type="button" onClick={onBackToDepartments} className="text-primary hover:underline">
+          Documents
+        </button>
+        {chain.map((crumb, index) => (
+          <span key={crumb.id} className="inline-flex items-center gap-1">
+            <span className="text-muted-foreground">/</span>
+            {index === chain.length - 1 ? (
+              <span className="font-semibold">{crumb.name}</span>
+            ) : (
+              <button type="button" onClick={() => onOpenFolder(crumb.id)} className="text-primary hover:underline">
+                {crumb.name}
+              </button>
+            )}
+          </span>
+        ))}
+      </nav>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => (parent ? onOpenFolder(parent.id) : onBackToDepartments())}
+          className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
+        >
+          Up
+        </button>
+        <button
+          type="button"
+          onClick={() => onUploadClick(folder.id)}
+          className="flex items-center gap-1 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+        >
+          <UploadCloud size={13} />
+          Upload Document
+        </button>
+      </div>
+
+      <FileDropZone
+        onFiles={(dropped) => void onUploadFiles(folder.id, dropped)}
+        overlay={false}
+        className="shrink-0 rounded-lg border-2 border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground transition-colors hover:border-primary/50"
+      >
+        <span className="inline-flex items-center gap-2">
+          <UploadCloud size={14} /> Drag files from your computer onto {folder.name} to add them as documents
+        </span>
+      </FileDropZone>
+
+      <div
+        className="flex flex-col gap-1 rounded-lg border border-border bg-card p-2"
+        data-testid="folder-contents"
+        onDragOver={(event) => {
+          if (onAllowDrop(event, folder.id)) onHover(folder.id);
+        }}
+        onDrop={(event) => {
+          if (isFileDrag(event)) return;
+          onDrop(event, folder.id);
+        }}
+      >
+        {empty && <p className="px-2 py-3 text-sm italic text-muted-foreground">{query ? "Nothing in this folder matches." : "Nothing in this folder yet."}</p>}
+        {subfolders.map((row) => (
+          <div
+            key={row.id}
+            data-testid="folder-row"
+            data-folder-id={row.id}
+            draggable
+            onDragStart={(event) => {
+              event.stopPropagation();
+              onBeginDrag(event, row.id, "folder");
+            }}
+            onDragEnd={onEndDrag}
+            onDragOver={(event) => {
+              if (isFileDrag(event)) return;
+              if (onAllowDrop(event, row.id)) {
+                event.stopPropagation();
+                onHover(row.id);
+              }
+            }}
+            onDragLeave={() => onHover(dropHoverId === row.id ? null : dropHoverId)}
+            onDrop={(event) => {
+              if (isFileDrag(event)) {
+                event.preventDefault();
+                event.stopPropagation();
+                void onUploadFiles(row.id, Array.from(event.dataTransfer.files));
+                return;
+              }
+              onDrop(event, row.id);
+            }}
+            className={`flex items-center gap-2 rounded-md px-2 py-2 ${dropHoverId === row.id ? "bg-primary/10 ring-2 ring-primary" : "hover:bg-muted"}`}
+          >
+            <GripVertical size={14} className="text-muted-foreground" />
+            <button type="button" onClick={() => onOpenFolder(row.id)} className="flex-1 text-left text-sm font-medium">
+              {row.name}
+            </button>
+            <span className="text-xs text-muted-foreground">Folder</span>
+          </div>
+        ))}
+        {files.map((file) => {
+          const target = openTarget(file);
+          if (!target) {
+            return (
+              <div key={file.id} data-testid="file-row" className="px-2 py-1">
+                <DocPill
+                  doc={file}
+                  onDragStart={(event) => onBeginDrag(event, file.id, "doc")}
+                  onDragEnd={onEndDrag}
+                  onSendToLibrary={() => onSendToLibrary(file.id)}
+                  onAttach={() => onAttach(file.id)}
+                  onRemoveAttachment={() => onRemoveAttachment(file.id)}
+                />
+              </div>
+            );
+          }
+          return (
+            <Link
+              key={file.id}
+              to={target}
+              data-testid={`open-file-${file.id}`}
+              draggable
+              onDragStart={(event) => {
+                event.stopPropagation();
+                onBeginDrag(event, file.id, "doc");
+              }}
+              onDragEnd={onEndDrag}
+              className="flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
+            >
+              <FileText size={14} className="text-primary" />
+              <span className="flex-1 text-primary">{file.name}</span>
+              <span className="text-xs text-muted-foreground">Open</span>
+            </Link>
+          );
+        })}
+        {blanks.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-2 py-2">
+            {blanks.map((form) => (
+              <FormTemplateChip key={form.formKey} form={form} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <form
+        className="flex shrink-0 items-center gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!name.trim()) return;
+          onCreateFolder(name.trim(), folder.id);
+          setName("");
+        }}
+      >
+        <div className="max-w-xs flex-1">
+          <TextField label="" placeholder="New folder name…" value={name} onChange={(event) => setName(event.target.value)} />
+        </div>
+        <button type="submit" className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">
+          + Add folder to {folder.name}
+        </button>
+      </form>
+    </div>
   );
 }

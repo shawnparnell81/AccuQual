@@ -63,6 +63,9 @@ history below), the modules themselves are the source of truth:
   access level.
 - **Which modules use the generic Workflow Engine vs. their own
   hand-coded state machine**: `accuqual-workflow-architecture.md`.
+- **Living product notes** (keep these current until the app build is
+  nearly complete): `docs/product/AccuQual-Product-Overview.md` and
+  `docs/product/AccuQual-UI-UX.md`.
 
 Form signatures use a 4-digit PIN. The first sign-in after an account is
 created asks for that PIN once (it can be changed later under Settings →

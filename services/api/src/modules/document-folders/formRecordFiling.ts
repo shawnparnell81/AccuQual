@@ -3,6 +3,7 @@ import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { formFilings } from "../../drizzle/schema/formFilings.js";
 import { isoQualityForms } from "../../drizzle/schema/isoQualityForms.js";
+import { validationReports } from "../../drizzle/schema/validationReport.js";
 import type { Db } from "../../lib/requestDb.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { AppError } from "../../utils/appError.js";
@@ -11,6 +12,7 @@ import { ensureFormTemplates } from "./formTemplates.js";
 import {
   canEditFormNumber,
   EDITABLE_FORM_NUMBER_KEYS,
+  FILEABLE_FORM_KEYS,
   FORM_DATA_TYPE_TO_FORM_KEY,
   ISO_TYPE_TO_FORM_KEY,
   SUGGESTED_SUBJECT_PATH,
@@ -86,7 +88,7 @@ async function presentFiling(db: Db, formKey: string, recordId: number, folders:
 
 /** Copies the master's current number onto a new filled record. Does nothing if a snapshot already exists. */
 export async function snapshotFormNumber(db: Db, formKey: string, recordId: number): Promise<void> {
-  if (!EDITABLE_FORM_NUMBER_KEYS.has(formKey) || !Number.isInteger(recordId) || recordId <= 0) return;
+  if (!FILEABLE_FORM_KEYS.has(formKey) || !Number.isInteger(recordId) || recordId <= 0) return;
   const [existing] = await db.select({ id: formFilings.id }).from(formFilings).where(and(eq(formFilings.formKey, formKey), eq(formFilings.recordId, recordId)));
   if (existing) return;
   await ensureFormTemplates(db);
@@ -140,6 +142,14 @@ async function assertRecord(db: Db, formKey: string, recordId: number): Promise<
     return null;
   }
   if (formKey === "frm-msa-001") return null;
+  if (formKey === "frm-val-001" || formKey === "frm-val-007") {
+    const [record] = await db.select().from(validationReports).where(eq(validationReports.id, recordId));
+    if (!record) throw AppError.notFound("Filled form");
+    const formType = record.data?.formType === "fuel_pump" ? "fuel_pump" : "csa";
+    const expected = formKey === "frm-val-007" ? "fuel_pump" : "csa";
+    if (formType !== expected) throw AppError.notFound("Filled form");
+    return record.createdAt ? record.createdAt.toISOString().slice(0, 10) : null;
+  }
   const formType = Object.entries(ISO_TYPE_TO_FORM_KEY).find(([, key]) => key === formKey)?.[0];
   if (!formType) throw AppError.badRequest("This form cannot be filed from here");
   const [record] = await db.select().from(isoQualityForms).where(eq(isoQualityForms.id, recordId));
@@ -148,7 +158,7 @@ async function assertRecord(db: Db, formKey: string, recordId: number): Promise<
 }
 
 export async function getFormFiling(db: Db, formKey: string, recordId: number): Promise<FormFilingView> {
-  if (!EDITABLE_FORM_NUMBER_KEYS.has(formKey)) throw AppError.badRequest("This form is not filed from here");
+  if (!FILEABLE_FORM_KEYS.has(formKey)) throw AppError.badRequest("This form is not filed from here");
   if (!Number.isInteger(recordId) || recordId <= 0) throw AppError.badRequest("Record is required");
   await ensureFormTemplates(db);
   return presentFiling(db, formKey, recordId, await loadFolders(db));
@@ -156,7 +166,7 @@ export async function getFormFiling(db: Db, formKey: string, recordId: number): 
 
 export async function fileFormRecord(db: Db, input: { formKey: string; recordId: number; folderId: number }, performedBy: number | undefined): Promise<FormFilingView> {
   const { formKey, recordId, folderId } = input;
-  if (!EDITABLE_FORM_NUMBER_KEYS.has(formKey)) throw AppError.badRequest("This form cannot be filed from here");
+  if (!FILEABLE_FORM_KEYS.has(formKey)) throw AppError.badRequest("This form cannot be filed from here");
   await ensureFormTemplates(db);
   const createdOn = await assertRecord(db, formKey, recordId);
   const [parent] = await db.select().from(documentFolders).where(eq(documentFolders.id, folderId));
@@ -192,7 +202,7 @@ export async function fileFormRecord(db: Db, input: { formKey: string; recordId:
 
   const seed = seedFor(formKey);
   const date = createdOn || new Date().toISOString().slice(0, 10);
-  const name = filedRecordName("", recordId, date, fileNamePatternFor(seed ?? {}));
+  const name = filedRecordName(filing.formNumber, recordId, date, fileNamePatternFor(seed ?? {}));
   const siblings = await db.select({ id: documentFolders.id }).from(documentFolders).where(eq(documentFolders.parentId, folderId));
   const [created] = await db
     .insert(documentFolders)
@@ -211,7 +221,7 @@ export async function fileFormRecord(db: Db, input: { formKey: string; recordId:
 }
 
 export function filingQuery(formKey: unknown, recordId: unknown): { formKey: string; recordId: number } {
-  if (typeof formKey !== "string" || !EDITABLE_FORM_NUMBER_KEYS.has(formKey)) {
+  if (typeof formKey !== "string" || !FILEABLE_FORM_KEYS.has(formKey)) {
     throw AppError.badRequest("This form is not filed from here");
   }
   const id = Number(recordId);

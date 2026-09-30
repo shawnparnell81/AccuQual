@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ParetoChartForm } from "../../components/forms/customForms/ParetoChartForm";
-import { fileChosenFolder, FormNumberEditor, RecordFolderField, useFormFiling } from "../../components/forms/FormDocumentControls";
+import { fileChosenFolder, FormNumberEditor, RecordFolderField, SaveResult, useFormFiling, type SaveResultState } from "../../components/forms/FormDocumentControls";
 import { useFormEditorState } from "../../components/forms/useFormEditorState";
 import { SaveStatus } from "../../components/shared/SaveStatus";
 import { revisionLabel } from "../../lib/formDocument";
@@ -13,7 +13,7 @@ export function ParetoAnalysisPage() {
   const queryClient = useQueryClient();
   const { isLoading, values, updateField, saveNow, isSaving } = useFormEditorState("pareto_chart", SINGLETON_ENTITY_ID);
   const filing = useFormFiling("frm-par-001", SINGLETON_ENTITY_ID);
-  const [saveNote, setSaveNote] = useState<string | null>(null);
+  const [saveNote, setSaveNote] = useState<SaveResultState>(null);
   const [pending, setPending] = useState(false);
   const documentNumber = filing.data?.snapshotted ? filing.data.formNumber : "";
   const [dirty, setDirty] = useState(false);
@@ -40,18 +40,18 @@ export function ParetoAnalysisPage() {
               setSaveNote(null);
               void saveNow()
                 .then(() => fileChosenFolder(queryClient, "frm-par-001", SINGLETON_ENTITY_ID))
-                .then((path) => {
+                .then((filed) => {
                   setDirty(false);
-                  setSaveNote(path ? `Saved in ${path}` : "Saved. Choose a folder to file this copy.");
+                  setSaveNote(filed ?? "unfiled");
                 })
-                .catch(() => setSaveNote("Couldn't save this form."))
+                .catch(() => setSaveNote("error"))
                 .finally(() => setPending(false));
             }}
             className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60"
           >
             {pending ? "Saving…" : "Save"}
           </button>
-          {saveNote && <span className="text-xs text-muted-foreground">{saveNote}</span>}
+          <SaveResult result={saveNote} />
           <button type="button" onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             Print
           </button>

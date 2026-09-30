@@ -47,7 +47,9 @@ export function ValidationReportsPanel() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">CSA Validation and Fuel Pump Validation</h2>
-          <p className="text-sm text-muted-foreground">Start a CSA Validation or a Fuel Pump Validation, save it, and open it again from this folder.</p>
+          <p className="text-sm text-muted-foreground">
+            Start a CSA Validation or a Fuel Pump Validation, choose a Documents folder, and save. Open folder on the save line takes you there. You can also browse Quality, Document Control, Folder Explorer.
+          </p>
           <div className="mt-2 flex flex-wrap gap-4">
             <FormNumberEditor formKey="frm-val-001" compact />
             <FormNumberEditor formKey="frm-val-007" compact />

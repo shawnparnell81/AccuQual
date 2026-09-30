@@ -174,7 +174,7 @@ function isFormNumberWrite(req: Request): boolean {
   return req.baseUrl === "/document-folders" && req.method === "PATCH" && req.path.startsWith("/form-templates/");
 }
 
-/** Quality managers may set a form number or file one of the eight quality forms even when Documents is read-only for their department. Engineering may set a form number the same way. */
+/** Quality managers may set a form number or file a filled form even when Documents is read-only for their department. Engineering may set a form number the same way. */
 function isQualityFormControlWrite(req: Request): boolean {
   if (req.baseUrl !== "/document-folders") return false;
   if (req.method !== "POST" && req.method !== "PATCH") return false;

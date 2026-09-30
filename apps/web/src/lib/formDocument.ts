@@ -20,6 +20,9 @@ export const EDITABLE_FORM_KEYS = new Set([
   "frm-par-001",
 ]);
 
+/** Filled copies that can be saved into a Documents folder and opened from Folder Explorer. */
+export const FILEABLE_FORM_KEYS = new Set<string>([...EDITABLE_FORM_KEYS, "frm-val-001", "frm-val-007"]);
+
 export const FORM_KEY_BY_TYPE: Record<string, string> = {
   psw: "frm-psw-001",
   turtle_diagram: "frm-prc-001",
