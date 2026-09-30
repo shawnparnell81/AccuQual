@@ -13,8 +13,9 @@ others (denial of service, mass automated scanning).
 
 ## What is checked automatically
 
-Every change and a weekly schedule run: dependency vulnerability audit (production dependencies fail the build at
-high severity), CodeQL code scanning, secret scanning over the full git history, and — weekly and on merges — a vulnerability scan of every
-container image. Dependabot proposes dependency updates. See `DEPLOY.md` → "Security scanning".
+Every change and a weekly schedule run a dependency vulnerability audit (production dependencies fail the build at
+high severity) and a secret scan over the full git history. CodeQL analysis stays off until code scanning is enabled;
+that check still reports success. A vulnerability scan of every container image runs weekly and on merges to main.
+Dependabot proposes dependency updates. See `DEPLOY.md` → "Security scanning".
 
 AccuQual is not certified by ISO, IATF, or any other standards body.

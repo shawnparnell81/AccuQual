@@ -1,0 +1,49 @@
+name: Image scan
+
+# Vulnerabilities in the OS packages and libraries inside each image we ship.
+# Blocks only on CRITICAL issues that have a fix available (usually "rebuild
+# on a newer base image"); HIGH are listed. Not run on pull requests: it
+# builds five images, and base-image advisories are not something a PR causes.
+# security.yml reports a successful check with the old skipped name so that
+# name cannot block a merge.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * 1" # Mondays, 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  container-scan:
+    name: Image scan (${{ matrix.image.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - { name: api, dockerfile: services/api/Dockerfile }
+          - { name: web, dockerfile: apps/web/Dockerfile }
+          - { name: workflow-worker, dockerfile: workers/workflow-worker/Dockerfile }
+          - { name: ai-worker, dockerfile: workers/ai-worker/Dockerfile }
+          - { name: digital-twin-worker, dockerfile: workers/digital-twin-worker/Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -f ${{ matrix.image.dockerfile }} -t accuqual-${{ matrix.image.name }}:scan .
+      - name: Report HIGH and CRITICAL (not blocking)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: accuqual-${{ matrix.image.name }}:scan
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+      - name: Block on CRITICAL with a fix available
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: accuqual-${{ matrix.image.name }}:scan
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"

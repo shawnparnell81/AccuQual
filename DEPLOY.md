@@ -390,15 +390,18 @@ Redis and all three workers are actually deployed.
 
 ## Security scanning
 
-Four checks run automatically (`.github/workflows/security.yml`) on every pull request, every merge to main, and every
-Monday morning (a new vulnerability is published without anyone pushing code, so the schedule is what notices it):
+Dependency audit and secret scan run on every pull request, every merge to main, and every Monday morning
+(`.github/workflows/security.yml`). A new vulnerability is published without anyone pushing code, so the schedule is
+what notices it. CodeQL and the pull-request image-scan check report success without doing the heavy work, so a
+skipped status cannot block merge. The real image scan still runs on merges to main and on that Monday schedule
+(`.github/workflows/image-scan.yml`).
 
 | Check | What it looks for | Blocks the build? |
 |---|---|---|
 | **Dependency audit** | Known vulnerabilities in the packages that ship (production dependencies of every workspace) | Yes, at high/critical. Dev-only tooling is listed in the run summary but doesn't block |
-| **CodeQL** | Security bugs in our own code: injection, path traversal, unsafe crypto, ... Results are under the repo's **Security → Code scanning** tab | No — review the alerts |
+| **CodeQL** | Security bugs in our own code. Analysis and upload stay off until code scanning is enabled on this private repo; the check still exits 0. When it is on, results are under **Security → Code scanning** | No |
 | **Secret scan** (gitleaks) | Credentials committed anywhere in the full git history (`.gitleaks.toml` allowlists only the throwaway test-fixture passwords, by exact value, inside the test folder) | Yes |
-| **Image scan** (Trivy; merges + weekly) | Vulnerabilities in the OS packages and libraries inside each of the five container images | Yes, for CRITICAL issues that have a fix; HIGH are listed |
+| **Image scan** (Trivy; merges + weekly) | Vulnerabilities in the OS packages and libraries inside each of the five container images. Pull requests only record a successful placeholder for the old skipped check name | Yes, on main and the weekly run, for CRITICAL issues that have a fix; HIGH are listed |
 
 GitHub's own secret scanning with push protection is also on, **Dependabot** opens a monthly pull request of minor and patch dependency
 updates (`.github/dependabot.yml`), security updates are switched on, and `SECURITY.md` tells outsiders how to report a
