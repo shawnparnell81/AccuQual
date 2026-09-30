@@ -59,7 +59,7 @@ export function ValidationReportDetailPage() {
   }
 
   return (
-    <div className="validation-report-print flex flex-col gap-4">
+    <div className="validation-report-print flex min-w-0 flex-col gap-4">
       <div className="no-print flex flex-col gap-4">
         <RecordCrumbs
           items={[
@@ -108,7 +108,7 @@ export function ValidationReportDetailPage() {
         </div>
       </div>
 
-      <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
+      <div className="aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4">
         {formType === "fuel_pump" ? (
           <FuelPumpSheet
             cells={cells}

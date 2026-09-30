@@ -1,273 +1,169 @@
-/* CSA Validation Report. Chrome uses the same form tokens as the other quality forms. */
-.csa,
-.csa * {
+/* CSA (FRM-VAL-001) and Fuel Pump (FRM-VAL-007) sheets.
+   These are CSS grids with the workbook's column tracks, not HTML tables.
+   A table in this app was collapsing into one column and leaving the color key
+   as floating boxes. Fixed tracks cannot stack. */
+
+.csa-wrap,
+.fp-wrap {
+  overflow-x: auto;
+  width: 100%;
+  max-width: 100%;
+}
+
+.csa-sheet,
+.fp-sheet,
+.csa-sheet *,
+.fp-sheet * {
   box-sizing: border-box;
 }
 
-.csa-wrap {
-  overflow-x: auto;
-}
-
-.csa {
-  width: 100%;
-  min-width: 1080px;
-  border-collapse: collapse;
-  table-layout: fixed;
+.csa-sheet {
+  display: grid;
+  grid-template-columns: 300px 128px 128px 136px 136px 136px 136px 16px 28px 176px;
+  width: max-content;
+  background: #fff;
+  color: #111;
   font-family: var(--fb), "Inter", system-ui, sans-serif;
-  color: hsl(var(--foreground));
-  background: hsl(var(--card));
+  border-top: 1px solid #64748b;
+  border-left: 1px solid #64748b;
 }
 
-.csa col.c-a { width: 20%; }
-.csa col.c-b,
-.csa col.c-c { width: 9.5%; }
-.csa col.c-d,
-.csa col.c-e,
-.csa col.c-f,
-.csa col.c-g { width: 10.2%; }
-.csa col.c-h,
-.csa col.c-i { width: 3.6%; }
-.csa col.c-j { width: 10.2%; }
+.fp-sheet {
+  display: grid;
+  grid-template-columns: 306px 141px 141px 141px 92px 92px 92px 86px 16px 74px 74px;
+  width: max-content;
+  background: #fff;
+  color: #111;
+  font-family: var(--fb), "Inter", system-ui, sans-serif;
+  border-top: 1px solid #64748b;
+  border-left: 1px solid #64748b;
+}
 
-.csa td {
-  min-height: 30px;
-  height: 30px;
-  padding: 2px 4px;
+.csa-cell,
+.fp-cell {
+  min-width: 0;
+  min-height: 26px;
+  padding: 2px 6px;
   font-size: 11px;
   line-height: 1.25;
   text-align: center;
-  vertical-align: middle;
-  background: hsl(var(--card));
-  color: hsl(var(--foreground));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  color: #111;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  border-right: 1px solid #64748b;
+  border-bottom: 1px solid #64748b;
 }
 
-.csa td.grid {
-  border: 1px solid hsl(var(--border));
+.csa-cell.col-a,
+.fp-cell.col-a {
+  justify-content: flex-start;
+  text-align: left;
+  font-weight: 600;
 }
 
-.csa td.gap {
+.csa-cell.gutter,
+.fp-cell.gutter {
   border: 0;
   background: transparent;
+  padding: 0;
 }
 
-.csa .title {
-  font-size: 22px;
+.csa-cell.title,
+.fp-cell.title {
+  font-size: 20px;
   font-weight: 700;
-  line-height: 1.1;
-  color: var(--form-heading, #1d3a5c);
-  background: transparent;
   letter-spacing: 0.02em;
+  color: var(--form-heading, #1d3a5c);
+  justify-content: center;
+  text-align: center;
 }
 
-.csa .result {
+.csa-cell.result,
+.fp-cell.result {
   font-size: 14px;
   font-weight: 700;
 }
 
-.csa .section {
+.csa-cell.section,
+.fp-cell.section {
   background: var(--form-bar, #1d3a5c);
   color: var(--form-bar-foreground, #fff);
   font-weight: 700;
   font-size: 12px;
   letter-spacing: 0.03em;
+  justify-content: flex-start;
+  text-align: left;
   border-color: var(--form-bar, #1d3a5c);
 }
 
-.csa .label {
-  font-weight: 600;
-}
-
-.csa .wrap {
-  white-space: normal;
-}
-
-.csa input.csa-in,
-.csa select.csa-in,
-.csa textarea.csa-in {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: center;
-  outline: none;
-  box-shadow: none;
-  padding: 2px;
-}
-
-.csa textarea.csa-in {
+.csa-cell.note,
+.fp-cell.note,
+.csa-cell.wrap {
+  justify-content: flex-start;
   text-align: left;
-  resize: vertical;
-  min-height: 52px;
+  align-items: center;
 }
 
-.csa input.csa-in:focus,
-.csa select.csa-in:focus,
-.csa textarea.csa-in:focus {
-  box-shadow: inset 0 0 0 2px hsl(var(--ring));
-}
-
-.csa input[type="checkbox"] {
-  accent-color: hsl(var(--primary));
-  width: 14px;
-  height: 14px;
-  margin: 0;
-}
-
-.csa td.gray {
+.csa-cell.gray {
   background: #aeaeae;
   color: #1a1a1a;
 }
 
-.csa td.swatch {
-  border: 1px solid hsl(var(--border));
+.csa-cell.swatch {
+  padding: 0;
 }
 
-@media print {
-  .csa-wrap {
-    overflow: visible;
-  }
-  .csa {
-    min-width: 0;
-  }
-  .csa,
-  .csa td,
-  .csa .section {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-}
-
-/* Fuel Pump Validation Document. Section bars use the same form tokens as the other quality forms. */
-.fp,
-.fp * {
-  box-sizing: border-box;
-}
-
-.fp-wrap {
-  overflow-x: auto;
-}
-
-.fp {
-  width: 100%;
-  min-width: 1280px;
-  border-collapse: collapse;
-  table-layout: fixed;
-  font-family: var(--fb), "Inter", system-ui, sans-serif;
-  color: hsl(var(--foreground));
-  background: hsl(var(--card));
-}
-
-.fp col.f-a { width: 22%; }
-.fp col.f-b { width: 10%; }
-.fp col.f-c,
-.fp col.f-d,
-.fp col.f-f,
-.fp col.f-g { width: 6.2%; }
-.fp col.f-e { width: 7.4%; }
-.fp col.f-h { width: 7%; }
-.fp col.f-i { width: 4%; }
-.fp col.f-j,
-.fp col.f-k { width: 6%; }
-.fp col.f-l,
-.fp col.f-m { width: 3.4%; }
-
-.fp td {
-  min-height: 30px;
-  height: 30px;
-  padding: 2px 4px;
-  font-size: 11px;
-  line-height: 1.25;
-  text-align: center;
-  vertical-align: middle;
-  background: hsl(var(--card));
-  color: hsl(var(--foreground));
-}
-
-.fp tr.short td {
-  height: 16px;
-  min-height: 16px;
-}
-
-.fp td.grid {
-  border: 1px solid hsl(var(--border));
-}
-
-.fp td.gap {
-  border: 0;
-  background: transparent;
-}
-
-.fp .title {
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.1;
-  color: var(--form-heading, #1d3a5c);
-  background: transparent;
-  letter-spacing: 0.02em;
-}
-
-.fp .section {
-  background: var(--form-bar, #1d3a5c);
-  color: var(--form-bar-foreground, #fff);
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 0.03em;
-  border-color: var(--form-bar, #1d3a5c);
-}
-
-.fp .note {
-  height: auto;
-  white-space: normal;
-}
-
-.fp .result {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.fp .label {
-  font-weight: 600;
-}
-
-.fp td.blocked {
+.fp-cell.blocked {
   background: #000;
   border-color: #000;
 }
 
-.fp input.fp-in,
-.fp select.fp-in,
-.fp textarea.fp-in {
+.csa-cell input.csa-in,
+.csa-cell select.csa-in,
+.csa-cell textarea.csa-in,
+.fp-cell input.fp-in,
+.fp-cell select.fp-in,
+.fp-cell textarea.fp-in {
+  display: block;
   width: 100%;
-  height: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 24px;
   margin: 0;
-  border: 0;
-  border-radius: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
   background: transparent;
   color: inherit;
   font: inherit;
   text-align: center;
   outline: none;
   box-shadow: none;
-  padding: 2px;
+  padding: 1px 2px;
 }
 
-.fp textarea.fp-in {
+.csa-cell textarea.csa-in,
+.fp-cell textarea.fp-in {
   text-align: left;
   resize: vertical;
-  min-height: 48px;
+  min-height: 52px;
+  height: 100%;
 }
 
-.fp input.fp-in:focus,
-.fp select.fp-in:focus,
-.fp textarea.fp-in:focus {
+.csa-cell input.csa-in:focus,
+.csa-cell select.csa-in:focus,
+.csa-cell textarea.csa-in:focus,
+.fp-cell input.fp-in:focus,
+.fp-cell select.fp-in:focus,
+.fp-cell textarea.fp-in:focus {
   box-shadow: inset 0 0 0 2px hsl(var(--ring));
 }
 
-.fp input[type="checkbox"] {
+.csa-cell input[type="checkbox"],
+.fp-cell input[type="checkbox"] {
   accent-color: hsl(var(--primary));
   width: 14px;
   height: 14px;
@@ -275,15 +171,16 @@
 }
 
 @media print {
+  .csa-wrap,
   .fp-wrap {
     overflow: visible;
   }
-  .fp {
-    min-width: 0;
-  }
-  .fp,
-  .fp td,
-  .fp .section {
+  .csa-sheet,
+  .fp-sheet,
+  .csa-cell,
+  .fp-cell,
+  .csa-cell.section,
+  .fp-cell.section {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

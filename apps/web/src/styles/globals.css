@@ -1483,12 +1483,14 @@ body.side-collapsed .aq-nav-folder-link {
   }
   .csa,
   .fp,
+  .csa-sheet,
+  .fp-sheet,
   .e8-grid {
-    width: 100% !important;
+    width: max-content !important;
+  }
+  .e8-grid {
     min-width: 0 !important;
   }
-  .csa td,
-  .fp td,
   .e8-grid th,
   .e8-grid td {
     min-width: 0 !important;

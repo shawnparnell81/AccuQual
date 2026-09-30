@@ -11,6 +11,8 @@ interface FuelPumpSheetProps {
 
 type Slot = FuelCell | "covered" | "empty" | "gap";
 
+const FUEL_COLUMNS = "306px 141px 141px 141px 92px 92px 92px 86px 16px 74px 74px";
+
 function occupy(grid: Slot[][], row: number, spec: FuelCell) {
   for (let dc = 0; dc < spec.span; dc += 1) {
     const target = grid[row - 1];
@@ -31,9 +33,12 @@ export function FuelPumpSheet({ cells, readOnly = false, onChange }: FuelPumpShe
   const rows = useMemo(() => buildFuelPumpRows(), []);
   const calculated = useMemo(() => evaluate(cells), [cells]);
   const grid = useMemo(() => {
-    const next: Slot[][] = Array.from({ length: 61 }, () => Array.from({ length: 13 }, () => "gap" as Slot));
+    const next: Slot[][] = Array.from({ length: 61 }, () => Array.from({ length: 11 }, () => "gap" as Slot));
     rows.forEach((specs, index) => {
-      for (const spec of specs) occupy(next, index + 1, spec);
+      for (const spec of specs) {
+        if (spec.col > 11) continue;
+        occupy(next, index + 1, spec);
+      }
     });
     for (let r = 0; r < 61; r += 1) {
       for (let c = 0; c < 8; c += 1) {
@@ -45,47 +50,37 @@ export function FuelPumpSheet({ cells, readOnly = false, onChange }: FuelPumpShe
 
   return (
     <div className="fp-wrap">
-      <table className="fp" data-testid="fuel-pump-sheet" aria-label="Fuel Pump Validation Document">
-        <colgroup>
-          <col className="f-a" />
-          <col className="f-b" />
-          <col className="f-c" />
-          <col className="f-d" />
-          <col className="f-e" />
-          <col className="f-f" />
-          <col className="f-g" />
-          <col className="f-h" />
-          <col className="f-i" />
-          <col className="f-j" />
-          <col className="f-k" />
-          <col className="f-l" />
-          <col className="f-m" />
-        </colgroup>
-        <tbody>
-          {grid.map((row, rowIndex) => (
-            <tr key={rowIndex + 1} className={rowIndex + 1 === 55 ? "short" : undefined}>
-              {row.map((slot, colIndex) => {
-                if (slot === "covered") return null;
-                if (slot === "gap") return <td key={colIndex} className="gap" />;
-                if (slot === "empty") return <td key={colIndex} className="grid" />;
-                return <Cell key={slot.addr} spec={slot} cells={cells} calculated={calculated} readOnly={readOnly} onChange={onChange} />;
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div
+        className="fp fp-sheet"
+        data-testid="fuel-pump-sheet"
+        role="table"
+        aria-label="Fuel Pump Validation Document"
+        style={{ display: "grid", gridTemplateColumns: FUEL_COLUMNS, width: "max-content" }}
+      >
+        {grid.map((row, rowIndex) =>
+          row.map((slot, colIndex) => {
+            if (slot === "covered" || slot === "gap") return null;
+            const place: CSSProperties = { gridColumn: colIndex + 1, gridRow: rowIndex + 1 };
+            if (slot === "empty") return <div key={`e-${rowIndex}-${colIndex}`} className="fp-cell" style={place} />;
+            if (slot.kind === "spacer") return null;
+            return <Cell key={slot.addr} spec={slot} place={place} cells={cells} calculated={calculated} readOnly={readOnly} onChange={onChange} />;
+          }),
+        )}
+      </div>
     </div>
   );
 }
 
 function Cell({
   spec,
+  place,
   cells,
   calculated,
   readOnly,
   onChange,
 }: {
   spec: FuelCell;
+  place: CSSProperties;
   cells: Record<string, CellValue>;
   calculated: Record<string, CellValue>;
   readOnly: boolean;
@@ -93,19 +88,19 @@ function Cell({
 }) {
   const text = shownText(spec, cells, calculated);
   const cf = spec.kind === "blocked" || spec.kind === "check" || spec.kind === "spacer" ? null : conditionalFill(spec.addr, text);
-  const badge = spec.addr === "J1" || spec.addr === "J2";
   const className = [
-    spec.kind === "spacer" || (spec.col >= 9 && !badge) ? "gap" : "grid",
+    "fp-cell",
+    spec.col === 1 && spec.kind === "label" && spec.size !== "title" && spec.size !== "section" && spec.size !== "note" ? "col-a" : "",
     spec.size === "title" ? "title" : "",
     spec.size === "section" ? "section" : "",
     spec.size === "note" ? "note" : "",
     spec.size === "result" ? "result" : "",
-    spec.kind === "label" && !spec.size ? "label" : "",
     spec.kind === "blocked" ? "blocked" : "",
   ]
     .filter(Boolean)
     .join(" ");
-  const style: CSSProperties = {};
+  const style: CSSProperties = { ...place };
+  if (spec.span > 1) style.gridColumn = `${spec.col} / span ${spec.span}`;
   if (spec.kind === "blocked") {
     style.background = BLOCKED_FILL;
   } else if (cf) {
@@ -116,7 +111,7 @@ function Cell({
   const inputValue = value === undefined || value === null || typeof value === "boolean" ? "" : String(value);
 
   return (
-    <td className={className} style={style} colSpan={spec.span > 1 ? spec.span : undefined} data-addr={spec.addr}>
+    <div className={className} style={style} role="cell" data-addr={spec.addr}>
       {spec.kind === "input" && (
         <input
           className="fp-in"
@@ -163,6 +158,6 @@ function Cell({
       )}
       {spec.kind === "calc" && <span data-result={spec.addr === "J2" || spec.addr === "B51" ? text : undefined}>{text}</span>}
       {(spec.kind === "label" || spec.kind === "blocked" || spec.kind === "spacer") && text}
-    </td>
+    </div>
   );
 }

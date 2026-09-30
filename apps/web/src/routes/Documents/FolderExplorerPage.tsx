@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Paperclip, FileText, Download, X, Inbox, ArrowUpRight, UploadCloud, GripVertical } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
@@ -15,12 +15,55 @@ import { folderMoveIsBlocked, nextSortOrder } from "../../lib/folderMove";
 const DRAG_FOLDER = "application/x-accuqual-folder";
 const DRAG_DOC = "application/x-accuqual-doc";
 
+interface FormStart {
+  createPath: string;
+  body: Record<string, unknown>;
+  openPath: string;
+}
+
 interface FormTemplateLink {
   formKey: string;
   formId: string;
   title: string;
   subjectRoute: string;
   folderId: number | null;
+  start?: FormStart | null;
+}
+
+function FormTemplateChip({ form }: { form: FormTemplateLink }) {
+  const navigate = useNavigate();
+  const toast = useToast();
+  const [pending, setPending] = useState(false);
+  const label = form.formId ? `${form.formId} ${form.title}` : form.title;
+
+  async function open() {
+    if (!form.start) {
+      navigate(form.subjectRoute);
+      return;
+    }
+    setPending(true);
+    try {
+      const created = await apiClient.post<{ id: number }>(form.start.createPath, form.start.body);
+      navigate(form.start.openPath.replaceAll("{id}", String(created.data.id)));
+    } catch {
+      toast.error(`Couldn't start ${form.title}.`);
+      setPending(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void open()}
+      disabled={pending}
+      draggable={false}
+      data-form-key={form.formKey}
+      className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:opacity-80 disabled:opacity-60"
+    >
+      <ArrowUpRight size={12} />
+      {pending ? "Opening…" : label}
+    </button>
+  );
 }
 
 interface DocumentFolder {
@@ -518,10 +561,7 @@ export function FolderExplorerPage() {
                     {ownForms.length > 0 && (
                       <div className="flex flex-wrap gap-2">
                         {ownForms.map((form) => (
-                          <Link key={form.formKey} to={form.subjectRoute} draggable={false} data-form-key={form.formKey} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:opacity-80">
-                            <ArrowUpRight size={12} />
-                            {form.formId ? `${form.formId} ${form.title}` : form.title}
-                          </Link>
+                          <FormTemplateChip key={form.formKey} form={form} />
                         ))}
                       </div>
                     )}
@@ -575,10 +615,7 @@ export function FolderExplorerPage() {
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {topicForms.map((form) => (
-                              <Link key={form.formKey} to={form.subjectRoute} draggable={false} data-form-key={form.formKey} className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:opacity-80">
-                                <ArrowUpRight size={12} />
-                                {form.formId ? `${form.formId} ${form.title}` : form.title}
-                              </Link>
+                              <FormTemplateChip key={form.formKey} form={form} />
                             ))}
                             {topicDocs.map((doc) => (
                               <DocPill
