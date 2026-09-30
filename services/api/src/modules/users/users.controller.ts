@@ -23,6 +23,7 @@ import { loadUserHistory } from "./userLinks.js";
 import { loadOpenWork, reassignOpenWork, type OpenWorkGroup } from "./userOpenWork.js";
 import { deleteUserSchema } from "./users.validation.js";
 import type { Db } from "../../lib/requestDb.js";
+import { omitUserSecrets } from "./publicUser.js";
 
 export const listUsers = asyncHandler(async (req: Request, res: Response) => {
   const rows = await req
@@ -110,8 +111,7 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
   try {
     const [created] = await req.db!.insert(users).values({ email, passwordHash, name, roleId, department, managerId: managerId ?? null, passwordChangedAt: new Date(), mustChangePassword: true }).returning();
     if (!created) throw new AppError("Failed to create user", 500);
-    const { passwordHash: _omit, ...safe } = created;
-    res.status(201).json(safe);
+    res.status(201).json(omitUserSecrets(created));
   } catch (err) {
     const pg = postgresError(err);
     if (pg.code === "23505") throw AppError.badRequest("That email is already in use.");
@@ -197,8 +197,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   });
   if (revokeSessions) await revokeRefreshTokenRows(updated.id);
 
-  const { passwordHash: _omit, ...safe } = updated;
-  res.json(safe);
+  res.json(omitUserSecrets(updated));
 });
 
 /**

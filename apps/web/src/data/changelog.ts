@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-09-30",
+    date: "2026-09-30",
+    items: [
+      "Form signatures use a 4-digit PIN. Set it once the first time you sign in, and change it later under Settings → Security. Signing a form asks for the PIN and a certification checkbox, then writes your name with the date and time. A wrong PIN does not sign the form. The PIN is stored as a hash and is not visible to an administrator.",
+    ],
+  },
+  {
     version: "2026-09-27",
     date: "2026-09-27",
     items: [

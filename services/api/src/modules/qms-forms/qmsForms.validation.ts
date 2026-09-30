@@ -34,3 +34,8 @@ export const createQmsFormRowSchema = z.object({
 export const updateQmsFormRowSchema = z.object({
   data: z.record(z.string(), z.string()),
 });
+
+export const signQmsFormRowSchema = z.object({
+  pin: z.string().regex(/^\d{4}$/, "Enter a 4-digit PIN."),
+  certified: z.literal(true),
+});

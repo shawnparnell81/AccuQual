@@ -64,6 +64,14 @@ history below), the modules themselves are the source of truth:
 - **Which modules use the generic Workflow Engine vs. their own
   hand-coded state machine**: `accuqual-workflow-architecture.md`.
 
+Form signatures use a 4-digit PIN. The first sign-in after an account is
+created asks for that PIN once (it can be changed later under Settings →
+Security). Signing a form asks for the PIN and a certification checkbox.
+On success the field shows the person's display name with the date and
+time in the company timezone, and the audit trail records who signed,
+which field, when, and the certification text. The PIN is stored as a
+hash. It is not shown again, and an administrator cannot read it.
+
 ## One company — how data access works
 
 The application serves a single company; there is no per-company

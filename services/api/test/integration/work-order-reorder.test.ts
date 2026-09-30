@@ -15,6 +15,7 @@ import { workOrders, workOrderOperations } from "../../src/drizzle/schema/workOr
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { setTestPin, TEST_PIN } from "../helpers/signaturePin.js";
 import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 
 const app = createApp();
@@ -31,6 +32,7 @@ const opIds: Record<string, number> = {};
 async function makeUser(department: string) {
   const [user] = await db.insert(users).values({ email: `wo-reorder-${department}-${suffix}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
+  await setTestPin(user!.id);
   return signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department });
 }
 
@@ -78,7 +80,7 @@ describe("Work order operation reorder (real DB + real HTTP path)", () => {
   });
 
   it("won't move an operation that is already signed off", async () => {
-    await request(app).patch(`/work-orders/${workOrderId}/operations/${opIds.Deburr}`).set("Authorization", `Bearer ${csToken}`).send({ signOff: "T. Nakamura" });
+    await request(app).patch(`/work-orders/${workOrderId}/operations/${opIds.Deburr}`).set("Authorization", `Bearer ${csToken}`).send({ signOff: "sign", pin: TEST_PIN, certified: true });
     // Deburr now sits at op 10; putting it anywhere else would move it.
     const moveIt = await reorder(csToken, [opIds.Cut!, opIds.Deburr!, opIds.Drill!]);
     expect(moveIt.status).toBe(400);

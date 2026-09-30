@@ -3,7 +3,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
-import { createQmsFormSchema, updateQmsFormSchema, createQmsFormRowSchema, updateQmsFormRowSchema } from "./qmsForms.validation.js";
+import { createQmsFormSchema, updateQmsFormSchema, createQmsFormRowSchema, updateQmsFormRowSchema, signQmsFormRowSchema } from "./qmsForms.validation.js";
 import {
   listQmsFormTypesHandler,
   listQmsFormsHandler,
@@ -13,6 +13,7 @@ import {
   deleteQmsFormHandler,
   createQmsFormRowHandler,
   updateQmsFormRowHandler,
+  signQmsFormRowHandler,
   deleteQmsFormRowHandler,
 } from "./qmsForms.controller.js";
 
@@ -40,4 +41,5 @@ qmsFormsRouter.delete("/:id", deleteQmsFormHandler);
 
 qmsFormsRouter.post("/:id/rows", validate(createQmsFormRowSchema), createQmsFormRowHandler);
 qmsFormsRouter.patch("/:id/rows/:rowId", validate(updateQmsFormRowSchema), updateQmsFormRowHandler);
+qmsFormsRouter.post("/:id/rows/:rowId/sign", validate(signQmsFormRowSchema), signQmsFormRowHandler);
 qmsFormsRouter.delete("/:id/rows/:rowId", deleteQmsFormRowHandler);

@@ -4,6 +4,7 @@ import { feasibilityReviews } from "../../drizzle/schema/feasibility.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { deleteRecord } from "../records/recordDeletion.js";
 import { notifyDepartment } from "../notifications/notification.service.js";
 import { loadCompanyForSettings, getFeasibilitySettings, requiredDocumentDisplayNames } from "../settings/settings.service.js";
@@ -44,7 +45,7 @@ function assertSignoffFieldsAllowed(req: Request, body: Record<string, unknown>)
   const ownedPrefix = department ? SIGNOFF_OWNER[department] : undefined;
   if (!ownedPrefix) throw AppError.forbidden("Your department has no sign-off row on this form.");
 
-  const disallowed = Object.keys(body).filter((k) => !k.startsWith(ownedPrefix));
+  const disallowed = Object.keys(body).filter((k) => !k.startsWith(ownedPrefix) && k !== "pin" && k !== "certified");
   if (disallowed.length > 0) {
     throw AppError.forbidden(`Your department may only edit its own sign-off row (${ownedPrefix}Signoff*) — not: ${disallowed.join(", ")}`);
   }
@@ -134,20 +135,36 @@ export const updateSignoffHandler = asyncHandler(async (req: Request, res: Respo
   if (record.status === "final") throw AppError.badRequest("This review is finalized — sign-offs are locked.");
   assertSignoffFieldsAllowed(req, req.body);
 
-  const body = { ...(req.body as Record<string, unknown>) };
-  delete body.revision;
-  const patch: Record<string, unknown> = { ...body, revision: keptRevision(record.revision, templateRevisionFor("feasibility").revision), updatedAt: new Date() };
+  const { pin, certified, ...withoutPin } = req.body as { pin?: string; certified?: boolean } & Record<string, unknown>;
+  const rest = { ...withoutPin };
+  delete rest.revision;
+  const patch: Record<string, unknown> = { ...rest, revision: keptRevision(record.revision, templateRevisionFor("feasibility").revision), updatedAt: new Date() };
+  const signatureKeys = Object.keys(rest).filter((key) => key.endsWith("SignoffSignature") && rest[key]);
+  const stamp = signatureKeys.length
+    ? await requireSignatureStamp(req, {
+        pin,
+        certified,
+        entityType: "FeasibilityReview",
+        entityId: record.id,
+        field: signatureKeys.join(", "),
+        description: "I certify that this feasibility sign-off is mine and the assessment is accurate.",
+      })
+    : null;
   for (const prefix of ["engineering", "quality", "manufacturing", "purchasing", "sales"]) {
     const sigKey = `${prefix}SignoffSignature`;
     const dateKey = `${prefix}SignoffDate`;
-    if (req.body[sigKey] !== undefined) {
-      const wasUnset = !record[sigKey as keyof typeof record];
-      patch[dateKey] = req.body[sigKey] && wasUnset ? new Date() : req.body[sigKey] ? record[dateKey as keyof typeof record] : null;
+    if (rest[sigKey] === undefined) continue;
+    if (!rest[sigKey]) {
+      delete patch[sigKey];
+      continue;
     }
+    patch[sigKey] = stamp!.stamp;
+    const wasUnset = !record[sigKey as keyof typeof record];
+    patch[dateKey] = wasUnset ? stamp!.signedAt : record[dateKey as keyof typeof record];
   }
 
   const [updated] = await req.db!.update(feasibilityReviews).set(patch).where(eq(feasibilityReviews.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: record.id, action: "update", changes: { subAction: "signoff", fieldsChanged: Object.keys(req.body) }, performedBy: req.user?.id });
+  await recordAuditTrail(req.db!, { entityType: "FeasibilityReview", entityId: record.id, action: "update", changes: { subAction: "signoff", fieldsChanged: Object.keys(rest).filter((key) => !key.endsWith("Signature")) }, performedBy: req.user?.id });
   res.json(hideSalesSignoff(updated!));
 });
 

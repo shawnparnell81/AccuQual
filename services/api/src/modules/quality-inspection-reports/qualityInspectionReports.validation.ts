@@ -29,10 +29,12 @@ export const updateQualityInspectionReportSchema = z.object({
   sampleSize: z.string().nullable().optional(),
   finalStatus: z.enum(INSPECTION_FINAL_STATUSES).nullable().optional(),
   notesRemarks: z.string().nullable().optional(),
-  inspectorSignature: z.string().nullable().optional(),
-  inspectorSignatureDate: reasonableDate.nullable().optional(),
-  qaLeadSignature: z.string().nullable().optional(),
-  qaLeadSignatureDate: reasonableDate.nullable().optional(),
+});
+
+export const signQualityInspectionReportSchema = z.object({
+  field: z.enum(["inspector", "qaLead"]),
+  pin: z.string().regex(/^\d{4}$/, "Enter a 4-digit PIN."),
+  certified: z.literal(true),
 });
 
 export const createInspectionItemSchema = z.object({

@@ -85,13 +85,12 @@ describe("SCAR + Quality Inspection Report (real DB + real HTTP path)", () => {
         quarantineAtSupplier: true,
         correctiveActionOwner: "J. Alvarez",
         correctiveActionTargetDate: "2026-10-01",
-        supplierRepSignature: "M. Diaz",
       });
     expect(res.status).toBe(200);
     expect(res.body.why1).toBe("Tooling wear exceeded limit");
     expect(res.body.quarantineAtSupplier).toBe(true);
     expect(res.body.correctiveActionOwner).toBe("J. Alvarez");
-    expect(res.body.supplierRepSignature).toBe("M. Diaz");
+    expect(res.body.supplierRepSignature).toBeNull();
   });
 
   it("closes the SCAR", async () => {

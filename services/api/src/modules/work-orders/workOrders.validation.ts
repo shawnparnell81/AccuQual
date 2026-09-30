@@ -32,7 +32,8 @@ export const updateQualityGatesSchema = z.object({
 });
 
 export const signTravelerSchema = z.object({
-  signature: z.string().min(1),
+  pin: z.string().regex(/^\d{4}$/, "Enter a 4-digit PIN."),
+  certified: z.literal(true),
 });
 
 /** The traveler's operations in their new order: every operation exactly once. */
@@ -55,4 +56,6 @@ export const updateOperationSchema = z.object({
   workCenter: z.string().nullable().optional(),
   completedQty: z.coerce.number().nullable().optional(),
   signOff: z.string().nullable().optional(),
+  pin: z.string().regex(/^\d{4}$/).optional(),
+  certified: z.literal(true).optional(),
 });

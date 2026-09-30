@@ -11,6 +11,7 @@ import { crudFactory } from "../../utils/crudFactory.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import type { Db } from "../../lib/requestDb.js";
+import { omitUserSecrets } from "../users/publicUser.js";
 import { getSupplierQualityFactors, getSupplierHealth, getSupplierRiskScoreWithTrend, recomputeSupplierRiskScore, exportSupplierScorecard } from "./supplier.qualityRisk.js";
 
 export const baseHandlers = crudFactory(suppliers, { entityName: "Supplier", idColumn: "id" });
@@ -126,8 +127,7 @@ export const createPortalAccountHandler = asyncHandler(async (req: Request, res:
 
   await recordAuditTrail(req.db!, { entityType: "Supplier", entityId: supplierId, action: "update", changes: { action: "create_portal_account", email }, performedBy: req.user?.id });
 
-  const { passwordHash: _omit, ...safe } = created;
-  res.status(201).json({ user: safe, temporaryPassword: tempPassword });
+  res.status(201).json({ user: omitUserSecrets(created), temporaryPassword: tempPassword });
 });
 
 // ---------------------------------------------------------------------------

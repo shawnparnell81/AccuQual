@@ -4,6 +4,8 @@ import { qmsForms, qmsFormRows } from "../../drizzle/schema/qmsForms.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
+import { retainSignatureValues } from "../signatures/signaturePin.js";
 import { deleteRecord } from "../records/recordDeletion.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { keptRevision, templateRevisionFor } from "../forms/templateRevision.js";
@@ -77,7 +79,8 @@ export const createQmsFormRowHandler = asyncHandler(async (req: Request, res: Re
   const definition = getQmsFormDefinition(record.formType);
   const { sectionKey, data } = req.body as { sectionKey: string; data?: Record<string, string> };
   if (!definition?.sections.some((s) => s.key === sectionKey)) throw AppError.badRequest(`"${sectionKey}" is not a real section of "${record.formType}"`);
-  const [created] = await req.db!.insert(qmsFormRows).values({ formId: record.id, sectionKey, data: data ?? {} }).returning();
+  const safeData = retainSignatureValues({}, data ?? {}) as Record<string, string>;
+  const [created] = await req.db!.insert(qmsFormRows).values({ formId: record.id, sectionKey, data: safeData }).returning();
   await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: record.id, action: "update", changes: { subAction: "row_added", sectionKey }, performedBy: req.user?.id });
   res.status(201).json(created);
 });
@@ -85,10 +88,29 @@ export const createQmsFormRowHandler = asyncHandler(async (req: Request, res: Re
 export const updateQmsFormRowHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadForm(req, Number(req.params.id));
   const row = await loadRow(req, record.id, Number(req.params.rowId));
-  const { data } = req.body as { data: Record<string, string> };
+  const incoming = req.body.data as Record<string, string>;
+  const data = retainSignatureValues((row.data ?? {}) as Record<string, string>, incoming) as Record<string, string>;
   const [updated] = await req.db!.update(qmsFormRows).set({ data, updatedAt: new Date() }).where(eq(qmsFormRows.id, row.id)).returning();
   await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: record.id, action: "update", changes: { subAction: "row_updated", rowId: row.id }, performedBy: req.user?.id });
   res.json(updated);
+});
+
+export const signQmsFormRowHandler = asyncHandler(async (req: Request, res: Response) => {
+  const record = await loadForm(req, Number(req.params.id));
+  const row = await loadRow(req, record.id, Number(req.params.rowId));
+  const stamp = await requireSignatureStamp(req, {
+    pin: req.body.pin,
+    certified: req.body.certified,
+    entityType: "QmsForm",
+    entityId: record.id,
+    field: `row ${row.id} signature`,
+    description: "I certify that this entry is accurate and complete.",
+  });
+  const data = { ...(row.data ?? {}) };
+  data.signature = stamp.stamp;
+  if (!data.date) data.date = stamp.signedOn;
+  const [updated] = await req.db!.update(qmsFormRows).set({ data, updatedAt: new Date() }).where(eq(qmsFormRows.id, row.id)).returning();
+  res.json({ ...updated, stamp: stamp.stamp, signedOn: stamp.signedOn });
 });
 
 export const deleteQmsFormRowHandler = asyncHandler(async (req: Request, res: Response) => {

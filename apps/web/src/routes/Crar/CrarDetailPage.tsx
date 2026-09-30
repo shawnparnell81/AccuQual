@@ -3,6 +3,7 @@ import { isFullAccessRole } from "../../lib/fullAccess";
 import { useParams, Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
+import { apiClient } from "../../api/client";
 import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useToast } from "../../components/shared/ToastProvider";
@@ -185,7 +186,17 @@ export function CrarDetailPage() {
         </div>
       )}
 
-      <CrarFormRenderer value={isLinkOnly ? record : draft} onChange={(patch) => setDraft({ ...draft, ...patch })} readOnly={isReadOnly && !isLinkOnly} disabledFields={isLinkOnly ? new Set(Object.keys(record)) : undefined} />
+      <CrarFormRenderer
+        value={isLinkOnly ? record : draft}
+        onChange={(patch) => setDraft({ ...draft, ...patch })}
+        readOnly={isReadOnly && !isLinkOnly}
+        disabledFields={isLinkOnly ? new Set(Object.keys(record)) : undefined}
+        onSign={async (field, pin) => {
+          const updated = (await apiClient.post<CrarClaim>(`/crar/${crarId}/sign`, { field, pin, certified: true })).data;
+          setDraft(updated);
+          await queryClient.invalidateQueries({ queryKey: ["crar", crarId] });
+        }}
+      />
 
       <div className="print:hidden">
         <AttachmentsPanel entityType="crar" entityId={crarId} title="Evidence, Photos & Supporting Documents" />

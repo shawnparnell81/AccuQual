@@ -2,10 +2,12 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { AppLayout } from "./components/layout/AppLayout";
 import { ProtectedRoute } from "./components/layout/ProtectedRoute";
 import { RequireFreshPassword } from "./components/auth/RequireFreshPassword";
+import { RequireSignaturePin } from "./components/auth/RequireSignaturePin";
 import { LoginPage } from "./routes/Auth/LoginPage";
 import { ForgotPasswordPage } from "./routes/Auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "./routes/Auth/ResetPasswordPage";
 import { ForcePasswordChangePage } from "./routes/Auth/ForcePasswordChangePage";
+import { SetSignaturePinPage } from "./routes/Auth/SetSignaturePinPage";
 import { homeKind } from "./lib/opsLanguage";
 import { useCurrentUser, useAuthBootstrap } from "./hooks/useAuth";
 import {
@@ -122,6 +124,8 @@ export function App() {
       <Route element={<ProtectedRoute />}>
         <Route path="/change-password" element={<ForcePasswordChangePage />} />
         <Route element={<RequireFreshPassword />}>
+        <Route path="/set-signature-pin" element={<SetSignaturePinPage />} />
+        <Route element={<RequireSignaturePin />}>
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomeRoute />} />
           <Route path="/home" element={<HomePage />} />
@@ -257,6 +261,7 @@ export function App() {
 
           <Route path="/reporting" element={<ReportingHubPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
+        </Route>
         </Route>
         </Route>
       </Route>

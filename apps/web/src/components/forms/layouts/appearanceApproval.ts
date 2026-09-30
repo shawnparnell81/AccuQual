@@ -139,7 +139,7 @@ export const appearanceApprovalLayout: FormLayout = {
           name: "signoffs",
           fixedRowLabels: ["Organization Authorized Representative", "Customer Representative Approval"],
           columns: [
-            { key: "signature", label: "Signature", kind: "text" },
+            { key: "signature", label: "Signature", kind: "signature", certify: "I certify that this appearance approval is accurate." },
             { key: "date", label: "Date", kind: "date" },
           ],
         },

@@ -22,6 +22,24 @@ export const changePasswordSchema = z.object({
   newPassword: passwordSchema,
 });
 
+const fourDigitPin = z.string().regex(/^\d{4}$/, "Enter a 4-digit PIN.");
+
+export const setSignaturePinSchema = z.object({
+  pin: fourDigitPin,
+  confirmPin: fourDigitPin,
+});
+
+export const changeSignaturePinSchema = z.object({
+  currentPin: fourDigitPin,
+  pin: fourDigitPin,
+  confirmPin: fourDigitPin,
+});
+
+export const signatureStampSchema = z.object({
+  pin: fourDigitPin,
+  certified: z.literal(true),
+});
+
 const mfaToken = z.string().min(20).max(2000);
 const mfaCode = z.string().min(6).max(20);
 

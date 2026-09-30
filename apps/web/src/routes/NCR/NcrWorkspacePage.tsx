@@ -26,6 +26,7 @@ import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { NcrQuarantineSection } from "./NcrQuarantineSection";
 import { RepeatNcrBanner } from "./RepeatNcrBanner";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
+import { FormSignProvider } from "../../components/forms/formSign";
 
 const FORM_TYPE = "ncr";
 
@@ -101,6 +102,7 @@ export function NcrWorkspacePage() {
   const closed = ncr.status === "closed";
 
   return (
+    <FormSignProvider formType={FORM_TYPE} entityId={ncrId}>
     <PictureRecordProvider entityType="ncr" entityId={ncrId}>
     <div className="flex flex-col gap-4">
       <RecordGlance
@@ -263,6 +265,7 @@ export function NcrWorkspacePage() {
       </Modal>
     </div>
     </PictureRecordProvider>
+    </FormSignProvider>
   );
 }
 

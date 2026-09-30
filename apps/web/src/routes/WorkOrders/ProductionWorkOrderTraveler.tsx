@@ -5,6 +5,7 @@ import { useAuthStore } from "../../store/authStore";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
+import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import type { WorkOrder, WorkOrderOperation } from "../../api/types";
 
 /**
@@ -54,15 +55,13 @@ export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrde
   });
 
   const signOperator = useMutation({
-    mutationFn: async (signature: string) => (await apiClient.post(`/work-orders/${workOrder.id}/sign-operator`, { signature })).data,
+    mutationFn: async (pin: string) => (await apiClient.post(`/work-orders/${workOrder.id}/sign-operator`, { pin, certified: true })).data,
     onSuccess: invalidate,
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't record the operator signature.")),
   });
 
   const signInspector = useMutation({
-    mutationFn: async (signature: string) => (await apiClient.post(`/work-orders/${workOrder.id}/sign-inspector`, { signature })).data,
+    mutationFn: async (pin: string) => (await apiClient.post(`/work-orders/${workOrder.id}/sign-inspector`, { pin, certified: true })).data,
     onSuccess: invalidate,
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't record the inspector signature.")),
   });
 
   const addOperation = useMutation({
@@ -243,6 +242,7 @@ export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrde
                   op={op}
                   canEdit={canEditTraveler}
                   onPatch={(body) => patchOperation.mutate({ opId: op.id, body })}
+                  onSignOff={(pin) => patchOperation.mutateAsync({ opId: op.id, body: { signOff: "sign", pin, certified: true } })}
                   onDelete={() => deleteOperation.mutate(op.id)}
                   canDrag={canEditTraveler && operations.length > 1}
                   isDragging={dragOpId === op.id}
@@ -294,20 +294,26 @@ export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrde
         </div>
 
         <div className="wot-grid-2" style={{ marginTop: 24 }}>
-          <SignatureField
-            label="Operator Signature"
-            value={workOrder.operatorSignature}
-            signedAt={workOrder.operatorSignedAt}
-            canEdit={canEditTraveler}
-            onSign={(name) => signOperator.mutate(name)}
-          />
-          <SignatureField
-            label="Inspector Signature"
-            value={workOrder.inspectorSignature}
-            signedAt={workOrder.inspectorSignedAt}
-            canEdit={canEditTraveler}
-            onSign={(name) => signInspector.mutate(name)}
-          />
+          <div className="wot-field-group">
+            <span className="wot-field-label">Operator Signature</span>
+            <SignatureStamp
+              value={workOrder.operatorSignature}
+              certify="I certify that I performed this work as recorded."
+              disabled={!canEditTraveler}
+              variant="sheet"
+              onSign={(pin) => signOperator.mutateAsync(pin)}
+            />
+          </div>
+          <div className="wot-field-group">
+            <span className="wot-field-label">Inspector Signature</span>
+            <SignatureStamp
+              value={workOrder.inspectorSignature}
+              certify="I certify that I inspected this work and the record is accurate."
+              disabled={!canEditTraveler}
+              variant="sheet"
+              onSign={(pin) => signInspector.mutateAsync(pin)}
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -318,6 +324,7 @@ function OperationRow({
   op,
   canEdit,
   onPatch,
+  onSignOff,
   onDelete,
   canDrag,
   isDragging,
@@ -330,6 +337,7 @@ function OperationRow({
   op: WorkOrderOperation;
   canEdit: boolean;
   onPatch: (body: Record<string, unknown>) => void;
+  onSignOff: (pin: string) => Promise<unknown>;
   onDelete: () => void;
   canDrag: boolean;
   isDragging: boolean;
@@ -339,8 +347,6 @@ function OperationRow({
   onDragOverRow: () => void;
   onDropRow: () => void;
 }) {
-  const [signOffDraft, setSignOffDraft] = useState(op.signOff ?? "");
-
   return (
     <tr
       className={isOver ? "wot-row-over" : undefined}
@@ -375,17 +381,13 @@ function OperationRow({
         />
       </td>
       <td>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <input
-            className="wot-cell-input"
-            placeholder="Name"
-            value={signOffDraft}
-            disabled={!canEdit}
-            onChange={(e) => setSignOffDraft(e.target.value)}
-            onBlur={() => signOffDraft !== (op.signOff ?? "") && onPatch({ signOff: signOffDraft || null })}
-          />
-          {op.signOffDate && <span style={{ fontSize: 10, color: "#64748b" }}>{new Date(op.signOffDate).toLocaleDateString()}</span>}
-        </div>
+        <SignatureStamp
+          value={op.signOff}
+          certify="I certify that this operation was completed as recorded."
+          disabled={!canEdit}
+          variant="sheet"
+          onSign={onSignOff}
+        />
       </td>
       <td style={{ whiteSpace: "nowrap" }}>
         {canDrag && (
@@ -413,41 +415,5 @@ function OperationRow({
         )}
       </td>
     </tr>
-  );
-}
-
-function SignatureField({
-  label,
-  value,
-  signedAt,
-  canEdit,
-  onSign,
-}: {
-  label: string;
-  value: string | null;
-  signedAt: string | null;
-  canEdit: boolean;
-  onSign: (name: string) => void;
-}) {
-  const [draft, setDraft] = useState(value ?? "");
-
-  return (
-    <div className="wot-field-group">
-      <span className="wot-field-label">{label}</span>
-      <input
-        className="wot-field-input"
-        style={{ height: 24 }}
-        value={draft}
-        disabled={!canEdit}
-        placeholder={canEdit ? "Type name to sign" : "—"}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => draft !== (value ?? "") && draft.trim() && onSign(draft.trim())}
-      />
-      {signedAt && (
-        <span style={{ fontSize: 10, color: "#64748b" }}>
-          Signed {new Date(signedAt).toLocaleString()}
-        </span>
-      )}
-    </div>
   );
 }

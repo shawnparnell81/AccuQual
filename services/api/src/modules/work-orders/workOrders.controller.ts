@@ -6,6 +6,7 @@ import { ncr } from "../../drizzle/schema/ncr.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { applyMovement } from "../inventory/inventory.service.js";
 import { parseLimitOffset } from "../../utils/listQuery.js";
@@ -199,9 +200,15 @@ export const signOperatorHandler = asyncHandler(async (req: Request, res: Respon
   assertDepartment(req, ["customer_service"]);
   const record = await loadWorkOrder(req, Number(req.params.id));
   assertTravelerEditable(record.status);
-  const { signature } = req.body as { signature: string };
-  const [updated] = await req.db!.update(workOrders).set({ operatorSignature: signature, operatorSignedAt: new Date(), updatedAt: new Date() }).where(eq(workOrders.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operator_signed", signature }, performedBy: req.user?.id });
+  const stamp = await requireSignatureStamp(req, {
+    pin: req.body.pin,
+    certified: req.body.certified,
+    entityType: "WorkOrder",
+    entityId: record.id,
+    field: "operatorSignature",
+    description: "I certify that I performed this work as recorded.",
+  });
+  const [updated] = await req.db!.update(workOrders).set({ operatorSignature: stamp.stamp, operatorSignedAt: stamp.signedAt, updatedAt: new Date() }).where(eq(workOrders.id, record.id)).returning();
   res.json(updated);
 });
 
@@ -209,9 +216,15 @@ export const signInspectorHandler = asyncHandler(async (req: Request, res: Respo
   assertDepartment(req, ["customer_service"]);
   const record = await loadWorkOrder(req, Number(req.params.id));
   assertTravelerEditable(record.status);
-  const { signature } = req.body as { signature: string };
-  const [updated] = await req.db!.update(workOrders).set({ inspectorSignature: signature, inspectorSignedAt: new Date(), updatedAt: new Date() }).where(eq(workOrders.id, record.id)).returning();
-  await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "inspector_signed", signature }, performedBy: req.user?.id });
+  const stamp = await requireSignatureStamp(req, {
+    pin: req.body.pin,
+    certified: req.body.certified,
+    entityType: "WorkOrder",
+    entityId: record.id,
+    field: "inspectorSignature",
+    description: "I certify that I inspected this work and the record is accurate.",
+  });
+  const [updated] = await req.db!.update(workOrders).set({ inspectorSignature: stamp.stamp, inspectorSignedAt: stamp.signedAt, updatedAt: new Date() }).where(eq(workOrders.id, record.id)).returning();
   res.json(updated);
 });
 
@@ -275,15 +288,25 @@ export const updateOperationHandler = asyncHandler(async (req: Request, res: Res
   const record = await loadWorkOrder(req, Number(req.params.id));
   assertTravelerEditable(record.status);
   const operation = await loadOperation(req, record.id, Number(req.params.opId));
-  const { signOff, ...rest } = req.body as { signOff?: string | null } & Record<string, unknown>;
+  const { signOff, pin, certified, ...rest } = req.body as { signOff?: string | null; pin?: string; certified?: boolean } & Record<string, unknown>;
   const patch: Record<string, unknown> = { ...rest, updatedAt: new Date() };
-  // signOffDate is always server-stamped the moment signOff is first set — never client-supplied (same reasoning as operator/inspector signedAt above).
-  if (signOff !== undefined) {
-    patch.signOff = signOff;
-    patch.signOffDate = signOff && !operation.signOff ? new Date() : signOff ? operation.signOffDate : null;
+  if (signOff !== undefined && pin === undefined) throw AppError.badRequest("Sign with your 4-digit PIN.");
+  if (pin !== undefined) {
+    const stamp = await requireSignatureStamp(req, {
+      pin,
+      certified,
+      entityType: "WorkOrder",
+      entityId: record.id,
+      field: `operation ${operation.opNumber}`,
+      description: "I certify that this operation was completed as recorded.",
+    });
+    patch.signOff = stamp.stamp;
+    patch.signOffDate = operation.signOff ? operation.signOffDate : stamp.signedAt;
   }
   const [updated] = await req.db!.update(workOrderOperations).set(patch).where(eq(workOrderOperations.id, operation.id)).returning();
-  await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operation_updated", operationId: operation.id, ...req.body }, performedBy: req.user?.id });
+  if (pin === undefined) {
+    await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "operation_updated", operationId: operation.id, fieldsChanged: Object.keys(rest) }, performedBy: req.user?.id });
+  }
   res.json(updated);
 });
 

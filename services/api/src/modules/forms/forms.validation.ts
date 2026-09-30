@@ -49,3 +49,10 @@ export const saveFormSchema = z.object({
   entityId: z.coerce.number().int().optional(),
   data: z.record(z.string(), z.unknown()),
 });
+
+export const signFormSchema = z.object({
+  pin: z.string().regex(/^\d{4}$/, "Enter a 4-digit PIN."),
+  certified: z.literal(true),
+  path: z.string().min(1).max(80),
+  description: z.string().min(1).max(400),
+});

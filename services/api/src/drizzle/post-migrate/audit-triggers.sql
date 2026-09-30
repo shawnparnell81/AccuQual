@@ -94,7 +94,7 @@ DECLARE
 BEGIN
   FOR spec IN
     SELECT * FROM (VALUES
-      ('users',                       ARRAY['last_login_at', 'theme_preferences', 'failed_login_count', 'first_failed_login_at', 'mfa_last_used_step']),
+      ('users',                       ARRAY['last_login_at', 'theme_preferences', 'failed_login_count', 'first_failed_login_at', 'mfa_last_used_step', 'pin_failed_count']),
       ('sites',                       ARRAY[]::text[]),
       ('user_sites',                  ARRAY[]::text[]),
       ('company',                     ARRAY['ai_config', 'erp_sync_settings', 'ai_usage_tokens', 'ai_usage_cost']),

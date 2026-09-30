@@ -7,6 +7,7 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { PictureBoundText } from "../../components/forms/PictureText";
+import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import { usePictureRecord } from "../../components/forms/pictureRecord";
 import { FEASIBILITY_AREAS, FEASIBILITY_AREA_LABELS } from "../../api/types";
 import type { FeasibilityReview, FeasibleValue, FeasibilityRiskLevel, FeasibilityDetermination, FeasibilitySettings } from "../../api/types";
@@ -269,13 +270,15 @@ export function FeasibilityReviewForm({ review }: { review: FeasibilityReview })
                       disabled={!editable}
                     />
                   </td>
-                  <td className="border border-border p-0 print:border-black">
-                    <input
-                      className={inputClass}
-                      defaultValue={(review[sigKey as keyof FeasibilityReview] as string) ?? ""}
-                      onBlur={(e) => e.target.value !== ((review[sigKey as keyof FeasibilityReview] as string) ?? "") && patchSignoff.mutate({ [sigKey]: e.target.value || null })}
+                  <td className="border border-border p-1 print:border-black">
+                    <SignatureStamp
+                      value={(review[sigKey as keyof FeasibilityReview] as string) ?? ""}
+                      certify="I certify that this feasibility sign-off is mine and the assessment is accurate."
                       disabled={!editable}
-                      placeholder="Type name to sign"
+                      variant="sheet"
+                      onSign={async (pin) => {
+                        await patchSignoff.mutateAsync({ [sigKey]: "sign", pin, certified: true });
+                      }}
                     />
                   </td>
                   <td className="border border-border px-2 py-1.5 text-xs text-muted-foreground print:border-black print:text-black">{dateValue ? new Date(dateValue).toLocaleDateString() : "—"}</td>

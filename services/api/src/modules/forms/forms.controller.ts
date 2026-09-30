@@ -9,6 +9,8 @@ import { DI_FORM_TYPE, syncDiFormToRecord } from "../quality/quality.formSync.js
 import { COMPLAINT_FORM_TYPE, syncComplaintFormToRecord } from "../complaints/complaints.formSync.js";
 import { parseApqpSummaryData } from "./apqpSummary.validation.js";
 import { noteRepeatNcr } from "../quality-automation/qualityAutomation.service.js";
+import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
+import { writeSignatureValue } from "../signatures/signaturePin.js";
 
 export const getTemplate = asyncHandler(async (req: Request, res: Response) => {
   const formType = req.params.type!;
@@ -51,6 +53,63 @@ export const saveForm = asyncHandler(async (req: Request, res: Response) => {
   if (req.params.type === "ncr" && savedEntityId != null) await noteRepeatNcr(req.db!, Number(savedEntityId));
 
   res.json(saved);
+});
+
+const FORM_AUDIT_ENTITY: Record<string, string> = {
+  ncr: "NCR",
+  five_why: "NCR",
+  pareto_chart: "NCR",
+  capa: "CAPA",
+  eight_d: "8D Report",
+  change: "Change request",
+  pcn: "Change request",
+  calibration: "Equipment",
+  gage_rr: "Equipment",
+  maintenance_work_order: "Equipment",
+  complaint: "Complaint",
+  fmea: "RiskAssessment",
+  training: "TrainingAssignment",
+  competency_matrix: "TrainingAssignment",
+  audit_checklist: "Audit",
+  audit_plan: "Audit",
+  lpa: "Audit",
+  discrepancy_inspection: "Discrepancy investigation",
+  supplier: "Supplier",
+  approved_vendor_list: "Supplier",
+  document_control_index: "Document",
+};
+
+/** PIN plus the certification checkbox. The stamp is the signer's display name and the time in the company timezone. */
+export const signForm = asyncHandler(async (req: Request, res: Response) => {
+  const entityId = Number(req.params.id);
+  const formType = req.params.type!;
+  const existing = await formsService.loadData(req.db!, formType, entityId);
+  const current = (existing?.data ?? {}) as Record<string, unknown>;
+  const path = String(req.body.path);
+  try {
+    writeSignatureValue(current, path, "pending", "2000-01-01");
+  } catch (err) {
+    if (err instanceof Error && err.message === "That signature field is not recognized.") throw AppError.badRequest(err.message);
+    throw err;
+  }
+  const stamp = await requireSignatureStamp(req, {
+    pin: req.body.pin,
+    certified: req.body.certified,
+    entityType: FORM_AUDIT_ENTITY[formType] ?? formType,
+    entityId,
+    field: path,
+    description: String(req.body.description),
+  });
+  const next = writeSignatureValue(current, path, stamp.stamp, stamp.signedOn);
+  await formsService.saveData(req.db!, {
+    formType,
+    entityType: existing?.entityType ?? req.body.entityType ?? formType,
+    entityId,
+    data: next,
+    userId: req.user?.id,
+    trustSignatures: true,
+  });
+  res.json({ stamp: stamp.stamp, signedAt: stamp.signedAt.toISOString(), signedOn: stamp.signedOn, displayName: stamp.displayName });
 });
 
 // `:id` is the entity id (the NCR/CAPA/... row this form is attached to) across

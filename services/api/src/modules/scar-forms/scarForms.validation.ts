@@ -37,9 +37,11 @@ export const updateScarFormSchema = z.object({
   preventiveActionTargetDate: reasonableDate.nullable().optional(),
   processUpdateOwner: z.string().nullable().optional(),
   processUpdateTargetDate: reasonableDate.nullable().optional(),
-  supplierRepSignature: z.string().nullable().optional(),
-  supplierRepDate: reasonableDate.nullable().optional(),
-  qualityEngineerSignature: z.string().nullable().optional(),
-  qualityEngineerDate: reasonableDate.nullable().optional(),
   status: z.enum(SCAR_STATUSES).optional(),
+});
+
+export const signScarFormSchema = z.object({
+  field: z.enum(["supplierRep", "qualityEngineer"]),
+  pin: z.string().regex(/^\d{4}$/, "Enter a 4-digit PIN."),
+  certified: z.literal(true),
 });

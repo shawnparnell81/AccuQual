@@ -19,6 +19,7 @@ import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { setTestPin, TEST_PIN } from "../helpers/signaturePin.js";
 import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
@@ -35,9 +36,13 @@ let salesToken: string;
 let customerServiceToken: string;
 let adminToken: string;
 
-async function makeUser(department: string | null, roleName = "operator") {
-  const [user] = await db.insert(users).values({ email: `feas-test-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department }).returning();
+async function makeUser(department: string | null, roleName = "operator", name?: string) {
+  const [user] = await db
+    .insert(users)
+    .values({ email: `feas-test-${department ?? "none"}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department, name: name ?? null })
+    .returning();
   userIds.push(user!.id);
+  await setTestPin(user!.id);
   return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
 }
 
@@ -49,7 +54,7 @@ describe("Feasibility Review — bespoke document (real DB + real HTTP path)", (
     await seedDefaultPermissions(companyId);
 
     engineeringToken = await makeUser("engineering");
-    qualityToken = await makeUser("quality");
+    qualityToken = await makeUser("quality", "operator", "Jordan Chen");
     productionToken = await makeUser("production");
     purchasingToken = await makeUser("purchasing");
     salesToken = await makeUser("sales_and_marketing");
@@ -99,9 +104,9 @@ describe("Feasibility Review — bespoke document (real DB + real HTTP path)", (
   });
 
   it("quality can sign its own row but not another department's", async () => {
-    const ownRow = await request(app).patch(`/feasibility/${reviewId}/signoff`).set("Authorization", `Bearer ${qualityToken}`).send({ qualitySignoffName: "J. Chen, QA Manager", qualitySignoffSignature: "J. Chen" });
+    const ownRow = await request(app).patch(`/feasibility/${reviewId}/signoff`).set("Authorization", `Bearer ${qualityToken}`).send({ qualitySignoffName: "J. Chen, QA Manager", qualitySignoffSignature: "sign", pin: TEST_PIN, certified: true });
     expect(ownRow.status).toBe(200);
-    expect(ownRow.body.qualitySignoffSignature).toBe("J. Chen");
+    expect(ownRow.body.qualitySignoffSignature.startsWith("Jordan Chen — ")).toBe(true);
     expect(ownRow.body.qualitySignoffDate).toBeTruthy(); // server-stamped the moment it transitioned unset -> set
 
     const otherRow = await request(app).patch(`/feasibility/${reviewId}/signoff`).set("Authorization", `Bearer ${qualityToken}`).send({ purchasingSignoffName: "hijacked", purchasingSignoffSignature: "hijacked" });
@@ -109,10 +114,10 @@ describe("Feasibility Review — bespoke document (real DB + real HTTP path)", (
   });
 
   it("production signs the Manufacturing / Operations row and purchasing signs its own; sales has no sign-off row", async () => {
-    const manufacturing = await request(app).patch(`/feasibility/${reviewId}/signoff`).set("Authorization", `Bearer ${productionToken}`).send({ manufacturingSignoffName: "R. Diaz", manufacturingSignoffSignature: "R. Diaz" });
+    const manufacturing = await request(app).patch(`/feasibility/${reviewId}/signoff`).set("Authorization", `Bearer ${productionToken}`).send({ manufacturingSignoffName: "R. Diaz", manufacturingSignoffSignature: "sign", pin: TEST_PIN, certified: true });
     expect(manufacturing.status).toBe(200);
 
-    const purchasing = await request(app).patch(`/feasibility/${reviewId}/signoff`).set("Authorization", `Bearer ${purchasingToken}`).send({ purchasingSignoffName: "T. Nguyen", purchasingSignoffSignature: "T. Nguyen" });
+    const purchasing = await request(app).patch(`/feasibility/${reviewId}/signoff`).set("Authorization", `Bearer ${purchasingToken}`).send({ purchasingSignoffName: "T. Nguyen", purchasingSignoffSignature: "sign", pin: TEST_PIN, certified: true });
     expect(purchasing.status).toBe(200);
 
     const sales = await request(app).patch(`/feasibility/${reviewId}/signoff`).set("Authorization", `Bearer ${salesToken}`).send({ salesSignoffName: "M. Patel", salesSignoffSignature: "M. Patel" });
@@ -120,7 +125,7 @@ describe("Feasibility Review — bespoke document (real DB + real HTTP path)", (
   });
 
   it("engineering signs its own row and sets the determination", async () => {
-    const signoff = await request(app).patch(`/feasibility/${reviewId}/signoff`).set("Authorization", `Bearer ${engineeringToken}`).send({ engineeringSignoffName: "A. Osei", engineeringSignoffSignature: "A. Osei" });
+    const signoff = await request(app).patch(`/feasibility/${reviewId}/signoff`).set("Authorization", `Bearer ${engineeringToken}`).send({ engineeringSignoffName: "A. Osei", engineeringSignoffSignature: "sign", pin: TEST_PIN, certified: true });
     expect(signoff.status).toBe(200);
 
     const determination = await request(app).put(`/feasibility/${reviewId}`).set("Authorization", `Bearer ${engineeringToken}`).send({ determination: "feasible_with_conditions", determinationNotes: "Subject to a 6-week tooling lead time." });

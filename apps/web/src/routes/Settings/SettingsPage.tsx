@@ -7,6 +7,7 @@ import { NavigationSettingsPage } from "./NavigationSettingsPage";
 import { ThemeSettingsSection } from "./ThemeSettingsSection";
 import { MfaSettingsSection, TrustedDevicesSection } from "./MfaSettingsSection";
 import { ChangePasswordSection } from "./ChangePasswordSection";
+import { SignaturePinSection } from "./SignaturePinSection";
 import { FeasibilitySettingsPanel } from "./FeasibilitySettingsPanel";
 import { NotificationPreferencesSection } from "./NotificationPreferencesSection";
 import { ERPSyncSettingsPanel } from "./ERPSyncSettingsPanel";
@@ -115,6 +116,7 @@ export function SettingsPage() {
           <MfaSettingsSection />
           <TrustedDevicesSection />
           <ChangePasswordSection />
+          <SignaturePinSection />
         </div>
       )}
       {tab === "Theme" && <ThemeSettingsSection />}

@@ -8,9 +8,9 @@ import type { TemplateStamp } from "./templateStructure.js";
  */
 export const FORM_TEMPLATE_CATALOG: Record<string, TemplateStamp> = {
   "form:appearance_approval": {
-    "version": 1,
-    "revision": "A",
-    "structureHash": "7bef61202769d0c223b25e161a5e61bade68d2d75d51c5ae979d4e01aa4dc8cf"
+    "version": 2,
+    "revision": "B",
+    "structureHash": "57d8cbea5aba75dad745891a275dff067ef03a108da04532d39f91dcb7de6f0c"
   },
   "form:approved_vendor_list": {
     "version": 1,
@@ -38,9 +38,9 @@ export const FORM_TEMPLATE_CATALOG: Record<string, TemplateStamp> = {
     "structureHash": "208af2a64b67a499c2dcb539f401ee24bb4fd8eab45d154ba1a9217795cedd6d"
   },
   "form:capa": {
-    "version": 1,
-    "revision": "A",
-    "structureHash": "8ac3f1cdfa8d2197df07c77839eccd9caf89a844b8a938eaa038a3597c39438c"
+    "version": 2,
+    "revision": "B",
+    "structureHash": "07546853c1cbca18a81878ff4a4f2691d0afb44c4058c8bcc4a20c1f13a9c3c2"
   },
   "form:change": {
     "version": 1,
@@ -73,9 +73,9 @@ export const FORM_TEMPLATE_CATALOG: Record<string, TemplateStamp> = {
     "structureHash": "ed172d56716ed2596d2d0b019e854eec45c7ffd0ce738ff5e6f5c702dbb260a9"
   },
   "form:dimensional_report": {
-    "version": 1,
-    "revision": "A",
-    "structureHash": "c3f66f9dc6e07cb390f7693d93d6bf9516fddf33a423ffb14dbcebd3078f34aa"
+    "version": 2,
+    "revision": "B",
+    "structureHash": "97cbe9536c43ee050cc93655c367967a09c0a288b1eb12a21549261d5203dfa1"
   },
   "form:discrepancy_inspection": {
     "version": 1,
@@ -88,9 +88,9 @@ export const FORM_TEMPLATE_CATALOG: Record<string, TemplateStamp> = {
     "structureHash": "12945fc8b0d9bfd1af8fe6fad8ca16b85b072146f18c31be2d1bd5af3ad05765"
   },
   "form:dvpr": {
-    "version": 1,
-    "revision": "A",
-    "structureHash": "1fc4b22123942749bbb8da03b577cb4cfdaee308ed2c63910972fc7bda397301"
+    "version": 2,
+    "revision": "B",
+    "structureHash": "304fa341983a90a8da7e9d2dd11e46cde8c90d5836c774f8f92f165def84e6cd"
   },
   "form:eight_d": {
     "version": 1,
@@ -98,9 +98,9 @@ export const FORM_TEMPLATE_CATALOG: Record<string, TemplateStamp> = {
     "structureHash": "a210f537b0d0e876459b34c027ba9b3cdcdebac54a41443a8319e800ba55c348"
   },
   "form:final_inspection_release_checklist": {
-    "version": 1,
-    "revision": "A",
-    "structureHash": "1e078735f3f319ac0f91d74bb6ab4bbbff553faea4dec51cafb3e2431e425be9"
+    "version": 2,
+    "revision": "B",
+    "structureHash": "7c7d522d4e234d82b4d544d168c2348eb8cecb27e330bd6c8d55db0ba09fbfe8"
   },
   "form:five_why": {
     "version": 1,
@@ -113,9 +113,9 @@ export const FORM_TEMPLATE_CATALOG: Record<string, TemplateStamp> = {
     "structureHash": "3f5c7f58ae66b9303d92cc7d1e4d640fff3a279934724b32fdc0c20713fb2975"
   },
   "form:gage_rr": {
-    "version": 1,
-    "revision": "A",
-    "structureHash": "4c8f891eb20b91571f400ded7e570cce9363c0716eb3e4a1cda0756c873ba1bf"
+    "version": 2,
+    "revision": "B",
+    "structureHash": "426aaccc7ee07a0471af3f81461fa1144385365f042fc79d8efd2ee256067cbf"
   },
   "form:inventory_item": {
     "version": 1,
@@ -143,9 +143,9 @@ export const FORM_TEMPLATE_CATALOG: Record<string, TemplateStamp> = {
     "structureHash": "22cb570f2a97af305e2baadbde035006fa68f132b36a1b5750c3d07f42ba6eec"
   },
   "form:ncr": {
-    "version": 1,
-    "revision": "A",
-    "structureHash": "d7c68503ee2a62e24d5663f3482415b3e42ac877873efb60c88dbe957034664a"
+    "version": 2,
+    "revision": "B",
+    "structureHash": "b300a5f1ec45f83f6b33faba3f15b9a4d1222b8e4a7504f05827d804e856255b"
   },
   "form:pareto_chart": {
     "version": 1,
@@ -153,9 +153,9 @@ export const FORM_TEMPLATE_CATALOG: Record<string, TemplateStamp> = {
     "structureHash": "45e732fe5de3dd5687f28bacebce4e690bdc59c173f2e1b539981d1d540adf83"
   },
   "form:pcn": {
-    "version": 1,
-    "revision": "A",
-    "structureHash": "00f6dbca3425bdf6719590e483fa142aa0d778b2ee3e99bfe1a70fb280656de2"
+    "version": 2,
+    "revision": "B",
+    "structureHash": "fcdc735226e737346eacbb2d9ac85327777f0c9125d6ea4c530d600873fd861c"
   },
   "form:process_flow_diagram": {
     "version": 1,

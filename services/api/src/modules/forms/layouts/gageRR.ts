@@ -100,7 +100,7 @@ export const gageRRLayout: FormLayout = {
           type: "row",
           fields: [
             { kind: "date", name: "approvalDate", label: "Date:" },
-            { kind: "text", name: "approvalSignature", label: "Signature:" },
+            { kind: "signature", name: "approvalSignature", label: "Signature:", certify: "I certify that this gage study is accurate and I approve the result." },
           ],
         },
       ],

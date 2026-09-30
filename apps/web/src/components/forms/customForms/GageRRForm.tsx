@@ -1,5 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { sheetRevision } from "../../../lib/formDocument";
+import { SignatureStamp } from "../SignatureStamp";
+import { useFormSign } from "../formSign";
 import { computeGageRR, gageEvaluationFill, PART_COUNT } from "./gageRRMath";
 import "../../../routes/IsoForms/isoForm.css";
 
@@ -32,7 +34,10 @@ function fmt(n: number, digits = 3): string {
  * (services/api's layouts/gageRR.ts) prints the final computed values on PDF
  * export, since that path doesn't run this component.
  */
+const GAGE_CERTIFY = "I certify that this gage study is accurate and I approve the result.";
+
 export function GageRRForm({ data, onChange, documentNumber = "" }: CustomFormProps) {
+  const signForm = useFormSign();
   // Memoized on the actual stored reference (not recreated every render) so
   // the sync effect below only re-fires when the underlying data really
   // changes, not on every render.
@@ -233,7 +238,22 @@ export function GageRRForm({ data, onChange, documentNumber = "" }: CustomFormPr
             <td>Approval date</td>
             <td>{field("Approval date", "approvalDate", "date")}</td>
             <td>Signature</td>
-            <td>{field("Approval signature", "approvalSignature")}</td>
+            <td>
+              {signForm ? (
+                <SignatureStamp
+                  value={String(data.approvalSignature ?? "")}
+                  certify={GAGE_CERTIFY}
+                  variant="sheet"
+                  onSign={async (pin) => {
+                    const result = await signForm({ path: "approvalSignature", description: GAGE_CERTIFY, pin });
+                    onChange("approvalSignature", result.stamp);
+                    if (!data.approvalDate) onChange("approvalDate", result.signedOn);
+                  }}
+                />
+              ) : (
+                <span>{String(data.approvalSignature ?? "")}</span>
+              )}
+            </td>
           </tr>
         </tbody>
       </table>

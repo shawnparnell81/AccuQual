@@ -3,6 +3,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { env } from "../../config/env.js";
 import * as authService from "./auth.service.js";
+import { changeSignaturePin, setSignaturePin } from "../signatures/signaturePin.service.js";
 import { decryptDeviceCookie, encryptDeviceCookie, hashTrustedDeviceToken, listTrustedDevices, revokeAllTrustedDevices, revokeTrustedDevice, TRUSTED_DEVICE_TTL_MS } from "./trustedDevice.service.js";
 import { encryptRefreshCookie, REFRESH_COOKIE_NAME, refreshCookieFrom } from "./refreshCookie.js";
 
@@ -232,6 +233,18 @@ export const forgotPasswordHandler = asyncHandler(async (req: Request, res: Resp
 export const resetPasswordHandler = asyncHandler(async (req: Request, res: Response) => {
   await authService.resetPassword(req.body.token, req.body.newPassword);
   res.json({ message: "Password updated. You can now log in with your new password." });
+});
+
+export const setSignaturePinHandler = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) throw AppError.unauthorized();
+  await setSignaturePin(req.user.id, req.body.pin, req.body.confirmPin);
+  res.json({ pinSet: true });
+});
+
+export const changeSignaturePinHandler = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) throw AppError.unauthorized();
+  await changeSignaturePin(req.user.id, req.body.currentPin, req.body.pin, req.body.confirmPin);
+  res.json({ pinSet: true });
 });
 
 /** Replaces the refresh cookie so this browser stays signed in, and clears the trusted-device cookie because every device was just forgotten. */

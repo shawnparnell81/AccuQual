@@ -14,6 +14,7 @@ import { fileChosenFolder, FormNumberEditor, RecordFolderField, useFormFiling } 
 import { useFormEditorState } from "./useFormEditorState";
 import { ProcessFlowDiagramEditor } from "./processFlowDiagram/ProcessFlowDiagramEditor";
 import { PictureRecordProvider, pictureRecordForForm } from "./pictureRecord";
+import { FormSignProvider } from "./formSign";
 
 interface FormEditorProps {
   formType: string;
@@ -75,6 +76,7 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
   const pictureRecord = pictureRecordForForm(formType, entityId);
 
   return (
+    <FormSignProvider formType={formType} entityId={entityId}>
     <PictureRecordProvider entityType={pictureRecord.entityType} entityId={pictureRecord.entityId}>
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -139,5 +141,6 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
       {(previewBytes || previewLoading) && <PdfViewer data={previewBytes} isLoading={previewLoading} />}
     </div>
     </PictureRecordProvider>
+    </FormSignProvider>
   );
 }

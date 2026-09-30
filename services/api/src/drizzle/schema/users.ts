@@ -49,6 +49,12 @@ export const users = pgTable("users", {
   // after signing in — and after MFA, if they use it — before any other page
   // works. Existing accounts stay false; only a newly assigned password sets it.
   mustChangePassword: boolean("must_change_password").notNull().default(false),
+  // 4-digit form signature PIN. bcrypt hash only. Never selected into an
+  // admin screen and stripped from every user payload (publicUser.ts).
+  pinHash: text("pin_hash"),
+  pinSetAt: timestamp("pin_set_at"),
+  pinFailedCount: integer("pin_failed_count").notNull().default(0),
+  pinLockedUntil: timestamp("pin_locked_until"),
   // Multi-factor authentication (TOTP). The secret is AES-256-GCM ciphertext
   // (company/crypto.ts) and is written on enrollment start but only counts once
   // mfaEnabled flips true after the user proves a first code.
