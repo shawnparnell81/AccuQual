@@ -23,6 +23,7 @@ import { FuelPumpSheet } from "./FuelPumpSheet";
 import { Batch3Sheet } from "./Batch3Sheet";
 import { PartInspectionSheet } from "./PartInspectionSheet";
 import { ValidationReportSheet } from "./ValidationReportSheet";
+import { FormHeader } from "../../components/brand/DmaLogo";
 
 interface ValidationReport {
   id: number;
@@ -172,6 +173,7 @@ export function ValidationReportDetailPage() {
       </div>
 
       <div className="aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4">
+        <FormHeader />
         {formType === "fuel_pump" ? (
           <FuelPumpSheet
             cells={cells}

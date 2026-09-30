@@ -16,6 +16,7 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { PictureBoundText } from "../../components/forms/PictureText";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import { inspectionItemResult, passFailPaint } from "../../lib/passFail";
+import { BrandMark } from "../../components/brand/DmaLogo";
 
 const reportHooks = createResourceHooks<QualityInspectionReport>("quality-inspection-reports");
 const INSPECTION_TYPES: InspectionType[] = ["incoming", "in_process", "final"];
@@ -96,11 +97,7 @@ export function QualityInspectionReportDetailPage() {
       <div className="rounded-lg border border-border bg-card p-6 print:border-black print:bg-white print:text-black">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4 print:border-black">
           <div className="flex items-center gap-3">
-            {logoUrl ? (
-              <img src={logoUrl} alt="Logo" className="h-12 w-12 rounded-md border border-border object-cover print:border-black" />
-            ) : (
-              <div className="flex h-12 w-12 items-center justify-center rounded-md border border-border bg-muted text-xs font-semibold text-muted-foreground print:border-black">LOGO</div>
-            )}
+            <BrandMark logoUrl={logoUrl} />
             <div>
               <h1 className="text-xl font-semibold uppercase tracking-wide">Quality Inspection Report</h1>
               <p className="text-xs text-muted-foreground print:text-black">Receiving / In-Process / Final Audit</p>

@@ -32,6 +32,7 @@ import { FailureChartSheet } from "./FailureChartSheet";
 import { FaiSheet } from "./FaiSheet";
 import { IsoFormSheet } from "./IsoFormSheet";
 import { ScorecardSheet } from "./ScorecardSheet";
+import { FormHeader } from "../../components/brand/DmaLogo";
 
 interface IsoFormData {
   cells?: Record<string, CellValue>;
@@ -331,6 +332,7 @@ function IsoFormDetailBody({
       </div>
 
       <div className="aq-form-copy aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4">
+        <FormHeader />
         {formType === "cross_training" ? (
           <CrossTrainingSheet cells={cells} readOnly={!canEdit} onChange={changeCell} documentNumber={documentNumber} />
         ) : formType === "visitor_log" ? (

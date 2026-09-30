@@ -8,6 +8,7 @@ import { TextField } from "../../components/forms/Field";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { StandardsDisclaimer } from "../../components/shared/StandardsDisclaimer";
 import { MfaEnrollPanel, RecoveryCodesPanel } from "../../components/auth/MfaPanels";
+import { DmaLogo } from "../../components/brand/DmaLogo";
 
 type Stage =
   | { kind: "password" }
@@ -18,8 +19,11 @@ type Stage =
 function Card({ subtitle, children, onSubmit }: { subtitle: string; children: ReactNode; onSubmit?: (e: React.FormEvent) => void }) {
   const inner = (
     <>
+      <div className="mb-4 flex justify-center">
+        <DmaLogo height={72} />
+      </div>
       <div className="mb-1 flex items-center gap-3">
-        <img src="/branding/logo-mark.png" alt="" className="h-10 w-auto" style={{ filter: "drop-shadow(0 0 10px hsl(var(--primary) / 0.55))" }} />
+        <img src="/branding/logo-mark.png" alt="" className="aq-product-mark h-10 w-auto" style={{ filter: "drop-shadow(0 0 10px hsl(var(--primary) / 0.55))" }} />
         <div>
           <h1 className="font-display text-xl font-extrabold tracking-[0.06em] text-foreground">
             ACCU<span className="text-primary">QUAL</span>

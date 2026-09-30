@@ -11,6 +11,7 @@ import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import { usePictureRecord } from "../../components/forms/pictureRecord";
 import { FEASIBILITY_AREAS, FEASIBILITY_AREA_LABELS } from "../../api/types";
 import type { FeasibilityReview, FeasibleValue, FeasibilityRiskLevel, FeasibilityDetermination, FeasibilitySettings } from "../../api/types";
+import { BrandMark } from "../../components/brand/DmaLogo";
 
 const ASSESSMENT_QUESTIONS: Record<(typeof FEASIBILITY_AREAS)[number], string> = {
   design: "Are engineering drawings, GD&T, and material specifications clear, complete, and within process capabilities (Cpk ≥ 1.33)?",
@@ -101,11 +102,7 @@ export function FeasibilityReviewForm({ review }: { review: FeasibilityReview })
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4 print:border-black">
         <div className="flex items-center gap-3">
-          {logoUrl ? (
-            <img src={logoUrl} alt="Logo" className="h-12 w-12 rounded-md border border-border object-cover print:border-black" />
-          ) : (
-            <div className="flex h-12 w-12 items-center justify-center rounded-md border border-border bg-muted text-xs font-semibold text-muted-foreground print:border-black">LOGO</div>
-          )}
+          <BrandMark logoUrl={logoUrl} />
           <div>
             <h1 className="text-xl font-semibold uppercase tracking-wide">Contract &amp; Project Feasibility Review</h1>
             <p className="text-xs text-muted-foreground print:text-black">Quality Management System Form</p>

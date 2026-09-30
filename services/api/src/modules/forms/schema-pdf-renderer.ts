@@ -3,6 +3,7 @@ import type { Block, FormLayout, TableColumn } from "./layouts/types.js";
 import { hydrateDimensionalRow, measuredCellValue, passFailPdfPalette } from "../../utils/passFail.js";
 import { FMEA_PDF_TONE, fmeaCellValue, fmeaComputedTone } from "./fmeaPriority.js";
 import { pictureTextToPlain } from "../attachments/inlinePicture.js";
+import { drawDmaLogo, embedDmaLogo } from "../branding/dmaLogo.js";
 
 // Colors sampled from the reference templates (dark navy header bars, pale
 // blue-gray field boxes, thin blue-gray borders) — kept as named constants so
@@ -56,7 +57,7 @@ export async function renderFormLayoutAsPdf(layout: FormLayout, data: Record<str
   const [pageWidth, pageHeight] = pageSizeFor(layout);
   const ctx: RenderContext = { doc, page: doc.addPage([pageWidth, pageHeight]), y: pageHeight - MARGIN, font, bold, italic };
 
-  drawTitle(ctx, layout.title);
+  await drawTitle(ctx, layout.title);
 
   for (const section of layout.sections) {
     ensureSpace(ctx, 26);
@@ -79,15 +80,23 @@ export function ensureSpace(ctx: RenderContext, needed: number) {
   }
 }
 
-export function drawTitle(ctx: RenderContext, title: string) {
+export async function drawTitle(ctx: RenderContext, title: string) {
   const span = contentWidth(ctx);
-  const lines = wrapText(title, ctx.bold, 16, span);
+  const logoH = 32;
+  const logo = await embedDmaLogo(ctx.doc);
+  const logoTop = ctx.y + 12;
+  const logoW = drawDmaLogo(ctx.page, logo, MARGIN, logoTop, logoH);
+  const textSpan = Math.max(80, span - logoW - 12);
+  const lines = wrapText(title, ctx.bold, 16, textSpan);
+  const textX = MARGIN + logoW + 8;
+  let baseline = logoTop - Math.max(16, (logoH - lines.length * 20) / 2) - 2;
   for (const line of lines) {
     const width = ctx.bold.widthOfTextAtSize(line, 16);
-    ctx.page.drawText(line, { x: MARGIN + (span - width) / 2, y: ctx.y, size: 16, font: ctx.bold, color: NAVY });
-    ctx.y -= 20;
+    const x = textX + Math.max(0, (textSpan - width) / 2);
+    ctx.page.drawText(line, { x, y: baseline, size: 16, font: ctx.bold, color: NAVY });
+    baseline -= 20;
   }
-  ctx.y -= 8;
+  ctx.y = Math.min(logoTop - logoH, baseline + 12) - 8;
 }
 
 export function drawSectionHeader(ctx: RenderContext, text: string) {

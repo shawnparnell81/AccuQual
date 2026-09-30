@@ -23,6 +23,7 @@ import {
 import { SidebarDragChrome, SidebarOrganizeProvider, SidebarResetButton, useArrangedSidebar, useSidebarOrganize, useSidebarRow } from "./sidebarOrganize";
 import { LayoutDashboard } from "lucide-react";
 import { prefetchRoute } from "../../routes/pages";
+import { DmaLogo } from "../brand/DmaLogo";
 
 const SIDEBAR_KEY = "accuqual-sidebar-collapsed";
 
@@ -140,7 +141,8 @@ export function TopNav() {
           {sideOpen ? <X size={18} /> : <Menu size={18} />}
         </button>
         <Link to="/" className="aq-brand" aria-label="AccuQual QMS home">
-          <img src="/branding/logo-mark.png" alt="" width={26} height={31} />
+          <DmaLogo height={34} />
+          <img src="/branding/logo-mark.png" alt="" width={26} height={31} className="aq-product-mark" />
           <span>
             ACCU<b>QUAL</b>
           </span>
@@ -223,6 +225,9 @@ function SidebarNav({
   return (
     <nav className="aq-sidebar" id="sidebar" aria-label="Main navigation">
       <div className="aq-side-scroll">
+        <div className="aq-side-brand">
+          <DmaLogo height={32} />
+        </div>
         <div className="aq-nav-group">
           <NavLink to={DASHBOARD_LEAF.path} end title="Dashboard" onClick={closeSide} onMouseEnter={() => prefetchRoute(DASHBOARD_LEAF.path)} onFocus={() => prefetchRoute(DASHBOARD_LEAF.path)} className={({ isActive }) => clsx("aq-nav-link", isActive && "active")}>
             <LayoutDashboard size={18} />

@@ -38,6 +38,7 @@ RUN apk upgrade --no-cache && rm -rf /usr/local/lib/node_modules/npm /usr/local/
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /repo/services/api/dist ./dist
+COPY --from=build /repo/services/api/assets ./assets
 COPY --from=build /repo/services/api/package.json ./package.json
 # The hoisted root node_modules, not a per-workspace one (see the build stage's
 # comment) — placed at /app/node_modules so Node's upward module resolution

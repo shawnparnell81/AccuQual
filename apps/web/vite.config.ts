@@ -47,7 +47,7 @@ export default defineConfig(({ mode }) => ({
       // Registered from main.tsx, and only on the app host. The marketing
       // host must not install a worker that serves the app shell for "/".
       injectRegister: null,
-      includeAssets: ["branding/logo-mark.png"],
+      includeAssets: ["branding/logo-mark.png", "branding/dma-logo.png"],
       manifest: {
         name: "AccuQual",
         short_name: "AccuQual",

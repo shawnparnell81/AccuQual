@@ -59,7 +59,7 @@ export async function renderProcessFlowDiagramAsPdf(layout: FormLayout, data: Re
   const italic = await doc.embedFont(StandardFonts.HelveticaOblique);
   const ctx: RenderContext = { doc, page: doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]), y: PAGE_HEIGHT - MARGIN, font, bold, italic };
 
-  drawTitle(ctx, layout.title);
+  await drawTitle(ctx, layout.title);
 
   for (const section of layout.sections) {
     ensureSpace(ctx, 26);

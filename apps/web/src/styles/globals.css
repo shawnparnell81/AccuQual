@@ -746,10 +746,56 @@ input[type="radio"] {
   text-decoration: none;
   min-width: 0;
 }
-.aq-brand img {
+.aq-brand .aq-product-mark {
   width: 26px;
   height: auto;
   filter: drop-shadow(0 0 10px hsl(var(--primary) / 0.55));
+}
+.dma-logo {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  background: #000;
+  border-radius: 6px;
+  object-fit: contain;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.dma-form-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px;
+  min-height: 40px;
+}
+.dma-form-title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--form-heading, #1d3a5c);
+}
+.dma-form-balance {
+  flex: 0 0 60px;
+  width: 60px;
+}
+.aq-side-brand {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 12px;
+}
+.aq-side-brand .dma-logo {
+  height: 32px;
+}
+body.side-collapsed .aq-side-brand .dma-logo {
+  height: 26px;
 }
 .aq-brand b {
   color: hsl(var(--primary));
@@ -1499,9 +1545,13 @@ body.side-collapsed .aq-nav-folder-link {
   .csa .section,
   .fp .section,
   .b8-head,
-  .e8-h {
+  .e8-h,
+  .dma-logo {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+  .dma-logo {
+    background: #000 !important;
   }
   @page {
     margin: 0.5in;
