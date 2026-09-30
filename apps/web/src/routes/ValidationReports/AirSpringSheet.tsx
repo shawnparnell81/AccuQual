@@ -24,7 +24,7 @@ export function AirSpringSheet(props: AirSpringSheetProps) {
       evaluateCells={evaluate}
       certify={AIR_SPRING_CERTIFY}
       testId="air-spring-sheet"
-      label="Air Spring Validation"
+      label="AIR STRUT VALIDATION DOCUMENT"
       resultAddrs={["G7", "B48"]}
     />
   );

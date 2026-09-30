@@ -317,7 +317,7 @@ function IsoFormDetailBody({
         {meta.photos && (
           <div className="iso-tabs">
             <button type="button" onClick={() => setSheet("form")} className={`rounded-md border px-3 py-1.5 text-sm ${sheet === "form" ? "border-primary bg-primary/10" : "border-border"}`}>
-              Quarantine Notice
+              QUARANTINE NOTICE
             </button>
             <button type="button" onClick={() => setSheet("photos")} className={`rounded-md border px-3 py-1.5 text-sm ${sheet === "photos" ? "border-primary bg-primary/10" : "border-border"}`}>
               Photos
@@ -328,7 +328,7 @@ function IsoFormDetailBody({
 
       <div className="aq-form-copy aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4">
         {formType === "cross_training" ? (
-          <CrossTrainingSheet cells={cells} readOnly={!canEdit} onChange={changeCell} />
+          <CrossTrainingSheet cells={cells} readOnly={!canEdit} onChange={changeCell} documentNumber={documentNumber} />
         ) : formType === "visitor_log" ? (
           <VisitorLogSheet cells={cells} readOnly={!canEdit} onChange={changeCell} documentNumber={documentNumber} revision={revision} />
         ) : formType === "monthly_engineering" ? (

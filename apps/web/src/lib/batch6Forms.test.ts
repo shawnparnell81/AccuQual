@@ -14,7 +14,9 @@ test("electronic CSA and shock development stay separate from the earlier forms"
   assert.equal(ISO_FORMS.filter((form) => form.formType === "internal_audit").length, 1);
   assert.equal(ISO_FORMS.filter((form) => form.formType === "ncr_report").length, 1);
   assert.equal(ISO_FORMS.filter((form) => form.formType === "quarantine_notice").length, 1);
-  assert.equal(ISO_FORMS.find((form) => form.formKey === "frm-ecr-001")?.formId, "");
+  assert.equal(ISO_FORMS.find((form) => form.formKey === "frm-ecr-001")?.formId, "FRM-ECR-001");
+  assert.equal(ISO_FORMS.find((form) => form.formKey === "frm-dev-012")?.formId, "FRM-DEV-012");
+  assert.equal(ISO_FORMS.find((form) => form.formKey === "frm-dev-013")?.formId, "FRM-DEV-013");
   assert.equal(blankBatch6("dev_electronic_csa").B10, "Shawn Parnell");
   assert.equal(blankBatch6("dev_electronic_csa").E2, "Maxwell Tollefson");
   assert.equal(blankBatch6("engineering_change").D5, "Shawn Parnell");

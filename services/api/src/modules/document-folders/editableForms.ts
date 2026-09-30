@@ -22,7 +22,7 @@ export const EDITABLE_FORM_NUMBER_KEYS = new Set([
 
 /**
  * Filled copies that can be saved into any Documents folder and opened again from there.
- * CSA Validation and Fuel Pump Validation keep their seeded numbers; they are filed the same way.
+ * CSA VALIDATION REPORT and FUEL PUMP VALIDATION DOCUMENT have no Doc ID on the sheet. They are filed the same way.
  */
 export const FILEABLE_FORM_KEYS = new Set<string>([
   ...EDITABLE_FORM_NUMBER_KEYS,

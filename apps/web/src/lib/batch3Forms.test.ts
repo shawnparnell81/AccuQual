@@ -26,8 +26,10 @@ test("third-batch titles stay separate from conflicting Doc IDs", () => {
   assert.equal(BATCH3_SHEET_TITLE.electric_lift, "ELECTRIC LIFT SUPPORT VALIDATION DOCUMENT");
   assert.equal(BATCH3_SHEET_TITLE.gas_lift, "GAS LIFT SUPPORT VALIDATION DOCUMENT");
   assert.equal(BATCH3_SHEET_TITLE.coil_spring, "COIL SPRING VALIDATION DOCUMENT");
-  assert.equal(VALIDATION_FORMS.air_compressor.title, "Air Compressor Validation");
-  assert.equal(VALIDATION_FORMS.gas_lift.title, "Gas Lift Support Validation");
+  assert.equal(VALIDATION_FORMS.air_compressor.title, "FRM-VAL-009 AIR COMPRESSOR VALIDATION DOCUMENT");
+  assert.equal(VALIDATION_FORMS.gas_lift.title, "FRM-VAL-007 GAS LIFT SUPPORT VALIDATION DOCUMENT");
+  assert.equal(VALIDATION_FORMS.air_strut.title, "FRM-VAL-010 AIR STRUT VALIDATION DOCUMENT");
+  assert.equal(VALIDATION_FORMS.air_spring.title, "FRM-VAL-011 AIR STRUT VALIDATION DOCUMENT");
   assert.equal(VALIDATION_FORMS.electric_lift.formKey, "frm-val-004");
   assert.equal(VALIDATION_FORMS.gas_lift.formKey, "frm-val-005");
   assert.notEqual(formTypeOf({ formType: "gas_lift" }), "fuel_pump");

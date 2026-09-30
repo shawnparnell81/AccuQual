@@ -36,7 +36,7 @@ describe("editable form numbers and folder filing", () => {
   it("keeps an edited number, leaves older copies blank, and files into a chosen folder", async () => {
     const templates = await request(app).get("/document-folders/form-templates").set("Authorization", `Bearer ${qualityToken}`);
     expect(templates.status).toBe(200);
-    expect(templates.body.templates.find((form: { formKey: string }) => form.formKey === "frm-ncr-001")?.formId).toBe("");
+    expect(templates.body.templates.find((form: { formKey: string }) => form.formKey === "frm-ncr-001")?.formId).toBe("FRM-NCR-001");
 
     const setNcr = await request(app).patch("/document-folders/form-templates/frm-ncr-001").set("Authorization", `Bearer ${engineeringToken}`).send({ formId: "NOPE" });
     expect(setNcr.status).toBe(200);
@@ -62,7 +62,7 @@ describe("editable form numbers and folder filing", () => {
 
     const again = await request(app).get("/document-folders/form-templates").set("Authorization", `Bearer ${qualityToken}`);
     expect(again.body.templates.find((form: { formKey: string }) => form.formKey === "frm-qa-001")?.formId).toBe("QA-14");
-    expect(again.body.templates.find((form: { formKey: string }) => form.formKey === "frm-ncr-001")?.formId).toBe("");
+    expect(again.body.templates.find((form: { formKey: string }) => form.formKey === "frm-ncr-001")?.formId).toBe("FRM-NCR-001");
     expect(again.body.templates.find((form: { formKey: string }) => form.formKey === "frm-psw-001")?.formId).toBe("");
 
     const [historical] = await db.insert(isoQualityForms).values({ formType: "quality_alert", data: { cells: {} } }).returning();

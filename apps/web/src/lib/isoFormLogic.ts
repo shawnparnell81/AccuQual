@@ -9,11 +9,11 @@ export const COMPETENCY = ["1", "2", "3"] as const;
 
 export const CROSS_CRITERIA = [
   { addr: "S1", section: "A", weight: 2, max: 20, text: "1. Development & Lifecycle: Did the engineer clearly explain how the product is developed, from initial specs to final validation?" },
-  { addr: "S2", section: "A", weight: 2, max: 20, text: "2. Failure Modes & Quality Risks: Did the engineer thoroughly identify things to look out for (critical tolerances, common warranty issues, lab testing failure points)?" },
+  { addr: "S2", section: "A", weight: 2, max: 20, text: "2. Failure Modes & Quality Risks: Did the engineer thoroughly identify \"things to look out for\" (e.g., critical tolerances, common warranty issues, lab testing failure points)?" },
   { addr: "S3", section: "A", weight: 1, max: 10, text: "3. New Tech & Electrical Integration: Did the engineer successfully explain new technologies, electrical/sensor ties, or modern advancements in this product category?" },
-  { addr: "S4", section: "B", weight: 2, max: 20, text: "4. QMS Documentation: Did the presenter explicitly reference internal ISO documents (SPEC target values, WIN testing methods, or FRM validation forms) to ground their presentation in official company standards?" },
+  { addr: "S4", section: "B", weight: 2, max: 20, text: "4. QMS Documentation: Did the presenter explicitly reference internal ISO documents (e.g., SPEC target values, WIN testing methods, or FRM validation forms) to ground their presentation in official company standards?" },
   { addr: "S5", section: "C", weight: 2, max: 20, text: "5. Technical Defense: How accurately and confidently did the engineer answer ad-hoc technical questions from the technicians and peer engineers? Did they admit when they didn't know an answer, rather than guessing?" },
-  { addr: "S6", section: "D", weight: 1, max: 10, text: "6. Clarity & Engagement: Was the presentation logical and easy to follow? Were visual aids (physical samples, CAD drawings, PowerPoint) effective in helping technicians understand the concepts?" },
+  { addr: "S6", section: "D", weight: 1, max: 10, text: "6. Clarity & Engagement: Was the presentation logical and easy to follow? Were visual aids (e.g., physical samples, CAD drawings, PowerPoint) effective in helping technicians understand the concepts?" },
 ] as const;
 
 const QTY_CELLS = ["B17", "B18", "B19", "B20", "B21"];

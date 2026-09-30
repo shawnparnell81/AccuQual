@@ -59,7 +59,7 @@ export function AirStrutSheet(props: AirStrutSheetProps) {
       evaluateCells={evaluateAirStrut}
       certify={AIR_STRUT_CERTIFY}
       testId="air-strut-sheet"
-      label="Air Strut Validation Document"
+      label="AIR STRUT VALIDATION DOCUMENT"
       resultAddrs={["G7", "B84"]}
     />
   );

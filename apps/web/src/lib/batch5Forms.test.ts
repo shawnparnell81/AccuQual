@@ -24,8 +24,16 @@ test("batch F development documents stay separate from validation forms", () => 
   assert.equal(blankBatch5("dev_air_strut").F2, "Maxwell Tollefson");
   assert.equal(blankBatch5("dev_air_strut").B9, "Shawn Parnell");
   assert.equal(blankBatch5("dev_brake_wear").B8, "Shawn Parnell");
-  for (const key of ["frm-dev-006", "frm-dev-007", "frm-dev-008", "frm-dev-009", "frm-dev-010", "frm-dev-011"]) {
-    assert.equal(ISO_FORMS.find((form) => form.formKey === key)?.formId, "");
+  const ids: Record<string, string> = {
+    "frm-dev-006": "FRM-DEV-006",
+    "frm-dev-007": "FRM-DEV-007",
+    "frm-dev-008": "FRM-DEV-008",
+    "frm-dev-009": "FRM-DEV-009",
+    "frm-dev-010": "FRM-DEV-010",
+    "frm-dev-011": "FRM-DEV-011",
+  };
+  for (const [key, formId] of Object.entries(ids)) {
+    assert.equal(ISO_FORMS.find((form) => form.formKey === key)?.formId, formId);
   }
 });
 

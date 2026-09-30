@@ -2,7 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import type { Db } from "../../lib/requestDb.js";
-import { BLANK_FORMS_FOLDER, FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, LEGACY_ASSIGNED_FORM_IDS, fileNamePatternFor, type FormStart } from "./formFiling.js";
+import { BLANK_FORMS_FOLDER, FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, fileNamePatternFor, storedFormId, type FormStart } from "./formFiling.js";
 
 const PREVIOUS_ISO_ROOT = "ISO Compliance";
 const PREVIOUS_BLANK_FOLDER = "03_Blank_Forms_Templates";
@@ -96,8 +96,7 @@ export async function ensureFormTemplates(db: Db): Promise<void> {
     const folderGone = existing.folderId == null || !byId.has(existing.folderId);
     const nextFolderId = folderGone ? folderId : existing.folderId!;
     keep.add(nextFolderId);
-    // A number someone saved stays. A leftover FRM-xxx (or other invented seed) is cleared.
-    const nextFormId = LEGACY_ASSIGNED_FORM_IDS.has(existing.formId) ? "" : existing.formId;
+    const nextFormId = storedFormId(existing.formId, seed.formId);
     if (folderGone || existing.formId !== nextFormId || existing.title !== seed.title || existing.subjectRoute !== seed.subjectRoute) {
       await db
         .update(controlledFormTemplates)

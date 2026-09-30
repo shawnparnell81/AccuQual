@@ -18,7 +18,8 @@ test("development documents stay separate from validation reports", () => {
   assert.equal(BATCH4_SHEET_TITLE.dev_gas_lift, "GAS LIFT SUPPORT DEVELOPMENT DOCUMENT");
   assert.equal(BATCH4_SHEET_TITLE.dev_coil, "COIL SPRING DEVELOPMENT DOCUMENT");
   assert.equal(BATCH4_SHEET_TITLE.dev_air_spring, "AIR SPRING DEVELOPMENT DOCUMENT");
-  assert.equal(ISO_FORMS.find((form) => form.formKey === "frm-dev-002")?.title, "Fuel Pump Development Document");
+  assert.equal(ISO_FORMS.find((form) => form.formKey === "frm-dev-002")?.title, "FUEL PUMP DEVELOPMENT DOCUMENT");
+  assert.equal(ISO_FORMS.find((form) => form.formKey === "frm-dev-002")?.formId, "FRM-DEV-002");
   assert.equal(ISO_FORMS.find((form) => form.formType === "fuel_pump"), undefined);
   assert.equal(ISO_FORMS.filter((form) => form.formType === "concession").length, 1);
   assert.equal(blankBatch4("dev_csa").B10, "Shawn Parnell");
