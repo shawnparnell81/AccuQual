@@ -1,14 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { FORM_TEMPLATES, filedRecordName, fileNamePatternFor } from "../src/modules/document-folders/formFiling.js";
+import { FORM_TEMPLATES, filedRecordName, fileNamePatternFor, storedFormId } from "../src/modules/document-folders/formFiling.js";
 
 describe("cross-training filing name", () => {
-  it("does not use a form number", () => {
+  it("keeps the printed Doc ID and the document title", () => {
     const form = FORM_TEMPLATES.find((item) => item.formKey === "frm-trn-002");
-    expect(form?.formId).toBe("");
-    expect(form?.title).toBe("Cross-Training Evaluation");
-    expect(fileNamePatternFor(form!)).toBe("CrossTraining_{recordNumber}_{date}");
-    expect(filedRecordName("", 4, "2026-09-28", fileNamePatternFor(form!))).toBe("CrossTraining_4_2026-09-28");
+    const training = FORM_TEMPLATES.find((item) => item.formKey === "frm-trn-001");
+    const moduleRecord = FORM_TEMPLATES.find((item) => item.formKey === "training-record");
+    expect(form?.formId).toBe("FRM-TRN-002");
+    expect(form?.title).toBe("GRADING RUBRIC: CROSS-TRAINING EVALUATION");
+    expect(training).toMatchObject({ formId: "FRM-TRN-001", title: "COMPETENCY AND TRAINING RECORD" });
+    expect(moduleRecord?.title).toBe("Training & Competency Record");
+    expect(fileNamePatternFor(form!)).toBe("{formId}_{recordNumber}_{date}");
+    expect(filedRecordName("FRM-TRN-002", 4, "2026-09-28", fileNamePatternFor(form!))).toBe("FRM-TRN-002_4_2026-09-28");
     expect(filedRecordName("FRM-NCR-001", 4, "2026-09-28")).toBe("FRM-NCR-001_4_2026-09-28");
+    expect(storedFormId("", "FRM-TRN-001")).toBe("FRM-TRN-001");
+    expect(storedFormId("FRM-TRN-001", "FRM-TRN-001")).toBe("FRM-TRN-001");
+    expect(storedFormId("FRM-VAL-001", "")).toBe("");
+    expect(storedFormId("QA-14", "")).toBe("QA-14");
+    expect(storedFormId("FRM-VAL-007", "FRM-VAL-007")).toBe("FRM-VAL-007");
+    expect(storedFormId("FRM-VAL-007", "")).toBe("");
   });
 
   it("names quality and engineering copies without a form number", () => {

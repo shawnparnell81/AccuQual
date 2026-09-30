@@ -12,12 +12,21 @@ import { fileChosenFolder, RecordFolderField, SaveResult, useFormFiling, type Sa
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { FORM_KEY_BY_TYPE, instanceRevision, revisionLabel } from "../../lib/formDocument";
+import { auditScore, auditSignatures } from "../../lib/auditSummary";
+import { isBatch4, summaryBatch4 } from "../../lib/batch4Reports";
+import { isBatch5, summaryBatch5 } from "../../lib/batch5Reports";
+import { isBatch6, summaryBatch6 } from "../../lib/batch6Reports";
 import { formByType, type IsoFormType } from "../../lib/isoFormCatalog";
 import { EXCLUSIVE_CHECKS } from "../../lib/isoFormLayouts";
 import { showCell, quarantineTotal, type CellValue } from "../../lib/isoFormLogic";
 import { QUALITY_EXCLUSIVE_CHECKS } from "../../lib/qualitySheetLayouts";
 import { faiResult } from "../../lib/passFail";
 import { plusDays, type FailureRow, type FaiLine, type ScorecardRow } from "../../lib/qualitySheetLogic";
+import { Batch4Sheet } from "./Batch4Sheet";
+import { Batch5Sheet } from "./Batch5Sheet";
+import { Batch6Sheet } from "./Batch6Sheet";
+import { MonthlyEngineeringSheet } from "./MonthlyEngineeringSheet";
+import { VisitorLogSheet } from "./VisitorLogSheet";
 import { CrossTrainingSheet } from "./CrossTrainingSheet";
 import { FailureChartSheet } from "./FailureChartSheet";
 import { FaiSheet } from "./FaiSheet";
@@ -53,6 +62,7 @@ export function IsoFormDetailPage() {
   const canEdit = user?.roleName === "admin" || user?.roleName === "owner" || effective?.documents === "edit";
   const { data: record, isLoading, isError } = hooks.useOne(recordId);
   const updateRecord = hooks.useUpdate();
+  const signForm = hooks.useAction("sign");
   const [cells, setCells] = useState<Record<string, CellValue> | null>(null);
   const [photos, setPhotos] = useState("");
   const [lines, setLines] = useState<FaiLine[]>([]);
@@ -101,6 +111,10 @@ export function IsoFormDetailPage() {
     const closing = plusDays(showCell(cells.B3), 30);
     if (closing) calculated.D3 = closing;
   }
+  if (formType === "audit_summary") {
+    const score = auditScore(cells);
+    if (score) calculated.B13 = score;
+  }
 
   function changeCell(addr: string, value: CellValue) {
     setCells((current) => {
@@ -139,9 +153,50 @@ export function IsoFormDetailPage() {
     await updateRecord.mutateAsync({ id: recordId, data: payload() });
   }
 
-  const summary = showCell(cells.B3) || showCell(cells.B5) || showCell(cells.D2) || showCell(cells.F3) || showCell(cells.D4);
+  const summary = isBatch4(formType) ? summaryBatch4(formType, cells) : isBatch5(formType) ? summaryBatch5(formType, cells) : isBatch6(formType) ? summaryBatch6(formType, cells) : showCell(cells.D5) || showCell(cells.B6) || showCell(cells.B3) || showCell(cells.B5) || showCell(cells.D2) || showCell(cells.F3) || showCell(cells.D4);
   const formKey = FORM_KEY_BY_TYPE[formType] ?? null;
-  return <IsoFormDetailBody meta={meta} record={record} formKey={formKey} summary={summary} canEdit={canEdit} dirty={dirty} saving={updateRecord.isPending} onSave={saveRecord} sheet={sheet} setSheet={setSheet} cells={cells} photos={photos} setPhotos={setPhotos} lines={lines} customers={customers} problems={problems} months={months} calculated={calculated} changeCell={changeCell} setLines={setLines} setCustomers={setCustomers} setProblems={setProblems} setMonths={setMonths} recordId={recordId} />;
+  const signatures = formType === "audit_summary" ? auditSignatures(record.data) : {};
+
+  async function signField(field: string, pin: string) {
+    await signForm.mutateAsync({ id: recordId, field, pin, certified: true });
+  }
+
+  return (
+    <IsoFormDetailBody
+      meta={meta}
+      record={record}
+      formKey={formKey}
+      summary={summary}
+      canEdit={canEdit}
+      dirty={dirty}
+      saving={updateRecord.isPending}
+      onSave={saveRecord}
+      sheet={sheet}
+      setSheet={setSheet}
+      cells={cells}
+      photos={photos}
+      setPhotos={setPhotos}
+      lines={lines}
+      customers={customers}
+      problems={problems}
+      months={months}
+      calculated={calculated}
+      changeCell={changeCell}
+      setLines={setLines}
+      setCustomers={setCustomers}
+      setProblems={setProblems}
+      setMonths={setMonths}
+      recordId={recordId}
+      signatures={signatures}
+      onSign={formType === "audit_summary" || isBatch4(formType) || formType === "engineering_change" ? signField : undefined}
+    />
+  );
+}
+
+function signatureText(data: unknown, field: string): string {
+  if (!data || typeof data !== "object") return "";
+  const value = (data as Record<string, unknown>)[field];
+  return typeof value === "string" ? value : "";
 }
 
 function IsoFormDetailBody({
@@ -169,6 +224,8 @@ function IsoFormDetailBody({
   setProblems,
   setMonths,
   recordId,
+  signatures,
+  onSign,
 }: {
   meta: NonNullable<ReturnType<typeof formByType>>;
   record: IsoQualityForm;
@@ -194,6 +251,8 @@ function IsoFormDetailBody({
   setProblems: (rows: FailureRow[]) => void;
   setMonths: (months: string[]) => void;
   recordId: number;
+  signatures: Record<string, string>;
+  onSign?: (field: string, pin: string) => Promise<unknown>;
 }) {
   const queryClient = useQueryClient();
   const [saveNote, setSaveNote] = useState<SaveResultState>(null);
@@ -262,7 +321,7 @@ function IsoFormDetailBody({
         {meta.photos && (
           <div className="iso-tabs">
             <button type="button" onClick={() => setSheet("form")} className={`rounded-md border px-3 py-1.5 text-sm ${sheet === "form" ? "border-primary bg-primary/10" : "border-border"}`}>
-              Quarantine Notice
+              QUARANTINE NOTICE
             </button>
             <button type="button" onClick={() => setSheet("photos")} className={`rounded-md border px-3 py-1.5 text-sm ${sheet === "photos" ? "border-primary bg-primary/10" : "border-border"}`}>
               Photos
@@ -273,7 +332,36 @@ function IsoFormDetailBody({
 
       <div className="aq-form-copy aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4">
         {formType === "cross_training" ? (
-          <CrossTrainingSheet cells={cells} readOnly={!canEdit} onChange={changeCell} />
+          <CrossTrainingSheet cells={cells} readOnly={!canEdit} onChange={changeCell} documentNumber={documentNumber} />
+        ) : formType === "visitor_log" ? (
+          <VisitorLogSheet cells={cells} readOnly={!canEdit} onChange={changeCell} documentNumber={documentNumber} revision={revision} />
+        ) : formType === "monthly_engineering" ? (
+          <MonthlyEngineeringSheet cells={cells} readOnly={!canEdit} onChange={changeCell} revision={revision} />
+        ) : isBatch4(formType) ? (
+          <Batch4Sheet
+            variant={formType}
+            cells={cells}
+            readOnly={!canEdit}
+            onChange={changeCell}
+            documentNumber={documentNumber}
+            revision={revision}
+            testedSignature={signatureText(record.data, "testedSignature")}
+            approvedSignature={signatureText(record.data, formType === "prototype_strut" ? "engineeringSignoffSignature" : formType === "scar_request" ? "managerSignature" : "approvedSignature")}
+            onSign={onSign}
+          />
+        ) : isBatch5(formType) ? (
+          <Batch5Sheet variant={formType} cells={cells} readOnly={!canEdit} onChange={changeCell} documentNumber={documentNumber} />
+        ) : isBatch6(formType) ? (
+          <Batch6Sheet
+            variant={formType}
+            cells={cells}
+            readOnly={!canEdit}
+            onChange={changeCell}
+            documentNumber={documentNumber}
+            managerSignature={signatureText(record.data, "managerSignature")}
+            supplierSignature={signatureText(record.data, "supplierRepSignature")}
+            onSign={onSign}
+          />
         ) : formType === "first_article" ? (
           <FaiSheet cells={cells} lines={lines} readOnly={!canEdit} onCell={changeCell} onLines={setLines} documentNumber={documentNumber} revision={revision} />
         ) : formType === "customer_scorecard" ? (
@@ -284,7 +372,7 @@ function IsoFormDetailBody({
           <>
             {meta.layout && (
               <div className={sheet === "photos" ? "iso-offscreen" : undefined}>
-                <IsoFormSheet layout={meta.layout} cells={cells} calculated={calculated} readOnly={!canEdit} onChange={changeCell} label={meta.title} documentNumber={formKey ? documentNumber : ""} revision={revision} />
+                <IsoFormSheet layout={meta.layout} cells={cells} calculated={calculated} readOnly={!canEdit} onChange={changeCell} label={meta.title} documentNumber={formKey ? documentNumber : ""} revision={revision} signatures={signatures} onSign={onSign} />
               </div>
             )}
             {meta.photos && (

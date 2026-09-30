@@ -5,6 +5,7 @@ import { safeTimeZone, calendarDay } from "../quality-automation/logic.js";
 export const SIGNATURE_FIELD_KEYS = new Set([
   "signature",
   "authorizedSignature",
+  "furtherSignature",
   "approvalSignature",
   "signatureTitle",
   "operatorSignature",
@@ -14,11 +15,19 @@ export const SIGNATURE_FIELD_KEYS = new Set([
   "qaLeadSignature",
   "preparedSignature",
   "approvedSignature",
+  "testedSignature",
+  "managerSignature",
   "engineeringSignoffSignature",
   "qualitySignoffSignature",
   "manufacturingSignoffSignature",
   "purchasingSignoffSignature",
   "salesSignoffSignature",
+  "leadAuditorSignature",
+  "managementSignature",
+  "auditeeSignature1",
+  "auditeeSignature2",
+  "auditeeSignature3",
+  "auditeeSignature4",
 ]);
 
 const DATE_SIBLING: Record<string, string> = {

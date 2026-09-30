@@ -7,6 +7,7 @@ interface CrossTrainingSheetProps {
   cells: Record<string, CellValue>;
   readOnly?: boolean;
   onChange: (addr: string, value: CellValue) => void;
+  documentNumber?: string;
 }
 
 function field(addr: string, label: string, cells: Record<string, CellValue>, readOnly: boolean, onChange: (addr: string, value: CellValue) => void, type: "text" | "date" = "text") {
@@ -20,7 +21,8 @@ function field(addr: string, label: string, cells: Record<string, CellValue>, re
   );
 }
 
-export function CrossTrainingSheet({ cells, readOnly = false, onChange }: CrossTrainingSheetProps) {
+export function CrossTrainingSheet({ cells, readOnly = false, onChange, documentNumber = "" }: CrossTrainingSheetProps) {
+  const docId = documentNumber.trim() || "FRM-TRN-002";
   const scores = crossTrainingScores(cells);
   const sections = [
     { id: "A", title: "SECTION A: TECHNICAL CONTENT & PRODUCT KNOWLEDGE (50% of Total)", note: "Evaluates the depth, accuracy, and completeness of the engineering data presented.", addrs: ["S1", "S2", "S3"], max: 50 },
@@ -32,11 +34,11 @@ export function CrossTrainingSheet({ cells, readOnly = false, onChange }: CrossT
   return (
     <div className="rubric" data-testid="cross-training-sheet">
       <h2>GRADING RUBRIC: CROSS-TRAINING EVALUATION</h2>
-      <p className="text-center text-sm text-muted-foreground">Rev A · 3/19/2026 · Authorized by Maxwell Tollefson</p>
+      <p className="text-center text-sm text-muted-foreground">Document ID: {docId} · Rev: A · Title: Cross-Training Evaluation · Date: 3/19/2026 · Approved By: Maxwell Tollefson</p>
 
       <section>
         <h3>1.0 PURPOSE</h3>
-        <p className="text-sm">The purpose of this form is to provide a standardized, quantifiable metric for evaluating internal cross-training presentations delivered by Engineering staff. It serves as objective evidence of an employee's technical competency and communication capability for their permanent personnel training file.</p>
+        <p className="text-sm">The purpose of this form is to provide a standardized, quantifiable metric for evaluating internal cross-training presentations delivered by Engineering staff at DMA Industries. It serves as objective evidence of an employee's technical competency and communication capability for their permanent personnel training file.</p>
       </section>
       <section>
         <h3>2.0 SCOPE</h3>
@@ -49,6 +51,7 @@ export function CrossTrainingSheet({ cells, readOnly = false, onChange }: CrossT
       </section>
 
       <h3>4.0 PROCEDURE (EVALUATION RUBRIC)</h3>
+      <p className="text-sm font-semibold">EVALUATION DETAILS:</p>
       <div className="grid gap-3 sm:grid-cols-2">
         {field("PN", "Presenter Name", cells, readOnly, onChange)}
         {field("PT", "Product Line / Topic", cells, readOnly, onChange)}
@@ -57,8 +60,8 @@ export function CrossTrainingSheet({ cells, readOnly = false, onChange }: CrossT
       </div>
 
       <div className="scale rounded-md border border-border p-3">
-        <p className="font-semibold">SCORING SCALE (1 - 10)</p>
-        <p>Rate each criterion on a scale of 1 to 10. The base score is multiplied by the weight to calculate the section score.</p>
+        <p className="font-semibold">SCORING SCALE (1 - 10):</p>
+        <p>Rate each criterion below on a scale of 1 to 10. The base score will be multiplied by the designated weight factor to calculate the section score.</p>
         <p>1 - 2: Unacceptable / Missing Information</p>
         <p>3 - 4: Needs Improvement / Superficial Understanding</p>
         <p>5 - 6: Satisfactory / Meets Basic Requirements</p>
@@ -113,6 +116,7 @@ export function CrossTrainingSheet({ cells, readOnly = false, onChange }: CrossT
         </section>
       ))}
 
+      <h3>FINAL EVALUATION SCORE</h3>
       <p className="text-base font-semibold" data-testid="cross-training-total">
         Total Combined Score (A + B + C + D): {showCell(scores.total)} / 100 Points
       </p>

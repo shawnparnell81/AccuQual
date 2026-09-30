@@ -4,6 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { formatDate } from "../../lib/dates";
+import { auditSummaryStarter } from "../../lib/auditSummary";
+import { blankBatch4, isBatch4, summaryBatch4 } from "../../lib/batch4Reports";
+import { blankBatch5, isBatch5, summaryBatch5 } from "../../lib/batch5Reports";
+import { blankBatch6, isBatch6, summaryBatch6 } from "../../lib/batch6Reports";
+import { monthlyStarter } from "../../lib/monthlyEngineeringReport";
+import { visitorStarter, visitorSummary } from "../../lib/visitorLog";
 import { formByKey, type IsoFormType } from "../../lib/isoFormCatalog";
 import { showCell, type CellValue } from "../../lib/isoFormLogic";
 import type { FailureRow, ScorecardRow } from "../../lib/qualitySheetLogic";
@@ -47,6 +53,12 @@ function summary(formType: IsoFormType, data: IsoQualityForm["data"]): string {
   if (formType === "first_article") return showCell(cells.F3) || showCell(cells.D4);
   if (formType === "customer_scorecard") return showCell(cells.B2) || data.customers?.find((row) => row.name)?.name || "";
   if (formType === "failure_effectiveness") return data.problems?.find((row) => row.problem)?.problem || "";
+  if (formType === "audit_summary") return showCell(cells.D5) || showCell(cells.B6) || showCell(cells.B7);
+  if (formType === "visitor_log") return visitorSummary(cells);
+  if (formType === "monthly_engineering") return showCell(cells.period) || showCell(cells.prep);
+  if (isBatch4(formType)) return summaryBatch4(formType, cells);
+  if (isBatch5(formType)) return summaryBatch5(formType, cells);
+  if (isBatch6(formType)) return summaryBatch6(formType, cells);
   return "";
 }
 
@@ -76,7 +88,7 @@ export function IsoFormListPage() {
 
   function start() {
     setPending(true);
-    const cells = form.formType === "internal_audit" ? { F3: "Quality & Engineering" } : {};
+    const cells = form.formType === "internal_audit" ? { F3: "Quality & Engineering" } : form.formType === "audit_summary" ? auditSummaryStarter() : form.formType === "visitor_log" ? visitorStarter() : form.formType === "monthly_engineering" ? monthlyStarter() : isBatch4(form.formType) ? blankBatch4(form.formType) : isBatch5(form.formType) ? blankBatch5(form.formType) : isBatch6(form.formType) ? blankBatch6(form.formType) : {};
     createForm.mutate({ formType: form.formType, data: { cells } } as never, {
       onSuccess: (created) => navigate(`/iso-forms/record/${created.id}`),
       onSettled: () => setPending(false),

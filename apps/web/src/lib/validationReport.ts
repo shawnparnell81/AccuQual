@@ -1,5 +1,5 @@
 /**
- * CSA Validation (Rev C), sheet "Test Report".
+ * CSA VALIDATION REPORT (Rev C), sheet "Test Report".
  * Later Excel workbooks should follow this same cell model: one address, a formula or fill, answers in data.cells.
  * Formula text and conditional-formatting ranges match the workbook.
  * Passed fill is theme accent6 (#4EA72E). Failed fill is #FF0000.
@@ -8,13 +8,52 @@
 
 export type CellValue = string | number | boolean;
 
-export type ValidationFormType = "csa" | "fuel_pump";
+export type ValidationFormType =
+  | "csa"
+  | "fuel_pump"
+  | "air_strut"
+  | "air_spring"
+  | "fuel_injector"
+  | "brake_wear"
+  | "shock"
+  | "air_compressor"
+  | "electric_lift"
+  | "gas_lift"
+  | "coil_spring";
+
+const NAMED_KINDS = new Set<ValidationFormType>([
+  "fuel_pump",
+  "air_strut",
+  "air_spring",
+  "fuel_injector",
+  "brake_wear",
+  "shock",
+  "air_compressor",
+  "electric_lift",
+  "gas_lift",
+  "coil_spring",
+]);
 
 /** Records saved before the fuel pump form have no formType and stay CSA. */
 export function formTypeOf(data: unknown): ValidationFormType {
-  if (data && typeof data === "object" && (data as { formType?: unknown }).formType === "fuel_pump") return "fuel_pump";
+  const raw = data && typeof data === "object" ? (data as { formType?: unknown }).formType : undefined;
+  if (typeof raw === "string" && NAMED_KINDS.has(raw as ValidationFormType)) return raw as ValidationFormType;
   return "csa";
 }
+
+export const VALIDATION_FORMS: Record<ValidationFormType, { formKey: string; title: string; pass: string; revision: string }> = {
+  csa: { formKey: "frm-val-001", title: "CSA VALIDATION REPORT", pass: "#4EA72E", revision: "C" },
+  fuel_pump: { formKey: "frm-val-007", title: "FUEL PUMP VALIDATION DOCUMENT", pass: "#00B050", revision: "C" },
+  air_strut: { formKey: "frm-val-010", title: "FRM-VAL-010 AIR STRUT VALIDATION DOCUMENT", pass: "#0EBB5F", revision: "A" },
+  air_spring: { formKey: "frm-val-011", title: "FRM-VAL-011 AIR STRUT VALIDATION DOCUMENT", pass: "#0EBB5F", revision: "A" },
+  fuel_injector: { formKey: "frm-val-008", title: "FRM-VAL-008 FUEL INJECTOR VALIDATION DOCUMENT", pass: "#00B050", revision: "B" },
+  brake_wear: { formKey: "frm-val-009", title: "FRM-VAL-009 BRAKE WEAR SENSOR VALIDATION DOCUMENT", pass: "#00B050", revision: "A" },
+  shock: { formKey: "frm-val-002", title: "FRM-VAL-002 SHOCK VALIDATION REPORT", pass: "#4EA72E", revision: "B" },
+  air_compressor: { formKey: "frm-val-003", title: "FRM-VAL-009 AIR COMPRESSOR VALIDATION DOCUMENT", pass: "#00B050", revision: "A" },
+  electric_lift: { formKey: "frm-val-004", title: "FRM-VAL-011 ELECTRIC LIFT SUPPORT VALIDATION DOCUMENT", pass: "#00B050", revision: "B" },
+  gas_lift: { formKey: "frm-val-005", title: "FRM-VAL-007 GAS LIFT SUPPORT VALIDATION DOCUMENT", pass: "#00B050", revision: "B" },
+  coil_spring: { formKey: "frm-val-006", title: "FRM-VAL-006 COIL SPRING VALIDATION DOCUMENT", pass: "#00B050", revision: "A" },
+};
 
 export const PASSED_FILL = "#4EA72E";
 export const FAILED_FILL = "#FF0000";

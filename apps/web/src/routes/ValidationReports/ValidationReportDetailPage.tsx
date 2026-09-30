@@ -11,9 +11,17 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { instanceRevision } from "../../lib/formDocument";
-import { cellsFromData as csaCellsFromData, formTypeOf, overallResult as csaOverall, type CellValue, type ValidationFormType } from "../../lib/validationReport";
+import { cellsFromBatch, isBatch3, overallBatch } from "../../lib/batch3Reports";
+import { cellsFromData as springCellsFromData, overallResult as springOverall } from "../../lib/airSpringReport";
+import { authorizedSignatureOf, cellsFromData as airCellsFromData, overallResult as airOverall } from "../../lib/airStrutReport";
 import { cellsFromData as fuelCellsFromData, overallResult as fuelOverall } from "../../lib/fuelPumpReport";
+import { blankBrakeCells, blankInjectorCells, cellsFromData as inspectionCells, furtherSignatureOf, overallBrake, overallInjector } from "../../lib/partInspection";
+import { cellsFromData as csaCellsFromData, formTypeOf, overallResult as csaOverall, VALIDATION_FORMS, type CellValue, type ValidationFormType } from "../../lib/validationReport";
+import { AirSpringSheet } from "./AirSpringSheet";
+import { AirStrutSheet } from "./AirStrutSheet";
 import { FuelPumpSheet } from "./FuelPumpSheet";
+import { Batch3Sheet } from "./Batch3Sheet";
+import { PartInspectionSheet } from "./PartInspectionSheet";
 import { ValidationReportSheet } from "./ValidationReportSheet";
 
 interface ValidationReport {
@@ -25,6 +33,26 @@ interface ValidationReport {
 
 const hooks = createResourceHooks<ValidationReport>("validation-reports");
 
+function loadCells(formType: ValidationFormType, data: unknown): Record<string, CellValue> {
+  if (formType === "fuel_pump") return fuelCellsFromData(data);
+  if (formType === "air_strut") return airCellsFromData(data);
+  if (formType === "air_spring") return springCellsFromData(data);
+  if (formType === "fuel_injector") return inspectionCells(data, blankInjectorCells);
+  if (formType === "brake_wear") return inspectionCells(data, blankBrakeCells);
+  if (isBatch3(formType)) return cellsFromBatch(formType, data);
+  return csaCellsFromData(data);
+}
+
+function loadOverall(formType: ValidationFormType, cells: Record<string, CellValue>): string {
+  if (formType === "fuel_pump") return fuelOverall(cells);
+  if (formType === "air_strut") return airOverall(cells);
+  if (formType === "air_spring") return springOverall(cells);
+  if (formType === "fuel_injector") return overallInjector(cells);
+  if (formType === "brake_wear") return overallBrake(cells);
+  if (isBatch3(formType)) return overallBatch(formType, cells);
+  return csaOverall(cells);
+}
+
 export function ValidationReportDetailPage() {
   const { id } = useParams();
   const reportId = Number(id);
@@ -34,13 +62,15 @@ export function ValidationReportDetailPage() {
   const queryClient = useQueryClient();
   const { data: report, isLoading, isError } = hooks.useOne(reportId);
   const updateReport = hooks.useUpdate();
+  const signReport = hooks.useAction("sign");
   const [cells, setCells] = useState<Record<string, CellValue> | null>(null);
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
   const [saveNote, setSaveNote] = useState<SaveResultState>(null);
   const [pending, setPending] = useState(false);
 
   const formType: ValidationFormType = formTypeOf(report?.data);
-  const formKey = formType === "fuel_pump" ? "frm-val-007" : "frm-val-001";
+  const meta = VALIDATION_FORMS[formType];
+  const formKey = meta.formKey;
   const templates = useQuery({
     queryKey: ["form-templates"],
     queryFn: async () => (await apiClient.get<{ templates: { formKey: string; formId: string }[] }>("/document-folders/form-templates")).data.templates,
@@ -49,7 +79,7 @@ export function ValidationReportDetailPage() {
 
   useEffect(() => {
     if (!report || loadedFor === report.id) return;
-    const next = formTypeOf(report.data) === "fuel_pump" ? fuelCellsFromData(report.data) : csaCellsFromData(report.data);
+    const next = loadCells(formTypeOf(report.data), report.data);
     setCells(next);
     setLoadedFor(report.id);
   }, [loadedFor, report]);
@@ -58,15 +88,15 @@ export function ValidationReportDetailPage() {
   if (isLoading || !report || !cells) return <LoadingPlaceholder />;
 
   const filled = cells;
-  const saved = formType === "fuel_pump" ? fuelCellsFromData(report.data) : csaCellsFromData(report.data);
+  const saved = loadCells(formType, report.data);
   const dirty = JSON.stringify(filled) !== JSON.stringify(saved);
-  const result = formType === "fuel_pump" ? fuelOverall(filled) : csaOverall(filled);
-  const passed = result === "Pass" || result === "Passed";
-  const failed = result === "Fail" || result === "Failed";
-  const badge = passed ? (formType === "fuel_pump" ? "#00B050" : "#4EA72E") : failed ? "#FF0000" : "transparent";
-  const rev = instanceRevision(report.data, "C");
+  const result = loadOverall(formType, filled);
+  const passed = result === "Pass" || result === "Passed" || result === "PASS";
+  const failed = result === "Fail" || result === "Failed" || result === "FAIL";
+  const badge = passed ? meta.pass : failed ? "#FF0000" : "transparent";
+  const rev = instanceRevision(report.data, meta.revision);
   const doc = documentNumber.trim() ? `${documentNumber.trim()} Rev ${rev}` : `Rev ${rev}`;
-  const title = formType === "fuel_pump" ? `Fuel Pump Validation #${report.id}` : `CSA Validation #${report.id}`;
+  const title = `${meta.title} #${report.id}`;
 
   async function saveRecord() {
     setPending(true);
@@ -115,7 +145,7 @@ export function ValidationReportDetailPage() {
             <DeleteRecordButton
               resource="validation-reports"
               id={reportId}
-              kind={formType === "fuel_pump" ? "Fuel Pump Validation" : "CSA Validation"}
+              kind={meta.title}
               title={cells.B6 == null ? null : String(cells.B6)}
               navigateTo="/folders/validation-reports"
             />
@@ -148,6 +178,72 @@ export function ValidationReportDetailPage() {
             readOnly={!canEdit}
             documentNumber={documentNumber}
             revision={rev}
+            onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
+          />
+        ) : formType === "air_strut" ? (
+          <AirStrutSheet
+            cells={cells}
+            readOnly={!canEdit}
+            documentNumber={documentNumber}
+            revision={rev}
+            signature={authorizedSignatureOf(report.data)}
+            onSign={async (pin) => {
+              await signReport.mutateAsync({ id: reportId, pin, certified: true });
+            }}
+            onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
+          />
+        ) : formType === "air_spring" ? (
+          <AirSpringSheet
+            cells={cells}
+            readOnly={!canEdit}
+            documentNumber={documentNumber}
+            revision={rev}
+            signature={authorizedSignatureOf(report.data)}
+            onSign={async (pin) => {
+              await signReport.mutateAsync({ id: reportId, pin, certified: true });
+            }}
+            onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
+          />
+        ) : formType === "fuel_injector" || formType === "brake_wear" ? (
+          <PartInspectionSheet
+            variant={formType}
+            cells={cells}
+            readOnly={!canEdit}
+            documentNumber={documentNumber}
+            revision={rev}
+            signature={authorizedSignatureOf(report.data)}
+            furtherSignature={furtherSignatureOf(report.data)}
+            onSign={async (pin) => {
+              await signReport.mutateAsync({ id: reportId, pin, certified: true });
+            }}
+            onFurtherSign={async (pin) => {
+              await signReport.mutateAsync({ id: reportId, field: "furtherSignature", pin, certified: true });
+            }}
+            onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
+          />
+        ) : isBatch3(formType) ? (
+          <Batch3Sheet
+            variant={formType}
+            cells={cells}
+            readOnly={!canEdit}
+            documentNumber={documentNumber}
+            revision={rev}
+            signature={authorizedSignatureOf(report.data)}
+            furtherSignature={furtherSignatureOf(report.data)}
+            onSign={
+              formType === "shock"
+                ? undefined
+                : async (pin) => {
+                    await signReport.mutateAsync({ id: reportId, pin, certified: true });
+                  }
+            }
+            onFurtherSign={
+              formType === "gas_lift"
+                ? async (pin) => {
+                    await signReport.mutateAsync({ id: reportId, field: "furtherSignature", pin, certified: true });
+                  }
+                : undefined
+            }
             onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
           />
         ) : (

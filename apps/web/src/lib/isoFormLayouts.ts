@@ -1,6 +1,6 @@
 import { AUDIT_RESULTS, COMPETENCY, YES_NO, YN } from "./isoFormLogic";
 
-export type CellKind = "label" | "input" | "date" | "number" | "select" | "check" | "area" | "calc";
+export type CellKind = "label" | "input" | "date" | "number" | "select" | "check" | "area" | "calc" | "signature";
 
 export interface FormCell {
   col: number;
@@ -18,6 +18,9 @@ export interface FormCell {
   documentSlot?: boolean;
   /** Checkbox stays visible, and can be changed only while this address is checked. */
   enableWhen?: string;
+  /** Server signature field. The PIN stamp is stored under this key, not in cells. */
+  signatureKey?: string;
+  certify?: string;
 }
 
 export interface FormLayout {

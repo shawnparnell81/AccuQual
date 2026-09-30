@@ -1,4 +1,5 @@
 import { useMemo, type CSSProperties } from "react";
+import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import type { FormCell, FormLayout } from "../../lib/isoFormLayouts";
 import { resultFill, showCell, type CellValue } from "../../lib/isoFormLogic";
 import { documentIdText, sheetRevision } from "../../lib/formDocument";
@@ -13,6 +14,8 @@ interface IsoFormSheetProps {
   label: string;
   documentNumber?: string;
   revision?: string;
+  signatures?: Record<string, string>;
+  onSign?: (field: string, pin: string) => Promise<unknown>;
 }
 
 type Slot = FormCell | "covered" | "empty";
@@ -25,7 +28,7 @@ function occupy(grid: Slot[][], row: number, spec: FormCell) {
   }
 }
 
-export function IsoFormSheet({ layout, cells, calculated = {}, readOnly = false, onChange, label, documentNumber = "", revision = "A" }: IsoFormSheetProps) {
+export function IsoFormSheet({ layout, cells, calculated = {}, readOnly = false, onChange, label, documentNumber = "", revision = "A", signatures = {}, onSign }: IsoFormSheetProps) {
   const rowCount = layout.rows.length - 1;
   const grid = useMemo(() => {
     const next: Slot[][] = Array.from({ length: rowCount }, () => Array.from({ length: layout.columns }, () => "empty" as Slot));
@@ -55,7 +58,7 @@ export function IsoFormSheet({ layout, cells, calculated = {}, readOnly = false,
                   : row.map((slot, colIndex) => {
                       if (slot === "covered") return null;
                       if (slot === "empty") return <td key={colIndex} />;
-                      return <Cell key={slot.addr} spec={slot} cells={cells} calculated={calculated} readOnly={readOnly} onChange={onChange} documentNumber={documentNumber} revision={revision} />;
+                      return <Cell key={slot.addr} spec={slot} cells={cells} calculated={calculated} readOnly={readOnly} onChange={onChange} documentNumber={documentNumber} revision={revision} signatures={signatures} onSign={onSign} />;
                     })}
               </tr>
             );
@@ -74,6 +77,8 @@ function Cell({
   onChange,
   documentNumber,
   revision,
+  signatures,
+  onSign,
 }: {
   spec: FormCell;
   cells: Record<string, CellValue>;
@@ -82,6 +87,8 @@ function Cell({
   onChange: (addr: string, value: CellValue) => void;
   documentNumber: string;
   revision: string;
+  signatures: Record<string, string>;
+  onSign?: (field: string, pin: string) => Promise<unknown>;
 }) {
   const stored = cells[spec.addr];
   const raw = spec.kind === "label" ? spec.text ?? "" : spec.kind === "calc" ? showCell(calculated[spec.addr]) : showCell(stored);
@@ -94,7 +101,7 @@ function Cell({
           ? `Rev: ${revision}`
           : documentIdText(raw, documentNumber, spec.documentSlot === true);
   const fill = spec.paint || (spec.kind === "select" ? resultFill(text) : "");
-  const className = [spec.role ?? "", spec.align ?? "", spec.kind === "area" ? "area" : "", fill].filter(Boolean).join(" ");
+  const className = [spec.role ?? "", spec.align ?? "", spec.kind === "area" ? "area" : "", spec.kind === "signature" ? "sig" : "", fill].filter(Boolean).join(" ");
   const style: CSSProperties = {};
   const inputValue = stored == null || typeof stored === "boolean" ? "" : String(stored);
 
@@ -133,6 +140,17 @@ function Cell({
       )}
       {spec.kind === "area" && (
         <textarea className="iso-in" aria-label={spec.addr} placeholder={spec.placeholder} value={inputValue} disabled={readOnly} onChange={(event) => onChange(spec.addr, event.target.value)} />
+      )}
+      {spec.kind === "signature" && spec.signatureKey && (
+        <SignatureStamp
+          value={signatures[spec.signatureKey] ?? ""}
+          certify={spec.certify ?? ""}
+          disabled={readOnly || !onSign}
+          variant="sheet"
+          onSign={async (pin) => {
+            if (onSign && spec.signatureKey) await onSign(spec.signatureKey, pin);
+          }}
+        />
       )}
       {(spec.kind === "label" || spec.kind === "calc") && text}
     </td>

@@ -61,7 +61,7 @@ export function FuelPumpSheet({ cells, readOnly = false, onChange, documentNumbe
         className="fp fp-sheet"
         data-testid="fuel-pump-sheet"
         role="table"
-        aria-label="Fuel Pump Validation Document"
+        aria-label="FUEL PUMP VALIDATION DOCUMENT"
         style={{ display: "grid", gridTemplateColumns: FUEL_COLUMNS, width: "max-content" }}
       >
         {grid.map((row, rowIndex) =>

@@ -320,7 +320,18 @@ function validationTitle(row: Row): string | null {
 
 function validationLabel(row: Row): string {
   const data = row.data;
-  if (data && typeof data === "object" && (data as { formType?: unknown }).formType === "fuel_pump") return "Fuel Pump Validation";
+  const kind = data && typeof data === "object" ? (data as { formType?: unknown }).formType : undefined;
+  if (kind === "csa") return "CSA VALIDATION REPORT";
+  if (kind === "fuel_pump") return "FUEL PUMP VALIDATION DOCUMENT";
+  if (kind === "air_strut") return "FRM-VAL-010 AIR STRUT VALIDATION DOCUMENT";
+  if (kind === "air_spring") return "FRM-VAL-011 AIR STRUT VALIDATION DOCUMENT";
+  if (kind === "fuel_injector") return "FRM-VAL-008 FUEL INJECTOR VALIDATION DOCUMENT";
+  if (kind === "brake_wear") return "FRM-VAL-009 BRAKE WEAR SENSOR VALIDATION DOCUMENT";
+  if (kind === "shock") return "FRM-VAL-002 SHOCK VALIDATION REPORT";
+  if (kind === "air_compressor") return "FRM-VAL-009 AIR COMPRESSOR VALIDATION DOCUMENT";
+  if (kind === "electric_lift") return "FRM-VAL-011 ELECTRIC LIFT SUPPORT VALIDATION DOCUMENT";
+  if (kind === "gas_lift") return "FRM-VAL-007 GAS LIFT SUPPORT VALIDATION DOCUMENT";
+  if (kind === "coil_spring") return "FRM-VAL-006 COIL SPRING VALIDATION DOCUMENT";
   return "Validation Report";
 }
 
@@ -673,18 +684,40 @@ const specs: Record<RecordKind, KindSpec> = {
 };
 
 const ISO_FORM_LABELS: Record<string, string> = {
-  internal_audit: "Internal Audit Checklist",
-  ncr_report: "Non-Conformance Report",
-  quarantine_notice: "Quarantine Notice",
-  concession: "Concession / Deviation Request",
-  competency_training: "Competency and Training Record",
-  cross_training: "Cross-Training Evaluation",
+  internal_audit: "FRM-GEN-001 INTERNAL AUDIT CHECKLIST",
+  ncr_report: "FRM-NCR-001 NON-CONFORMANCE REPORT (NCR)",
+  quarantine_notice: "FRM-NCR-002 QUARANTINE NOTICE",
+  concession: "FRM-NCR-003 CONCESSION / DEVIATION REQUEST",
+  competency_training: "FRM-TRN-001 COMPETENCY AND TRAINING RECORD",
+  cross_training: "FRM-TRN-002 GRADING RUBRIC: CROSS-TRAINING EVALUATION",
   psw: "Part Submission Warrant",
   turtle_diagram: "Turtle Diagram",
   quality_alert: "Quality Alert",
   first_article: "First Article Inspection Report",
   customer_scorecard: "Customer Scorecard",
   failure_effectiveness: "Failure Action Effectiveness Chart",
+  audit_summary: "INTERNAL AUDIT SUMMARY REPORT",
+  visitor_log: "LST-VIS-001 DMA Laboratory Visitor Log",
+  monthly_engineering: "MONTHLY ENGINEERING DEVELOPMENT REPORT",
+  salt_spray: "FRM-TRP-002 SALT SPRAY TEST REPORT (ASTM B117)",
+  volume_water: "ASTM E542 Gravimetric Volume Calculator (Water)",
+  volume_heptane: "ASTM E542 Gravimetric Volume Calculator (n-Heptane)",
+  prototype_strut: "FRM-TRP-001 PROTOTYPE EVALUATION REPORT (STRUT ASSEMBLY)",
+  dev_csa: "FRM-DEV-001 CSA DEVELOPMENT DOCUMENT",
+  dev_fuel_pump: "FRM-DEV-002 FUEL PUMP DEVELOPMENT DOCUMENT",
+  dev_gas_lift: "FRM-DEV-003 GAS LIFT SUPPORT DEVELOPMENT DOCUMENT",
+  dev_coil: "FRM-DEV-004 COIL SPRING DEVELOPMENT DOCUMENT",
+  dev_air_spring: "FRM-DEV-005 AIR SPRING DEVELOPMENT DOCUMENT",
+  dev_air_strut: "FRM-DEV-006 AIR STRUT DEVELOPMENT DOCUMENT",
+  dev_brake_wear: "FRM-DEV-007 BRAKE WEAR SENSOR DEVELOPMENT DOCUMENT",
+  dev_electronic_shock: "FRM-DEV-008 ELECTRONIC SHOCK ABSORBER DEVELOPMENT DOCUMENT",
+  dev_air_compressor: "FRM-DEV-009 AIR COMPRESSOR DEVELOPMENT DOCUMENT",
+  dev_fuel_injector: "FRM-DEV-010 FUEL INJECTOR DEVELOPMENT DOCUMENT",
+  dev_electric_lift: "FRM-DEV-011 ELECTRIC LIFT SUPPORT DEVELOPMENT DOCUMENT",
+  dev_electronic_csa: "FRM-DEV-012 ELECTRONIC CSA DEVELOPMENT DOCUMENT",
+  dev_shock: "FRM-DEV-013 SHOCK ABSORBER DEVELOPMENT DOCUMENT",
+  engineering_change: "FRM-ECR-001 ENGINEERING CHANGE REQUEST (ECR)",
+  scar_request: "FRM-CAR-001 SUPPLIER CORRECTIVE ACTION REQUEST (SCAR)",
 };
 
 function isoFormTitle(row: Row): string | null {

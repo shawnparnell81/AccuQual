@@ -203,7 +203,7 @@ describe("record delete", () => {
       .from(auditTrail)
       .where(and(eq(auditTrail.entityType, "Validation Report"), eq(auditTrail.entityId, id), eq(auditTrail.action, "delete")));
     expect(entry!.performedBy).toBe(qualityManager.id);
-    expect((entry!.changes as { summary: string; attachmentFileNames: string[] }).summary).toBe(`Deleted Validation Report #${id} "CSA-VAL-9"`);
+    expect((entry!.changes as { summary: string; attachmentFileNames: string[] }).summary).toBe(`Deleted CSA VALIDATION REPORT #${id} "CSA-VAL-9"`);
     expect((entry!.changes as { attachmentFileNames: string[] }).attachmentFileNames).toEqual([]);
   });
 
@@ -222,7 +222,7 @@ describe("record delete", () => {
       .select()
       .from(auditTrail)
       .where(and(eq(auditTrail.entityType, "Validation Report"), eq(auditTrail.entityId, id), eq(auditTrail.action, "delete")));
-    expect((entry!.changes as { summary: string }).summary).toBe(`Deleted Fuel Pump Validation #${id} "FP-200"`);
+    expect((entry!.changes as { summary: string }).summary).toBe(`Deleted FUEL PUMP VALIDATION DOCUMENT #${id} "FP-200"`);
 
     const csa = await request(app).post("/validation-reports").set("Authorization", `Bearer ${creator.token}`).send({ data: { formType: "csa", cells: { B6: "CSA-KEEP" } } });
     expect(csa.status).toBe(201);

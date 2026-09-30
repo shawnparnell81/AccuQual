@@ -59,7 +59,7 @@ export function ValidationReportSheet({ cells, readOnly = false, onChange, docum
         className="csa csa-sheet"
         data-testid="validation-report-sheet"
         role="table"
-        aria-label="CSA Validation Report"
+        aria-label="CSA VALIDATION REPORT"
         style={{ display: "grid", gridTemplateColumns: "300px 128px 128px 136px 136px 136px 136px 16px 28px 176px", width: "max-content" }}
       >
         {grid.map((row, rowIndex) =>

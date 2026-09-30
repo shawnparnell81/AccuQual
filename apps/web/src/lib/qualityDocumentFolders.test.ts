@@ -37,7 +37,7 @@ describe("Quality document folders", () => {
     assert.ok(audits && isFolder(audits));
     assert.deepEqual(
       audits.children.map((child) => child.label),
-      ["Internal Audits", "Audit Plan", "Audit Schedule", "Audit Checklist", "Internal Audit Checklist", "Audit Report"],
+      ["Internal Audits", "Audit Plan", "Audit Schedule", "Audit Checklist", "FRM-GEN-001 INTERNAL AUDIT CHECKLIST", "INTERNAL AUDIT SUMMARY REPORT", "Audit Report"],
     );
 
     const links = flattenSidebarLinks([audits]);
