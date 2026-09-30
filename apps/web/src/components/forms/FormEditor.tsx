@@ -15,6 +15,7 @@ import { useFormEditorState } from "./useFormEditorState";
 import { ProcessFlowDiagramEditor } from "./processFlowDiagram/ProcessFlowDiagramEditor";
 import { PictureRecordProvider, pictureRecordForForm } from "./pictureRecord";
 import { FormSignProvider } from "./formSign";
+import { FormHeader } from "../brand/DmaLogo";
 
 interface FormEditorProps {
   formType: string;
@@ -114,9 +115,13 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
       {layout ? (
         <GenericFormRenderer layout={layout} data={values} onChange={updateField} />
       ) : CustomComponent ? (
-        <CustomComponent data={values} onChange={updateField} documentNumber={formType === "gage_rr" ? gageNumber : undefined} />
+        <>
+          <FormHeader />
+          <CustomComponent data={values} onChange={updateField} documentNumber={formType === "gage_rr" ? gageNumber : undefined} />
+        </>
       ) : (
         <div className="flex flex-col gap-3">
+          <FormHeader />
           {fields.map((field) => (
             <FormFieldOverlay key={field.name} field={field} value={values[field.name]} onChange={(v) => updateField(field.name, v)} />
           ))}

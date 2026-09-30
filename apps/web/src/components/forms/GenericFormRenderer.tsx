@@ -9,6 +9,7 @@ import { PictureText } from "./PictureText";
 import { usePictureRecord } from "./pictureRecord";
 import { DEFAULT_CERTIFY, SIGNATURE_DATE_FIELD, SignatureStamp } from "./SignatureStamp";
 import { useFormSign } from "./formSign";
+import { FormHeader } from "../brand/DmaLogo";
 
 // Section bars and the document title use tokens whose Classic values are
 // the same navy as schema-pdf-renderer.ts (#1d3a5c), so the on-screen form
@@ -16,7 +17,6 @@ import { useFormSign } from "./formSign";
 // retint the on-screen form through --form-bar / --form-heading without
 // changing the PDF. Label cells and input wells use the shared form tokens.
 const FORM_BAR = "var(--form-bar, #1d3a5c)";
-const FORM_HEADING = "var(--form-heading, #1d3a5c)";
 const FORM_BAR_TEXT = "var(--form-bar-foreground, #fff)";
 const labelCell = "bg-[hsl(var(--form-label))] text-[hsl(var(--form-label-foreground))]";
 const valueCell = "bg-[hsl(var(--form-input))] text-[hsl(var(--form-input-foreground))]";
@@ -73,9 +73,7 @@ export function GenericFormRenderer({ layout, data, onChange, readOnly = false, 
   const details = layout.sections.filter((section) => parked.has(section.number));
   return (
     <div className={`flex flex-col gap-5${readOnly ? " aq-form-copy min-w-0" : ""}`}>
-      <h2 className="text-center text-base font-bold uppercase tracking-wide" style={{ color: FORM_HEADING }}>
-        {layout.title}
-      </h2>
+      <FormHeader title={layout.title} />
       {primary.map((section) => (
         <SectionCard key={section.number} section={section} data={data} onChange={onChange} readOnly={readOnly} />
       ))}

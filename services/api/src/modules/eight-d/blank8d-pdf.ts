@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { BLANK_8D_LABELS, BLANK_8D_STRING_KEYS, BLANK_8D_TITLE, type Blank8DValues } from "./blank8dForm.js";
 import { pictureTextToPlain } from "../attachments/inlinePicture.js";
+import { drawDmaLogo, embedDmaLogo } from "../branding/dmaLogo.js";
 
 const PAGE_W = 595.28;
 const PAGE_H = 841.89;
@@ -126,6 +127,8 @@ export async function renderBlank8DPdf(input: { id: number; values: Blank8DValue
 
   const titleH = 26;
   drawBox(ctx, MARGIN_X, ctx.y, CONTENT_W, titleH, WHITE);
+  const logo = await embedDmaLogo(doc);
+  drawDmaLogo(page, logo, MARGIN_X + 3, ctx.y - 2, 22);
   const title = BLANK_8D_TITLE;
   const titleW = bold.widthOfTextAtSize(title, 16);
   page.drawText(title, { x: MARGIN_X + (CONTENT_W - titleW) / 2, y: ctx.y - 18, size: 16, font: bold, color: INK });

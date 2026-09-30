@@ -1,5 +1,6 @@
 import { BLANK_8D_LABELS, BLANK_8D_TITLE, type Blank8DValues } from "../../lib/blank8d";
 import { PictureText } from "../../components/forms/PictureText";
+import { FormHeader } from "../../components/brand/DmaLogo";
 import "./blank8d.css";
 
 interface Blank8DSheetProps {
@@ -87,7 +88,7 @@ export function Blank8DSheet({ eightDNo, values, readOnly, onChange }: Blank8DSh
 
   return (
     <section className="b8" data-testid="blank-8d-sheet" aria-label={BLANK_8D_TITLE}>
-      <div className="b8-title">{BLANK_8D_TITLE}</div>
+      <FormHeader title={BLANK_8D_TITLE} />
 
       <div className="b8-cols b8-header">
         <div className="b8-lab left" style={{ gridColumn: "1 / 4" }}>{L.whoImpacted}</div>
