@@ -73,9 +73,9 @@ export const FORM_TEMPLATE_CATALOG: Record<string, TemplateStamp> = {
     "structureHash": "ed172d56716ed2596d2d0b019e854eec45c7ffd0ce738ff5e6f5c702dbb260a9"
   },
   "form:dimensional_report": {
-    "version": 2,
-    "revision": "B",
-    "structureHash": "97cbe9536c43ee050cc93655c367967a09c0a288b1eb12a21549261d5203dfa1"
+    "version": 3,
+    "revision": "C",
+    "structureHash": "07ca94adb5a877eed3f2c53ed1037f2a82cec208b0082a376cac9f73b22ad8af"
   },
   "form:discrepancy_inspection": {
     "version": 1,
@@ -98,9 +98,9 @@ export const FORM_TEMPLATE_CATALOG: Record<string, TemplateStamp> = {
     "structureHash": "a210f537b0d0e876459b34c027ba9b3cdcdebac54a41443a8319e800ba55c348"
   },
   "form:final_inspection_release_checklist": {
-    "version": 2,
-    "revision": "B",
-    "structureHash": "7c7d522d4e234d82b4d544d168c2348eb8cecb27e330bd6c8d55db0ba09fbfe8"
+    "version": 3,
+    "revision": "C",
+    "structureHash": "31ac9c7713b532588ee647338e54763fa7045a4729c02da025d53a01f8f33917"
   },
   "form:five_why": {
     "version": 1,
