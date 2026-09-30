@@ -1,6 +1,13 @@
 /** Official DMA Industries mark. Transparent PNG; the plate is CSS so silver type stays readable. */
 export const DMA_LOGO_SRC = "/branding/dma-logo.png";
 
+/** Product name on sign-in and in the app header. */
+export const PRODUCT_LINE = "AccuQual — a DMA Industries QMS";
+
+export function ProductLine({ className }: { className?: string }) {
+  return <span className={className ? `aq-product-line ${className}` : "aq-product-line"}>{PRODUCT_LINE}</span>;
+}
+
 interface DmaLogoProps {
   /** Rendered height in pixels. Width follows the mark. */
   height?: number;

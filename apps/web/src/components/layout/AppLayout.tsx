@@ -16,7 +16,7 @@ import { deriveTabMeta } from "../../lib/tabMeta";
 import { StandardsDisclaimer } from "../shared/StandardsDisclaimer";
 import { MfaGraceBanner } from "../auth/MfaGraceBanner";
 import { LoadingPlaceholder } from "../shared/LoadingPlaceholder";
-import { DmaLogo } from "../brand/DmaLogo";
+import { DmaLogo, ProductLine } from "../brand/DmaLogo";
 
 /**
  * An external Supplier Portal login (roleName:"supplier") gets none of the
@@ -33,9 +33,9 @@ function SupplierPortalShell() {
   return (
     <div className="flex h-screen w-full flex-col">
       <header className="flex h-[62px] items-center justify-between border-b border-border bg-[hsl(var(--brand-header))] px-4 text-white">
-        <span className="flex items-center gap-3 font-display text-base font-extrabold tracking-[0.06em]">
+        <span className="aq-brand">
           <DmaLogo height={34} />
-          ACCU<span className="text-primary">QUAL</span>
+          <ProductLine />
         </span>
         <button onClick={() => logout.mutate()} className="rounded-md border border-white/20 px-3 py-1.5 text-sm hover:bg-white/10">
           Log Out

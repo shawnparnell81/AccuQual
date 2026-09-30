@@ -23,7 +23,7 @@ import {
 import { SidebarDragChrome, SidebarOrganizeProvider, SidebarResetButton, useArrangedSidebar, useSidebarOrganize, useSidebarRow } from "./sidebarOrganize";
 import { LayoutDashboard } from "lucide-react";
 import { prefetchRoute } from "../../routes/pages";
-import { DmaLogo } from "../brand/DmaLogo";
+import { DmaLogo, PRODUCT_LINE, ProductLine } from "../brand/DmaLogo";
 
 const SIDEBAR_KEY = "accuqual-sidebar-collapsed";
 
@@ -140,13 +140,9 @@ export function TopNav() {
         <button type="button" className="aq-icon-btn aq-menu-btn" aria-label="Open navigation" aria-expanded={sideOpen} onClick={() => setSideOpen((v) => !v)}>
           {sideOpen ? <X size={18} /> : <Menu size={18} />}
         </button>
-        <Link to="/" className="aq-brand" aria-label="AccuQual QMS home">
+        <Link to="/" className="aq-brand" aria-label={PRODUCT_LINE}>
           <DmaLogo height={34} />
-          <img src="/branding/logo-mark.png" alt="" width={26} height={31} className="aq-product-mark" />
-          <span>
-            ACCU<b>QUAL</b>
-          </span>
-          <span className="aq-qms">QMS</span>
+          <ProductLine />
         </Link>
 
         <div className="aq-search" role="search">
