@@ -4,6 +4,7 @@ import { qualityInspectionReports, qualityInspectionItems } from "../../drizzle/
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { deleteRecord } from "../records/recordDeletion.js";
 
 async function loadReport(req: Request, id: number) {
@@ -50,6 +51,31 @@ export const updateReportHandler = asyncHandler(async (req: Request, res: Respon
 
   const [updated] = await req.db!.update(qualityInspectionReports).set({ ...req.body, updatedAt: new Date() }).where(eq(qualityInspectionReports.id, record.id)).returning();
   await recordAuditTrail(req.db!, { entityType: "QualityInspectionReport", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  res.json(updated);
+});
+
+const INSPECTION_SIGNOFF = {
+  inspector: { column: "inspectorSignature", date: "inspectorSignatureDate", description: "I certify that this inspection record is accurate." },
+  qaLead: { column: "qaLeadSignature", date: "qaLeadSignatureDate", description: "I certify that I have reviewed this inspection and approve the result." },
+} as const;
+
+export const signReportHandler = asyncHandler(async (req: Request, res: Response) => {
+  const record = await loadReport(req, Number(req.params.id));
+  const field = req.body.field as keyof typeof INSPECTION_SIGNOFF;
+  const spec = INSPECTION_SIGNOFF[field];
+  const stamp = await requireSignatureStamp(req, {
+    pin: req.body.pin,
+    certified: req.body.certified,
+    entityType: "QualityInspectionReport",
+    entityId: record.id,
+    field: spec.column,
+    description: spec.description,
+  });
+  const [updated] = await req
+    .db!.update(qualityInspectionReports)
+    .set({ [spec.column]: stamp.stamp, [spec.date]: stamp.signedAt, updatedAt: new Date() })
+    .where(eq(qualityInspectionReports.id, record.id))
+    .returning();
   res.json(updated);
 });
 

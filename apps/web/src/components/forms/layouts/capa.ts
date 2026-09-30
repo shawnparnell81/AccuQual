@@ -117,7 +117,7 @@ export const capaLayout: FormLayout = {
           labelColumnHeader: "Role",
           columns: [
             { key: "name", label: "Name / Title", kind: "text" },
-            { key: "signature", label: "Signature", kind: "text" },
+            { key: "signature", label: "Signature", kind: "signature", certify: "I certify that this corrective action is accurate and that I approve this sign-off." },
             { key: "date", label: "Date", kind: "date" },
           ],
         },

@@ -82,10 +82,8 @@ const crarContentFields = {
   // 12. Approval / Final Record
   finalReviewComments: z.string().nullable().optional(),
   preparedByFinal: z.string().nullable().optional(),
-  preparedSignature: z.string().nullable().optional(),
   preparedDate: reasonableDate.nullable().optional(),
   approvedByFinal: z.string().nullable().optional(),
-  approvedSignature: z.string().nullable().optional(),
   approvedDate: reasonableDate.nullable().optional(),
 
   // 13. Record Retention / Closeout
@@ -115,4 +113,10 @@ export const updateCrarSchema = z.object({ ...crarContentFields, ...crarLinkFiel
 
 export const transitionCrarSchema = z.object({
   status: z.enum(CRAR_STATUSES),
+});
+
+export const signCrarSchema = z.object({
+  field: z.enum(["prepared", "approved"]),
+  pin: z.string().regex(/^\d{4}$/, "Enter a 4-digit PIN."),
+  certified: z.literal(true),
 });

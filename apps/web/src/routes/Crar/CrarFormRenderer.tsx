@@ -1,4 +1,5 @@
 import { TextField, TextAreaField, SelectField } from "../../components/forms/Field";
+import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import { CRAR_FORM_SCHEMA, type CrarRow } from "./crarFormSchema";
 import type { CrarClaim } from "../../api/types";
 
@@ -21,11 +22,13 @@ export function CrarFormRenderer({
   onChange,
   readOnly,
   disabledFields,
+  onSign,
 }: {
   value: Partial<CrarClaim>;
   onChange: (patch: Partial<CrarClaim>) => void;
   readOnly?: boolean;
   disabledFields?: Set<string>;
+  onSign?: (field: "prepared" | "approved", pin: string) => Promise<void>;
 }) {
   function renderRow(row: CrarRow, key: number) {
     if (Array.isArray(row)) {
@@ -38,6 +41,16 @@ export function CrarFormRenderer({
               return (
                 <div key={f.name} className={`col-span-12`}>
                   <TextAreaField label={f.label} value={(raw as string) ?? ""} disabled={disabled} onChange={(e) => onChange({ [f.name]: e.target.value } as Partial<CrarClaim>)} rows={4} />
+                </div>
+              );
+            }
+            if (f.type === "signature") {
+              const which = f.name === "approvedSignature" ? "approved" : "prepared";
+              const certify = which === "prepared" ? "I certify that I prepared this report and it is accurate." : "I certify that I approve this report.";
+              return (
+                <div key={f.name} style={{ gridColumn: `span ${f.span} / span ${f.span}` }}>
+                  <p className="mb-1 text-xs font-semibold text-muted-foreground">{f.label}</p>
+                  <SignatureStamp value={(raw as string) ?? ""} certify={certify} disabled={disabled || !onSign} onSign={async (pin) => onSign?.(which, pin)} />
                 </div>
               );
             }

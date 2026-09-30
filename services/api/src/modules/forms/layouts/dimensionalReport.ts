@@ -77,7 +77,7 @@ export const dimensionalReportLayout: FormLayout = {
         {
           type: "row",
           fields: [
-            { kind: "text", name: "signatureTitle", label: "Signature / Title:" },
+            { kind: "signature", name: "signatureTitle", label: "Signature / Title:", certify: "I certify that this dimensional report is accurate." },
             { kind: "date", name: "signatureDate", label: "Date:" },
           ],
         },

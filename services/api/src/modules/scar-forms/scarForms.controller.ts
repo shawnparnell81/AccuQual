@@ -6,6 +6,7 @@ import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { deleteRecord } from "../records/recordDeletion.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
+import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 
 async function loadScar(req: Request, id: number) {
   const [row] = await req.db!.select().from(scarForms).where(and(eq(scarForms.id, id)));
@@ -49,6 +50,31 @@ export const updateScarFormHandler = asyncHandler(async (req: Request, res: Resp
   // edit on the same "scar" workflow stream.
   const event = updated!.status !== record.status ? updated!.status : "update";
   await publishEvent(WORKFLOW_STREAM, { module: "scar", event, entityId: record.id });
+  res.json(updated);
+});
+
+const SCAR_SIGNOFF = {
+  supplierRep: { column: "supplierRepSignature", date: "supplierRepDate", description: "I certify that this supplier response is accurate." },
+  qualityEngineer: { column: "qualityEngineerSignature", date: "qualityEngineerDate", description: "I certify that this supplier corrective action has been reviewed." },
+} as const;
+
+export const signScarFormHandler = asyncHandler(async (req: Request, res: Response) => {
+  const record = await loadScar(req, Number(req.params.id));
+  const field = req.body.field as keyof typeof SCAR_SIGNOFF;
+  const spec = SCAR_SIGNOFF[field];
+  const stamp = await requireSignatureStamp(req, {
+    pin: req.body.pin,
+    certified: req.body.certified,
+    entityType: "ScarForm",
+    entityId: record.id,
+    field: spec.column,
+    description: spec.description,
+  });
+  const [updated] = await req
+    .db!.update(scarForms)
+    .set({ [spec.column]: stamp.stamp, [spec.date]: stamp.signedAt, updatedAt: new Date() })
+    .where(eq(scarForms.id, record.id))
+    .returning();
   res.json(updated);
 });
 

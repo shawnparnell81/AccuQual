@@ -645,6 +645,13 @@
       "when": 1791932400000,
       "tag": "0091_form_numbers_and_filing",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1792018800000,
+      "tag": "0092_signature_pin",
+      "breakpoints": true
     }
   ]
 }

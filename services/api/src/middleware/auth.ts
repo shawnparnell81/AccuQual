@@ -6,6 +6,8 @@ import { db } from "../db/index.js";
 import { users } from "../drizzle/schema/users.js";
 import { enrichRequestContext } from "../modules/monitoring/requestContext.js";
 import { touchSessionActivity } from "../modules/auth/sessionActivity.js";
+import { env } from "../config/env.js";
+import { missingPinBlocks } from "../modules/signatures/signaturePin.js";
 
 export interface AuthenticatedUser {
   id: number;
@@ -56,13 +58,22 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       throw AppError.unauthorized("Invalid or expired token");
     }
 
-    const [live] = await db.select({ isActive: users.isActive, tokenVersion: users.tokenVersion, mustChangePassword: users.mustChangePassword }).from(users).where(eq(users.id, Number(payload.sub)));
+    const [live] = await db
+      .select({ isActive: users.isActive, tokenVersion: users.tokenVersion, mustChangePassword: users.mustChangePassword, pinHash: users.pinHash })
+      .from(users)
+      .where(eq(users.id, Number(payload.sub)));
     if (!live || !live.isActive) throw AppError.unauthorized("Session is no longer valid");
     if (payload.tv !== undefined && payload.tv !== live.tokenVersion) throw AppError.unauthorized("Session has been revoked");
+    const path = `${req.baseUrl}${req.path}`;
     // A temporary password only gets the person as far as choosing their own.
     // Sign-out and the change itself stay available; every other page does not.
-    if (live.mustChangePassword && !PASSWORD_CHANGE_ALLOWED.has(`${req.baseUrl}${req.path}`)) {
+    if (live.mustChangePassword && !PASSWORD_CHANGE_ALLOWED.has(path)) {
       throw AppError.forbidden("You need to set a new password before continuing.");
+    }
+    // A signature PIN is required before any other page. Tests skip this gate
+    // so existing fixtures can call the API; signing itself still checks the PIN.
+    if (missingPinBlocks(Boolean(live.pinHash), path, env.NODE_ENV !== "test")) {
+      throw AppError.forbidden("Set a 4-digit signature PIN before continuing.");
     }
 
     req.user = {

@@ -3,8 +3,8 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
-import { createCrarSchema, updateCrarSchema, transitionCrarSchema } from "./crar.validation.js";
-import { listCrarHandler, createCrarHandler, getCrarHandler, updateCrarHandler, transitionCrarHandler } from "./crar.controller.js";
+import { createCrarSchema, updateCrarSchema, transitionCrarSchema, signCrarSchema } from "./crar.validation.js";
+import { listCrarHandler, createCrarHandler, getCrarHandler, updateCrarHandler, transitionCrarHandler, signCrarHandler } from "./crar.controller.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
 
 export const crarRouter = Router();
@@ -23,3 +23,4 @@ crarRouter.delete("/:id", deleteRecordHandler("crar"));
 // mechanism is required by its own workflow requirement — same "the route
 // list is a floor, not a ceiling" precedent as every other module added alongside them (e.g. Warranty's /costs, Supplier Portal's /review routes).
 crarRouter.post("/:id/transition", validate(transitionCrarSchema), transitionCrarHandler);
+crarRouter.post("/:id/sign", validate(signCrarSchema), signCrarHandler);

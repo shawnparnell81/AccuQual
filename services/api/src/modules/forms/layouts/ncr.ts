@@ -310,7 +310,7 @@ export const ncrLayout: FormLayout = {
           fixedRowLabels: ["Quality Manager", "Operations / Production Manager", "Engineering (if applicable)", "Customer Representative (if required)"],
           columns: [
             { key: "name", label: "Name (Print)", kind: "text" },
-            { key: "signature", label: "Signature", kind: "text" },
+            { key: "signature", label: "Signature", kind: "signature", certify: "I certify that this nonconformance record is accurate and that I approve closure." },
             { key: "date", label: "Date", kind: "date" },
           ],
         },

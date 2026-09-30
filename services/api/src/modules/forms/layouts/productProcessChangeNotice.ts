@@ -120,7 +120,7 @@ export const pcnLayout: FormLayout = {
           labelColumnHeader: "Role / Department",
           fixedRowLabels: ["Change Initiator", "Quality Engineering", "Operations / Plant Mgmt", "Customer Representative (if req.)"],
           columns: [
-            { key: "authorizedSignature", label: "Authorized Signature", kind: "text" },
+            { key: "authorizedSignature", label: "Authorized Signature", kind: "signature", certify: "I certify that I authorize this change." },
             { key: "decisionStatus", label: "Decision / Status", kind: "checkboxGroup", options: ["Approved", "Rejected"] },
             { key: "date", label: "Date", kind: "date" },
           ],

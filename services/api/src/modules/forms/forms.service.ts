@@ -8,6 +8,7 @@ import { renderBlank8DPdf } from "../eight-d/blank8d-pdf.js";
 import { mergePdfFields } from "./pdf-merger.js";
 import { snapshotFormDataNumber } from "../document-folders/formRecordFiling.js";
 import { answersWithTemplateStamp, readTemplateStamp, templateRevisionFor } from "./templateRevision.js";
+import { retainSignatureValues } from "../signatures/signaturePin.js";
 
 /**
  * Self-healing (same pattern as document-folders.controller.ts's
@@ -52,13 +53,16 @@ interface SaveInput {
   entityId?: number;
   data: Record<string, unknown>;
   userId?: number;
+  /** The signature endpoint already wrote the stamp. A normal save must not. */
+  trustSignatures?: boolean;
 }
 
 /** Auto-save path: updates the current row in place without snapshotting a version. */
 export async function saveData(db: Db, input: SaveInput) {
   const existing = await loadData(db, input.formType, input.entityId);
-
-  const data = answersWithTemplateStamp(`form:${input.formType}`, existing?.data, input.data, !existing);
+  const previous = (existing?.data ?? {}) as Record<string, unknown>;
+  const signed = input.trustSignatures ? input.data : (retainSignatureValues(previous, input.data) as Record<string, unknown>);
+  const data = answersWithTemplateStamp(`form:${input.formType}`, existing?.data, signed, !existing);
 
   if (existing) {
     // Answer saves keep the template revision this instance was filled against.

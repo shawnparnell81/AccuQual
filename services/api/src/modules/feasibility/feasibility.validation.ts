@@ -74,4 +74,6 @@ export const updateSignoffSchema = z.object({
   manufacturingSignoffSignature: z.string().nullable().optional(),
   purchasingSignoffName: z.string().optional(),
   purchasingSignoffSignature: z.string().nullable().optional(),
+  pin: z.string().regex(/^\d{4}$/).optional(),
+  certified: z.literal(true).optional(),
 });

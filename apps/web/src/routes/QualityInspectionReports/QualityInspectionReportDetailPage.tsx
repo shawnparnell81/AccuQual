@@ -13,6 +13,7 @@ import { DEFECT_CATEGORIES, INSPECTION_METHODS } from "../../api/types";
 import type { QualityInspectionReport, QualityInspectionItem, InspectionType, InspectionFinalStatus, Supplier, DefectCategory, InspectionMethod } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { PictureBoundText } from "../../components/forms/PictureText";
+import { SignatureStamp } from "../../components/forms/SignatureStamp";
 
 const reportHooks = createResourceHooks<QualityInspectionReport>("quality-inspection-reports");
 const INSPECTION_TYPES: InspectionType[] = ["incoming", "in_process", "final"];
@@ -48,6 +49,11 @@ export function QualityInspectionReportDetailPage() {
     mutationFn: async (body: Record<string, unknown>) => (await apiClient.patch(`/quality-inspection-reports/${reportId}`, body)).data,
     onSuccess: invalidate,
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't update.")),
+  });
+  const sign = useMutation({
+    mutationFn: async ({ field, pin }: { field: "inspector" | "qaLead"; pin: string }) =>
+      (await apiClient.post(`/quality-inspection-reports/${reportId}/sign`, { field, pin, certified: true })).data,
+    onSuccess: invalidate,
   });
 
   const addItem = useMutation({
@@ -277,8 +283,8 @@ export function QualityInspectionReportDetailPage() {
               </tr>
             </thead>
             <tbody>
-              <SignRow label="Inspector" signature={report.inspectorSignature} date={report.inspectorSignatureDate} onSignature={(v) => patch.mutate({ inspectorSignature: v || null })} onDate={(v) => patch.mutate({ inspectorSignatureDate: v || null })} />
-              <SignRow label="QA Lead" signature={report.qaLeadSignature} date={report.qaLeadSignatureDate} onSignature={(v) => patch.mutate({ qaLeadSignature: v || null })} onDate={(v) => patch.mutate({ qaLeadSignatureDate: v || null })} />
+              <SignRow label="Inspector" signature={report.inspectorSignature} date={report.inspectorSignatureDate} certify="I certify that this inspection record is accurate." onSign={(pin) => sign.mutateAsync({ field: "inspector", pin })} />
+              <SignRow label="QA Lead" signature={report.qaLeadSignature} date={report.qaLeadSignatureDate} certify="I certify that I have reviewed this inspection and approve the result." onSign={(pin) => sign.mutateAsync({ field: "qaLead", pin })} />
             </tbody>
           </table>
         </div>
@@ -350,16 +356,15 @@ function ItemRow({ item, onPatch, onDelete }: { item: QualityInspectionItem; onP
   );
 }
 
-function SignRow({ label, signature, date, onSignature, onDate }: { label: string; signature: string | null; date: string | null; onSignature: (v: string) => void; onDate: (v: string) => void }) {
+function SignRow({ label, signature, date, certify, onSign }: { label: string; signature: string | null; date: string | null; certify: string; onSign: (pin: string) => Promise<unknown> }) {
+  const shown = date ? new Date(date).toLocaleString() : "—";
   return (
     <tr>
       <td className="border border-border px-2 py-1.5 print:border-black">{label}</td>
-      <td className="border border-border p-0 print:border-black">
-        <input defaultValue={signature ?? ""} placeholder="Type name to sign" onBlur={(e) => e.target.value !== (signature ?? "") && onSignature(e.target.value)} className="w-full bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary print:text-black" />
+      <td className="border border-border p-1 print:border-black">
+        <SignatureStamp value={signature} certify={certify} variant="sheet" onSign={onSign} />
       </td>
-      <td className="border border-border p-0 print:border-black">
-        <input type="date" defaultValue={date?.slice(0, 10) ?? ""} onBlur={(e) => e.target.value !== (date?.slice(0, 10) ?? "") && onDate(e.target.value)} className="w-full bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary print:text-black" />
-      </td>
+      <td className="border border-border px-2 py-1.5 text-xs print:border-black">{shown}</td>
     </tr>
   );
 }

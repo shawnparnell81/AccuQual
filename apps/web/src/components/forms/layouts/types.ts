@@ -5,11 +5,13 @@
  */
 
 export interface SimpleField {
-  kind: "text" | "date" | "select" | "number";
+  kind: "text" | "date" | "select" | "number" | "signature";
   name: string;
   label: string;
   hint?: string;
   options?: string[];
+  /** Certification sentence shown with the PIN when kind is signature. */
+  certify?: string;
   /** Display-only even in an editable form — for values owned by the parent record's workflow (e.g. a status that only moves through guarded endpoints). */
   readOnly?: boolean;
 }
@@ -35,8 +37,10 @@ export interface YesNoBlock {
 export interface TableColumn {
   key: string;
   label: string;
-  kind: "text" | "textarea" | "date" | "checkboxGroup" | "number" | "computed" | "select";
+  kind: "text" | "textarea" | "date" | "checkboxGroup" | "number" | "computed" | "select" | "signature";
   options?: string[]; // for checkboxGroup and select
+  /** Certification sentence shown next to the PIN when kind is signature. */
+  certify?: string;
   /** Checkboxes drawn beside one option. They stay disabled until that option is checked, and only one of them can be on. */
   beside?: { option: string; choices: string[] };
   /**

@@ -252,7 +252,7 @@ export const finalInspectionReleaseChecklistLayout: FormLayout = {
           fixedRowLabels: ["Final Inspector", "Quality Approval", "Additional Approval (if required)"],
           columns: [
             { key: "name", label: "Name", kind: "text" },
-            { key: "signature", label: "Signature", kind: "text" },
+            { key: "signature", label: "Signature", kind: "signature", certify: "I certify that this final inspection is accurate and that I approve release." },
             { key: "date", label: "Date / Time", kind: "date" },
           ],
         },

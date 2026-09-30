@@ -23,6 +23,7 @@ import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
+import { setTestPin, TEST_PIN } from "../helpers/signaturePin.js";
 import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
@@ -37,8 +38,12 @@ let customerServiceToken: string;
 let qualityToken: string;
 
 async function makeUser(department: string | null, roleName = "operator") {
-  const [user] = await db.insert(users).values({ email: `wot-test-${department ?? "none"}-${suffix}@test.local`, passwordHash: "unused" }).returning();
+  const [user] = await db
+    .insert(users)
+    .values({ email: `wot-test-${department ?? "none"}-${suffix}@test.local`, passwordHash: "unused", name: department === "customer_service" ? "Casey Service" : null })
+    .returning();
   userIds.push(user!.id);
+  await setTestPin(user!.id);
   return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
 }
 
@@ -104,9 +109,9 @@ describe("Production Work Order traveler (real DB + real HTTP path)", () => {
     const res = await request(app)
       .patch(`/work-orders/${workOrderId}/operations/${operationId}`)
       .set("Authorization", `Bearer ${customerServiceToken}`)
-      .send({ signOff: "J. Alvarez", completedQty: 100 });
+      .send({ signOff: "J. Alvarez", completedQty: 100, pin: TEST_PIN, certified: true });
     expect(res.status).toBe(200);
-    expect(res.body.signOff).toBe("J. Alvarez");
+    expect(res.body.signOff.startsWith("Casey Service — ")).toBe(true);
     expect(res.body.signOffDate).toBeTruthy();
   });
 
@@ -127,14 +132,14 @@ describe("Production Work Order traveler (real DB + real HTTP path)", () => {
   });
 
   it("records the operator and inspector signatures with a real server timestamp", async () => {
-    const op = await request(app).post(`/work-orders/${workOrderId}/sign-operator`).set("Authorization", `Bearer ${customerServiceToken}`).send({ signature: "T. Nakamura" });
+    const op = await request(app).post(`/work-orders/${workOrderId}/sign-operator`).set("Authorization", `Bearer ${customerServiceToken}`).send({ pin: TEST_PIN, certified: true });
     expect(op.status).toBe(200);
-    expect(op.body.operatorSignature).toBe("T. Nakamura");
+    expect(op.body.operatorSignature.startsWith("Casey Service — ")).toBe(true);
     expect(op.body.operatorSignedAt).toBeTruthy();
 
-    const insp = await request(app).post(`/work-orders/${workOrderId}/sign-inspector`).set("Authorization", `Bearer ${customerServiceToken}`).send({ signature: "R. Chen" });
+    const insp = await request(app).post(`/work-orders/${workOrderId}/sign-inspector`).set("Authorization", `Bearer ${customerServiceToken}`).send({ pin: TEST_PIN, certified: true });
     expect(insp.status).toBe(200);
-    expect(insp.body.inspectorSignature).toBe("R. Chen");
+    expect(insp.body.inspectorSignature.startsWith("Casey Service — ")).toBe(true);
     expect(insp.body.inspectorSignedAt).toBeTruthy();
   });
 
@@ -171,7 +176,7 @@ describe("Production Work Order traveler (real DB + real HTTP path)", () => {
     const gateAttempt = await request(app).patch(`/work-orders/${workOrderId}/quality-gates`).set("Authorization", `Bearer ${customerServiceToken}`).send({ firstPieceInspectionPassed: false });
     expect(gateAttempt.status).toBe(400);
 
-    const signAttempt = await request(app).post(`/work-orders/${workOrderId}/sign-operator`).set("Authorization", `Bearer ${customerServiceToken}`).send({ signature: "Someone Else" });
+    const signAttempt = await request(app).post(`/work-orders/${workOrderId}/sign-operator`).set("Authorization", `Bearer ${customerServiceToken}`).send({ pin: TEST_PIN, certified: true });
     expect(signAttempt.status).toBe(400);
 
     const addOpAttempt = await request(app).post(`/work-orders/${workOrderId}/operations`).set("Authorization", `Bearer ${customerServiceToken}`).send({ opNumber: 40, description: "Final Quality Inspection" });

@@ -78,7 +78,7 @@ export const dvprLayout: FormLayout = {
           labelColumnHeader: "Agreement on Design Plan Test",
           fixedRowLabels: ["Supplier", "Client Representative"],
           columns: [
-            { key: "signature", label: "Signature", kind: "text" },
+            { key: "signature", label: "Signature", kind: "signature", certify: "I certify that I agree with this design verification record." },
             { key: "date", label: "Date", kind: "date" },
           ],
         },
@@ -88,7 +88,7 @@ export const dvprLayout: FormLayout = {
           labelColumnHeader: "Agreement on Results and Test Report",
           fixedRowLabels: ["Supplier", "Client Representative"],
           columns: [
-            { key: "signature", label: "Signature", kind: "text" },
+            { key: "signature", label: "Signature", kind: "signature", certify: "I certify that I agree with this design verification record." },
             { key: "date", label: "Date", kind: "date" },
           ],
         },

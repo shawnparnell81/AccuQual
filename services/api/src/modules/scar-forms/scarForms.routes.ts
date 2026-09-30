@@ -3,8 +3,8 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
-import { createScarFormSchema, updateScarFormSchema } from "./scarForms.validation.js";
-import { listScarFormsHandler, createScarFormHandler, getScarFormHandler, updateScarFormHandler, deleteScarFormHandler } from "./scarForms.controller.js";
+import { createScarFormSchema, updateScarFormSchema, signScarFormSchema } from "./scarForms.validation.js";
+import { listScarFormsHandler, createScarFormHandler, getScarFormHandler, updateScarFormHandler, signScarFormHandler, deleteScarFormHandler } from "./scarForms.controller.js";
 
 export const scarFormsRouter = Router();
 // Security-audit finding (medium): this comment used to justify staying
@@ -21,4 +21,5 @@ scarFormsRouter.get("/", listScarFormsHandler);
 scarFormsRouter.post("/", validate(createScarFormSchema), createScarFormHandler);
 scarFormsRouter.get("/:id", getScarFormHandler);
 scarFormsRouter.patch("/:id", validate(updateScarFormSchema), updateScarFormHandler);
+scarFormsRouter.post("/:id/sign", validate(signScarFormSchema), signScarFormHandler);
 scarFormsRouter.delete("/:id", deleteScarFormHandler);

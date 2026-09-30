@@ -45,7 +45,7 @@ Must support:
 - Radio buttons  
 - Dropdowns  
 - Date pickers  
-- Digital signatures  
+- Digital signatures (a 4-digit PIN plus a certification checkbox; the field then shows the person's name and the time)  
 - AI‑generated suggestion fields  
 
 ### 2.3 Data Binding

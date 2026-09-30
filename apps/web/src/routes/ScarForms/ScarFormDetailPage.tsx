@@ -9,6 +9,7 @@ import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPan
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import { PictureText } from "../../components/forms/PictureText";
+import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import { usePictureRecord } from "../../components/forms/pictureRecord";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import type { ScarForm, Supplier } from "../../api/types";
@@ -42,6 +43,11 @@ export function ScarFormDetailPage() {
     mutationFn: async (body: Record<string, unknown>) => (await apiClient.patch(`/scar-forms/${scarId}`, body)).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["scar-forms", scarId] }),
     onError: (err: unknown) => toast.error(extractErrorMessage(err, "Couldn't update.")),
+  });
+  const sign = useMutation({
+    mutationFn: async ({ field, pin }: { field: "supplierRep" | "qualityEngineer"; pin: string }) =>
+      (await apiClient.post(`/scar-forms/${scarId}/sign`, { field, pin, certified: true })).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["scar-forms", scarId] }),
   });
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
@@ -180,8 +186,8 @@ export function ScarFormDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                <SignRow label="Supplier Representative" signature={scar.supplierRepSignature} date={scar.supplierRepDate} onSignature={(v) => patch.mutate({ supplierRepSignature: v || null })} onDate={(v) => patch.mutate({ supplierRepDate: v || null })} />
-                <SignRow label="Quality Engineer" signature={scar.qualityEngineerSignature} date={scar.qualityEngineerDate} onSignature={(v) => patch.mutate({ qualityEngineerSignature: v || null })} onDate={(v) => patch.mutate({ qualityEngineerDate: v || null })} />
+                <SignRow label="Supplier Representative" signature={scar.supplierRepSignature} date={scar.supplierRepDate} certify="I certify that this supplier response is accurate." onSign={(pin) => sign.mutateAsync({ field: "supplierRep", pin })} />
+                <SignRow label="Quality Engineer" signature={scar.qualityEngineerSignature} date={scar.qualityEngineerDate} certify="I certify that this supplier corrective action has been reviewed." onSign={(pin) => sign.mutateAsync({ field: "qualityEngineer", pin })} />
               </tbody>
             </table>
           </div>
@@ -262,16 +268,15 @@ function CapaRow({ label, owner, date, onOwner, onDate }: { label: string; owner
   );
 }
 
-function SignRow({ label, signature, date, onSignature, onDate }: { label: string; signature: string | null; date: string | null; onSignature: (v: string) => void; onDate: (v: string) => void }) {
+function SignRow({ label, signature, date, certify, onSign }: { label: string; signature: string | null; date: string | null; certify: string; onSign: (pin: string) => Promise<unknown> }) {
+  const shown = date ? new Date(date).toLocaleString() : "—";
   return (
     <tr>
       <td className="border border-border px-2 py-1.5 print:border-black">{label}</td>
-      <td className="border border-border p-0 print:border-black">
-        <input defaultValue={signature ?? ""} placeholder="Type name to sign" onBlur={(e) => e.target.value !== (signature ?? "") && onSignature(e.target.value)} className="w-full bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary print:text-black" />
+      <td className="border border-border p-1 print:border-black">
+        <SignatureStamp value={signature} certify={certify} variant="sheet" onSign={onSign} />
       </td>
-      <td className="border border-border p-0 print:border-black">
-        <input type="date" defaultValue={date?.slice(0, 10) ?? ""} onBlur={(e) => e.target.value !== (date?.slice(0, 10) ?? "") && onDate(e.target.value)} className="w-full bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary print:text-black" />
-      </td>
+      <td className="border border-border px-2 py-1.5 text-xs print:border-black">{shown}</td>
     </tr>
   );
 }

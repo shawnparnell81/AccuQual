@@ -120,6 +120,7 @@ Tabs:
 - Role-based UI visibility
 - Protected routes
 - Auto-logout on token expiration
+- Signature PIN: the first sign-in after an account is created requires a 4-digit PIN (change it later under Settings → Security). A signature field asks for that PIN and a clear “I certify …” checkbox. Success writes the person's display name plus the date and time. A wrong PIN does not sign the form. The PIN is masked, stored only as a hash, and is not readable by an administrator.
 
 ---
 

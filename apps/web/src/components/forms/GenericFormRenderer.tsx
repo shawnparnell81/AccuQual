@@ -6,6 +6,8 @@ import { DetailsDisclosure } from "./DetailsDisclosure";
 import { inputTypeForFieldKind } from "./formInputType";
 import { PictureText } from "./PictureText";
 import { usePictureRecord } from "./pictureRecord";
+import { DEFAULT_CERTIFY, SIGNATURE_DATE_FIELD, SignatureStamp } from "./SignatureStamp";
+import { useFormSign } from "./formSign";
 
 // Section bars and the document title use tokens whose Classic values are
 // the same navy as schema-pdf-renderer.ts (#1d3a5c), so the on-screen form
@@ -123,7 +125,23 @@ function RowBlockView({ block, data, onChange, readOnly }: BlockViewProps<RowBlo
             {field.hint && <p className="text-[9px] italic text-muted-foreground">{field.hint}</p>}
           </div>
           <div className={`${valueCell} px-2 py-1`}>
-            {readOnly || field.readOnly ? (
+            {field.kind === "signature" ? (
+              <SignatureField
+                value={data[field.name]}
+                path={field.name}
+                certify={field.certify}
+                readOnly={readOnly || Boolean(field.readOnly)}
+                dateEmpty={(() => {
+                  const sibling = SIGNATURE_DATE_FIELD[field.name];
+                  return !sibling || data[sibling] == null || data[sibling] === "";
+                })()}
+                onStamp={(stamp, signedOn) => {
+                  onChange(field.name, stamp);
+                  const sibling = SIGNATURE_DATE_FIELD[field.name];
+                  if (sibling && signedOn) onChange(sibling, signedOn);
+                }}
+              />
+            ) : readOnly || field.readOnly ? (
               <StaticValue value={data[field.name]} />
             ) : field.kind === "select" ? (
               <select
@@ -338,6 +356,27 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
                         );
                       })}
                     </div>
+                  ) : col.kind === "signature" ? (
+                    <SignatureField
+                      value={row[col.key]}
+                      path={`${block.name}.${rowIndex}.${col.key}`}
+                      certify={col.certify}
+                      readOnly={readOnly}
+                      dateEmpty={(() => {
+                        const sibling = SIGNATURE_DATE_FIELD[col.key];
+                        return !sibling || row[sibling] == null || row[sibling] === "";
+                      })()}
+                      onStamp={(stamp, signedOn) => {
+                        const sibling = SIGNATURE_DATE_FIELD[col.key];
+                        const next = rows.map((r, i) => {
+                          if (i !== rowIndex) return r;
+                          const patched = { ...r, [col.key]: stamp };
+                          if (sibling && signedOn) patched[sibling] = signedOn;
+                          return hasComputedColumns ? materializeRow(patched, block.columns) : patched;
+                        });
+                        onChange(block.name, next);
+                      }}
+                    />
                   ) : col.kind === "computed" ? (
                     <ComputedCell value={fmeaCellValue(col.formula, row, row[col.key])} formula={col.formula} />
                   ) : col.kind === "textarea" ? (
@@ -399,6 +438,39 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
       )}
       {block.legend && <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{block.legend}</p>}
     </div>
+  );
+}
+
+function SignatureField({
+  value,
+  path,
+  certify,
+  readOnly,
+  dateEmpty,
+  onStamp,
+}: {
+  value: unknown;
+  path: string;
+  certify?: string;
+  readOnly: boolean;
+  dateEmpty: boolean;
+  onStamp: (stamp: string, signedOn?: string) => void;
+}) {
+  const sign = useFormSign();
+  const text = typeof value === "string" ? value : "";
+  const sentence = certify?.trim() || DEFAULT_CERTIFY;
+  if (readOnly || text.trim() || !sign) {
+    return <StaticValue value={text} />;
+  }
+  return (
+    <SignatureStamp
+      value={text}
+      certify={sentence}
+      onSign={async (pin) => {
+        const result = await sign({ path, description: sentence, pin });
+        onStamp(result.stamp, dateEmpty ? result.signedOn : undefined);
+      }}
+    />
   );
 }
 

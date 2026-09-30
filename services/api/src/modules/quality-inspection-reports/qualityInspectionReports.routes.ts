@@ -3,12 +3,13 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
-import { createQualityInspectionReportSchema, updateQualityInspectionReportSchema, createInspectionItemSchema, updateInspectionItemSchema } from "./qualityInspectionReports.validation.js";
+import { createQualityInspectionReportSchema, updateQualityInspectionReportSchema, signQualityInspectionReportSchema, createInspectionItemSchema, updateInspectionItemSchema } from "./qualityInspectionReports.validation.js";
 import {
   listReportsHandler,
   createReportHandler,
   getReportHandler,
   updateReportHandler,
+  signReportHandler,
   deleteReportHandler,
   createItemHandler,
   updateItemHandler,
@@ -25,6 +26,7 @@ qualityInspectionReportsRouter.get("/", listReportsHandler);
 qualityInspectionReportsRouter.post("/", validate(createQualityInspectionReportSchema), createReportHandler);
 qualityInspectionReportsRouter.get("/:id", getReportHandler);
 qualityInspectionReportsRouter.patch("/:id", validate(updateQualityInspectionReportSchema), updateReportHandler);
+qualityInspectionReportsRouter.post("/:id/sign", validate(signQualityInspectionReportSchema), signReportHandler);
 qualityInspectionReportsRouter.delete("/:id", deleteReportHandler);
 
 qualityInspectionReportsRouter.post("/:id/items", validate(createInspectionItemSchema), createItemHandler);

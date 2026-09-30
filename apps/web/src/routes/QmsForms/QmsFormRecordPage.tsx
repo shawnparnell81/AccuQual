@@ -11,6 +11,7 @@ import { getQmsFormDefinition } from "./qmsFormDefinitions";
 import type { QmsForm, QmsFormRow, QmsFormStatus } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { PictureBoundText } from "../../components/forms/PictureText";
+import { SignatureStamp } from "../../components/forms/SignatureStamp";
 
 const qmsFormHooks = createResourceHooks<QmsForm>("qms-forms");
 const STATUSES: QmsFormStatus[] = ["draft", "active", "obsolete"];
@@ -57,6 +58,11 @@ export function QmsFormRecordPage() {
     mutationFn: async (rowId: number) => apiClient.delete(`/qms-forms/${formId}/rows/${rowId}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["qms-forms", formId] }),
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't remove that row.")),
+  });
+  const signRow = useMutation({
+    mutationFn: async ({ rowId, pin }: { rowId: number; pin: string }) =>
+      (await apiClient.post(`/qms-forms/${formId}/rows/${rowId}/sign`, { pin, certified: true })).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["qms-forms", formId] }),
   });
 
   if (!definition) return <p className="text-sm text-destructive">Unknown form type "{formType}".</p>;
@@ -143,7 +149,7 @@ export function QmsFormRecordPage() {
                     </tr>
                   )}
                   {rowsBySection(section.key).map((row) => (
-                    <QmsRow key={row.id} row={row} columns={section.columns} onPatch={(data) => patchRow.mutate({ rowId: row.id, data })} onDelete={() => deleteRow.mutate(row.id)} />
+                    <QmsRow key={row.id} row={row} columns={section.columns} onPatch={(data) => patchRow.mutate({ rowId: row.id, data })} onDelete={() => deleteRow.mutate(row.id)} onSign={(pin) => signRow.mutateAsync({ rowId: row.id, pin })} />
                   ))}
                 </tbody>
               </table>
@@ -196,21 +202,27 @@ function QmsRow({
   columns,
   onPatch,
   onDelete,
+  onSign,
 }: {
   row: QmsFormRow;
   columns: { key: string; label: string }[];
   onPatch: (data: Record<string, string>) => void;
   onDelete: () => void;
+  onSign: (pin: string) => Promise<unknown>;
 }) {
   return (
     <tr>
       {columns.map((col) => (
         <td key={col.key} className="border border-border p-0 print:border-black">
-          <input
-            defaultValue={row.data[col.key] ?? ""}
-            onBlur={(e) => e.target.value !== (row.data[col.key] ?? "") && onPatch({ ...row.data, [col.key]: e.target.value })}
-            className="w-full bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary print:text-black"
-          />
+          {col.key === "signature" ? (
+            <SignatureStamp value={row.data.signature ?? ""} certify="I certify that this entry is accurate and complete." variant="sheet" onSign={onSign} />
+          ) : (
+            <input
+              defaultValue={row.data[col.key] ?? ""}
+              onBlur={(e) => e.target.value !== (row.data[col.key] ?? "") && onPatch({ ...row.data, [col.key]: e.target.value })}
+              className="w-full bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary print:text-black"
+            />
+          )}
         </td>
       ))}
       <td className="border border-border text-center print:hidden">

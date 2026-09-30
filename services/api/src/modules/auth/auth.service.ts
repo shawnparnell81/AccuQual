@@ -49,6 +49,7 @@ async function userWithRole(userId: number) {
       mfaEnabled: users.mfaEnabled,
       mfaRequiredSince: users.mfaRequiredSince,
       mustChangePassword: users.mustChangePassword,
+      pinHash: users.pinHash,
       companyMfaPolicy: company.mfaPolicy,
     })
     .from(users)
@@ -597,10 +598,13 @@ export async function me(userId: number) {
   return sanitize(full);
 }
 
-/** Everything a session response may show about a user — never the password hash, the MFA secret, or lockout bookkeeping. */
-function sanitize<T extends { passwordHash?: string }>(user: T) {
+/** Everything a session response may show about a user — never the password hash, the PIN hash, the MFA secret, or lockout bookkeeping. */
+function sanitize<T extends { passwordHash?: string; pinHash?: string | null }>(user: T) {
   const {
     passwordHash: _passwordHash,
+    pinHash,
+    pinFailedCount: _pinFailed,
+    pinLockedUntil: _pinLocked,
     mfaSecretEncrypted: _mfaSecret,
     mfaLastUsedStep: _mfaStep,
     failedLoginCount: _failedCount,
@@ -609,7 +613,7 @@ function sanitize<T extends { passwordHash?: string }>(user: T) {
     companyMfaPolicy: _policy,
     ...rest
   } = user as T & Record<string, unknown>;
-  return rest;
+  return { ...rest, pinSet: typeof pinHash === "string" && pinHash.length > 0 };
 }
 
 // ---- Signed-in MFA management (My account) --------------------------------------------------------------------------------------------------

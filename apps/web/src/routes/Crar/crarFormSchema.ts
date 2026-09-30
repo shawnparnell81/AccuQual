@@ -15,7 +15,7 @@ import type { CrarClaim } from "../../api/types";
  * handled on the detail page via the existing generic AttachmentsPanel,
  * same as every other module's evidence uploads, not part of this schema.
  */
-export type CrarFieldType = "text" | "textarea" | "date" | "select";
+export type CrarFieldType = "text" | "textarea" | "date" | "select" | "signature";
 
 export interface CrarField {
   kind: "field";
@@ -135,8 +135,8 @@ export const CRAR_FORM_SCHEMA: CrarSection[] = [
     title: "Approval / Final Record",
     rows: [
       [field("finalReviewComments", "Final Review Comments", "textarea", 12)],
-      [field("preparedByFinal", "Report Prepared By", "text", 5), field("preparedSignature", "Signature / Initials", "text", 4), field("preparedDate", "Date", "date", 3)],
-      [field("approvedByFinal", "Report Approved By", "text", 5), field("approvedSignature", "Signature / Initials", "text", 4), field("approvedDate", "Date", "date", 3)],
+      [field("preparedByFinal", "Report Prepared By", "text", 5), field("preparedSignature", "Signature", "signature", 4), field("preparedDate", "Date", "date", 3)],
+      [field("approvedByFinal", "Report Approved By", "text", 5), field("approvedSignature", "Signature", "signature", 4), field("approvedDate", "Date", "date", 3)],
     ],
   },
   {

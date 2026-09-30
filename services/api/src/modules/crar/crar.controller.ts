@@ -10,6 +10,7 @@ import { customers } from "../../drizzle/schema/customers.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail, recordAuditTrailStandalone } from "../audit-trail/audit-trail.service.js";
+import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { pool } from "../../db/index.js";
@@ -221,6 +222,8 @@ export const updateCrarHandler = asyncHandler(async (req: Request, res: Response
   }
 
   const patch: Record<string, unknown> = { ...req.body };
+  delete patch.preparedSignature;
+  delete patch.approvedSignature;
   if (patch.warrantyId !== undefined && patch.warrantyId !== null) {
     const [w] = await req.db!.select({ id: warrantyClaims.id, customerId: warrantyClaims.customerId }).from(warrantyClaims).where(and(eq(warrantyClaims.id, patch.warrantyId as number)));
     if (!w) throw AppError.badRequest(`Warranty claim #${patch.warrantyId} not found`);
@@ -285,5 +288,32 @@ export const transitionCrarHandler = asyncHandler(async (req: Request, res: Resp
   });
   await publishEvent(WORKFLOW_STREAM, { module: "crar", event: newStatus, entityId: record.id });
 
+  res.json(updated);
+});
+
+const CRAR_SIGNOFF = {
+  prepared: { column: "preparedSignature", date: "preparedDate", description: "I certify that I prepared this report and it is accurate." },
+  approved: { column: "approvedSignature", date: "approvedDate", description: "I certify that I approve this report." },
+} as const;
+
+export const signCrarHandler = asyncHandler(async (req: Request, res: Response) => {
+  const record = await loadCrar(req, Number(req.params.id));
+  if (record.status === "completed") throw AppError.badRequest("This CRAR is completed and can no longer be signed.");
+  await assertCrarContentWrite(req);
+  const field = req.body.field as keyof typeof CRAR_SIGNOFF;
+  const spec = CRAR_SIGNOFF[field];
+  const stamp = await requireSignatureStamp(req, {
+    pin: req.body.pin,
+    certified: req.body.certified,
+    entityType: "Crar",
+    entityId: record.id,
+    field: spec.column,
+    description: spec.description,
+  });
+  const [updated] = await req
+    .db!.update(crarClaims)
+    .set({ [spec.column]: stamp.stamp, [spec.date]: stamp.signedAt, updatedAt: new Date() })
+    .where(eq(crarClaims.id, record.id))
+    .returning();
   res.json(updated);
 });

@@ -7,8 +7,8 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { getUserAccessLevel, requireDepartmentAccess } from "../../middleware/departmentAccess.js";
-import { saveFormSchema, FORM_TYPES } from "./forms.validation.js";
-import { getTemplate, getForm, saveForm, createVersion, getHistory, exportForm } from "./forms.controller.js";
+import { saveFormSchema, signFormSchema, FORM_TYPES } from "./forms.validation.js";
+import { getTemplate, getForm, saveForm, signForm, createVersion, getHistory, exportForm } from "./forms.controller.js";
 import { listTemplatesHandler, uploadTemplateHandler, downloadTemplateHandler, deleteTemplateHandler } from "./formTemplates.controller.js";
 import type { ResourceKey } from "../../middleware/departmentAccess.js";
 import { canEditFormStructure } from "../roles/roleHierarchy.js";
@@ -142,6 +142,7 @@ formsRouter.delete("/:type/template", requireFormStructureEditor, deleteTemplate
 formsRouter.get("/:type/template/file", downloadTemplateHandler);
 formsRouter.get("/:type/:id", gateFormRead, getForm);
 formsRouter.post("/:type/:id/save", refuseControlledForms, gateKnownFormTypes, validate(saveFormSchema), saveForm);
+formsRouter.post("/:type/:id/sign", refuseControlledForms, gateKnownFormTypes, validate(signFormSchema), signForm);
 formsRouter.post("/:type/:id/version", refuseControlledForms, gateKnownFormTypes, createVersion);
 formsRouter.get("/:type/:id/history", gateFormRead, getHistory);
 formsRouter.post("/:type/:id/export", gateFormRead, exportForm);
