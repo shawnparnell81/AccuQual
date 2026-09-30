@@ -203,7 +203,7 @@ describe("record delete", () => {
       .from(auditTrail)
       .where(and(eq(auditTrail.entityType, "Validation Report"), eq(auditTrail.entityId, id), eq(auditTrail.action, "delete")));
     expect(entry!.performedBy).toBe(qualityManager.id);
-    expect((entry!.changes as { summary: string; attachmentFileNames: string[] }).summary).toBe(`Deleted Validation Report #${id} "CSA-VAL-9"`);
+    expect((entry!.changes as { summary: string; attachmentFileNames: string[] }).summary).toBe(`Deleted CSA VALIDATION REPORT #${id} "CSA-VAL-9"`);
     expect((entry!.changes as { attachmentFileNames: string[] }).attachmentFileNames).toEqual([]);
   });
 
