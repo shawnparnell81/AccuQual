@@ -47,6 +47,13 @@ const SIGNATURE_COPY: Record<string, Record<string, string>> = {
     authorizedSignature: "I certify that this brake wear sensor validation is accurate and I authorize the disposition.",
     furtherSignature: "I certify that the further review of this brake wear sensor is accurate and I authorize the later disposition.",
   },
+  air_compressor: { authorizedSignature: "I certify that this air compressor validation is accurate and I authorize the disposition." },
+  electric_lift: { authorizedSignature: "I certify that this electric lift support validation is accurate and I authorize the disposition." },
+  gas_lift: {
+    authorizedSignature: "I certify that this gas lift support validation is accurate and I authorize the disposition.",
+    furtherSignature: "I certify that the further review of this gas lift support is accurate and I authorize the later disposition.",
+  },
+  coil_spring: { authorizedSignature: "I certify that this coil spring validation is accurate and I authorize the disposition." },
 };
 
 export const signValidationReport = asyncHandler(async (req: Request, res: Response) => {

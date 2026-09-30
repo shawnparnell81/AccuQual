@@ -32,6 +32,11 @@ export const FILEABLE_FORM_KEYS = new Set<string>([
   "frm-val-009",
   "frm-val-010",
   "frm-val-011",
+  "frm-val-002",
+  "frm-val-003",
+  "frm-val-004",
+  "frm-val-005",
+  "frm-val-006",
   "frm-gen-002",
   "lst-vis-001",
   "rpt-eng-001",
@@ -75,14 +80,41 @@ export const SUGGESTED_SUBJECT_PATH: Record<string, string[]> = {
   "frm-val-011": ["Engineering", "Design & Development", "Design Validation"],
   "frm-val-008": ["Engineering", "Manufacturing Engineering", "Process Validation"],
   "frm-val-009": ["Engineering", "Manufacturing Engineering", "Process Validation"],
+  "frm-val-002": ["Engineering", "Design & Development", "Design Validation"],
+  "frm-val-003": ["Engineering", "Design & Development", "Design Validation"],
+  "frm-val-004": ["Engineering", "Design & Development", "Design Validation"],
+  "frm-val-005": ["Engineering", "Design & Development", "Design Validation"],
+  "frm-val-006": ["Engineering", "Design & Development", "Design Validation"],
   "frm-gen-002": ["Quality", "Audits", "Internal Audit Reports"],
   "lst-vis-001": ["Quality", "Records", "Inspection Records"],
   "rpt-eng-001": ["Engineering", "Technical Records"],
 };
 
-export type ValidationKind = "csa" | "fuel_pump" | "air_strut" | "air_spring" | "fuel_injector" | "brake_wear";
+export type ValidationKind =
+  | "csa"
+  | "fuel_pump"
+  | "air_strut"
+  | "air_spring"
+  | "fuel_injector"
+  | "brake_wear"
+  | "shock"
+  | "air_compressor"
+  | "electric_lift"
+  | "gas_lift"
+  | "coil_spring";
 
-const NAMED_KINDS = new Set<ValidationKind>(["fuel_pump", "air_strut", "air_spring", "fuel_injector", "brake_wear"]);
+const NAMED_KINDS = new Set<ValidationKind>([
+  "fuel_pump",
+  "air_strut",
+  "air_spring",
+  "fuel_injector",
+  "brake_wear",
+  "shock",
+  "air_compressor",
+  "electric_lift",
+  "gas_lift",
+  "coil_spring",
+]);
 
 /** Missing formType stays CSA so older rows keep their sheet. */
 export function validationKind(data: unknown): ValidationKind {
@@ -98,6 +130,11 @@ const KIND_KEY: Record<ValidationKind, string> = {
   air_spring: "frm-val-011",
   fuel_injector: "frm-val-008",
   brake_wear: "frm-val-009",
+  shock: "frm-val-002",
+  air_compressor: "frm-val-003",
+  electric_lift: "frm-val-004",
+  gas_lift: "frm-val-005",
+  coil_spring: "frm-val-006",
 };
 
 export function validationFormKeyFor(data: unknown): string {
@@ -111,6 +148,11 @@ const VALIDATION_KEY_KIND: Record<string, ValidationKind> = {
   "frm-val-009": "brake_wear",
   "frm-val-010": "air_strut",
   "frm-val-011": "air_spring",
+  "frm-val-002": "shock",
+  "frm-val-003": "air_compressor",
+  "frm-val-004": "electric_lift",
+  "frm-val-005": "gas_lift",
+  "frm-val-006": "coil_spring",
 };
 
 export function validationKindForKey(formKey: string): ValidationKind | null {

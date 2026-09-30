@@ -11,6 +11,7 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { instanceRevision } from "../../lib/formDocument";
+import { cellsFromBatch, isBatch3, overallBatch } from "../../lib/batch3Reports";
 import { cellsFromData as springCellsFromData, overallResult as springOverall } from "../../lib/airSpringReport";
 import { authorizedSignatureOf, cellsFromData as airCellsFromData, overallResult as airOverall } from "../../lib/airStrutReport";
 import { cellsFromData as fuelCellsFromData, overallResult as fuelOverall } from "../../lib/fuelPumpReport";
@@ -19,6 +20,7 @@ import { cellsFromData as csaCellsFromData, formTypeOf, overallResult as csaOver
 import { AirSpringSheet } from "./AirSpringSheet";
 import { AirStrutSheet } from "./AirStrutSheet";
 import { FuelPumpSheet } from "./FuelPumpSheet";
+import { Batch3Sheet } from "./Batch3Sheet";
 import { PartInspectionSheet } from "./PartInspectionSheet";
 import { ValidationReportSheet } from "./ValidationReportSheet";
 
@@ -37,6 +39,7 @@ function loadCells(formType: ValidationFormType, data: unknown): Record<string, 
   if (formType === "air_spring") return springCellsFromData(data);
   if (formType === "fuel_injector") return inspectionCells(data, blankInjectorCells);
   if (formType === "brake_wear") return inspectionCells(data, blankBrakeCells);
+  if (isBatch3(formType)) return cellsFromBatch(formType, data);
   return csaCellsFromData(data);
 }
 
@@ -46,6 +49,7 @@ function loadOverall(formType: ValidationFormType, cells: Record<string, CellVal
   if (formType === "air_spring") return springOverall(cells);
   if (formType === "fuel_injector") return overallInjector(cells);
   if (formType === "brake_wear") return overallBrake(cells);
+  if (isBatch3(formType)) return overallBatch(formType, cells);
   return csaOverall(cells);
 }
 
@@ -215,6 +219,31 @@ export function ValidationReportDetailPage() {
             onFurtherSign={async (pin) => {
               await signReport.mutateAsync({ id: reportId, field: "furtherSignature", pin, certified: true });
             }}
+            onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
+          />
+        ) : isBatch3(formType) ? (
+          <Batch3Sheet
+            variant={formType}
+            cells={cells}
+            readOnly={!canEdit}
+            documentNumber={documentNumber}
+            revision={rev}
+            signature={authorizedSignatureOf(report.data)}
+            furtherSignature={furtherSignatureOf(report.data)}
+            onSign={
+              formType === "shock"
+                ? undefined
+                : async (pin) => {
+                    await signReport.mutateAsync({ id: reportId, pin, certified: true });
+                  }
+            }
+            onFurtherSign={
+              formType === "gas_lift"
+                ? async (pin) => {
+                    await signReport.mutateAsync({ id: reportId, field: "furtherSignature", pin, certified: true });
+                  }
+                : undefined
+            }
             onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
           />
         ) : (

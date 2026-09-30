@@ -10,7 +10,18 @@ export const validationReports = pgTable("validation_reports", {
   id: serial("id").primaryKey(),
   data: jsonb("data")
     .$type<{
-      formType?: "csa" | "fuel_pump" | "air_strut" | "air_spring" | "fuel_injector" | "brake_wear";
+      formType?:
+        | "csa"
+        | "fuel_pump"
+        | "air_strut"
+        | "air_spring"
+        | "fuel_injector"
+        | "brake_wear"
+        | "shock"
+        | "air_compressor"
+        | "electric_lift"
+        | "gas_lift"
+        | "coil_spring";
       cells?: Record<string, string | number | boolean | null>;
       authorizedSignature?: string;
       furtherSignature?: string;

@@ -5,6 +5,7 @@ import { apiClient } from "../../api/client";
 import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { formatDate } from "../../lib/dates";
+import { cellsFromBatch, isBatch3, overallBatch } from "../../lib/batch3Reports";
 import { cellsFromData as springCellsFromData, overallResult as springOverall } from "../../lib/airSpringReport";
 import { cellsFromData as airCellsFromData, overallResult as airOverall } from "../../lib/airStrutReport";
 import { cellsFromData as fuelCellsFromData, overallResult as fuelOverall } from "../../lib/fuelPumpReport";
@@ -28,6 +29,7 @@ function rowCells(kind: ValidationFormType, data: unknown): Record<string, CellV
   if (kind === "air_spring") return springCellsFromData(data);
   if (kind === "fuel_injector") return inspectionCells(data, blankInjectorCells);
   if (kind === "brake_wear") return inspectionCells(data, blankBrakeCells);
+  if (isBatch3(kind)) return cellsFromBatch(kind, data);
   return cellsFromData(data);
 }
 
@@ -37,6 +39,7 @@ function rowResult(kind: ValidationFormType, cells: Record<string, CellValue>): 
   if (kind === "air_spring") return springOverall(cells);
   if (kind === "fuel_injector") return overallInjector(cells);
   if (kind === "brake_wear") return overallBrake(cells);
+  if (isBatch3(kind)) return overallBatch(kind, cells);
   return overallResult(cells);
 }
 

@@ -326,6 +326,11 @@ function validationLabel(row: Row): string {
   if (kind === "air_spring") return "Air Spring Validation";
   if (kind === "fuel_injector") return "Fuel Injector Validation";
   if (kind === "brake_wear") return "Brake Wear Sensor Validation";
+  if (kind === "shock") return "Shock Validation";
+  if (kind === "air_compressor") return "Air Compressor Validation";
+  if (kind === "electric_lift") return "Electric Lift Support Validation";
+  if (kind === "gas_lift") return "Gas Lift Support Validation";
+  if (kind === "coil_spring") return "Coil Spring Validation";
   return "Validation Report";
 }
 

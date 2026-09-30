@@ -68,6 +68,12 @@ describe("new blank forms", () => {
     expect(validationKind({ formType: "air_spring" })).toBe("air_spring");
     expect(validationKind({})).toBe("csa");
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-val-008")?.formId).toBe("");
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-val-003")).toMatchObject({ formId: "", title: "Air Compressor Validation" });
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-val-005")).toMatchObject({ formId: "", title: "Gas Lift Support Validation" });
+    expect(validationKind({ formType: "gas_lift" })).toBe("gas_lift");
+    expect(validationKind({ formType: "electric_lift" })).toBe("electric_lift");
+    expect(recordLinkedPath("frm-val-002", 13)).toBe("/validation-reports/13");
+    expect(FILEABLE_FORM_KEYS.has("frm-val-006")).toBe(true);
     expect(FORM_TEMPLATES.find((form) => form.formKey === "lst-vis-001")?.title).toBe("DMA Laboratory Visitor Log");
     expect(FORM_TEMPLATES.find((form) => form.formKey === "rpt-eng-001")?.title).toBe("Monthly Engineering Development Report");
   });
