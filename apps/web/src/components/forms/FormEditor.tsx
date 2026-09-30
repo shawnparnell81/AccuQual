@@ -106,7 +106,7 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
       {formType === "gage_rr" && (
         <div className="flex flex-col gap-2">
           <FormNumberEditor formKey="frm-msa-001" />
-          <RecordFolderField formKey="frm-msa-001" recordId={entityId} />
+          <RecordFolderField formKey="frm-msa-001" recordId={entityId} prepare={() => saveNow()} />
         </div>
       )}
 

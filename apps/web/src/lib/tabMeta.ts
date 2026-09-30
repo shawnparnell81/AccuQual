@@ -28,6 +28,7 @@ const ROUTE_PATTERNS: RoutePattern[] = [
   { test: /^\/scar-forms/, icon: "default", title: () => "SCAR" },
   { test: /^\/document-change-requests/, icon: "default", title: () => "Document changes" },
   { test: /^\/qms-forms/, icon: "default", title: () => "QMS Forms" },
+  { test: /^\/blank-forms\/?$/, icon: "documents", title: () => "Blank Forms" },
   { test: /^\/management-system/, icon: "default", title: () => "Management System" },
   { test: /^\/risk\/dashboard\/?$/, icon: "default", title: () => "Risk dashboard" },
   { test: /^\/workers/, icon: "default", title: () => "Workers" },

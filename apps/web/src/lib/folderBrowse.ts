@@ -44,6 +44,30 @@ function childrenOf<T extends BrowseFolder>(folders: T[], parentId: number | nul
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 }
 
+/** Blank masters live here. Save as does not offer this folder, so a filled copy is not filed as another blank. */
+export const BLANK_FORM_TEMPLATES_FOLDER = "Blank Form Templates";
+
+/** This folder and everything nested under a blank-template library. */
+export function templateLibraryIds<T extends BrowseFolder>(folders: T[]): Set<number> {
+  const hidden = new Set<number>();
+  const stack = folders.filter((folder) => folder.name === BLANK_FORM_TEMPLATES_FOLDER).map((folder) => folder.id);
+  for (let index = 0; index < stack.length; index += 1) {
+    const parentId = stack[index]!;
+    if (hidden.has(parentId)) continue;
+    hidden.add(parentId);
+    for (const folder of folders) {
+      if (folder.parentId === parentId) stack.push(folder.id);
+    }
+  }
+  return hidden;
+}
+
+/** Real Documents folders a filled copy can be saved into. */
+export function saveAsFolders<T extends BrowseFolder>(folders: T[]): T[] {
+  const hidden = templateLibraryIds(folders);
+  return folders.filter((folder) => !hidden.has(folder.id) && isFolderEntry(folders, folder));
+}
+
 /** A row you can open as a folder. A leaf with a record, file, or controlled document is a file. */
 export function isFolderEntry<T extends BrowseFolder>(folders: T[], node: T): boolean {
   if (folders.some((folder) => folder.parentId === node.id)) return true;

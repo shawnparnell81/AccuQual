@@ -140,7 +140,7 @@ export function ValidationReportDetailPage() {
                 Validation Reports
               </Link>
             </p>
-            <RecordFolderField formKey={formKey} recordId={reportId} />
+            <RecordFolderField formKey={formKey} recordId={reportId} prepare={() => updateReport.mutateAsync({ id: reportId, data: { formType, cells: filled } })} />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <DeleteRecordButton

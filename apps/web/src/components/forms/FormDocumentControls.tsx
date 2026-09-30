@@ -5,15 +5,17 @@ import { apiClient } from "../../api/client";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { EDITABLE_FORM_KEYS, FILEABLE_FORM_KEYS, canEditFormNumber } from "../../lib/formDocument";
-import { documentsFolderHref, filingLocation, type FiledLocation } from "../../lib/folderBrowse";
+import { documentsFolderHref, filingLocation, type BrowseFolder, type FiledLocation } from "../../lib/folderBrowse";
+import { SaveAsFolderDialog } from "./SaveAsFolderDialog";
 
 export type { FiledLocation };
 export type SaveResultState = FiledLocation | "saved" | "unfiled" | "error" | "file-error" | null;
 
-interface FolderRow {
+interface FolderRow extends BrowseFolder {
   id: number;
   name: string;
   parentId: number | null;
+  sortOrder: number;
 }
 
 export interface FormFilingView {
@@ -109,21 +111,6 @@ export function useFormFiling(formKey: string | null, recordId: number) {
   });
 }
 
-function folderChoices(folders: FolderRow[], excludeId: number | null): { id: number; label: string }[] {
-  const choices: { id: number; label: string }[] = [];
-  function walk(parentId: number | null, prefix: string) {
-    const children = folders.filter((folder) => folder.parentId === parentId).sort((a, b) => a.name.localeCompare(b.name));
-    for (const folder of children) {
-      if (folder.id === excludeId) continue;
-      const label = prefix ? `${prefix} / ${folder.name}` : folder.name;
-      choices.push({ id: folder.id, label });
-      walk(folder.id, label);
-    }
-  }
-  walk(null, "");
-  return choices;
-}
-
 /** Sets the document number on the blank master. Filled copies keep the number they were given. */
 export function FormNumberEditor({ formKey, compact = false }: { formKey: string; compact?: boolean }) {
   const user = useCurrentUser();
@@ -196,7 +183,7 @@ export function FormNumberEditor({ formKey, compact = false }: { formKey: string
 }
 
 /** Pick any Documents folder for this filled copy. The subject folder starts selected. */
-export function RecordFolderField({ formKey, recordId }: { formKey: string; recordId: number }) {
+export function RecordFolderField({ formKey, recordId, prepare }: { formKey: string; recordId: number; prepare?: () => Promise<unknown> | unknown }) {
   const canEdit = useCanControlDocuments();
   const queryClient = useQueryClient();
   const filing = useFormFiling(formKey, recordId);
@@ -208,6 +195,7 @@ export function RecordFolderField({ formKey, recordId }: { formKey: string; reco
   const [selected, setSelected] = useState<number | "">("");
   const [synced, setSynced] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const signature = `${filing.data?.parentId ?? ""}:${filing.data?.suggestedFolderId ?? ""}`;
 
   useEffect(() => {
@@ -221,8 +209,11 @@ export function RecordFolderField({ formKey, recordId }: { formKey: string; reco
   const file = useMutation({
     mutationFn: async (folderId: number) =>
       (await apiClient.post<FormFilingView>("/document-folders/form-filings", { formKey, recordId, folderId })).data,
-    onSuccess: async () => {
+    onSuccess: async (_saved, folderId) => {
       setMessage(null);
+      setPickerOpen(false);
+      rememberFolderChoice(queryClient, formKey, recordId, folderId);
+      setSelected(folderId);
       await queryClient.invalidateQueries({ queryKey: ["form-filing", formKey, recordId] });
       await queryClient.invalidateQueries({ queryKey: ["document-folders"] });
     },
@@ -231,32 +222,17 @@ export function RecordFolderField({ formKey, recordId }: { formKey: string; reco
 
   if (!FILEABLE_FORM_KEYS.has(formKey)) return null;
 
-  const choices = folderChoices(folders.data ?? [], filing.data?.folderNodeId ?? null);
   const filed = (filing.data?.parentPath.length ?? 0) > 0;
-  const samePlace = filed && selected === filing.data?.parentId;
+  const tree = (folders.data ?? []).map((folder) => ({ ...folder, sortOrder: folder.sortOrder ?? 0 }));
 
   return (
     <div className="no-print flex flex-col gap-1" data-testid="folder-destination">
-      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-        Save to folder
+      <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+        Save as
         {canEdit ? (
-          <select
-            aria-label="Save to folder"
-            value={selected}
-            onChange={(event) => {
-              const next = event.target.value === "" ? "" : Number(event.target.value);
-              setSelected(next);
-              rememberFolderChoice(queryClient, formKey, recordId, next);
-            }}
-            className="max-w-xl rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
-          >
-            <option value="">Choose a folder</option>
-            {choices.map((choice) => (
-              <option key={choice.id} value={choice.id}>
-                {choice.label}
-              </option>
-            ))}
-          </select>
+          <button type="button" data-testid="save-as" onClick={() => setPickerOpen(true)} className="w-fit rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:bg-muted">
+            Save as
+          </button>
         ) : (
           <span className="text-sm text-foreground">
             {filed && filing.data?.parentId != null ? (
@@ -268,7 +244,26 @@ export function RecordFolderField({ formKey, recordId }: { formKey: string; reco
             )}
           </span>
         )}
-      </label>
+      </div>
+      {pickerOpen && canEdit && (
+        <SaveAsFolderDialog
+          folders={tree}
+          selectedId={selected}
+          pending={file.isPending}
+          onClose={() => setPickerOpen(false)}
+          onSave={(folderId) => {
+            setMessage(null);
+            void (async () => {
+              try {
+                if (prepare) await prepare();
+                file.mutate(folderId);
+              } catch {
+                setMessage("Couldn't file this record.");
+              }
+            })();
+          }}
+        />
+      )}
       {filing.data && filing.data.suggestedPath.length > 0 && (
         <p className="text-xs text-muted-foreground">Suggested: {filing.data.suggestedPath.join(" / ")}</p>
       )}
@@ -285,23 +280,7 @@ export function RecordFolderField({ formKey, recordId }: { formKey: string; reco
           </Link>
         </p>
       )}
-      {canEdit && (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={file.isPending || selected === "" || samePlace}
-            onClick={() => {
-              if (selected === "") return;
-              setMessage(null);
-              file.mutate(selected);
-            }}
-            className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-60"
-          >
-            {file.isPending ? "Saving…" : filed ? "Move" : "File here"}
-          </button>
-          <span className="text-xs text-muted-foreground">Pick any Documents folder. You can move it later. One copy stays in the folder you pick.</span>
-        </div>
-      )}
+      {canEdit && <p className="text-xs text-muted-foreground">Save as files this copy in the folder you pick. The blank stays reusable.</p>}
       {message === "Couldn't file this record." && <p className="text-xs text-destructive">{message}</p>}
     </div>
   );

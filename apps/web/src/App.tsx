@@ -34,6 +34,7 @@ import {
   AiInsightsPage,
   AuditDetailPage,
   AuditsPage,
+  BlankFormsPage,
   CalendarPage,
   CapaDetailPage,
   CapaListPage,
@@ -129,6 +130,7 @@ export function App() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomeRoute />} />
           <Route path="/home" element={<HomePage />} />
+          <Route path="/blank-forms" element={<BlankFormsPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/audit-log" element={<AuditLogPage />} />
 

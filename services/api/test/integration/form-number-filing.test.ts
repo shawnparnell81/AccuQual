@@ -97,8 +97,11 @@ describe("editable form numbers and folder filing", () => {
       const made = await request(app).post("/document-folders").set("Authorization", `Bearer ${qualityToken}`).send({ name: "Customer Quality", parentId: quality!.id });
       customer = made.body;
     }
+    const productAlerts = folders.find((folder) => folder.parentId === quality?.id && folder.name === "Product Alerts");
+    expect(productAlerts?.id).toBeTruthy();
     const suggested = await request(app).get(`/document-folders/form-filings?formKey=frm-qa-001&recordId=${created.body.id}`).set("Authorization", `Bearer ${qualityToken}`);
-    expect(suggested.body.suggestedFolderId).toBe(customer!.id);
+    expect(suggested.body.suggestedFolderId).toBe(productAlerts!.id);
+    expect(suggested.body.suggestedPath).toEqual(["Quality", "Product Alerts"]);
 
     const iso = folders.find((folder) => folder.parentId === null && folder.name === "ISO Compliance Documents");
     expect(iso?.id).toBeTruthy();

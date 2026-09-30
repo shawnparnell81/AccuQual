@@ -303,7 +303,7 @@ function IsoFormDetailBody({
                 Filled records
               </Link>
             </p>
-            {formKey && <RecordFolderField formKey={formKey} recordId={recordId} />}
+            {formKey && <RecordFolderField formKey={formKey} recordId={recordId} prepare={onSave} />}
           </div>
           <div className="flex items-center gap-2">
             <DeleteRecordButton resource="iso-quality-forms" id={recordId} kind={meta.title} title={summary || null} navigateTo={`/iso-forms/${meta.formKey}`} />

@@ -18,6 +18,7 @@ import { loadOfficeActor } from "../onlyoffice/access.js";
 import { onlyOfficeSettings } from "../onlyoffice/settings.js";
 import { signOfficeToken } from "../onlyoffice/token.js";
 import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
+import { ensureCompanyDocumentFolders, FILING_DRAWER_NAMES } from "./companyDocumentFolders.js";
 import { ensureFormTemplates, listFormTemplates } from "./formTemplates.js";
 import { fileFormRecord, filingQuery, getFormFiling, updateFormNumber } from "./formRecordFiling.js";
 import { UPLOAD_TYPE_ERROR, sniffUpload } from "../../utils/fileSniff.js";
@@ -174,7 +175,7 @@ async function ensureAdditionalSubfolders(db: Db, all: (typeof documentFolders.$
  */
 async function linkKnownForms(db: Db, all: (typeof documentFolders.$inferSelect)[]): Promise<void> {
   const hasChildren = new Set(all.map((f) => f.parentId).filter((id): id is number => id !== null));
-  const toLink = all.filter((f) => !hasChildren.has(f.id) && !f.linkedPath && !/procedure/i.test(f.name));
+  const toLink = all.filter((f) => !hasChildren.has(f.id) && !f.linkedPath && !/procedure/i.test(f.name) && !FILING_DRAWER_NAMES.has(f.name));
 
   for (const leaf of toLink) {
     const rule = FORM_LINK_RULES.find((r) => r.pattern.test(leaf.name));
@@ -239,7 +240,8 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     await seedDefaults(db);
     const seeded = await db.select().from(documentFolders);
     const pool = await ensureLibraryPool(db, seeded);
-    const all = await ensureAdditionalSubfolders(db, [...seeded, pool]);
+    const added = await ensureAdditionalSubfolders(db, [...seeded, pool]);
+    const all = await ensureCompanyDocumentFolders(db, added);
     await linkKnownForms(db, all);
     await ensureFormTemplates(db);
     const fresh = await db.select().from(documentFolders);
@@ -249,7 +251,8 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
   const pool = await ensureLibraryPool(db, existing);
   const alreadyIncluded = existing.some((f) => f.id === pool.id);
   const withPool = alreadyIncluded ? existing : [...existing, pool];
-  const all = await ensureAdditionalSubfolders(db, withPool);
+  const added = await ensureAdditionalSubfolders(db, withPool);
+  const all = await ensureCompanyDocumentFolders(db, added);
   await linkKnownForms(db, all);
   await ensureFormTemplates(db);
   const fresh = await db.select().from(documentFolders);
