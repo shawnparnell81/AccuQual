@@ -53,9 +53,11 @@ describe("theme contrast", () => {
 
   it("lets workbook cells keep the color they set on a status fill", () => {
     const css = readFileSync(join(srcRoot, "routes/ValidationReports/validationReport.css"), "utf8");
-    assert.match(css, /\.csa input\.csa-in[\s\S]*?color:\s*inherit/);
-    assert.match(css, /\.fp input\.fp-in[\s\S]*?color:\s*inherit/);
-    assert.match(css, /\.csa \.section \{\s*background:\s*var\(--form-bar/);
-    assert.match(css, /color:\s*var\(--form-bar-foreground/);
+    assert.match(css, /\.csa-cell input\.csa-in[\s\S]*?color:\s*inherit/);
+    assert.match(css, /\.fp-cell input\.fp-in[\s\S]*?color:\s*inherit/);
+    assert.match(css, /\.csa-cell\.section[\s\S]*?background:\s*var\(--form-bar/);
+    assert.match(css, /\.fp-cell\.section[\s\S]*?background:\s*var\(--form-bar/);
+    assert.match(css, /\.csa-cell\.section[\s\S]*?color:\s*var\(--form-bar-foreground/);
+    assert.match(css, /\.fp-cell\.section[\s\S]*?color:\s*var\(--form-bar-foreground/);
   });
 });
