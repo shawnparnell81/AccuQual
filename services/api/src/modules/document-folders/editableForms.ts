@@ -40,6 +40,16 @@ export const FILEABLE_FORM_KEYS = new Set<string>([
   "frm-gen-002",
   "lst-vis-001",
   "rpt-eng-001",
+  "frm-trp-001",
+  "frm-trp-002",
+  "frm-tst-001",
+  "frm-tst-002",
+  "frm-dev-001",
+  "frm-dev-002",
+  "frm-dev-003",
+  "frm-dev-004",
+  "frm-dev-005",
+  "frm-car-001",
 ]);
 
 /** ISO form_type -> blank-template key. Only the six records stored on iso_quality_forms. */
@@ -53,6 +63,16 @@ export const ISO_TYPE_TO_FORM_KEY: Record<string, string> = {
   audit_summary: "frm-gen-002",
   visitor_log: "lst-vis-001",
   monthly_engineering: "rpt-eng-001",
+  salt_spray: "frm-trp-002",
+  volume_water: "frm-tst-001",
+  volume_heptane: "frm-tst-002",
+  prototype_strut: "frm-trp-001",
+  dev_csa: "frm-dev-001",
+  dev_fuel_pump: "frm-dev-002",
+  dev_gas_lift: "frm-dev-003",
+  dev_coil: "frm-dev-004",
+  dev_air_spring: "frm-dev-005",
+  scar_request: "frm-car-001",
 };
 
 export const FORM_DATA_TYPE_TO_FORM_KEY: Record<string, string> = {
@@ -88,6 +108,16 @@ export const SUGGESTED_SUBJECT_PATH: Record<string, string[]> = {
   "frm-gen-002": ["Quality", "Audits", "Internal Audit Reports"],
   "lst-vis-001": ["Quality", "Records", "Inspection Records"],
   "rpt-eng-001": ["Engineering", "Technical Records"],
+  "frm-trp-002": ["Quality", "Records", "Inspection Records"],
+  "frm-tst-001": ["Engineering", "Technical Records"],
+  "frm-tst-002": ["Engineering", "Technical Records"],
+  "frm-trp-001": ["Engineering", "Design & Development", "Design Validation"],
+  "frm-dev-001": ["Engineering", "Design & Development"],
+  "frm-dev-002": ["Engineering", "Design & Development"],
+  "frm-dev-003": ["Engineering", "Design & Development"],
+  "frm-dev-004": ["Engineering", "Design & Development"],
+  "frm-dev-005": ["Engineering", "Design & Development"],
+  "frm-car-001": ["Quality", "Corrective & Preventive Actions"],
 };
 
 export type ValidationKind =

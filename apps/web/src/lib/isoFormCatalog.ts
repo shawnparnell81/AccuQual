@@ -18,6 +18,16 @@ export const ISO_FORM_TYPES = [
   "audit_summary",
   "visitor_log",
   "monthly_engineering",
+  "salt_spray",
+  "volume_water",
+  "volume_heptane",
+  "prototype_strut",
+  "dev_csa",
+  "dev_fuel_pump",
+  "dev_gas_lift",
+  "dev_coil",
+  "dev_air_spring",
+  "scar_request",
 ] as const;
 export type IsoFormType = (typeof ISO_FORM_TYPES)[number];
 
@@ -47,6 +57,16 @@ export const ISO_FORMS: IsoFormMeta[] = [
   { formKey: "frm-gen-002", formType: "audit_summary", formId: "", title: "Internal Audit Summary Report", rev: "A", layout: auditSummaryLayout(), photos: false },
   { formKey: "lst-vis-001", formType: "visitor_log", formId: "", title: "DMA Laboratory Visitor Log", rev: "A", layout: null, photos: false },
   { formKey: "rpt-eng-001", formType: "monthly_engineering", formId: "", title: "Monthly Engineering Development Report", rev: "A", layout: null, photos: false },
+  { formKey: "frm-trp-002", formType: "salt_spray", formId: "", title: "Salt Spray Test Report (ASTM B117)", rev: "A", layout: null, photos: false },
+  { formKey: "frm-tst-001", formType: "volume_water", formId: "", title: "ASTM E542 Volume Calculator (Water)", rev: "A", layout: null, photos: false },
+  { formKey: "frm-tst-002", formType: "volume_heptane", formId: "", title: "ASTM E542 Volume Calculator (n-Heptane)", rev: "A", layout: null, photos: false },
+  { formKey: "frm-trp-001", formType: "prototype_strut", formId: "", title: "Prototype Evaluation Report (Strut Assembly)", rev: "A", layout: null, photos: false },
+  { formKey: "frm-dev-001", formType: "dev_csa", formId: "", title: "CSA Development Document", rev: "A", layout: null, photos: false },
+  { formKey: "frm-dev-002", formType: "dev_fuel_pump", formId: "", title: "Fuel Pump Development Document", rev: "A", layout: null, photos: false },
+  { formKey: "frm-dev-003", formType: "dev_gas_lift", formId: "", title: "Gas Lift Support Development Document", rev: "B", layout: null, photos: false },
+  { formKey: "frm-dev-004", formType: "dev_coil", formId: "", title: "Coil Spring Development Document", rev: "A", layout: null, photos: false },
+  { formKey: "frm-dev-005", formType: "dev_air_spring", formId: "", title: "Air Spring Development Document", rev: "A", layout: null, photos: false },
+  { formKey: "frm-car-001", formType: "scar_request", formId: "", title: "Supplier Corrective Action Request (SCAR)", rev: "A", layout: null, photos: false },
 ];
 
 export function formByKey(formKey: string | undefined): IsoFormMeta | undefined {

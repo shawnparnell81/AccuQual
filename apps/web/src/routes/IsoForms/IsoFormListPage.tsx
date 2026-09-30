@@ -5,6 +5,7 @@ import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { formatDate } from "../../lib/dates";
 import { auditSummaryStarter } from "../../lib/auditSummary";
+import { blankBatch4, isBatch4, summaryBatch4 } from "../../lib/batch4Reports";
 import { monthlyStarter } from "../../lib/monthlyEngineeringReport";
 import { visitorStarter, visitorSummary } from "../../lib/visitorLog";
 import { formByKey, type IsoFormType } from "../../lib/isoFormCatalog";
@@ -53,6 +54,7 @@ function summary(formType: IsoFormType, data: IsoQualityForm["data"]): string {
   if (formType === "audit_summary") return showCell(cells.D5) || showCell(cells.B6) || showCell(cells.B7);
   if (formType === "visitor_log") return visitorSummary(cells);
   if (formType === "monthly_engineering") return showCell(cells.period) || showCell(cells.prep);
+  if (isBatch4(formType)) return summaryBatch4(formType, cells);
   return "";
 }
 
@@ -82,7 +84,7 @@ export function IsoFormListPage() {
 
   function start() {
     setPending(true);
-    const cells = form.formType === "internal_audit" ? { F3: "Quality & Engineering" } : form.formType === "audit_summary" ? auditSummaryStarter() : form.formType === "visitor_log" ? visitorStarter() : form.formType === "monthly_engineering" ? monthlyStarter() : {};
+    const cells = form.formType === "internal_audit" ? { F3: "Quality & Engineering" } : form.formType === "audit_summary" ? auditSummaryStarter() : form.formType === "visitor_log" ? visitorStarter() : form.formType === "monthly_engineering" ? monthlyStarter() : isBatch4(form.formType) ? blankBatch4(form.formType) : {};
     createForm.mutate({ formType: form.formType, data: { cells } } as never, {
       onSuccess: (created) => navigate(`/iso-forms/record/${created.id}`),
       onSettled: () => setPending(false),

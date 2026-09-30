@@ -37,6 +37,16 @@ export const FILEABLE_FORM_KEYS = new Set<string>([
   "frm-gen-002",
   "lst-vis-001",
   "rpt-eng-001",
+  "frm-trp-001",
+  "frm-trp-002",
+  "frm-tst-001",
+  "frm-tst-002",
+  "frm-dev-001",
+  "frm-dev-002",
+  "frm-dev-003",
+  "frm-dev-004",
+  "frm-dev-005",
+  "frm-car-001",
 ]);
 
 export const FORM_KEY_BY_TYPE: Record<string, string> = {
@@ -51,6 +61,16 @@ export const FORM_KEY_BY_TYPE: Record<string, string> = {
   audit_summary: "frm-gen-002",
   visitor_log: "lst-vis-001",
   monthly_engineering: "rpt-eng-001",
+  salt_spray: "frm-trp-002",
+  volume_water: "frm-tst-001",
+  volume_heptane: "frm-tst-002",
+  prototype_strut: "frm-trp-001",
+  dev_csa: "frm-dev-001",
+  dev_fuel_pump: "frm-dev-002",
+  dev_gas_lift: "frm-dev-003",
+  dev_coil: "frm-dev-004",
+  dev_air_spring: "frm-dev-005",
+  scar_request: "frm-car-001",
 };
 
 /** Print and sheet header. A blank number stays a revision with no document id. */

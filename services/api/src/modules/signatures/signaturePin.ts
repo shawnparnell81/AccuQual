@@ -15,6 +15,8 @@ export const SIGNATURE_FIELD_KEYS = new Set([
   "qaLeadSignature",
   "preparedSignature",
   "approvedSignature",
+  "testedSignature",
+  "managerSignature",
   "engineeringSignoffSignature",
   "qualitySignoffSignature",
   "manufacturingSignoffSignature",

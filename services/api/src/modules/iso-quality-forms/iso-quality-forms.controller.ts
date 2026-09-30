@@ -41,14 +41,27 @@ export const baseHandlers = crudFactory(isoQualityForms, {
   },
 });
 
+const FORM_SIGNATURES: Record<string, Record<string, string>> = {
+  audit_summary: AUDIT_SIGNATURES,
+  salt_spray: {
+    testedSignature: "I certify that I performed this salt spray test and the record is accurate.",
+    approvedSignature: "I certify that I approve this salt spray test report.",
+  },
+  prototype_strut: {
+    engineeringSignoffSignature: "I certify that I approve this prototype evaluation.",
+  },
+  scar_request: {
+    managerSignature: "I certify that I verified this supplier corrective action request.",
+  },
+};
+
 export const signIsoQualityForm = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
   const field = String(req.body.field ?? "");
-  const description = AUDIT_SIGNATURES[field];
-  if (!description) throw AppError.badRequest("That signature field is not recognized.");
   const [record] = await req.db!.select().from(isoQualityForms).where(eq(isoQualityForms.id, id));
   if (!record) throw AppError.notFound("ISO form");
-  if (record.formType !== "audit_summary") throw AppError.badRequest("This form has no signature block.");
+  const description = FORM_SIGNATURES[record.formType]?.[field];
+  if (!description) throw AppError.badRequest("That signature field is not recognized.");
   const previous = asRecord(record.data);
   const current = previous[field];
   if (typeof current === "string" && current.trim()) throw AppError.badRequest("This signature is already recorded.");

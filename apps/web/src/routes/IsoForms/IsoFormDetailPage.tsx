@@ -13,11 +13,13 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { FORM_KEY_BY_TYPE, instanceRevision, revisionLabel } from "../../lib/formDocument";
 import { auditScore, auditSignatures } from "../../lib/auditSummary";
+import { isBatch4, summaryBatch4 } from "../../lib/batch4Reports";
 import { formByType, type IsoFormType } from "../../lib/isoFormCatalog";
 import { EXCLUSIVE_CHECKS } from "../../lib/isoFormLayouts";
 import { showCell, quarantineTotal, type CellValue } from "../../lib/isoFormLogic";
 import { QUALITY_EXCLUSIVE_CHECKS } from "../../lib/qualitySheetLayouts";
 import { plusDays, type FailureRow, type FaiLine, type ScorecardRow } from "../../lib/qualitySheetLogic";
+import { Batch4Sheet } from "./Batch4Sheet";
 import { MonthlyEngineeringSheet } from "./MonthlyEngineeringSheet";
 import { VisitorLogSheet } from "./VisitorLogSheet";
 import { CrossTrainingSheet } from "./CrossTrainingSheet";
@@ -143,7 +145,7 @@ export function IsoFormDetailPage() {
     await updateRecord.mutateAsync({ id: recordId, data: payload() });
   }
 
-  const summary = showCell(cells.D5) || showCell(cells.B6) || showCell(cells.B3) || showCell(cells.B5) || showCell(cells.D2) || showCell(cells.F3) || showCell(cells.D4);
+  const summary = isBatch4(formType) ? summaryBatch4(formType, cells) : showCell(cells.D5) || showCell(cells.B6) || showCell(cells.B3) || showCell(cells.B5) || showCell(cells.D2) || showCell(cells.F3) || showCell(cells.D4);
   const formKey = FORM_KEY_BY_TYPE[formType] ?? null;
   const signatures = formType === "audit_summary" ? auditSignatures(record.data) : {};
 
@@ -178,9 +180,15 @@ export function IsoFormDetailPage() {
       setMonths={setMonths}
       recordId={recordId}
       signatures={signatures}
-      onSign={formType === "audit_summary" ? signField : undefined}
+      onSign={formType === "audit_summary" || isBatch4(formType) ? signField : undefined}
     />
   );
+}
+
+function signatureText(data: unknown, field: string): string {
+  if (!data || typeof data !== "object") return "";
+  const value = (data as Record<string, unknown>)[field];
+  return typeof value === "string" ? value : "";
 }
 
 function IsoFormDetailBody({
@@ -321,6 +329,18 @@ function IsoFormDetailBody({
           <VisitorLogSheet cells={cells} readOnly={!canEdit} onChange={changeCell} documentNumber={documentNumber} revision={revision} />
         ) : formType === "monthly_engineering" ? (
           <MonthlyEngineeringSheet cells={cells} readOnly={!canEdit} onChange={changeCell} revision={revision} />
+        ) : isBatch4(formType) ? (
+          <Batch4Sheet
+            variant={formType}
+            cells={cells}
+            readOnly={!canEdit}
+            onChange={changeCell}
+            documentNumber={documentNumber}
+            revision={revision}
+            testedSignature={signatureText(record.data, "testedSignature")}
+            approvedSignature={signatureText(record.data, formType === "prototype_strut" ? "engineeringSignoffSignature" : formType === "scar_request" ? "managerSignature" : "approvedSignature")}
+            onSign={onSign}
+          />
         ) : formType === "first_article" ? (
           <FaiSheet cells={cells} lines={lines} readOnly={!canEdit} onCell={changeCell} onLines={setLines} documentNumber={documentNumber} revision={revision} />
         ) : formType === "customer_scorecard" ? (

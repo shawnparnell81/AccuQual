@@ -113,6 +113,15 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
       { key: "frm-psw-001", label: "Part Submission Warrant", path: "/iso-forms/frm-psw-001", icon: ClipboardList },
       { key: "frm-prc-001", label: "Turtle Diagram", path: "/iso-forms/frm-prc-001", icon: FileText },
       { key: "rpt-eng-001", label: "Monthly Engineering Development Report", path: "/iso-forms/rpt-eng-001", icon: FileText },
+      { key: "frm-trp-002", label: "Salt Spray Test Report (ASTM B117)", path: "/iso-forms/frm-trp-002", icon: FileText },
+      { key: "frm-tst-001", label: "ASTM E542 Volume Calculator (Water)", path: "/iso-forms/frm-tst-001", icon: FileText },
+      { key: "frm-tst-002", label: "ASTM E542 Volume Calculator (n-Heptane)", path: "/iso-forms/frm-tst-002", icon: FileText },
+      { key: "frm-trp-001", label: "Prototype Evaluation Report (Strut Assembly)", path: "/iso-forms/frm-trp-001", icon: FileText },
+      { key: "frm-dev-001", label: "CSA Development Document", path: "/iso-forms/frm-dev-001", icon: FileText },
+      { key: "frm-dev-002", label: "Fuel Pump Development Document", path: "/iso-forms/frm-dev-002", icon: FileText },
+      { key: "frm-dev-003", label: "Gas Lift Support Development Document", path: "/iso-forms/frm-dev-003", icon: FileText },
+      { key: "frm-dev-004", label: "Coil Spring Development Document", path: "/iso-forms/frm-dev-004", icon: FileText },
+      { key: "frm-dev-005", label: "Air Spring Development Document", path: "/iso-forms/frm-dev-005", icon: FileText },
       { key: "fmea", label: "FMEA", path: "/risk", icon: ShieldAlert },
       { key: "risk-dashboard", label: "Risk dashboard", path: "/risk/dashboard", icon: BarChart3 },
       doc("ecn", GitBranch),
@@ -194,6 +203,7 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
         children: [
           { key: "supplier_portal", label: "Supplier Portal", path: "/supplier-portal", icon: Building2 },
           { key: "scar", label: "SCAR", path: "/scar-forms", icon: ClipboardList },
+          { key: "frm-car-001", label: "Supplier Corrective Action Request", path: "/iso-forms/frm-car-001", icon: ClipboardList },
         ],
       },
       {

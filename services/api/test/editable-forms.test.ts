@@ -74,6 +74,11 @@ describe("new blank forms", () => {
     expect(validationKind({ formType: "electric_lift" })).toBe("electric_lift");
     expect(recordLinkedPath("frm-val-002", 13)).toBe("/validation-reports/13");
     expect(FILEABLE_FORM_KEYS.has("frm-val-006")).toBe(true);
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-dev-001")).toMatchObject({ formId: "", title: "CSA Development Document" });
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-car-001")?.title).toBe("Supplier Corrective Action Request (SCAR)");
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-ncr-003")?.title).toBe("Concession / Deviation Request");
+    expect(recordLinkedPath("frm-tst-001", 19)).toBe("/iso-forms/record/19");
+    expect(FILEABLE_FORM_KEYS.has("frm-trp-002")).toBe(true);
     expect(FORM_TEMPLATES.find((form) => form.formKey === "lst-vis-001")?.title).toBe("DMA Laboratory Visitor Log");
     expect(FORM_TEMPLATES.find((form) => form.formKey === "rpt-eng-001")?.title).toBe("Monthly Engineering Development Report");
   });

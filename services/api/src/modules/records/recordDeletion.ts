@@ -698,6 +698,16 @@ const ISO_FORM_LABELS: Record<string, string> = {
   audit_summary: "Internal Audit Summary Report",
   visitor_log: "DMA Laboratory Visitor Log",
   monthly_engineering: "Monthly Engineering Development Report",
+  salt_spray: "Salt Spray Test Report (ASTM B117)",
+  volume_water: "ASTM E542 Volume Calculator (Water)",
+  volume_heptane: "ASTM E542 Volume Calculator (n-Heptane)",
+  prototype_strut: "Prototype Evaluation Report (Strut Assembly)",
+  dev_csa: "CSA Development Document",
+  dev_fuel_pump: "Fuel Pump Development Document",
+  dev_gas_lift: "Gas Lift Support Development Document",
+  dev_coil: "Coil Spring Development Document",
+  dev_air_spring: "Air Spring Development Document",
+  scar_request: "Supplier Corrective Action Request (SCAR)",
 };
 
 function isoFormTitle(row: Row): string | null {
