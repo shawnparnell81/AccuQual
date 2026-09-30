@@ -7,7 +7,7 @@ import { users } from "../drizzle/schema/users.js";
 import { enrichRequestContext } from "../modules/monitoring/requestContext.js";
 import { touchSessionActivity } from "../modules/auth/sessionActivity.js";
 import { env } from "../config/env.js";
-import { missingPinBlocks } from "../modules/signatures/signaturePin.js";
+import { missingPinBlocks } from "../modules/signatures/signaturePinGate.js";
 
 export interface AuthenticatedUser {
   id: number;

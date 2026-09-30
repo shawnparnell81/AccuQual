@@ -28,8 +28,7 @@ const DATE_SIBLING: Record<string, string> = {
   signatureTitle: "signatureDate",
 };
 
-/** Routes still available after sign-in when a signature PIN has not been set. */
-export const PIN_SETUP_PATHS = new Set(["/auth/signature-pin", "/auth/logout", "/auth/me", "/auth/change-password"]);
+export { PIN_SETUP_PATHS, missingPinBlocks } from "./signaturePinGate.js";
 
 export const PIN_MAX_ATTEMPTS = 5;
 export const PIN_LOCK_MS = 15 * 60 * 1000;
@@ -69,11 +68,6 @@ export function registerPinFailure(state: PinAttemptState, now: Date): PinAttemp
     return { count: 0, lockedUntil: new Date(now.getTime() + PIN_LOCK_MS), justLocked: true };
   }
   return { count, lockedUntil: null, justLocked: false };
-}
-
-export function missingPinBlocks(pinSet: boolean, path: string, enforce: boolean): boolean {
-  if (!enforce || pinSet) return false;
-  return !PIN_SETUP_PATHS.has(path);
 }
 
 /** Display name plus the date and time in the company timezone. */
