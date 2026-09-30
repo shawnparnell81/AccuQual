@@ -63,6 +63,9 @@ history below), the modules themselves are the source of truth:
   access level.
 - **Which modules use the generic Workflow Engine vs. their own
   hand-coded state machine**: `accuqual-workflow-architecture.md`.
+- **Living product notes** (keep these current until the app build is
+  nearly complete): `docs/product/AccuQual-Product-Overview.md` and
+  `docs/product/AccuQual-UI-UX.md`.
 
 ## One company — how data access works
 

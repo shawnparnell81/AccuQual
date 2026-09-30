@@ -1,9 +1,14 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
-import { EDITABLE_FORM_KEYS, canEditFormNumber } from "../../lib/formDocument";
+import { EDITABLE_FORM_KEYS, FILEABLE_FORM_KEYS, canEditFormNumber } from "../../lib/formDocument";
+import { documentsFolderHref, filingLocation, type FiledLocation } from "../../lib/folderBrowse";
+
+export type { FiledLocation };
+export type SaveResultState = FiledLocation | "saved" | "unfiled" | "error" | "file-error" | null;
 
 interface FolderRow {
   id: number;
@@ -33,21 +38,59 @@ export function rememberFolderChoice(queryClient: QueryClient, formKey: string, 
   queryClient.setQueryData(folderChoiceKey(formKey, recordId), folderId);
 }
 
+function locationOf(view: FormFilingView): FiledLocation | null {
+  return filingLocation(view.parentId, view.parentPath, view.fileName);
+}
+
 /**
  * Files this filled copy in the folder currently chosen. A cleared choice does not fall back to the suggestion.
- * Returns the folder path when the copy is already there or was just filed.
+ * Returns the folder so the save message can open it. Null when no folder is chosen.
  */
-export async function fileChosenFolder(queryClient: QueryClient, formKey: string, recordId: number): Promise<string | null> {
+export async function fileChosenFolder(queryClient: QueryClient, formKey: string, recordId: number): Promise<FiledLocation | null> {
   const stored = queryClient.getQueryData<number | "">(folderChoiceKey(formKey, recordId));
-  const current = queryClient.getQueryData<FormFilingView>(["form-filing", formKey, recordId]);
+  let current = queryClient.getQueryData<FormFilingView>(["form-filing", formKey, recordId]);
+  if (!current && FILEABLE_FORM_KEYS.has(formKey)) {
+    current = (await apiClient.get<FormFilingView>("/document-folders/form-filings", { params: { formKey, recordId } })).data;
+    queryClient.setQueryData(["form-filing", formKey, recordId], current);
+  }
   const folderId = typeof stored === "number" ? stored : stored === "" ? null : (current?.parentId ?? current?.suggestedFolderId ?? null);
   if (folderId == null) return null;
-  if (current?.parentId === folderId) return current.parentPath.join(" / ");
+  if (current?.parentId === folderId) return locationOf(current);
   const saved = (await apiClient.post<FormFilingView>("/document-folders/form-filings", { formKey, recordId, folderId })).data;
   queryClient.setQueryData(["form-filing", formKey, recordId], saved);
   await queryClient.invalidateQueries({ queryKey: ["form-filing", formKey, recordId] });
   await queryClient.invalidateQueries({ queryKey: ["document-folders"] });
-  return saved.parentPath.join(" / ");
+  return locationOf(saved);
+}
+
+/** The line under Save: the folder path opens that folder in Documents. */
+export function SaveResult({ result }: { result: SaveResultState }) {
+  if (result == null) return null;
+  if (result === "saved") return <span className="text-xs text-muted-foreground">Saved</span>;
+  if (result === "error") return <span className="text-xs text-destructive">Couldn't save this form.</span>;
+  if (result === "file-error") {
+    return <span className="text-xs text-destructive">The form was saved, but it could not be filed in that folder.</span>;
+  }
+  if (result === "unfiled") {
+    return (
+      <span className="text-xs text-muted-foreground" data-testid="save-location">
+        Saved. Choose a folder to file this copy.
+      </span>
+    );
+  }
+  const href = documentsFolderHref(result.folderId);
+  return (
+    <span className="text-xs text-muted-foreground" data-testid="save-location">
+      Saved in{" "}
+      <Link to={href} className="text-primary hover:underline">
+        {result.path}
+      </Link>
+      {" · "}
+      <Link to={href} className="text-primary hover:underline">
+        Open folder
+      </Link>
+    </span>
+  );
 }
 
 function useCanControlDocuments() {
@@ -60,7 +103,7 @@ function useCanControlDocuments() {
 export function useFormFiling(formKey: string | null, recordId: number) {
   return useQuery({
     queryKey: ["form-filing", formKey, recordId],
-    enabled: !!formKey && EDITABLE_FORM_KEYS.has(formKey) && recordId > 0,
+    enabled: !!formKey && FILEABLE_FORM_KEYS.has(formKey) && recordId > 0,
     queryFn: async () =>
       (await apiClient.get<FormFilingView>("/document-folders/form-filings", { params: { formKey, recordId } })).data,
   });
@@ -160,7 +203,7 @@ export function RecordFolderField({ formKey, recordId }: { formKey: string; reco
   const folders = useQuery({
     queryKey: ["document-folders"],
     queryFn: async () => (await apiClient.get<FolderRow[]>("/document-folders")).data,
-    enabled: EDITABLE_FORM_KEYS.has(formKey),
+    enabled: FILEABLE_FORM_KEYS.has(formKey),
   });
   const [selected, setSelected] = useState<number | "">("");
   const [synced, setSynced] = useState("");
@@ -178,15 +221,15 @@ export function RecordFolderField({ formKey, recordId }: { formKey: string; reco
   const file = useMutation({
     mutationFn: async (folderId: number) =>
       (await apiClient.post<FormFilingView>("/document-folders/form-filings", { formKey, recordId, folderId })).data,
-    onSuccess: async (saved) => {
-      setMessage(saved.parentPath.length > 0 ? `Filed in ${saved.parentPath.join(" / ")}` : "Filed");
+    onSuccess: async () => {
+      setMessage(null);
       await queryClient.invalidateQueries({ queryKey: ["form-filing", formKey, recordId] });
       await queryClient.invalidateQueries({ queryKey: ["document-folders"] });
     },
     onError: () => setMessage("Couldn't file this record."),
   });
 
-  if (!EDITABLE_FORM_KEYS.has(formKey)) return null;
+  if (!FILEABLE_FORM_KEYS.has(formKey)) return null;
 
   const choices = folderChoices(folders.data ?? [], filing.data?.folderNodeId ?? null);
   const filed = (filing.data?.parentPath.length ?? 0) > 0;
@@ -215,13 +258,33 @@ export function RecordFolderField({ formKey, recordId }: { formKey: string; reco
             ))}
           </select>
         ) : (
-          <span className="text-sm text-foreground">{filed ? filing.data?.parentPath.join(" / ") : "Not filed yet"}</span>
+          <span className="text-sm text-foreground">
+            {filed && filing.data?.parentId != null ? (
+              <Link to={documentsFolderHref(filing.data.parentId)} className="text-primary hover:underline">
+                {filing.data.parentPath.join(" / ")}
+              </Link>
+            ) : (
+              "Not filed yet"
+            )}
+          </span>
         )}
       </label>
       {filing.data && filing.data.suggestedPath.length > 0 && (
         <p className="text-xs text-muted-foreground">Suggested: {filing.data.suggestedPath.join(" / ")}</p>
       )}
-      {filed && <p className="text-xs text-muted-foreground">Filed in {filing.data?.parentPath.join(" / ")}{filing.data?.fileName ? ` · ${filing.data.fileName}` : ""}</p>}
+      {filed && filing.data?.parentId != null && (
+        <p className="text-xs text-muted-foreground">
+          Filed in{" "}
+          <Link to={documentsFolderHref(filing.data.parentId)} className="text-primary hover:underline">
+            {filing.data.parentPath.join(" / ")}
+          </Link>
+          {filing.data.fileName ? ` · ${filing.data.fileName}` : ""}
+          {" · "}
+          <Link to={documentsFolderHref(filing.data.parentId)} className="text-primary hover:underline">
+            Open folder
+          </Link>
+        </p>
+      )}
       {canEdit && (
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -236,10 +299,10 @@ export function RecordFolderField({ formKey, recordId }: { formKey: string; reco
           >
             {file.isPending ? "Saving…" : filed ? "Move" : "File here"}
           </button>
-          <span className="text-xs text-muted-foreground">Pick any Documents folder, including a subject folder or ISO Compliance. You can move it later.</span>
+          <span className="text-xs text-muted-foreground">Pick any Documents folder. You can move it later. One copy stays in the folder you pick.</span>
         </div>
       )}
-      {message && <p className="text-xs text-muted-foreground">{message}</p>}
+      {message === "Couldn't file this record." && <p className="text-xs text-destructive">{message}</p>}
     </div>
   );
 }

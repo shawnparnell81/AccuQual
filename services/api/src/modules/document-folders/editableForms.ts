@@ -20,6 +20,12 @@ export const EDITABLE_FORM_NUMBER_KEYS = new Set([
   "frm-par-001",
 ]);
 
+/**
+ * Filled copies that can be saved into any Documents folder and opened again from there.
+ * CSA Validation and Fuel Pump Validation keep their seeded numbers; they are filed the same way.
+ */
+export const FILEABLE_FORM_KEYS = new Set<string>([...EDITABLE_FORM_NUMBER_KEYS, "frm-val-001", "frm-val-007"]);
+
 /** ISO form_type -> blank-template key. Only the six records stored on iso_quality_forms. */
 export const ISO_TYPE_TO_FORM_KEY: Record<string, string> = {
   psw: "frm-psw-001",
@@ -49,11 +55,14 @@ export const SUGGESTED_SUBJECT_PATH: Record<string, string[]> = {
   "frm-fae-001": ["Quality", "Corrective & Preventive Actions", "Effectiveness Checks"],
   "frm-msa-001": ["Quality", "Calibration & Equipment", "Gage R&R"],
   "frm-par-001": ["Quality", "Production & Inspection", "Pareto Charts"],
+  "frm-val-001": ["Engineering", "Design & Development", "Design Validation"],
+  "frm-val-007": ["Engineering", "Manufacturing Engineering", "Process Validation"],
 };
 
 export function recordLinkedPath(formKey: string, recordId: number): string {
   if (formKey === "frm-msa-001") return `/calibration/${recordId}`;
   if (formKey === "frm-par-001") return "/pareto";
+  if (formKey === "frm-val-001" || formKey === "frm-val-007") return `/validation-reports/${recordId}`;
   return `/iso-forms/record/${recordId}`;
 }
 

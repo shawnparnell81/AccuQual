@@ -59,7 +59,7 @@ export function QmsFormsLibraryPage() {
       <div>
         <h1 className="text-2xl font-semibold">QMS Forms</h1>
         <p className="text-sm text-muted-foreground">
-          Blank templates live in Document Folders under ISO Compliance Documents / Blank Form Templates. Start one here. When you save a filled copy, the subject folder is suggested and you can choose another folder.
+          Blank templates live in Document Folders under ISO Compliance Documents / Blank Form Templates. Start one here. When you save a filled copy, choose a Documents folder. Open folder on the save line takes you there, and the form opens from that folder.
         </p>
       </div>
 

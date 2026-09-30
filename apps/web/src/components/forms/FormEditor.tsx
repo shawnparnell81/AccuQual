@@ -10,7 +10,7 @@ import { PdfViewer } from "./PdfViewer";
 import { getFormLayout } from "./layouts";
 import { GenericFormRenderer } from "./GenericFormRenderer";
 import { getCustomFormComponent } from "./customForms";
-import { fileChosenFolder, FormNumberEditor, RecordFolderField, useFormFiling } from "./FormDocumentControls";
+import { fileChosenFolder, FormNumberEditor, RecordFolderField, SaveResult, useFormFiling, type SaveResultState } from "./FormDocumentControls";
 import { useFormEditorState } from "./useFormEditorState";
 import { ProcessFlowDiagramEditor } from "./processFlowDiagram/ProcessFlowDiagramEditor";
 import { PictureRecordProvider, pictureRecordForForm } from "./pictureRecord";
@@ -29,7 +29,7 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
   const queryClient = useQueryClient();
   const { formData, isLoading, values, updateField, saveNow, isSaving } = useFormEditorState(formType, entityId, windowId);
   const templateQuery = useFormTemplate(formType);
-  const [saveNote, setSaveNote] = useState<string | null>(null);
+  const [saveNote, setSaveNote] = useState<SaveResultState>(null);
   const [pending, setPending] = useState(false);
   const gageFiling = useFormFiling(formType === "gage_rr" ? "frm-msa-001" : null, entityId);
   const gageNumber = gageFiling.data?.snapshotted ? gageFiling.data.formNumber : "";
@@ -79,7 +79,8 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>{`Rev ${formData?.templateRevision ?? templateQuery.data?.templateRevision ?? "A"}`}</span>
-        <span>{isSaving || pending ? "Saving…" : saveNote ?? "Auto-saved"}</span>
+        <span>{isSaving || pending ? "Saving…" : saveNote == null ? "Auto-saved" : ""}</span>
+        <SaveResult result={saveNote} />
         {formType === "gage_rr" && (
           <button
             type="button"
@@ -89,8 +90,8 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
               setSaveNote(null);
               void saveNow()
                 .then(() => fileChosenFolder(queryClient, "frm-msa-001", entityId))
-                .then((path) => setSaveNote(path ? `Saved in ${path}` : "Saved. Choose a folder to file this copy."))
-                .catch(() => setSaveNote("Couldn't save this form."))
+                .then((filed) => setSaveNote(filed ?? "unfiled"))
+                .catch(() => setSaveNote("error"))
                 .finally(() => setPending(false));
             }}
             className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60"
