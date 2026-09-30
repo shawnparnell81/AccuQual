@@ -1,8 +1,8 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import type { Db } from "../../lib/requestDb.js";
-import { BLANK_FORMS_FOLDER, FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, fileNamePatternFor, storedFormId, type FormStart } from "./formFiling.js";
+import { BLANK_FORMS_FOLDER, FILE_NAME_PATTERN, FORM_TEMPLATES, ISO_DOCUMENTS_FOLDER, RETIRED_FORM_KEYS, fileNamePatternFor, storedFormId, type FormStart } from "./formFiling.js";
 
 const PREVIOUS_ISO_ROOT = "ISO Compliance";
 const PREVIOUS_BLANK_FOLDER = "03_Blank_Forms_Templates";
@@ -30,6 +30,9 @@ async function findOrCreateChild(db: Db, parentId: number, name: string) {
  * the first time that topic is created. A folder someone has already moved stays where they put it.
  */
 export async function ensureFormTemplates(db: Db): Promise<void> {
+  if (RETIRED_FORM_KEYS.length > 0) {
+    await db.delete(controlledFormTemplates).where(inArray(controlledFormTemplates.formKey, [...RETIRED_FORM_KEYS]));
+  }
   const all = await db.select().from(documentFolders);
   const byId = new Map(all.map((folder) => [folder.id, folder]));
 
@@ -174,6 +177,7 @@ export async function listFormTemplates(db: Db): Promise<{ fileNamePattern: stri
   const templates = await db.select().from(controlledFormTemplates);
   const folders = await db.select().from(documentFolders);
   const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const liveKeys = new Set(FORM_TEMPLATES.map((seed) => seed.formKey));
   const starts = new Map(FORM_TEMPLATES.map((seed) => [seed.formKey, seed.start]));
   const patterns = new Map(FORM_TEMPLATES.map((seed) => [seed.formKey, fileNamePatternFor(seed)]));
 
@@ -190,6 +194,7 @@ export async function listFormTemplates(db: Db): Promise<{ fileNamePattern: stri
   return {
     fileNamePattern: FILE_NAME_PATTERN,
     templates: templates
+      .filter((template) => liveKeys.has(template.formKey))
       .map((template) => ({
         id: template.id,
         formKey: template.formKey,

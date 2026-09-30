@@ -84,6 +84,12 @@ export const users = pgTable("users", {
   savedViews: jsonb("saved_views").$type<Record<string, { label: string; searchText: string }[]>>().default({}),
   // Per-user bell, email, and daily-digest switches. Missing values mean on.
   notificationPreferences: jsonb("notification_preferences").$type<{ inApp?: boolean; email?: boolean; dailyDigest?: boolean }>().default({ inApp: true, email: true, dailyDigest: true }),
+  // Which shared sidebar items this person hides, and the extra shortcuts they pin.
+  // Null means the shared menu with nothing extra. Company admins still rearrange the shared structure.
+  sidebarShortcuts: jsonb("sidebar_shortcuts").$type<{
+    hidden?: string[];
+    pinned?: { key: string; label: string; path: string }[];
+  } | null>(),
   // Who to escalate this person's overdue or stuck records to. Null means a quality manager.
   managerId: integer("manager_id"),
   createdAt: timestamp("created_at").defaultNow(),

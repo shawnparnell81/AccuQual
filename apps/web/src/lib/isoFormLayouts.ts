@@ -60,8 +60,8 @@ const AUDIT_ROWS: Array<[string, string, string, string]> = [
 
 export function auditLayout(): FormLayout {
   const rows: FormCell[][] = [];
-  rows[1] = [L(1, 6, "A1", "INTERNAL AUDIT CHECKLIST", "title")];
-  rows[2] = [L(1, 1, "A2", "Doc ID:"), { ...L(2, 1, "B2", ""), documentSlot: true }, L(3, 1, "C2", "Rev:", undefined, "center"), L(4, 1, "D2", "A"), L(5, 1, "E2", "Title:"), L(6, 1, "F2", "Internal Audit Checklist")];
+  rows[1] = [L(1, 6, "A1", "AUDIT CHECKLIST", "title")];
+  rows[2] = [L(1, 1, "A2", "Doc ID:"), { ...L(2, 1, "B2", ""), documentSlot: true }, L(3, 1, "C2", "Rev:", undefined, "center"), L(4, 1, "D2", "A"), L(5, 1, "E2", "Title:"), L(6, 1, "F2", "AUDIT CHECKLIST")];
   rows[3] = [L(1, 1, "A3", "Auditor Name:"), I(2, 1, "B3"), L(3, 1, "C3", "Audit Date:", undefined, "center"), D(4, 1, "D3"), L(5, 1, "E3", "Auditee Depts:"), I(6, 1, "F3")];
   rows[4] = [];
   rows[5] = [

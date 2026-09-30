@@ -113,13 +113,16 @@
   accent-color: hsl(var(--primary));
   width: 14px;
   height: 14px;
-  margin: 0 6px 0 0;
+  margin: 0.15em 0 0;
+  flex: 0 0 auto;
 }
 
 .iso .check {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: auto;
+  max-width: 100%;
   text-align: left;
 }
 
@@ -298,7 +301,7 @@
   color: #fff;
   font-weight: 700;
 }
-.dense-log input,
+.dense-log input:not([type="checkbox"]):not([type="radio"]),
 .dense-log textarea,
 .dense-log select {
   width: 100%;

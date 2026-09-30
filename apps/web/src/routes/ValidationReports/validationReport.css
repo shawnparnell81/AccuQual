@@ -178,7 +178,20 @@
   accent-color: hsl(var(--primary));
   width: 14px;
   height: 14px;
-  margin: 0;
+  margin: 0.15em 0 0;
+  flex: 0 0 auto;
+}
+.csa-cell .check,
+.fp-cell .check,
+.insp label,
+.dense-log label {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  justify-content: flex-start;
+  text-align: left;
+  width: auto;
+  max-width: 100%;
 }
 
 @media print {
@@ -225,7 +238,7 @@
   background: #fff3cd;
   font-size: 11px;
 }
-.insp input,
+.insp input:not([type="checkbox"]):not([type="radio"]),
 .insp textarea,
 .insp select {
   width: 100%;

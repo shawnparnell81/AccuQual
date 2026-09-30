@@ -21,7 +21,8 @@ import { isFullAccessRole } from "../roles/roleAccess.js";
 import { decideUserRemoval } from "./userRemoval.js";
 import { loadUserHistory } from "./userLinks.js";
 import { loadOpenWork, reassignOpenWork, type OpenWorkGroup } from "./userOpenWork.js";
-import { deleteUserSchema } from "./users.validation.js";
+import { deleteUserSchema, updateMySidebarShortcutsSchema } from "./users.validation.js";
+import type { z } from "zod";
 import type { Db } from "../../lib/requestDb.js";
 import { omitUserSecrets } from "./publicUser.js";
 
@@ -268,6 +269,46 @@ export const updateMySavedViews = asyncHandler(async (req: Request, res: Respons
     performedBy: req.user?.id,
   });
   res.json(updated.savedViews);
+});
+
+type SidebarShortcutBody = z.infer<typeof updateMySidebarShortcutsSchema>;
+
+function emptySidebarShortcuts(): SidebarShortcutBody {
+  return { hidden: [], pinned: [] };
+}
+
+function normalizeSidebarShortcuts(raw: { hidden?: string[]; pinned?: { key: string; label: string; path: string }[] } | null | undefined): SidebarShortcutBody {
+  const hidden = [...new Set((raw?.hidden ?? []).filter((key) => typeof key === "string" && key.length > 0))];
+  const hiddenSet = new Set(hidden);
+  const seen = new Set<string>();
+  const pinned: SidebarShortcutBody["pinned"] = [];
+  for (const pin of raw?.pinned ?? []) {
+    if (!pin || hiddenSet.has(pin.key) || seen.has(pin.key)) continue;
+    seen.add(pin.key);
+    pinned.push({ key: pin.key, label: pin.label, path: pin.path });
+  }
+  return { hidden, pinned };
+}
+
+/** This person's sidebar shortcuts. Null in the database is the shared menu with nothing pinned. */
+export const getMySidebarShortcuts = asyncHandler(async (req: Request, res: Response) => {
+  const [row] = await req.db!.select({ sidebarShortcuts: users.sidebarShortcuts }).from(users).where(eq(users.id, req.user!.id));
+  res.json(normalizeSidebarShortcuts(row?.sidebarShortcuts ?? emptySidebarShortcuts()));
+});
+
+/** Replaces this person's hidden items and pinned shortcuts. Does not change the company-wide menu arrangement. */
+export const updateMySidebarShortcuts = asyncHandler(async (req: Request, res: Response) => {
+  const next = normalizeSidebarShortcuts(req.body as SidebarShortcutBody);
+  const [updated] = await req.db!.update(users).set({ sidebarShortcuts: next, updatedAt: new Date() }).where(eq(users.id, req.user!.id)).returning({ sidebarShortcuts: users.sidebarShortcuts });
+  if (!updated) throw AppError.notFound("User");
+  await recordAuditTrail(req.db!, {
+    entityType: "User",
+    entityId: req.user!.id,
+    action: "update",
+    changes: { fieldsChanged: ["sidebarShortcuts"] },
+    performedBy: req.user?.id,
+  });
+  res.json(normalizeSidebarShortcuts(updated.sidebarShortcuts));
 });
 
 async function clearSignInRows(db: Db, userId: number) {

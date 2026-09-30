@@ -96,7 +96,7 @@
   white-space: pre-wrap;
 }
 
-.e8-sheet input,
+.e8-sheet input:not([type="checkbox"]):not([type="radio"]),
 .e8-sheet textarea {
   width: 100%;
   min-width: 0;

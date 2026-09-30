@@ -21,6 +21,8 @@ import {
   type SidebarNode,
 } from "./sidebarStructure";
 import { SidebarDragChrome, SidebarOrganizeProvider, SidebarResetButton, useArrangedSidebar, useSidebarOrganize, useSidebarRow } from "./sidebarOrganize";
+import { SidebarShortcutsButton } from "./sidebarShortcutsPanel";
+import { SHORTCUTS_FOLDER_KEY, isPersonalShortcutKey } from "../../lib/sidebarShortcuts";
 import { LayoutDashboard } from "lucide-react";
 import { prefetchRoute } from "../../routes/pages";
 import { DmaLogo, PRODUCT_LINE, ProductLine } from "../brand/DmaLogo";
@@ -59,7 +61,7 @@ export function TopNav() {
   const [query, setQuery] = useState("");
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>(() => readOpenFolders(user?.id));
 
-  const { arranged, folders, isAdmin } = useArrangedSidebar();
+  const { arranged, folders, catalog, isAdmin } = useArrangedSidebar();
   const links = flattenSidebarLinks(folders);
   const needle = query.trim().toLowerCase();
   const searchResults = needle ? links.filter((leaf) => `${leaf.label} ${leaf.key}`.toLowerCase().includes(needle)) : [];
@@ -124,6 +126,7 @@ export function TopNav() {
   function folderOpen(node: SidebarFolder): boolean {
     const stored = openFolders[node.key];
     if (stored !== undefined) return stored;
+    if (node.key === SHORTCUTS_FOLDER_KEY) return true;
     return sidebarNodeContainsPath(node, location.pathname);
   }
 
@@ -190,10 +193,10 @@ export function TopNav() {
       <div className="aq-scrim" onClick={closeSide} />
       {isAdmin ? (
         <SidebarOrganizeProvider arranged={arranged}>
-          <SidebarNav folders={folders} folderOpen={folderOpen} toggleFolder={toggleFolder} closeSide={closeSide} pathname={location.pathname} companyName={company?.name} sideCollapsed={sideCollapsed} toggleCollapsed={toggleCollapsed} />
+          <SidebarNav folders={folders} catalog={catalog} folderOpen={folderOpen} toggleFolder={toggleFolder} closeSide={closeSide} pathname={location.pathname} companyName={company?.name} sideCollapsed={sideCollapsed} toggleCollapsed={toggleCollapsed} />
         </SidebarOrganizeProvider>
       ) : (
-        <SidebarNav folders={folders} folderOpen={folderOpen} toggleFolder={toggleFolder} closeSide={closeSide} pathname={location.pathname} companyName={company?.name} sideCollapsed={sideCollapsed} toggleCollapsed={toggleCollapsed} />
+        <SidebarNav folders={folders} catalog={catalog} folderOpen={folderOpen} toggleFolder={toggleFolder} closeSide={closeSide} pathname={location.pathname} companyName={company?.name} sideCollapsed={sideCollapsed} toggleCollapsed={toggleCollapsed} />
       )}
     </>
   );
@@ -201,6 +204,7 @@ export function TopNav() {
 
 function SidebarNav({
   folders,
+  catalog,
   folderOpen,
   toggleFolder,
   closeSide,
@@ -210,6 +214,7 @@ function SidebarNav({
   toggleCollapsed,
 }: {
   folders: SidebarNode[];
+  catalog: SidebarNode[];
   folderOpen: (node: SidebarFolder) => boolean;
   toggleFolder: (key: string, currentlyOpen: boolean) => void;
   closeSide: () => void;
@@ -244,6 +249,7 @@ function SidebarNav({
           <span className="aq-nav-label">Settings</span>
         </NavLink>
         {companyName && <p className="mt-2 truncate">{companyName}</p>}
+        <SidebarShortcutsButton catalog={catalog} />
         <SidebarResetButton />
         <button type="button" className="aq-collapse" onClick={toggleCollapsed} aria-label={sideCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
           {sideCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
@@ -274,11 +280,12 @@ function FolderBlock({
   nested?: boolean;
 }) {
   const active = sidebarNodeContainsPath(node, pathname);
-  const row = useSidebarRow(node.key, true);
+  const personal = isPersonalShortcutKey(node.key);
+  const row = useSidebarRow(personal ? "" : node.key, true);
   return (
     <div className={clsx("aq-nav-group", nested && "aq-nav-nested")}>
-      <div className={clsx("aq-nav-link aq-nav-folder", active && !node.path && "active", row.dropClass)} onDragOver={row.onDragOver} onDragLeave={row.onDragLeave} onDrop={row.onDrop}>
-        <SidebarDragChrome itemKey={node.key} label={node.label} />
+      <div className={clsx("aq-nav-link aq-nav-folder", active && !node.path && "active", !personal && row.dropClass)} onDragOver={personal ? undefined : row.onDragOver} onDragLeave={personal ? undefined : row.onDragLeave} onDrop={personal ? undefined : row.onDrop}>
+        {personal ? null : <SidebarDragChrome itemKey={node.key} label={node.label} />}
         {node.path ? (
           <NavLink to={node.path} onClick={onNavigate} onMouseEnter={() => prefetchRoute(node.path!)} onFocus={() => prefetchRoute(node.path!)} className={() => clsx("aq-nav-folder-link", pathMatches(pathname, node.path!) && "active")} title={node.label}>
             <node.icon size={18} className="shrink-0" />
@@ -320,11 +327,12 @@ function FolderBlock({
 }
 
 function LeafLink({ node, onNavigate, pathname }: { node: SidebarNode & { path: string }; onNavigate: () => void; pathname: string }) {
-  const row = useSidebarRow(node.key, false);
+  const personal = isPersonalShortcutKey(node.key);
+  const row = useSidebarRow(personal ? "" : node.key, false);
   const organize = useSidebarOrganize();
   if (isFolder(node) || !node.path) return null;
   const active = pathMatches(pathname, node.path);
-  if (!organize) {
+  if (!organize || personal) {
     return (
       <NavLink to={node.path} title={node.label} onClick={onNavigate} onMouseEnter={() => prefetchRoute(node.path)} onFocus={() => prefetchRoute(node.path)} className={() => clsx("aq-nav-link aq-nav-child", active && "active")}>
         <node.icon size={16} className="shrink-0" />

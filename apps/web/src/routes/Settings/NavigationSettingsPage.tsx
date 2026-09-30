@@ -1,16 +1,26 @@
+import { useArrangedSidebar } from "../../components/layout/sidebarOrganize";
+import { SidebarShortcutsButton } from "../../components/layout/sidebarShortcutsPanel";
+
 /**
- * The sidebar is now a fixed set of folders (Engineering, Quality, Operations).
- * The old per-module show/hide toggles no longer change that menu, so they are
- * not shown here — a switch that did nothing would look like it worked.
+ * Personal shortcuts sit on top of the shared menu.
+ * An administrator can still drag the shared menu into a different order.
  */
 export function NavigationSettingsPage() {
+  const { catalog, isAdmin } = useArrangedSidebar();
   return (
     <div className="max-w-3xl rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
       <h2 className="mb-2 text-base font-medium text-foreground">Menu</h2>
       <p>
-        The sidebar is Engineering, Quality, and Operations, with Dashboard at the top and Settings at the bottom. Folders remember whether you left them open.
-        Company name, logo, users, departments, plants, and numbering formats are on the Company tab.
+        Dashboard stays at the top and Settings stays at the bottom. Blank forms are listed under Workspace. Filled forms open from Documents.
+        Folders remember whether you left them open.
       </p>
+      <p className="mt-3">
+        Shortcuts are yours. Hiding a menu item, or pinning a page, changes only your sidebar.
+        {isAdmin ? " Dragging the menu still changes the shared order for the company." : ""}
+      </p>
+      <div className="mt-4">
+        <SidebarShortcutsButton catalog={catalog} placement="page" />
+      </div>
     </div>
   );
 }

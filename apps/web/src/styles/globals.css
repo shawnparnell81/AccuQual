@@ -689,6 +689,28 @@ option {
 input[type="checkbox"],
 input[type="radio"] {
   accent-color: hsl(var(--primary));
+  flex: 0 0 auto;
+}
+
+/* A checkbox sits on the same line as the words it belongs to. */
+label:has(> input[type="checkbox"]),
+label:has(> input[type="radio"]),
+.form-check {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  max-width: 100%;
+  text-align: left;
+  vertical-align: middle;
+}
+label:has(> input[type="checkbox"]) > input[type="checkbox"],
+label:has(> input[type="radio"]) > input[type="radio"],
+.form-check > input[type="checkbox"],
+.form-check > input[type="radio"] {
+  width: 14px;
+  height: 14px;
+  margin: 0.15em 0 0;
+  flex: 0 0 auto;
 }
 
 /* ---------- app shell (sidebar + top bar) ---------- */
@@ -1083,7 +1105,8 @@ a:focus-visible {
   border-top: 1px solid hsl(var(--border));
 }
 .aq-collapse,
-.aq-side-reset {
+.aq-side-reset,
+.aq-side-shortcuts {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1098,6 +1121,7 @@ a:focus-visible {
   font: inherit;
 }
 .aq-side-reset:hover,
+.aq-side-shortcuts:hover,
 .aq-collapse:hover {
   color: hsl(var(--foreground));
   border-color: hsl(var(--primary));
@@ -1204,7 +1228,8 @@ body.side-collapsed .aq-nav-link {
 body.side-collapsed .aq-nav-children,
 body.side-collapsed .aq-nav-chevron-btn,
 body.side-collapsed .aq-nav-organize,
-body.side-collapsed .aq-side-reset {
+body.side-collapsed .aq-side-reset,
+body.side-collapsed .aq-side-shortcuts {
   display: none;
 }
 body.side-collapsed .aq-nav-folder {

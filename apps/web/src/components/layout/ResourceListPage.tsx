@@ -37,6 +37,8 @@ interface ResourceListPageProps<T extends { id: number }> {
   rowPredicate?: (row: T) => boolean;
   /** Open the create dialog on arrival, used by the dashboard's Schedule audit button. */
   createOnMount?: boolean;
+  /** Dialog title. Defaults to "Create {title}". */
+  createTitle?: string;
 }
 
 /**
@@ -57,6 +59,7 @@ export function ResourceListPage<T extends { id: number }>({
   accessNote,
   headerActions,
   createOnMount,
+  createTitle,
   extraFilters,
   rowPredicate,
 }: ResourceListPageProps<T>) {
@@ -133,7 +136,7 @@ export function ResourceListPage<T extends { id: number }>({
       <DataTable columns={columns} rows={visibleRows} rowKey={(r) => r.id} isLoading={isLoading} isError={isError} onRowClick={onRowClick} emptyMessage={searchable && search.trim() ? "No records match this search." : undefined} />
 
       {createFields && (
-        <Modal title={`Create ${title}`} isOpen={createOpen} onClose={() => setCreateOpen(false)}>
+        <Modal title={createTitle ?? `Create ${title}`} isOpen={createOpen} onClose={() => setCreateOpen(false)}>
           <GenericCreateForm
             fields={createFields}
             onSubmit={(values) =>

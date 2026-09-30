@@ -38,7 +38,7 @@ describe("Quality document folders", () => {
     assert.ok(audits && isFolder(audits));
     assert.deepEqual(
       audits.children.map((child) => child.label),
-      ["Internal Audits", "Audit Plan", "Audit Schedule", "Audit Checklist", "Audit Report"],
+      ["Internal Audits", "Audit Plan", "Audit Schedule", "Audit Report"],
     );
 
     const links = flattenSidebarLinks([audits]);
@@ -79,5 +79,25 @@ describe("Quality document folders", () => {
     const engineering = SIDEBAR_FOLDERS.find((folder) => folder.key === "engineering");
     assert.ok(engineering);
     assert.equal(engineering.children.some((child) => child.key.startsWith("frm-")), false);
+  });
+
+  it("keeps the shared menu free of form dumps and duplicate lists", () => {
+    const links = flattenSidebarLinks();
+    const labels = links.map((link) => link.label);
+    assert.equal(labels.includes("QMS Forms"), false);
+    assert.equal(labels.includes("Master Document List"), false);
+    assert.equal(labels.includes("Master Tool List"), false);
+    assert.equal(labels.includes("Audit Checklist"), false);
+    assert.equal(labels.filter((label) => label === "Master Equipment List").length, 1);
+    assert.equal(labels.includes("ADD SUPPLIER"), true);
+    assert.equal(links.find((link) => link.key === "add-supplier")?.path, "/suppliers/new");
+
+    const engineering = SIDEBAR_FOLDERS.find((folder) => folder.key === "engineering");
+    assert.ok(engineering);
+    const engineeringLabels = engineering.children.map((child) => child.label);
+    for (const removed of ["FMEA", "ECN", "ECR", "Work Instructions", "Master Document List", "Master Equipment List", "Turtle Diagrams", "Cross-training evaluation"]) {
+      assert.equal(engineeringLabels.includes(removed), false, removed);
+    }
+    assert.deepEqual(engineeringLabels, ["Drawings", "APQP", "PPAP Packet", "Risk dashboard", "Process Change"]);
   });
 });

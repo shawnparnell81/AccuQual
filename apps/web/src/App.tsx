@@ -199,6 +199,7 @@ export function App() {
             element={<ControlledDocumentPage basePath="/context" formType="context_of_organization" title="Context of the Organization" noun="context analysis" description="ISO 9001 clause 4.1 — internal strengths and weaknesses, external opportunities and threats, by interested party." />}
           />
           <Route path="/pareto" element={<ParetoAnalysisPage />} />
+          <Route path="/suppliers/new" element={<SuppliersPage />} />
           <Route path="/suppliers" element={<SuppliersPage />} />
           <Route path="/suppliers/:id" element={<SupplierDetailPage />} />
           <Route path="/calibration" element={<CalibrationPage />} />
