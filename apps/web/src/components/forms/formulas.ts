@@ -9,6 +9,7 @@
  * per layout, so they always know what their sibling columns are called).
  */
 
+import { hydrateDimensionalRow, rowPassFail, PASS_FILL, PASS_INK, FAIL_FILL, FAIL_INK } from "../../lib/passFail";
 import { pfmeaActionPriority } from "./fmeaPriority";
 
 export type FormulaFn = (row: Record<string, unknown>) => unknown;
@@ -134,6 +135,15 @@ export const FORMULAS: Record<string, FormulaFn> = {
     if (ppm <= 100 || delivery >= 95) return "Conditional";
     return "Disqualified";
   },
+
+  /**
+   * Dimensional test results: Pass inside nominal ± tolerance, Fail outside.
+   * Blank until nominal, tolerance, and actual are filled. Not a manual choice.
+   */
+  dimensionalPassFail: (row) => rowPassFail(hydrateDimensionalRow(row)),
+
+  /** Final inspection key characteristic: specification & tolerance against the actual result. */
+  characteristicStatus: (row) => rowPassFail(row, { actual: "actualResult", specification: "specTolerance" }),
 };
 
 /** Background/text color pairs for known status labels — semantic, not part of a form's chrome palette. */
@@ -147,6 +157,8 @@ export const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
   Approved: { bg: "#DCF2E7", fg: "#1E7A54" },
   Conditional: { bg: "#FBF2CE", fg: "#7A6B18" },
   Disqualified: { bg: "#FBE4E0", fg: "#9A2E20" },
+  Pass: { bg: PASS_FILL, fg: PASS_INK },
+  Fail: { bg: FAIL_FILL, fg: FAIL_INK },
 };
 
 /**
@@ -171,7 +183,7 @@ export function calibrationStatusFromDueDate(nextDueAt: string | Date | null | u
 
 /** Runs every kind:"computed" column in a table's column list against one row, in column order (so a later formula can read an earlier column's freshly-computed value). */
 export function materializeRow(row: Record<string, unknown>, columns: { key: string; kind: string; formula?: string }[]): Record<string, unknown> {
-  let next = row;
+  let next = columns.some((col) => col.formula === "dimensionalPassFail") ? hydrateDimensionalRow(row) : row;
   for (const col of columns) {
     const fn = col.kind === "computed" && col.formula ? FORMULAS[col.formula] : undefined;
     if (fn) {

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -14,6 +15,7 @@ import type { QualityInspectionReport, QualityInspectionItem, InspectionType, In
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { PictureBoundText } from "../../components/forms/PictureText";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
+import { inspectionItemResult, passFailPaint } from "../../lib/passFail";
 
 const reportHooks = createResourceHooks<QualityInspectionReport>("quality-inspection-reports");
 const INSPECTION_TYPES: InspectionType[] = ["incoming", "in_process", "final"];
@@ -314,6 +316,22 @@ function Field({ label, value, onSave, type = "text" }: { label: string; value: 
 
 function ItemRow({ item, onPatch, onDelete }: { item: QualityInspectionItem; onPatch: (body: Record<string, unknown>) => void; onDelete: () => void }) {
   const inputClass = "w-full bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary print:text-black";
+  const judged = inspectionItemResult(item);
+  const sent = useRef("");
+  useEffect(() => {
+    const key = `${item.id}:${judged}`;
+    if (!judged || item.result === judged || sent.current === key) return;
+    sent.current = key;
+    onPatch({ result: judged });
+  }, [item.id, item.result, judged, onPatch]);
+
+  function saveMeasure(field: "specMin" | "specMax" | "actualValue", raw: string) {
+    const next = raw === "" ? null : raw;
+    if (next === (item[field] ?? null) || (next === null && (item[field] ?? "") === "")) return;
+    const result = inspectionItemResult({ ...item, [field]: next });
+    onPatch({ [field]: next, result: result || null });
+  }
+
   return (
     <tr>
       <td className="border border-border p-0 print:border-black">
@@ -329,23 +347,29 @@ function ItemRow({ item, onPatch, onDelete }: { item: QualityInspectionItem; onP
         <input defaultValue={item.actualFinding ?? ""} onBlur={(e) => e.target.value !== (item.actualFinding ?? "") && onPatch({ actualFinding: e.target.value || null })} className={inputClass} />
       </td>
       <td className="border border-border p-0 print:border-black">
-        <input type="number" defaultValue={item.specMin ?? ""} onBlur={(e) => e.target.value !== (item.specMin ?? "") && onPatch({ specMin: e.target.value || null })} className={`${inputClass} w-20`} />
+        <input type="number" defaultValue={item.specMin ?? ""} onBlur={(e) => saveMeasure("specMin", e.target.value)} className={`${inputClass} w-20`} />
       </td>
       <td className="border border-border p-0 print:border-black">
-        <input type="number" defaultValue={item.specMax ?? ""} onBlur={(e) => e.target.value !== (item.specMax ?? "") && onPatch({ specMax: e.target.value || null })} className={`${inputClass} w-20`} />
+        <input type="number" defaultValue={item.specMax ?? ""} onBlur={(e) => saveMeasure("specMax", e.target.value)} className={`${inputClass} w-20`} />
       </td>
       <td className="border border-border p-0 print:border-black">
-        <input type="number" defaultValue={item.actualValue ?? ""} onBlur={(e) => e.target.value !== (item.actualValue ?? "") && onPatch({ actualValue: e.target.value || null })} className={`${inputClass} w-24`} />
+        <input type="number" defaultValue={item.actualValue ?? ""} onBlur={(e) => saveMeasure("actualValue", e.target.value)} className={`${inputClass} w-24`} />
       </td>
       <td className="border border-border p-0 print:border-black">
         <input defaultValue={item.measurementUnit ?? ""} onBlur={(e) => e.target.value !== (item.measurementUnit ?? "") && onPatch({ measurementUnit: e.target.value || null })} className={`${inputClass} w-16`} />
       </td>
       <td className="border border-border p-0 print:border-black">
-        <select defaultValue={item.result ?? ""} onChange={(e) => onPatch({ result: e.target.value || null })} className={inputClass}>
-          <option value="">—</option>
-          <option value="pass">Pass</option>
-          <option value="fail">Fail</option>
-        </select>
+        {judged ? (
+          <span className="inline-block rounded-sm px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: passFailPaint(judged)?.bg, color: passFailPaint(judged)?.fg }}>
+            {judged === "pass" ? "Pass" : "Fail"}
+          </span>
+        ) : (
+          <select defaultValue={item.result ?? ""} onChange={(e) => onPatch({ result: e.target.value || null })} className={inputClass} aria-label="Result">
+            <option value="">—</option>
+            <option value="pass">Pass</option>
+            <option value="fail">Fail</option>
+          </select>
+        )}
       </td>
       <td className="border border-border text-center print:hidden">
         <button onClick={onDelete} title="Remove row" className="px-1 text-muted-foreground hover:text-destructive">

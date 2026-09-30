@@ -49,6 +49,8 @@ export interface TableColumn {
    */
   min?: number;
   max?: number;
+  /** Shown inside an empty text cell, for example "±0.10" on a tolerance column. */
+  placeholder?: string;
   /**
    * For kind:"computed" — name of a formula in components/forms/formulas.ts,
    * evaluated client-side from other columns in the same row and re-saved into

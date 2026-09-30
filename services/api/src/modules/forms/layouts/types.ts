@@ -59,6 +59,8 @@ export interface TableColumn {
   beside?: { option: string; choices: string[] };
   min?: number; // for number — e.g. FMEA's 1-10 Severity/Occurrence/Detection ratings
   max?: number;
+  /** Shown inside an empty text cell, for example "±0.10" on a tolerance column. */
+  placeholder?: string;
   /**
    * For kind:"computed" — name of the client-side formula (apps/web's
    * formulas.ts) that derived this value. The server never evaluates it: the

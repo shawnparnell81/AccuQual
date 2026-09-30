@@ -117,7 +117,7 @@ export function FaiSheet({ cells, lines, readOnly = false, onCell, onLines, docu
                 <td>
                   <input className="iso-in center" aria-label={`Actual ${index + 1}`} value={row.actual} disabled={readOnly} onChange={(event) => edit(index, { actual: event.target.value })} />
                 </td>
-                <td className={faiFill(result)} data-testid={`fai-result-${index}`}>
+                <td className={faiFill(result)} data-testid={`fai-result-${index}`} aria-label={`Pass or Fail ${index + 1}`}>
                   {result}
                 </td>
               </tr>

@@ -116,6 +116,17 @@ Tabs:
 - Tailwind utility classes
 - Dark mode support
 
+### Pass/Fail on measured grids
+A Pass/Fail cell that sits next to a requirement and a measured result
+is filled in by the app. Inside the tolerance is Pass (green). Outside
+is Fail (red). The person does not pick it. New forms use the shared
+tolerance check (`services/api/src/utils/passFail.ts`, used by the grids
+through `apps/web/src/lib/passFail.ts`). The reference sheet is
+Production Part Approval — Dimensional Test Results: Nominal, Tolerance,
+and Actual on each row. A manual choice stays only where the form
+already has a deliberate override, or where the row is not numeric.
+See `docs/development/new-modules-design-notes.md`.
+
 ### Security
 - Role-based UI visibility
 - Protected routes

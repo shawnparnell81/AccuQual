@@ -6,6 +6,7 @@ import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { deleteRecord } from "../records/recordDeletion.js";
+import { applyMeasuredResult } from "../../utils/passFail.js";
 
 async function loadReport(req: Request, id: number) {
   const [row] = await req.db!.select().from(qualityInspectionReports).where(and(eq(qualityInspectionReports.id, id)));
@@ -94,16 +95,18 @@ async function loadItem(req: Request, reportId: number, itemId: number) {
 
 export const createItemHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadReport(req, Number(req.params.id));
-  const [created] = await req.db!.insert(qualityInspectionItems).values({ ...req.body, reportId: record.id, }).returning();
-  await recordAuditTrail(req.db!, { entityType: "QualityInspectionReport", entityId: record.id, action: "update", changes: { subAction: "item_added", ...req.body }, performedBy: req.user?.id });
+  const body = applyMeasuredResult({}, req.body);
+  const [created] = await req.db!.insert(qualityInspectionItems).values({ ...body, reportId: record.id }).returning();
+  await recordAuditTrail(req.db!, { entityType: "QualityInspectionReport", entityId: record.id, action: "update", changes: { subAction: "item_added", ...body }, performedBy: req.user?.id });
   res.status(201).json(created);
 });
 
 export const updateItemHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadReport(req, Number(req.params.id));
   const item = await loadItem(req, record.id, Number(req.params.itemId));
-  const [updated] = await req.db!.update(qualityInspectionItems).set({ ...req.body, updatedAt: new Date() }).where(eq(qualityInspectionItems.id, item.id)).returning();
-  await recordAuditTrail(req.db!, { entityType: "QualityInspectionReport", entityId: record.id, action: "update", changes: { subAction: "item_updated", itemId: item.id, ...req.body }, performedBy: req.user?.id });
+  const body = applyMeasuredResult(item, req.body);
+  const [updated] = await req.db!.update(qualityInspectionItems).set({ ...body, updatedAt: new Date() }).where(eq(qualityInspectionItems.id, item.id)).returning();
+  await recordAuditTrail(req.db!, { entityType: "QualityInspectionReport", entityId: record.id, action: "update", changes: { subAction: "item_updated", itemId: item.id, ...body }, performedBy: req.user?.id });
   res.json(updated);
 });
 
