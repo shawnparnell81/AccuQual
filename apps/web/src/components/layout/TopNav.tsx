@@ -357,12 +357,11 @@ function SidebarDestination({ node, className, iconSize, onNavigate }: { node: S
 }
 
 function LeafLink({ node, onNavigate, pathname }: { node: SidebarNode & { path: string }; onNavigate: () => void; pathname: string }) {
-  const personal = isPersonalShortcutKey(node.key);
-  const row = useSidebarRow(personal ? "" : node.key, false);
+  const row = useSidebarRow(node.key, false);
   const organize = useSidebarOrganize();
   if (isFolder(node) || !node.path) return null;
   const active = pathMatches(pathname, node.path);
-  if (!organize || personal) {
+  if (!organize) {
     return <SidebarDestination node={node} iconSize={16} onNavigate={onNavigate} className={clsx("aq-nav-link aq-nav-child", active && "active")} />;
   }
   return (

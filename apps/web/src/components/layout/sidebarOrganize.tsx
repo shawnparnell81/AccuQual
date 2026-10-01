@@ -8,7 +8,8 @@ import { canViewAuditLog } from "../../lib/recordDelete";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { useToast } from "../shared/ToastProvider";
 import { SIDEBAR_FOLDERS, visibleSidebar, type SidebarNode } from "./sidebarStructure";
-import { applyUserShortcuts, EMPTY_SIDEBAR_SHORTCUTS, type SidebarShortcutPrefs } from "../../lib/sidebarShortcuts";
+import { applyUserShortcuts, EMPTY_SIDEBAR_SHORTCUTS, isPersonalShortcutKey, SHORTCUTS_FOLDER_KEY, type PinnedShortcut, type SidebarShortcutPrefs } from "../../lib/sidebarShortcuts";
+import { dropPosition, reorderIds } from "../../lib/listReorder";
 import {
   applySidebarLayout,
   moveSidebarItem,
@@ -77,6 +78,31 @@ export function SidebarOrganizeProvider({ arranged, children }: { arranged: Side
     save.mutate(next);
   }
 
+  const shortcuts = useQuery({
+    queryKey: ["sidebar-shortcuts"],
+    queryFn: async () => (await apiClient.get<SidebarShortcutPrefs>("/users/me/sidebar-shortcuts")).data,
+  });
+  const saveShortcuts = useMutation({
+    mutationFn: async (prefs: SidebarShortcutPrefs) => (await apiClient.put<SidebarShortcutPrefs>("/users/me/sidebar-shortcuts", prefs)).data,
+    onSuccess: (prefs) => qc.setQueryData(["sidebar-shortcuts"], prefs),
+    onError: async (err) => toast.error(await extractErrorMessageAsync(err, "Couldn't save your shortcuts")),
+  });
+
+  function reorderPins(draggedKey: string, targetKey: string, position: "before" | "after") {
+    const prefs = shortcuts.data ?? EMPTY_SIDEBAR_SHORTCUTS;
+    const nextIds = reorderIds(
+      prefs.pinned.map((pin) => pin.key),
+      draggedKey,
+      targetKey,
+      position,
+    );
+    if (!nextIds) return;
+    const byKey = new Map(prefs.pinned.map((pin) => [pin.key, pin]));
+    const pinned = nextIds.map((key) => byKey.get(key)).filter((pin): pin is PinnedShortcut => Boolean(pin));
+    if (pinned.length !== nextIds.length) return;
+    saveShortcuts.mutate({ hidden: prefs.hidden ?? [], pinned });
+  }
+
   const draggingKey = useRef<string | null>(null);
   const api: OrganizeApi = {
     saving: save.isPending || resetLayout.isPending,
@@ -89,13 +115,31 @@ export function SidebarOrganizeProvider({ arranged, children }: { arranged: Side
     },
     destinations: (key) => sidebarDestinations(arranged, key),
     reset: () => resetLayout.mutate(),
-    nudge: (key, direction) => commit(nudgeSidebarItem(placementsFromNodes(arranged), key, direction)),
+    nudge: (key, direction) => {
+      if (isPersonalShortcutKey(key) && key !== SHORTCUTS_FOLDER_KEY) {
+        const prefs = shortcuts.data ?? EMPTY_SIDEBAR_SHORTCUTS;
+        const index = prefs.pinned.findIndex((pin) => pin.key === key);
+        const neighbor = prefs.pinned[index + direction];
+        if (index < 0 || !neighbor) return;
+        reorderPins(key, neighbor.key, direction < 0 ? "before" : "after");
+        return;
+      }
+      commit(nudgeSidebarItem(placementsFromNodes(arranged), key, direction));
+    },
     moveInto: (key, parentKey) => {
       const tree = placementsFromNodes(arranged);
       const parent = parentKey ? findChildren(tree, parentKey) : tree;
       commit(moveSidebarItem(tree, key, parentKey, parent?.length ?? 0));
     },
     drop: (draggedKey, targetKey, position) => {
+      const draggedPersonal = isPersonalShortcutKey(draggedKey);
+      const targetPersonal = isPersonalShortcutKey(targetKey);
+      if (draggedPersonal || targetPersonal) {
+        if (!draggedPersonal || !targetPersonal || position === "inside") return;
+        if (draggedKey === SHORTCUTS_FOLDER_KEY || targetKey === SHORTCUTS_FOLDER_KEY) return;
+        reorderPins(draggedKey, targetKey, position);
+        return;
+      }
       const tree = placementsFromNodes(arranged);
       const target = placementParent(tree, targetKey);
       if (!target) return;
@@ -133,14 +177,18 @@ export function useSidebarRow(itemKey: string, folder: boolean) {
 
   function onDragOver(event: DragEvent) {
     if (!organize || (!organize.readDrag() && !hasNavDrag(event))) return;
+    const dragged = organize.readDrag();
+    const personalDrag = dragged ? isPersonalShortcutKey(dragged) : false;
+    const personalTarget = isPersonalShortcutKey(itemKey);
+    if (dragged && personalDrag !== personalTarget) return;
+    if (itemKey === SHORTCUTS_FOLDER_KEY) return;
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = "move";
     const rect = event.currentTarget.getBoundingClientRect();
-    const ratio = rect.height === 0 ? 0.5 : (event.clientY - rect.top) / rect.height;
-    const next = folder ? (ratio < 0.28 ? "before" : ratio > 0.72 ? "after" : "inside") : ratio < 0.5 ? "before" : "after";
+    const next = dropPosition(event.clientY, rect.top, rect.height, folder && !personalTarget);
     hint.current = next;
-    setDropClass(`aq-nav-drop-${next}`);
+    setDropClass(`aq-drop-${next}`);
   }
 
   function onDrop(event: DragEvent) {
@@ -198,7 +246,8 @@ export function SidebarDragChrome({ itemKey, label }: { itemKey: string; label: 
   }, [open]);
 
   if (!organize) return null;
-  const destinations = open ? organize.destinations(itemKey) : [];
+  const personal = isPersonalShortcutKey(itemKey);
+  const destinations = open && !personal ? organize.destinations(itemKey) : [];
 
   return (
     <div className="aq-nav-organize" ref={menuRef}>

@@ -11,6 +11,7 @@ import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { useWorkflowAction, extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useToast } from "../../components/shared/ToastProvider";
 import { GripVertical } from "lucide-react";
+import { dropPosition, reorderDropClass, reorderIds } from "../../lib/listReorder";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
@@ -61,15 +62,20 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
   const [autoOpened, setAutoOpened] = useState<number | null>(null);
   const toast = useToast();
   const [dragItemId, setDragItemId] = useState<number | null>(null);
-  const [overItemId, setOverItemId] = useState<number | null>(null);
+  const [overItem, setOverItem] = useState<{ id: number; position: "before" | "after" } | null>(null);
 
-  async function dropItem(targetId: number) {
+  async function dropItem(targetId: number, position: "before" | "after") {
     const movingId = dragItemId;
     setDragItemId(null);
-    setOverItemId(null);
+    setOverItem(null);
     if (movingId === null || movingId === targetId) return;
-    const order = items.map((i) => i.id).filter((id) => id !== movingId);
-    order.splice(order.indexOf(targetId), 0, movingId);
+    const order = reorderIds(
+      items.map((i) => i.id),
+      movingId,
+      targetId,
+      position,
+    );
+    if (!order) return;
     // Show the new order immediately; the server's answer replaces it.
     queryClient.setQueryData<AuditItem[]>(["audits", auditId, "items"], (current = []) => order.map((id) => current.find((i) => i.id === id)!).filter(Boolean));
     try {
@@ -182,15 +188,22 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
           {items.map((i) => (
             <li
               key={i.id}
-              className={`border-b border-border pb-2 transition-colors ${overItemId === i.id && dragItemId !== null && dragItemId !== i.id ? "border-t-2 border-t-primary" : ""} ${dragItemId === i.id ? "opacity-40" : ""}`}
+              className={`border-b border-border pb-2 transition-colors ${overItem?.id === i.id && dragItemId !== i.id ? reorderDropClass(overItem.position) : ""} ${dragItemId === i.id ? "opacity-40" : ""}`}
               onDragOver={(e) => {
-                if (dragItemId === null) return;
+                if (dragItemId === null || dragItemId === i.id) return;
                 e.preventDefault();
-                setOverItemId(i.id);
+                const rect = e.currentTarget.getBoundingClientRect();
+                const position = dropPosition(e.clientY, rect.top, rect.height, false);
+                if (position === "inside") return;
+                setOverItem({ id: i.id, position });
               }}
+              onDragLeave={() => setOverItem((current) => (current?.id === i.id ? null : current))}
               onDrop={(e) => {
                 e.preventDefault();
-                void dropItem(i.id);
+                const rect = e.currentTarget.getBoundingClientRect();
+                const position = dropPosition(e.clientY, rect.top, rect.height, false);
+                if (position === "inside") return;
+                void dropItem(i.id, position);
               }}
             >
               <div className="flex items-center justify-between gap-2">
@@ -209,7 +222,7 @@ export function AuditDetailPage({ entityId }: AuditDetailPageProps = {}) {
                       }}
                       onDragEnd={() => {
                         setDragItemId(null);
-                        setOverItemId(null);
+                        setOverItem(null);
                       }}
                     >
                       <GripVertical size={15} />

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { contentRoot, departmentForFolder, folderChain, leftHandFolders, listFolder, openTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
-import { Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical } from "lucide-react";
+import { contentRoot, departmentForFolder, folderChain, isFolderEntry, leftHandFolders, listFolder, openTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
+import { ChevronDown, ChevronRight, Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical, Folder, FolderOpen } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
 import { StatusBadge } from "../../components/tables/StatusBadge";
@@ -11,7 +11,8 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
 import { onlyOfficeFile, previewKind, saveBytes } from "../../lib/filePreview";
-import { folderMoveIsBlocked, nextSortOrder } from "../../lib/folderMove";
+import { folderMoveIsBlocked, planNest, planSiblingReorder, type NodePlacement } from "../../lib/folderMove";
+import { dropPosition, reorderDropClass, type DropPosition } from "../../lib/listReorder";
 
 const DRAG_FOLDER = "application/x-accuqual-folder";
 const DRAG_DOC = "application/x-accuqual-doc";
@@ -32,8 +33,108 @@ interface DocumentFolder {
 
 const LIBRARY_POOL_NAME = "Library Pool";
 
-/** Stable accent per department, cycling if there are ever more than 7. */
-const DEPARTMENT_COLORS = ["#5B5FEA", "#2451FF", "#0E9F6E", "#C2953B", "#8A4FD6", "#D65F8A", "#2AA7B8"];
+function FolderTreeBranch({
+  folder,
+  depth,
+  folders,
+  selectedId,
+  treeOpen,
+  draggable,
+  isoRoot,
+  hintClass,
+  onToggle,
+  onSelect,
+  onBeginDrag,
+  onEndDrag,
+  onHoverRow,
+  onLeaveRow,
+  onDropRow,
+}: {
+  folder: DocumentFolder;
+  depth: number;
+  folders: DocumentFolder[];
+  selectedId: number | null;
+  treeOpen: Record<number, boolean>;
+  draggable: boolean;
+  isoRoot: boolean;
+  hintClass: (id: number) => string;
+  onToggle: (id: number) => void;
+  onSelect: (folder: DocumentFolder) => void;
+  onBeginDrag: (event: DragEvent, id: number, kind: "folder" | "doc") => void;
+  onEndDrag: () => void;
+  onHoverRow: (event: DragEvent, folder: DocumentFolder) => void;
+  onLeaveRow: (id: number) => void;
+  onDropRow: (event: DragEvent, folder: DocumentFolder) => void;
+}) {
+  const children = listFolder(folders, folder.id).folders;
+  const open = treeOpen[folder.id] ?? isoRoot;
+  const selected = selectedId === folder.id;
+  const Icon = open && children.length > 0 ? FolderOpen : Folder;
+  return (
+    <li>
+      <div
+        className={`group flex items-center rounded-md border-l-2 pr-1 text-sm ${
+          selected ? "border-primary bg-primary/10 font-medium" : "border-transparent hover:bg-muted"
+        } ${hintClass(folder.id)}`}
+        style={{ paddingLeft: 4 + depth * 14 }}
+        draggable={draggable}
+        data-folder-id={draggable ? folder.id : undefined}
+        data-testid={isoRoot ? "iso-root" : "folder-tree-row"}
+        onDragStart={draggable ? (event) => onBeginDrag(event, folder.id, "folder") : undefined}
+        onDragEnd={draggable ? onEndDrag : undefined}
+        onDragOver={(event) => onHoverRow(event, folder)}
+        onDragLeave={(event) => {
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+          onLeaveRow(folder.id);
+        }}
+        onDrop={(event) => onDropRow(event, folder)}
+      >
+        {children.length > 0 ? (
+          <button
+            type="button"
+            className="grid h-7 w-6 shrink-0 place-items-center rounded text-muted-foreground hover:text-foreground"
+            aria-expanded={open}
+            aria-label={`${open ? "Collapse" : "Expand"} ${folder.name}`}
+            onClick={() => onToggle(folder.id)}
+          >
+            {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </button>
+        ) : (
+          <span className="h-7 w-6 shrink-0" aria-hidden />
+        )}
+        <button type="button" className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left" aria-current={selected ? "page" : undefined} onClick={() => onSelect(folder)}>
+          <Icon size={15} className={selected ? "shrink-0 text-primary" : "shrink-0 text-muted-foreground"} />
+          <span className="truncate">{folder.name}</span>
+        </button>
+        {draggable && <GripVertical size={12} className="mr-1 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-70" />}
+      </div>
+      {open && children.length > 0 && (
+        <ul>
+          {children.map((child) => (
+            <FolderTreeBranch
+              key={child.id}
+              folder={child}
+              depth={depth + 1}
+              folders={folders}
+              selectedId={selectedId}
+              treeOpen={treeOpen}
+              draggable
+              isoRoot={false}
+              hintClass={hintClass}
+              onToggle={onToggle}
+              onSelect={onSelect}
+              onBeginDrag={onBeginDrag}
+              onEndDrag={onEndDrag}
+              onHoverRow={onHoverRow}
+              onLeaveRow={onLeaveRow}
+              onDropRow={onDropRow}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
 
 function useDocumentFolders() {
   return useQuery({
@@ -124,6 +225,7 @@ export function FolderExplorerPage() {
   const removeTemplate = useRemoveTemplate();
   const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
+  const qc = useQueryClient();
 
   /** Files dropped from the desktop become real controlled documents in the target folder, one request each. */
   async function uploadFiles(parentId: number, files: File[]) {
@@ -141,11 +243,14 @@ export function FolderExplorerPage() {
 
   const [activeDeptId, setActiveDeptId] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
+  const [treeOpen, setTreeOpen] = useState<Record<number, boolean>>({});
+  const [dropHint, setDropHint] = useState<{ id: number; position: DropPosition } | null>(null);
   const [search, setSearch] = useState("");
   const dragRef = useRef<{ id: number; kind: "folder" | "doc" } | null>(null);
   const [dropHoverId, setDropHoverId] = useState<number | null>(null);
   const [poolHover, setPoolHover] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
+  const [newDepartmentName, setNewDepartmentName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingUploadTarget = useRef<number | null>(null);
   const uploadDocInputRef = useRef<HTMLInputElement>(null);
@@ -189,14 +294,26 @@ export function FolderExplorerPage() {
   const activeDept =
     (isoRoot && activeDeptId === isoRoot.id ? isoRoot : undefined) ?? departments.find((d) => d.id === activeDeptId) ?? departments[0] ?? isoRoot;
 
-  function countsFor(deptId: number) {
-    const subs = byParent.get(deptId) ?? [];
-    const docs = subs.reduce((sum, sub) => {
-      const listing = listFolder(visibleFolders, sub.id);
-      return sum + listing.folders.length + listing.files.length;
-    }, 0);
-    return { subs: subs.length, docs };
-  }
+  const folderParam = searchParams.get("folder");
+  const requestedFolderId = folderParam != null && /^\d+$/.test(folderParam) ? Number(folderParam) : null;
+  const openFolder = requestedFolderId == null ? undefined : visibleFolders.find((folder) => folder.id === requestedFolderId);
+  const selectedTreeId = openFolder?.id ?? activeDept?.id ?? null;
+
+  useEffect(() => {
+    if (selectedTreeId == null) return;
+    const chain = folderChain(visibleFolders, selectedTreeId);
+    setTreeOpen((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const crumb of chain.slice(0, -1)) {
+        if (next[crumb.id] !== true) {
+          next[crumb.id] = true;
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [selectedTreeId, visibleFolders]);
 
   function beginDrag(event: DragEvent, id: number, kind: "folder" | "doc") {
     dragRef.current = { id, kind };
@@ -206,7 +323,107 @@ export function FolderExplorerPage() {
   function endDrag() {
     dragRef.current = null;
     setDropHoverId(null);
+    setDropHint(null);
     setPoolHover(false);
+  }
+  function hintClass(id: number) {
+    if (dropHoverId === id) return "ring-2 ring-primary";
+    if (dropHint?.id === id) return reorderDropClass(dropHint.position);
+    return "";
+  }
+  function rowAllows(target: DocumentFolder, position: DropPosition) {
+    const drag = dragRef.current;
+    if (!drag || drag.id === target.id) return false;
+    const moving = folders.find((folder) => folder.id === drag.id);
+    if (!moving) return false;
+    if (position === "inside") {
+      if (!isFolderEntry(folders, target)) return false;
+      return !folderMoveIsBlocked(folders, moving.id, target.id);
+    }
+    if (isFolderEntry(folders, moving) !== isFolderEntry(folders, target)) return false;
+    if (isFolderEntry(folders, moving) && folderMoveIsBlocked(folders, moving.id, target.parentId)) return false;
+    return true;
+  }
+  function hoverRow(event: DragEvent, target: DocumentFolder) {
+    if (isFileDrag(event)) {
+      event.preventDefault();
+      setDropHint(null);
+      setDropHoverId(target.id);
+      return;
+    }
+    const position = dropPosition(event.clientY, event.currentTarget.getBoundingClientRect().top, event.currentTarget.getBoundingClientRect().height, isFolderEntry(folders, target));
+    if (!rowAllows(target, position)) {
+      setDropHint((current) => (current?.id === target.id ? null : current));
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+    setDropHoverId(null);
+    setDropHint({ id: target.id, position });
+  }
+  function leaveRow(id: number) {
+    setDropHint((current) => (current?.id === id ? null : current));
+    setDropHoverId((current) => (current === id ? null : current));
+  }
+  async function commitPlacements(placements: NodePlacement[] | null) {
+    if (!placements || placements.length === 0) return;
+    const changed = placements.filter((placement) => {
+      const current = folders.find((folder) => folder.id === placement.id);
+      return !current || current.parentId !== placement.parentId || current.sortOrder !== placement.sortOrder;
+    });
+    if (changed.length === 0) return;
+    try {
+      await Promise.all(
+        changed.map((placement) => {
+          const current = folders.find((folder) => folder.id === placement.id);
+          const body: { sortOrder: number; parentId?: number | null } = { sortOrder: placement.sortOrder };
+          if (!current || current.parentId !== placement.parentId) body.parentId = placement.parentId;
+          return apiClient.patch(`/document-folders/${placement.id}`, body);
+        }),
+      );
+    } catch (err) {
+      toast.error(await extractErrorMessageAsync(err, "Couldn't rearrange that"));
+    } finally {
+      await qc.invalidateQueries({ queryKey: ["document-folders"] });
+    }
+  }
+  function applyDrop(target: DocumentFolder, position: DropPosition) {
+    const drag = dragRef.current;
+    if (!drag || drag.id === target.id) return;
+    const moving = folders.find((folder) => folder.id === drag.id);
+    if (!moving) return;
+    if (position === "inside") {
+      void commitPlacements(planNest(folders, moving.id, target.id));
+      return;
+    }
+    const movingIsFolder = isFolderEntry(folders, moving);
+    if (movingIsFolder !== isFolderEntry(folders, target)) return;
+    if (movingIsFolder && folderMoveIsBlocked(folders, moving.id, target.parentId)) return;
+    const group = folders.filter((folder) => {
+      if (folder.parentId !== target.parentId) return false;
+      if (folder.name === LIBRARY_POOL_NAME) return false;
+      return isFolderEntry(folders, folder) === movingIsFolder;
+    });
+    void commitPlacements(planSiblingReorder(group, moving.id, target.id, position, target.parentId));
+  }
+  function dropRow(event: DragEvent, target: DocumentFolder) {
+    if (isFileDrag(event)) {
+      event.preventDefault();
+      event.stopPropagation();
+      setDropHoverId(null);
+      setDropHint(null);
+      void uploadFiles(target.id, Array.from(event.dataTransfer.files));
+      endDrag();
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const position = dropPosition(event.clientY, event.currentTarget.getBoundingClientRect().top, event.currentTarget.getBoundingClientRect().height, isFolderEntry(folders, target));
+    setDropHint(null);
+    setDropHoverId(null);
+    if (rowAllows(target, position)) applyDrop(target, position);
+    endDrag();
   }
   function allowDrop(event: DragEvent, targetParentId: number | null) {
     const drag = dragRef.current;
@@ -229,35 +446,15 @@ export function FolderExplorerPage() {
     event.dataTransfer.dropEffect = "move";
     return true;
   }
-  async function moveDoc(docId: number, newFolderId: number) {
-    const current = folders.find((folder) => folder.id === docId);
-    if (!current || current.parentId === newFolderId) return;
-    try {
-      await updateFolder.mutateAsync({ id: docId, parentId: newFolderId, sortOrder: nextSortOrder(folders, newFolderId, docId) });
-    } catch (err) {
-      toast.error(await extractErrorMessageAsync(err, "Couldn't move that document"));
-    }
-  }
-  async function moveFolder(folderId: number, newParentId: number | null) {
-    const current = folders.find((folder) => folder.id === folderId);
-    if (!current || current.parentId === newParentId) return;
-    if (folderMoveIsBlocked(folders, folderId, newParentId)) return;
-    try {
-      await updateFolder.mutateAsync({ id: folderId, parentId: newParentId, sortOrder: nextSortOrder(folders, newParentId, folderId) });
-    } catch (err) {
-      toast.error(await extractErrorMessageAsync(err, "Couldn't move that folder"));
-    }
-  }
-  function dropOn(event: DragEvent, targetParentId: number | null) {
+  function dropOnParent(event: DragEvent, parentId: number | null) {
     event.preventDefault();
     event.stopPropagation();
     const drag = dragRef.current;
-    if (drag?.kind === "doc" && targetParentId !== null) void moveDoc(drag.id, targetParentId);
-    else if (drag?.kind === "folder" && !folderMoveIsBlocked(folders, drag.id, targetParentId)) void moveFolder(drag.id, targetParentId);
+    if (drag && !(drag.kind === "doc" && parentId === null)) void commitPlacements(planNest(folders, drag.id, parentId));
     endDrag();
   }
   function sendToLibrary(docId: number) {
-    if (poolFolder) moveDoc(docId, poolFolder.id);
+    if (poolFolder) void commitPlacements(planNest(folders, docId, poolFolder.id));
   }
   function requestUpload(docId: number) {
     pendingUploadTarget.current = docId;
@@ -286,16 +483,39 @@ export function FolderExplorerPage() {
     });
   }
 
-  const folderParam = searchParams.get("folder");
-  const requestedFolderId = folderParam != null && /^\d+$/.test(folderParam) ? Number(folderParam) : null;
-  const openFolder = requestedFolderId == null ? undefined : visibleFolders.find((folder) => folder.id === requestedFolderId);
   const hiddenBlank = requestedFolderId != null && !openFolder && folders.some((folder) => folder.id === requestedFolderId);
+
+  function toggleTree(id: number) {
+    setTreeOpen((current) => {
+      const wasOpen = current[id] ?? id === isoRoot?.id;
+      return { ...current, [id]: !wasOpen };
+    });
+  }
+
+  function selectTreeFolder(folder: DocumentFolder) {
+    setTreeOpen((current) => ({ ...current, [folder.id]: true }));
+    const onShelf = folder.id === isoRoot?.id || departments.some((dept) => dept.id === folder.id);
+    if (onShelf) {
+      setActiveDeptId(folder.id);
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.set("dept", String(folder.id));
+        next.delete("folder");
+        return next;
+      });
+      return;
+    }
+    showFolder(folder.id);
+  }
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading folder tree…</p>;
   if (!activeDept) return <p className="text-sm text-muted-foreground">No departments found.</p>;
 
   const query = search.trim().toLowerCase();
-  const deptColorIndex = departments.findIndex((d) => d.id === activeDept.id);
+  const treeRoots = (isoRoot ? [isoRoot, ...departments.filter((dept) => dept.parentId !== isoRoot.id)] : departments)
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+  const activeListing = listFolder(visibleFolders, activeDept.id);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
@@ -328,7 +548,7 @@ export function FolderExplorerPage() {
         <div>
           <h1 className="text-2xl font-semibold">Document Folders</h1>
           <p className="text-sm text-muted-foreground">
-            ISO Compliance Documents is the top folder. Engineering, Quality, and the other departments stay in the list on the left. A folder shows its name and the forms or files saved into it. Start a new blank from Blank Forms. Drag a folder onto another folder to move it, or onto Top level. Drag a saved document onto a folder to file it there, or into the Library Pool to take it out.
+            Expand a folder to see what is saved in it. Drag the top or bottom of a row to rearrange it. Drop on the middle of a folder to put something inside. Blank forms stay under Blank Forms. The Library Pool is where a document goes when you take it out of a folder.
           </p>
         </div>
         <div className="w-56">
@@ -336,77 +556,31 @@ export function FolderExplorerPage() {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto md:grid-cols-[220px_minmax(0,1fr)] md:overflow-hidden">
-        <nav className="flex flex-col gap-1 rounded-lg border border-border bg-card p-2 md:min-h-0 md:overflow-y-auto">
-          {isoRoot && (
-            <button
-              type="button"
-              data-testid="iso-root"
-              onClick={() => {
-                setActiveDeptId(isoRoot.id);
-                setSearchParams((current) => {
-                  const next = new URLSearchParams(current);
-                  next.set("dept", String(isoRoot.id));
-                  next.delete("folder");
-                  return next;
-                });
-              }}
-              className={`rounded-md px-3 py-2 text-left text-sm font-medium ${activeDept?.id === isoRoot.id ? "bg-primary/10" : "hover:bg-muted"}`}
-            >
-              {isoRoot.name}
-            </button>
-          )}
-          {departments.map((dept, i) => {
-            const counts = countsFor(dept.id);
-            const color = DEPARTMENT_COLORS[i % DEPARTMENT_COLORS.length];
-            return (
-              <button
-                key={dept.id}
+      <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto md:grid-cols-[minmax(220px,17.5rem)_minmax(0,1fr)] md:overflow-hidden">
+        <nav className="flex flex-col gap-1 rounded-lg border border-border bg-card p-2 md:min-h-0 md:overflow-y-auto" aria-label="Document folders">
+          <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">Folders</p>
+          <ul data-testid="folder-tree">
+            {treeRoots.map((folder) => (
+              <FolderTreeBranch
+                key={folder.id}
+                folder={folder}
+                depth={0}
+                folders={visibleFolders}
+                selectedId={selectedTreeId}
+                treeOpen={treeOpen}
                 draggable
-                data-folder-id={dept.id}
-                onClick={() => {
-                  setActiveDeptId(dept.id);
-                  setSearchParams((current) => {
-                    const next = new URLSearchParams(current);
-                    next.set("dept", String(dept.id));
-                    next.delete("folder");
-                    return next;
-                  });
-                }}
-                onDragStart={(e) => beginDrag(e, dept.id, "folder")}
-                onDragEnd={endDrag}
-                onDragOver={(e) => {
-                  if (isFileDrag(e)) {
-                    e.preventDefault();
-                    setDropHoverId(dept.id);
-                    return;
-                  }
-                  if (allowDrop(e, dept.id)) setDropHoverId(dept.id);
-                }}
-                onDragLeave={() => setDropHoverId((h) => (h === dept.id ? null : h))}
-                onDrop={(e) => {
-                  if (isFileDrag(e)) {
-                    e.preventDefault();
-                    setDropHoverId(null);
-                    void uploadFiles(dept.id, Array.from(e.dataTransfer.files));
-                    endDrag();
-                    return;
-                  }
-                  dropOn(e, dept.id);
-                }}
-                className={`flex cursor-grab items-center gap-2 rounded-md py-2 text-left text-sm transition-colors active:cursor-grabbing ${isoRoot ? "pr-3 pl-5" : "px-3"} ${
-                  dept.id === activeDept.id ? "bg-primary/10 font-medium" : "hover:bg-muted"
-                } ${dropHoverId === dept.id ? "ring-2 ring-primary" : ""}`}
-              >
-                <GripVertical size={14} className="text-muted-foreground" />
-                <span className="h-2 w-2 flex-none rounded-full" style={{ backgroundColor: color }} />
-                <span className="flex-1">{dept.name}</span>
-                <span className="font-mono text-[10px] text-muted-foreground">
-                  {counts.subs}/{counts.docs}
-                </span>
-              </button>
-            );
-          })}
+                isoRoot={folder.id === isoRoot?.id}
+                hintClass={hintClass}
+                onToggle={toggleTree}
+                onSelect={selectTreeFolder}
+                onBeginDrag={beginDrag}
+                onEndDrag={endDrag}
+                onHoverRow={hoverRow}
+                onLeaveRow={leaveRow}
+                onDropRow={dropRow}
+              />
+            ))}
+          </ul>
 
           <div
             data-testid="folder-drop-root"
@@ -414,22 +588,22 @@ export function FolderExplorerPage() {
               if (allowDrop(e, shelfParentId)) setDropHoverId(-1);
             }}
             onDragLeave={() => setDropHoverId((h) => (h === -1 ? null : h))}
-            onDrop={(e) => dropOn(e, shelfParentId)}
+            onDrop={(e) => dropOnParent(e, shelfParentId)}
             className={`rounded-md border border-dashed px-3 py-2 text-xs ${dropHoverId === -1 ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground"}`}
           >
             Top level
           </div>
 
           <form
-            className="flex flex-col gap-1 border-t border-border pt-2 mt-1"
+            className="mt-1 flex flex-col gap-1 border-t border-border pt-2"
             onSubmit={(e) => {
               e.preventDefault();
-              if (!newFolderName.trim()) return;
-              createFolder.mutate(isoRoot ? { name: newFolderName.trim(), parentId: isoRoot.id } : { name: newFolderName.trim() });
-              setNewFolderName("");
+              if (!newDepartmentName.trim()) return;
+              createFolder.mutate(isoRoot ? { name: newDepartmentName.trim(), parentId: isoRoot.id } : { name: newDepartmentName.trim() });
+              setNewDepartmentName("");
             }}
           >
-            <TextField label="" placeholder="New department…" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} />
+            <TextField label="" placeholder="New department…" value={newDepartmentName} onChange={(e) => setNewDepartmentName(e.target.value)} />
             <button type="submit" className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted">
               + Add department
             </button>
@@ -456,14 +630,16 @@ export function FolderExplorerPage() {
               folder={openFolder}
               folders={visibleFolders}
               query={query}
-              dropHoverId={dropHoverId}
+              hintClass={hintClass}
               onOpenFolder={showFolder}
               onBackToDepartments={showDepartmentList}
               onBeginDrag={beginDrag}
               onEndDrag={endDrag}
               onAllowDrop={allowDrop}
-              onDrop={dropOn}
-              onHover={setDropHoverId}
+              onNest={dropOnParent}
+              onHoverRow={hoverRow}
+              onLeaveRow={leaveRow}
+              onDropRow={dropRow}
               onUploadFiles={uploadFiles}
               onUploadClick={requestDocumentUpload}
               onCreateFolder={(name, parentId) => createFolder.mutate({ name, parentId })}
@@ -474,8 +650,8 @@ export function FolderExplorerPage() {
             />
           ) : (
           <>
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="h-3 w-3 flex-none rounded-full" style={{ backgroundColor: DEPARTMENT_COLORS[deptColorIndex % DEPARTMENT_COLORS.length] }} />
+          <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
+            <FolderOpen size={18} className="shrink-0 text-primary" />
             <h2 className="text-lg font-semibold">{activeDept.name}</h2>
             <button type="button" onClick={() => showFolder(activeDept.id)} className="text-xs text-primary hover:underline">
               Open
@@ -509,7 +685,7 @@ export function FolderExplorerPage() {
             </span>
           </FileDropZone>
 
-          {(byParent.get(activeDept.id) ?? []).map((sub) => {
+          {activeListing.folders.map((sub) => {
             const listing = listFolder(visibleFolders, sub.id);
             const subfolders = listing.folders.filter((row) => !query || row.name.toLowerCase().includes(query));
             const docs = listing.files.filter((row) => !query || row.name.toLowerCase().includes(query));
@@ -523,7 +699,7 @@ export function FolderExplorerPage() {
                 className={`shrink-0 overflow-hidden rounded-lg border bg-card transition-shadow ${isDropTarget ? "border-primary ring-2 ring-primary" : "border-border"}`}
               >
                 <div
-                  className="flex cursor-grab items-center gap-2 border-b border-border bg-muted/50 px-3 py-2 active:cursor-grabbing"
+                  className={`flex cursor-grab items-center gap-2 border-b border-border bg-muted/40 px-2 py-1.5 active:cursor-grabbing ${hintClass(sub.id)}`}
                   draggable
                   data-folder-id={sub.id}
                   onDragStart={(e) => {
@@ -532,26 +708,13 @@ export function FolderExplorerPage() {
                   }}
                   onDragEnd={endDrag}
                   onClick={() => setCollapsed((c) => ({ ...c, [sub.id]: !c[sub.id] }))}
-                  onDragOver={(e) => {
-                    if (isFileDrag(e)) return;
-                    if (allowDrop(e, sub.id)) {
-                      e.stopPropagation();
-                      setDropHoverId(sub.id);
-                    }
-                  }}
-                  onDragLeave={() => setDropHoverId((h) => (h === sub.id ? null : h))}
-                  onDrop={(e) => {
-                    if (isFileDrag(e)) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      void uploadFiles(sub.id, Array.from(e.dataTransfer.files));
-                      return;
-                    }
-                    dropOn(e, sub.id);
-                  }}
+                  onDragOver={(e) => hoverRow(e, sub)}
+                  onDragLeave={() => leaveRow(sub.id)}
+                  onDrop={(e) => dropRow(e, sub)}
                 >
                   <GripVertical size={14} className="text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">{isCollapsed ? "▸" : "▾"}</span>
+                  <span className="text-muted-foreground">{isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}</span>
+                  {isCollapsed ? <Folder size={15} className="shrink-0 text-primary" /> : <FolderOpen size={15} className="shrink-0 text-primary" />}
                   <span className="flex-1 text-sm font-semibold" data-testid="folder-title">
                     {sub.name}
                   </span>
@@ -596,7 +759,7 @@ export function FolderExplorerPage() {
                     }}
                     onDrop={(e) => {
                       if (isFileDrag(e)) return;
-                      dropOn(e, sub.id);
+                      dropOnParent(e, sub.id);
                     }}
                   >
                     {subfolders.length === 0 && docs.length === 0 && <span className="text-xs italic text-muted-foreground">{query ? "Nothing in this folder matches." : "Nothing saved here yet."}</span>}
@@ -611,39 +774,83 @@ export function FolderExplorerPage() {
                           beginDrag(event, row.id, "folder");
                         }}
                         onDragEnd={endDrag}
-                        onDragOver={(event) => {
-                          if (isFileDrag(event)) return;
-                          if (allowDrop(event, row.id)) {
-                            event.stopPropagation();
-                            setDropHoverId(row.id);
-                          }
-                        }}
-                        onDragLeave={() => setDropHoverId((current) => (current === row.id ? null : current))}
-                        onDrop={(event) => {
-                          if (isFileDrag(event)) {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            void uploadFiles(row.id, Array.from(event.dataTransfer.files));
-                            return;
-                          }
-                          dropOn(event, row.id);
-                        }}
-                        className={`flex items-center gap-2 rounded-md px-2 py-2 ${dropHoverId === row.id ? "bg-primary/10 ring-2 ring-primary" : "hover:bg-muted"}`}
+                        onDragOver={(event) => hoverRow(event, row)}
+                        onDragLeave={() => leaveRow(row.id)}
+                        onDrop={(event) => dropRow(event, row)}
+                        className={`flex items-center gap-2 rounded-md px-2 py-2 hover:bg-muted ${hintClass(row.id)}`}
                       >
                         <GripVertical size={14} className="text-muted-foreground" />
+                        <Folder size={15} className="shrink-0 text-primary" />
                         <button type="button" onClick={() => showFolder(row.id)} className="flex-1 text-left text-sm font-medium" data-testid="folder-title">
                           {row.name}
                         </button>
-                        <span className="text-xs text-muted-foreground">Folder</span>
+                        <ChevronRight size={14} className="text-muted-foreground" />
                       </div>
                     ))}
                     <div className="flex flex-wrap gap-2">
                     {docs.map((doc) => {
                       const target = openTarget(doc);
-                      if (target) {
-                        return (
+                      return (
+                        <div
+                          key={doc.id}
+                          className={`inline-flex rounded-full ${hintClass(doc.id)}`}
+                          onDragOver={(event) => hoverRow(event, doc)}
+                          onDragLeave={() => leaveRow(doc.id)}
+                          onDrop={(event) => dropRow(event, doc)}
+                        >
+                          {target ? (
+                            <Link
+                              to={target}
+                              data-testid="saved-file"
+                              draggable
+                              onDragStart={(event) => {
+                                event.stopPropagation();
+                                beginDrag(event, doc.id, "doc");
+                              }}
+                              onDragEnd={endDrag}
+                              className="inline-flex cursor-grab items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:underline active:cursor-grabbing"
+                            >
+                              <FileText size={12} />
+                              {doc.name}
+                            </Link>
+                          ) : (
+                            <DocPill
+                              doc={doc}
+                              onDragStart={(e) => beginDrag(e, doc.id, "doc")}
+                              onDragEnd={endDrag}
+                              onSendToLibrary={() => sendToLibrary(doc.id)}
+                              onAttach={() => requestUpload(doc.id)}
+                              onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                    </div>
+                  </div>
+                )}
+              </FileDropZone>
+            );
+          })}
+
+          {activeListing.files.some((file) => !query || file.name.toLowerCase().includes(query)) && (
+            <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
+              <p className="text-xs font-medium text-muted-foreground">Saved in {activeDept.name}</p>
+              <div className="flex flex-wrap gap-2">
+                {activeListing.files
+                  .filter((file) => !query || file.name.toLowerCase().includes(query))
+                  .map((doc) => {
+                    const target = openTarget(doc);
+                    return (
+                      <div
+                        key={doc.id}
+                        className={`inline-flex rounded-full ${hintClass(doc.id)}`}
+                        onDragOver={(event) => hoverRow(event, doc)}
+                        onDragLeave={() => leaveRow(doc.id)}
+                        onDrop={(event) => dropRow(event, doc)}
+                      >
+                        {target ? (
                           <Link
-                            key={doc.id}
                             to={target}
                             data-testid="saved-file"
                             draggable
@@ -657,26 +864,22 @@ export function FolderExplorerPage() {
                             <FileText size={12} />
                             {doc.name}
                           </Link>
-                        );
-                      }
-                      return (
-                      <DocPill
-                        key={doc.id}
-                        doc={doc}
-                        onDragStart={(e) => beginDrag(e, doc.id, "doc")}
-                        onDragEnd={endDrag}
-                        onSendToLibrary={() => sendToLibrary(doc.id)}
-                        onAttach={() => requestUpload(doc.id)}
-                        onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
-                      />
-                      );
-                    })}
-                    </div>
-                  </div>
-                )}
-              </FileDropZone>
-            );
-          })}
+                        ) : (
+                          <DocPill
+                            doc={doc}
+                            onDragStart={(event) => beginDrag(event, doc.id, "doc")}
+                            onDragEnd={endDrag}
+                            onSendToLibrary={() => sendToLibrary(doc.id)}
+                            onAttach={() => requestUpload(doc.id)}
+                            onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
 
           <form
             className="flex shrink-0 items-center gap-2 pt-1"
@@ -711,7 +914,7 @@ export function FolderExplorerPage() {
           onDrop={(e) => {
             if (dragRef.current?.kind !== "doc") return;
             setPoolHover(false);
-            dropOn(e, poolFolder.id);
+            dropOnParent(e, poolFolder.id);
           }}
           className={`shrink-0 rounded-lg border bg-card transition-colors ${
             poolHover ? "border-primary ring-1 ring-inset ring-primary" : "border-border"
@@ -724,14 +927,21 @@ export function FolderExplorerPage() {
             <div className="flex max-h-28 min-w-0 flex-1 flex-wrap gap-2 overflow-y-auto">
               {poolItems.length === 0 && <span className="text-xs italic text-muted-foreground">Empty — drag a document here to unassign it</span>}
               {poolItems.map((doc) => (
-                <DocPill
+                <div
                   key={doc.id}
-                  doc={doc}
-                  onDragStart={(e) => beginDrag(e, doc.id, "doc")}
-                  onDragEnd={endDrag}
-                  onAttach={() => requestUpload(doc.id)}
-                  onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
-                />
+                  className={`inline-flex rounded-full ${hintClass(doc.id)}`}
+                  onDragOver={(event) => hoverRow(event, doc)}
+                  onDragLeave={() => leaveRow(doc.id)}
+                  onDrop={(event) => dropRow(event, doc)}
+                >
+                  <DocPill
+                    doc={doc}
+                    onDragStart={(e) => beginDrag(e, doc.id, "doc")}
+                    onDragEnd={endDrag}
+                    onAttach={() => requestUpload(doc.id)}
+                    onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
+                  />
+                </div>
               ))}
             </div>
           </div>
@@ -841,14 +1051,16 @@ function FolderBrowser({
   folder,
   folders,
   query,
-  dropHoverId,
+  hintClass,
   onOpenFolder,
   onBackToDepartments,
   onBeginDrag,
   onEndDrag,
   onAllowDrop,
-  onDrop,
-  onHover,
+  onNest,
+  onHoverRow,
+  onLeaveRow,
+  onDropRow,
   onUploadFiles,
   onUploadClick,
   onCreateFolder,
@@ -860,14 +1072,16 @@ function FolderBrowser({
   folder: DocumentFolder;
   folders: DocumentFolder[];
   query: string;
-  dropHoverId: number | null;
+  hintClass: (id: number) => string;
   onOpenFolder: (id: number) => void;
   onBackToDepartments: () => void;
   onBeginDrag: (event: DragEvent, id: number, kind: "folder" | "doc") => void;
   onEndDrag: () => void;
   onAllowDrop: (event: DragEvent, targetParentId: number | null) => boolean;
-  onDrop: (event: DragEvent, targetParentId: number | null) => void;
-  onHover: (id: number | null) => void;
+  onNest: (event: DragEvent, parentId: number | null) => void;
+  onHoverRow: (event: DragEvent, folder: DocumentFolder) => void;
+  onLeaveRow: (id: number) => void;
+  onDropRow: (event: DragEvent, folder: DocumentFolder) => void;
   onUploadFiles: (parentId: number, files: File[]) => Promise<void>;
   onUploadClick: (parentId: number) => void;
   onCreateFolder: (name: string, parentId: number) => void;
@@ -912,6 +1126,11 @@ function FolderBrowser({
           </span>
         ))}
       </nav>
+
+      <div className="flex items-center gap-2">
+        <FolderOpen size={18} className="shrink-0 text-primary" />
+        <h2 className="text-lg font-semibold">{folder.name}</h2>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -983,11 +1202,12 @@ function FolderBrowser({
         className="flex flex-col gap-1 rounded-lg border border-border bg-card p-2"
         data-testid="folder-contents"
         onDragOver={(event) => {
-          if (onAllowDrop(event, folder.id)) onHover(folder.id);
+          if (isFileDrag(event)) return;
+          onAllowDrop(event, folder.id);
         }}
         onDrop={(event) => {
           if (isFileDrag(event)) return;
-          onDrop(event, folder.id);
+          onNest(event, folder.id);
         }}
       >
         {empty && <p className="px-2 py-3 text-sm italic text-muted-foreground">{query ? "Nothing in this folder matches." : "Nothing saved in this folder yet."}</p>}
@@ -1002,65 +1222,58 @@ function FolderBrowser({
               onBeginDrag(event, row.id, "folder");
             }}
             onDragEnd={onEndDrag}
-            onDragOver={(event) => {
-              if (isFileDrag(event)) return;
-              if (onAllowDrop(event, row.id)) {
-                event.stopPropagation();
-                onHover(row.id);
-              }
-            }}
-            onDragLeave={() => onHover(dropHoverId === row.id ? null : dropHoverId)}
-            onDrop={(event) => {
-              if (isFileDrag(event)) {
-                event.preventDefault();
-                event.stopPropagation();
-                void onUploadFiles(row.id, Array.from(event.dataTransfer.files));
-                return;
-              }
-              onDrop(event, row.id);
-            }}
-            className={`flex items-center gap-2 rounded-md px-2 py-2 ${dropHoverId === row.id ? "bg-primary/10 ring-2 ring-primary" : "hover:bg-muted"}`}
+            onDragOver={(event) => onHoverRow(event, row)}
+            onDragLeave={() => onLeaveRow(row.id)}
+            onDrop={(event) => onDropRow(event, row)}
+            className={`flex items-center gap-2 rounded-md px-2 py-2 hover:bg-muted ${hintClass(row.id)}`}
           >
             <GripVertical size={14} className="text-muted-foreground" />
+            <Folder size={15} className="shrink-0 text-primary" />
             <button type="button" onClick={() => onOpenFolder(row.id)} className="flex-1 text-left text-sm font-medium" data-testid="folder-title">
               {row.name}
             </button>
-            <span className="text-xs text-muted-foreground">Folder</span>
+            <ChevronRight size={14} className="text-muted-foreground" />
           </div>
         ))}
         {files.map((file) => {
           const target = openTarget(file);
-          if (!target) {
-            return (
-              <div key={file.id} data-testid="file-row" className="px-2 py-1">
-                <DocPill
-                  doc={file}
-                  onDragStart={(event) => onBeginDrag(event, file.id, "doc")}
-                  onDragEnd={onEndDrag}
-                  onSendToLibrary={() => onSendToLibrary(file.id)}
-                  onAttach={() => onAttach(file.id)}
-                  onRemoveAttachment={() => onRemoveAttachment(file.id)}
-                />
-              </div>
-            );
-          }
           return (
-            <Link
+            <div
               key={file.id}
-              to={target}
-              data-testid={`open-file-${file.id}`}
-              draggable
-              onDragStart={(event) => {
-                event.stopPropagation();
-                onBeginDrag(event, file.id, "doc");
-              }}
-              onDragEnd={onEndDrag}
-              className="flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
+              className={hintClass(file.id)}
+              onDragOver={(event) => onHoverRow(event, file)}
+              onDragLeave={() => onLeaveRow(file.id)}
+              onDrop={(event) => onDropRow(event, file)}
             >
-              <FileText size={14} className="text-primary" />
-              <span className="flex-1 text-primary">{file.name}</span>
-              <span className="text-xs text-muted-foreground">Open</span>
-            </Link>
+              {target ? (
+                <Link
+                  to={target}
+                  data-testid={`open-file-${file.id}`}
+                  draggable
+                  onDragStart={(event) => {
+                    event.stopPropagation();
+                    onBeginDrag(event, file.id, "doc");
+                  }}
+                  onDragEnd={onEndDrag}
+                  className="flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
+                >
+                  <FileText size={14} className="text-primary" />
+                  <span className="flex-1 text-primary">{file.name}</span>
+                  <span className="text-xs text-muted-foreground">Open</span>
+                </Link>
+              ) : (
+                <div data-testid="file-row" className="px-2 py-1">
+                  <DocPill
+                    doc={file}
+                    onDragStart={(event) => onBeginDrag(event, file.id, "doc")}
+                    onDragEnd={onEndDrag}
+                    onSendToLibrary={() => onSendToLibrary(file.id)}
+                    onAttach={() => onAttach(file.id)}
+                    onRemoveAttachment={() => onRemoveAttachment(file.id)}
+                  />
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
