@@ -23,6 +23,7 @@ import type { DashboardOverview } from "../../api/dashboard";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { usePlantWrite } from "../../hooks/usePlantWrite";
 import { useSites, useSwitchPlant } from "../../hooks/useSites";
+import { FRM_NCR_PATH } from "../../lib/qualityEntry";
 import { useSiteStore } from "../../store/siteStore";
 import { AgingChart, ParetoChart, PlantChart, Sparkline, TrendChart } from "./charts";
 
@@ -233,7 +234,7 @@ export function DashboardPage() {
               </div>
             )}
             {reportIssue.canEdit && (
-              <button type="button" onClick={() => navigate("/ncr?new=1")} className="inline-flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-primary to-[hsl(var(--brand-purple))] px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-[0_8px_22px_-10px_hsl(var(--primary)/0.85)]">
+              <button type="button" onClick={() => navigate(FRM_NCR_PATH)} className="inline-flex items-center gap-1.5 rounded-[10px] bg-gradient-to-br from-primary to-[hsl(var(--brand-purple))] px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-[0_8px_22px_-10px_hsl(var(--primary)/0.85)]">
                 <Plus size={16} /> Report issue
               </button>
             )}
@@ -271,7 +272,7 @@ export function DashboardPage() {
           {data.partial && <p className="text-xs text-muted-foreground">Some older records were left out of these counts so the page stays fast.</p>}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
             <Kpi
-              href={data.kpis.openIssues.access ? "/ncr" : undefined}
+              href={data.kpis.openIssues.access ? FRM_NCR_PATH : undefined}
               token="primary"
               delay={0}
               icon={<AlertTriangle size={15} />}

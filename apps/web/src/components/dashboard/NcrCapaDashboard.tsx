@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { WorkflowMetricCard } from "./WorkflowMetricCard";
 import { WorkflowTrendChart } from "../charts/WorkflowTrendChart";
 import { bucketByMonth } from "../../lib/workflowMetrics";
+import { FRM_NCR_PATH } from "../../lib/qualityEntry";
 import type { useWorkflowDashboardData } from "../../hooks/useWorkflowDashboardData";
 
 /**
@@ -27,9 +28,9 @@ export function NcrCapaDashboard({ data }: { data: ReturnType<typeof useWorkflow
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <WorkflowMetricCard label="NCRs open" value={open} bucket={open > 0 ? "warning" : "success"} to="/ncr" />
-        <WorkflowMetricCard label="NCRs in containment" value={contained} bucket="info" to="/ncr" />
-        <WorkflowMetricCard label="NCRs in investigation" value={investigating} bucket="info" to="/ncr" />
+        <WorkflowMetricCard label="NCRs open" value={open} bucket={open > 0 ? "warning" : "success"} to={FRM_NCR_PATH} />
+        <WorkflowMetricCard label="NCRs in containment" value={contained} bucket="info" to={FRM_NCR_PATH} />
+        <WorkflowMetricCard label="NCRs in investigation" value={investigating} bucket="info" to={FRM_NCR_PATH} />
         <WorkflowMetricCard label="CAPAs awaiting verification" value={capaVerifying} bucket={capaVerifying > 0 ? "warning" : "muted"} to="/capa" />
       </div>
       <div className="rounded-lg border border-border bg-card p-4">
