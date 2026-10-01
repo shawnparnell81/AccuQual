@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { fileChosenFolder, FormNumberEditor, RecordFolderField, SaveResult, type SaveResultState } from "../../components/forms/FormDocumentControls";
+import { validationReportsCrumb } from "../../lib/folderBrowse";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
 import { SaveStatus } from "../../components/shared/SaveStatus";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
@@ -121,7 +122,7 @@ export function ValidationReportDetailPage() {
       <div className="no-print flex flex-col gap-4">
         <RecordCrumbs
           items={[
-            { label: "Validation Reports", to: "/folders/validation-reports" },
+            validationReportsCrumb(),
             { label: title },
           ]}
         />
@@ -133,8 +134,8 @@ export function ValidationReportDetailPage() {
               {doc}
               {cells.B6 ? ` · ${cells.B6}` : ""}
               {" · "}
-              <Link to="/folders/validation-reports" className="text-primary hover:underline">
-                Validation Reports
+              <Link to={validationReportsCrumb().to} className="text-primary hover:underline">
+                {validationReportsCrumb().label}
               </Link>
             </p>
             <RecordFolderField formKey={formKey} recordId={reportId} prepare={() => updateReport.mutateAsync({ id: reportId, data: { formType, cells: filled } })} />
@@ -145,7 +146,7 @@ export function ValidationReportDetailPage() {
               id={reportId}
               kind={meta.title}
               title={cells.B6 == null ? null : String(cells.B6)}
-              navigateTo="/folders/validation-reports"
+              navigateTo={validationReportsCrumb().to}
             />
             <span className="rounded-md px-2 py-1 text-sm font-semibold" style={{ background: badge, color: "#111" }} data-testid="validation-overall">
               {result}

@@ -1,3 +1,5 @@
+import { FAI_VALIDATION_FOLDER_NAME } from "./companyDocumentFolders.js";
+
 /**
  * Who may change a document number: Engineering, a quality manager, and an
  * administrator or owner. Everyone else may read the number.
@@ -126,7 +128,7 @@ export const SUGGESTED_SUBJECT_PATH: Record<string, string[]> = {
   "frm-psw-001": subjectPath("Engineering", "Supplier Engineering", "Supplier PPAP Submissions"),
   "frm-prc-001": subjectPath("Quality", "Quality Manual & Policies"),
   "frm-qa-001": subjectPath("Quality", "Product Alerts"),
-  "frm-fai-001": subjectPath("Quality", "FAI"),
+  "frm-fai-001": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME),
   "frm-cus-001": subjectPath("Quality", "Customer Quality"),
   "frm-fae-001": subjectPath("Quality", "Corrective & Preventive Actions", "Effectiveness Checks"),
   "frm-msa-001": subjectPath("Quality", "Calibration & Equipment", "Gage R&R"),

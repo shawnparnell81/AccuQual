@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { departmentForFolder, documentsFolderHref, filingLocation, folderChain, leftHandFolders, listFolder, openTarget, saveAsFolders, visibleExplorerFolders, type BrowseFolder } from "./folderBrowse.ts";
+import { departmentForFolder, documentsFolderHref, FAI_VALIDATION_FOLDER_NAME, faiValidationDocumentsHref, filingLocation, folderChain, folderIdByName, LEGACY_VALIDATION_REPORTS_PATH, leftHandFolders, listFolder, openTarget, saveAsFolders, validationReportsCrumb, visibleExplorerFolders, type BrowseFolder } from "./folderBrowse.ts";
 
 const tree: BrowseFolder[] = [
   { id: 1, name: "Quality", parentId: null, sortOrder: 0 },
@@ -23,6 +23,34 @@ describe("folder browse", () => {
       ["Quality", "Production & Inspection", "FRM-VAL-001_9_2026-09-30"],
     );
     assert.equal(documentsFolderHref(2), "/documents/folders?folder=2");
+    assert.deepEqual(
+      folderChain(
+        [
+          { id: 1, name: "ISO Compliance Documents", parentId: null, sortOrder: 0 },
+          { id: 2, name: "Quality", parentId: 1, sortOrder: 0 },
+          { id: 3, name: FAI_VALIDATION_FOLDER_NAME, parentId: 2, sortOrder: 0 },
+          { id: 4, name: "CSA", parentId: 3, sortOrder: 0 },
+        ],
+        4,
+      ).map((folder) => folder.name),
+      ["ISO Compliance Documents", "Quality", FAI_VALIDATION_FOLDER_NAME, "CSA"],
+    );
+  });
+
+  it("opens the renamed FAI drawer by name and keeps the old Validation Reports address as a redirect target", () => {
+    const folders: BrowseFolder[] = [
+      { id: 1, name: "ISO Compliance Documents", parentId: null, sortOrder: 0 },
+      { id: 2, name: "Quality", parentId: 1, sortOrder: 0 },
+      { id: 3, name: FAI_VALIDATION_FOLDER_NAME, parentId: 2, sortOrder: 0 },
+      { id: 9, name: "Engineering", parentId: 1, sortOrder: 1 },
+      { id: 10, name: "Validation", parentId: 9, sortOrder: 0 },
+    ];
+    assert.equal(folderIdByName(folders, FAI_VALIDATION_FOLDER_NAME), 3);
+    assert.equal(folderIdByName(folders, "Validation"), 10);
+    assert.equal(faiValidationDocumentsHref(), "/documents/folders?name=FAI%20%2F%20Validation");
+    assert.equal(LEGACY_VALIDATION_REPORTS_PATH, "/folders/validation-reports");
+    assert.deepEqual(validationReportsCrumb(), { label: "FAI / Validation", to: "/documents/folders?name=FAI%20%2F%20Validation" });
+    assert.equal(openTarget({ id: 11, name: "FRM-VAL-001_9", parentId: 3, sortOrder: 0, linkedPath: "/validation-reports/9" }), "/validation-reports/9");
   });
 
   it("lists subfolders separately from a saved form you can open", () => {

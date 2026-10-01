@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { contentRoot, departmentForFolder, folderChain, isFolderEntry, leftHandFolders, listFolder, openTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
+import { contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderIdByName, isFolderEntry, leftHandFolders, listFolder, openTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
+import { ValidationReportsPanel } from "../ValidationReports/ValidationReportsPanel";
 import { ChevronDown, ChevronRight, Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical, Folder, FolderOpen } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
@@ -411,8 +412,12 @@ export function FolderExplorerPage() {
   // would re-fire this on every render if listed directly.
   useEffect(() => {
     const folderParam = searchParams.get("folder");
-    if (folderParam && /^\d+$/.test(folderParam)) {
-      const dept = departmentForFolder(folders, Number(folderParam));
+    const nameParam = searchParams.get("name");
+    const namedId = nameParam ? folderIdByName(folders, nameParam) : null;
+    const explicitId = folderParam && /^\d+$/.test(folderParam) ? Number(folderParam) : null;
+    const targetId = explicitId ?? namedId;
+    if (targetId != null) {
+      const dept = departmentForFolder(folders, targetId);
       if (dept) setActiveDeptId(dept.id);
       return;
     }
@@ -426,7 +431,9 @@ export function FolderExplorerPage() {
     (isoRoot && activeDeptId === isoRoot.id ? isoRoot : undefined) ?? departments.find((d) => d.id === activeDeptId) ?? departments[0] ?? isoRoot;
 
   const folderParam = searchParams.get("folder");
-  const requestedFolderId = folderParam != null && /^\d+$/.test(folderParam) ? Number(folderParam) : null;
+  const nameParam = searchParams.get("name");
+  const namedFolderId = nameParam ? folderIdByName(visibleFolders, nameParam) : null;
+  const requestedFolderId = folderParam != null && /^\d+$/.test(folderParam) ? Number(folderParam) : namedFolderId;
   const openFolder = requestedFolderId == null ? undefined : visibleFolders.find((folder) => folder.id === requestedFolderId);
   const selectedTreeId = openFolder?.id ?? activeDept?.id ?? null;
 
@@ -1420,6 +1427,8 @@ function FolderBrowser({
         <FolderOpen size={18} className="shrink-0 text-primary" />
         <h2 className="text-lg font-semibold">{folder.name}</h2>
       </div>
+
+      {folder.name === FAI_VALIDATION_FOLDER_NAME && <ValidationReportsPanel />}
 
       <div className="flex flex-wrap items-center gap-2">
         <button

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { SIDEBAR_FOLDERS, flattenSidebarLinks, isFolder } from "../components/layout/sidebarStructure.ts";
+import { faiValidationDocumentsHref, LEGACY_VALIDATION_REPORTS_PATH } from "./folderBrowse.ts";
 import { applyUserShortcuts, PINNABLE_SHORTCUTS } from "./sidebarShortcuts.ts";
 
 describe("per-user sidebar shortcuts", () => {
@@ -52,6 +53,17 @@ describe("per-user sidebar shortcuts", () => {
     assert.equal(links.some((link) => link.key === "capa"), true);
     assert.equal(links.some((link) => link.key === "blank-forms"), true);
     assert.equal(links.some((link) => link.path === "/ncr"), false);
+  });
+
+  it("sends a saved Validation Reports shortcut to FAI / Validation", () => {
+    const next = applyUserShortcuts(SIDEBAR_FOLDERS, {
+      hidden: [],
+      pinned: [{ key: "pin-validation", label: "Validation Reports", path: LEGACY_VALIDATION_REPORTS_PATH }],
+    });
+    const shortcuts = next.find((node) => node.key === "my-shortcuts");
+    assert.ok(shortcuts && isFolder(shortcuts));
+    assert.equal(shortcuts.children[0] && "path" in shortcuts.children[0] ? shortcuts.children[0].path : "", faiValidationDocumentsHref());
+    assert.equal(flattenSidebarLinks(next).some((link) => link.path === LEGACY_VALIDATION_REPORTS_PATH), false);
   });
 
   it("can pin the live NCR module because it is not on the shared menu", () => {
