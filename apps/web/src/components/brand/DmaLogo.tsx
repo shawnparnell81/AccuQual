@@ -1,4 +1,4 @@
-/** Official DMA Industries mark. Transparent PNG; the plate is CSS so silver type stays readable. */
+/** Official DMA Industries mark. Dark navy on transparent; CSS turns it white on dark chrome. */
 export const DMA_LOGO_SRC = "/branding/dma-logo.png";
 
 /** Product name on sign-in and in the app header. */

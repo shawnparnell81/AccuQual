@@ -51,6 +51,19 @@ describe("theme contrast", () => {
     assert.match(css, /body input:where\(:not\(\[type="checkbox"\]\)/);
   });
 
+  it("renders the DMA mark white on dark chrome and keeps the dark file on light paper", () => {
+    const css = readFileSync(join(srcRoot, "styles/globals.css"), "utf8");
+    const logoRule = css.slice(css.indexOf(".dma-logo {"), css.indexOf(".dma-form-header"));
+    assert.match(logoRule, /filter:\s*brightness\(0\)\s*invert\(1\)/);
+    assert.doesNotMatch(logoRule, /background:\s*#000/);
+    assert.match(css, /:root\[data-theme="light"\] \.dma-logo \{\s*filter:\s*none;/);
+    assert.match(css, /:root\[data-scheme="dma"\] \.aq-topbar \.dma-logo/);
+    const printAt = css.indexOf("@media print {");
+    const printCss = css.slice(printAt, css.indexOf("@media (prefers-reduced-motion", printAt));
+    assert.match(printCss, /\.dma-logo \{\s*filter:\s*none !important;\s*background:\s*transparent !important;/);
+    assert.doesNotMatch(printCss, /\.dma-logo \{\s*background:\s*#000/);
+  });
+
   it("lets workbook cells keep the color they set on a status fill", () => {
     const css = readFileSync(join(srcRoot, "routes/ValidationReports/validationReport.css"), "utf8");
     assert.match(css, /\.csa-cell input\.csa-in[\s\S]*?color:\s*inherit/);

@@ -32,7 +32,7 @@ function SupplierPortalShell() {
   const logout = useLogout();
   return (
     <div className="flex h-screen w-full flex-col">
-      <header className="flex h-[62px] items-center justify-between border-b border-border bg-[hsl(var(--brand-header))] px-4 text-white">
+      <header className="aq-brand-bar flex h-[62px] items-center justify-between border-b border-border bg-[hsl(var(--brand-header))] px-4 text-white">
         <span className="aq-brand">
           <DmaLogo height={34} />
           <ProductLine />

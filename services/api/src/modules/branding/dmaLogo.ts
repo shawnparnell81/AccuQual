@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PDFDocument, rgb, type PDFImage, type PDFPage } from "pdf-lib";
+import { PDFDocument, type PDFImage, type PDFPage } from "pdf-lib";
 
 let cached: Uint8Array | null = null;
 
@@ -18,15 +18,13 @@ export async function embedDmaLogo(doc: PDFDocument): Promise<PDFImage> {
 }
 
 /**
- * Official mark on a black plate. `yTop` is the top edge in PDF coordinates.
- * Returns the plate width so the title can sit beside it.
+ * Official mark at the requested height. `yTop` is the top edge in PDF coordinates.
+ * The file is the dark navy artwork, so it sits on the white page.
+ * Returns the drawn width so the title can sit beside it.
  */
 export function drawDmaLogo(page: PDFPage, image: PDFImage, x: number, yTop: number, height: number): number {
-  const pad = 1.5;
-  const innerH = Math.max(1, height - pad * 2);
-  const innerW = innerH * (image.width / image.height);
-  const plateW = innerW + pad * 2;
-  page.drawRectangle({ x, y: yTop - height, width: plateW, height, color: rgb(0, 0, 0) });
-  page.drawImage(image, { x: x + pad, y: yTop - height + pad, width: innerW, height: innerH });
-  return plateW;
+  const drawnH = Math.max(1, height);
+  const drawnW = drawnH * (image.width / image.height);
+  page.drawImage(image, { x, y: yTop - drawnH, width: drawnW, height: drawnH });
+  return drawnW;
 }
