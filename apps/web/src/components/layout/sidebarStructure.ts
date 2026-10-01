@@ -114,6 +114,7 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
       { key: "blank-forms", label: "Blank Forms", path: "/blank-forms", icon: Library },
       { key: "calendar", label: "Calendar", path: "/calendar", icon: CalendarDays },
       { key: "reporting", label: "Reporting", path: "/reporting", icon: BarChart3 },
+      { key: "reports", label: "Reports", path: "/reports", icon: BarChart3 },
       { key: "pareto", label: "Pareto", path: "/pareto", icon: PieChart },
     ],
   },

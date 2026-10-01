@@ -34,6 +34,7 @@ const ROUTE_PATTERNS: RoutePattern[] = [
   { test: /^\/workers/, icon: "default", title: () => "Workers" },
   { test: /^\/workflow/, icon: "default", title: () => "Workflow Builder" },
   { test: /^\/ai\/?$/, icon: "default", title: () => "AI Insights" },
+  { test: /^\/reports\/?$/, icon: "default", title: () => "Reports" },
   { test: /^\/reporting\/?$/, icon: "default", title: () => "Reporting" },
   { test: /^\/pareto\/?$/, icon: "default", title: () => "Pareto" },
   { test: /^\/iso-forms\/record\/(\d+)$/, icon: "documents", title: (match) => `Form #${match[1]}` },

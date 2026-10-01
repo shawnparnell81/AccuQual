@@ -59,6 +59,7 @@ const EXACT = new Set([
   "/admin/company-ai",
   "/admin/ai-usage",
   "/reporting",
+  "/reports",
 ]);
 
 /** One dynamic segment: a number, or (for a few list filters) any single path piece. */

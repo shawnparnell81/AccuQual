@@ -88,6 +88,7 @@ export const WorkflowCanvasPage = lazyNamed("/workflow", () => import("./Workflo
 export const AiInsightsPage = lazyNamed("/ai", () => import("./AI/AiInsightsPage"), "AiInsightsPage");
 export const DigitalTwinPage = lazyNamed("/digital-twin", () => import("./DigitalTwin/DigitalTwinPage"), "DigitalTwinPage");
 export const ReportingHubPage = lazyNamed("/reporting", () => import("./Reporting/ReportingHubPage"), "ReportingHubPage");
+export const ReportsPage = lazyNamed("/reports", () => import("./Reports/ReportsPage"), "ReportsPage");
 export const NavigationSettingsPage = lazyNamed("/settings/navigation", () => import("./Settings/NavigationSettingsPage"), "NavigationSettingsPage");
 export const SettingsPage = lazyNamed("/settings", () => import("./Settings/SettingsPage"), "SettingsPage");
 export const ErpPresetsListPage = lazyNamed("/settings/erp/presets", () => import("./Erp/ErpPresetsListPage"), "ErpPresetsListPage");
