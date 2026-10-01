@@ -1,21 +1,7 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../api/client";
-
-interface FormStart {
-  createPath: string;
-  body: Record<string, unknown>;
-  openPath: string;
-}
-
-interface FormTemplateLink {
-  formKey: string;
-  formId: string;
-  title: string;
-  isoPath: string[];
-  start: FormStart | null;
-}
+import { useFormTemplates, type FormTemplateCacheRow } from "../../api/formTemplatesQuery";
 
 /**
  * Every fillable blank already in the app. Starting one creates a filled copy.
@@ -26,12 +12,9 @@ export function BlankFormsPage() {
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const templates = useQuery({
-    queryKey: ["form-templates"],
-    queryFn: async () => (await apiClient.get<{ templates: FormTemplateLink[] }>("/document-folders/form-templates")).data.templates,
-  });
+  const templates = useFormTemplates();
 
-  async function openForm(form: FormTemplateLink) {
+  async function openForm(form: FormTemplateCacheRow) {
     if (!form.start) return;
     setPendingKey(form.formKey);
     setStartError(null);
@@ -46,7 +29,7 @@ export function BlankFormsPage() {
 
   const needle = query.trim().toLowerCase();
   const groups = useMemo(() => {
-    const byTopic = new Map<string, FormTemplateLink[]>();
+    const byTopic = new Map<string, FormTemplateCacheRow[]>();
     for (const form of templates.data ?? []) {
       if (!form.start) continue;
       if (needle && !`${form.formId} ${form.title} ${form.formKey}`.toLowerCase().includes(needle)) continue;

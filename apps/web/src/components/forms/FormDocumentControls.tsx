@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
+import { FORM_TEMPLATES_QUERY_KEY, useFormTemplates } from "../../api/formTemplatesQuery";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { EDITABLE_FORM_KEYS, FILEABLE_FORM_KEYS, canEditFormNumber } from "../../lib/formDocument";
@@ -116,11 +117,7 @@ export function FormNumberEditor({ formKey, compact = false }: { formKey: string
   const user = useCurrentUser();
   const canEdit = canEditFormNumber(user);
   const queryClient = useQueryClient();
-  const templates = useQuery({
-    queryKey: ["form-number", formKey],
-    queryFn: async () => (await apiClient.get<{ templates: { formKey: string; formId: string }[] }>("/document-folders/form-templates")).data.templates,
-    enabled: formKey.length > 0,
-  });
+  const templates = useFormTemplates({ enabled: formKey.length > 0 });
   const current = templates.data?.find((item) => item.formKey === formKey)?.formId ?? "";
   const [value, setValue] = useState(current);
   const [seen, setSeen] = useState<string | null>(null);
@@ -136,8 +133,7 @@ export function FormNumberEditor({ formKey, compact = false }: { formKey: string
     mutationFn: async (formId: string) => (await apiClient.patch(`/document-folders/form-templates/${formKey}`, { formId })).data,
     onSuccess: async () => {
       setMessage("Saved. The blank master and Forms Library use this number from now on.");
-      await queryClient.invalidateQueries({ queryKey: ["form-templates"] });
-      await queryClient.invalidateQueries({ queryKey: ["form-number", formKey] });
+      await queryClient.invalidateQueries({ queryKey: FORM_TEMPLATES_QUERY_KEY });
     },
     onError: () => setMessage("Couldn't save the form number."),
   });

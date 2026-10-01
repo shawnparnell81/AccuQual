@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
-import { apiClient } from "../../api/client";
+import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { fileChosenFolder, FormNumberEditor, RecordFolderField, SaveResult, type SaveResultState } from "../../components/forms/FormDocumentControls";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
@@ -72,10 +72,7 @@ export function ValidationReportDetailPage() {
   const formType: ValidationFormType = formTypeOf(report?.data);
   const meta = VALIDATION_FORMS[formType];
   const formKey = meta.formKey;
-  const templates = useQuery({
-    queryKey: ["form-templates"],
-    queryFn: async () => (await apiClient.get<{ templates: { formKey: string; formId: string }[] }>("/document-folders/form-templates")).data.templates,
-  });
+  const templates = useFormTemplates();
   const documentNumber = templates.data?.find((item) => item.formKey === formKey)?.formId ?? "";
 
   useEffect(() => {

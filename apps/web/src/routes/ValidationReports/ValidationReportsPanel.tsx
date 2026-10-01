@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "../../api/client";
+import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { formatDate } from "../../lib/dates";
@@ -49,10 +48,7 @@ export function ValidationReportsPanel() {
   const { effective } = useEffectivePermissions();
   const canEdit = user?.roleName === "admin" || user?.roleName === "owner" || effective?.documents === "edit";
   const { data: rows = [], isLoading, isError } = hooks.useList();
-  const filing = useQuery({
-    queryKey: ["form-templates"],
-    queryFn: async () => (await apiClient.get<{ templates: { formKey: string; formId: string }[] }>("/document-folders/form-templates")).data,
-  });
+  const filing = useFormTemplates();
   const createReport = hooks.useCreate();
   const [pendingKind, setPendingKind] = useState<ValidationFormType | null>(null);
 
@@ -120,7 +116,7 @@ export function ValidationReportsPanel() {
                 const passed = result === "Pass" || result === "Passed" || result === "PASS";
                 const failed = result === "Fail" || result === "Failed" || result === "FAIL";
                 const color = passed ? VALIDATION_FORMS[kind].pass : failed ? "#FF0000" : "transparent";
-                const number = filing.data?.templates.find((item) => item.formKey === VALIDATION_FORMS[kind].formKey)?.formId?.trim() ?? "";
+                const number = filing.data?.find((item) => item.formKey === VALIDATION_FORMS[kind].formKey)?.formId?.trim() ?? "";
                 const name = number ? `${number} #${row.id}` : `${VALIDATION_FORMS[kind].title} #${row.id}`;
                 return (
                   <tr key={row.id} className="border-t border-border">
