@@ -25,6 +25,7 @@ import { usePlantWrite } from "../../hooks/usePlantWrite";
 import { useSites, useSwitchPlant } from "../../hooks/useSites";
 import { FRM_NCR_PATH } from "../../lib/qualityEntry";
 import { useSiteStore } from "../../store/siteStore";
+import { OpenWorkSection } from "../../components/dashboard/OpenWorkSection";
 import { AgingChart, ParetoChart, PlantChart, Sparkline, TrendChart } from "./charts";
 
 function greeting() {
@@ -270,6 +271,7 @@ export function DashboardPage() {
       {data && (
         <>
           {data.partial && <p className="text-xs text-muted-foreground">Some older records were left out of these counts so the page stays fast.</p>}
+          <OpenWorkSection work={data.openWork} singlePlant={singlePlant} />
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
             <Kpi
               href={data.kpis.openIssues.access ? FRM_NCR_PATH : undefined}

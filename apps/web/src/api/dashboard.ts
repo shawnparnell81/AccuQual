@@ -33,4 +33,26 @@ export interface DashboardOverview {
   }[];
   gagesByPlant: false;
   activity: { id: number; at: string | null; text: string; href: string | null; by: string }[];
+  openWork: OpenWork;
+}
+
+/** Open quality records on the signed-in dashboard. Counts are real rows only. */
+export interface OpenWork {
+  cards: { key: string; label: string; value: number; foot: string; href: string | null; module: string | null }[];
+  modules: { key: string; label: string }[];
+  plants: { id: number; name: string }[];
+  records: {
+    id: string;
+    module: string;
+    href: string;
+    number: string;
+    title: string;
+    status: string;
+    plantId: number | null;
+    plant: string | null;
+    owner: string | null;
+    updatedAt: string | null;
+    ageDays: number | null;
+  }[];
+  truncated: boolean;
 }

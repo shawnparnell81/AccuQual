@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { asc, desc, eq, inArray, ne } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
 import { getUserAccessLevel, type ResourceKey } from "../../middleware/departmentAccess.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
@@ -13,6 +13,11 @@ import { suppliers } from "../../drizzle/schema/supplier.js";
 import { sites, userSites } from "../../drizzle/schema/sites.js";
 import { users } from "../../drizzle/schema/users.js";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
+import { validationReports } from "../../drizzle/schema/validationReport.js";
+import { isoQualityForms } from "../../drizzle/schema/isoQualityForms.js";
+import { riskAssessments } from "../../drizzle/schema/risk.js";
+import { workOrders } from "../../drizzle/schema/workOrders.js";
+import { inventoryItems } from "../../drizzle/schema/inventory.js";
 import { listEquipmentWithSummary } from "../calibration/calibration.service.js";
 import { canSeeCompanyAuditRow, visibleEntityTypes } from "../audit-trail/auditTrailVisibility.js";
 import {
@@ -24,12 +29,15 @@ import {
   type DashboardSource,
   type SiteRef,
 } from "./dashboard.metrics.js";
+import { buildOpenWork, type OpenWork } from "./dashboard.openWork.js";
 
 const ROW_CAP = 5000;
 const ACTIVITY_LIMIT = 40;
 const ACTIVITY_SCAN = 200;
 
-const READ_KEYS = ["ncr", "capa", "documents", "training", "audit", "calibration", "change", "ppap", "scar"] as const satisfies readonly ResourceKey[];
+const READ_KEYS = ["ncr", "capa", "documents", "training", "audit", "calibration", "change", "ppap", "scar", "risk", "work_orders"] as const satisfies readonly ResourceKey[];
+
+const OPEN_FORM_TYPES = ["first_article", "salt_spray", "prototype_strut", "engineering_change"] as const;
 
 const SITE_SCOPED_ACTIVITY = new Set(["NCR", "CAPA", "Audit"]);
 
@@ -64,7 +72,7 @@ export async function loadDashboardOverview(
   db: Db,
   user: { id: number; roleName: string | null; department: string | null },
   opts: DashboardLoadOptions,
-): Promise<DashboardOverview> {
+): Promise<DashboardOverview & { openWork: OpenWork }> {
   const levels = await Promise.all(READ_KEYS.map(async (key) => [key, await getUserAccessLevel(db, user, key)] as const));
   const levelOf = Object.fromEntries(levels) as Record<(typeof READ_KEYS)[number], string>;
   const can = (key: (typeof READ_KEYS)[number]) => levelOf[key] !== "none";
@@ -72,7 +80,7 @@ export async function loadDashboardOverview(
   const allowed = opts.allowedSiteIds;
   const kpiSiteIds = opts.kpiSiteIds.filter((id) => allowed.includes(id));
   const truncated = { value: false };
-  const [siteRows, ncrRows, capaRows, docRows, assignmentRows, membershipRows, auditRows, changeRows, ppapRows, scarRows, people, equipmentRows] = await Promise.all([
+  const [siteRows, ncrRows, capaRows, docRows, assignmentRows, membershipRows, auditRows, changeRows, ppapRows, scarRows, people, equipmentRows, validationRows, isoRows, riskRows, workOrderRows] = await Promise.all([
     allowed.length === 0
       ? Promise.resolve([])
       : db.select({ id: sites.id, name: sites.name, code: sites.code, status: sites.status }).from(sites).where(inArray(sites.id, allowed)),
@@ -88,6 +96,7 @@ export async function loadDashboardOverview(
             dueDate: ncr.dueDate,
             closedAt: ncr.closedAt,
             createdAt: ncr.createdAt,
+            updatedAt: ncr.updatedAt,
             rootCause: ncr.rootCause,
             isDeleted: ncr.isDeleted,
           })
@@ -106,6 +115,7 @@ export async function loadDashboardOverview(
             dueDate: capa.dueDate,
             closedAt: capa.closedAt,
             createdAt: capa.createdAt,
+            updatedAt: capa.updatedAt,
             actionPlan: capa.actionPlan,
             rootCause: capa.rootCause,
           })
@@ -158,11 +168,28 @@ export async function loadDashboardOverview(
           .limit(ROW_CAP)
       : Promise.resolve([]),
     can("change")
-      ? db.select({ id: changeRequests.id, title: changeRequests.title, status: changeRequests.status }).from(changeRequests).limit(ROW_CAP)
+      ? db
+          .select({
+            id: changeRequests.id,
+            title: changeRequests.title,
+            status: changeRequests.status,
+            requestedBy: changeRequests.requestedBy,
+            createdAt: changeRequests.createdAt,
+            updatedAt: changeRequests.updatedAt,
+          })
+          .from(changeRequests)
+          .limit(ROW_CAP)
       : Promise.resolve([]),
     can("ppap")
       ? db
-          .select({ id: ppapPackages.id, partNumber: ppapPackages.partNumber, partName: ppapPackages.partName, status: ppapPackages.status })
+          .select({
+            id: ppapPackages.id,
+            partNumber: ppapPackages.partNumber,
+            partName: ppapPackages.partName,
+            status: ppapPackages.status,
+            ownerId: ppapPackages.ownerId,
+            createdAt: ppapPackages.createdAt,
+          })
           .from(ppapPackages)
           .limit(ROW_CAP)
       : Promise.resolve([]),
@@ -178,6 +205,12 @@ export async function loadDashboardOverview(
             why1: scarForms.why1,
             supplierRepSignature: scarForms.supplierRepSignature,
             createdBy: scarForms.createdBy,
+            scarNumber: scarForms.scarNumber,
+            partNumberDescription: scarForms.partNumberDescription,
+            defectDescription: scarForms.defectDescription,
+            correctiveActionOwner: scarForms.correctiveActionOwner,
+            createdAt: scarForms.createdAt,
+            updatedAt: scarForms.updatedAt,
           })
           .from(scarForms)
           .leftJoin(suppliers, eq(suppliers.id, scarForms.supplierId))
@@ -185,9 +218,68 @@ export async function loadDashboardOverview(
       : Promise.resolve([]),
     db.select({ id: users.id, name: users.name }).from(users),
     can("calibration") ? listEquipmentWithSummary(db) : Promise.resolve([]),
+    can("documents")
+      ? db
+          .select({
+            id: validationReports.id,
+            data: validationReports.data,
+            createdAt: validationReports.createdAt,
+            updatedAt: validationReports.updatedAt,
+          })
+          .from(validationReports)
+          .orderBy(asc(validationReports.createdAt))
+          .limit(ROW_CAP)
+      : Promise.resolve([]),
+    can("documents")
+      ? db
+          .select({
+            id: isoQualityForms.id,
+            formType: isoQualityForms.formType,
+            data: isoQualityForms.data,
+            createdAt: isoQualityForms.createdAt,
+            updatedAt: isoQualityForms.updatedAt,
+          })
+          .from(isoQualityForms)
+          .where(inArray(isoQualityForms.formType, [...OPEN_FORM_TYPES]))
+          .orderBy(asc(isoQualityForms.createdAt))
+          .limit(ROW_CAP)
+      : Promise.resolve([]),
+    can("risk")
+      ? db
+          .select({
+            id: riskAssessments.id,
+            title: riskAssessments.title,
+            status: riskAssessments.status,
+            ownerId: riskAssessments.ownerId,
+            createdAt: riskAssessments.createdAt,
+            updatedAt: riskAssessments.updatedAt,
+          })
+          .from(riskAssessments)
+          .where(ne(riskAssessments.status, "closed"))
+          .orderBy(asc(riskAssessments.createdAt))
+          .limit(ROW_CAP)
+      : Promise.resolve([]),
+    can("work_orders")
+      ? db
+          .select({
+            id: workOrders.id,
+            status: workOrders.status,
+            notes: workOrders.notes,
+            createdBy: workOrders.createdBy,
+            createdAt: workOrders.createdAt,
+            updatedAt: workOrders.updatedAt,
+            sku: inventoryItems.sku,
+            description: inventoryItems.description,
+          })
+          .from(workOrders)
+          .leftJoin(inventoryItems, eq(inventoryItems.id, workOrders.itemId))
+          .where(inArray(workOrders.status, ["planned", "in_progress"]))
+          .orderBy(asc(workOrders.createdAt))
+          .limit(ROW_CAP)
+      : Promise.resolve([]),
   ]);
 
-  for (const rows of [ncrRows, capaRows, docRows, assignmentRows, auditRows, changeRows, ppapRows, scarRows]) {
+  for (const rows of [ncrRows, capaRows, docRows, assignmentRows, auditRows, changeRows, ppapRows, scarRows, validationRows, isoRows, riskRows, workOrderRows]) {
     if (rows.length >= ROW_CAP) truncated.value = true;
   }
 
@@ -246,9 +338,10 @@ export async function loadDashboardOverview(
   const kpiSites = siteRefs.filter((row) => kpiSiteIds.includes(row.id));
   const names: Record<number, string | null> = {};
   for (const person of people) names[person.id] = person.name;
+  const now = new Date();
 
   const source: DashboardSource = {
-    now: new Date(),
+    now,
     userId: user.id,
     scope: { allPlants: opts.allPlants, siteIds: kpiSiteIds, sites: kpiSites },
     comparisonSites: siteRefs,
@@ -290,5 +383,49 @@ export async function loadDashboardOverview(
     partial: truncated.value,
   };
 
-  return buildDashboardOverview(source);
+  const overview = buildDashboardOverview(source);
+  const openWork = buildOpenWork({
+    now,
+    allPlants: opts.allPlants,
+    siteIds: kpiSiteIds,
+    sites: kpiSites.map((site) => ({ id: site.id, name: site.name })),
+    access: {
+      ncr: can("ncr"),
+      capa: can("capa"),
+      scar: can("scar"),
+      documents: can("documents"),
+      change: can("change"),
+      ppap: can("ppap"),
+      risk: can("risk"),
+      workOrders: can("work_orders"),
+      calibration: can("calibration"),
+      training: can("training"),
+    },
+    names,
+    userSites: membershipRows,
+    ncrs: cap(ncrRows, truncated),
+    capas: cap(capaRows, truncated),
+    scars: cap(scarRows, truncated).map((row) => ({
+      id: row.id,
+      status: row.status,
+      scarNumber: row.scarNumber,
+      supplierName: row.supplierName?.trim() || row.linkedName?.trim() || null,
+      partNumberDescription: row.partNumberDescription,
+      defectDescription: row.defectDescription,
+      correctiveActionOwner: row.correctiveActionOwner,
+      createdBy: row.createdBy,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    })),
+    changes: cap(changeRows, truncated),
+    ppaps: cap(ppapRows, truncated),
+    risks: cap(riskRows, truncated),
+    workOrders: cap(workOrderRows, truncated),
+    validation: cap(validationRows, truncated).map((row) => ({ ...row, formType: "validation" })),
+    forms: cap(isoRows, truncated),
+    assignments: cap(assignmentRows, truncated),
+    equipment: equipmentRows.map((row) => ({ dueStatus: row.dueStatus })),
+  });
+
+  return { ...overview, openWork };
 }
