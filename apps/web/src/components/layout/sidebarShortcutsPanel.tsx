@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pin } from "lucide-react";
+import { GripVertical, Pin } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
@@ -14,6 +14,7 @@ import {
 } from "../../lib/sidebarShortcuts";
 import type { SidebarNode } from "./sidebarStructure";
 import { flattenSidebarLinks } from "./sidebarStructure";
+import { dropPosition, reorderDropClass, reorderIds } from "../../lib/listReorder";
 import { useToast } from "../shared/ToastProvider";
 import { Modal } from "../modals/Modal";
 
@@ -42,6 +43,7 @@ export function SidebarShortcutsDialog({ catalog, open, onClose }: { catalog: Si
   const [hidden, setHidden] = useState<string[]>([]);
   const [pinned, setPinned] = useState<PinnedShortcut[]>([]);
   const [find, setFind] = useState("");
+  const [pinOver, setPinOver] = useState<{ key: string; position: "before" | "after" } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -81,6 +83,20 @@ export function SidebarShortcutsDialog({ catalog, open, onClose }: { catalog: Si
     });
   }, [find, pinned, templates.data]);
 
+  function placePin(movingKey: string, targetKey: string, position: "before" | "after") {
+    setPinned((current) => {
+      const next = reorderIds(
+        current.map((pin) => pin.key),
+        movingKey,
+        targetKey,
+        position,
+      );
+      if (!next) return current;
+      const byKey = new Map(current.map((pin) => [pin.key, pin]));
+      return next.map((key) => byKey.get(key)).filter((pin): pin is PinnedShortcut => Boolean(pin));
+    });
+  }
+
   function toggleHidden(key: string) {
     setHidden((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
   }
@@ -110,8 +126,41 @@ export function SidebarShortcutsDialog({ catalog, open, onClose }: { catalog: Si
           {pinned.length > 0 && (
             <ul className="mb-2 flex flex-col gap-1">
               {pinned.map((pin) => (
-                <li key={pin.key} className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1">
-                  <span>{pin.label}</span>
+                <li
+                  key={pin.key}
+                  className={`flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1 ${pinOver?.key === pin.key ? reorderDropClass(pinOver.position) : ""}`}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const position = dropPosition(event.clientY, rect.top, rect.height, false);
+                    if (position === "inside") return;
+                    setPinOver({ key: pin.key, position });
+                  }}
+                  onDragLeave={() => setPinOver((current) => (current?.key === pin.key ? null : current))}
+                  onDrop={(event: DragEvent) => {
+                    event.preventDefault();
+                    const movingKey = event.dataTransfer.getData("application/x-accuqual-pin");
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const position = dropPosition(event.clientY, rect.top, rect.height, false);
+                    setPinOver(null);
+                    if (movingKey && position !== "inside") placePin(movingKey, pin.key, position);
+                  }}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span
+                      draggable
+                      title="Drag to rearrange"
+                      className="cursor-grab text-muted-foreground active:cursor-grabbing"
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData("application/x-accuqual-pin", pin.key);
+                        event.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragEnd={() => setPinOver(null)}
+                    >
+                      <GripVertical size={14} />
+                    </span>
+                    <span className="truncate">{pin.label}</span>
+                  </span>
                   <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setPinned((current) => current.filter((item) => item.key !== pin.key))}>
                     Remove
                   </button>

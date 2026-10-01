@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { folderMoveIsBlocked, nextSortOrder } from "./folderMove.ts";
+import { folderMoveIsBlocked, nextSortOrder, planNest, planSiblingReorder } from "./folderMove.ts";
 
 const tree = [
   { id: 1, parentId: null, sortOrder: 0 },
@@ -25,5 +25,32 @@ describe("folder moves", () => {
   it("places a moved folder after its new siblings", () => {
     assert.equal(nextSortOrder(tree, null, 2), 2);
     assert.equal(nextSortOrder(tree, 4, 3), 0);
+  });
+
+  it("reorders siblings beside a row and leaves the parent alone", () => {
+    const quality = { id: 3, parentId: 1, sortOrder: 1 };
+    const engineering = { id: 2, parentId: 1, sortOrder: 0 };
+    const placed = planSiblingReorder([engineering, quality], quality.id, engineering.id, "before", 1);
+    assert.deepEqual(placed, [
+      { id: 3, parentId: 1, sortOrder: 0 },
+      { id: 2, parentId: 1, sortOrder: 1 },
+    ]);
+  });
+
+  it("moves a nested folder up beside its parent without nesting into that row", () => {
+    const engineering = { id: 2, parentId: 1, sortOrder: 0 };
+    const quality = { id: 5, parentId: 1, sortOrder: 1 };
+    const csa = { id: 3, parentId: 2, sortOrder: 0 };
+    const placed = planSiblingReorder([engineering, quality], csa.id, quality.id, "before", 1);
+    assert.deepEqual(placed, [
+      { id: 3, parentId: 1, sortOrder: 1 },
+      { id: 5, parentId: 1, sortOrder: 2 },
+    ]);
+  });
+
+  it("nests only when the drop asks to go inside, and refuses a cycle", () => {
+    assert.deepEqual(planNest(tree, 3, 4), [{ id: 3, parentId: 4, sortOrder: 0 }]);
+    assert.equal(planNest(tree, 1, 3), null);
+    assert.deepEqual(planNest(tree, 3, 2), []);
   });
 });

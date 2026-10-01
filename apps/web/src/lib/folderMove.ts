@@ -1,6 +1,19 @@
+import { reorderIds } from "./listReorder";
+
 export interface FolderNode {
   id: number;
   parentId: number | null;
+}
+
+export interface OrderedNode extends FolderNode {
+  sortOrder: number;
+}
+
+/** A row after a drop. `parentId` is the parent it should have once the drop is saved. */
+export interface NodePlacement {
+  id: number;
+  parentId: number | null;
+  sortOrder: number;
 }
 
 /** True when `targetParentId` is the folder itself or one of its descendants. Null is the top level. */
@@ -23,4 +36,43 @@ export function folderMoveIsBlocked(folders: FolderNode[], folderId: number, tar
 export function nextSortOrder(folders: { parentId: number | null; sortOrder: number; id: number }[], parentId: number | null, movingId: number): number {
   const siblings = folders.filter((folder) => folder.parentId === parentId && folder.id !== movingId);
   return siblings.reduce((max, folder) => Math.max(max, folder.sortOrder), -1) + 1;
+}
+
+/**
+ * Puts `movingId` inside `targetParentId`, after the children already there.
+ * An empty list means it is already there. Null means the move would cycle.
+ */
+export function planNest(nodes: OrderedNode[], movingId: number, targetParentId: number | null): NodePlacement[] | null {
+  if (folderMoveIsBlocked(nodes, movingId, targetParentId)) return null;
+  const moving = nodes.find((node) => node.id === movingId);
+  if (!moving) return null;
+  if (moving.parentId === targetParentId) return [];
+  return [{ id: movingId, parentId: targetParentId, sortOrder: nextSortOrder(nodes, targetParentId, movingId) }];
+}
+
+/**
+ * Inserts `movingId` before or after `targetId` and renumbers that sibling
+ * group from 0. `parentId` is the parent's id for the whole group (the
+ * target's parent), so a drop beside a row does not nest into it.
+ * An empty list means the order did not change. Null means `targetId` is not in the group.
+ */
+export function planSiblingReorder(group: OrderedNode[], movingId: number, targetId: number, position: "before" | "after", parentId: number | null): NodePlacement[] | null {
+  const ids = reorderIds(
+    group.map((node) => node.id),
+    movingId,
+    targetId,
+    position,
+  );
+  if (!ids) return null;
+  const byId = new Map(group.map((node) => [node.id, node]));
+  const placements: NodePlacement[] = [];
+  ids.forEach((id, sortOrder) => {
+    const current = byId.get(id);
+    const nextParent = id === movingId ? parentId : (current?.parentId ?? parentId);
+    const parentChanged = !current || current.parentId !== nextParent;
+    const orderChanged = !current || current.sortOrder !== sortOrder;
+    if (!parentChanged && !orderChanged) return;
+    placements.push({ id, parentId: nextParent, sortOrder });
+  });
+  return placements;
 }

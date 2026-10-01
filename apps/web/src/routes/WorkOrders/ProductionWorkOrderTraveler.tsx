@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { dropPosition, reorderIds } from "../../lib/listReorder";
 import { apiClient } from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
 import { useToast } from "../../components/shared/ToastProvider";
@@ -94,15 +95,20 @@ export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrde
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't reorder the operations.")),
   });
   const [dragOpId, setDragOpId] = useState<number | null>(null);
-  const [overOpId, setOverOpId] = useState<number | null>(null);
+  const [overOp, setOverOp] = useState<{ id: number; position: "before" | "after" } | null>(null);
 
-  function dropOperation(targetId: number) {
+  function dropOperation(targetId: number, position: "before" | "after") {
     const movingId = dragOpId;
     setDragOpId(null);
-    setOverOpId(null);
+    setOverOp(null);
     if (movingId === null || movingId === targetId) return;
-    const ids = operations.map((o) => o.id).filter((id) => id !== movingId);
-    ids.splice(ids.indexOf(targetId), 0, movingId);
+    const ids = reorderIds(
+      operations.map((o) => o.id),
+      movingId,
+      targetId,
+      position,
+    );
+    if (!ids) return;
     // A signed-off operation vouches for its own place in the routing, so it can't be shifted.
     const shifted = operations.find((o, index) => o.signOff && ids[index] !== o.id);
     if (shifted) {
@@ -145,7 +151,8 @@ export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrde
         .wot-remove-op:hover { color: #dc2626; }
         .wot-grip-op { cursor: grab; color: #94a3b8; font-size: 14px; line-height: 1; padding: 2px 4px; user-select: none; }
         .wot-grip-op:hover { color: #0f1423; }
-        .wot-row-over td { box-shadow: inset 0 2px 0 #2451ff; }
+        .wot-row-before td { box-shadow: inset 0 3px 0 #2451ff; }
+        .wot-row-after td { box-shadow: inset 0 -3px 0 #2451ff; }
         .wot-add-op { margin-top: 10px; border: 1px dashed #9d4edd; background: transparent; color: #9d4edd; border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
         .wot-add-op:disabled { opacity: 0.4; cursor: not-allowed; }
         /* Real print support (previously missing entirely — see the "Save/
@@ -247,14 +254,14 @@ export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrde
                   onDelete={() => deleteOperation.mutate(op.id)}
                   canDrag={canEditTraveler && operations.length > 1}
                   isDragging={dragOpId === op.id}
-                  isOver={overOpId === op.id && dragOpId !== null && dragOpId !== op.id}
+                  isOver={overOp?.id === op.id && dragOpId !== null && dragOpId !== op.id ? overOp.position : null}
                   onDragStart={() => setDragOpId(op.id)}
                   onDragEnd={() => {
                     setDragOpId(null);
-                    setOverOpId(null);
+                    setOverOp(null);
                   }}
-                  onDragOverRow={() => dragOpId !== null && setOverOpId(op.id)}
-                  onDropRow={() => dropOperation(op.id)}
+                  onDragOverRow={(position) => dragOpId !== null && dragOpId !== op.id && setOverOp({ id: op.id, position })}
+                  onDropRow={(position) => dropOperation(op.id, position)}
                 />
               ))}
             </tbody>
@@ -342,23 +349,27 @@ function OperationRow({
   onDelete: () => void;
   canDrag: boolean;
   isDragging: boolean;
-  isOver: boolean;
+  isOver: "before" | "after" | null;
   onDragStart: () => void;
   onDragEnd: () => void;
-  onDragOverRow: () => void;
-  onDropRow: () => void;
+  onDragOverRow: (position: "before" | "after") => void;
+  onDropRow: (position: "before" | "after") => void;
 }) {
   return (
     <tr
-      className={isOver ? "wot-row-over" : undefined}
+      className={isOver === "before" ? "wot-row-before" : isOver === "after" ? "wot-row-after" : undefined}
       style={isDragging ? { opacity: 0.4 } : undefined}
       onDragOver={(e) => {
-        onDragOverRow();
+        const position = dropPosition(e.clientY, e.currentTarget.getBoundingClientRect().top, e.currentTarget.getBoundingClientRect().height, false);
+        if (position === "inside") return;
+        onDragOverRow(position);
         e.preventDefault();
       }}
       onDrop={(e) => {
         e.preventDefault();
-        onDropRow();
+        const position = dropPosition(e.clientY, e.currentTarget.getBoundingClientRect().top, e.currentTarget.getBoundingClientRect().height, false);
+        if (position === "inside") return;
+        onDropRow(position);
       }}
     >
       <td>

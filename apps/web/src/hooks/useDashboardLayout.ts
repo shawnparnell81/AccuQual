@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { reorderIds } from "../lib/listReorder";
 import { useCurrentUser } from "./useAuth";
 
 export const DASHBOARD_SECTIONS = ["status", "kpis", "trend", "attention", "detail"] as const;
@@ -50,13 +51,12 @@ export function useDashboardLayout() {
     [key]
   );
 
-  /** Puts `moving` where `target` is now. */
+  /** Puts `moving` before or after `target`. */
   const move = useCallback(
-    (moving: DashboardSectionId, target: DashboardSectionId) => {
-      if (moving === target) return;
-      const without = order.filter((id) => id !== moving);
-      without.splice(without.indexOf(target), 0, moving);
-      persist(without);
+    (moving: DashboardSectionId, target: DashboardSectionId, position: "before" | "after" = "before") => {
+      const next = reorderIds(order, moving, target, position);
+      if (!next) return;
+      persist(next);
     },
     [order, persist]
   );
