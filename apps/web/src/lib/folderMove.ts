@@ -56,6 +56,32 @@ export function planNest(nodes: OrderedNode[], movingId: number, targetParentId:
  * target's parent), so a drop beside a row does not nest into it.
  * An empty list means the order did not change. Null means `targetId` is not in the group.
  */
+/**
+ * Inserts `movingId` in the gap under `parentId`, before or after `targetId`.
+ * `targetId` null uses the first sibling for "before" and the last for "after".
+ * The row beside the gap does not become the parent.
+ */
+export function planSiblingGap(
+  nodes: OrderedNode[],
+  movingId: number,
+  parentId: number | null,
+  targetId: number | null,
+  position: "before" | "after",
+  inGroup: (node: OrderedNode) => boolean,
+): NodePlacement[] | null {
+  if (folderMoveIsBlocked(nodes, movingId, parentId)) return null;
+  const moving = nodes.find((node) => node.id === movingId);
+  if (!moving || !inGroup(moving)) return null;
+  const group = nodes.filter((node) => node.parentId === parentId && inGroup(node)).sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+  const others = group.filter((node) => node.id !== movingId);
+  const anchor = targetId == null ? others.at(position === "before" ? 0 : -1) : group.find((node) => node.id === targetId);
+  if (!anchor || anchor.id === movingId) {
+    if (targetId == null && others.length === 0) return moving.parentId === parentId ? [] : planNest(nodes, movingId, parentId);
+    return anchor?.id === movingId ? [] : null;
+  }
+  return planSiblingReorder(group, movingId, anchor.id, position, parentId);
+}
+
 export function planSiblingReorder(group: OrderedNode[], movingId: number, targetId: number, position: "before" | "after", parentId: number | null): NodePlacement[] | null {
   const ids = reorderIds(
     group.map((node) => node.id),

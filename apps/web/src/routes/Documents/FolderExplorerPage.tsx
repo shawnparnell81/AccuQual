@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { contentRoot, departmentForFolder, folderChain, isFolderEntry, leftHandFolders, listFolder, openTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
@@ -11,11 +11,53 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
 import { onlyOfficeFile, previewKind, saveBytes } from "../../lib/filePreview";
-import { folderMoveIsBlocked, planNest, planSiblingReorder, type NodePlacement } from "../../lib/folderMove";
+import { paneScrollDelta } from "../../lib/dragAutoScroll";
+import { folderMoveIsBlocked, planNest, planSiblingGap, planSiblingReorder, type NodePlacement } from "../../lib/folderMove";
 import { dropPosition, reorderDropClass, type DropPosition } from "../../lib/listReorder";
 
 const DRAG_FOLDER = "application/x-accuqual-folder";
 const DRAG_DOC = "application/x-accuqual-doc";
+
+type DragKind = "folder" | "doc";
+
+function gapKey(parentId: number | null, targetId: number | null, kind: DragKind) {
+  const position = targetId == null ? "after" : "before";
+  return `${kind}:${parentId ?? "root"}:${position}:${targetId ?? "end"}`;
+}
+
+/** The empty strip between siblings. A line here means "place beside this row", not inside it. */
+function SiblingGap({
+  active,
+  className,
+  orientation = "row",
+  onDragOver,
+  onDragLeave,
+  onDrop,
+}: {
+  active: boolean;
+  className: string;
+  orientation?: "row" | "pill";
+  onDragOver: (event: DragEvent) => void;
+  onDragLeave: () => void;
+  onDrop: (event: DragEvent) => void;
+}) {
+  const line =
+    orientation === "row"
+      ? `h-0.5 w-full ${active ? "bg-primary shadow-[0_0_0_1px_hsl(var(--primary))]" : "bg-primary/40"}`
+      : `h-4 w-0.5 ${active ? "bg-primary" : "bg-primary/40"}`;
+  return (
+    <div
+      data-testid="sibling-drop-gap"
+      data-drop-active={active ? "true" : "false"}
+      className={`z-20 flex items-center justify-center ${className}`}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      <span className={`pointer-events-none rounded-full ${line}`} />
+    </div>
+  );
+}
 
 interface DocumentFolder {
   id: number;
@@ -41,6 +83,9 @@ function FolderTreeBranch({
   treeOpen,
   draggable,
   isoRoot,
+  trailingGap,
+  dragKind,
+  gapHint,
   hintClass,
   onToggle,
   onSelect,
@@ -49,6 +94,9 @@ function FolderTreeBranch({
   onHoverRow,
   onLeaveRow,
   onDropRow,
+  onGapOver,
+  onGapLeave,
+  onGapDrop,
 }: {
   folder: DocumentFolder;
   depth: number;
@@ -57,21 +105,39 @@ function FolderTreeBranch({
   treeOpen: Record<number, boolean>;
   draggable: boolean;
   isoRoot: boolean;
+  trailingGap: boolean;
+  dragKind: DragKind | null;
+  gapHint: string | null;
   hintClass: (id: number) => string;
   onToggle: (id: number) => void;
   onSelect: (folder: DocumentFolder) => void;
-  onBeginDrag: (event: DragEvent, id: number, kind: "folder" | "doc") => void;
+  onBeginDrag: (event: DragEvent, id: number, kind: DragKind) => void;
   onEndDrag: () => void;
   onHoverRow: (event: DragEvent, folder: DocumentFolder) => void;
   onLeaveRow: (id: number) => void;
   onDropRow: (event: DragEvent, folder: DocumentFolder) => void;
+  onGapOver: (event: DragEvent, parentId: number | null, beforeId: number | null, kind: DragKind) => void;
+  onGapLeave: (key: string) => void;
+  onGapDrop: (event: DragEvent, parentId: number | null, beforeId: number | null, kind: DragKind) => void;
 }) {
   const children = listFolder(folders, folder.id).folders;
   const open = treeOpen[folder.id] ?? isoRoot;
   const selected = selectedId === folder.id;
   const Icon = open && children.length > 0 ? FolderOpen : Folder;
+  const showGaps = dragKind === "folder";
+  const beforeKey = gapKey(folder.parentId, folder.id, "folder");
+  const afterKey = gapKey(folder.parentId, null, "folder");
   return (
-    <li>
+    <li className="relative">
+      {showGaps && (
+        <SiblingGap
+          active={gapHint === beforeKey}
+          className="absolute inset-x-1 -top-1.5 h-3"
+          onDragOver={(event) => onGapOver(event, folder.parentId, folder.id, "folder")}
+          onDragLeave={() => onGapLeave(beforeKey)}
+          onDrop={(event) => onGapDrop(event, folder.parentId, folder.id, "folder")}
+        />
+      )}
       <div
         className={`group flex items-center rounded-md border-l-2 pr-1 text-sm ${
           selected ? "border-primary bg-primary/10 font-medium" : "border-transparent hover:bg-muted"
@@ -110,7 +176,7 @@ function FolderTreeBranch({
       </div>
       {open && children.length > 0 && (
         <ul>
-          {children.map((child) => (
+          {children.map((child, index) => (
             <FolderTreeBranch
               key={child.id}
               folder={child}
@@ -120,6 +186,9 @@ function FolderTreeBranch({
               treeOpen={treeOpen}
               draggable
               isoRoot={false}
+              trailingGap={index === children.length - 1}
+              dragKind={dragKind}
+              gapHint={gapHint}
               hintClass={hintClass}
               onToggle={onToggle}
               onSelect={onSelect}
@@ -128,12 +197,68 @@ function FolderTreeBranch({
               onHoverRow={onHoverRow}
               onLeaveRow={onLeaveRow}
               onDropRow={onDropRow}
+              onGapOver={onGapOver}
+              onGapLeave={onGapLeave}
+              onGapDrop={onGapDrop}
             />
           ))}
         </ul>
       )}
+      {showGaps && trailingGap && (
+        <SiblingGap
+          active={gapHint === afterKey}
+          className="relative mx-1 mt-0.5 h-3"
+          onDragOver={(event) => onGapOver(event, folder.parentId, null, "folder")}
+          onDragLeave={() => onGapLeave(afterKey)}
+          onDrop={(event) => onGapDrop(event, folder.parentId, null, "folder")}
+        />
+      )}
     </li>
   );
+}
+
+function useDragAutoScroll(panes: Array<RefObject<HTMLElement | null>>, dragKindRef: RefObject<DragKind | null>) {
+  const panesRef = useRef(panes);
+  panesRef.current = panes;
+  useEffect(() => {
+    let frame = 0;
+    let x = 0;
+    let y = 0;
+    const tick = () => {
+      frame = 0;
+      if (!dragKindRef.current) return;
+      let moving = false;
+      for (const pane of panesRef.current) {
+        const el = pane.current;
+        if (!el) continue;
+        const delta = paneScrollDelta(x, y, el.getBoundingClientRect(), getComputedStyle(el).overflowY, el.scrollHeight, el.clientHeight);
+        if (delta !== 0) {
+          el.scrollTop += delta;
+          moving = true;
+        }
+      }
+      if (moving) frame = requestAnimationFrame(tick);
+    };
+    const onDragOver = (event: globalThis.DragEvent) => {
+      if (!dragKindRef.current) return;
+      x = event.clientX;
+      y = event.clientY;
+      if (!frame) frame = requestAnimationFrame(tick);
+    };
+    const stop = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+    };
+    window.addEventListener("dragover", onDragOver, true);
+    window.addEventListener("dragend", stop, true);
+    window.addEventListener("drop", stop, true);
+    return () => {
+      stop();
+      window.removeEventListener("dragover", onDragOver, true);
+      window.removeEventListener("dragend", stop, true);
+      window.removeEventListener("drop", stop, true);
+    };
+  }, [dragKindRef]);
 }
 
 function useDocumentFolders() {
@@ -245,8 +370,14 @@ export function FolderExplorerPage() {
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
   const [treeOpen, setTreeOpen] = useState<Record<number, boolean>>({});
   const [dropHint, setDropHint] = useState<{ id: number; position: DropPosition } | null>(null);
+  const [gapHint, setGapHint] = useState<string | null>(null);
+  const [dragKind, setDragKind] = useState<DragKind | null>(null);
   const [search, setSearch] = useState("");
-  const dragRef = useRef<{ id: number; kind: "folder" | "doc" } | null>(null);
+  const dragRef = useRef<{ id: number; kind: DragKind } | null>(null);
+  const dragKindRef = useRef<DragKind | null>(null);
+  const treePaneRef = useRef<HTMLElement>(null);
+  const listPaneRef = useRef<HTMLDivElement>(null);
+  const boardPaneRef = useRef<HTMLDivElement>(null);
   const [dropHoverId, setDropHoverId] = useState<number | null>(null);
   const [poolHover, setPoolHover] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
@@ -315,17 +446,27 @@ export function FolderExplorerPage() {
     });
   }, [selectedTreeId, visibleFolders]);
 
-  function beginDrag(event: DragEvent, id: number, kind: "folder" | "doc") {
+  function beginDrag(event: DragEvent, id: number, kind: DragKind) {
     dragRef.current = { id, kind };
+    dragKindRef.current = kind;
     event.dataTransfer.setData(kind === "folder" ? DRAG_FOLDER : DRAG_DOC, String(id));
     event.dataTransfer.effectAllowed = "move";
+    // Paint the gap targets after the browser has started the drag. Updating
+    // state inside dragstart can cancel the gesture.
+    requestAnimationFrame(() => {
+      if (dragKindRef.current === kind) setDragKind(kind);
+    });
   }
   function endDrag() {
     dragRef.current = null;
+    dragKindRef.current = null;
+    setDragKind(null);
     setDropHoverId(null);
     setDropHint(null);
+    setGapHint(null);
     setPoolHover(false);
   }
+  useDragAutoScroll([treePaneRef, listPaneRef, boardPaneRef], dragKindRef);
   function hintClass(id: number) {
     if (dropHoverId === id) return "ring-2 ring-primary";
     if (dropHint?.id === id) return reorderDropClass(dropHint.position);
@@ -345,6 +486,7 @@ export function FolderExplorerPage() {
     return true;
   }
   function hoverRow(event: DragEvent, target: DocumentFolder) {
+    setGapHint((current) => (current == null ? current : null));
     if (isFileDrag(event)) {
       event.preventDefault();
       setDropHint(null);
@@ -453,6 +595,42 @@ export function FolderExplorerPage() {
     if (drag && !(drag.kind === "doc" && parentId === null)) void commitPlacements(planNest(folders, drag.id, parentId));
     endDrag();
   }
+  function sameSiblingGroup(node: { id: number }, kind: DragKind) {
+    const row = folders.find((folder) => folder.id === node.id);
+    if (!row || row.name === LIBRARY_POOL_NAME) return false;
+    return isFolderEntry(folders, row) === (kind === "folder");
+  }
+  function gapAccepts(parentId: number | null, kind: DragKind) {
+    const drag = dragRef.current;
+    if (!drag) return false;
+    const moving = folders.find((folder) => folder.id === drag.id);
+    if (!moving || !sameSiblingGroup(moving, kind)) return false;
+    if (kind === "doc" && parentId == null) return false;
+    if (kind === "folder" && folderMoveIsBlocked(folders, moving.id, parentId)) return false;
+    return true;
+  }
+  function hoverGap(event: DragEvent, parentId: number | null, beforeId: number | null, kind: DragKind) {
+    if (isFileDrag(event) || !gapAccepts(parentId, kind)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+    setDropHint(null);
+    setDropHoverId(null);
+    setGapHint(gapKey(parentId, beforeId, kind));
+  }
+  function leaveGap(key: string) {
+    setGapHint((current) => (current === key ? null : current));
+  }
+  function dropGap(event: DragEvent, parentId: number | null, beforeId: number | null, kind: DragKind) {
+    event.preventDefault();
+    event.stopPropagation();
+    const drag = dragRef.current;
+    if (drag && !isFileDrag(event) && gapAccepts(parentId, kind)) {
+      const position = beforeId == null ? "after" : "before";
+      void commitPlacements(planSiblingGap(folders, drag.id, parentId, beforeId, position, (node) => sameSiblingGroup(node, kind)));
+    }
+    endDrag();
+  }
   function sendToLibrary(docId: number) {
     if (poolFolder) void commitPlacements(planNest(folders, docId, poolFolder.id));
   }
@@ -548,7 +726,7 @@ export function FolderExplorerPage() {
         <div>
           <h1 className="text-2xl font-semibold">Document Folders</h1>
           <p className="text-sm text-muted-foreground">
-            Expand a folder to see what is saved in it. Drag the top or bottom of a row to rearrange it. Drop on the middle of a folder to put something inside. Blank forms stay under Blank Forms. The Library Pool is where a document goes when you take it out of a folder.
+            Expand a folder to see what is saved in it. While dragging, drop on the line between rows to place an item beside its neighbors. Drop on a folder to put something inside. Blank forms stay under Blank Forms. The Library Pool is where a document goes when you take it out of a folder.
           </p>
         </div>
         <div className="w-56">
@@ -556,8 +734,8 @@ export function FolderExplorerPage() {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto md:grid-cols-[minmax(220px,17.5rem)_minmax(0,1fr)] md:overflow-hidden">
-        <nav className="flex flex-col gap-1 rounded-lg border border-border bg-card p-2 md:min-h-0 md:overflow-y-auto" aria-label="Document folders">
+      <div ref={boardPaneRef} className="grid min-h-0 flex-1 gap-4 overflow-y-auto md:grid-cols-[minmax(220px,17.5rem)_minmax(0,1fr)] md:overflow-hidden">
+        <nav ref={treePaneRef} className="flex flex-col gap-1 rounded-lg border border-border bg-card p-2 md:min-h-0 md:overflow-y-auto" aria-label="Document folders">
           <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">Folders</p>
           <ul data-testid="folder-tree">
             {treeRoots.map((folder) => (
@@ -570,6 +748,9 @@ export function FolderExplorerPage() {
                 treeOpen={treeOpen}
                 draggable
                 isoRoot={folder.id === isoRoot?.id}
+                trailingGap={false}
+                dragKind={dragKind}
+                gapHint={gapHint}
                 hintClass={hintClass}
                 onToggle={toggleTree}
                 onSelect={selectTreeFolder}
@@ -578,6 +759,9 @@ export function FolderExplorerPage() {
                 onHoverRow={hoverRow}
                 onLeaveRow={leaveRow}
                 onDropRow={dropRow}
+                onGapOver={hoverGap}
+                onGapLeave={leaveGap}
+                onGapDrop={dropGap}
               />
             ))}
           </ul>
@@ -610,7 +794,7 @@ export function FolderExplorerPage() {
           </form>
         </nav>
 
-        <div className="flex min-w-0 flex-col gap-3 md:min-h-0 md:overflow-y-auto">
+        <div ref={listPaneRef} className="flex min-w-0 flex-col gap-3 md:min-h-0 md:overflow-y-auto">
           {requestedFolderId != null && !openFolder ? (
             <div className="flex flex-col gap-2">
               <p className="text-sm text-muted-foreground">
@@ -647,6 +831,11 @@ export function FolderExplorerPage() {
               onSendToLibrary={sendToLibrary}
               onAttach={requestUpload}
               onRemoveAttachment={(id) => removeTemplate.mutate(id)}
+              dragKind={dragKind}
+              gapHint={gapHint}
+              onGapOver={hoverGap}
+              onGapLeave={leaveGap}
+              onGapDrop={dropGap}
             />
           ) : (
           <>
@@ -685,15 +874,26 @@ export function FolderExplorerPage() {
             </span>
           </FileDropZone>
 
-          {activeListing.folders.map((sub) => {
+          {activeListing.folders.map((sub, index) => {
             const listing = listFolder(visibleFolders, sub.id);
             const subfolders = listing.folders.filter((row) => !query || row.name.toLowerCase().includes(query));
             const docs = listing.files.filter((row) => !query || row.name.toLowerCase().includes(query));
             const isCollapsed = collapsed[sub.id];
             const isDropTarget = dropHoverId === sub.id;
+            const beforeCard = gapKey(activeDept.id, sub.id, "folder");
+            const afterCards = gapKey(activeDept.id, null, "folder");
             return (
+              <div key={sub.id} className="contents">
+              {dragKind === "folder" && (
+                <SiblingGap
+                  active={gapHint === beforeCard}
+                  className="h-4 shrink-0"
+                  onDragOver={(event) => hoverGap(event, activeDept.id, sub.id, "folder")}
+                  onDragLeave={() => leaveGap(beforeCard)}
+                  onDrop={(event) => dropGap(event, activeDept.id, sub.id, "folder")}
+                />
+              )}
               <FileDropZone
-                key={sub.id}
                 onFiles={(dropped) => void uploadFiles(sub.id, dropped)}
                 overlay={false}
                 className={`shrink-0 overflow-hidden rounded-lg border bg-card transition-shadow ${isDropTarget ? "border-primary ring-2 ring-primary" : "border-border"}`}
@@ -763,9 +963,21 @@ export function FolderExplorerPage() {
                     }}
                   >
                     {subfolders.length === 0 && docs.length === 0 && <span className="text-xs italic text-muted-foreground">{query ? "Nothing in this folder matches." : "Nothing saved here yet."}</span>}
-                    {subfolders.map((row) => (
+                    {subfolders.map((row, rowIndex) => {
+                      const beforeRow = gapKey(sub.id, row.id, "folder");
+                      const afterRows = gapKey(sub.id, null, "folder");
+                      return (
+                      <div key={row.id} className="relative">
+                      {dragKind === "folder" && (
+                        <SiblingGap
+                          active={gapHint === beforeRow}
+                          className="absolute inset-x-0 -top-4 h-4"
+                          onDragOver={(event) => hoverGap(event, sub.id, row.id, "folder")}
+                          onDragLeave={() => leaveGap(beforeRow)}
+                          onDrop={(event) => dropGap(event, sub.id, row.id, "folder")}
+                        />
+                      )}
                       <div
-                        key={row.id}
                         data-testid="folder-row"
                         data-folder-id={row.id}
                         draggable
@@ -786,13 +998,36 @@ export function FolderExplorerPage() {
                         </button>
                         <ChevronRight size={14} className="text-muted-foreground" />
                       </div>
-                    ))}
+                      {dragKind === "folder" && rowIndex === subfolders.length - 1 && (
+                        <SiblingGap
+                          active={gapHint === afterRows}
+                          className="mt-1 h-4"
+                          onDragOver={(event) => hoverGap(event, sub.id, null, "folder")}
+                          onDragLeave={() => leaveGap(afterRows)}
+                          onDrop={(event) => dropGap(event, sub.id, null, "folder")}
+                        />
+                      )}
+                      </div>
+                      );
+                    })}
                     <div className="flex flex-wrap gap-2">
-                    {docs.map((doc) => {
+                    {docs.map((doc, docIndex) => {
                       const target = openTarget(doc);
+                      const beforeDoc = gapKey(sub.id, doc.id, "doc");
+                      const afterDocs = gapKey(sub.id, null, "doc");
                       return (
+                        <div key={doc.id} className="contents">
+                        {dragKind === "doc" && (
+                          <SiblingGap
+                            orientation="pill"
+                            active={gapHint === beforeDoc}
+                            className="h-6 w-3 shrink-0"
+                            onDragOver={(event) => hoverGap(event, sub.id, doc.id, "doc")}
+                            onDragLeave={() => leaveGap(beforeDoc)}
+                            onDrop={(event) => dropGap(event, sub.id, doc.id, "doc")}
+                          />
+                        )}
                         <div
-                          key={doc.id}
                           className={`inline-flex rounded-full ${hintClass(doc.id)}`}
                           onDragOver={(event) => hoverRow(event, doc)}
                           onDragLeave={() => leaveRow(doc.id)}
@@ -824,12 +1059,33 @@ export function FolderExplorerPage() {
                             />
                           )}
                         </div>
+                        {dragKind === "doc" && docIndex === docs.length - 1 && (
+                          <SiblingGap
+                            orientation="pill"
+                            active={gapHint === afterDocs}
+                            className="h-6 w-3 shrink-0"
+                            onDragOver={(event) => hoverGap(event, sub.id, null, "doc")}
+                            onDragLeave={() => leaveGap(afterDocs)}
+                            onDrop={(event) => dropGap(event, sub.id, null, "doc")}
+                          />
+                        )}
+                        </div>
                       );
                     })}
                     </div>
                   </div>
                 )}
               </FileDropZone>
+              {dragKind === "folder" && index === activeListing.folders.length - 1 && (
+                <SiblingGap
+                  active={gapHint === afterCards}
+                  className="h-4 shrink-0"
+                  onDragOver={(event) => hoverGap(event, activeDept.id, null, "folder")}
+                  onDragLeave={() => leaveGap(afterCards)}
+                  onDrop={(event) => dropGap(event, activeDept.id, null, "folder")}
+                />
+              )}
+              </div>
             );
           })}
 
@@ -839,11 +1095,23 @@ export function FolderExplorerPage() {
               <div className="flex flex-wrap gap-2">
                 {activeListing.files
                   .filter((file) => !query || file.name.toLowerCase().includes(query))
-                  .map((doc) => {
+                  .map((doc, index, list) => {
                     const target = openTarget(doc);
+                    const beforeDoc = gapKey(activeDept.id, doc.id, "doc");
+                    const afterDocs = gapKey(activeDept.id, null, "doc");
                     return (
+                      <div key={doc.id} className="contents">
+                      {dragKind === "doc" && (
+                        <SiblingGap
+                          orientation="pill"
+                          active={gapHint === beforeDoc}
+                          className="h-6 w-3 shrink-0"
+                          onDragOver={(event) => hoverGap(event, activeDept.id, doc.id, "doc")}
+                          onDragLeave={() => leaveGap(beforeDoc)}
+                          onDrop={(event) => dropGap(event, activeDept.id, doc.id, "doc")}
+                        />
+                      )}
                       <div
-                        key={doc.id}
                         className={`inline-flex rounded-full ${hintClass(doc.id)}`}
                         onDragOver={(event) => hoverRow(event, doc)}
                         onDragLeave={() => leaveRow(doc.id)}
@@ -874,6 +1142,17 @@ export function FolderExplorerPage() {
                             onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
                           />
                         )}
+                      </div>
+                      {dragKind === "doc" && index === list.length - 1 && (
+                        <SiblingGap
+                          orientation="pill"
+                          active={gapHint === afterDocs}
+                          className="h-6 w-3 shrink-0"
+                          onDragOver={(event) => hoverGap(event, activeDept.id, null, "doc")}
+                          onDragLeave={() => leaveGap(afterDocs)}
+                          onDrop={(event) => dropGap(event, activeDept.id, null, "doc")}
+                        />
+                      )}
                       </div>
                     );
                   })}
@@ -1068,6 +1347,11 @@ function FolderBrowser({
   onSendToLibrary,
   onAttach,
   onRemoveAttachment,
+  dragKind,
+  gapHint,
+  onGapOver,
+  onGapLeave,
+  onGapDrop,
 }: {
   folder: DocumentFolder;
   folders: DocumentFolder[];
@@ -1075,7 +1359,7 @@ function FolderBrowser({
   hintClass: (id: number) => string;
   onOpenFolder: (id: number) => void;
   onBackToDepartments: () => void;
-  onBeginDrag: (event: DragEvent, id: number, kind: "folder" | "doc") => void;
+  onBeginDrag: (event: DragEvent, id: number, kind: DragKind) => void;
   onEndDrag: () => void;
   onAllowDrop: (event: DragEvent, targetParentId: number | null) => boolean;
   onNest: (event: DragEvent, parentId: number | null) => void;
@@ -1089,6 +1373,11 @@ function FolderBrowser({
   onSendToLibrary: (id: number) => void;
   onAttach: (id: number) => void;
   onRemoveAttachment: (id: number) => void;
+  dragKind: DragKind | null;
+  gapHint: string | null;
+  onGapOver: (event: DragEvent, parentId: number | null, beforeId: number | null, kind: DragKind) => void;
+  onGapLeave: (key: string) => void;
+  onGapDrop: (event: DragEvent, parentId: number | null, beforeId: number | null, kind: DragKind) => void;
 }) {
   const [name, setName] = useState("");
   const [rename, setRename] = useState(folder.name);
@@ -1211,9 +1500,21 @@ function FolderBrowser({
         }}
       >
         {empty && <p className="px-2 py-3 text-sm italic text-muted-foreground">{query ? "Nothing in this folder matches." : "Nothing saved in this folder yet."}</p>}
-        {subfolders.map((row) => (
+        {subfolders.map((row, index) => {
+          const beforeRow = gapKey(folder.id, row.id, "folder");
+          const afterRows = gapKey(folder.id, null, "folder");
+          return (
+          <div key={row.id}>
+          {dragKind === "folder" && (
+            <SiblingGap
+              active={gapHint === beforeRow}
+              className="h-3"
+              onDragOver={(event) => onGapOver(event, folder.id, row.id, "folder")}
+              onDragLeave={() => onGapLeave(beforeRow)}
+              onDrop={(event) => onGapDrop(event, folder.id, row.id, "folder")}
+            />
+          )}
           <div
-            key={row.id}
             data-testid="folder-row"
             data-folder-id={row.id}
             draggable
@@ -1234,12 +1535,34 @@ function FolderBrowser({
             </button>
             <ChevronRight size={14} className="text-muted-foreground" />
           </div>
-        ))}
-        {files.map((file) => {
+          {dragKind === "folder" && index === subfolders.length - 1 && (
+            <SiblingGap
+              active={gapHint === afterRows}
+              className="h-3"
+              onDragOver={(event) => onGapOver(event, folder.id, null, "folder")}
+              onDragLeave={() => onGapLeave(afterRows)}
+              onDrop={(event) => onGapDrop(event, folder.id, null, "folder")}
+            />
+          )}
+          </div>
+          );
+        })}
+        {files.map((file, index) => {
           const target = openTarget(file);
+          const beforeFile = gapKey(folder.id, file.id, "doc");
+          const afterFiles = gapKey(folder.id, null, "doc");
           return (
+            <div key={file.id}>
+            {dragKind === "doc" && (
+              <SiblingGap
+                active={gapHint === beforeFile}
+                className="h-3"
+                onDragOver={(event) => onGapOver(event, folder.id, file.id, "doc")}
+                onDragLeave={() => onGapLeave(beforeFile)}
+                onDrop={(event) => onGapDrop(event, folder.id, file.id, "doc")}
+              />
+            )}
             <div
-              key={file.id}
               className={hintClass(file.id)}
               onDragOver={(event) => onHoverRow(event, file)}
               onDragLeave={() => onLeaveRow(file.id)}
@@ -1273,6 +1596,16 @@ function FolderBrowser({
                   />
                 </div>
               )}
+            </div>
+            {dragKind === "doc" && index === files.length - 1 && (
+              <SiblingGap
+                active={gapHint === afterFiles}
+                className="h-3"
+                onDragOver={(event) => onGapOver(event, folder.id, null, "doc")}
+                onDragLeave={() => onGapLeave(afterFiles)}
+                onDrop={(event) => onGapDrop(event, folder.id, null, "doc")}
+              />
+            )}
             </div>
           );
         })}

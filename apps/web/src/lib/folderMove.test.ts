@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { folderMoveIsBlocked, nextSortOrder, planNest, planSiblingReorder } from "./folderMove.ts";
+import { folderMoveIsBlocked, nextSortOrder, planNest, planSiblingGap, planSiblingReorder } from "./folderMove.ts";
 
 const tree = [
   { id: 1, parentId: null, sortOrder: 0 },
@@ -46,6 +46,19 @@ describe("folder moves", () => {
       { id: 3, parentId: 1, sortOrder: 1 },
       { id: 5, parentId: 1, sortOrder: 2 },
     ]);
+  });
+
+  it("places a drawer in the gap before a sibling without nesting into that row", () => {
+    const iso = { id: 1, parentId: null, sortOrder: 0 };
+    const quality = { id: 2, parentId: 1, sortOrder: 0 };
+    const training = { id: 3, parentId: 1, sortOrder: 1 };
+    const ncr = { id: 4, parentId: 1, sortOrder: 2 };
+    const placed = planSiblingGap([iso, quality, training, ncr], ncr.id, 1, training.id, "before", () => true);
+    assert.deepEqual(placed, [
+      { id: 4, parentId: 1, sortOrder: 1 },
+      { id: 3, parentId: 1, sortOrder: 2 },
+    ]);
+    assert.equal(placed?.some((row) => row.parentId === quality.id), false);
   });
 
   it("nests only when the drop asks to go inside, and refuses a cycle", () => {
