@@ -187,7 +187,9 @@ Security headers on `/*`: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosn
 | Variable | Set to |
 |---|---|
 | `NODE_ENV` | `production` |
-| `DATABASE_URL` | Supabase **Session Pooler** string (dashboard only) |
+| `DATABASE_URL` | Supabase **Session Pooler** string, or a Render Postgres URL (dashboard only) |
+| `DATABASE_SSL_CA` | Optional PEM. Unset verifies nothing (production logs a warning and still boots). See [Database TLS certificate](#database-tls-certificate) |
+| `ACCUQUAL_REQUIRE_DB_SSL_CA` | Leave unset. Set to `true` only after `DATABASE_SSL_CA` is in place and a deploy stayed healthy. `true` with no PEM refuses to boot |
 | `JWT_ACCESS_SECRET` | Render `generateValue: true` |
 | `JWT_REFRESH_SECRET` | Render `generateValue: true` |
 | `AI_CONFIG_ENCRYPTION_KEY` | `openssl rand -hex 32`. Paste once. **Never rotate** — stored company AI keys were encrypted with it |
@@ -207,6 +209,33 @@ Security headers on `/*`: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosn
 Leave `API_PUBLIC_URL` unset. SSO callbacks then use `FRONTEND_URL` + `/api`, which is the rewrite.
 
 Both `CF_ACCESS_*` values must be set or the API does not check Access at all (that is how local, Compose, and CI stay open). An empty string counts as unset.
+
+<a id="database-tls-certificate"></a>
+
+### Database TLS certificate
+
+Signed-in requests do not need a new migration for this. `DATABASE_SSL_CA` is an environment variable on `accuqual-api`.
+
+The API connects with TLS to any database that is not `localhost`. Until `DATABASE_SSL_CA` is set it accepts any certificate and, in production, logs a warning. It does **not** refuse to boot. Set `ACCUQUAL_REQUIRE_DB_SSL_CA=true` only after a deploy with the PEM stays healthy (`/health` returns `{"status":"ok"}`). Setting the flag first takes the service down.
+
+**Render Postgres.** Render does not offer a CA file to download ([Create and Connect to Render Postgres](https://render.com/docs/postgresql-creating-connecting)).
+
+1. Dashboard → your Postgres database → **Connect** (or the Info page). Copy the host from the URL you actually use.
+2. External URL (public internet): TLS uses a Render-managed certificate. From a machine that can reach that host:
+
+```
+openssl s_client -starttls postgres -connect HOST:5432 -showcerts </dev/null
+```
+
+3. Copy one block from `-----BEGIN CERTIFICATE-----` through `-----END CERTIFICATE-----` into `DATABASE_SSL_CA` on `accuqual-api`. A multi-line value or a single line with `\n` between the lines both work. Do not commit the PEM.
+4. Redeploy, or let the env change restart the service. Confirm `/health` is ok and a signed-in save still works. Then, if you want a missing PEM to stop the process, set `ACCUQUAL_REQUIRE_DB_SSL_CA` to `true` and restart again.
+5. Internal URL (same region, private network): the certificate is self-signed, and Render does not support `verify-full` on internal connections. Run the same `openssl` command from the **accuqual-api Shell** (the internal host is not reachable from your laptop). If the service then fails its health check, clear `DATABASE_SSL_CA` and leave `ACCUQUAL_REQUIRE_DB_SSL_CA` unset. Encrypted-but-unverified TLS and the warning are the supported mode for that URL.
+
+**Supabase.** Project Settings → Database → SSL configuration → download the CA certificate. Paste that PEM into `DATABASE_SSL_CA`. Use the Session Pooler URL (see the gotcha at the top of this file).
+
+### Application role
+
+`npm run db:migrate` already creates `accuqual_app`, grants it ordinary table access, and revokes audit rewrites (`rls-policies.sql`, `audit-triggers.sql`). Each signed-in request now runs `SET LOCAL ROLE accuqual_app`, which is what makes those revokes apply when `DATABASE_URL` is the table owner. Sign-in, token refresh, MFA, signature-PIN setup, and role administration stay on the owner connection, because that role cannot see the credential tables or write `roles`. No new SQL is required on a database that has already been migrated. If this database has never had `db:migrate` applied, run the **Migrate production database** workflow before relying on signed-in saves — a login that is not a member of `accuqual_app` cannot serve those requests.
 
 **accuqual-web environment**
 
