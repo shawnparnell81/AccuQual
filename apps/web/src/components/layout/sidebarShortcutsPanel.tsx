@@ -78,7 +78,7 @@ export function SidebarShortcutsDialog({ catalog, open, onClose }: { catalog: Si
 
   const choices = useMemo(() => {
     const blanks: PinnedShortcut[] = (templates.data ?? [])
-      .filter((form) => form.start && form.formKey !== "frm-ncr-001")
+      .filter((form) => form.start)
       .map((form) => ({
         key: `blank:${form.formKey}`,
         label: form.formId ? `${form.title} (${form.formId})` : form.title,

@@ -52,13 +52,9 @@ export interface IsoFormMeta {
   retired?: boolean;
 }
 
-/** The old NCR spreadsheet. The live NCR module is separate and stays. */
-export const RETIRED_ISO_FORMS: IsoFormMeta[] = [
-  { formKey: "frm-ncr-001", formType: "ncr_report", formId: "FRM-NCR-001", title: "NON-CONFORMANCE REPORT (NCR)", rev: "C", layout: ncrLayout(), photos: false, retired: true },
-];
-
 export const ISO_FORMS: IsoFormMeta[] = [
   { formKey: "frm-gen-001", formType: "internal_audit", formId: "FRM-GEN-001", title: "AUDIT CHECKLIST", rev: "A", layout: auditLayout(), photos: false },
+  { formKey: "frm-ncr-001", formType: "ncr_report", formId: "FRM-NCR-001", title: "NON-CONFORMANCE REPORT (NCR)", rev: "C", layout: ncrLayout(), photos: false },
   { formKey: "frm-ncr-002", formType: "quarantine_notice", formId: "FRM-NCR-002", title: "QUARANTINE NOTICE", rev: "A", layout: quarantineLayout(), photos: true },
   { formKey: "frm-ncr-003", formType: "concession", formId: "FRM-NCR-003", title: "CONCESSION / DEVIATION REQUEST", rev: "A", layout: concessionLayout(), photos: false },
   { formKey: "frm-trn-001", formType: "competency_training", formId: "FRM-TRN-001", title: "COMPETENCY AND TRAINING RECORD", rev: "A", layout: trainingLayout(), photos: false },
@@ -94,9 +90,9 @@ export const ISO_FORMS: IsoFormMeta[] = [
 ];
 
 export function formByKey(formKey: string | undefined): IsoFormMeta | undefined {
-  return ISO_FORMS.find((form) => form.formKey === formKey) ?? RETIRED_ISO_FORMS.find((form) => form.formKey === formKey);
+  return ISO_FORMS.find((form) => form.formKey === formKey);
 }
 
 export function formByType(formType: string | undefined): IsoFormMeta | undefined {
-  return ISO_FORMS.find((form) => form.formType === formType) ?? RETIRED_ISO_FORMS.find((form) => form.formType === formType);
+  return ISO_FORMS.find((form) => form.formType === formType);
 }

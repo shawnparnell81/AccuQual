@@ -66,7 +66,7 @@ describe("Quality document folders", () => {
     assert.deepEqual(link && { label: link.label, path: link.path }, { label: "Obsolete / Archive", path: "/folders/obsolete-archive" });
   });
 
-  it("lists Blank Forms under Workspace and keeps individual blanks out of the sidebar", () => {
+  it("lists Blank Forms under Workspace and keeps the sidebar to FRM NCR plus modules", () => {
     const workspace = SIDEBAR_FOLDERS.find((folder) => folder.key === "workspace");
     assert.ok(workspace);
     const blank = workspace.children.find((child) => child.key === "blank-forms");
@@ -74,7 +74,10 @@ describe("Quality document folders", () => {
     assert.deepEqual({ label: blank.label, path: blank.path }, { label: "Blank Forms", path: "/blank-forms" });
 
     const links = flattenSidebarLinks();
-    assert.equal(links.filter((link) => link.path.startsWith("/iso-forms/")).length, 0);
+    assert.deepEqual(
+      links.filter((link) => link.path.startsWith("/iso-forms/")).map((link) => [link.label, link.path]),
+      [["FRM NCR", "/iso-forms/frm-ncr-001"]],
+    );
     assert.equal(links.filter((link) => link.label === "Blank Forms").length, 1);
     const engineering = SIDEBAR_FOLDERS.find((folder) => folder.key === "engineering");
     assert.ok(engineering);
@@ -91,6 +94,16 @@ describe("Quality document folders", () => {
     assert.equal(labels.filter((label) => label === "Master Equipment List").length, 1);
     assert.equal(labels.includes("ADD SUPPLIER"), true);
     assert.equal(links.find((link) => link.key === "add-supplier")?.path, "/suppliers/new");
+    assert.equal(links.some((link) => link.path === "/ncr" || link.label === "NCR"), false);
+    const frmNcr = links.find((link) => link.key === "frm-ncr-001");
+    assert.deepEqual(frmNcr && { label: frmNcr.label, path: frmNcr.path }, { label: "FRM NCR", path: "/iso-forms/frm-ncr-001" });
+    const quality = SIDEBAR_FOLDERS.find((folder) => folder.key === "quality");
+    const ncrCapa = quality?.children.find((child) => isFolder(child) && child.key === "ncr-capa");
+    assert.ok(ncrCapa && isFolder(ncrCapa));
+    assert.deepEqual(
+      ncrCapa.children.map((child) => child.label),
+      ["FRM NCR", "CAPA", "8D"],
+    );
 
     const engineering = SIDEBAR_FOLDERS.find((folder) => folder.key === "engineering");
     assert.ok(engineering);

@@ -12,7 +12,7 @@ test("electronic CSA and shock development stay separate from the earlier forms"
   assert.equal(ISO_FORMS.find((form) => form.formKey === "frm-dev-001")?.formType, "dev_csa");
   assert.equal(ISO_FORMS.find((form) => form.formKey === "frm-dev-008")?.formType, "dev_electronic_shock");
   assert.equal(ISO_FORMS.filter((form) => form.formType === "internal_audit").length, 1);
-  assert.equal(ISO_FORMS.filter((form) => form.formType === "ncr_report").length, 0);
+  assert.equal(ISO_FORMS.filter((form) => form.formType === "ncr_report").length, 1);
   assert.equal(ISO_FORMS.filter((form) => form.formType === "quarantine_notice").length, 1);
   assert.equal(ISO_FORMS.find((form) => form.formKey === "frm-ecr-001")?.formId, "FRM-ECR-001");
   assert.equal(ISO_FORMS.find((form) => form.formKey === "frm-dev-012")?.formId, "FRM-DEV-012");

@@ -86,7 +86,12 @@ describe("new blank forms", () => {
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-dev-012")).toMatchObject({ formId: "FRM-DEV-012", title: "ELECTRONIC CSA DEVELOPMENT DOCUMENT" });
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-dev-013")?.title).toBe("SHOCK ABSORBER DEVELOPMENT DOCUMENT");
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-ecr-001")).toMatchObject({ formId: "FRM-ECR-001", title: "ENGINEERING CHANGE REQUEST (ECR)", subjectRoute: "/iso-forms/frm-ecr-001" });
-    expect(FORM_TEMPLATES.filter((form) => form.formKey === "frm-ncr-001")).toHaveLength(0);
+    expect(FORM_TEMPLATES.filter((form) => form.formKey === "frm-ncr-001")).toHaveLength(1);
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-ncr-001")).toMatchObject({
+      formId: "FRM-NCR-001",
+      title: "NON-CONFORMANCE REPORT (NCR)",
+      subjectRoute: "/iso-forms/frm-ncr-001",
+    });
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-gen-001")?.title).toBe("AUDIT CHECKLIST");
     expect(FORM_TEMPLATES.find((form) => form.formKey === "ncr")?.subjectRoute).toBe("/ncr");
     expect(FORM_TEMPLATES.filter((form) => form.formKey === "frm-ncr-002")).toHaveLength(1);

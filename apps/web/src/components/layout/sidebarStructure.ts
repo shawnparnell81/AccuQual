@@ -181,7 +181,8 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
         label: "NCR & CAPA",
         icon: AlertTriangle,
         children: [
-          { key: "ncr", label: "NCR", path: "/ncr", icon: AlertTriangle },
+          // Spreadsheet blank FRM-NCR-001. The live NCR module stays at /ncr and is not a sidebar item.
+          { key: "frm-ncr-001", label: "FRM NCR", path: "/iso-forms/frm-ncr-001", icon: AlertTriangle },
           { key: "capa", label: "CAPA", path: "/capa", icon: ClipboardCheck },
           { key: "8d", label: "8D", path: "/8d", icon: FileSearch },
         ],
