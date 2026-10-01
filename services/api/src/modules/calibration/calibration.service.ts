@@ -8,6 +8,7 @@ import { logger } from "../../utils/logger.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { notifyDepartment } from "../notifications/notification.service.js";
+import { gageUsageBlockReason, inspectionGageIds, type GageUseDue, type GageUseStatus } from "./gageUsage.js";
 
 /**
  * Equipment & calibration rules, in one place. A calibration is SCHEDULED (a planned date, nothing performed), then either
@@ -68,6 +69,40 @@ export function summarize(items: Equipment[], cals: Calibration[], now: Date = n
     });
   }
   return out;
+}
+
+function matchGage(rows: Array<Equipment & { dueStatus: GageUseDue }>, gageId: string) {
+  const needle = gageId.trim().toLowerCase();
+  const bySerial = rows.find((row) => row.serialNumber?.trim().toLowerCase() === needle);
+  if (bySerial) return bySerial;
+  const byName = rows.find((row) => row.name.trim().toLowerCase() === needle);
+  if (byName) return byName;
+  if (/^\d+$/.test(gageId.trim())) return rows.find((row) => row.id === Number(gageId.trim()));
+  return undefined;
+}
+
+/** Rejects measuring with an overdue, failed, inactive, or out-of-service gage. */
+export async function assertGageUsable(db: Db, equipmentId: number): Promise<void> {
+  const rows = await listEquipmentWithSummary(db);
+  const item = rows.find((row) => row.id === equipmentId);
+  if (!item) throw AppError.notFound("Equipment");
+  const reason = gageUsageBlockReason(item.status as GageUseStatus, item.dueStatus);
+  if (reason) throw AppError.badRequest(`${item.name}: ${reason}`);
+}
+
+/** Final inspection characteristic rows name a gage. Unknown text is left alone. A known unusable gage is refused. */
+export async function assertInspectionGagesUsable(db: Db, data: Record<string, unknown>): Promise<void> {
+  const ids = inspectionGageIds(data);
+  if (ids.length === 0) return;
+  const rows = await listEquipmentWithSummary(db);
+  const problems: string[] = [];
+  for (const gageId of ids) {
+    const item = matchGage(rows, gageId);
+    if (!item) continue;
+    const reason = gageUsageBlockReason(item.status as GageUseStatus, item.dueStatus);
+    if (reason) problems.push(`${item.name}: ${reason}`);
+  }
+  if (problems.length > 0) throw AppError.badRequest(problems.join(" "));
 }
 
 async function loadEquipment(db: Db, id: number): Promise<Equipment> {

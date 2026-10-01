@@ -5,6 +5,7 @@ import { FileText, Paperclip } from "lucide-react";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
+import { gageUsageBlockReason } from "../../lib/gageUsage";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { GenericCreateForm, type FieldSpec } from "../../components/forms/GenericCreateForm";
 import { Modal } from "../../components/modals/Modal";
@@ -131,6 +132,8 @@ export function EquipmentDetailPage() {
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !equipment) return <LoadingPlaceholder />;
 
+  const useBlock = gageUsageBlockReason(equipment.status, equipment.dueStatus);
+
   return (
     <div className="flex flex-col gap-4">
       <input
@@ -163,11 +166,17 @@ export function EquipmentDetailPage() {
           <PrintFormButton formType="calibration" entityId={equipment.id} label="Print Record" />
           <OpenFormButton formType="maintenance_work_order" entityId={equipment.id} title={`Equipment #${equipment.id} — Maintenance Work Order`} label="Maintenance Work Order" />
           <PrintFormButton formType="maintenance_work_order" entityId={equipment.id} label="Print WO" />
-          <OpenFormButton formType="gage_rr" entityId={equipment.id} title={`Equipment #${equipment.id} — Gage R&R Study`} label="Gage R&R Study" />
+          {useBlock ? (
+            <button type="button" disabled title={useBlock} className="rounded-md border border-border px-3 py-2 text-sm opacity-50">
+              Gage R&R Study
+            </button>
+          ) : (
+            <OpenFormButton formType="gage_rr" entityId={equipment.id} title={`Equipment #${equipment.id} — Gage R&R Study`} label="Gage R&R Study" />
+          )}
           <PrintFormButton formType="gage_rr" entityId={equipment.id} label="Print R&R" />
           {mayEdit && (
             <>
-              <button onClick={() => setScheduleOpen(true)} disabled={equipment.status === "inactive" || !!equipment.scheduledCalibrationId} title={equipment.scheduledCalibrationId ? "A calibration is already scheduled" : undefined} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50">
+              <button onClick={() => setScheduleOpen(true)} disabled={equipment.status === "inactive" || !!equipment.scheduledCalibrationId} title={equipment.status === "inactive" ? "This gage is inactive and cannot be used." : equipment.scheduledCalibrationId ? "A calibration is already scheduled" : undefined} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50">
                 Schedule calibration
               </button>
               <button onClick={() => setStatusOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
@@ -190,6 +199,9 @@ export function EquipmentDetailPage() {
             {equipment.statusCause === "calibration_failure" && " It returns to service automatically when a calibration passes; an admin or quality manager can override that with a recorded reason."}
           </p>
         </div>
+      )}
+      {useBlock && equipment.status !== "out_of_service" && (
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{useBlock}</p>
       )}
       {equipment.dueStatus === "failed" && equipment.status !== "out_of_service" && <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs">The latest calibration failed. It needs a passing calibration.</p>}
       {equipment.nextScheduledAt && (
