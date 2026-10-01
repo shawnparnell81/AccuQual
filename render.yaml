@@ -39,6 +39,30 @@ services:
       # endpoint resolves to. See DEPLOY.md's "The one gotcha" section.
       - key: DATABASE_URL
         sync: false
+      # PEM used to verify the Postgres TLS certificate. Leave this unset
+      # until you paste it — the API still boots and logs a warning.
+      # Do not set ACCUQUAL_REQUIRE_DB_SSL_CA until a deploy with the PEM
+      # below stays healthy. true refuses to boot in production when the
+      # PEM is missing.
+      #
+      # Render Postgres does not publish a CA file
+      # (https://render.com/docs/postgresql-creating-connecting):
+      #   External URL — Render-managed TLS. Dashboard → the database →
+      #   Connect (or Info), copy the host, then from a machine that can
+      #   reach it:
+      #     openssl s_client -starttls postgres -connect HOST:5432 -showcerts </dev/null
+      #   Paste one PEM block (BEGIN CERTIFICATE through END CERTIFICATE).
+      #   Real newlines or the two characters \n both work.
+      #   Internal URL — self-signed, and Render does not support verify-full
+      #   on internal connections. Capture that cert the same way from the
+      #   accuqual-api Shell. If verification fails, clear DATABASE_SSL_CA
+      #   and leave the require flag unset.
+      # Supabase (Session Pooler): Project Settings → Database → SSL
+      # configuration, download the CA, and paste that PEM here.
+      - key: DATABASE_SSL_CA
+        sync: false
+      - key: ACCUQUAL_REQUIRE_DB_SSL_CA
+        sync: false
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET

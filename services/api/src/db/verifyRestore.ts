@@ -1,6 +1,7 @@
 import "dotenv/config";
 import fs from "node:fs";
 import pg from "pg";
+import { postgresConnectionConfig } from "./ssl.js";
 
 /**
  * Backup-restore verification: proves a restored database matches the one it was backed up from.
@@ -37,8 +38,10 @@ if (source && source === target) {
   process.exit(2);
 }
 
-const ssl = (url: string) => (/localhost|127\.0\.0\.1|@postgres[:/]/.test(url) ? undefined : { rejectUnauthorized: false });
-const mk = (url: string) => new pg.Pool({ connectionString: url, ssl: ssl(url), max: 2 });
+const mk = (url: string) => {
+  const cfg = postgresConnectionConfig(url, process.env.DATABASE_SSL_CA);
+  return new pg.Pool({ connectionString: cfg.connectionString, ssl: cfg.ssl, max: 2 });
+};
 
 const CATALOG_QUERIES: Record<string, string> = {
   tables: "SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'",

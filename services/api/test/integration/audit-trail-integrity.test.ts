@@ -4,8 +4,9 @@ import { ensureTestCompany } from "../helpers/company.js";
 // audit_row_change() trigger (who, from, to), credentials never stored,
 // history entries carrying their field changes, deactivation being audited,
 // and the app role being unable to rewrite or delete history.
+import type { Request, Response } from "express";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
@@ -16,6 +17,8 @@ import { complaints } from "../../src/drizzle/schema/complaints.js";
 import { formData } from "../../src/drizzle/schema/forms.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { auditRowChanges } from "../../src/drizzle/schema/auditRowChanges.js";
+import { refreshTokens } from "../../src/drizzle/schema/refreshTokens.js";
+import { withDb, withTableOwner, type Db } from "../../src/lib/requestDb.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 
 const app = createApp();
@@ -28,6 +31,55 @@ let adminToken: string;
 const roleIds: number[] = [];
 const userIds: number[] = [];
 const auth = () => ({ Authorization: `Bearer ${adminToken}` });
+
+function permissionDenied(err: unknown): boolean {
+  const parts: string[] = [];
+  let current: unknown = err;
+  while (current instanceof Error) {
+    parts.push(current.message);
+    current = current.cause;
+  }
+  return /permission denied/i.test(parts.join(" "));
+}
+
+/** One withDb transaction, the same path a signed-in request uses. */
+function runInWithDb(userId: number, fn: (tx: Db) => Promise<void>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const req = {
+      user: { id: userId, roleId: null, roleName: "admin", department: null, supplierId: null },
+    } as Request;
+    const res = {
+      statusCode: 200,
+      json() {
+        setTimeout(resolve, 30);
+        return res;
+      },
+      send() {
+        setTimeout(resolve, 30);
+        return res;
+      },
+      on() {
+        return res;
+      },
+    } as unknown as Response;
+    withDb(req, res, (err) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      fn(req.db!).then(
+        () => {
+          res.json(undefined);
+        },
+        (error: unknown) => {
+          res.statusCode = 500;
+          res.json(undefined);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        },
+      );
+    });
+  });
+}
 
 async function asAppRole<T>(fn: (q: (sql: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[]; rowCount: number | null }>) => Promise<T>): Promise<T> {
   const client = await pool.connect();
@@ -126,6 +178,34 @@ describe("Audit trail integrity (real DB + real HTTP path)", () => {
   });
 
   describe("removing a user", () => {
+    it("erases an account that already has a sign-in session", async () => {
+      const [target] = await db.insert(users).values({ email: `audit-int-session-${suffix}@test.local`, passwordHash: "unused", name: "Has Session" }).returning();
+      await db.insert(refreshTokens).values({ userId: target!.id, jti: `jti-${suffix}`, expiresAt: new Date(Date.now() + 60_000) });
+
+      const res = await request(app).delete(`/users/${target!.id}`).set(auth());
+      expect(res.status).toBe(200);
+      expect(res.body.outcome).toBe("deleted");
+      expect(await db.select().from(refreshTokens).where(eq(refreshTokens.userId, target!.id))).toHaveLength(0);
+    });
+
+    it("the app role cannot see refresh tokens; the owner switch inside the request can delete them", async () => {
+      const [target] = await db.insert(users).values({ email: `audit-int-token-${suffix}@test.local`, passwordHash: "unused" }).returning();
+      userIds.push(target!.id);
+      await db.insert(refreshTokens).values({ userId: target!.id, jti: `jti-keep-${suffix}`, expiresAt: new Date(Date.now() + 60_000) });
+
+      await runInWithDb(adminId, async (tx) => {
+        const hidden = await tx.execute(sql`DELETE FROM refresh_tokens WHERE user_id = ${target!.id}`);
+        expect(hidden.rowCount).toBe(0);
+        await withTableOwner(async () => {
+          await tx.delete(refreshTokens).where(eq(refreshTokens.userId, target!.id));
+        });
+        const who = await tx.execute(sql`SELECT current_user AS u`);
+        expect((who.rows[0] as { u: string }).u).toBe("accuqual_app");
+      });
+
+      expect(await db.select().from(refreshTokens).where(eq(refreshTokens.userId, target!.id))).toHaveLength(0);
+    });
+
     it("erases an account with no records and logs the delete", async () => {
       const [target] = await db.insert(users).values({ email: `audit-int-leaver-${suffix}@test.local`, passwordHash: "unused", name: "No History" }).returning();
 
@@ -159,6 +239,17 @@ describe("Audit trail integrity (real DB + real HTTP path)", () => {
   });
 
   describe("history cannot be rewritten by the app role", () => {
+    it("a signed-in request runs as accuqual_app and cannot UPDATE or DELETE audit_trail", async () => {
+      await runInWithDb(adminId, async (tx) => {
+        const who = await tx.execute(sql`SELECT current_user AS u`);
+        expect((who.rows[0] as { u: string }).u).toBe("accuqual_app");
+        await tx.execute(sql`SELECT count(*)::int AS n FROM audit_trail`);
+      });
+
+      await expect(runInWithDb(adminId, (tx) => tx.execute(sql`UPDATE audit_trail SET action = 'tampered'`))).rejects.toSatisfy(permissionDenied);
+      await expect(runInWithDb(adminId, (tx) => tx.execute(sql`DELETE FROM audit_trail`))).rejects.toSatisfy(permissionDenied);
+    });
+
     it("cannot UPDATE or DELETE audit_trail, but can read it and append to it", async () => {
       await request(app).post("/complaints").set(auth()).send({ description: "Seed an audit entry" });
 

@@ -58,8 +58,7 @@ roles are locked out of every table. This is covered by automated tests that run
 ## Data in transit and at rest
 
 - In production, traffic between browsers and the application is protected by TLS, which the hosting platform terminates.
-- The application connects to the database over TLS. **By default the server certificate is not verified**; setting
-  the `DATABASE_SSL_CA` environment variable turns on full certificate verification. **[confirm it is set in production]**
+- The application connects to the database over TLS. Setting `DATABASE_SSL_CA` to the provider PEM verifies the server certificate. Until that is set, production still connects and logs a warning (`rejectUnauthorized: false`). `ACCUQUAL_REQUIRE_DB_SSL_CA=true` refuses to boot in production when the PEM is missing — set that only after the PEM is in place. Where to get the certificate is in [DEPLOY.md](../../DEPLOY.md#database-tls-certificate). **[confirm DATABASE_SSL_CA is set in production]**
 - Encryption at rest of the database volume and of backups is provided by the database host. **[confirm the plan's settings]**
 - Uploaded files are stored on the application host's storage. **[confirm whether that storage is encrypted and persistent in the chosen hosting setup]**
 
@@ -99,6 +98,6 @@ See [subprocessors.md](subprocessors.md).
 
 1. Restore from the database host's own backups is untested, and the uploaded-files folder is not part of the nightly backup (above).
 2. Permanent deletion of the company's data is manual.
-3. The database certificate is not verified unless `DATABASE_SSL_CA` is set.
+3. The database certificate is not verified unless `DATABASE_SSL_CA` is set. Production warns when it is missing and refuses to boot only if `ACCUQUAL_REQUIRE_DB_SSL_CA=true`.
 4. Mid-session enforcement of two-step sign-in is at sign-in and token refresh (within about 15 minutes), not every request.
 5. Alert counters live in the API process and assume a single API instance.

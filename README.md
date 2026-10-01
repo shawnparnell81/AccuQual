@@ -95,11 +95,15 @@ public roles out.
 
 Deliberate exceptions to the per-request `req.db` convention (see
 `grep -rn "db/index.js" services/api/src/modules`): `modules/auth`
-(no signed-in user yet), `modules/roles` (constants), monitoring's
-liveness pings, the reporting scheduler (an in-process poller with no
-HTTP request), and controllers that call `recordAuditTrailStandalone` to
-log an entry that must survive even if the request's own transaction
-rolls back.
+(no signed-in user yet — and the credential tables are deny-all for
+`accuqual_app`), `modules/roles` (the app role may read roles, not write
+them), monitoring's liveness pings, the reporting scheduler (an
+in-process poller with no HTTP request), and controllers that call
+`recordAuditTrailStandalone` to log an entry that must survive even if
+the request's own transaction rolls back. Deleting an account clears
+refresh tokens, trusted devices, recovery codes, and password-reset
+tokens as the table owner inside that same transaction, then switches
+back to `accuqual_app`.
 
 ## Known limits (told to every testing round — keep this list honest)
 

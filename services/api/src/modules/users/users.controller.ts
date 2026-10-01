@@ -23,7 +23,7 @@ import { loadUserHistory } from "./userLinks.js";
 import { loadOpenWork, reassignOpenWork, type OpenWorkGroup } from "./userOpenWork.js";
 import { deleteUserSchema, updateMySidebarShortcutsSchema } from "./users.validation.js";
 import type { z } from "zod";
-import type { Db } from "../../lib/requestDb.js";
+import { withTableOwner, type Db } from "../../lib/requestDb.js";
 import { omitUserSecrets } from "./publicUser.js";
 
 export const listUsers = asyncHandler(async (req: Request, res: Response) => {
@@ -312,10 +312,14 @@ export const updateMySidebarShortcuts = asyncHandler(async (req: Request, res: R
 });
 
 async function clearSignInRows(db: Db, userId: number) {
-  await db.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
-  await db.delete(trustedDevices).where(eq(trustedDevices.userId, userId));
-  await db.delete(mfaRecoveryCodes).where(eq(mfaRecoveryCodes.userId, userId));
-  await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
+  // Deny-all under RLS for accuqual_app. The request is that role, so these
+  // four deletes run as the table owner and the role switches back immediately.
+  await withTableOwner(async () => {
+    await db.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
+    await db.delete(trustedDevices).where(eq(trustedDevices.userId, userId));
+    await db.delete(mfaRecoveryCodes).where(eq(mfaRecoveryCodes.userId, userId));
+    await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
+  });
   await db.delete(userIdentities).where(eq(userIdentities.userId, userId));
   await db.delete(userPermissionRoles).where(eq(userPermissionRoles.userId, userId));
   await db.delete(userSites).where(eq(userSites.userId, userId));

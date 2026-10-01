@@ -1,19 +1,24 @@
 import "dotenv/config";
 import { z } from "zod";
+import { databaseSslBootProblem } from "../db/ssl.js";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().default(3000),
 
   DATABASE_URL: z.string().min(1),
-  // PEM-encoded CA certificate for verifying the hosted Postgres connection's
-  // TLS certificate (Supabase/RDS/Render Postgres all publish one). Optional
-  // — unset keeps today's lenient behavior (skip verification) with a loud
-  // startup warning outside local dev, same graceful-degrade convention as
-  // SMTP/ALERT_WEBHOOK_URL above; set it to verify properly instead. See
-  // db/index.ts's own comment for why this existed as rejectUnauthorized:
-  // false in the first place.
-  DATABASE_SSL_CA: z.string().optional(),
+  // PEM CA (or server certificate) used to verify the hosted Postgres TLS
+  // certificate. Optional. Unset keeps rejectUnauthorized: false and, in
+  // production, logs where to get the certificate. Empty string counts as unset.
+  // See db/ssl.ts and DEPLOY.md.
+  DATABASE_SSL_CA: z
+    .string()
+    .optional()
+    .transform((value) => (value && value.trim().length > 0 ? value : undefined)),
+  // "true" refuses to boot in production when the database is not local and
+  // DATABASE_SSL_CA is missing. Leave unset until the CA is pasted and a
+  // deploy with it stays healthy — setting this first takes the API down.
+  ACCUQUAL_REQUIRE_DB_SSL_CA: z.enum(["true", "false"]).optional().or(z.literal("").transform(() => undefined)),
 
   JWT_ACCESS_SECRET: z.string().min(1),
   JWT_REFRESH_SECRET: z.string().min(1),
@@ -168,18 +173,19 @@ if (env.AI_CONFIG_ENCRYPTION_KEY === DEFAULT_ENCRYPTION_KEY) {
   console.warn(`⚠️  ${message}`);
 }
 
-// Audit finding (Database, high): db/index.ts's SSL config skips TLS
-// certificate verification (rejectUnauthorized: false) for every non-local
-// Postgres host whenever DATABASE_SSL_CA isn't set — accepts any
-// certificate, including one from an active MITM. Not fatal (a provider's
-// CA bundle isn't always trivial to obtain immediately, and this matches
-// the encryption-key guard's own "warn outside prod, don't block local
-// dev" shape), but loud, so it's never silently shipped to production.
-const LOCAL_DB_HOSTS = new Set(["localhost", "127.0.0.1", "postgres"]);
-if (env.NODE_ENV === "production" && !env.DATABASE_SSL_CA && !LOCAL_DB_HOSTS.has(new URL(env.DATABASE_URL).hostname)) {
-  console.warn(
-    "⚠️  DATABASE_SSL_CA is not set — the Postgres connection accepts any TLS certificate " +
-      "(rejectUnauthorized: false), which does not protect against a MITM on the DB connection. " +
-      "Set DATABASE_SSL_CA to your provider's CA certificate to verify it properly."
-  );
+// Audit finding (Database, high): without DATABASE_SSL_CA, a non-local
+// Postgres connection accepts any TLS certificate. Warn in production.
+// Refuse to boot only when ACCUQUAL_REQUIRE_DB_SSL_CA=true, so merging this
+// does not take a live deploy down before the certificate is pasted.
+const sslProblem = databaseSslBootProblem({
+  nodeEnv: env.NODE_ENV,
+  databaseUrl: env.DATABASE_URL,
+  caRaw: env.DATABASE_SSL_CA,
+  requireCa: env.ACCUQUAL_REQUIRE_DB_SSL_CA === "true",
+});
+if (sslProblem?.fatal) {
+  throw new Error(`❌ ${sslProblem.message}`);
+}
+if (sslProblem) {
+  console.warn(`⚠️  ${sslProblem.message}`);
 }
