@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ListChecks } from "lucide-react";
 import type { OpenWork } from "../../api/dashboard";
+import { cardFilterKeys, filterToken, rowInModuleFilter } from "../../lib/openWorkFilter";
 import { StatusBadge } from "../tables/StatusBadge";
 
 const TONE: Record<string, string> = {
@@ -66,9 +67,13 @@ export function OpenWorkSection({ work, singlePlant }: { work: OpenWork; singleP
 
   const plantActive = work.plants.some((row) => String(row.id) === plant) ? plant : "";
   const moduleRows = work.records.filter((row) => {
-    if (module && row.module !== module) return false;
+    if (!rowInModuleFilter(row.module, module)) return false;
     if (plantActive && String(row.plantId ?? "") !== plantActive) return false;
     return true;
+  });
+  const groupedCard = work.cards.find((card) => {
+    const keys = cardFilterKeys(card);
+    return keys != null && keys.length > 1 && filterToken(keys) === module;
   });
   const statuses = [...new Set(moduleRows.map((row) => row.status))].sort();
   const statusActive = statuses.includes(status) ? status : "";
@@ -90,17 +95,19 @@ export function OpenWorkSection({ work, singlePlant }: { work: OpenWork; singleP
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
         {work.cards.map((card) => {
           const tone = card.key === "calibration" && card.value === 0 ? "info" : card.key === "training" && card.value === 0 ? "success" : (TONE[card.key] ?? "primary");
-          const pressed = card.module != null && module === card.module;
+          const keys = cardFilterKeys(card);
+          const token = keys ? filterToken(keys) : "";
+          const pressed = token !== "" && module === token;
           return (
             <CardShell
               key={card.key}
               tone={tone}
               pressed={pressed}
-              href={card.module ? null : card.href}
+              href={keys ? null : card.href}
               onClick={
-                card.module
+                keys
                   ? () => {
-                      setModule(pressed ? "" : card.module!);
+                      setModule(pressed ? "" : token);
                       setStatus("");
                     }
                   : null
@@ -128,6 +135,7 @@ export function OpenWorkSection({ work, singlePlant }: { work: OpenWork; singleP
               className="rounded-md border border-border bg-background px-2 py-1 text-xs"
             >
               <option value="">All types</option>
+              {groupedCard ? <option value={module}>{groupedCard.label}</option> : null}
               {work.modules.map((item) => (
                 <option key={item.key} value={item.key}>
                   {item.label}

@@ -137,8 +137,20 @@ describe("open quality work", () => {
         ],
       }),
     );
-    expect(work.cards.find((card) => card.key === "validation")).toMatchObject({ value: 5, foot: "2 validation · 1 FAI · 2 TRP" });
-    expect(work.cards.find((card) => card.key === "ecr")).toMatchObject({ value: 2, foot: "1 ECR form · 1 change request" });
+    expect(work.cards.find((card) => card.key === "validation")).toMatchObject({
+      value: 5,
+      foot: "2 validation · 1 FAI · 2 TRP",
+      href: null,
+      module: null,
+      modules: ["VAL", "FAI", "TRP"],
+    });
+    expect(work.cards.find((card) => card.key === "ecr")).toMatchObject({
+      value: 2,
+      foot: "1 ECR form · 1 change request",
+      href: null,
+      module: null,
+      modules: ["ECR", "Change"],
+    });
     expect(work.records.filter((row) => row.module === "VAL").map((row) => row.number)).toEqual(["VAL-3", "VAL-1"]);
     expect(work.records.find((row) => row.number === "VAL-3")).toMatchObject({ title: "Air strut validation", owner: null, status: "in_progress" });
     expect(work.records.find((row) => row.number === "FAI-10")).toMatchObject({ title: "PN-10", href: "/iso-forms/record/10" });
@@ -146,6 +158,16 @@ describe("open quality work", () => {
     expect(work.records.find((row) => row.number === "TRP-14")).toMatchObject({ title: "Strut B", status: "in_progress" });
     expect(work.records.find((row) => row.number === "ECR-16")).toMatchObject({ title: "Housing · Job 2", status: "request", href: "/iso-forms/record/16" });
     expect(work.records.find((row) => row.module === "Change")).toMatchObject({ number: "CHG-3", status: "under_review", owner: "Dana Wells", href: "/change/3" });
+  });
+
+  it("keeps a one-list ECR or change card on that single module", () => {
+    const formsOnly = buildOpenWork(input({ access: { ...input().access, change: false } }));
+    expect(formsOnly.cards.find((card) => card.key === "ecr")).toMatchObject({ href: "/iso-forms/frm-ecr-001", module: "ECR" });
+    expect(formsOnly.cards.find((card) => card.key === "validation")?.modules).toEqual(["VAL", "FAI", "TRP"]);
+
+    const changesOnly = buildOpenWork(input({ access: { ...input().access, documents: false } }));
+    expect(changesOnly.cards.find((card) => card.key === "validation")).toBeUndefined();
+    expect(changesOnly.cards.find((card) => card.key === "ecr")).toMatchObject({ label: "Open change requests", href: "/change", module: "Change" });
   });
 
   it("marks company-wide cards when the dashboard is on one plant", () => {

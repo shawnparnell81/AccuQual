@@ -146,7 +146,7 @@ function Kpi({
       </div>
     </>
   );
-  const className = "kpi-tile reveal block rounded-[14px] p-4 no-underline";
+  const className = `kpi-tile reveal block rounded-[14px] p-4 no-underline${href ? " kpi-hover cursor-pointer" : ""}`;
   const style = { ["--tone" as string]: `var(--${token})`, ["--d" as string]: `${delay}ms` };
   if (!href) {
     return (
@@ -378,8 +378,32 @@ export function DashboardPage() {
               ) : (
                 <StatusTile label="PPAPs pending" value="No access" detail="You don't have access to PPAP." token="brand-purple" />
               )}
-              <StatusTile label="Deviations expiring (14 d)" value="Coming soon" detail={data.engineering.deviations.reason} token="warning" />
-              <StatusTile label="APQP gates due (21 d)" value="Coming soon" detail={data.engineering.apqp.reason} token="info" />
+              {data.kpis.docsDue.access ? (
+                <Kpi
+                  href="/iso-forms/frm-ncr-003"
+                  token="warning"
+                  delay={0}
+                  icon={<AlertTriangle size={15} />}
+                  label="Deviations"
+                  value="Open"
+                  foot="Concession / deviation requests"
+                />
+              ) : (
+                <StatusTile label="Deviations" value="No access" detail="You don't have access to deviation requests." token="warning" />
+              )}
+              {data.kpis.docsDue.access ? (
+                <Kpi
+                  href="/folders/apqp"
+                  token="info"
+                  delay={0}
+                  icon={<Layers size={15} />}
+                  label="APQP gates"
+                  value="Open"
+                  foot="Packets and gate documents"
+                />
+              ) : (
+                <StatusTile label="APQP gates" value="No access" detail="You don't have access to APQP gate documents." token="info" />
+              )}
             </div>
           </div>
 
