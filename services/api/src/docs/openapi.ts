@@ -4,6 +4,7 @@ import { createNcrSchema, updateNcrSchema, containmentNcrSchema, rootCauseNcrSch
 import { createCapaSchema, updateCapaSchema, verifyCapaSchema } from "../modules/capa/capa.validation.js";
 import { createDocumentSchema, updateDocumentSchema, requestReviewSchema, decisionSchema } from "../modules/documents/documents.validation.js";
 import { createCourseSchema, updateCourseSchema, assignSchema, completeAssignmentSchema } from "../modules/training/training.validation.js";
+import { ecrStructureSaveSchema, ecrStructureUnlockSchema, ecrTransitionSchema } from "../modules/change-requests/ecr.validation.js";
 
 extendZodWithOpenApi(z);
 
@@ -188,6 +189,46 @@ registry.registerPath({
   summary: "Mark a training assignment complete",
   request: { params: z.object({ assignmentId: z.string() }), body: { content: { "application/json": { schema: completeAssignmentSchema } } } },
   responses: { 200: genericResponses[200], 400: genericResponses[400] },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/iso-quality-forms/structure/engineering-change",
+  tags: ["Engineering change request"],
+  summary: "Current ECR template labels and revision. Filling a copy does not use this as an editor.",
+  responses: { 200: genericResponses[200], 403: genericResponses[403] },
+});
+registry.registerPath({
+  method: "post",
+  path: "/iso-quality-forms/structure/engineering-change/unlock",
+  tags: ["Engineering change request"],
+  summary: "PIN and certification before editing the ECR template. Structure-edit roles only.",
+  request: { body: { content: { "application/json": { schema: ecrStructureUnlockSchema } } } },
+  responses: { 200: genericResponses[200], 400: genericResponses[400], 403: genericResponses[403] },
+});
+registry.registerPath({
+  method: "put",
+  path: "/iso-quality-forms/structure/engineering-change",
+  tags: ["Engineering change request"],
+  summary: "Save ECR template labels. VERSION and REV advance only when the structure changes. PIN required.",
+  request: { body: { content: { "application/json": { schema: ecrStructureSaveSchema } } } },
+  responses: { 200: genericResponses[200], 400: genericResponses[400], 403: genericResponses[403] },
+});
+registry.registerPath({
+  method: "get",
+  path: "/iso-quality-forms/{id}/workflow",
+  tags: ["Engineering change request"],
+  summary: "ECR stage, allowed actions, and the labels this copy shows.",
+  request: { params: z.object({ id: z.string() }) },
+  responses: { 200: genericResponses[200], 403: genericResponses[403] },
+});
+registry.registerPath({
+  method: "post",
+  path: "/iso-quality-forms/{id}/transition",
+  tags: ["Engineering change request"],
+  summary: "Move an ECR: submit, parallel review, approve, reject, implement, close, or reopen.",
+  request: { params: z.object({ id: z.string() }), body: { content: { "application/json": { schema: ecrTransitionSchema } } } },
+  responses: { 200: genericResponses[200], 400: genericResponses[400], 403: genericResponses[403] },
 });
 
 export function buildOpenApiDocument() {

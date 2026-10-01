@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
+import { apiClient } from "../../api/client";
 import { recordFileNamePattern, useFormTemplates } from "../../api/formTemplatesQuery";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { formatDate } from "../../lib/dates";
@@ -58,6 +60,11 @@ function summary(formType: IsoFormType, data: IsoQualityForm["data"]): string {
 export function IsoFormListPage() {
   const { formKey = "" } = useParams();
   const meta = formByKey(formKey);
+  const ecrMaster = useQuery({
+    queryKey: ["ecr-structure"],
+    enabled: meta?.formType === "engineering_change",
+    queryFn: async () => (await apiClient.get<{ revision: string }>("/iso-quality-forms/structure/engineering-change")).data,
+  });
   const navigate = useNavigate();
   const user = useCurrentUser();
   const { effective } = useEffectivePermissions();
@@ -91,7 +98,7 @@ export function IsoFormListPage() {
         <div>
           <h1 className="text-2xl font-semibold">{meta.title}</h1>
           <p className="text-sm text-muted-foreground">
-            {revisionLabel(liveFormId, meta.rev)}. Start this blank from Blank Forms. {filledCopyFolderSentence(form.formKey)}
+            {revisionLabel(liveFormId, ecrMaster.data?.revision || meta.rev)}. Start this blank from Blank Forms. {filledCopyFolderSentence(form.formKey)}
           </p>
           <FormNumberEditor formKey={form.formKey} />
           {form.retired && <p className="mt-2 text-sm text-muted-foreground">This blank is no longer used. Start a nonconformance from NCR.</p>}

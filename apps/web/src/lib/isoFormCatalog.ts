@@ -85,7 +85,7 @@ export const ISO_FORMS: IsoFormMeta[] = [
   { formKey: "frm-dev-011", formType: "dev_electric_lift", formId: "FRM-DEV-011", title: "ELECTRIC LIFT SUPPORT DEVELOPMENT DOCUMENT", rev: "B", layout: null, photos: false },
   { formKey: "frm-dev-012", formType: "dev_electronic_csa", formId: "FRM-DEV-012", title: "ELECTRONIC CSA DEVELOPMENT DOCUMENT", rev: "A", layout: null, photos: false },
   { formKey: "frm-dev-013", formType: "dev_shock", formId: "FRM-DEV-013", title: "SHOCK ABSORBER DEVELOPMENT DOCUMENT", rev: "A", layout: null, photos: false },
-  { formKey: "frm-ecr-001", formType: "engineering_change", formId: "FRM-ECR-001", title: "ENGINEERING CHANGE REQUEST (ECR)", rev: "A", layout: null, photos: false },
+  { formKey: "frm-ecr-001", formType: "engineering_change", formId: "FRM-ECR-001", title: "ENGINEERING CHANGE REQUEST (ECR)", rev: "B", layout: null, photos: false },
   { formKey: "frm-car-001", formType: "scar_request", formId: "FRM-CAR-001", title: "SUPPLIER CORRECTIVE ACTION REQUEST (SCAR)", rev: "A", layout: null, photos: false },
 ];
 

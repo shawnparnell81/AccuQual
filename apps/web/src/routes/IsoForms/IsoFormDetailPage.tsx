@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
+import { apiClient } from "../../api/client";
 import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { PictureText } from "../../components/forms/PictureText";
@@ -10,6 +11,8 @@ import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPan
 import { SaveStatus } from "../../components/shared/SaveStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { fileChosenFolder, RecordFolderField, SaveResult, useFormFiling, type SaveResultState } from "../../components/forms/FormDocumentControls";
+import { canEditFormStructure } from "../../lib/formStructureAccess";
+import { ecrCellLocked, ecrStatusLabel, type EcrWorkflowView } from "../../lib/ecrWorkflow";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { FORM_KEY_BY_TYPE, instanceRevision, revisionLabel } from "../../lib/formDocument";
@@ -26,6 +29,7 @@ import { plusDays, type FailureRow, type FaiLine, type ScorecardRow } from "../.
 import { Batch4Sheet } from "./Batch4Sheet";
 import { Batch5Sheet } from "./Batch5Sheet";
 import { Batch6Sheet } from "./Batch6Sheet";
+import { EcrWorkflowPanel } from "./EcrWorkflowPanel";
 import { MonthlyEngineeringSheet } from "./MonthlyEngineeringSheet";
 import { VisitorLogSheet } from "./VisitorLogSheet";
 import { CrossTrainingSheet } from "./CrossTrainingSheet";
@@ -65,6 +69,20 @@ export function IsoFormDetailPage() {
   const { data: record, isLoading, isError } = hooks.useOne(recordId);
   const updateRecord = hooks.useUpdate();
   const signForm = hooks.useAction("sign");
+  const queryClient = useQueryClient();
+  const ecrView = useQuery({
+    queryKey: ["ecr-workflow", recordId],
+    enabled: record?.formType === "engineering_change",
+    queryFn: async () => (await apiClient.get<EcrWorkflowView>(`/iso-quality-forms/${recordId}/workflow`)).data,
+  });
+  const ecrTransition = useMutation({
+    mutationFn: async (input: { action: string; note?: string }) => (await apiClient.post(`/iso-quality-forms/${recordId}/transition`, input)).data,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["iso-quality-forms"] });
+      await queryClient.invalidateQueries({ queryKey: ["ecr-workflow", recordId] });
+      await queryClient.invalidateQueries({ queryKey: ["workflow-history", "iso_forms", recordId] });
+    },
+  });
   const [cells, setCells] = useState<Record<string, CellValue> | null>(null);
   const [photos, setPhotos] = useState("");
   const [lines, setLines] = useState<FaiLine[]>([]);
@@ -161,6 +179,10 @@ export function IsoFormDetailPage() {
 
   async function signField(field: string, pin: string) {
     await signForm.mutateAsync({ id: recordId, field, pin, certified: true });
+    if (formType === "engineering_change") {
+      await queryClient.invalidateQueries({ queryKey: ["ecr-workflow", recordId] });
+      await queryClient.invalidateQueries({ queryKey: ["workflow-history", "iso_forms", recordId] });
+    }
   }
 
   return (
@@ -191,6 +213,13 @@ export function IsoFormDetailPage() {
       recordId={recordId}
       signatures={signatures}
       onSign={formType === "audit_summary" || isBatch4(formType) || formType === "engineering_change" ? signField : undefined}
+      ecrView={formType === "engineering_change" ? ecrView.data : undefined}
+      ecrBusy={ecrTransition.isPending}
+      canEditStructure={canEditFormStructure(user)}
+      onEcrTransition={async (action, note) => {
+        if (dirty) await saveRecord();
+        await ecrTransition.mutateAsync({ action, note });
+      }}
     />
   );
 }
@@ -228,6 +257,10 @@ function IsoFormDetailBody({
   recordId,
   signatures,
   onSign,
+  ecrView,
+  ecrBusy,
+  canEditStructure,
+  onEcrTransition,
 }: {
   meta: NonNullable<ReturnType<typeof formByType>>;
   record: IsoQualityForm;
@@ -255,6 +288,10 @@ function IsoFormDetailBody({
   recordId: number;
   signatures: Record<string, string>;
   onSign?: (field: string, pin: string) => Promise<unknown>;
+  ecrView?: EcrWorkflowView;
+  ecrBusy?: boolean;
+  canEditStructure?: boolean;
+  onEcrTransition?: (action: string, note?: string) => Promise<void>;
 }) {
   const queryClient = useQueryClient();
   const [saveNote, setSaveNote] = useState<SaveResultState>(null);
@@ -264,7 +301,7 @@ function IsoFormDetailBody({
   const formType = record.formType;
   const liveFormId = templates.data?.find((item) => item.formKey === formKey)?.formId ?? "";
   const documentNumber = filing.data?.snapshotted ? filing.data.formNumber : liveFormId;
-  const revision = instanceRevision(record.data, meta.rev);
+  const revision = ecrView?.revision || instanceRevision(record.data, meta.rev);
 
   async function save() {
     setPending(true);
@@ -326,6 +363,9 @@ function IsoFormDetailBody({
             </button>
           </div>
         )}
+        {formType === "engineering_change" && ecrView && onEcrTransition && (
+          <EcrWorkflowPanel recordId={recordId} view={ecrView} canEditStructure={canEditStructure === true} busy={ecrBusy === true} onTransition={onEcrTransition} />
+        )}
       </div>
 
       <div className="aq-form-copy aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4">
@@ -360,6 +400,12 @@ function IsoFormDetailBody({
             managerSignature={signatureText(record.data, "managerSignature")}
             supplierSignature={signatureText(record.data, "supplierRepSignature")}
             onSign={onSign}
+            labels={formType === "engineering_change" ? ecrView?.labels : undefined}
+            revision={formType === "engineering_change" ? revision : undefined}
+            workflowStatus={formType === "engineering_change" ? ecrStatusLabel(ecrView?.workflow.status ?? "request") : undefined}
+            cellLocked={formType === "engineering_change" && ecrView ? (addr) => ecrCellLocked(ecrView.editing, canEdit, addr) : undefined}
+            managerLocked={formType === "engineering_change" ? !canEdit || (ecrView != null && ecrView.workflow.status !== "request" && ecrView.workflow.status !== "review") : undefined}
+            supplierLocked={formType === "engineering_change" ? !canEdit || ecrView?.workflow.status === "closed" : undefined}
           />
         ) : formType === "first_article" ? (
           <FaiSheet cells={cells} lines={lines} readOnly={!canEdit} onCell={changeCell} onLines={setLines} documentNumber={documentNumber} revision={revision} />

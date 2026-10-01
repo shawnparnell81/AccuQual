@@ -8,6 +8,8 @@ import { answersWithTemplateStamp } from "../forms/templateRevision.js";
 import { retainSignatureValues } from "../signatures/signaturePin.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { crudFactory } from "../../utils/crudFactory.js";
+import { assertEcrAnswerEdit, blankEcrWorkflow, canApproveChangeRequest, readEcrWorkflow } from "../change-requests/changeRequestWorkflow.js";
+import { stampNewEcr } from "../change-requests/ecr.controller.js";
 
 const AUDIT_SIGNATURES: Record<string, string> = {
   leadAuditorSignature: "I certify that I conducted this audit impartially and according to the internal audit procedure.",
@@ -25,12 +27,14 @@ function asRecord(value: unknown): Record<string, unknown> {
 export const baseHandlers = crudFactory(isoQualityForms, {
   entityName: "ISO form",
   idColumn: "id",
-  prepareCreate: (body) => ({
-    ...body,
-    data: answersWithTemplateStamp(`iso:${String(body.formType ?? "")}`, undefined, asRecord(body.data), true),
-  }),
+  prepareCreate: (body) => {
+    const data = answersWithTemplateStamp(`iso:${String(body.formType ?? "")}`, undefined, asRecord(body.data), true);
+    if (body.formType === "engineering_change") return { ...body, data: { ...data, workflow: blankEcrWorkflow() } };
+    return { ...body, data };
+  },
   mergeUpdate: (existing, patch) => {
     if (!patch.data || typeof patch.data !== "object" || Array.isArray(patch.data)) return patch;
+    if (existing.formType === "engineering_change") assertEcrAnswerEdit(existing.data, patch.data);
     const previous = asRecord(existing.data);
     const stamped = answersWithTemplateStamp(`iso:${String(existing.formType ?? "")}`, existing.data, patch.data as Record<string, unknown>, false);
     return { ...patch, data: retainSignatureValues(previous, stamped) };
@@ -38,6 +42,7 @@ export const baseHandlers = crudFactory(isoQualityForms, {
   afterCreate: async (created, req) => {
     if (!req.db) return;
     await snapshotIsoFormNumber(req.db, created);
+    await stampNewEcr(req.db, created);
   },
 });
 
@@ -66,6 +71,16 @@ export const signIsoQualityForm = asyncHandler(async (req: Request, res: Respons
   if (!record) throw AppError.notFound("ISO form");
   const description = FORM_SIGNATURES[record.formType]?.[field];
   if (!description) throw AppError.badRequest("That signature field is not recognized.");
+  if (record.formType === "engineering_change") {
+    const status = readEcrWorkflow(record.data).status;
+    if (status === "closed") throw AppError.badRequest("This engineering change request is closed.");
+    if (field === "managerSignature" && status !== "request" && status !== "review") {
+      throw AppError.badRequest("The manager signature is recorded during request or review.");
+    }
+    if (field === "managerSignature" && !canApproveChangeRequest(req.user)) {
+      throw AppError.forbidden("That signature is limited to quality and engineering management.");
+    }
+  }
   const previous = asRecord(record.data);
   const current = previous[field];
   if (typeof current === "string" && current.trim()) throw AppError.badRequest("This signature is already recorded.");
