@@ -11,8 +11,8 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { startSessionForSsoUser } from "../auth/auth.service.js";
 import { completeAuthorization, type SsoFlowState } from "./oidc.js";
 
-/** Roles SSO may never hand out on its own: whoever controls (or spoofs) the provider must not be able to mint admins. */
-export const SSO_FORBIDDEN_ROLES = new Set(["admin"]);
+/** Roles SSO may never hand out on its own: whoever controls (or spoofs) the provider must not be able to mint an owner or an admin. */
+export const SSO_FORBIDDEN_ROLES = new Set(["admin", "owner"]);
 
 // Anyone can register these, so proving control of one proves nothing about an organization.
 const FREE_MAIL_DOMAINS = new Set(["gmail.com", "googlemail.com", "yahoo.com", "outlook.com", "hotmail.com", "live.com", "msn.com", "icloud.com", "me.com", "aol.com", "proton.me", "protonmail.com", "gmx.com", "mail.com", "zoho.com", "yandex.com"]);
@@ -53,7 +53,7 @@ export async function findConnection(): Promise<SsoConnection | null> {
  * it carries an email that the provider says is verified; that email is on a
  * domain the company proved it owns; then the account is found by the stable
  * provider subject, else by email, else created if auto-provisioning is on.
- * Auto-provisioned users never get an admin role.
+ * Auto-provisioned users never get an owner or admin role. Domain verification still runs first.
  */
 export async function handleCallback(callbackUrl: URL, flow: SsoFlowState): Promise<{ session: Awaited<ReturnType<typeof startSessionForSsoUser>>; provisioned: boolean }> {
   const [conn] = await db.select().from(ssoConnections).where(eq(ssoConnections.id, flow.cid));
@@ -86,7 +86,7 @@ export async function handleCallback(callbackUrl: URL, flow: SsoFlowState): Prom
     if (existing) {
       userId = existing.id;
     } else {
-      // 3. Nothing yet: create it, but only when the company opted in, and never as an admin.
+      // 3. Nothing yet: create it, but only when the company opted in, and never as an owner or an admin.
       if (!conn.autoProvision || !conn.defaultRoleId) throw new SsoDenied("no_account", { email });
       const [role] = await db.select().from(roles).where(eq(roles.id, conn.defaultRoleId));
       if (!role || SSO_FORBIDDEN_ROLES.has(role.name)) throw new SsoDenied("no_account", { email });

@@ -115,6 +115,13 @@ function MonitoringPanel({ report }: { report: SystemHealthReport }) {
         <span>Workers watched: {m.configured.workersMonitored.length > 0 ? m.configured.workersMonitored.join(", ") : <span>none</span>}</span>
         <span>Last 5 min: {m.serverErrors5m} server errors / {m.requests5m} requests</span>
         <span>Version {m.version}, up {Math.floor(m.uptimeSeconds / 3600)}h {Math.floor((m.uptimeSeconds % 3600) / 60)}m</span>
+        {report.readiness && (
+          <span>
+            Redis: {report.readiness.redis.status}
+            {report.readiness.redis.latencyMs > 0 ? `, ${report.readiness.redis.latencyMs}ms` : ""}
+            {report.readiness.redis.status !== "ok" ? ` — ${report.readiness.redis.detail}` : ""}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -164,6 +171,9 @@ export function AdminSystemHealthPage() {
               <StatusBadge value={report.overall} />
               <span className="ml-auto text-xs text-muted-foreground">Last checked {new Date(dataUpdatedAt).toLocaleTimeString()}</span>
             </div>
+            {report.readiness?.backgroundJobs === "off" && (
+              <p className="rounded-lg border border-border bg-card p-4 text-sm">Background jobs are off on this deploy</p>
+            )}
             <MonitoringPanel report={report} />
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {CARDS.map((def) => (

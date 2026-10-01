@@ -151,6 +151,10 @@ export function WorkflowBuilderPage() {
         </div>
       </div>
 
+      {health?.backgroundJobs === "off" && (
+        <p className="rounded-lg border border-border bg-card p-4 text-sm">Background jobs are off on this deploy</p>
+      )}
+
       <PendingApprovals />
 
       {showHealth ? (

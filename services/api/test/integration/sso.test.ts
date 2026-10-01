@@ -137,6 +137,7 @@ let companyId: number;
 let adminToken: string;
 let workerRoleId: number;
 let adminRoleId: number;
+let ownerRoleId: number;
 const userIds: number[] = [];
 const createdRoleIds: number[] = []; // only the uniquely named worker role; 'admin' is a shared system role and is left in place (parallel test files use it)
 const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
@@ -186,6 +187,7 @@ describe("OpenID Connect single sign-on (real DB + real openid-client)", () => {
     companyId = t!.id;
     
     adminRoleId = await ensureRole("admin");
+    ownerRoleId = await ensureRole("owner");
     workerRoleId = await ensureRole(`sso-worker-${suffix}`);
     const admin = await makeUser("sso-admin", companyId, { roleId: adminRoleId });
     adminToken = await signAccessToken({ sub: String(admin.id), roleId: adminRoleId, roleName: "admin", department: null });
@@ -258,6 +260,9 @@ describe("OpenID Connect single sign-on (real DB + real openid-client)", () => {
       const adminRole = await request(app).put("/sso").set(bearer(adminToken)).send({ issuer: idp.issuer, clientId: CLIENT_ID, enabled: true, autoProvision: true, defaultRoleId: adminRoleId });
       expect(adminRole.status).toBe(400);
       expect(adminRole.body.message).toMatch(/administrator/);
+      const ownerRole = await request(app).put("/sso").set(bearer(adminToken)).send({ issuer: idp.issuer, clientId: CLIENT_ID, enabled: true, autoProvision: true, defaultRoleId: ownerRoleId });
+      expect(ownerRole.status).toBe(400);
+      expect(ownerRole.body.message).toMatch(/owner/);
       const enforce = await request(app).put("/sso").set(bearer(adminToken)).send({ issuer: idp.issuer, clientId: CLIENT_ID, enabled: false, enforceSso: true });
       expect(enforce.status).toBe(400);
     });
@@ -332,10 +337,14 @@ describe("OpenID Connect single sign-on (real DB + real openid-client)", () => {
       // The random password is unusable: nobody knows it.
       expect((await request(app).post("/auth/login").send({ email, password: "anything-at-all-123" })).status).toBe(401);
 
-      // Point the default role at an admin role directly in the DB (bypassing the API check): use still refuses.
+      // Point the default role at an admin or owner role directly in the DB (bypassing the API check): use still refuses.
       await db.update(ssoConnections).set({ defaultRoleId: adminRoleId });
       const blocked = await ssoSignIn(claimsFor(`second-${suffix}@${DOMAIN}`));
       expect(errorOf(blocked.location)).toBe("no_account");
+      await db.update(ssoConnections).set({ defaultRoleId: ownerRoleId });
+      const blockedOwner = await ssoSignIn(claimsFor(`third-${suffix}@${DOMAIN}`));
+      expect(errorOf(blockedOwner.location)).toBe("no_account");
+      expect(await db.select().from(users).where(eq(users.email, `third-${suffix}@${DOMAIN}`))).toHaveLength(0);
       await db.update(ssoConnections).set({ autoProvision: false, defaultRoleId: null });
     });
 

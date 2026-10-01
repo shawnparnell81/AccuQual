@@ -38,9 +38,27 @@ export interface EmailTransport {
   send(message: OutboundEmail): Promise<"sent" | "failed">;
 }
 
+/**
+ * Log-only delivery must not keep password-reset links, query tokens, or a
+ * temporary password. The real transport still receives the original message.
+ */
+export function redactEmailForLog(message: OutboundEmail): { to: string; subject: string; body: string; html?: string } {
+  const redact = (text: string) =>
+    text
+      .replace(/https?:\/\/[^\s<>"']+/gi, "[link redacted]")
+      .replace(/\b(?:token|code|resetToken|password)=[^\s&<>"']+/gi, "[redacted]")
+      .replace(/(temporary password:\s*)\S+/gi, "$1[redacted]");
+  return {
+    to: message.to,
+    subject: message.subject,
+    body: redact(message.body),
+    ...(message.html !== undefined ? { html: redact(message.html) } : {}),
+  };
+}
+
 export const logTransport: EmailTransport = {
   async send(message) {
-    logger.info("Email (logged, not delivered — no transport configured)", message);
+    logger.info("Email (logged, not delivered — no transport configured)", redactEmailForLog(message));
     return "sent";
   },
 };
@@ -212,7 +230,7 @@ async function deliver(transport: EmailTransport, message: OutboundEmail): Promi
 
 export async function sendEmail(message: OutboundEmail): Promise<"sent" | "logged_only" | "failed"> {
   if (!activeTransport) {
-    logger.info("Email (logged, not delivered — no transport configured)", message);
+    logger.info("Email (logged, not delivered — no transport configured)", redactEmailForLog(message));
     return "logged_only";
   }
   return deliver(activeTransport, message);

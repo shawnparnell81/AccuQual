@@ -11,44 +11,52 @@ afterAll(async () => {
 });
 
 describe("GET /health", () => {
-  it("returns 200 with a real readiness report when the database and Redis are both reachable", async () => {
+  it("returns 200 and only {status:ok} when the database is reachable", async () => {
     const res = await request(app).get("/health");
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ service: "accuqual-api", status: "ok" });
-    expect(res.body.database).toMatchObject({ status: "ok" });
-    expect(res.body.redis.status).toMatch(/ok|critical|not configured/); // real Redis reachability, not asserted as always up
-    expect(res.body.checkedAt).toBeTruthy();
+    expect(res.body).toEqual({ status: "ok" });
+    expect(JSON.stringify(res.body)).not.toMatch(/version|redis|latency|database|uptime/i);
   });
 
-  it("responds within a few seconds when Redis is unreachable, and stays 200", async () => {
+  it("responds within a few seconds when Redis is unreachable, stays 200, and does not describe Redis", async () => {
     // Closed port: the failure mode that used to hang. node-redis retries
     // ECONNREFUSED forever unless reconnectStrategy is false, and connectTimeout
     // does not reject that loop. 127.0.0.1:1 is nothing, same as Render with
-    // no Redis on localhost.
+    // no Redis on localhost. Redis still must not fail Render's probe.
     setRedisUrlOverrideForTests("redis://127.0.0.1:1");
     const started = Date.now();
     try {
       const res = await request(app).get("/health");
       expect(Date.now() - started).toBeLessThan(5_000);
       expect(res.status).toBe(200);
-      expect(res.body.status).toBe("ok");
-      expect(res.body.database.status).toBe("ok");
-      expect(res.body.redis.status).toBe("critical");
+      expect(res.body).toEqual({ status: "ok" });
     } finally {
       clearRedisUrlOverrideForTests();
     }
   });
 
-  it("reports Redis as not configured when REDIS_URL is unset, without opening a socket", async () => {
+  it("stays 200 with no Redis detail when REDIS_URL is unset", async () => {
     setRedisUrlOverrideForTests(null);
     const started = Date.now();
     try {
       const res = await request(app).get("/health");
       expect(Date.now() - started).toBeLessThan(5_000);
       expect(res.status).toBe(200);
-      expect(res.body.redis).toMatchObject({ status: "not configured", detail: "not configured" });
+      expect(res.body).toEqual({ status: "ok" });
     } finally {
       clearRedisUrlOverrideForTests();
+    }
+  });
+
+  it("answers 503 with the single word Unreachable and hides the driver error", async () => {
+    const spy = vi.spyOn(pool, "query").mockRejectedValueOnce(new Error("password authentication failed for user postgres"));
+    try {
+      const res = await request(app).get("/health");
+      expect(res.status).toBe(503);
+      expect(res.body).toEqual({ status: "Unreachable" });
+      expect(JSON.stringify(res.body)).not.toMatch(/password authentication|postgres/);
+    } finally {
+      spy.mockRestore();
     }
   });
 });

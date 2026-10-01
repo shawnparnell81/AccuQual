@@ -11,6 +11,7 @@ import { toWorkflowPayload, workflowAdapter } from "../versioning/adapters.js";
 import { recordAuditTrail, withResolvedActors, attachFieldChanges, labelPersonFields } from "../audit-trail/audit-trail.service.js";
 import { assertCanReadEntityHistory } from "../audit-trail/auditTrailVisibility.js";
 import { RESOURCE_KEYS } from "../../middleware/departmentAccess.js";
+import { configuredRedisUrl } from "../../lib/redisConnect.js";
 import { WORKFLOW_TEMPLATES } from "./workflow.templates.js";
 import type { Db } from "../../lib/requestDb.js";
 
@@ -292,5 +293,7 @@ export async function buildWorkflowHealthReport(db: Db) {
 }
 
 export const healthHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await buildWorkflowHealthReport(req.db! as Db));
+  const report = await buildWorkflowHealthReport(req.db! as Db);
+  // Informational only. Unset REDIS_URL means workers are not running; this does not change how workflows save or run.
+  res.json({ ...report, backgroundJobs: configuredRedisUrl() ? "on" : "off" });
 });

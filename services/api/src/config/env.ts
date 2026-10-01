@@ -118,7 +118,7 @@ const envSchema = z.object({
   // Error tracking (Sentry). Unset = disabled, nothing is sent anywhere. See modules/monitoring/sentry.ts for what is (and is not) sent.
   SENTRY_DSN: z.string().optional(),
   SENTRY_ENVIRONMENT: z.string().optional(),
-  // Shown in /health and attached to error reports so a problem can be tied to a deploy. Set to the git commit in CI/hosting.
+  // Shown on GET /system-health (Owner/Admin) and attached to error reports so a problem can be tied to a deploy. Set to the git commit in CI/hosting. Public /health does not include it.
   // On Render the deploy's git commit is provided automatically (RENDER_GIT_COMMIT).
   APP_VERSION: z.string().default(process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? process.env.GIT_SHA?.slice(0, 7) ?? "dev"),
   // A URL pinged once a minute while the database is reachable (Healthchecks.io, Better Stack, Uptime Kuma...). When the
