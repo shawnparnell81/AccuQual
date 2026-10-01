@@ -37,7 +37,7 @@
     "hibp": "15.2.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.4.0",
-    "nodemailer": "^10.0.9",
+    "nodemailer": "^10.0.12",
     "openid-client": "^6.8.8",
     "pdf-lib": "^1.17.1",
     "pg": "^8.12.0",
