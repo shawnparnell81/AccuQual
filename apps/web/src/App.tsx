@@ -84,6 +84,7 @@ import {
   QuarantineDetailPage,
   QuarantinePage,
   ReportingHubPage,
+  ReportsPage,
   RetiredModulePage,
   RiskDashboardPage,
   RiskDetailPage,
@@ -264,6 +265,7 @@ export function App() {
           </Route>
 
           <Route path="/reporting" element={<ReportingHubPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
         </Route>
         </Route>
