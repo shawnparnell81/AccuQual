@@ -167,7 +167,7 @@
 .b8-impact label,
 .b8-doc-checks label {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   font-weight: 400;
   color: hsl(var(--foreground));
@@ -177,7 +177,8 @@
   accent-color: hsl(var(--primary));
   width: 14px;
   height: 14px;
-  margin: 0;
+  margin: 0.15em 0 0;
+  flex: 0 0 auto;
 }
 
 .b8-or {

@@ -63,8 +63,28 @@ export const updateMyChangelogSeenSchema = z.object({
   version: z.string().trim().min(1).max(40),
 });
 
+/** In-app path only. Rejects protocol-relative and parent-directory paths. */
+export function isShortcutPath(path: string): boolean {
+  if (!path.startsWith("/") || path.startsWith("//") || path.includes("..") || path.includes("\\") || path.includes("?")) return false;
+  return /^\/[A-Za-z0-9][A-Za-z0-9_./-]*$/.test(path);
+}
+
 /** Saved list-view search filters — a body of `{ [pageKey]: view[] }`, merge-patched one page key at a time (see updateMySavedViews). Each page key is capped at 20 saved views; a page id itself is just a short caller-chosen slug like "ncr-list". */
 export const updateMySavedViewsSchema = z.record(
   z.string().trim().min(1).max(60),
   z.array(z.object({ label: z.string().trim().min(1).max(60), searchText: z.string().max(200) })).max(20)
 );
+
+/** One person's sidebar: hidden shared items, plus shortcuts they pinned. Replaces the whole preference. */
+export const updateMySidebarShortcutsSchema = z.object({
+  hidden: z.array(z.string().trim().min(1).max(80).regex(/^[A-Za-z0-9:_-]+$/)).max(200),
+  pinned: z
+    .array(
+      z.object({
+        key: z.string().trim().min(1).max(80).regex(/^[A-Za-z0-9:_-]+$/),
+        label: z.string().trim().min(1).max(80),
+        path: z.string().trim().max(120).refine(isShortcutPath, "must be an in-app path"),
+      }),
+    )
+    .max(40),
+});

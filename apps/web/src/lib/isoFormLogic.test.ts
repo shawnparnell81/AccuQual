@@ -29,7 +29,7 @@ test("audit results use pass, minor, and major colors", () => {
 });
 
 test("each workbook keeps its title and the quarantine total cell", () => {
-  assert.equal(auditLayout().rows[1]?.[0]?.text, "INTERNAL AUDIT CHECKLIST");
+  assert.equal(auditLayout().rows[1]?.[0]?.text, "AUDIT CHECKLIST");
   assert.equal(ncrLayout().rows[1]?.[0]?.text, "NON-CONFORMANCE REPORT (NCR)");
   assert.equal(ncrLayout().rows.flat().find((cell) => cell?.addr === "B22")?.text, "USE AS-IS");
   const withConcession = ncrLayout().rows.flat().find((cell) => cell?.text === "with concession");

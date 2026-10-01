@@ -684,7 +684,7 @@ const specs: Record<RecordKind, KindSpec> = {
 };
 
 const ISO_FORM_LABELS: Record<string, string> = {
-  internal_audit: "FRM-GEN-001 INTERNAL AUDIT CHECKLIST",
+  internal_audit: "FRM-GEN-001 AUDIT CHECKLIST",
   ncr_report: "FRM-NCR-001 NON-CONFORMANCE REPORT (NCR)",
   quarantine_notice: "FRM-NCR-002 QUARANTINE NOTICE",
   concession: "FRM-NCR-003 CONCESSION / DEVIATION REQUEST",

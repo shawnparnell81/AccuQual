@@ -1,0 +1,36 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { SIDEBAR_FOLDERS, flattenSidebarLinks, isFolder } from "../components/layout/sidebarStructure.ts";
+import { applyUserShortcuts, PINNABLE_SHORTCUTS } from "./sidebarShortcuts.ts";
+
+describe("per-user sidebar shortcuts", () => {
+  it("leaves the shared menu alone until someone hides or pins", () => {
+    const next = applyUserShortcuts(SIDEBAR_FOLDERS, { hidden: [], pinned: [] });
+    assert.equal(next.some((node) => node.key === "my-shortcuts"), false);
+    assert.equal(flattenSidebarLinks(next).some((link) => link.path.startsWith("/iso-forms/")), false);
+    assert.equal(PINNABLE_SHORTCUTS.some((item) => item.label === "FMEA"), true);
+  });
+
+  it("hides a shared item and pins a page that is not already showing", () => {
+    const next = applyUserShortcuts(SIDEBAR_FOLDERS, {
+      hidden: ["pareto"],
+      pinned: [{ key: "pin-fmea", label: "FMEA", path: "/risk" }],
+    });
+    assert.equal(flattenSidebarLinks(next).some((link) => link.key === "pareto"), false);
+    const shortcuts = next.find((node) => node.key === "my-shortcuts");
+    assert.ok(shortcuts && isFolder(shortcuts));
+    assert.deepEqual(
+      shortcuts.children.map((child) => child.label),
+      ["FMEA"],
+    );
+  });
+
+  it("does not pin a second copy of a page that is already on the menu", () => {
+    const next = applyUserShortcuts(SIDEBAR_FOLDERS, {
+      hidden: [],
+      pinned: [{ key: "pin-ncr", label: "NCR", path: "/ncr" }],
+    });
+    assert.equal(next.some((node) => node.key === "my-shortcuts"), false);
+    assert.equal(flattenSidebarLinks(next).filter((link) => link.path === "/ncr").length, 1);
+  });
+});

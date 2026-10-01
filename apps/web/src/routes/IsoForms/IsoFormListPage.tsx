@@ -104,8 +104,9 @@ export function IsoFormListPage() {
             {revisionLabel(liveFormId, meta.rev)}. The blank template is filed under ISO Compliance Documents / Blank Form Templates. A filled copy can be saved into any Documents folder.
           </p>
           <FormNumberEditor formKey={form.formKey} />
+          {form.retired && <p className="mt-2 text-sm text-muted-foreground">This blank is no longer used. Start a nonconformance from NCR.</p>}
         </div>
-        {canEdit && (
+        {canEdit && !form.retired && (
           <button type="button" onClick={start} disabled={pending} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
             {pending ? "Creating…" : liveFormId ? `New ${liveFormId}` : `New ${meta.title}`}
           </button>

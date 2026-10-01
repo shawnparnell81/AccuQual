@@ -8,6 +8,7 @@ import { canViewAuditLog } from "../../lib/recordDelete";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { useToast } from "../shared/ToastProvider";
 import { SIDEBAR_FOLDERS, visibleSidebar, type SidebarNode } from "./sidebarStructure";
+import { applyUserShortcuts, EMPTY_SIDEBAR_SHORTCUTS, type SidebarShortcutPrefs } from "../../lib/sidebarShortcuts";
 import {
   applySidebarLayout,
   moveSidebarItem,
@@ -32,9 +33,15 @@ export function useArrangedSidebar() {
     queryKey: ["sidebar-layout"],
     queryFn: async () => (await apiClient.get<{ layout: SidebarPlacement[] | null }>("/company/sidebar-layout")).data.layout,
   });
+  const shortcuts = useQuery({
+    queryKey: ["sidebar-shortcuts"],
+    enabled: Boolean(user?.id),
+    queryFn: async () => (await apiClient.get<SidebarShortcutPrefs>("/users/me/sidebar-shortcuts")).data,
+  });
   const arranged = useMemo(() => applySidebarLayout(layout.data, SIDEBAR_FOLDERS), [layout.data]);
-  const folders = useMemo(() => visibleSidebar(arranged, isAdmin, { auditLog: showAuditLog }), [arranged, isAdmin, showAuditLog]);
-  return { arranged, folders, isAdmin };
+  const catalog = useMemo(() => visibleSidebar(arranged, isAdmin, { auditLog: showAuditLog }), [arranged, isAdmin, showAuditLog]);
+  const folders = useMemo(() => applyUserShortcuts(catalog, shortcuts.data ?? EMPTY_SIDEBAR_SHORTCUTS), [catalog, shortcuts.data]);
+  return { arranged, folders, catalog, isAdmin };
 }
 
 interface OrganizeApi {

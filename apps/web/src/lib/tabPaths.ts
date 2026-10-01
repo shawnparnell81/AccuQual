@@ -42,6 +42,7 @@ const EXACT = new Set([
   "/management-system/context",
   "/pareto",
   "/suppliers",
+  "/suppliers/new",
   "/calibration",
   "/quarantine",
   "/warranty",

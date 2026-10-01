@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import type { Supplier } from "../../api/types";
@@ -11,9 +11,12 @@ import { ImportButton } from "../../components/import/ImportDialog";
  */
 export function SuppliersPage() {
   const navigate = useNavigate();
+  const createOnMount = useLocation().pathname === "/suppliers/new";
   return (
     <ResourceListPage<Supplier>
       title="Suppliers"
+      createTitle="ADD SUPPLIER"
+      createOnMount={createOnMount}
       headerActions={<ImportButton entity="suppliers" />}
       resource="suppliers"
       onRowClick={(s) => navigate(`/suppliers/${s.id}`)}

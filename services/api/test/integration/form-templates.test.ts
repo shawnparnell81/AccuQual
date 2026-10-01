@@ -70,12 +70,13 @@ describe("ISO Compliance Documents form templates", () => {
     const documentList = templates.find((form) => form.formKey === "lst-gen-001");
     const auditForm = templates.find((form) => form.formKey === "frm-gen-001");
     const ncrForm = templates.find((form) => form.formKey === "frm-ncr-001");
+    expect(ncrForm).toBeUndefined();
     expect(equipmentList?.subjectRoute).toBe("/calibration/master-list");
     expect(equipmentList?.isoPath).toEqual(["Blank Form Templates", "Calibration"]);
     expect(documentList?.subjectRoute).toBe("/documents/master-list");
     expect(documentList?.isoPath).toEqual(["Blank Form Templates", "Document Control"]);
     expect(auditForm?.formId).toBe("FRM-GEN-001");
-    expect(auditForm?.title).toBe("INTERNAL AUDIT CHECKLIST");
+    expect(auditForm?.title).toBe("AUDIT CHECKLIST");
     const crossTraining = templates.find((form) => form.formKey === "frm-trn-002");
     expect(crossTraining?.formId).toBe("FRM-TRN-002");
     expect(crossTraining?.title).toBe("GRADING RUBRIC: CROSS-TRAINING EVALUATION");
@@ -84,7 +85,6 @@ describe("ISO Compliance Documents form templates", () => {
     expect(templates.find((form) => form.formKey === "frm-trn-001")).toMatchObject({ formId: "FRM-TRN-001", title: "COMPETENCY AND TRAINING RECORD" });
     expect(training?.title).toBe("Training & Competency Record");
     expect(auditForm?.start?.createPath).toBe("/iso-quality-forms");
-    expect(ncrForm?.subjectRoute).toBe("/iso-forms/frm-ncr-001");
     expect(ncr?.subjectRoute).toBe("/ncr");
     expect(ncr?.isoPath).toEqual(["Blank Form Templates", "Nonconformance"]);
     expect(training?.isoPath).toEqual(["Blank Form Templates", "Training"]);

@@ -3,8 +3,8 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
 import { validate } from "../../middleware/validate.js";
 import { withDb } from "../../lib/requestDb.js";
-import { createUserSchema, updateUserSchema, temporaryPasswordSchema, updateMyThemeSchema, updateMyChangelogSeenSchema, updateMySavedViewsSchema } from "./users.validation.js";
-import { listUsers, getUser, createUser, updateUser, deleteUser, getUserOpenWork, unlockUser, resetUserMfa, setTemporaryPassword, getMyTheme, updateMyTheme, getMyChangelogSeen, updateMyChangelogSeen, getMySavedViews, updateMySavedViews } from "./users.controller.js";
+import { createUserSchema, updateUserSchema, temporaryPasswordSchema, updateMyThemeSchema, updateMyChangelogSeenSchema, updateMySavedViewsSchema, updateMySidebarShortcutsSchema } from "./users.validation.js";
+import { listUsers, getUser, createUser, updateUser, deleteUser, getUserOpenWork, unlockUser, resetUserMfa, setTemporaryPassword, getMyTheme, updateMyTheme, getMyChangelogSeen, updateMyChangelogSeen, getMySavedViews, updateMySavedViews, getMySidebarShortcuts, updateMySidebarShortcuts } from "./users.controller.js";
 
 export const usersRouter = Router();
 
@@ -21,6 +21,8 @@ usersRouter.get("/me/changelog-seen", getMyChangelogSeen);
 usersRouter.patch("/me/changelog-seen", validate(updateMyChangelogSeenSchema), updateMyChangelogSeen);
 usersRouter.get("/me/saved-views", getMySavedViews);
 usersRouter.patch("/me/saved-views", validate(updateMySavedViewsSchema), updateMySavedViews);
+usersRouter.get("/me/sidebar-shortcuts", getMySidebarShortcuts);
+usersRouter.put("/me/sidebar-shortcuts", validate(updateMySidebarShortcutsSchema), updateMySidebarShortcuts);
 
 usersRouter.get("/:id/open-work", requireRole("admin"), getUserOpenWork);
 usersRouter.get("/:id", getUser);

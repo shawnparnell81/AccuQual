@@ -25,9 +25,9 @@ import {
   ShieldCheck,
   Sparkles,
   Truck,
+  UserPlus,
   Users,
   Workflow,
-  Wrench,
 } from "lucide-react";
 
 export interface SidebarLink {
@@ -111,14 +111,8 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
       doc("drawings", FileText),
       doc("apqp", ClipboardList),
       { key: "ppap", label: "PPAP Packet", path: "/ppap", icon: ClipboardList },
-      { key: "fmea", label: "FMEA", path: "/risk", icon: ShieldAlert },
       { key: "risk-dashboard", label: "Risk dashboard", path: "/risk/dashboard", icon: BarChart3 },
-      doc("ecn", GitBranch),
-      doc("ecr", GitBranch),
       { key: "process-change", label: "Process Change", path: "/change", icon: GitBranch },
-      doc("work-instructions", ScrollText),
-      { key: "master-document-list-eng", label: "Master Document List", path: "/documents/master-list", icon: FileText },
-      { key: "master-equipment-list-eng", label: "Master Equipment List", path: "/calibration/master-list", icon: Gauge },
     ],
   },
   {
@@ -133,9 +127,7 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
         path: "/documents",
         children: [
           { key: "folder-explorer", label: "Folder Explorer", path: "/documents/folders", icon: FolderTree },
-          { key: "master-document-list", label: "Master Document List", path: "/documents/master-list", icon: FileText },
           { key: "dcr", label: "Document changes", path: "/document-change-requests", icon: FileEdit },
-          { key: "qms-forms", label: "QMS Forms", path: "/qms-forms", icon: Library },
           { key: "management-system", label: "Management System", path: "/management-system", icon: Building2 },
         ],
       },
@@ -159,7 +151,7 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
         label: "Calibration",
         icon: Gauge,
         path: "/calibration",
-        children: [doc("master-tool-list", Wrench), { key: "master-equipment-list", label: "Master Equipment List", path: "/calibration/master-list", icon: Gauge }],
+        children: [{ key: "master-equipment-list", label: "Master Equipment List", path: "/calibration/master-list", icon: Gauge }],
       },
       {
         key: "audits",
@@ -170,7 +162,6 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
           doc("internal-audits", ClipboardCheck),
           doc("audit-plan", ClipboardList),
           doc("audit-schedule", ClipboardList),
-          doc("audit-checklist", ClipboardCheck),
           doc("audit-report", FileText),
         ],
       },
@@ -180,6 +171,7 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
         icon: Truck,
         path: "/suppliers",
         children: [
+          { key: "add-supplier", label: "ADD SUPPLIER", path: "/suppliers/new", icon: UserPlus },
           { key: "supplier_portal", label: "Supplier Portal", path: "/supplier-portal", icon: Building2 },
           { key: "scar", label: "SCAR", path: "/scar-forms", icon: ClipboardList },
         ],

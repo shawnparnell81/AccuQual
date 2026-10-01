@@ -307,7 +307,7 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
                                 {opt}
                               </span>
                             ) : (
-                              <label className="flex items-center gap-1">
+                              <label className="form-check">
                                 <input
                                   type="checkbox"
                                   checked={parentOn}
@@ -332,7 +332,7 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
                                       {choice}
                                     </span>
                                   ) : (
-                                    <label key={choice} className={`flex items-center gap-1 ${parentOn ? "" : "opacity-50"}`}>
+                                    <label key={choice} className={`form-check ${parentOn ? "" : "opacity-50"}`}>
                                       <input
                                         type="checkbox"
                                         checked={on}
