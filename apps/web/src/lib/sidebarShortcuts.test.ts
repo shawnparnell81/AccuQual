@@ -7,7 +7,13 @@ describe("per-user sidebar shortcuts", () => {
   it("leaves the shared menu alone until someone hides or pins", () => {
     const next = applyUserShortcuts(SIDEBAR_FOLDERS, { hidden: [], pinned: [] });
     assert.equal(next.some((node) => node.key === "my-shortcuts"), false);
-    assert.equal(flattenSidebarLinks(next).some((link) => link.path.startsWith("/iso-forms/")), false);
+    assert.deepEqual(
+      flattenSidebarLinks(next)
+        .filter((link) => link.path.startsWith("/iso-forms/"))
+        .map((link) => link.path),
+      ["/iso-forms/frm-ncr-001"],
+    );
+    assert.equal(flattenSidebarLinks(next).some((link) => link.path === "/ncr"), false);
     assert.equal(PINNABLE_SHORTCUTS.some((item) => item.label === "FMEA"), true);
   });
 
@@ -28,9 +34,22 @@ describe("per-user sidebar shortcuts", () => {
   it("does not pin a second copy of a page that is already on the menu", () => {
     const next = applyUserShortcuts(SIDEBAR_FOLDERS, {
       hidden: [],
-      pinned: [{ key: "pin-ncr", label: "NCR", path: "/ncr" }],
+      pinned: [{ key: "pin-capa", label: "CAPA", path: "/capa" }],
     });
     assert.equal(next.some((node) => node.key === "my-shortcuts"), false);
-    assert.equal(flattenSidebarLinks(next).filter((link) => link.path === "/ncr").length, 1);
+    assert.equal(flattenSidebarLinks(next).filter((link) => link.path === "/capa").length, 1);
+  });
+
+  it("can pin the live NCR module because it is not on the shared menu", () => {
+    const next = applyUserShortcuts(SIDEBAR_FOLDERS, {
+      hidden: [],
+      pinned: [{ key: "pin-ncr", label: "NCR", path: "/ncr" }],
+    });
+    const shortcuts = next.find((node) => node.key === "my-shortcuts");
+    assert.ok(shortcuts && isFolder(shortcuts));
+    assert.deepEqual(
+      shortcuts.children.map((child) => child.path),
+      ["/ncr"],
+    );
   });
 });

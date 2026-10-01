@@ -50,15 +50,15 @@ test("published ISO letters and source Doc IDs stay on the masters", () => {
   const rev = Object.fromEntries(ISO_FORMS.map((form) => [form.formType, form.rev]));
   const id = Object.fromEntries(ISO_FORMS.map((form) => [form.formKey, form.formId]));
   const title = Object.fromEntries(ISO_FORMS.map((form) => [form.formKey, form.title]));
-  assert.equal(rev.ncr_report, undefined);
+  assert.equal(rev.ncr_report, "C");
   assert.equal(rev.internal_audit, "A");
   assert.equal(title["frm-gen-001"], "AUDIT CHECKLIST");
   assert.equal(id["frm-trn-001"], "FRM-TRN-001");
   assert.equal(title["frm-trn-001"], "COMPETENCY AND TRAINING RECORD");
   assert.equal(id["frm-trn-002"], "FRM-TRN-002");
   assert.equal(title["frm-trn-002"], "GRADING RUBRIC: CROSS-TRAINING EVALUATION");
-  assert.equal(id["frm-ncr-001"], undefined);
-  assert.equal(title["frm-ncr-001"], undefined);
+  assert.equal(id["frm-ncr-001"], "FRM-NCR-001");
+  assert.equal(title["frm-ncr-001"], "NON-CONFORMANCE REPORT (NCR)");
   assert.equal(id["frm-gen-002"], "");
   assert.equal(title["frm-gen-002"], "INTERNAL AUDIT SUMMARY REPORT");
   assert.equal(id["frm-tst-001"], "");

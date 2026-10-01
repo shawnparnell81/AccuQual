@@ -104,12 +104,13 @@ export const LEGACY_ASSIGNED_FORM_IDS = new Set([
   "DESIGN-HISTORY-FORM",
 ]);
 
-/** Blank templates taken out of the library. The live NCR module stays; this is only the old NCR spreadsheet. */
-export const RETIRED_FORM_KEYS = ["frm-ncr-001"] as const;
+/** Blank templates taken out of the library. None right now — FRM-NCR-001 is a live blank again. */
+export const RETIRED_FORM_KEYS = [] as const;
 
 export const FORM_TEMPLATES: FormTemplateSeed[] = [
   { formKey: "frm-gen-001", formId: "FRM-GEN-001", title: "AUDIT CHECKLIST", topic: "Audit", subjectRoute: "/iso-forms/frm-gen-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "internal_audit", data: { cells: { F3: "Quality & Engineering" } } }) },
   { formKey: "frm-gen-002", formId: "", title: "INTERNAL AUDIT SUMMARY REPORT", topic: "Audit", subjectRoute: "/iso-forms/frm-gen-002", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "audit_summary", data: { cells: { D5: "Shawn Parnell" } } }) },
+  { formKey: "frm-ncr-001", formId: "FRM-NCR-001", title: "NON-CONFORMANCE REPORT (NCR)", topic: "Nonconformance", subjectRoute: "/iso-forms/frm-ncr-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "ncr_report", data: { cells: {} } }) },
   { formKey: "frm-ncr-002", formId: "FRM-NCR-002", title: "QUARANTINE NOTICE", topic: "Nonconformance", subjectRoute: "/iso-forms/frm-ncr-002", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "quarantine_notice", data: { cells: {} } }) },
   { formKey: "frm-ncr-003", formId: "FRM-NCR-003", title: "CONCESSION / DEVIATION REQUEST", topic: "Nonconformance", subjectRoute: "/iso-forms/frm-ncr-003", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "concession", data: { cells: {} } }) },
   { formKey: "frm-trn-001", formId: "FRM-TRN-001", title: "COMPETENCY AND TRAINING RECORD", topic: "Training", subjectRoute: "/iso-forms/frm-trn-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "competency_training", data: { cells: {} } }) },
