@@ -9,6 +9,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { Modal } from "../../components/modals/Modal";
 import { SelectField, TextField, TextAreaField } from "../../components/forms/Field";
 import type { ErpPurchaseRequisition, InventoryItem, Supplier } from "../../api/types";
+import { supplierOrderBlocked } from "../../lib/supplierOrder";
 
 const requisitionHooks = createResourceHooks<ErpPurchaseRequisition>("erp/requisitions");
 const itemHooks = createResourceHooks<InventoryItem>("inventory/items");
@@ -67,8 +68,8 @@ function NewRequisitionModal({ isOpen, onClose, onCreated }: { isOpen: boolean; 
         <SelectField label="Supplier (optional — defaults to the item's default supplier)" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
           <option value="">Use item default</option>
           {suppliers.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
+            <option key={s.id} value={s.id} disabled={supplierOrderBlocked(s.status)}>
+              {supplierOrderBlocked(s.status) ? `${s.name} (${s.status})` : s.name}
             </option>
           ))}
         </SelectField>

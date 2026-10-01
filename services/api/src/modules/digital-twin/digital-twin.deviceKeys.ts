@@ -31,3 +31,17 @@ export function deviceSecretMatches(secret: string, storedHash: string): boolean
   const b = Buffer.from(storedHash, "hex");
   return a.length === b.length && timingSafeEqual(a, b);
 }
+
+/**
+ * The signed-in IoT ingest route may write only the device this key belongs to.
+ * A missing key, a revoked key, or a body device id that does not match is refused.
+ */
+export function ingestDeviceAuthorized(
+  device: { id: number; deviceId: string; apiKeyHash: string | null } | null | undefined,
+  header: string | undefined,
+  requestedDeviceId: string,
+): boolean {
+  const parsed = parseDeviceKey(header);
+  if (!parsed || !device || device.id !== parsed.deviceRowId || device.deviceId !== requestedDeviceId || !device.apiKeyHash) return false;
+  return deviceSecretMatches(parsed.secret, device.apiKeyHash);
+}

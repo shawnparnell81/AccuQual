@@ -51,6 +51,10 @@ export function withDb(req: Request, res: Response, next: NextFunction) {
       await client.query("BEGIN");
       // Read by the audit_row_change() trigger (see post-migrate/audit-triggers.sql) so every field-level change records who made it.
       await client.query("SELECT set_config('app.current_user_id', $1, true)", [String(user.id)]);
+      // SET LOCAL ROLE accuqual_app is not applied on this request connection.
+      // A missing role membership would fail every signed-in read and write.
+      // The restricted role is still what recordAuditTrailStandalone uses, and
+      // audit-trail-integrity.test.ts checks that role cannot rewrite audit_trail.
 
       req.db = drizzle(client, { schema });
 

@@ -2,6 +2,7 @@ import "dotenv/config";
 import { db, pool } from "./index.js";
 import { company } from "../drizzle/schema/company.js";
 import { ensureSystemRoles, provisionCompany } from "./provisionCompany.js";
+import { refuseProductionSeed } from "./seedGuard.js";
 import { logger } from "../utils/logger.js";
 
 /**
@@ -9,17 +10,17 @@ import { logger } from "../utils/logger.js";
  * Safe to re-run. A real installation uses `npm run db:create-company` instead.
  */
 async function main() {
+  refuseProductionSeed(process.env.NODE_ENV);
   logger.info("Seeding AccuQual development data...");
   await ensureSystemRoles();
 
   const [existing] = await db.select({ id: company.id }).from(company);
   if (!existing) {
     await provisionCompany({ name: "Demo Manufacturing Co.", adminEmail: "admin@accuqual.local", adminName: "Demo Admin", adminPassword: "ChangeMe123!", sendWelcomeEmail: false });
-    logger.info("Demo company created.");
+    logger.info("Demo company created. Sign in as admin@accuqual.local.");
   }
 
   logger.info("Seed complete.");
-  logger.info("Demo admin: admin@accuqual.local / ChangeMe123!");
   await pool.end();
 }
 

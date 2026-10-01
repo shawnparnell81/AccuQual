@@ -31,7 +31,7 @@ export function AuditLogPage() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold">Audit log</h1>
-        <p className="text-sm text-muted-foreground">Who changed a record you can open, what they did, when, and a short description. Sign-in and account history for other people stays with an Owner or Administrator.</p>
+        <p className="text-sm text-muted-foreground">Who changed a record you can open, what they did, when, and a short description. Sign-in history stays with an Owner or Administrator.</p>
       </div>
       {isLoading ? (
         <LoadingPlaceholder />

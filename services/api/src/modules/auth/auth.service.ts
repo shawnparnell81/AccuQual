@@ -29,6 +29,7 @@ import { renderTemplate } from "../notifications/templates.js";
 import { logger } from "../../utils/logger.js";
 import { env } from "../../config/env.js";
 import { sessionIsIdle } from "./sessionActivity.js";
+import { SIGN_IN_ENTITY_TYPE, signInAuditChanges, type SignInClient } from "./signInAudit.js";
 
 // Sign-in runs before a request transaction exists, so — unlike every other
 // module — this service intentionally uses the plain `db` singleton.
@@ -108,7 +109,7 @@ async function issueTokens(user: {
   return { accessToken, refreshToken, refreshJti: jti, sessionExpiresAt };
 }
 
-export async function login(input: { email: string; password: string; rememberMe?: boolean; trustedDeviceToken?: string }) {
+export async function login(input: { email: string; password: string; rememberMe?: boolean; trustedDeviceToken?: string; client?: SignInClient }) {
   const [row] = await db
     .select()
     .from(users)
@@ -148,25 +149,32 @@ export async function login(input: { email: string; password: string; rememberMe
   const mfa = evaluateMfa(user, roleName, row.company?.mfaPolicy);
   if (user.mfaEnabled) {
     if (await useTrustedDevice(user.id, input.trustedDeviceToken)) {
-      return completeLogin(user, roleName, row.company, null);
+      return completeLogin(user, roleName, row.company, null, { method: "trusted_device", client: input.client });
     }
     return { mfaRequired: true as const, mfaToken: signMfaToken(user.id, "verify", user.tokenVersion) };
   }
   if (mfa.state === "blocked") return { mfaEnrollmentRequired: true as const, mfaToken: signMfaToken(user.id, "enroll", user.tokenVersion) };
   if (mfa.required && !user.mfaRequiredSince) await markMfaRequired(user.id);
 
-  return completeLogin(user, roleName, row.company, mfa.state === "grace" ? mfa.graceEndsAt : null);
+  return completeLogin(user, roleName, row.company, mfa.state === "grace" ? mfa.graceEndsAt : null, { method: "password", client: input.client });
 }
 
 type LoginUserRow = typeof users.$inferSelect;
 type LoginCompanyRow = typeof company.$inferSelect | null;
 
 /** Stamps the successful sign-in, clears the failed-attempt counters (and an expired lock), and issues a session that ends 12 hours from now. */
-async function completeLogin(user: LoginUserRow, roleName: string | null, co: LoginCompanyRow, mfaGraceEndsAt: Date | null = null) {
+async function completeLogin(
+  user: LoginUserRow,
+  roleName: string | null,
+  co: LoginCompanyRow,
+  mfaGraceEndsAt: Date | null = null,
+  audit?: { method: "password" | "mfa" | "trusted_device"; client?: SignInClient },
+) {
   // Phase 7 — Supplier Portal health indicators ("last supplier login")
   // read this; best-effort, never blocks a successful login on its own
   // failure.
   await db.update(users).set({ lastLoginAt: new Date(), failedLoginCount: 0, firstFailedLoginAt: null, lockedUntil: null }).where(eq(users.id, user.id)).catch(() => undefined);
+  if (audit) await recordSignInEvent(user.id, "login", audit.method, audit.client);
 
   const tokens = await issueTokens({ id: user.id, roleId: user.roleId, roleName, department: user.department, supplierId: user.supplierId, tokenVersion: user.tokenVersion }, freshSessionEnd());
   return {
@@ -193,7 +201,7 @@ async function loginContext(userId: number) {
 }
 
 /** Second step of a sign-in: the authenticator (or recovery) code. Wrong codes count toward the same lockout as wrong passwords. */
-export async function verifyMfaLogin(mfaToken: string, code: string, _rememberMe = false, trustDevice = false, userAgent?: string) {
+export async function verifyMfaLogin(mfaToken: string, code: string, _rememberMe = false, trustDevice = false, userAgent?: string, client?: SignInClient) {
   const userId = await verifyMfaToken(mfaToken, "verify");
   const ctx = await loginContext(userId);
   const kind = await checkSecondFactor(userId, code);
@@ -204,7 +212,7 @@ export async function verifyMfaLogin(mfaToken: string, code: string, _rememberMe
   if (kind === "recovery") {
     await recordAuditTrail(db, { entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_recovery_code_used" }, performedBy: userId }).catch((err) => logger.error("Failed to audit a recovery-code sign-in", { userId, err }));
   }
-  const session = await completeLogin(ctx.user, ctx.roleName, ctx.company, null);
+  const session = await completeLogin(ctx.user, ctx.roleName, ctx.company, null, { method: "mfa", client: client ?? { userAgent } });
   const trustedDeviceToken = trustDevice ? (await issueTrustedDevice(userId, userAgent)).raw : undefined;
   return { ...session, trustedDeviceToken };
 }
@@ -216,7 +224,7 @@ export async function startEnrollmentWithToken(mfaToken: string) {
   return startEnrollment(userId, ctx.user.email);
 }
 
-export async function confirmEnrollmentWithToken(mfaToken: string, code: string, _rememberMe = false, trustDevice = false, userAgent?: string) {
+export async function confirmEnrollmentWithToken(mfaToken: string, code: string, _rememberMe = false, trustDevice = false, userAgent?: string, client?: SignInClient) {
   const userId = await verifyMfaToken(mfaToken, "enroll");
   const ctx = await loginContext(userId);
   let recoveryCodes: string[];
@@ -229,7 +237,7 @@ export async function confirmEnrollmentWithToken(mfaToken: string, code: string,
   await recordAuditTrail(db, { entityType: "User", entityId: userId, action: "status_change", changes: { action: "mfa_enabled" }, performedBy: userId }).catch((err) => logger.error("Failed to audit MFA enrollment", { userId, err }));
 
   const [fresh] = await db.select().from(users).where(eq(users.id, userId));
-  const session = await completeLogin(fresh ?? ctx.user, ctx.roleName, ctx.company, null);
+  const session = await completeLogin(fresh ?? ctx.user, ctx.roleName, ctx.company, null, { method: "mfa", client: client ?? { userAgent } });
   const trustedDeviceToken = trustDevice ? (await issueTrustedDevice(userId, userAgent)).raw : undefined;
   return { ...session, recoveryCodes, trustedDeviceToken };
 }
@@ -415,12 +423,23 @@ async function companyInfo() {
  * explicit row is what a future audit of "was this token really dead"
  * checks against directly, not an inference from tokenVersion arithmetic).
  */
-export async function logout(userId: number) {
+export async function logout(userId: number, client?: SignInClient) {
   await db
     .update(users)
     .set({ tokenVersion: (await currentTokenVersion(userId)) + 1 })
     .where(eq(users.id, userId));
   await revokeAllRefreshTokens(userId);
+  await recordSignInEvent(userId, "logout", "session", client);
+}
+
+async function recordSignInEvent(userId: number, action: "login" | "logout", method: string, client?: SignInClient) {
+  await recordAuditTrail(db, {
+    entityType: SIGN_IN_ENTITY_TYPE,
+    entityId: userId,
+    action: "status_change",
+    changes: signInAuditChanges({ action, method, client }),
+    performedBy: userId,
+  }).catch((err) => logger.error("Failed to audit a sign-in event", { userId, action, err }));
 }
 
 /**
@@ -474,10 +493,19 @@ export async function forgotPassword(email: string): Promise<void> {
   if (!user || !user.isActive) return;
 
   const rawToken = randomBytes(32).toString("hex");
-  await db.insert(passwordResetTokens).values({
-    userId: user.id,
-    tokenHash: hashResetToken(rawToken),
-    expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+  // Older unused links for this person stop working before the new one is stored.
+  // The lock is only this user's reset rows, and only for this transaction.
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(582021, ${user.id})`);
+    await tx
+      .update(passwordResetTokens)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(and(eq(passwordResetTokens.userId, user.id), isNull(passwordResetTokens.usedAt)));
+    await tx.insert(passwordResetTokens).values({
+      userId: user.id,
+      tokenHash: hashResetToken(rawToken),
+      expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+    });
   });
 
   const resetUrl = `${env.FRONTEND_URL}/reset-password?token=${rawToken}`;

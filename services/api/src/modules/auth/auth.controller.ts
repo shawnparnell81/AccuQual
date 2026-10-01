@@ -3,6 +3,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { env } from "../../config/env.js";
 import * as authService from "./auth.service.js";
+import type { SignInClient } from "./signInAudit.js";
 import { changeSignaturePin, setSignaturePin } from "../signatures/signaturePin.service.js";
 import { decryptDeviceCookie, encryptDeviceCookie, hashTrustedDeviceToken, listTrustedDevices, revokeAllTrustedDevices, revokeTrustedDevice, TRUSTED_DEVICE_TTL_MS } from "./trustedDevice.service.js";
 import { encryptRefreshCookie, REFRESH_COOKIE_NAME, refreshCookieFrom } from "./refreshCookie.js";
@@ -134,12 +135,16 @@ function sendSession(res: Response, result: Awaited<ReturnType<typeof authServic
   res.json(withoutRefreshToken(session as FinishedSession & Record<string, unknown>));
 }
 
+function signInClient(req: Request): SignInClient {
+  return { ip: req.ip, userAgent: req.get("user-agent") };
+}
+
 export const loginHandler = asyncHandler(async (req: Request, res: Response) => {
-  sendSession(res, await authService.login({ ...req.body, trustedDeviceToken: trustedDeviceCookie(req) }));
+  sendSession(res, await authService.login({ ...req.body, trustedDeviceToken: trustedDeviceCookie(req), client: signInClient(req) }));
 });
 
 export const mfaVerifyHandler = asyncHandler(async (req: Request, res: Response) => {
-  sendSession(res, await authService.verifyMfaLogin(req.body.mfaToken, req.body.code, req.body.rememberMe === true, req.body.trustDevice === true, req.get("user-agent")));
+  sendSession(res, await authService.verifyMfaLogin(req.body.mfaToken, req.body.code, req.body.rememberMe === true, req.body.trustDevice === true, req.get("user-agent"), signInClient(req)));
 });
 
 export const mfaEnrollStartHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -147,7 +152,7 @@ export const mfaEnrollStartHandler = asyncHandler(async (req: Request, res: Resp
 });
 
 export const mfaEnrollConfirmHandler = asyncHandler(async (req: Request, res: Response) => {
-  const result = await authService.confirmEnrollmentWithToken(req.body.mfaToken, req.body.code, req.body.rememberMe === true, req.body.trustDevice === true, req.get("user-agent"));
+  const result = await authService.confirmEnrollmentWithToken(req.body.mfaToken, req.body.code, req.body.rememberMe === true, req.body.trustDevice === true, req.get("user-agent"), signInClient(req));
   setRefreshCookie(res, result.refreshToken);
   if (result.trustedDeviceToken) setTrustedDeviceCookie(res, result.trustedDeviceToken);
   res.json(withoutRefreshToken(result));
@@ -212,7 +217,7 @@ export const refreshHandler = asyncHandler(async (req: Request, res: Response) =
 
 export const logoutHandler = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) throw AppError.unauthorized();
-  await authService.logout(req.user.id);
+  await authService.logout(req.user.id, signInClient(req));
   clearRefreshCookie(res);
   res.status(204).send();
 });

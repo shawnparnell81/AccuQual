@@ -6,6 +6,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { TextField, SelectField } from "../../components/forms/Field";
 import type { Supplier, InventoryItem, ErpPurchaseOrder } from "../../api/types";
+import { supplierOrderBlocked } from "../../lib/supplierOrder";
 
 const supplierHooks = createResourceHooks<Supplier>("suppliers");
 const itemHooks = createResourceHooks<InventoryItem>("inventory/items");
@@ -77,8 +78,8 @@ export function ErpNewPurchaseOrderPage() {
             <SelectField label="Supplier" required value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
               <option value="">Select a supplier…</option>
               {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
+                <option key={s.id} value={s.id} disabled={supplierOrderBlocked(s.status)}>
+                  {supplierOrderBlocked(s.status) ? `${s.name} (${s.status})` : s.name}
                 </option>
               ))}
             </SelectField>
