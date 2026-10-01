@@ -9,7 +9,7 @@ import { useOpenTab } from "../../hooks/useOpenTab";
 import { readRecentRecords, rememberRecord, type RecentRecord } from "../../lib/recentRecords";
 import { useDialogBehavior } from "../shared/useDialogBehavior";
 import { FRM_NCR_PATH } from "../../lib/qualityEntry";
-import { flattenSidebarLinks } from "./sidebarStructure";
+import { flattenSidebarLinks, sidebarLinkOpensNewTab } from "./sidebarStructure";
 import { useArrangedSidebar } from "./sidebarOrganize";
 
 interface PaletteItem {
@@ -112,8 +112,14 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     const pageItems: PaletteItem[] = (needle ? pages.filter((page) => `${page.label} ${page.key}`.toLowerCase().includes(needle)).slice(0, 8) : []).map((page) => ({
         id: `page-${page.key}`,
         label: page.label,
-        hint: "Go to",
-        run: () => navigate(page.path),
+        hint: sidebarLinkOpensNewTab(page) ? "New tab" : "Go to",
+        run: () => {
+          if (sidebarLinkOpensNewTab(page)) {
+            window.open(page.path, "_blank", "noopener,noreferrer");
+            return;
+          }
+          navigate(page.path);
+        },
       }));
 
     const recordItems: PaletteItem[] = (data?.results ?? []).map((result) => ({

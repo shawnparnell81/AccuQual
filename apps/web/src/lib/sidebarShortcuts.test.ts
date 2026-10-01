@@ -40,6 +40,20 @@ describe("per-user sidebar shortcuts", () => {
     assert.equal(flattenSidebarLinks(next).filter((link) => link.path === "/capa").length, 1);
   });
 
+  it("hides Engineering Planner for one person and leaves the rest of the menu", () => {
+    const next = applyUserShortcuts(SIDEBAR_FOLDERS, {
+      hidden: ["engineering-planner"],
+      pinned: [],
+    });
+    const links = flattenSidebarLinks(next);
+    assert.equal(links.some((link) => link.key === "engineering-planner"), false);
+    assert.equal(links.some((link) => link.key === "drawings"), true);
+    assert.equal(links.some((link) => link.key === "frm-ncr-001"), true);
+    assert.equal(links.some((link) => link.key === "capa"), true);
+    assert.equal(links.some((link) => link.key === "blank-forms"), true);
+    assert.equal(links.some((link) => link.path === "/ncr"), false);
+  });
+
   it("can pin the live NCR module because it is not on the shared menu", () => {
     const next = applyUserShortcuts(SIDEBAR_FOLDERS, {
       hidden: [],

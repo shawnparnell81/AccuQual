@@ -16,8 +16,10 @@ import {
   flattenSidebarLinks,
   isFolder,
   pathMatches,
+  sidebarLinkOpensNewTab,
   sidebarNodeContainsPath,
   type SidebarFolder,
+  type SidebarLink,
   type SidebarNode,
 } from "./sidebarStructure";
 import { SidebarDragChrome, SidebarOrganizeProvider, SidebarResetButton, useArrangedSidebar, useSidebarOrganize, useSidebarRow } from "./sidebarOrganize";
@@ -162,12 +164,19 @@ export function TopNav() {
           <kbd className="aq-hide-sm">/</kbd>
           {query.trim() && (
             <div className="aq-search-pop" role="listbox">
-              {searchResults.map((r) => (
-                <Link key={r.key} to={r.path} onClick={() => setQuery("")} className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-primary/10">
-                  <r.icon size={16} />
-                  <span>{r.label}</span>
-                </Link>
-              ))}
+              {searchResults.map((r) =>
+                sidebarLinkOpensNewTab(r) ? (
+                  <a key={r.key} href={r.path} target="_blank" rel="noopener noreferrer" onClick={() => setQuery("")} className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-primary/10">
+                    <r.icon size={16} />
+                    <span>{r.label}</span>
+                  </a>
+                ) : (
+                  <Link key={r.key} to={r.path} onClick={() => setQuery("")} className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-primary/10">
+                    <r.icon size={16} />
+                    <span>{r.label}</span>
+                  </Link>
+                ),
+              )}
               <GlobalSearchResults query={query} onSelect={() => setQuery("")} />
             </div>
           )}
@@ -326,6 +335,27 @@ function FolderBlock({
   );
 }
 
+function SidebarDestination({ node, className, iconSize, onNavigate }: { node: SidebarLink; className: string; iconSize: number; onNavigate: () => void }) {
+  const body = (
+    <>
+      <node.icon size={iconSize} className="shrink-0" />
+      <span className="aq-nav-label min-w-0 flex-1 truncate">{node.label}</span>
+    </>
+  );
+  if (sidebarLinkOpensNewTab(node)) {
+    return (
+      <a href={node.path} target="_blank" rel="noopener noreferrer" title={`${node.label} (opens in a new tab)`} className={className} onClick={onNavigate}>
+        {body}
+      </a>
+    );
+  }
+  return (
+    <NavLink to={node.path} title={node.label} onClick={onNavigate} onMouseEnter={() => prefetchRoute(node.path)} onFocus={() => prefetchRoute(node.path)} className={() => className}>
+      {body}
+    </NavLink>
+  );
+}
+
 function LeafLink({ node, onNavigate, pathname }: { node: SidebarNode & { path: string }; onNavigate: () => void; pathname: string }) {
   const personal = isPersonalShortcutKey(node.key);
   const row = useSidebarRow(personal ? "" : node.key, false);
@@ -333,20 +363,12 @@ function LeafLink({ node, onNavigate, pathname }: { node: SidebarNode & { path: 
   if (isFolder(node) || !node.path) return null;
   const active = pathMatches(pathname, node.path);
   if (!organize || personal) {
-    return (
-      <NavLink to={node.path} title={node.label} onClick={onNavigate} onMouseEnter={() => prefetchRoute(node.path)} onFocus={() => prefetchRoute(node.path)} className={() => clsx("aq-nav-link aq-nav-child", active && "active")}>
-        <node.icon size={16} className="shrink-0" />
-        <span className="aq-nav-label min-w-0 flex-1 truncate">{node.label}</span>
-      </NavLink>
-    );
+    return <SidebarDestination node={node} iconSize={16} onNavigate={onNavigate} className={clsx("aq-nav-link aq-nav-child", active && "active")} />;
   }
   return (
     <div className={clsx("aq-nav-link aq-nav-folder aq-nav-child", active && "active", row.dropClass)} onDragOver={row.onDragOver} onDragLeave={row.onDragLeave} onDrop={row.onDrop}>
       <SidebarDragChrome itemKey={node.key} label={node.label} />
-      <NavLink to={node.path} title={node.label} onClick={onNavigate} onMouseEnter={() => prefetchRoute(node.path)} onFocus={() => prefetchRoute(node.path)} className={() => clsx("aq-nav-folder-link", active && "active")}>
-        <node.icon size={16} className="shrink-0" />
-        <span className="aq-nav-label min-w-0 flex-1 truncate">{node.label}</span>
-      </NavLink>
+      <SidebarDestination node={node} iconSize={16} onNavigate={onNavigate} className={clsx("aq-nav-folder-link", active && "active")} />
     </div>
   );
 }
