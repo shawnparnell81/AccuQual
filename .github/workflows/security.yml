@@ -40,33 +40,10 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Static analysis for security bugs (injection, unsafe deserialization, path traversal, weak crypto, ...).
-  # Stays off until GitHub Advanced Security / code scanning is enabled on this private repo.
-  # Running the analysis with continue-on-error still leaves a red CodeQL check: the analysis finishes, then
-  # the upload is rejected because code scanning is not enabled. A job-level `if: false` skips the check, and
-  # a skipped required check blocks merge. The job therefore always runs and exits 0; the upload steps stay
-  # `if: false`. To turn analysis on, delete this step and every `if: false` below (keep security-events: write).
-  codeql:
-    name: CodeQL
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
-    steps:
-      - name: Code scanning is not enabled
-        run: echo "CodeQL upload stays off until GitHub code scanning is enabled. Reporting CodeQL as success so a skipped required check cannot block merges."
-      - uses: actions/checkout@v4
-        if: false
-      - uses: github/codeql-action/init@v4
-        if: false
-        with:
-          languages: javascript-typescript
-          config-file: ./.github/codeql/codeql-config.yml
-      - uses: github/codeql-action/analyze@v4
-        if: false
-        with:
-          category: "/language:javascript-typescript"
+  # CodeQL is not a job here. This private repo does not have code scanning enabled
+  # (the alerts API returns 403), so an analyze/upload step fails and a job that
+  # always exits 0 would be a fake green check. The query config is kept at
+  # .github/codeql/codeql-config.yml for the day code scanning is turned on.
 
   # Looks for credentials committed anywhere in the full history. GitHub's own secret scanning already covers
   # known provider token formats; this catches generic patterns (a password or key assigned in code) too.

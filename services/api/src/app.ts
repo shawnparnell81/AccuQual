@@ -10,7 +10,7 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { requestLogger } from "./middleware/requestLogger.js";
 import { requestIdMiddleware } from "./modules/monitoring/requestContext.js";
 import { env } from "./config/env.js";
-import { checkReadiness } from "./modules/monitoring/healthMonitor.js";
+import { publicHealthResponse } from "./modules/monitoring/healthMonitor.js";
 import { asyncHandler } from "./utils/asyncHandler.js";
 
 // Inspection Report SAAS-03/SEC-02/R04: cors() with no options accepts every
@@ -66,22 +66,21 @@ export function createApp() {
   app.use(csrfProtection);
   app.use(express.json({ limit: "5mb" }));
 
-  // Render's own healthCheckPath (see render.yaml) — a real readiness check,
-  // not a bare liveness ping. 503 only when the database (the one
-  // dependency this app's real deployment always provisions) is
-  // unreachable; see healthMonitor.ts's own comment on why Redis is
-  // reported but never gates the HTTP status here.
+  // Render's healthCheckPath (render.yaml) stays on this URL. The body is only
+  // ok or "Unreachable" — version, latency, Redis, and driver errors are on
+  // GET /system-health for an Owner or Admin. 503 only when the database is
+  // down. Redis never changes this status (healthMonitor.ts).
   app.get(
     "/health",
     asyncHandler(async (_req, res) => {
-      const report = await checkReadiness();
-      res.status(report.status === "critical" ? 503 : 200).json({ service: "accuqual-api", version: env.APP_VERSION, uptimeSeconds: Math.round(process.uptime()), ...report });
+      const result = await publicHealthResponse();
+      res.status(result.httpStatus).json(result.body);
     })
   );
   // Liveness only — answers as long as the process is up, touching no dependency. For a supervisor that should restart
-  // a hung process but never one that merely can't reach its database.
+  // a hung process but never one that merely can't reach its database. No version string: that lives on /system-health.
   app.get("/health/live", (_req, res) => {
-    res.json({ service: "accuqual-api", status: "ok", version: env.APP_VERSION, uptimeSeconds: Math.round(process.uptime()) });
+    res.status(200).json({ status: "ok" });
   });
 
   app.use("/", apiRouter);

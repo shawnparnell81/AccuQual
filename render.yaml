@@ -16,7 +16,8 @@ services:
     # The 1 GB disk is $0.25/month.
     plan: starter
     # Must stay /health. The handler returns within a few seconds even when
-    # REDIS_URL is unset; a hung probe here fails the deploy.
+    # REDIS_URL is unset; a hung probe here fails the deploy. The public body
+    # is only {"status":"ok"} or {"status":"Unreachable"} — keep this path.
     healthCheckPath: /health
     disk:
       name: uploads
@@ -164,6 +165,12 @@ services:
       - path: /*
         name: Permissions-Policy
         value: "camera=(), microphone=(), geolocation=()"
+      # Stays report-only. Enforcing this exact policy would break known UI:
+      # inline scripts in apps/web/index.html (theme + marketing-host redirect),
+      # ONLYOFFICE (document-server script and editor frame are not same-origin),
+      # Google Fonts on /welcome, and Sentry when VITE_SENTRY_DSN is set
+      # (connect-src is 'self' only). Same-origin /api rewrites would be fine.
+      # Residual risk: a violating load is reported, not blocked.
       - path: /*
         name: Content-Security-Policy-Report-Only
         value: "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-src 'self' blob:; manifest-src 'self'"

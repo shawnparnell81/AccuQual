@@ -138,7 +138,7 @@ function ConnectionPanel({ config }: { config: SsoConfig }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const { data: roles = [] } = useQuery<AppRole[]>({ queryKey: ["roles"], queryFn: async () => (await apiClient.get("/roles")).data });
-  const assignable = roles.filter((r) => r.name !== "admin" && r.name !== "supplier");
+  const assignable = roles.filter((r) => r.name !== "admin" && r.name !== "owner" && r.name !== "supplier");
 
   const existing = config.connection;
   const [form, setForm] = useState({
@@ -243,7 +243,7 @@ function ConnectionPanel({ config }: { config: SsoConfig }) {
 
       <div className="flex flex-col gap-3 border-t border-border pt-4">
         {check("Turn single sign-on on", "enabled", "Needs at least one verified domain and a reachable provider. We check the provider before saving.")}
-        {check("Create accounts automatically on first sign-in", "autoProvision", "Someone on a verified domain with no AccuQual account gets one. They receive the role below — never an administrator.")}
+        {check("Create accounts automatically on first sign-in", "autoProvision", "Someone on a verified domain with no AccuQual account gets one. They receive the role below — never an owner or an administrator.")}
         {form.autoProvision && (
           <SelectField label="Role for new SSO users" value={form.defaultRoleId} onChange={(e) => set("defaultRoleId", e.target.value)} required>
             <option value="">Choose a role…</option>

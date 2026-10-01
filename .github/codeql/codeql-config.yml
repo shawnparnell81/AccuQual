@@ -1,4 +1,7 @@
 name: AccuQual CodeQL config
+# Not wired into CI. Code scanning is not enabled on this private repo, so
+# .github/workflows/security.yml does not run a CodeQL job. Use this file when
+# code scanning is turned on (languages: javascript-typescript).
 # Tests contain deliberate fake credentials and hostile inputs; scanning them produces noise, not findings.
 paths-ignore:
   - "**/test/**"

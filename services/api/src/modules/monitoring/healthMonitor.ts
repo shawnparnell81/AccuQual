@@ -107,6 +107,17 @@ export async function checkReadiness(): Promise<ReadinessReport> {
 }
 
 /**
+ * Public load-balancer body. Success is `{ status: "ok" }` (HTTP 200).
+ * Failure text is the single word "Unreachable" (HTTP 503) — never a driver
+ * message, version, latency, or Redis status. Render keeps probing `/health`.
+ */
+export async function publicHealthResponse(): Promise<{ httpStatus: 200 | 503; body: { status: "ok" | "Unreachable" } }> {
+  const report = await checkReadiness();
+  if (report.status === "critical") return { httpStatus: 503, body: { status: "Unreachable" } };
+  return { httpStatus: 200, body: { status: "ok" } };
+}
+
+/**
  * Real alerting (opt-in, same graceful-degrade pattern as
  * notification.service.ts's EmailTransport): always logs loudly regardless
  * of configuration, and additionally POSTs a Slack-compatible `{text}` body

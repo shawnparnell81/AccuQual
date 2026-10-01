@@ -78,7 +78,7 @@ export const saveSsoConfig = asyncHandler(async (req: Request, res: Response) =>
   if (input.defaultRoleId) {
     const [role] = await req.db!.select().from(roles).where(eq(roles.id, input.defaultRoleId));
     if (!role) throw AppError.badRequest("That role doesn't exist.");
-    if (SSO_FORBIDDEN_ROLES.has(role.name)) throw AppError.badRequest("New SSO users can't be given an administrator role. Promote them yourself after they first sign in.");
+    if (SSO_FORBIDDEN_ROLES.has(role.name)) throw AppError.badRequest("New SSO users can't be given an owner or administrator role. Promote them yourself after they first sign in.");
   }
 
   const clientSecretEncrypted = secretPlain ? encryptSecret(secretPlain) : existing!.clientSecretEncrypted;

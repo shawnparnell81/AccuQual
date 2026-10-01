@@ -21,6 +21,7 @@ let companyId: number;
 
 const userIds: number[] = [];
 let adminToken: string;
+let ownerToken: string;
 let operatorToken: string;
 
 async function makeUser(roleName: string, co = companyId) {
@@ -37,6 +38,7 @@ describe("System Health (real DB + real HTTP path)", () => {
     
 
     adminToken = await makeUser("admin");
+    ownerToken = await makeUser("owner");
     operatorToken = await makeUser("operator");
   });
 
@@ -47,6 +49,18 @@ describe("System Health (real DB + real HTTP path)", () => {
   it("a non-admin is blocked outright", async () => {
     const res = await request(app).get("/system-health").set("Authorization", `Bearer ${operatorToken}`);
     expect(res.status).toBe(403);
+  });
+
+  it("an owner can read dependency detail that the public health check hides", async () => {
+    const res = await request(app).get("/system-health").set("Authorization", `Bearer ${ownerToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.readiness.version).toEqual(expect.any(String));
+    expect(res.body.readiness.database.latencyMs).toBeGreaterThanOrEqual(0);
+    expect(["ok", "critical", "not configured"]).toContain(res.body.readiness.redis.status);
+    expect(["on", "off"]).toContain(res.body.readiness.backgroundJobs);
+    const publicHealth = await request(app).get("/health");
+    expect(publicHealth.body).toEqual({ status: "ok" });
+    expect(JSON.stringify(publicHealth.body)).not.toContain(res.body.readiness.version);
   });
 
   it("admin gets a full report with all 8 sub-checks and an overall status", async () => {

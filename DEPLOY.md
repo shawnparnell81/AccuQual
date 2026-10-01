@@ -134,12 +134,13 @@ migrations, and the first administrator are in
 Run the smoke test in [Private Render + Cloudflare Access](#private-render-cloudflare-access) below (upload, reset email, `/api/health`).
 What `/health` returns:
 
-- `curl https://api.accuqualqms.com/health` → `{"status":"ok","database":{"status":"ok",...},"redis":{"status":"not configured",...},...}`
-  — a real readiness check, not a bare liveness ping (see "Monitoring &
-  alerting" below). `status` is 503 only when the database itself is
-  unreachable. `redis` is `not configured` on this blueprint because
-  `REDIS_URL` is unset; that does not cause a 503, and the check still
-  returns within a few seconds. See that section for why.
+- `curl https://api.accuqualqms.com/health` → `{"status":"ok"}` when the database
+  is reachable, or HTTP 503 `{"status":"Unreachable"}` when it is not. That is
+  the whole public body. Render's `healthCheckPath` stays `/health`. Version,
+  latency, Redis, and database error text are on `GET /system-health` for an
+  Owner or Admin (Admin Console → System Health). `REDIS_URL` unset does not
+  cause a 503, and the check still returns within a few seconds. See that
+  section for why.
 - Open https://app.accuqualqms.com (through Cloudflare Access), sign in
   with the administrator created from the Render Shell, and confirm a
   page that hits the API (for example the NCR list) loads without a CORS
@@ -306,7 +307,7 @@ Optional: `--admin-name "Full Name"`. A temporary password is printed once to th
 
 1. **Upload survives a redeploy.** Sign in, upload a file on a record (a small PDF is enough), redeploy `accuqual-api`, and open the file again. It lives on the disk at `/var/data/uploads`. Anything written outside `/var/data` is gone after the deploy.
 2. **Reset email arrives.** Use Forgot password for the administrator. The message arrives only after `ZEPTOMAIL_SEND_TOKEN` (or all of `SMTP_*`) is set; otherwise the send is logged and not delivered.
-3. **Health is ok, and the API is closed.** `curl -fsS https://api.accuqualqms.com/health` returns HTTP 200 with `"status":"ok"` and `"database":{"status":"ok",...}` and no Access token. `"redis":{"status":"not configured"}` is expected until Redis is deployed (`REDIS_URL` unset), and it does not fail the check. After `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are set, `curl -s -o /dev/null -w '%{http_code}' https://api.accuqualqms.com/auth/me` is `403`. A browser that has passed Access on `app.accuqualqms.com` can still load a page that calls `/api`. Do not point an external monitor at `https://app.accuqualqms.com/api/health`: Access answers that URL with a login redirect before the rewrite runs.
+3. **Health is ok, and the API is closed.** `curl -fsS https://api.accuqualqms.com/health` returns HTTP 200 and `{"status":"ok"}` with no Access token. A database outage is HTTP 503 and `{"status":"Unreachable"}` — no driver text. Redis being unset does not fail the check. After `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are set, `curl -s -o /dev/null -w '%{http_code}' https://api.accuqualqms.com/auth/me` is `403`. A browser that has passed Access on `app.accuqualqms.com` can still load a page that calls `/api`. Do not point an external monitor at `https://app.accuqualqms.com/api/health`: Access answers that URL with a login redirect before the rewrite runs. Owner or Admin dependency detail (version, latency, Redis) is `GET /system-health` after sign-in.
 
 ## Monitoring & alerting
 
@@ -372,18 +373,25 @@ exception rather than carrying on in an unknown state.
 
 ### /health, /health/live
 
-`GET /health` is the readiness check Render's `healthCheckPath` uses: it pings the database
-(and Redis, informationally) and reports `version` and `uptimeSeconds`; HTTP 503 only when the database is
-unreachable. `GET /health/live` answers as long as the process is up and touches no dependency — for
+Render's `healthCheckPath` stays **`/health`**. Do not point it at `/health/live`.
+
+`GET /health` pings the database (and Redis, only to decide the Owner/Admin report).
+The public JSON is `{"status":"ok"}` with HTTP 200, or `{"status":"Unreachable"}`
+with HTTP 503 when the database is down. That failure text is the whole body —
+no version, latency, Redis status, or driver error. `GET /health/live` answers
+`{"status":"ok"}` as long as the process is up and touches no dependency — for
 a supervisor that should restart a *hung* process but never one that merely can't reach its database.
+
+Version, uptime, database latency, Redis status, and the database error string are on
+`GET /system-health`, which requires an Owner or Admin session.
 
 **Why `/health` still doesn't fail over a Redis outage**: the private blueprint
 does not deploy Redis or the workers (`render.workers.yaml` holds those
 definitions for later). `/health` would otherwise stay on 503 and Render
-would restart a working API. With `REDIS_URL` unset, `redis.status` is
-`not configured` and no socket is opened. With a URL set, an unreachable
+would restart a working API. With `REDIS_URL` unset, the admin report's
+`redis.status` is `not configured` and no socket is opened. With a URL set, an unreachable
 Redis is `critical` and the probe gives up after about 3 seconds (node-redis
-must not retry the connect). Either way `redis` in the JSON is informational.
+must not retry the connect). Either way Redis does not change the public HTTP status.
 Promoting it to a hard dependency in `checkReadiness()`
 (`services/api/src/modules/monitoring/healthMonitor.ts`) is safe only after
 Redis and all three workers are actually deployed.
@@ -392,14 +400,16 @@ Redis and all three workers are actually deployed.
 
 Dependency audit and secret scan run on every pull request, every merge to main, and every Monday morning
 (`.github/workflows/security.yml`). A new vulnerability is published without anyone pushing code, so the schedule is
-what notices it. CodeQL and the pull-request image-scan check report success without doing the heavy work, so a
-skipped status cannot block merge. The real image scan still runs on merges to main and on that Monday schedule
-(`.github/workflows/image-scan.yml`).
+what notices it. There is no CodeQL job: code scanning is not enabled on this private repo, so a scan
+would fail to upload and a job that exits 0 without scanning would be a false green check. The query
+config is kept at `.github/codeql/codeql-config.yml`. The pull-request image-scan check reports success
+without scanning so a skipped status cannot block merge. The real image scan still runs on merges to main
+and on that Monday schedule (`.github/workflows/image-scan.yml`).
 
 | Check | What it looks for | Blocks the build? |
 |---|---|---|
 | **Dependency audit** | Known vulnerabilities in the packages that ship (production dependencies of every workspace) | Yes, at high/critical. Dev-only tooling is listed in the run summary but doesn't block |
-| **CodeQL** | Security bugs in our own code. Analysis and upload stay off until code scanning is enabled on this private repo; the check still exits 0. When it is on, results are under **Security → Code scanning** | No |
+| **CodeQL** | Not run. Code scanning is not enabled on this private repo, so the workflow does not publish a CodeQL check. Turn on code scanning, then add the job using `.github/codeql/codeql-config.yml` | No check |
 | **Secret scan** (gitleaks) | Credentials committed anywhere in the full git history (`.gitleaks.toml` allowlists only the throwaway test-fixture passwords, by exact value, inside the test folder) | Yes |
 | **Image scan** (Trivy; merges + weekly) | Vulnerabilities in the OS packages and libraries inside each of the five container images. Pull requests only record a successful placeholder for the old skipped check name | Yes, on main and the weekly run, for CRITICAL issues that have a fix; HIGH are listed |
 

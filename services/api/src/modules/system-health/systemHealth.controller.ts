@@ -9,6 +9,8 @@ import { reportSchedules } from "../../drizzle/schema/reporting.js";
 import { notificationLog } from "../../drizzle/schema/notifications.js";
 import { users } from "../../drizzle/schema/users.js";
 import { env } from "../../config/env.js";
+import { configuredRedisUrl } from "../../lib/redisConnect.js";
+import { checkReadiness } from "../monitoring/healthMonitor.js";
 import { buildWorkflowHealthReport } from "../workflow/workflow.controller.js";
 import { currentAlerts } from "../monitoring/alerts.js";
 import { metrics } from "../monitoring/metrics.js";
@@ -168,7 +170,7 @@ function checkMonitoring(): HealthCheck {
 export const getSystemHealthHandler = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db! as Db;
 
-  const [database, ai, workflow, email, reporting, receivingInventory, supplierPortal] = await Promise.all([
+  const [database, ai, workflow, email, reporting, receivingInventory, supplierPortal, readiness] = await Promise.all([
     checkDatabase(),
     checkAi(db),
     checkWorkflow(db),
@@ -176,6 +178,7 @@ export const getSystemHealthHandler = asyncHandler(async (req: Request, res: Res
     checkReporting(db),
     checkReceivingInventory(db),
     checkSupplierPortal(db),
+    checkReadiness(),
   ]);
 
   const checks = { database, monitoring: checkMonitoring(), ai, workflow, email, reporting, receivingInventory, supplierPortal };
@@ -185,5 +188,18 @@ export const getSystemHealthHandler = asyncHandler(async (req: Request, res: Res
       ? "warning"
       : "ok";
 
-  res.json({ overall, checks, checkedAt: new Date().toISOString() });
+  // Version, latency, Redis, and driver error text. Owner/Admin only — the public
+  // /health body never includes these. Redis "not configured" does not change `overall`.
+  res.json({
+    overall,
+    checks,
+    checkedAt: new Date().toISOString(),
+    readiness: {
+      version: env.APP_VERSION,
+      uptimeSeconds: Math.round(process.uptime()),
+      backgroundJobs: configuredRedisUrl() ? "on" : "off",
+      database: readiness.database,
+      redis: readiness.redis,
+    },
+  });
 });

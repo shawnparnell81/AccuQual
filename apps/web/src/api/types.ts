@@ -683,6 +683,14 @@ export interface SystemHealthCheck {
 export interface SystemHealthReport {
   overall: SystemHealthStatus;
   checkedAt: string;
+  /** Owner/Admin dependency detail. Public `/health` does not include this. */
+  readiness: {
+    version: string;
+    uptimeSeconds: number;
+    backgroundJobs: "on" | "off";
+    database: { status: string; latencyMs: number; detail: string };
+    redis: { status: string; latencyMs: number; detail: string };
+  };
   checks: {
     database: SystemHealthCheck & { latencyMs: number };
     monitoring: SystemHealthCheck & {
@@ -798,6 +806,8 @@ export interface WorkflowDefinitionHealth {
 export interface WorkflowHealthReport {
   definitions: WorkflowDefinitionHealth[];
   summary: { total: number; active: number; withIssues: number; neverRun: number };
+  /** "off" when REDIS_URL is unset. Does not change how a workflow runs. */
+  backgroundJobs?: "on" | "off";
 }
 
 export type WorkOrderStatus = "planned" | "in_progress" | "completed" | "cancelled";
