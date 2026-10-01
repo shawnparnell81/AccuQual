@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useFormData, useSaveForm } from "../../api/formHooks";
+import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { useToast } from "../shared/ToastProvider";
 import { useFormStore } from "../../store/formStore";
 
 const AUTOSAVE_DELAY_MS = 1200;
@@ -19,6 +21,7 @@ const AUTOSAVE_DELAY_MS = 1200;
 export function useFormEditorState(formType: string, entityId: number, windowId?: string) {
   const { data: formData, isLoading } = useFormData(formType, entityId);
   const saveForm = useSaveForm(formType, entityId);
+  const toast = useToast();
   const { setDirty, setSaving } = useFormStore();
 
   const [values, setValues] = useState<Record<string, unknown>>({});
@@ -65,6 +68,9 @@ export function useFormEditorState(formType: string, entityId: number, windowId?
           isDirty.current = false;
           if (windowId) setDirty(windowId, false);
         }
+      } catch (err) {
+        toast.error(extractErrorMessage(err, "Couldn't save this form."));
+        throw err;
       } finally {
         if (windowId) setSaving(windowId, false);
       }

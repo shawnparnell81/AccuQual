@@ -13,6 +13,8 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { fileChosenFolder, RecordFolderField, SaveResult, useFormFiling, type SaveResultState } from "../../components/forms/FormDocumentControls";
 import { canEditFormStructure } from "../../lib/formStructureAccess";
 import { ecrCellLocked, ecrStatusLabel, type EcrWorkflowView } from "../../lib/ecrWorkflow";
+import { useToast } from "../../components/shared/ToastProvider";
+import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { FORM_KEY_BY_TYPE, instanceRevision, revisionLabel } from "../../lib/formDocument";
@@ -294,6 +296,7 @@ function IsoFormDetailBody({
   onEcrTransition?: (action: string, note?: string) => Promise<void>;
 }) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [saveNote, setSaveNote] = useState<SaveResultState>(null);
   const [pending, setPending] = useState(false);
   const filing = useFormFiling(formKey, record.id);
@@ -308,6 +311,9 @@ function IsoFormDetailBody({
     setSaveNote(null);
     try {
       await onSave();
+      if (formType === "quarantine_notice") {
+        void queryClient.invalidateQueries({ queryKey: ["quarantine"] });
+      }
       if (!formKey) {
         setSaveNote("saved");
         return;
@@ -318,6 +324,9 @@ function IsoFormDetailBody({
       } catch {
         setSaveNote("file-error");
       }
+    } catch (err) {
+      setSaveNote("error");
+      toast.error(extractErrorMessage(err, "Couldn't save this form."));
     } finally {
       setPending(false);
     }
@@ -343,7 +352,7 @@ function IsoFormDetailBody({
             <DeleteRecordButton resource="iso-quality-forms" id={recordId} kind={meta.title} title={summary || null} navigateTo={`/iso-forms/${meta.formKey}`} />
             <SaveStatus saving={saving} unsaved={dirty && !saving} />
             {canEdit && (
-              <button type="button" onClick={() => void save().catch(() => setSaveNote("error"))} disabled={saving || pending} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
+              <button type="button" onClick={() => void save()} disabled={saving || pending} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
                 {saving || pending ? "Saving…" : "Save"}
               </button>
             )}

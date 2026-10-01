@@ -10,6 +10,7 @@ import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { assertEcrAnswerEdit, blankEcrWorkflow, canApproveChangeRequest, readEcrWorkflow } from "../change-requests/changeRequestWorkflow.js";
 import { stampNewEcr } from "../change-requests/ecr.controller.js";
+import { syncQuarantineNotice } from "../quarantine/quarantineNotice.js";
 
 const AUDIT_SIGNATURES: Record<string, string> = {
   leadAuditorSignature: "I certify that I conducted this audit impartially and according to the internal audit procedure.",
@@ -43,6 +44,13 @@ export const baseHandlers = crudFactory(isoQualityForms, {
     if (!req.db) return;
     await snapshotIsoFormNumber(req.db, created);
     await stampNewEcr(req.db, created);
+    if (created.formType === "quarantine_notice") {
+      await syncQuarantineNotice(req.db, Number(created.id), created.data, req.user?.id);
+    }
+  },
+  afterUpdate: async (updated, req) => {
+    if (!req.db || updated.formType !== "quarantine_notice") return;
+    await syncQuarantineNotice(req.db, Number(updated.id), updated.data, req.user?.id);
   },
 });
 

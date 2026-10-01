@@ -62,7 +62,7 @@ describe("open quality work", () => {
         ],
       }),
     );
-    expect(work.cards.find((card) => card.key === "ncr")).toMatchObject({ value: 2, foot: "1 high / critical", href: "/ncr", module: "NCR" });
+    expect(work.cards.find((card) => card.key === "ncr")).toMatchObject({ value: 2, foot: "1 high / critical", href: "/iso-forms/frm-ncr-001", module: null });
     const rows = work.records.filter((row) => row.module === "NCR");
     expect(rows.map((row) => row.number)).toEqual(["NCR-2", "NCR-1"]);
     expect(rows[0]).toMatchObject({ title: "Scratch", status: "investigating", plant: "Dayton Machining", owner: "Unassigned", ageDays: 10 });

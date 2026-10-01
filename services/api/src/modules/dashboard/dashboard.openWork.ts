@@ -547,7 +547,7 @@ export function buildOpenWork(input: OpenWorkInput): OpenWork {
   if (access.ncr) {
     const rows = input.ncrs.filter((row) => !row.isDeleted && row.status !== "closed" && inScope(row.siteId, input.siteIds));
     const high = rows.filter((row) => row.severity === "high" || row.severity === "critical").length;
-    cards.push({ key: "ncr", label: "Open NCRs", value: rows.length, foot: `${high} high / critical`, href: "/ncr", module: "NCR" });
+    cards.push({ key: "ncr", label: "Open NCRs", value: rows.length, foot: `${high} high / critical`, href: "/iso-forms/frm-ncr-001", module: null });
   }
 
   if (access.capa || access.scar) {

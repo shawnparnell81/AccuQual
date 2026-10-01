@@ -4,6 +4,7 @@ import { AppError } from "../../utils/appError.js";
 import { logger } from "../../utils/logger.js";
 import * as formsService from "./forms.service.js";
 import { createCalibrationEvent } from "../calibration/calibration.controller.js";
+import { assertGageUsable, assertInspectionGagesUsable } from "../calibration/calibration.service.js";
 import { completeTrainingAssignment } from "../training/training.controller.js";
 import { DI_FORM_TYPE, syncDiFormToRecord } from "../quality/quality.formSync.js";
 import { COMPLAINT_FORM_TYPE, syncComplaintFormToRecord } from "../complaints/complaints.formSync.js";
@@ -32,6 +33,14 @@ export const saveForm = asyncHandler(async (req: Request, res: Response) => {
     req.params.type === "apqp_summary" && req.body.data && typeof req.body.data === "object"
       ? parseApqpSummaryData(req.body.data as Record<string, unknown>)
       : req.body.data;
+  const savedEntityId = req.body.entityId ?? entityId;
+  const gageEquipmentId = Number(savedEntityId);
+  if (req.params.type === "gage_rr" && Number.isInteger(gageEquipmentId) && gageEquipmentId > 0) {
+    await assertGageUsable(req.db!, gageEquipmentId);
+  }
+  if (req.params.type === "final_inspection_release_checklist" && data && typeof data === "object" && !Array.isArray(data)) {
+    await assertInspectionGagesUsable(req.db!, data as Record<string, unknown>);
+  }
   const saved = await formsService.saveData(req.db!, {
     formType: req.params.type!,
     entityType: req.body.entityType,
@@ -43,7 +52,6 @@ export const saveForm = asyncHandler(async (req: Request, res: Response) => {
   // The DI form and its discrepancy record share title/severity/description/
   // disposition — flow the descriptive fields back to the record (status
   // never does). See quality.formSync.ts.
-  const savedEntityId = req.body.entityId ?? entityId;
   if (req.params.type === DI_FORM_TYPE && savedEntityId != null && req.body.data && typeof req.body.data === "object") {
     await syncDiFormToRecord(req.db!, Number(savedEntityId), req.body.data as Record<string, unknown>, req.user?.id);
   }
