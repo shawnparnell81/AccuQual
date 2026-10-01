@@ -13,9 +13,9 @@ What you can do:
 - See the departments down the left side.
 - Click a department to work with its folders. **Open** on a department or folder switches to that folder's contents.
 - The path at the top is the breadcrumb (Documents / department / folder). Each earlier part of the path opens that folder. **Up** goes to the parent.
-- The list shows subfolders and files in the folder you opened. Click a subfolder to go inside it. Click a saved form to open that record in the app.
+- The list shows the folder name, its subfolders, and forms or files that were saved into it. Empty blanks are not listed. Click a subfolder to go inside it. Click a saved form to open that record in the app.
 - **Upload Document**, or drop a file on the folder, adds a file in that folder.
-- **+ Add folder** creates a folder inside the one you are viewing. **+ Add department** creates a top-level folder.
+- **+ Add folder** creates a folder inside the one you are viewing. **+ Add department** creates a top-level folder. **Rename** on an open folder changes that folder's name. Dragging a folder onto another folder organizes the tree.
 - Drag a folder onto another folder to move it, with everything inside it. Drop a folder on **Top level** to make it a department. Drag a file onto a folder to move the file. Drop a file on **Library Pool** to take it out of its folder.
 - The sidebar (the main menu) can still be rearranged by an administrator with drag and drop. That does not change these Documents folders.
 
@@ -41,7 +41,7 @@ The form is not only a download. The record stays in AccuQual, and the folder ro
 | --- | --- |
 | Open the folder you just saved into | **Open folder** on the save line, or click the path |
 | Browse later | Quality → Document Control → Folder Explorer, then open the folder |
-| Start another CSA or fuel pump form | Quality → Validation Reports, or the blank form in Folder Explorer |
+| Start another CSA or fuel pump form | Workspace → Blank Forms, or Quality → Validation Reports |
 | Open a validation record you already know | Validation Reports list, or the file row in the Documents folder you chose |
 
 Both the Validation Reports list and the Documents folder open the same saved record.

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { folderChain, listFolder, openTarget } from "../../lib/folderBrowse";
-import { Paperclip, FileText, Download, X, Inbox, ArrowUpRight, UploadCloud, GripVertical } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { folderChain, listFolder, openTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
+import { Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
 import { StatusBadge } from "../../components/tables/StatusBadge";
@@ -15,57 +15,6 @@ import { folderMoveIsBlocked, nextSortOrder } from "../../lib/folderMove";
 
 const DRAG_FOLDER = "application/x-accuqual-folder";
 const DRAG_DOC = "application/x-accuqual-doc";
-
-interface FormStart {
-  createPath: string;
-  body: Record<string, unknown>;
-  openPath: string;
-}
-
-interface FormTemplateLink {
-  formKey: string;
-  formId: string;
-  title: string;
-  subjectRoute: string;
-  folderId: number | null;
-  start?: FormStart | null;
-}
-
-function FormTemplateChip({ form }: { form: FormTemplateLink }) {
-  const navigate = useNavigate();
-  const toast = useToast();
-  const [pending, setPending] = useState(false);
-  const label = form.formId ? `${form.formId} ${form.title}` : form.title;
-
-  async function open() {
-    if (!form.start) {
-      navigate(form.subjectRoute);
-      return;
-    }
-    setPending(true);
-    try {
-      const created = await apiClient.post<{ id: number }>(form.start.createPath, form.start.body);
-      navigate(form.start.openPath.replaceAll("{id}", String(created.data.id)));
-    } catch {
-      toast.error(`Couldn't start ${form.title}.`);
-      setPending(false);
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => void open()}
-      disabled={pending}
-      draggable={false}
-      data-form-key={form.formKey}
-      className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:opacity-80 disabled:opacity-60"
-    >
-      <ArrowUpRight size={12} />
-      {pending ? "Opening…" : label}
-    </button>
-  );
-}
 
 interface DocumentFolder {
   id: number;
@@ -90,13 +39,6 @@ function useDocumentFolders() {
   return useQuery({
     queryKey: ["document-folders"],
     queryFn: async () => (await apiClient.get<DocumentFolder[]>("/document-folders")).data,
-  });
-}
-
-function useFormTemplates() {
-  return useQuery({
-    queryKey: ["form-templates"],
-    queryFn: async () => (await apiClient.get<{ templates: FormTemplateLink[] }>("/document-folders/form-templates")).data.templates,
   });
 }
 
@@ -168,10 +110,12 @@ function useUploadDocument() {
  * land in instead of disappearing, and per-document PDF attach/view/remove.
  * The default 7-department taxonomy seeds itself the first time this loads
  * for a company with no folders yet; the Library Pool self-heals every load.
+ * Blank templates are not listed here. They stay on Blank Forms and QMS Forms.
+ * This page lists the folder and the forms or files that were saved into it.
  */
 export function FolderExplorerPage() {
   const { data: folders = [], isLoading } = useDocumentFolders();
-  const { data: formTemplates = [] } = useFormTemplates();
+  const visibleFolders = useMemo(() => visibleExplorerFolders(folders), [folders]);
   const updateFolder = useUpdateFolder();
   const createFolder = useCreateFolder();
   const deleteFolder = useDeleteFolder();
@@ -209,14 +153,14 @@ export function FolderExplorerPage() {
 
   const byParent = useMemo(() => {
     const map = new Map<number | null, DocumentFolder[]>();
-    for (const f of folders) {
+    for (const f of visibleFolders) {
       const list = map.get(f.parentId) ?? [];
       list.push(f);
       map.set(f.parentId, list);
     }
     for (const list of map.values()) list.sort((a, b) => a.sortOrder - b.sortOrder);
     return map;
-  }, [folders]);
+  }, [visibleFolders]);
 
   const topLevel = byParent.get(null) ?? [];
   const poolFolder = topLevel.find((f) => f.name === LIBRARY_POOL_NAME);
@@ -242,16 +186,11 @@ export function FolderExplorerPage() {
 
   const activeDept = departments.find((d) => d.id === activeDeptId) ?? departments[0];
 
-  function formsIn(folderId: number) {
-    return formTemplates.filter((form) => form.folderId === folderId);
-  }
-
   function countsFor(deptId: number) {
     const subs = byParent.get(deptId) ?? [];
     const docs = subs.reduce((sum, sub) => {
-      const children = byParent.get(sub.id) ?? [];
-      const nested = children.reduce((count, child) => count + formsIn(child.id).length, 0);
-      return sum + children.length + formsIn(sub.id).length + nested;
+      const listing = listFolder(visibleFolders, sub.id);
+      return sum + listing.folders.length + listing.files.length;
     }, 0);
     return { subs: subs.length, docs };
   }
@@ -346,7 +285,8 @@ export function FolderExplorerPage() {
 
   const folderParam = searchParams.get("folder");
   const requestedFolderId = folderParam != null && /^\d+$/.test(folderParam) ? Number(folderParam) : null;
-  const openFolder = requestedFolderId == null ? undefined : folders.find((folder) => folder.id === requestedFolderId);
+  const openFolder = requestedFolderId == null ? undefined : visibleFolders.find((folder) => folder.id === requestedFolderId);
+  const hiddenBlank = requestedFolderId != null && !openFolder && folders.some((folder) => folder.id === requestedFolderId);
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading folder tree…</p>;
   if (!activeDept) return <p className="text-sm text-muted-foreground">No departments found.</p>;
@@ -385,7 +325,7 @@ export function FolderExplorerPage() {
         <div>
           <h1 className="text-2xl font-semibold">Document Folders</h1>
           <p className="text-sm text-muted-foreground">
-            Open a folder to see the forms and files inside it. A saved form opens in the app. Drag a folder onto another folder to move it with everything inside, or onto Top level. Drag a document onto a folder to file it there, or into the Library Pool to take it out of a folder.
+            A folder shows its name and the forms or files saved into it. Start a new blank from Blank Forms. Drag a folder onto another folder to move it, or onto Top level. Drag a saved document onto a folder to file it there, or into the Library Pool to take it out.
           </p>
         </div>
         <div className="w-56">
@@ -478,7 +418,14 @@ export function FolderExplorerPage() {
         <div className="flex min-w-0 flex-col gap-3 md:min-h-0 md:overflow-y-auto">
           {requestedFolderId != null && !openFolder ? (
             <div className="flex flex-col gap-2">
-              <p className="text-sm text-muted-foreground">That folder is not in Documents.</p>
+              <p className="text-sm text-muted-foreground">
+                {hiddenBlank ? "Blank templates are listed under Blank Forms. This folder shows saved work only." : "That folder is not in Documents."}
+              </p>
+              {hiddenBlank && (
+                <Link to="/blank-forms" className="w-fit text-sm text-primary hover:underline">
+                  Open Blank Forms
+                </Link>
+              )}
               <button type="button" onClick={showDepartmentList} className="w-fit text-sm text-primary hover:underline">
                 Back to departments
               </button>
@@ -486,8 +433,7 @@ export function FolderExplorerPage() {
           ) : openFolder ? (
             <FolderBrowser
               folder={openFolder}
-              folders={folders}
-              forms={formTemplates}
+              folders={visibleFolders}
               query={query}
               dropHoverId={dropHoverId}
               onOpenFolder={showFolder}
@@ -500,6 +446,7 @@ export function FolderExplorerPage() {
               onUploadFiles={uploadFiles}
               onUploadClick={requestDocumentUpload}
               onCreateFolder={(name, parentId) => createFolder.mutate({ name, parentId })}
+              onRename={(id, name) => updateFolder.mutate({ id, name })}
               onSendToLibrary={sendToLibrary}
               onAttach={requestUpload}
               onRemoveAttachment={(id) => removeTemplate.mutate(id)}
@@ -542,11 +489,9 @@ export function FolderExplorerPage() {
           </FileDropZone>
 
           {(byParent.get(activeDept.id) ?? []).map((sub) => {
-            const children = byParent.get(sub.id) ?? [];
-            const topicFolders = children.filter((child) => formsIn(child.id).length > 0 || (byParent.get(child.id)?.length ?? 0) > 0);
-            const topicIds = new Set(topicFolders.map((child) => child.id));
-            const ownForms = formsIn(sub.id).filter((form) => !query || `${form.formId} ${form.title}`.toLowerCase().includes(query));
-            const docs = children.filter((child) => !topicIds.has(child.id) && (!query || child.name.toLowerCase().includes(query)));
+            const listing = listFolder(visibleFolders, sub.id);
+            const subfolders = listing.folders.filter((row) => !query || row.name.toLowerCase().includes(query));
+            const docs = listing.files.filter((row) => !query || row.name.toLowerCase().includes(query));
             const isCollapsed = collapsed[sub.id];
             const isDropTarget = dropHoverId === sub.id;
             return (
@@ -586,7 +531,9 @@ export function FolderExplorerPage() {
                 >
                   <GripVertical size={14} className="text-muted-foreground" />
                   <span className="text-xs text-muted-foreground">{isCollapsed ? "▸" : "▾"}</span>
-                  <span className="flex-1 text-sm font-semibold">{sub.name}</span>
+                  <span className="flex-1 text-sm font-semibold" data-testid="folder-title">
+                    {sub.name}
+                  </span>
                   <button
                     type="button"
                     onClick={(e) => {
@@ -597,7 +544,7 @@ export function FolderExplorerPage() {
                   >
                     Open
                   </button>
-                  <span className="font-mono text-[10px] text-muted-foreground">{children.length + formsIn(sub.id).length + topicFolders.reduce((count, topic) => count + formsIn(topic.id).length, 0)}</span>
+                  <span className="font-mono text-[10px] text-muted-foreground">{subfolders.length + docs.length}</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -631,125 +578,67 @@ export function FolderExplorerPage() {
                       dropOn(e, sub.id);
                     }}
                   >
-                    {docs.length === 0 && ownForms.length === 0 && topicFolders.length === 0 && <span className="text-xs italic text-muted-foreground">No documents yet — drop one here</span>}
-                    {ownForms.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {ownForms.map((form) => (
-                          <FormTemplateChip key={form.formKey} form={form} />
-                        ))}
+                    {subfolders.length === 0 && docs.length === 0 && <span className="text-xs italic text-muted-foreground">{query ? "Nothing in this folder matches." : "Nothing saved here yet."}</span>}
+                    {subfolders.map((row) => (
+                      <div
+                        key={row.id}
+                        data-testid="folder-row"
+                        data-folder-id={row.id}
+                        draggable
+                        onDragStart={(event) => {
+                          event.stopPropagation();
+                          beginDrag(event, row.id, "folder");
+                        }}
+                        onDragEnd={endDrag}
+                        onDragOver={(event) => {
+                          if (isFileDrag(event)) return;
+                          if (allowDrop(event, row.id)) {
+                            event.stopPropagation();
+                            setDropHoverId(row.id);
+                          }
+                        }}
+                        onDragLeave={() => setDropHoverId((current) => (current === row.id ? null : current))}
+                        onDrop={(event) => {
+                          if (isFileDrag(event)) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void uploadFiles(row.id, Array.from(event.dataTransfer.files));
+                            return;
+                          }
+                          dropOn(event, row.id);
+                        }}
+                        className={`flex items-center gap-2 rounded-md px-2 py-2 ${dropHoverId === row.id ? "bg-primary/10 ring-2 ring-primary" : "hover:bg-muted"}`}
+                      >
+                        <GripVertical size={14} className="text-muted-foreground" />
+                        <button type="button" onClick={() => showFolder(row.id)} className="flex-1 text-left text-sm font-medium" data-testid="folder-title">
+                          {row.name}
+                        </button>
+                        <span className="text-xs text-muted-foreground">Folder</span>
                       </div>
-                    )}
-                    {topicFolders.map((topic) => {
-                      const topicForms = formsIn(topic.id).filter((form) => !query || `${form.formId} ${form.title}`.toLowerCase().includes(query));
-                      const topicChildren = byParent.get(topic.id) ?? [];
-                      const nestedTopics = topicChildren.filter((child) => formsIn(child.id).length > 0 || (byParent.get(child.id)?.length ?? 0) > 0);
-                      const nestedIds = new Set(nestedTopics.map((child) => child.id));
-                      const topicDocs = topicChildren.filter((child) => !nestedIds.has(child.id) && (!query || child.name.toLowerCase().includes(query)));
-                      if (query && topicForms.length === 0 && topicDocs.length === 0 && !topic.name.toLowerCase().includes(query)) return null;
-                      const topicHover = dropHoverId === topic.id;
-                      return (
-                        <div
-                          key={topic.id}
-                          data-folder-id={topic.id}
-                          draggable
-                          onDragStart={(e) => {
-                            e.stopPropagation();
-                            beginDrag(e, topic.id, "folder");
-                          }}
-                          onDragEnd={endDrag}
-                          onDragOver={(e) => {
-                            if (allowDrop(e, topic.id)) {
-                              e.stopPropagation();
-                              setDropHoverId(topic.id);
-                            }
-                          }}
-                          onDragLeave={() => setDropHoverId((h) => (h === topic.id ? null : h))}
-                          onDrop={(e) => {
-                            if (isFileDrag(e)) {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              void uploadFiles(topic.id, Array.from(e.dataTransfer.files));
-                              return;
-                            }
-                            dropOn(e, topic.id);
-                          }}
-                          className={`rounded-md border px-2 py-2 ${topicHover ? "border-primary bg-primary/10" : "border-border"}`}
-                        >
-                          <div
-                            className="mb-1 flex cursor-grab items-center gap-2 text-xs font-semibold active:cursor-grabbing"
+                    ))}
+                    <div className="flex flex-wrap gap-2">
+                    {docs.map((doc) => {
+                      const target = openTarget(doc);
+                      if (target) {
+                        return (
+                          <Link
+                            key={doc.id}
+                            to={target}
+                            data-testid="saved-file"
                             draggable
-                            onDragStart={(e) => {
-                              e.stopPropagation();
-                              beginDrag(e, topic.id, "folder");
+                            onDragStart={(event) => {
+                              event.stopPropagation();
+                              beginDrag(event, doc.id, "doc");
                             }}
                             onDragEnd={endDrag}
+                            className="inline-flex cursor-grab items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary hover:underline active:cursor-grabbing"
                           >
-                            <GripVertical size={12} className="text-muted-foreground" />
-                            <span className="flex-1">{topic.name}</span>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                showFolder(topic.id);
-                              }}
-                              className="text-xs font-medium text-primary hover:underline"
-                            >
-                              Open
-                            </button>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {topicForms.map((form) => (
-                              <FormTemplateChip key={form.formKey} form={form} />
-                            ))}
-                            {topicDocs.map((doc) => (
-                              <DocPill
-                                key={doc.id}
-                                doc={doc}
-                                onDragStart={(e) => beginDrag(e, doc.id, "doc")}
-                                onDragEnd={endDrag}
-                                onSendToLibrary={() => sendToLibrary(doc.id)}
-                                onAttach={() => requestUpload(doc.id)}
-                                onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
-                              />
-                            ))}
-                          </div>
-                          {nestedTopics.map((nested) => (
-                            <div
-                              key={nested.id}
-                              data-folder-id={nested.id}
-                              draggable
-                              onDragStart={(e) => {
-                                e.stopPropagation();
-                                beginDrag(e, nested.id, "folder");
-                              }}
-                              onDragEnd={endDrag}
-                              onDragOver={(e) => {
-                                if (allowDrop(e, nested.id)) {
-                                  e.stopPropagation();
-                                  setDropHoverId(nested.id);
-                                }
-                              }}
-                              onDrop={(e) => dropOn(e, nested.id)}
-                              className={`mt-2 flex cursor-grab items-center gap-2 rounded-md border px-2 py-1 text-xs font-semibold active:cursor-grabbing ${dropHoverId === nested.id ? "border-primary bg-primary/10" : "border-border"}`}
-                            >
-                              <span className="flex-1">{nested.name}</span>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  showFolder(nested.id);
-                                }}
-                                className="font-medium text-primary hover:underline"
-                              >
-                                Open
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })}
-                    <div className="flex flex-wrap gap-2">
-                    {docs.map((doc) => (
+                            <FileText size={12} />
+                            {doc.name}
+                          </Link>
+                        );
+                      }
+                      return (
                       <DocPill
                         key={doc.id}
                         doc={doc}
@@ -759,7 +648,8 @@ export function FolderExplorerPage() {
                         onAttach={() => requestUpload(doc.id)}
                         onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
                       />
-                    ))}
+                      );
+                    })}
                     </div>
                   </div>
                 )}
@@ -929,7 +819,6 @@ function DocPill({
 function FolderBrowser({
   folder,
   folders,
-  forms,
   query,
   dropHoverId,
   onOpenFolder,
@@ -942,13 +831,13 @@ function FolderBrowser({
   onUploadFiles,
   onUploadClick,
   onCreateFolder,
+  onRename,
   onSendToLibrary,
   onAttach,
   onRemoveAttachment,
 }: {
   folder: DocumentFolder;
   folders: DocumentFolder[];
-  forms: FormTemplateLink[];
   query: string;
   dropHoverId: number | null;
   onOpenFolder: (id: number) => void;
@@ -961,18 +850,25 @@ function FolderBrowser({
   onUploadFiles: (parentId: number, files: File[]) => Promise<void>;
   onUploadClick: (parentId: number) => void;
   onCreateFolder: (name: string, parentId: number) => void;
+  onRename: (id: number, name: string) => void;
   onSendToLibrary: (id: number) => void;
   onAttach: (id: number) => void;
   onRemoveAttachment: (id: number) => void;
 }) {
   const [name, setName] = useState("");
+  const [rename, setRename] = useState(folder.name);
+  const [renaming, setRenaming] = useState(false);
+  useEffect(() => {
+    setRenaming(false);
+    setRename(folder.name);
+  }, [folder.id, folder.name]);
   const chain = folderChain(folders, folder.id);
   const listing = listFolder(folders, folder.id);
   const parent = chain.length > 1 ? chain[chain.length - 2] : undefined;
   const subfolders = listing.folders.filter((row) => !query || row.name.toLowerCase().includes(query));
   const files = listing.files.filter((row) => !query || row.name.toLowerCase().includes(query));
-  const blanks = forms.filter((form) => form.folderId === folder.id && (!query || `${form.formId} ${form.title}`.toLowerCase().includes(query)));
-  const empty = subfolders.length === 0 && files.length === 0 && blanks.length === 0;
+  const empty = subfolders.length === 0 && files.length === 0;
+  const canRename = folder.name !== LIBRARY_POOL_NAME;
 
   return (
     <div className="flex flex-col gap-3" data-testid="folder-browser">
@@ -984,7 +880,9 @@ function FolderBrowser({
           <span key={crumb.id} className="inline-flex items-center gap-1">
             <span className="text-muted-foreground">/</span>
             {index === chain.length - 1 ? (
-              <span className="font-semibold">{crumb.name}</span>
+              <span className="font-semibold" data-testid="folder-title">
+                {crumb.name}
+              </span>
             ) : (
               <button type="button" onClick={() => onOpenFolder(crumb.id)} className="text-primary hover:underline">
                 {crumb.name}
@@ -1010,7 +908,45 @@ function FolderBrowser({
           <UploadCloud size={13} />
           Upload Document
         </button>
+        {canRename && !renaming && (
+          <button
+            type="button"
+            onClick={() => {
+              setRename(folder.name);
+              setRenaming(true);
+            }}
+            className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
+          >
+            Rename
+          </button>
+        )}
       </div>
+
+      {canRename && renaming && (
+        <form
+          className="flex flex-wrap items-end gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const next = rename.trim();
+            if (!next || next === folder.name) {
+              setRenaming(false);
+              return;
+            }
+            onRename(folder.id, next);
+            setRenaming(false);
+          }}
+        >
+          <div className="w-full max-w-xs">
+            <TextField label="Folder name" value={rename} onChange={(event) => setRename(event.target.value)} />
+          </div>
+          <button type="submit" className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">
+            Save name
+          </button>
+          <button type="button" onClick={() => setRenaming(false)} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">
+            Cancel
+          </button>
+        </form>
+      )}
 
       <FileDropZone
         onFiles={(dropped) => void onUploadFiles(folder.id, dropped)}
@@ -1033,7 +969,7 @@ function FolderBrowser({
           onDrop(event, folder.id);
         }}
       >
-        {empty && <p className="px-2 py-3 text-sm italic text-muted-foreground">{query ? "Nothing in this folder matches." : "Nothing in this folder yet."}</p>}
+        {empty && <p className="px-2 py-3 text-sm italic text-muted-foreground">{query ? "Nothing in this folder matches." : "Nothing saved in this folder yet."}</p>}
         {subfolders.map((row) => (
           <div
             key={row.id}
@@ -1065,7 +1001,7 @@ function FolderBrowser({
             className={`flex items-center gap-2 rounded-md px-2 py-2 ${dropHoverId === row.id ? "bg-primary/10 ring-2 ring-primary" : "hover:bg-muted"}`}
           >
             <GripVertical size={14} className="text-muted-foreground" />
-            <button type="button" onClick={() => onOpenFolder(row.id)} className="flex-1 text-left text-sm font-medium">
+            <button type="button" onClick={() => onOpenFolder(row.id)} className="flex-1 text-left text-sm font-medium" data-testid="folder-title">
               {row.name}
             </button>
             <span className="text-xs text-muted-foreground">Folder</span>
@@ -1106,13 +1042,6 @@ function FolderBrowser({
             </Link>
           );
         })}
-        {blanks.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-2 py-2">
-            {blanks.map((form) => (
-              <FormTemplateChip key={form.formKey} form={form} />
-            ))}
-          </div>
-        )}
       </div>
 
       <form

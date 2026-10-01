@@ -101,7 +101,7 @@ export function IsoFormListPage() {
         <div>
           <h1 className="text-2xl font-semibold">{meta.title}</h1>
           <p className="text-sm text-muted-foreground">
-            {revisionLabel(liveFormId, meta.rev)}. The blank template is filed under ISO Compliance Documents / Blank Form Templates. A filled copy can be saved into any Documents folder.
+            {revisionLabel(liveFormId, meta.rev)}. Start this blank from Blank Forms. A filled copy can be saved into any Documents folder.
           </p>
           <FormNumberEditor formKey={form.formKey} />
           {form.retired && <p className="mt-2 text-sm text-muted-foreground">This blank is no longer used. Start a nonconformance from NCR.</p>}
