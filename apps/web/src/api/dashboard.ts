@@ -38,7 +38,7 @@ export interface DashboardOverview {
 
 /** Open quality records on the signed-in dashboard. Counts are real rows only. */
 export interface OpenWork {
-  cards: { key: string; label: string; value: number; foot: string; href: string | null; module: string | null }[];
+  cards: { key: string; label: string; value: number; foot: string; href: string | null; module: string | null; modules?: string[] | null }[];
   modules: { key: string; label: string }[];
   plants: { id: number; name: string }[];
   records: {

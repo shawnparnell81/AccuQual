@@ -40,6 +40,11 @@ export interface OpenWorkCard {
   href: string | null;
   /** Table module this card narrows to. Empty when the card covers more than one list. */
   module: string | null;
+  /**
+   * Table modules this card narrows to when `module` is empty.
+   * The dashboard filters the open-records table to these keys.
+   */
+  modules?: string[] | null;
 }
 
 export interface OpenWorkRecord {
@@ -570,6 +575,7 @@ export function buildOpenWork(input: OpenWorkInput): OpenWork {
       foot: companyNote(input.allPlants, `${validation} validation · ${fai} FAI · ${trp} TRP`),
       href: null,
       module: null,
+      modules: ["VAL", "FAI", "TRP"],
     });
     const ecrs = count(built.records, "ECR");
     const changes = access.change ? count(built.records, "Change") : 0;
@@ -581,6 +587,7 @@ export function buildOpenWork(input: OpenWorkInput): OpenWork {
         foot: companyNote(input.allPlants, `${ecrs} ${ecrs === 1 ? "ECR form" : "ECR forms"} · ${changes} ${changes === 1 ? "change request" : "change requests"}`),
         href: null,
         module: null,
+        modules: ["ECR", "Change"],
       });
     } else {
       cards.push({
