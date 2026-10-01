@@ -57,6 +57,7 @@ describe("FRM-NCR-002 saves a quarantine hold", () => {
     expect(items.status).toBe(200);
     expect((items.body as { id: number; partNumber: string }[]).some((row) => row.id === hold!.id && row.partNumber === "PN-441")).toBe(true);
 
+    // ISO form saves merge cells, so Cage B (B18 = 1) stays when this patch only changes Cage A.
     const updated = await request(app)
       .patch(`/iso-quality-forms/${created.body.id}`)
       .set(auth())
@@ -68,7 +69,7 @@ describe("FRM-NCR-002 saves a quarantine hold", () => {
       .from(quarantineRecords)
       .where(and(eq(quarantineRecords.sourceType, "frm-ncr-002"), eq(quarantineRecords.sourceId, created.body.id)));
     expect(again).toHaveLength(1);
-    expect(Number(again[0]!.quantity)).toBe(6);
+    expect(Number(again[0]!.quantity)).toBe(7);
   });
 
   it("does not insert a hold for a blank notice", async () => {
