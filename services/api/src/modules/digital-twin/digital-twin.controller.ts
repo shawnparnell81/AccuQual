@@ -9,7 +9,7 @@ import { publishEvent, DIGITAL_TWIN_STREAM } from "../../lib/eventBus.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { aiRiskScores } from "../../drizzle/schema/ai.js";
 import { db as rootDb } from "../../db/index.js";
-import { generateDeviceKey, parseDeviceKey, deviceSecretMatches } from "./digital-twin.deviceKeys.js";
+import { generateDeviceKey, parseDeviceKey, deviceSecretMatches, ingestDeviceAuthorized } from "./digital-twin.deviceKeys.js";
 
 /**
  * A device as the API returns it: never the key hash (not reversible, but
@@ -56,18 +56,25 @@ export const getSimulation = asyncHandler(async (req: Request, res: Response) =>
   res.json(row);
 });
 
-/** Real-time IoT ingestion — persisted for time-series analysis and pushed to the digital-twin worker. */
+/**
+ * Signed-in ingest. Same device key as POST /digital-twin/device-ingest.
+ * The key decides which device is written. A body device id that does not match is refused.
+ * This does not create a device.
+ */
 export const ingestIot = asyncHandler(async (req: Request, res: Response) => {
   const { deviceId, timestamp, data } = req.body;
+  const header = req.header("x-device-key");
+  const parsed = parseDeviceKey(header);
+  const [device] = parsed ? await req.db!.select().from(iotDevices).where(eq(iotDevices.id, parsed.deviceRowId)) : [];
+  if (!ingestDeviceAuthorized(device, header, deviceId)) {
+    throw AppError.unauthorized("Invalid device key");
+  }
 
-  await req.db!.insert(iotDevices).values({ deviceId, lastSeenAt: new Date() }).onConflictDoUpdate({
-    target: iotDevices.deviceId,
-    set: { lastSeenAt: new Date() },
-  });
+  await req.db!.update(iotDevices).set({ lastSeenAt: new Date() }).where(eq(iotDevices.id, device!.id));
 
   const [reading] = await req
     .db!.insert(iotData)
-    .values({ deviceId, timestamp: timestamp ?? new Date(), data })
+    .values({ deviceId: device!.deviceId, timestamp: timestamp ?? new Date(), data })
     .returning();
 
   await publishEvent(DIGITAL_TWIN_STREAM, { event: "iot_reading", deviceId, data });
@@ -81,9 +88,8 @@ export const listDevicesHandler = asyncHandler(async (req: Request, res: Respons
 });
 
 /**
- * Real device registration — distinct from ingestIot's upsert, which only
- * ever sets deviceId+lastSeenAt as a side effect of a reading arriving.
- * This is the one real path that ever sets name/type/digitalTwinModelId.
+ * Real device registration. Signed-in ingest does not create a device.
+ * This is the path that sets name, type, and the linked model.
  */
 export const registerDeviceHandler = asyncHandler(async (req: Request, res: Response) => {
   const { deviceId, name, type, digitalTwinModelId } = req.body as { deviceId: string; name?: string; type?: string; digitalTwinModelId?: number };

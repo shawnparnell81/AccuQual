@@ -209,11 +209,11 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
   const shownValues: DocumentPayload = editable ? values : { ...blankPayload(doc.title), ...(shown?.payload ?? {}) };
 
   async function retire() {
-    if (!confirm("Retire this document? It will be marked obsolete and can't be revised any more.")) return;
+    if (!confirm("Retire this document? It will be marked obsolete, filed in Obsolete / Archive, and locked so it can't be edited. An Owner or Administrator can restore it.")) return;
     try {
       await apiClient.post(`/documents/${documentId}/obsolete`);
       void queryClient.invalidateQueries({ queryKey: ["documents"] });
-      toast.success("Document retired.");
+      toast.success("Document retired and locked.");
     } catch (err) {
       toast.error(extractErrorMessage(err, "Couldn't retire this document."));
     }

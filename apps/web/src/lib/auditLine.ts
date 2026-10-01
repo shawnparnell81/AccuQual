@@ -172,6 +172,8 @@ function auditWhat(action: string, changes?: Record<string, unknown> | null): st
   if (action === "permission_denied") return "Change blocked";
   if (action === "decision") return "Decision recorded";
   const code = specificCode(record);
+  if (code === "login") return "Signed in";
+  if (code === "logout") return "Signed out";
   if (code && /publish/.test(code)) return "Published";
   if (code && /file_downloaded|download/.test(code)) return "Downloaded file";
   if (isAttachment(action, record, code)) return "Attached file";
@@ -233,6 +235,14 @@ function eventDetail(changes: Record<string, unknown> | null, code: string | nul
       const mode = stringField(changes, "failureMode");
       return mode ? `Added failure mode "${mode}".` : "Added a failure mode.";
     }
+    case "login": {
+      const method = stringField(changes, "method");
+      if (method === "mfa") return "Signed in with a password and an authenticator code.";
+      if (method === "trusted_device") return "Signed in with a password on a trusted browser.";
+      return "Signed in with a password.";
+    }
+    case "logout":
+      return "Signed out.";
     case "password_reset":
       return "Reset the password.";
     case "password_changed":

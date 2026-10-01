@@ -86,7 +86,7 @@ export const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
 };
 
 /** Account, sign-in, and permission history. Not a record another department opens. */
-export const ACCOUNT_ENTITY_TYPES = new Set(["Company", "User", "DepartmentPermission", "PermissionRole", "UserPermissionRole"]);
+export const ACCOUNT_ENTITY_TYPES = new Set(["Company", "User", "DepartmentPermission", "PermissionRole", "UserPermissionRole", "SignIn"]);
 
 type Viewer = { id: number; roleName: string | null; department: string | null };
 

@@ -101,13 +101,25 @@ describe("Controlled documents: draft -> review -> publish (real DB + real HTTP 
       await db.delete(auditRowChanges);
       await db.delete(auditTrail);
       await db.delete(notificationLog);
-      await db.delete(documentFiles);
-      await db.delete(documentVersions);
-      await db.delete(documents);
-      // Published versions are frozen by a trigger; this is a test-database teardown, so lift it for the cleanup only.
+      // Retire locks a document in Obsolete / Archive. These triggers are what keep that lock.
+      // Lift them only for this test-database teardown, then turn them back on.
+      await pool.query("ALTER TABLE document_files DISABLE TRIGGER archived_document_files_readonly");
+      await pool.query("ALTER TABLE document_versions DISABLE TRIGGER archived_document_ledger_readonly");
+      await pool.query("ALTER TABLE documents DISABLE TRIGGER documents_archive_readonly");
+      await pool.query("ALTER TABLE controlled_versions DISABLE TRIGGER archived_document_versions_readonly");
       await pool.query("ALTER TABLE controlled_versions DISABLE TRIGGER controlled_versions_freeze");
-      await db.delete(controlledVersions);
-      await pool.query("ALTER TABLE controlled_versions ENABLE TRIGGER controlled_versions_freeze");
+      try {
+        await db.delete(documentFiles);
+        await db.delete(documentVersions);
+        await db.delete(documents);
+        await db.delete(controlledVersions);
+      } finally {
+        await pool.query("ALTER TABLE document_files ENABLE TRIGGER archived_document_files_readonly");
+        await pool.query("ALTER TABLE document_versions ENABLE TRIGGER archived_document_ledger_readonly");
+        await pool.query("ALTER TABLE documents ENABLE TRIGGER documents_archive_readonly");
+        await pool.query("ALTER TABLE controlled_versions ENABLE TRIGGER archived_document_versions_readonly");
+        await pool.query("ALTER TABLE controlled_versions ENABLE TRIGGER controlled_versions_freeze");
+      }
       await db.delete(equipment);
       await db.delete(suppliers);
       await db.delete(departmentPermissions);

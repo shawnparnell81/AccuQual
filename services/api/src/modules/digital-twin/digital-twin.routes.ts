@@ -37,4 +37,5 @@ digitalTwinRouter.delete("/devices/:id/api-key", requireRole("admin"), revokeDev
 // Drift alerts the worker recorded — viewing stays open to the whole company, like every other GET here.
 digitalTwinRouter.get("/alerts", listAlertsHandler);
 
+// Same device key as /digital-twin/device-ingest. A signed-in user without that key cannot invent a device or a reading.
 digitalTwinRouter.post("/iot-ingest", validate(iotIngestSchema), ingestIot);

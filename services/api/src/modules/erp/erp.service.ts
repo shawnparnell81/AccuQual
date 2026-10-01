@@ -9,7 +9,9 @@ import {
   type ErpPurchaseOrder,
   type ErpPurchaseRequisition,
 } from "../../drizzle/schema/erp.js";
+import { suppliers } from "../../drizzle/schema/supplier.js";
 import { AppError } from "../../utils/appError.js";
+import { supplierOrderBlockMessage } from "./supplierOrder.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { applyMovement } from "../inventory/inventory.service.js";
 import { receiveIntoLot } from "../inventory/inventoryLots.service.js";
@@ -22,6 +24,14 @@ export interface LineItemInput {
   notes?: string;
 }
 
+/** Disqualified and suspended suppliers cannot be ordered from or received against. Active and probation suppliers are unchanged. */
+export async function assertSupplierOrderable(db: Db, supplierId: number): Promise<void> {
+  const [supplier] = await db.select({ id: suppliers.id, status: suppliers.status }).from(suppliers).where(eq(suppliers.id, supplierId));
+  if (!supplier) throw AppError.badRequest("Supplier not found");
+  const blocked = supplierOrderBlockMessage(supplier.status);
+  if (blocked) throw AppError.badRequest(blocked);
+}
+
 /** Every request here already runs inside one Postgres transaction (see requestDb.ts's withDb) — no separate db.transaction() needed for these multi-insert operations to be atomic. */
 export async function createPurchaseOrder(
   db: Db,
@@ -31,6 +41,7 @@ export async function createPurchaseOrder(
   createdBy: number | undefined,
   expectedDeliveryDate?: string
 ) {
+  await assertSupplierOrderable(db, supplierId);
   const [po] = await db
     .insert(erpPurchaseOrders)
     .values({ supplierId, notes, createdBy, status: "draft", expectedDeliveryDate: expectedDeliveryDate ? new Date(expectedDeliveryDate) : undefined })
@@ -74,6 +85,7 @@ export async function getReceivedQuantities(db: Db, poLineItemIds: number[]): Pr
 
 export async function sendPurchaseOrder(db: Db, po: ErpPurchaseOrder, performedBy: number | undefined) {
   if (po.status !== "draft") throw AppError.badRequest(`Cannot send — purchase order is "${po.status}", not "draft"`);
+  await assertSupplierOrderable(db, po.supplierId);
   const lineItems = await getLineItems(db, po.id);
   if (lineItems.length === 0) throw AppError.badRequest("Cannot send a purchase order with no line items");
 
@@ -122,6 +134,7 @@ export async function createReceivingDocument(
   if (po.status !== "sent" && po.status !== "partially_received") {
     throw AppError.badRequest(`Cannot receive against a purchase order that is "${po.status}"`);
   }
+  await assertSupplierOrderable(db, po.supplierId);
 
   const poLineItems = await getLineItems(db, po.id);
   const poLineItemById = new Map(poLineItems.map((li) => [li.id, li]));

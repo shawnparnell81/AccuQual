@@ -8,6 +8,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import {
   createPurchaseOrder,
+  assertSupplierOrderable,
   replaceLineItems,
   getLineItems,
   getReceivedQuantities,
@@ -111,6 +112,7 @@ export const updatePurchaseOrderHandler = asyncHandler(async (req: Request, res:
   if (supplierId !== undefined && po.status !== "draft") {
     throw AppError.badRequest(`Cannot change supplier — purchase order is "${po.status}", not "draft"`);
   }
+  if (supplierId !== undefined) await assertSupplierOrderable(req.db!, supplierId);
 
   const [updated] = await req.db!
     .update(erpPurchaseOrders)

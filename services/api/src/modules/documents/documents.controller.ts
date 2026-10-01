@@ -13,7 +13,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import * as engine from "../versioning/versioning.service.js";
 import { blankDocumentPayload } from "./documentPayload.js";
 import { documentAdapter, isInsideStorage } from "./documentVersioning.js";
-import { ARCHIVED_READ_ONLY, isInObsoleteArchive, OBSOLETE_ARCHIVE_CATEGORY } from "./obsoleteArchive.js";
+import { ARCHIVED_READ_ONLY, folderBeforeArchive, isInObsoleteArchive, OBSOLETE_ARCHIVE_CATEGORY, retiredDocumentWrite } from "./obsoleteArchive.js";
 import { roleCanRestoreArchivedDocuments } from "../roles/roleAccess.js";
 import { sendStoredFile } from "../../utils/storedFile.js";
 
@@ -79,14 +79,19 @@ export const obsoleteHandler = asyncHandler(async (req: Request, res: Response) 
   const pending = open ?? inReview;
   if (pending) throw new AppError(`Version ${pending.n} of this document is still being worked on. Discard it or finish it before retiring the document.`, 409);
 
-  // Same M3 defense-in-depth fix as approveHandler above.
-  const [updated] = await req.db!.update(documents).set({ status: "obsolete", updatedAt: new Date() }).where(and(eq(documents.id, documentId))).returning();
+  // Same lock as Move to Obsolete / Archive: this document only, status obsolete and the archive folder.
+  const retired = retiredDocumentWrite(doc);
+  const [updated] = await req
+    .db!.update(documents)
+    .set({ category: retired.category, status: retired.status, updatedAt: new Date() })
+    .where(and(eq(documents.id, documentId)))
+    .returning();
 
   await recordAuditTrail(req.db!, {
     entityType: "Document",
     entityId: documentId,
     action: "status_change",
-    changes: { action: "obsolete", status: "obsolete" },
+    changes: retired.changes,
     performedBy: req.user?.id,
   });
   await publishEvent(WORKFLOW_STREAM, { module: "documents", event: "obsolete", entityId: documentId });
@@ -157,10 +162,7 @@ export const restoreArchivedDocumentHandler = asyncHandler(async (req: Request, 
   if (!isInObsoleteArchive(doc)) throw AppError.badRequest("This document is not in Obsolete / Archive.");
 
   const history = await req.db!.select().from(auditTrail).where(and(eq(auditTrail.entityType, "Document"), eq(auditTrail.entityId, documentId)));
-  const move = [...history].reverse().find((row) => (row.changes as { action?: string } | null)?.action === "moved_to_obsolete");
-  const changes = (move?.changes ?? {}) as { fromCategory?: unknown; fromStatus?: unknown };
-  const fromCategory = typeof changes.fromCategory === "string" && changes.fromCategory !== OBSOLETE_ARCHIVE_CATEGORY ? changes.fromCategory : null;
-  const fromStatus = typeof changes.fromStatus === "string" && changes.fromStatus !== "obsolete" ? changes.fromStatus : "draft";
+  const { fromCategory, fromStatus } = folderBeforeArchive(history);
 
   // The database trigger rejects every other update of an archived row. This setting is local to the request transaction.
   await req.db!.execute(sql`SELECT set_config('accuqual.restore_document', ${String(documentId)}, true)`);

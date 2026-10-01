@@ -226,6 +226,25 @@ test("a form save names the fields that were sent, without the internal source f
   assert.equal(line.description, "Changed description and severity.");
 });
 
+test("a sign-in row names the method and does not show the address or browser hash", () => {
+  const line = formatAuditLine({
+    action: "status_change",
+    performedByName: "Pat Kim",
+    changes: {
+      action: "login",
+      method: "password",
+      ipHash: "abc123secretaddress",
+      userAgentHash: "browserhashvalue",
+    },
+  });
+
+  assert.equal(line.who, "Pat Kim");
+  assert.equal(line.what, "Signed in");
+  assert.match(line.description, /Signed in with a password/);
+  assert.doesNotMatch(line.description, /abc123secretaddress/);
+  assert.doesNotMatch(line.description, /browserhashvalue/);
+});
+
 test("a moved hold names the locations instead of calling them a status", () => {
   const line = formatAuditLine({
     action: "update",
