@@ -24,6 +24,40 @@ export function documentsFolderHref(folderId: number): string {
   return `/documents/folders?folder=${folderId}`;
 }
 
+/** The only content root in Documents. Departments are children of this folder. */
+export const ISO_DOCUMENTS_FOLDER = "ISO Compliance Documents";
+
+const LIBRARY_POOL_NAME = "Library Pool";
+
+/** ISO Compliance Documents when it is a real root. */
+export function contentRoot<T extends BrowseFolder>(folders: T[]): T | undefined {
+  return folders.find((folder) => folder.parentId == null && folder.name === ISO_DOCUMENTS_FOLDER);
+}
+
+/**
+ * Left-hand department list. Children of ISO stay on the list.
+ * Library Pool is the remove-shelf, not a department.
+ * A department that is still a true root (before the layout migration) stays on the list too.
+ */
+export function leftHandFolders<T extends BrowseFolder>(folders: T[]): T[] {
+  const iso = contentRoot(folders);
+  const nested = iso ? folders.filter((folder) => folder.parentId === iso.id && folder.name !== BLANK_FORM_TEMPLATES_FOLDER) : [];
+  const stray = folders.filter((folder) => folder.parentId == null && folder.id !== iso?.id && folder.name !== LIBRARY_POOL_NAME);
+  return [...nested, ...stray].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+}
+
+/** Department to highlight when a folder deep link opens. ISO's child wins over the ISO root itself. */
+export function departmentForFolder<T extends BrowseFolder>(folders: T[], folderId: number): T | undefined {
+  const iso = contentRoot(folders);
+  const chain = folderChain(folders, folderId);
+  if (iso) {
+    const underIso = chain.find((folder) => folder.parentId === iso.id);
+    if (underIso) return underIso;
+    if (chain[0]?.id === iso.id) return iso;
+  }
+  return chain[0];
+}
+
 /** Root-first chain for breadcrumbs. Stops if the tree loops. */
 export function folderChain<T extends BrowseFolder>(folders: T[], folderId: number): T[] {
   const byId = new Map(folders.map((folder) => [folder.id, folder]));

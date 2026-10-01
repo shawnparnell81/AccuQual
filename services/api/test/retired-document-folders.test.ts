@@ -64,4 +64,26 @@ describe("document folders the library is allowed to show", () => {
     expect(names).not.toContain("Production Planning");
     expect(names).toContain("Library Pool");
   });
+
+  it("treats departments under ISO Compliance Documents the same way it treats roots", () => {
+    const nested = presentDocumentFolders([
+      { id: 1, parentId: null, name: "ISO Compliance Documents" },
+      { id: 2, parentId: 1, name: "Production" },
+      { id: 3, parentId: 2, name: "Production Planning" },
+      { id: 4, parentId: 1, name: "Training" },
+      { id: 5, parentId: 4, name: "Operator Training Records" },
+      { id: 6, parentId: 1, name: "Customer Service" },
+      { id: 7, parentId: 6, name: "Customer Accounts" },
+      { id: 8, parentId: null, name: "Library Pool" },
+    ]);
+    const nestedNames = nested.map((folder) => folder.name);
+    expect(nestedNames).toContain("ISO Compliance Documents");
+    expect(nestedNames).toContain("Production");
+    expect(nestedNames).toContain("Training");
+    expect(nestedNames).toContain("Operator Training Records");
+    expect(nestedNames).not.toContain("Production Planning");
+    expect(nestedNames).not.toContain("Customer Service");
+    expect(nestedNames).not.toContain("Customer Accounts");
+    expect(nestedNames).toContain("Library Pool");
+  });
 });

@@ -659,6 +659,13 @@
       "when": 1792105200000,
       "tag": "0093_user_sidebar_shortcuts",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1792191600000,
+      "tag": "0094_iso_compliance_folder_tree",
+      "breakpoints": true
     }
   ]
 }

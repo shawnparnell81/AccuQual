@@ -1,11 +1,9 @@
 import { ensureTestCompany } from "../helpers/company.js";
 import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { and, eq, isNull } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db } from "../../src/db/index.js";
 import { users } from "../../src/drizzle/schema/users.js";
-import { documentFolders } from "../../src/drizzle/schema/documentFolders.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 import { filedRecordName } from "../../src/modules/document-folders/formFiling.js";
@@ -24,8 +22,6 @@ describe("ISO Compliance Documents form templates", () => {
       .values({ email: `form-templates-${suffix}@test.local`, passwordHash: "unused" })
       .returning();
     token = signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department: "quality" });
-    const [quality] = await db.select().from(documentFolders).where(and(isNull(documentFolders.parentId), eq(documentFolders.name, "Quality")));
-    if (!quality) await db.insert(documentFolders).values({ name: "Quality", sortOrder: 0 });
   });
 
   it("files each blank template once under Blank Form Templates and names a filled record from the pattern", async () => {
