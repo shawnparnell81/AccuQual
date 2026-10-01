@@ -20,6 +20,7 @@ export type StatusBucket = "muted" | "info" | "warning" | "success" | "destructi
 /** Exported so cross-module views (the workflow dashboards' state distribution chart) bucket a status exactly the same way this badge colors it, instead of a second mapping that could drift out of sync. */
 export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   draft: "muted",
+  planned: "muted",
   scheduled: "muted",
   submitted: "muted",
   low: "muted",
@@ -30,6 +31,11 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   contained: "info",
   investigating: "info",
   in_progress: "info",
+  request: "info",
+  review: "info",
+  implement: "info",
+  tested: "info",
+  monitoring: "info",
   under_review: "info",
   in_review: "info",
   verifying: "info",
@@ -37,6 +43,7 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   disposed: "info", // DI: awaiting close, one step past investigating
 
   open: "warning",
+  mitigation: "warning",
   medium: "warning",
   high: "warning",
   minor: "warning", // Audit finding severity — same weight as NCR's "medium"
