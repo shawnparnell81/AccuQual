@@ -157,12 +157,12 @@ export const SUGGESTED_SUBJECT_PATH: Record<string, string[]> = {
   "frm-dev-013": ["Engineering", "Shocks", "Development"],
   "frm-ecr-001": ["Engineering", "Engineering Change Control", "Engineering Change Requests (ECR)"],
   "frm-car-001": ["Quality", "Corrective & Preventive Actions"],
-  "frm-ncr-001": ["Quality", "Records", "NCR Records"],
-  "frm-ncr-002": ["Quality", "Nonconformance Management", "Quarantine Material"],
-  "frm-ncr-003": ["Quality", "Nonconformance Management", "Deviation / Waiver Requests"],
-  "frm-gen-001": ["Quality", "Audits", "Internal Audit Reports"],
-  "frm-trn-001": ["Quality", "Training & Competency", "Training Records"],
-  "frm-trn-002": ["Quality", "Training & Competency", "Competency Assessments"],
+  "frm-ncr-001": ["NCR"],
+  "frm-ncr-002": ["NCR"],
+  "frm-ncr-003": ["NCR"],
+  "frm-gen-001": ["Quality", "Audits"],
+  "frm-trn-001": ["Quality", "Training"],
+  "frm-trn-002": ["Quality", "Training"],
 };
 
 export type ValidationKind =

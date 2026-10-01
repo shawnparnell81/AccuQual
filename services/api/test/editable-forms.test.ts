@@ -120,7 +120,9 @@ describe("new blank forms", () => {
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-ncr-003")?.title).toBe("CONCESSION / DEVIATION REQUEST");
     expect(recordLinkedPath("frm-ncr-001", 4)).toBe("/iso-forms/record/4");
     expect(recordLinkedPath("frm-tst-001", 19)).toBe("/iso-forms/record/19");
-    expect(SUGGESTED_SUBJECT_PATH["frm-ncr-001"]).toEqual(["Quality", "Records", "NCR Records"]);
+    expect(SUGGESTED_SUBJECT_PATH["frm-ncr-001"]).toEqual(["NCR"]);
+    expect(SUGGESTED_SUBJECT_PATH["frm-gen-001"]).toEqual(["Quality", "Audits"]);
+    expect(SUGGESTED_SUBJECT_PATH["frm-trn-001"]).toEqual(["Quality", "Training"]);
     expect(FILEABLE_FORM_KEYS.has("frm-trp-002")).toBe(true);
     expect(FORM_TEMPLATES.find((form) => form.formKey === "lst-vis-001")?.title).toBe("DMA Laboratory Visitor Log");
     expect(FORM_TEMPLATES.find((form) => form.formKey === "rpt-eng-001")?.title).toBe("MONTHLY ENGINEERING DEVELOPMENT REPORT");

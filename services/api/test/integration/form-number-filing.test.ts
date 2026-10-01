@@ -140,7 +140,7 @@ describe("editable form numbers and folder filing", () => {
     expect(ncrFiling.status).toBe(200);
     expect(ncrFiling.body.snapshotted).toBe(true);
     expect(ncrFiling.body.formNumber).toBe(masterId("frm-ncr-001"));
-    expect(ncrFiling.body.suggestedPath).toEqual(["Quality", "Records", "NCR Records"]);
+    expect(ncrFiling.body.suggestedPath).toEqual(["NCR"]);
 
     const stillFiled = [
       ["quality_alert", "frm-qa-001"],
@@ -164,19 +164,17 @@ describe("editable form numbers and folder filing", () => {
 
     const tree = await request(app).get("/document-folders").set("Authorization", `Bearer ${qualityToken}`);
     const folders = tree.body as { id: number; name: string; parentId: number | null }[];
-    const quality = folders.find((folder) => folder.parentId === null && folder.name === "Quality");
-    const records = folders.find((folder) => folder.parentId === quality?.id && folder.name === "Records");
-    const ncrRecords = folders.find((folder) => folder.parentId === records?.id && folder.name === "NCR Records");
-    expect(ncrRecords?.id).toBeTruthy();
+    const ncrFolder = folders.find((folder) => folder.parentId === null && folder.name === "NCR");
+    expect(ncrFolder?.id).toBeTruthy();
 
-    const filed = await request(app).post("/document-folders/form-filings").set("Authorization", `Bearer ${qualityToken}`).send({ formKey: "frm-ncr-001", recordId: ncr.body.id, folderId: ncrRecords!.id });
+    const filed = await request(app).post("/document-folders/form-filings").set("Authorization", `Bearer ${qualityToken}`).send({ formKey: "frm-ncr-001", recordId: ncr.body.id, folderId: ncrFolder!.id });
     expect(filed.status).toBe(201);
-    expect(filed.body.parentId).toBe(ncrRecords!.id);
+    expect(filed.body.parentId).toBe(ncrFolder!.id);
     expect(filed.body.formNumber).toBe(masterId("frm-ncr-001"));
 
     const after = await request(app).get("/document-folders").set("Authorization", `Bearer ${qualityToken}`);
     const saved = (after.body as { name: string; parentId: number | null; linkedPath?: string | null }[]).find((folder) => folder.linkedPath === `/iso-forms/record/${ncr.body.id}`);
-    expect(saved?.parentId).toBe(ncrRecords!.id);
+    expect(saved?.parentId).toBe(ncrFolder!.id);
     expect(saved?.name).toBe(filed.body.fileName);
 
     const history = await request(app).get(`/workflow/history/iso_forms/${ncr.body.id}`).set("Authorization", `Bearer ${managerToken}`);
