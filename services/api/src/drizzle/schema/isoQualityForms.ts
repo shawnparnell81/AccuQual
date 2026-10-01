@@ -61,6 +61,13 @@ export const isoQualityForms = pgTable("iso_quality_forms", {
       engineeringSignoffSignature?: string;
       managerSignature?: string;
       supplierRepSignature?: string;
+      workflow?: {
+        status: string;
+        engineeringReview: { at: string; by: string } | null;
+        qualityReview: { at: string; by: string } | null;
+      };
+      templateLabels?: Record<string, string>;
+      _formTemplate?: { version: number; revision: string; structureHash: string };
     }>()
     .default({}),
   createdAt: timestamp("created_at").defaultNow(),

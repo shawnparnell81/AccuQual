@@ -190,6 +190,18 @@ export const company = pgTable("company", {
     contactName?: string;
     contactEmail?: string;
     contactPhone?: string;
+    /**
+     * Engineering change request master (labels and revision). Written only by
+     * the ECR structure endpoints. Company Settings spreads this object, so a
+     * profile save keeps it. No separate table.
+     */
+    ecrTemplate?: {
+      version: number;
+      revision: string;
+      structureHash: string;
+      labels: Record<string, string>;
+      lastChange?: { who: string; what: string; when: string; description: string } | null;
+    };
   }>().default({}),
   // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for the company's first admin.
   // `dismissed: true` for every company that existed before this shipped (backfillOnboardingChecklist.ts) — an

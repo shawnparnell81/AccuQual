@@ -13,10 +13,26 @@ interface Batch6SheetProps {
   managerSignature?: string;
   supplierSignature?: string;
   onSign?: (field: string, pin: string) => Promise<unknown>;
+  labels?: Record<string, string>;
+  revision?: string;
+  workflowStatus?: string;
+  cellLocked?: (addr: string) => boolean;
+  managerLocked?: boolean;
+  supplierLocked?: boolean;
 }
 
 function text(value: CellValue | undefined): string {
   return value === undefined || value === null || typeof value === "boolean" ? "" : String(value);
+}
+
+function locked(props: SheetProps, addr: string): boolean {
+  if (props.cellLocked) return props.cellLocked(addr);
+  return props.readOnly === true;
+}
+
+function labelOf(props: SheetProps, key: string, fallback: string): string {
+  const value = props.labels?.[key];
+  return value && value.trim() ? value : fallback;
 }
 
 function parseNumber(raw: string): CellValue {
@@ -30,12 +46,13 @@ type SheetProps = Batch6SheetProps & { calculated: Record<string, CellValue>; co
 
 function Field(props: SheetProps & { addr: string; kind?: "text" | "number" | "date" | "area" | "yesno" }) {
   const value = text(props.cells[props.addr]);
+  const disabled = locked(props, props.addr);
   if (props.kind === "area") {
-    return <textarea aria-label={props.addr} value={value} disabled={props.readOnly} onChange={(event) => props.onChange(props.addr, event.target.value)} />;
+    return <textarea aria-label={props.addr} value={value} disabled={disabled} onChange={(event) => props.onChange(props.addr, event.target.value)} />;
   }
   if (props.kind === "yesno") {
     return (
-      <select aria-label={props.addr} value={value} disabled={props.readOnly} onChange={(event) => props.onChange(props.addr, event.target.value)}>
+      <select aria-label={props.addr} value={value} disabled={disabled} onChange={(event) => props.onChange(props.addr, event.target.value)}>
         {["", "YES", "NO"].map((option) => (
           <option key={option || "blank"} value={option}>
             {option || "—"}
@@ -49,7 +66,7 @@ function Field(props: SheetProps & { addr: string; kind?: "text" | "number" | "d
       aria-label={props.addr}
       type={props.kind === "date" ? "date" : "text"}
       value={value}
-      disabled={props.readOnly}
+      disabled={disabled}
       onChange={(event) => props.onChange(props.addr, props.kind === "number" ? parseNumber(event.target.value) : event.target.value)}
     />
   );
@@ -62,7 +79,7 @@ function Check(props: SheetProps & { addr: string; label: string }) {
         aria-label={props.addr}
         type="checkbox"
         checked={props.cells[props.addr] === true}
-        disabled={props.readOnly}
+        disabled={locked(props, props.addr)}
         onChange={(event) => props.onChange(props.addr, event.target.checked)}
       />
       {props.label}
@@ -113,7 +130,7 @@ export function Batch6Sheet(props: Batch6SheetProps) {
           {props.variant === "engineering_change" ? (
             <tr>
               <td>{doc}</td>
-              <td>Rev: A</td>
+              <td>{`Rev: ${props.revision?.trim() || "B"}`}</td>
               <td colSpan={2}>Location: ISO Compliance Documents / Blank Form Templates</td>
               <td colSpan={2}>
                 Approved By: <Field {...shared} addr="F2" />
@@ -472,119 +489,126 @@ function ShockDev(props: SheetProps) {
 }
 
 function ChangeRequest(props: SheetProps) {
+  const line = (key: string, fallback: string) => labelOf(props, key, fallback);
   return (
     <>
-      <Section cols={props.cols}>SECTION 1: IDENTIFICATION</Section>
+      {props.workflowStatus ? (
+        <tr>
+          <td>{line("workflowStatus", "Workflow Status:")}</td>
+          <td colSpan={5}>{props.workflowStatus}</td>
+        </tr>
+      ) : null}
+      <Section cols={props.cols}>{line("section1", "SECTION 1: IDENTIFICATION")}</Section>
       <tr>
-        <td>Date of Request:</td>
+        <td>{line("dateOfRequest", "Date of Request:")}</td>
         <td>
           <Field {...props} addr="B5" kind="date" />
         </td>
-        <td>Requested By:</td>
+        <td>{line("requestedBy", "Requested By:")}</td>
         <td colSpan={3}>
           <Field {...props} addr="D5" />
         </td>
       </tr>
       <tr>
-        <td>Part Number(s) Affected:</td>
+        <td>{line("partNumbers", "Part Number(s) Affected:")}</td>
         <td>
           <Field {...props} addr="B6" />
         </td>
-        <td>Current Revision:</td>
+        <td>{line("currentRevision", "Current Revision:")}</td>
         <td colSpan={3}>
           <Field {...props} addr="D6" />
         </td>
       </tr>
       <tr>
-        <td>Job / Project:</td>
+        <td>{line("job", "Job / Project:")}</td>
         <td>
           <Field {...props} addr="B7" />
         </td>
-        <td>New Revision (Proposed):</td>
+        <td>{line("newRevision", "New Revision (Proposed):")}</td>
         <td colSpan={3}>
           <Field {...props} addr="D7" />
         </td>
       </tr>
-      <Section cols={props.cols}>SECTION 2: CHANGE DETAILS</Section>
+      <Section cols={props.cols}>{line("section2", "SECTION 2: CHANGE DETAILS")}</Section>
       <tr>
-        <td>Type of Change:</td>
+        <td>{line("changeType", "Type of Change:")}</td>
         <td>
-          <Check {...props} addr="B10" label="Supplier Request" />
+          <Check {...props} addr="B10" label={line("changeSupplier", "Supplier Request")} />
         </td>
         <td>
-          <Check {...props} addr="C10" label="Cost Reduction" />
+          <Check {...props} addr="C10" label={line("changeCost", "Cost Reduction")} />
         </td>
         <td>
-          <Check {...props} addr="D10" label="Quality Improvement" />
+          <Check {...props} addr="D10" label={line("changeQuality", "Quality Improvement")} />
         </td>
         <td colSpan={2}>
-          <Check {...props} addr="E10" label="Dimensional Correction" />
+          <Check {...props} addr="E10" label={line("changeDimensional", "Dimensional Correction")} />
         </td>
       </tr>
       <tr>
-        <td>Description of Change (Current vs. Proposed):</td>
+        <td>{line("description", "Description of Change (Current vs. Proposed):")}</td>
         <td colSpan={5}>
           <Field {...props} addr="B11" kind="area" />
         </td>
       </tr>
       <tr>
-        <td>Reason / Explanation:</td>
+        <td>{line("reason", "Reason / Explanation:")}</td>
         <td colSpan={5}>
           <Field {...props} addr="B12" kind="area" />
         </td>
       </tr>
       <tr>
-        <td>Drawing Update Required?</td>
+        <td>{line("drawingUpdate", "Drawing Update Required?")}</td>
         <td>
           <Field {...props} addr="B13" kind="yesno" />
         </td>
-        <td colSpan={4}>If YES attach draft drawing.</td>
+        <td colSpan={4}>{line("drawingNote", "If YES attach draft drawing.")}</td>
       </tr>
-      <Section cols={props.cols}>SECTION 3: ENGINEERING REVIEW & RISK</Section>
+      <Section cols={props.cols}>{line("section3", "SECTION 3: ENGINEERING REVIEW & RISK")}</Section>
       <tr>
-        <td>Does this affect Fit Form or Function?</td>
+        <td>{line("fitFormFunction", "Does this affect Fit Form or Function?")}</td>
         <td colSpan={5}>
           <Field {...props} addr="B16" kind="yesno" />
         </td>
       </tr>
       <tr>
-        <td>Is Validation Testing required?</td>
+        <td>{line("validationRequired", "Is Validation Testing required?")}</td>
         <td>
           <Field {...props} addr="B17" kind="yesno" />
         </td>
         <td colSpan={4}>
-          If YES describe test plan: <Field {...props} addr="C17" />
+          {line("testPlan", "If YES describe test plan:")} <Field {...props} addr="C17" />
         </td>
       </tr>
       <tr>
-        <td>QC Procedure to Prevent Mixing Parts:</td>
+        <td>{line("qcProcedure", "QC Procedure to Prevent Mixing Parts:")}</td>
         <td colSpan={5}>
           <Field {...props} addr="B18" kind="area" />
         </td>
       </tr>
       <tr>
-        <td>Planned Implementation Batch/Date:</td>
+        <td>{line("implementationPlan", "Planned Implementation Batch/Date:")}</td>
         <td colSpan={5}>
           <Field {...props} addr="B19" />
         </td>
       </tr>
-      <Section cols={props.cols}>SECTION 4: STOCK DISPOSITION (What about old parts?)</Section>
+      <Section cols={props.cols}>{line("section4", "SECTION 4: STOCK DISPOSITION (What about old parts?)")}</Section>
       <tr>
         <td />
-        <td>Use As-Is</td>
-        <td>Scrap</td>
-        <td>Rework</td>
-        <td colSpan={2}>Notes</td>
+        <td>{line("useAsIs", "Use As-Is")}</td>
+        <td>{line("scrap", "Scrap")}</td>
+        <td>{line("rework", "Rework")}</td>
+        <td colSpan={2}>{line("notes", "Notes")}</td>
       </tr>
       {(
         [
-          ["Raw Material:", 22],
-          ["WIP (In Process):", 23],
-          ["Finished Goods:", 24],
+          ["rawMaterial", "Raw Material:", 22],
+          ["wip", "WIP (In Process):", 23],
+          ["finishedGoods", "Finished Goods:", 24],
         ] as const
-      ).map(([label, row]) => (
+      ).map(([key, fallback, row]) => (
         <tr key={row}>
-          <td>{label}</td>
+          <td>{line(key, fallback)}</td>
           <td>
             <Check {...props} addr={`B${row}`} label="" />
           </td>
@@ -599,50 +623,89 @@ function ChangeRequest(props: SheetProps) {
           </td>
         </tr>
       ))}
-      <Section cols={props.cols}>SECTION 5: AUTHORIZATION</Section>
+      <Section cols={props.cols}>{line("section7", "SECTION 7: LINKS, TRAINING, AND IMPACT")}</Section>
       <tr>
-        <td>DMA Engineering/Quality Manager:</td>
+        <td>{line("affectedDrawing", "Affected Drawing:")}</td>
+        <td colSpan={5}>
+          <Field {...props} addr="B33" />
+        </td>
+      </tr>
+      <tr>
+        <td>{line("affectedDocument", "Affected Document:")}</td>
+        <td colSpan={5}>
+          <Field {...props} addr="B34" />
+        </td>
+      </tr>
+      <tr>
+        <td>{line("affectedProcess", "Affected Process:")}</td>
+        <td colSpan={5}>
+          <Field {...props} addr="B35" />
+        </td>
+      </tr>
+      <tr>
+        <td>{line("trainingRequired", "Training Required?")}</td>
+        <td>
+          <Field {...props} addr="B36" kind="yesno" />
+        </td>
+        <td>{line("trainingReference", "Training Reference:")}</td>
+        <td colSpan={3}>
+          <Field {...props} addr="D36" />
+        </td>
+      </tr>
+      <tr>
+        <td>{line("customerNotice", "Customer Notification Required?")}</td>
+        <td>
+          <Field {...props} addr="B37" kind="yesno" />
+        </td>
+        <td>{line("ppapImpact", "PPAP or Validation Impact?")}</td>
+        <td colSpan={3}>
+          <Field {...props} addr="D37" kind="yesno" />
+        </td>
+      </tr>
+      <Section cols={props.cols}>{line("section5", "SECTION 5: AUTHORIZATION")}</Section>
+      <tr>
+        <td>{line("managerSign", "DMA Engineering/Quality Manager:")}</td>
         <td colSpan={3}>
           <SignatureStamp
             value={props.managerSignature ?? ""}
             certify="I certify that I approve this engineering change request."
-            disabled={props.readOnly || !props.onSign}
+            disabled={(props.managerLocked ?? props.readOnly) || !props.onSign}
             variant="sheet"
             onSign={async (pin) => props.onSign?.("managerSignature", pin)}
           />
         </td>
-        <td>Date:</td>
+        <td>{line("signDate", "Date:")}</td>
         <td>
           <Field {...props} addr="E27" kind="date" />
         </td>
       </tr>
       <tr>
-        <td>Supplier Representative (If Applicable):</td>
+        <td>{line("supplierSign", "Supplier Representative (If Applicable):")}</td>
         <td colSpan={3}>
           <SignatureStamp
             value={props.supplierSignature ?? ""}
             certify="I certify that I represent the supplier on this engineering change request."
-            disabled={props.readOnly || !props.onSign}
+            disabled={(props.supplierLocked ?? props.readOnly) || !props.onSign}
             variant="sheet"
             onSign={async (pin) => props.onSign?.("supplierRepSignature", pin)}
           />
         </td>
-        <td>Date:</td>
+        <td>{line("signDate", "Date:")}</td>
         <td>
           <Field {...props} addr="E28" kind="date" />
         </td>
       </tr>
-      <Section cols={props.cols}>SECTION 6: VERIFICATION OF IMPLEMENTATION</Section>
+      <Section cols={props.cols}>{line("section6", "SECTION 6: VERIFICATION OF IMPLEMENTATION")}</Section>
       <tr>
-        <td>Did the change occur successfully on the planned batch?</td>
+        <td>{line("implemented", "Did the change occur successfully on the planned batch?")}</td>
         <td>
           <Field {...props} addr="B31" kind="yesno" />
         </td>
-        <td>Verified By:</td>
+        <td>{line("verifiedBy", "Verified By:")}</td>
         <td>
           <Field {...props} addr="D31" />
         </td>
-        <td>Date:</td>
+        <td>{line("signDate", "Date:")}</td>
         <td>
           <Field {...props} addr="F31" kind="date" />
         </td>
