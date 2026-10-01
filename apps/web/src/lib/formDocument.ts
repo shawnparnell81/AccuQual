@@ -56,6 +56,12 @@ export const FILEABLE_FORM_KEYS = new Set<string>([
   "frm-dev-013",
   "frm-ecr-001",
   "frm-car-001",
+  "frm-ncr-001",
+  "frm-ncr-002",
+  "frm-ncr-003",
+  "frm-gen-001",
+  "frm-trn-001",
+  "frm-trn-002",
 ]);
 
 export const FORM_KEY_BY_TYPE: Record<string, string> = {
@@ -89,7 +95,19 @@ export const FORM_KEY_BY_TYPE: Record<string, string> = {
   dev_shock: "frm-dev-013",
   engineering_change: "frm-ecr-001",
   scar_request: "frm-car-001",
+  ncr_report: "frm-ncr-001",
+  quarantine_notice: "frm-ncr-002",
+  concession: "frm-ncr-003",
+  internal_audit: "frm-gen-001",
+  competency_training: "frm-trn-001",
+  cross_training: "frm-trn-002",
 };
+
+/** List-page line. A type that is not fileable must not claim it can go into Documents. */
+export function filledCopyFolderSentence(formKey: string): string {
+  if (FILEABLE_FORM_KEYS.has(formKey)) return "A filled copy can be saved into any Documents folder.";
+  return "A filled copy is stored on this form. It is not saved into a Documents folder.";
+}
 
 /** Print and sheet header. A blank number stays a revision with no document id. */
 export function sheetRevision(formNumber: string | undefined, rev = "A"): string {

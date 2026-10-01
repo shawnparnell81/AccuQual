@@ -127,4 +127,30 @@ describe("folder browse", () => {
     assert.equal(saveAsFolders(rows).some((folder) => folder.name === "NCR Form" || folder.name === "Blank Form Templates"), false);
     assert.equal(saveAsFolders(rows).some((folder) => folder.id === 3), true);
   });
+
+  it("shows a saved FRM NCR and keeps empty blanks out of Folder Explorer", () => {
+    const rows: BrowseFolder[] = [
+      { id: 1, name: "Quality", parentId: null, sortOrder: 0 },
+      { id: 2, name: "Records", parentId: 1, sortOrder: 0 },
+      { id: 3, name: "NCR Records", parentId: 2, sortOrder: 0 },
+      { id: 4, name: "FRM-NCR-001_4_2026-10-01", parentId: 3, sortOrder: 0, linkedPath: "/iso-forms/record/4" },
+      { id: 5, name: "FRM-VAL-001_9_2026-09-30", parentId: 2, sortOrder: 1, linkedPath: "/validation-reports/9" },
+      { id: 6, name: "Forms & Templates", parentId: 1, sortOrder: 1 },
+      { id: 7, name: "NCR Form", parentId: 6, sortOrder: 0, linkedPath: "/ncr" },
+      { id: 8, name: "8D Form", parentId: 6, sortOrder: 1, linkedPath: "/8d" },
+      { id: 10, name: "ISO Compliance Documents", parentId: null, sortOrder: 1 },
+      { id: 11, name: "Blank Form Templates", parentId: 10, sortOrder: 0 },
+      { id: 12, name: "Nonconformance", parentId: 11, sortOrder: 0 },
+    ];
+    const names = visibleExplorerFolders(rows).map((folder) => folder.name);
+    assert.equal(names.includes("FRM-NCR-001_4_2026-10-01"), true);
+    assert.equal(names.includes("FRM-VAL-001_9_2026-09-30"), true);
+    assert.equal(names.includes("NCR Form"), false);
+    assert.equal(names.includes("8D Form"), false);
+    assert.equal(names.includes("Blank Form Templates"), false);
+    assert.equal(names.includes("Nonconformance"), false);
+    const saved = listFolder(visibleExplorerFolders(rows), 3).files;
+    assert.equal(openTarget(saved[0]!), "/iso-forms/record/4");
+    assert.equal(openTarget(rows.find((folder) => folder.id === 5)!), "/validation-reports/9");
+  });
 });

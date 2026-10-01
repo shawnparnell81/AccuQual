@@ -156,7 +156,7 @@ export const runHandler = asyncHandler(async (req: Request, res: Response) => {
   }
 });
 
-const MODULE_ENTITY_TYPES: Record<string, string> = {
+export const MODULE_ENTITY_TYPES: Record<string, string> = {
   calibration: "Equipment",
   quarantine: "Quarantine",
   documents: "Document",
@@ -184,6 +184,7 @@ const MODULE_ENTITY_TYPES: Record<string, string> = {
   // means WorkflowHistoryPanel/GET /workflow/history/:moduleName/... now
   // works for them too, if anything ever wants it).
   eight_d: "8D Report",
+  iso_forms: "ISO form",
   warranty: "WarrantyClaim",
   crar: "Crar",
   rma_log: "RmaLog",

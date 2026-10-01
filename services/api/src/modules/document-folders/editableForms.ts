@@ -59,9 +59,15 @@ export const FILEABLE_FORM_KEYS = new Set<string>([
   "frm-dev-013",
   "frm-ecr-001",
   "frm-car-001",
+  "frm-ncr-001",
+  "frm-ncr-002",
+  "frm-ncr-003",
+  "frm-gen-001",
+  "frm-trn-001",
+  "frm-trn-002",
 ]);
 
-/** ISO form_type -> blank-template key. Only the six records stored on iso_quality_forms. */
+/** ISO form_type -> blank-template key for sheets stored on iso_quality_forms. */
 export const ISO_TYPE_TO_FORM_KEY: Record<string, string> = {
   psw: "frm-psw-001",
   turtle_diagram: "frm-prc-001",
@@ -91,6 +97,12 @@ export const ISO_TYPE_TO_FORM_KEY: Record<string, string> = {
   dev_shock: "frm-dev-013",
   engineering_change: "frm-ecr-001",
   scar_request: "frm-car-001",
+  ncr_report: "frm-ncr-001",
+  quarantine_notice: "frm-ncr-002",
+  concession: "frm-ncr-003",
+  internal_audit: "frm-gen-001",
+  competency_training: "frm-trn-001",
+  cross_training: "frm-trn-002",
 };
 
 export const FORM_DATA_TYPE_TO_FORM_KEY: Record<string, string> = {
@@ -145,6 +157,12 @@ export const SUGGESTED_SUBJECT_PATH: Record<string, string[]> = {
   "frm-dev-013": ["Engineering", "Shocks", "Development"],
   "frm-ecr-001": ["Engineering", "Engineering Change Control", "Engineering Change Requests (ECR)"],
   "frm-car-001": ["Quality", "Corrective & Preventive Actions"],
+  "frm-ncr-001": ["Quality", "Records", "NCR Records"],
+  "frm-ncr-002": ["Quality", "Nonconformance Management", "Quarantine Material"],
+  "frm-ncr-003": ["Quality", "Nonconformance Management", "Deviation / Waiver Requests"],
+  "frm-gen-001": ["Quality", "Audits", "Internal Audit Reports"],
+  "frm-trn-001": ["Quality", "Training & Competency", "Training Records"],
+  "frm-trn-002": ["Quality", "Training & Competency", "Competency Assessments"],
 };
 
 export type ValidationKind =

@@ -127,4 +127,63 @@ describe("editable form numbers and folder filing", () => {
     const numberAudit = await db.select().from(auditTrail).where(eq(auditTrail.entityType, "ControlledFormTemplate"));
     expect(numberAudit.some((row) => (row.changes as { event?: string; to?: string } | null)?.event === "form_number" && (row.changes as { to?: string }).to === "QA-99")).toBe(true);
   });
+
+  it("files an FRM NCR into a Documents folder and lets a quality manager read its history", async () => {
+    const templates = await request(app).get("/document-folders/form-templates").set("Authorization", `Bearer ${qualityToken}`);
+    expect(templates.status).toBe(200);
+    const masters = templates.body.templates as { formKey: string; formId: string }[];
+    const masterId = (formKey: string) => masters.find((form) => form.formKey === formKey)?.formId ?? "";
+
+    const ncr = await request(app).post("/iso-quality-forms").set("Authorization", `Bearer ${qualityToken}`).send({ formType: "ncr_report", data: { cells: { B8: "Cracked housing" } } });
+    expect(ncr.status).toBe(201);
+    const ncrFiling = await request(app).get(`/document-folders/form-filings?formKey=frm-ncr-001&recordId=${ncr.body.id}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(ncrFiling.status).toBe(200);
+    expect(ncrFiling.body.snapshotted).toBe(true);
+    expect(ncrFiling.body.formNumber).toBe(masterId("frm-ncr-001"));
+    expect(ncrFiling.body.suggestedPath).toEqual(["Quality", "Records", "NCR Records"]);
+
+    const stillFiled = [
+      ["quality_alert", "frm-qa-001"],
+      ["psw", "frm-psw-001"],
+      ["first_article", "frm-fai-001"],
+      ["quarantine_notice", "frm-ncr-002"],
+      ["concession", "frm-ncr-003"],
+    ] as const;
+    for (const [formType, formKey] of stillFiled) {
+      const created = await request(app).post("/iso-quality-forms").set("Authorization", `Bearer ${qualityToken}`).send({ formType, data: { cells: {} } });
+      expect(created.status).toBe(201);
+      const filing = await request(app).get(`/document-folders/form-filings?formKey=${formKey}&recordId=${created.body.id}`).set("Authorization", `Bearer ${qualityToken}`);
+      expect(filing.status).toBe(200);
+      expect(filing.body.snapshotted).toBe(true);
+      expect(filing.body.formNumber).toBe(masterId(formKey));
+    }
+
+    expect((await request(app).get("/document-folders/form-filings?formKey=ncr&recordId=1").set("Authorization", `Bearer ${qualityToken}`)).status).toBe(400);
+    expect((await request(app).get("/document-folders/form-filings?formKey=capa&recordId=1").set("Authorization", `Bearer ${qualityToken}`)).status).toBe(400);
+    expect((await request(app).get("/document-folders/form-filings?formKey=8d&recordId=1").set("Authorization", `Bearer ${qualityToken}`)).status).toBe(400);
+
+    const tree = await request(app).get("/document-folders").set("Authorization", `Bearer ${qualityToken}`);
+    const folders = tree.body as { id: number; name: string; parentId: number | null }[];
+    const quality = folders.find((folder) => folder.parentId === null && folder.name === "Quality");
+    const records = folders.find((folder) => folder.parentId === quality?.id && folder.name === "Records");
+    const ncrRecords = folders.find((folder) => folder.parentId === records?.id && folder.name === "NCR Records");
+    expect(ncrRecords?.id).toBeTruthy();
+
+    const filed = await request(app).post("/document-folders/form-filings").set("Authorization", `Bearer ${qualityToken}`).send({ formKey: "frm-ncr-001", recordId: ncr.body.id, folderId: ncrRecords!.id });
+    expect(filed.status).toBe(201);
+    expect(filed.body.parentId).toBe(ncrRecords!.id);
+    expect(filed.body.formNumber).toBe(masterId("frm-ncr-001"));
+
+    const after = await request(app).get("/document-folders").set("Authorization", `Bearer ${qualityToken}`);
+    const saved = (after.body as { name: string; parentId: number | null; linkedPath?: string | null }[]).find((folder) => folder.linkedPath === `/iso-forms/record/${ncr.body.id}`);
+    expect(saved?.parentId).toBe(ncrRecords!.id);
+    expect(saved?.name).toBe(filed.body.fileName);
+
+    const history = await request(app).get(`/workflow/history/iso_forms/${ncr.body.id}`).set("Authorization", `Bearer ${managerToken}`);
+    expect(history.status).toBe(200);
+    expect((history.body as { action: string }[]).some((row) => row.action === "create")).toBe(true);
+    const audit = await request(app).get(`/audit-trail/${encodeURIComponent("ISO form")}/${ncr.body.id}`).set("Authorization", `Bearer ${managerToken}`);
+    expect(audit.status).toBe(200);
+    expect(audit.body.length).toBeGreaterThan(0);
+  });
 });
