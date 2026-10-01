@@ -8,6 +8,7 @@ import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useOpenTab } from "../../hooks/useOpenTab";
 import { readRecentRecords, rememberRecord, type RecentRecord } from "../../lib/recentRecords";
 import { useDialogBehavior } from "../shared/useDialogBehavior";
+import { FRM_NCR_PATH } from "../../lib/qualityEntry";
 import { flattenSidebarLinks } from "./sidebarStructure";
 import { useArrangedSidebar } from "./sidebarOrganize";
 
@@ -54,7 +55,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   const items = useMemo(() => {
     const actions: PaletteItem[] = [
-      { id: "new-ncr", label: "New NCR", hint: "Action", run: () => navigate("/ncr?new=1") },
+      { id: "new-ncr", label: "New NCR", hint: "Action", run: () => navigate(FRM_NCR_PATH) },
       { id: "new-capa", label: "New CAPA", hint: "Action", run: () => navigate("/capa?new=1") },
       { id: "start-validation", label: "Start validation", hint: "Action", run: () => navigate("/workflow?template=validation") },
       { id: "upload-validation", label: "Upload to Validation Reports", hint: "Action", run: () => navigate("/folders/validation-reports") },

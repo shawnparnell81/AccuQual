@@ -9,6 +9,7 @@ import { ResetPasswordPage } from "./routes/Auth/ResetPasswordPage";
 import { ForcePasswordChangePage } from "./routes/Auth/ForcePasswordChangePage";
 import { SetSignaturePinPage } from "./routes/Auth/SetSignaturePinPage";
 import { homeKind } from "./lib/opsLanguage";
+import { FRM_NCR_PATH } from "./lib/qualityEntry";
 import { useCurrentUser, useAuthBootstrap } from "./hooks/useAuth";
 import {
   AdminAiSettingsPage,
@@ -150,8 +151,8 @@ export function App() {
           <Route path="/audits" element={<AuditsPage />} />
           <Route path="/audits/:id" element={<AuditDetailPage />} />
 
-          <Route path="/quality" element={<Navigate to="/ncr" replace />} />
-          <Route path="/quality/:id" element={<Navigate to="/ncr" replace />} />
+          <Route path="/quality" element={<Navigate to={FRM_NCR_PATH} replace />} />
+          <Route path="/quality/:id" element={<Navigate to={FRM_NCR_PATH} replace />} />
 
           <Route path="/folders/:category" element={<DocumentCategoryPage />} />
           <Route path="/documents" element={<DocumentsPage />} />
@@ -207,8 +208,8 @@ export function App() {
           <Route path="/calibration/:id" element={<EquipmentDetailPage />} />
           <Route path="/quarantine" element={<QuarantinePage />} />
           <Route path="/quarantine/:id" element={<QuarantineDetailPage />} />
-          <Route path="/complaints" element={<Navigate to="/ncr" replace />} />
-          <Route path="/complaints/:id" element={<Navigate to="/ncr" replace />} />
+          <Route path="/complaints" element={<Navigate to={FRM_NCR_PATH} replace />} />
+          <Route path="/complaints/:id" element={<Navigate to={FRM_NCR_PATH} replace />} />
           <Route path="/inventory/*" element={<RetiredModulePage name="Inventory" />} />
           <Route path="/erp/*" element={<RetiredModulePage name="ERP" />} />
           <Route path="/erp" element={<RetiredModulePage name="ERP" />} />
