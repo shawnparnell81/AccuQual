@@ -1,23 +1,8 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../../api/client";
+import { useFormTemplates, type FormTemplateCacheRow } from "../../api/formTemplatesQuery";
 import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
-
-interface FormStart {
-  createPath: string;
-  body: Record<string, unknown>;
-  openPath: string;
-}
-
-interface FormTemplateLink {
-  formKey: string;
-  formId: string;
-  title: string;
-  subjectRoute: string;
-  isoPath: string[];
-  start: FormStart | null;
-}
 
 /**
  * Lists the master blank templates. The same rows are on Blank Forms.
@@ -27,12 +12,9 @@ export function QmsFormsLibraryPage() {
   const navigate = useNavigate();
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
-  const templates = useQuery({
-    queryKey: ["form-templates"],
-    queryFn: async () => (await apiClient.get<{ templates: FormTemplateLink[] }>("/document-folders/form-templates")).data.templates,
-  });
+  const templates = useFormTemplates();
 
-  async function openForm(form: FormTemplateLink) {
+  async function openForm(form: FormTemplateCacheRow) {
     if (!form.start) {
       navigate(form.subjectRoute);
       return;
@@ -48,7 +30,7 @@ export function QmsFormsLibraryPage() {
     }
   }
 
-  const byTopic = new Map<string, FormTemplateLink[]>();
+  const byTopic = new Map<string, FormTemplateCacheRow[]>();
   for (const form of templates.data ?? []) {
     const topic = form.isoPath.at(-1) || "Blank Form Templates";
     byTopic.set(topic, [...(byTopic.get(topic) ?? []), form]);

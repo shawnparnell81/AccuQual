@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
-import { apiClient } from "../../api/client";
+import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { PictureText } from "../../components/forms/PictureText";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
@@ -259,11 +259,7 @@ function IsoFormDetailBody({
   const [saveNote, setSaveNote] = useState<SaveResultState>(null);
   const [pending, setPending] = useState(false);
   const filing = useFormFiling(formKey, record.id);
-  const templates = useQuery({
-    queryKey: ["form-templates"],
-    queryFn: async () => (await apiClient.get<{ templates: { formKey: string; formId: string }[] }>("/document-folders/form-templates")).data.templates,
-    enabled: !!formKey,
-  });
+  const templates = useFormTemplates({ enabled: !!formKey });
   const formType = record.formType;
   const liveFormId = templates.data?.find((item) => item.formKey === formKey)?.formId ?? "";
   const documentNumber = filing.data?.snapshotted ? filing.data.formNumber : liveFormId;

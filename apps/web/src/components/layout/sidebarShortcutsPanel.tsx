@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pin } from "lucide-react";
 import { apiClient } from "../../api/client";
+import { useFormTemplates } from "../../api/formTemplatesQuery";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import {
   EMPTY_SIDEBAR_SHORTCUTS,
@@ -15,14 +16,6 @@ import type { SidebarNode } from "./sidebarStructure";
 import { flattenSidebarLinks } from "./sidebarStructure";
 import { useToast } from "../shared/ToastProvider";
 import { Modal } from "../modals/Modal";
-
-interface FormTemplateLink {
-  formKey: string;
-  formId: string;
-  title: string;
-  subjectRoute: string;
-  start: { createPath: string } | null;
-}
 
 export function SidebarShortcutsButton({ catalog, placement = "sidebar" }: { catalog: SidebarNode[]; placement?: "sidebar" | "page" }) {
   const [open, setOpen] = useState(false);
@@ -45,11 +38,7 @@ export function SidebarShortcutsDialog({ catalog, open, onClose }: { catalog: Si
     queryKey: ["sidebar-shortcuts"],
     queryFn: async () => (await apiClient.get<SidebarShortcutPrefs>("/users/me/sidebar-shortcuts")).data,
   });
-  const templates = useQuery({
-    queryKey: ["form-templates"],
-    enabled: open,
-    queryFn: async () => (await apiClient.get<{ templates: FormTemplateLink[] }>("/document-folders/form-templates")).data.templates,
-  });
+  const templates = useFormTemplates({ enabled: open });
   const [hidden, setHidden] = useState<string[]>([]);
   const [pinned, setPinned] = useState<PinnedShortcut[]>([]);
   const [find, setFind] = useState("");

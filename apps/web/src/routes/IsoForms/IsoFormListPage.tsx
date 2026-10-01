@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "../../api/client";
+import { recordFileNamePattern, useFormTemplates } from "../../api/formTemplatesQuery";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { formatDate } from "../../lib/dates";
 import { auditSummaryStarter } from "../../lib/auditSummary";
@@ -31,12 +30,6 @@ const hooks = createResourceHooks<IsoQualityForm>("iso-quality-forms");
 function filedName(pattern: string, formId: string, recordNumber: number, createdAt?: string | null) {
   const date = (createdAt ?? "").slice(0, 10);
   return pattern.replaceAll("{formId}", formId).replaceAll("{recordNumber}", String(recordNumber)).replaceAll("{date}", date);
-}
-
-interface FilingTemplate {
-  formKey: string;
-  formId: string;
-  fileNamePattern: string;
 }
 
 function summary(formType: IsoFormType, data: IsoQualityForm["data"]): string {
@@ -70,14 +63,11 @@ export function IsoFormListPage() {
   const { effective } = useEffectivePermissions();
   const canEdit = user?.roleName === "admin" || user?.roleName === "owner" || effective?.documents === "edit";
   const { data: rows = [], isLoading, isError } = hooks.useList();
-  const filing = useQuery({
-    queryKey: ["form-templates"],
-    queryFn: async () => (await apiClient.get<{ fileNamePattern: string; templates: FilingTemplate[] }>("/document-folders/form-templates")).data,
-  });
+  const filing = useFormTemplates();
   const createForm = hooks.useCreate();
   const [pending, setPending] = useState(false);
-  const filedTemplate = filing.data?.templates?.find((item) => item.formKey === formKey);
-  const pattern = filedTemplate?.fileNamePattern ?? filing.data?.fileNamePattern ?? "{formId}_{recordNumber}_{date}";
+  const filedTemplate = filing.data?.find((item) => item.formKey === formKey);
+  const pattern = recordFileNamePattern(filedTemplate);
   const filingId = filedTemplate?.formId ?? meta?.formId ?? "";
   const liveFormId = filedTemplate?.formId ?? meta?.formId ?? "";
 
