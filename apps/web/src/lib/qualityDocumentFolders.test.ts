@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { DOCUMENT_FOLDER_PAGES, SIDEBAR_FOLDERS, flattenSidebarLinks, isFolder } from "../components/layout/sidebarStructure.ts";
+import { DOCUMENT_FOLDER_PAGES, ENGINEERING_PLANNER_URL, SIDEBAR_FOLDERS, flattenSidebarLinks, isFolder, pathMatches } from "../components/layout/sidebarStructure.ts";
 
 describe("Quality document folders", () => {
   it("adds Product Alerts and Recalls as upload folders, in order with the other Quality items", () => {
@@ -111,6 +111,12 @@ describe("Quality document folders", () => {
     for (const removed of ["FMEA", "ECN", "ECR", "Work Instructions", "Master Document List", "Master Equipment List", "Turtle Diagrams", "Cross-training evaluation"]) {
       assert.equal(engineeringLabels.includes(removed), false, removed);
     }
-    assert.deepEqual(engineeringLabels, ["Drawings", "APQP", "PPAP Packet", "Risk dashboard", "Process Change"]);
+    assert.deepEqual(engineeringLabels, ["Drawings", "APQP", "PPAP Packet", "Risk dashboard", "Process Change", "Engineering Planner"]);
+    const planner = engineering.children.find((child) => child.key === "engineering-planner");
+    assert.ok(planner && !isFolder(planner));
+    assert.equal(planner.external, true);
+    assert.equal(planner.path, ENGINEERING_PLANNER_URL);
+    assert.equal(pathMatches("/home", planner.path), false);
+    assert.equal(pathMatches("/engineering", planner.path), false);
   });
 });

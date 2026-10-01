@@ -5,6 +5,7 @@ import {
   BarChart3,
   Building2,
   CalendarDays,
+  CalendarRange,
   ClipboardCheck,
   ClipboardList,
   Cog,
@@ -39,6 +40,19 @@ export interface SidebarLink {
   adminOnly?: boolean;
   /** Owner, Administrator, and Quality Manager. */
   auditLog?: boolean;
+  /** Opens in a new browser tab. `path` is an absolute URL, not an AccuQual route. */
+  external?: boolean;
+}
+
+/** Workload tracker hosted outside AccuQual. A link-out only: no embed and no shared login. */
+export const ENGINEERING_PLANNER_URL = "https://mtollefson-rgb.github.io/Engineering-Planner/";
+
+export function isExternalHref(path: string): boolean {
+  return /^https?:\/\//i.test(path);
+}
+
+export function sidebarLinkOpensNewTab(link: Pick<SidebarLink, "external" | "path">): boolean {
+  return link.external === true || isExternalHref(link.path);
 }
 
 export interface SidebarFolder {
@@ -113,6 +127,7 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
       { key: "ppap", label: "PPAP Packet", path: "/ppap", icon: ClipboardList },
       { key: "risk-dashboard", label: "Risk dashboard", path: "/risk/dashboard", icon: BarChart3 },
       { key: "process-change", label: "Process Change", path: "/change", icon: GitBranch },
+      { key: "engineering-planner", label: "Engineering Planner", path: ENGINEERING_PLANNER_URL, icon: CalendarRange, external: true },
     ],
   },
   {
@@ -241,5 +256,6 @@ export function sidebarNodeContainsPath(node: SidebarNode, pathname: string): bo
 
 export function pathMatches(pathname: string, path: string): boolean {
   if (path === "/") return pathname === "/";
+  if (isExternalHref(path)) return false;
   return pathname === path || pathname.startsWith(`${path}/`);
 }
