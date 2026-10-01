@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canEditFormNumber, resolveFolderPath, folderPathNames, recordLinkedPath, FILEABLE_FORM_KEYS, SUGGESTED_SUBJECT_PATH, validationKind } from "../src/modules/document-folders/editableForms.js";
+import { canEditFormNumber, resolveFolderPath, folderPathNames, recordLinkedPath, FILEABLE_FORM_KEYS, ISO_TYPE_TO_FORM_KEY, SUGGESTED_SUBJECT_PATH, validationKind } from "../src/modules/document-folders/editableForms.js";
 import { FORM_TEMPLATES } from "../src/modules/document-folders/formFiling.js";
 
 describe("form number editors", () => {
@@ -49,7 +49,16 @@ describe("saved form open path", () => {
     expect(FILEABLE_FORM_KEYS.has("frm-val-011")).toBe(true);
     expect(FILEABLE_FORM_KEYS.has("lst-vis-001")).toBe(true);
     expect(FILEABLE_FORM_KEYS.has("rpt-eng-001")).toBe(true);
-    expect(FILEABLE_FORM_KEYS.has("frm-ncr-001")).toBe(false);
+    expect(FILEABLE_FORM_KEYS.has("frm-ncr-001")).toBe(true);
+    expect(FILEABLE_FORM_KEYS.has("frm-ncr-002")).toBe(true);
+    expect(FILEABLE_FORM_KEYS.has("frm-ncr-003")).toBe(true);
+    expect(FILEABLE_FORM_KEYS.has("frm-gen-001")).toBe(true);
+    expect(FILEABLE_FORM_KEYS.has("frm-trn-001")).toBe(true);
+    expect(FILEABLE_FORM_KEYS.has("frm-trn-002")).toBe(true);
+    expect(ISO_TYPE_TO_FORM_KEY.ncr_report).toBe("frm-ncr-001");
+    expect(ISO_TYPE_TO_FORM_KEY.quality_alert).toBe("frm-qa-001");
+    expect(ISO_TYPE_TO_FORM_KEY.psw).toBe("frm-psw-001");
+    expect(ISO_TYPE_TO_FORM_KEY.first_article).toBe("frm-fai-001");
     expect(FILEABLE_FORM_KEYS.has("ncr")).toBe(false);
     expect(FILEABLE_FORM_KEYS.has("capa")).toBe(false);
   });
@@ -109,7 +118,11 @@ describe("new blank forms", () => {
     expect(FILEABLE_FORM_KEYS.has("8d")).toBe(false);
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-car-001")?.title).toBe("SUPPLIER CORRECTIVE ACTION REQUEST (SCAR)");
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-ncr-003")?.title).toBe("CONCESSION / DEVIATION REQUEST");
+    expect(recordLinkedPath("frm-ncr-001", 4)).toBe("/iso-forms/record/4");
     expect(recordLinkedPath("frm-tst-001", 19)).toBe("/iso-forms/record/19");
+    expect(SUGGESTED_SUBJECT_PATH["frm-ncr-001"]).toEqual(["NCR"]);
+    expect(SUGGESTED_SUBJECT_PATH["frm-gen-001"]).toEqual(["Quality", "Audits"]);
+    expect(SUGGESTED_SUBJECT_PATH["frm-trn-001"]).toEqual(["Quality", "Training"]);
     expect(FILEABLE_FORM_KEYS.has("frm-trp-002")).toBe(true);
     expect(FORM_TEMPLATES.find((form) => form.formKey === "lst-vis-001")?.title).toBe("DMA Laboratory Visitor Log");
     expect(FORM_TEMPLATES.find((form) => form.formKey === "rpt-eng-001")?.title).toBe("MONTHLY ENGINEERING DEVELOPMENT REPORT");

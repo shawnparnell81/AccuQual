@@ -6,6 +6,7 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { PictureText } from "../../components/forms/PictureText";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
+import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { SaveStatus } from "../../components/shared/SaveStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { fileChosenFolder, RecordFolderField, SaveResult, useFormFiling, type SaveResultState } from "../../components/forms/FormDocumentControls";
@@ -382,6 +383,10 @@ function IsoFormDetailBody({
             )}
           </>
         )}
+      </div>
+
+      <div className="no-print">
+        <WorkflowHistoryPanel moduleName="iso_forms" recordId={recordId} />
       </div>
     </div>
   );

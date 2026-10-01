@@ -15,7 +15,7 @@ import type { FailureRow, ScorecardRow } from "../../lib/qualitySheetLogic";
 import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
-import { revisionLabel } from "../../lib/formDocument";
+import { filledCopyFolderSentence, revisionLabel } from "../../lib/formDocument";
 
 interface IsoQualityForm {
   id: number;
@@ -91,7 +91,7 @@ export function IsoFormListPage() {
         <div>
           <h1 className="text-2xl font-semibold">{meta.title}</h1>
           <p className="text-sm text-muted-foreground">
-            {revisionLabel(liveFormId, meta.rev)}. Start this blank from Blank Forms. A filled copy can be saved into any Documents folder.
+            {revisionLabel(liveFormId, meta.rev)}. Start this blank from Blank Forms. {filledCopyFolderSentence(form.formKey)}
           </p>
           <FormNumberEditor formKey={form.formKey} />
           {form.retired && <p className="mt-2 text-sm text-muted-foreground">This blank is no longer used. Start a nonconformance from NCR.</p>}

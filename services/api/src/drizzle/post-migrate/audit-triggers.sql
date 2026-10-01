@@ -106,6 +106,7 @@ BEGIN
       ('capa',                        ARRAY[]::text[]),
       ('eight_d',                     ARRAY[]::text[]),
       ('validation_reports',          ARRAY[]::text[]),
+      ('iso_quality_forms',           ARRAY[]::text[]),
       ('controlled_form_templates',   ARRAY[]::text[]),
       ('audits',                      ARRAY[]::text[]),
       ('audit_items',                 ARRAY[]::text[]),

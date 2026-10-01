@@ -49,6 +49,7 @@ export const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   InventoryItem: "inventory",
   InventorySettings: "inventory",
   NCR: "ncr",
+  "ISO form": "documents",
   "Validation Report": "documents",
   "PPAP package": "ppap",
   PurchaseOrder: "erp",
