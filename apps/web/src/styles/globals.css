@@ -782,13 +782,23 @@ label:has(> input[type="radio"]) > input[type="radio"],
   display: block;
   width: auto;
   max-width: 100%;
-  background: #000;
-  border-radius: 6px;
   object-fit: contain;
   flex: 0 0 auto;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28);
+  background: transparent;
+  /* The file is the dark navy mark. Flatten it to white so it reads on the
+     dark sign-in card, header, and sidebar. Light surfaces opt out below. */
+  filter: brightness(0) invert(1);
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
+}
+:root[data-theme="light"] .dma-logo {
+  filter: none;
+}
+/* These bars stay dark when the rest of the app is light. */
+:root[data-scheme="dma"] .aq-topbar .dma-logo,
+:root[data-theme="light"] .aq-brand-bar .dma-logo,
+:root[data-theme="light"] .wot-header .dma-logo {
+  filter: brightness(0) invert(1);
 }
 .dma-form-header {
   display: flex;
@@ -1584,7 +1594,8 @@ body.side-collapsed .aq-nav-folder-link {
     print-color-adjust: exact;
   }
   .dma-logo {
-    background: #000 !important;
+    filter: none !important;
+    background: transparent !important;
   }
   @page {
     margin: 0.5in;
