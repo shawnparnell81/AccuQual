@@ -1,10 +1,12 @@
 /**
- * Shawn's Documents drawers. Created the first time the folder list loads,
- * and again later only where a name is still missing. No schema change:
- * an existing folder under the same parent is left where an admin put it.
- * A name that appears once here is reused if someone moved it, unless that
- * copy sits in the blank-template library (those names are reused on purpose,
- * like "Training" and "Validation").
+ * Shawn's Documents drawers, nested under ISO Compliance Documents.
+ * Created the first time the folder list loads, and again later only where a
+ * name is still missing. No schema change: an existing folder under the same
+ * parent is left where an admin put it. A name that appears once here is
+ * reused if someone moved it, unless that copy sits in the blank-template
+ * library (those names are reused on purpose, like "Training" and "Validation").
+ * Moving an existing company onto this layout is the job of migration
+ * 0094_iso_compliance_folder_tree. This seed does not reparent folders.
  */
 import type { Db } from "../../lib/requestDb.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
@@ -24,38 +26,81 @@ function productLine(name: string): DefaultFolderSeed {
 
 export const COMPANY_DOCUMENT_FOLDERS: DefaultFolderSeed[] = [
   {
-    name: "Engineering",
-    children: [productLine("CSA"), productLine("Fuel"), productLine("Shocks"), productLine("Air Suspension"), productLine("Gas/Electric Lifts")],
-  },
-  {
-    name: "Quality",
+    name: "ISO Compliance Documents",
     children: [
       {
-        name: "FAI",
+        name: "Engineering",
+        children: [productLine("CSA"), productLine("Fuel"), productLine("Shocks"), productLine("Air Suspension"), productLine("Gas/Electric Lifts")],
+      },
+      {
+        name: "Quality",
         children: [
-          { name: "CSA", children: [] },
-          { name: "Shocks", children: [] },
-          { name: "Fuel", children: [] },
-          { name: "Brake Wear sensors", children: [] },
-          { name: "Gas/Electric Lifts", children: [] },
-          { name: "Air Suspension", children: [] },
+          {
+            name: "FAI",
+            children: [
+              { name: "CSA", children: [] },
+              { name: "Shocks", children: [] },
+              { name: "Fuel", children: [] },
+              { name: "Brake Wear sensors", children: [] },
+              { name: "Gas/Electric Lifts", children: [] },
+              { name: "Air Suspension", children: [] },
+            ],
+          },
+          { name: "Product Alerts", children: [] },
+          { name: "Recalls", children: [] },
+          { name: "Warranty", children: [] },
+          { name: "Training", children: [] },
+          { name: "Repair", children: [] },
+          { name: "Inspections", children: [] },
         ],
       },
-      { name: "Product Alerts", children: [] },
-      { name: "Recalls", children: [] },
-      { name: "Warranty", children: [] },
-      { name: "Training", children: [] },
-      { name: "Repair", children: [] },
-      { name: "Inspections", children: [] },
-      { name: "Audits", children: [] },
+      {
+        name: "Audits",
+        children: [
+          { name: "Internal Audit Schedule", children: [] },
+          { name: "Internal Audit Reports", children: [] },
+          { name: "External Audit Reports", children: [] },
+          { name: "Audit Findings", children: [] },
+          { name: "Audit Follow-Up", children: [] },
+          { name: "Audit Evidence", children: [] },
+          { name: "Safety Audits", children: [] },
+        ],
+      },
+      {
+        name: "Training",
+        children: [
+          { name: "Operator Training Records", children: [] },
+          { name: "Machine Qualification", children: [] },
+          { name: "Cross-Training Matrix", children: [] },
+          { name: "Safety Training", children: [] },
+          { name: "Production Certifications", children: [] },
+        ],
+      },
+      {
+        name: "Safety",
+        children: [
+          { name: "Safety Procedures", children: [] },
+          { name: "PPE Requirements", children: [] },
+          { name: "Incident Reports", children: [] },
+          { name: "Lockout/Tagout Procedures", children: [] },
+          { name: "Environmental Condition Records", children: [] },
+        ],
+      },
+      { name: "Production", children: [] },
+      { name: "CAPA", children: [] },
+      { name: "NCR", children: [] },
+      { name: "8D", children: [] },
+      { name: "Work Instruction", children: [] },
+      { name: "Procedures", children: [] },
+      {
+        name: "SOP",
+        children: [
+          { name: "Policies", children: [] },
+          { name: "Procedures", children: [] },
+        ],
+      },
     ],
   },
-  { name: "NCR", children: [] },
-  { name: "CAPA", children: [] },
-  { name: "8D", children: [] },
-  { name: "Work Instruction", children: [] },
-  { name: "Procedures", children: [] },
-  { name: "SOP", children: [] },
 ];
 
 /** Top-level filing drawers. They stay folders; the live NCR, CAPA, and 8D screens are unchanged. */

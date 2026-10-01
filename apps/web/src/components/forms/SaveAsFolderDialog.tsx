@@ -2,12 +2,16 @@ import { useMemo, useState } from "react";
 import { useDialogBehavior } from "../shared/useDialogBehavior";
 import { saveAsFolders, type BrowseFolder } from "../../lib/folderBrowse";
 
-const ROOT_ORDER = ["Engineering", "Quality", "NCR", "CAPA", "8D", "Work Instruction", "Procedures", "SOP"];
+const ISO_DOCUMENTS_FOLDER = "ISO Compliance Documents";
+
+const ROOT_ORDER = [ISO_DOCUMENTS_FOLDER, "Engineering", "Quality", "Audits", "Training", "Safety", "Production", "CAPA", "NCR", "8D", "Work Instruction", "Procedures", "SOP"];
 
 const CHILD_ORDER: Record<string, string[]> = {
+  [ISO_DOCUMENTS_FOLDER]: ["Engineering", "Quality", "Audits", "Training", "Safety", "Production", "CAPA", "NCR", "8D", "Work Instruction", "Procedures", "SOP"],
   Engineering: ["CSA", "Fuel", "Shocks", "Air Suspension", "Gas/Electric Lifts"],
-  Quality: ["FAI", "Product Alerts", "Recalls", "Warranty", "Training", "Repair", "Inspections", "Audits"],
+  Quality: ["FAI", "Product Alerts", "Recalls", "Warranty", "Training", "Repair", "Inspections"],
   FAI: ["CSA", "Shocks", "Fuel", "Brake Wear sensors", "Gas/Electric Lifts", "Air Suspension"],
+  SOP: ["Policies", "Procedures"],
 };
 
 function orderedChildren(folders: BrowseFolder[], parentId: number | null, parentName: string | null): BrowseFolder[] {
@@ -115,7 +119,7 @@ export function SaveAsFolderDialog({
     const open = new Set<number>();
     for (const folder of destinations) {
       if (folder.parentId === null && ROOT_ORDER.includes(folder.name)) open.add(folder.id);
-      if (folder.name === "FAI" || CHILD_ORDER.Engineering?.includes(folder.name)) open.add(folder.id);
+      if (folder.name === ISO_DOCUMENTS_FOLDER || folder.name === "FAI" || folder.name === "SOP" || CHILD_ORDER.Engineering?.includes(folder.name)) open.add(folder.id);
     }
     return open;
   });

@@ -150,10 +150,16 @@ const ADDITIONAL_SUBFOLDERS: { department: string; folder: string; subfolder: st
   { department: "Quality", folder: "Supplier Quality", subfolder: "Supplier Qualification & Evaluation" },
 ];
 
+function findDepartment(list: (typeof documentFolders.$inferSelect)[], name: string) {
+  const iso = list.find((folder) => folder.parentId === null && folder.name === "ISO Compliance Documents");
+  const underIso = iso ? list.find((folder) => folder.parentId === iso.id && folder.name === name) : undefined;
+  return underIso ?? list.find((folder) => folder.parentId === null && folder.name === name);
+}
+
 async function ensureAdditionalSubfolders(db: Db, all: (typeof documentFolders.$inferSelect)[]): Promise<(typeof documentFolders.$inferSelect)[]> {
   let list = all;
   for (const { department, folder, subfolder } of ADDITIONAL_SUBFOLDERS) {
-    const dept = list.find((f) => f.parentId === null && f.name === department);
+    const dept = findDepartment(list, department);
     if (!dept) continue; // company doesn't have this department branch (e.g. a customized tree) — skip rather than force it back in
     const parentFolder = list.find((f) => f.parentId === dept.id && f.name === folder);
     if (!parentFolder) continue;

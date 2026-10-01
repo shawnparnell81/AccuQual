@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { folderChain, listFolder, openTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
+import { contentRoot, departmentForFolder, folderChain, leftHandFolders, listFolder, openTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
 import { Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical } from "lucide-react";
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
@@ -164,8 +164,10 @@ export function FolderExplorerPage() {
 
   const topLevel = byParent.get(null) ?? [];
   const poolFolder = topLevel.find((f) => f.name === LIBRARY_POOL_NAME);
-  const departments = topLevel.filter((f) => f.id !== poolFolder?.id);
+  const isoRoot = contentRoot(visibleFolders);
+  const departments = leftHandFolders(visibleFolders);
   const poolItems = poolFolder ? byParent.get(poolFolder.id) ?? [] : [];
+  const shelfParentId = isoRoot?.id ?? null;
 
   // Deep link from the nav bar's dynamic Documents dropdown (?dept=<id>).
   // Deliberately depends on folders.length (a stable proxy) instead of
@@ -174,17 +176,18 @@ export function FolderExplorerPage() {
   useEffect(() => {
     const folderParam = searchParams.get("folder");
     if (folderParam && /^\d+$/.test(folderParam)) {
-      const root = folderChain(folders, Number(folderParam))[0];
-      if (root && departments.some((dept) => dept.id === root.id)) setActiveDeptId(root.id);
+      const dept = departmentForFolder(folders, Number(folderParam));
+      if (dept) setActiveDeptId(dept.id);
       return;
     }
     const deptParam = searchParams.get("dept");
-    if (deptParam && departments.some((d) => d.id === Number(deptParam))) {
+    if (deptParam && folders.some((folder) => folder.id === Number(deptParam))) {
       setActiveDeptId(Number(deptParam));
     }
   }, [searchParams, folders.length]);
 
-  const activeDept = departments.find((d) => d.id === activeDeptId) ?? departments[0];
+  const activeDept =
+    (isoRoot && activeDeptId === isoRoot.id ? isoRoot : undefined) ?? departments.find((d) => d.id === activeDeptId) ?? departments[0] ?? isoRoot;
 
   function countsFor(deptId: number) {
     const subs = byParent.get(deptId) ?? [];
@@ -269,8 +272,8 @@ export function FolderExplorerPage() {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.set("folder", String(id));
-      const root = folderChain(folders, id)[0];
-      if (root) next.set("dept", String(root.id));
+      const dept = departmentForFolder(folders, id);
+      if (dept) next.set("dept", String(dept.id));
       return next;
     });
   }
@@ -325,7 +328,7 @@ export function FolderExplorerPage() {
         <div>
           <h1 className="text-2xl font-semibold">Document Folders</h1>
           <p className="text-sm text-muted-foreground">
-            A folder shows its name and the forms or files saved into it. Start a new blank from Blank Forms. Drag a folder onto another folder to move it, or onto Top level. Drag a saved document onto a folder to file it there, or into the Library Pool to take it out.
+            ISO Compliance Documents is the top folder. Engineering, Quality, and the other departments stay in the list on the left. A folder shows its name and the forms or files saved into it. Start a new blank from Blank Forms. Drag a folder onto another folder to move it, or onto Top level. Drag a saved document onto a folder to file it there, or into the Library Pool to take it out.
           </p>
         </div>
         <div className="w-56">
@@ -335,6 +338,24 @@ export function FolderExplorerPage() {
 
       <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto md:grid-cols-[220px_minmax(0,1fr)] md:overflow-hidden">
         <nav className="flex flex-col gap-1 rounded-lg border border-border bg-card p-2 md:min-h-0 md:overflow-y-auto">
+          {isoRoot && (
+            <button
+              type="button"
+              data-testid="iso-root"
+              onClick={() => {
+                setActiveDeptId(isoRoot.id);
+                setSearchParams((current) => {
+                  const next = new URLSearchParams(current);
+                  next.set("dept", String(isoRoot.id));
+                  next.delete("folder");
+                  return next;
+                });
+              }}
+              className={`rounded-md px-3 py-2 text-left text-sm font-medium ${activeDept?.id === isoRoot.id ? "bg-primary/10" : "hover:bg-muted"}`}
+            >
+              {isoRoot.name}
+            </button>
+          )}
           {departments.map((dept, i) => {
             const counts = countsFor(dept.id);
             const color = DEPARTMENT_COLORS[i % DEPARTMENT_COLORS.length];
@@ -373,7 +394,7 @@ export function FolderExplorerPage() {
                   }
                   dropOn(e, dept.id);
                 }}
-                className={`flex cursor-grab items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors active:cursor-grabbing ${
+                className={`flex cursor-grab items-center gap-2 rounded-md py-2 text-left text-sm transition-colors active:cursor-grabbing ${isoRoot ? "pr-3 pl-5" : "px-3"} ${
                   dept.id === activeDept.id ? "bg-primary/10 font-medium" : "hover:bg-muted"
                 } ${dropHoverId === dept.id ? "ring-2 ring-primary" : ""}`}
               >
@@ -390,10 +411,10 @@ export function FolderExplorerPage() {
           <div
             data-testid="folder-drop-root"
             onDragOver={(e) => {
-              if (allowDrop(e, null)) setDropHoverId(-1);
+              if (allowDrop(e, shelfParentId)) setDropHoverId(-1);
             }}
             onDragLeave={() => setDropHoverId((h) => (h === -1 ? null : h))}
-            onDrop={(e) => dropOn(e, null)}
+            onDrop={(e) => dropOn(e, shelfParentId)}
             className={`rounded-md border border-dashed px-3 py-2 text-xs ${dropHoverId === -1 ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground"}`}
           >
             Top level
@@ -404,7 +425,7 @@ export function FolderExplorerPage() {
             onSubmit={(e) => {
               e.preventDefault();
               if (!newFolderName.trim()) return;
-              createFolder.mutate({ name: newFolderName.trim() });
+              createFolder.mutate(isoRoot ? { name: newFolderName.trim(), parentId: isoRoot.id } : { name: newFolderName.trim() });
               setNewFolderName("");
             }}
           >

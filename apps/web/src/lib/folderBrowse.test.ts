@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { documentsFolderHref, filingLocation, folderChain, listFolder, openTarget, saveAsFolders, visibleExplorerFolders, type BrowseFolder } from "./folderBrowse.ts";
+import { departmentForFolder, documentsFolderHref, filingLocation, folderChain, leftHandFolders, listFolder, openTarget, saveAsFolders, visibleExplorerFolders, type BrowseFolder } from "./folderBrowse.ts";
 
 const tree: BrowseFolder[] = [
   { id: 1, name: "Quality", parentId: null, sortOrder: 0 },
@@ -152,5 +152,32 @@ describe("folder browse", () => {
     const saved = listFolder(visibleExplorerFolders(rows), 3).files;
     assert.equal(openTarget(saved[0]!), "/iso-forms/record/4");
     assert.equal(openTarget(rows.find((folder) => folder.id === 5)!), "/validation-reports/9");
+  });
+
+  it("keeps departments on the left-hand list under ISO Compliance Documents", () => {
+    const rows: BrowseFolder[] = [
+      { id: 1, name: "ISO Compliance Documents", parentId: null, sortOrder: 0 },
+      { id: 2, name: "Engineering", parentId: 1, sortOrder: 0 },
+      { id: 3, name: "Quality", parentId: 1, sortOrder: 1 },
+      { id: 4, name: "Audits", parentId: 1, sortOrder: 2 },
+      { id: 5, name: "Training", parentId: 1, sortOrder: 3 },
+      { id: 6, name: "Safety", parentId: 1, sortOrder: 4 },
+      { id: 7, name: "Production", parentId: 1, sortOrder: 5 },
+      { id: 8, name: "CAPA", parentId: 1, sortOrder: 6 },
+      { id: 9, name: "NCR", parentId: 1, sortOrder: 7 },
+      { id: 10, name: "8D", parentId: 1, sortOrder: 8 },
+      { id: 11, name: "SOP", parentId: 1, sortOrder: 11 },
+      { id: 12, name: "Policies", parentId: 11, sortOrder: 0 },
+      { id: 13, name: "Procedures", parentId: 11, sortOrder: 1 },
+      { id: 14, name: "Library Pool", parentId: null, sortOrder: 1 },
+      { id: 15, name: "CSA", parentId: 2, sortOrder: 0 },
+    ];
+    assert.deepEqual(
+      leftHandFolders(rows).map((folder) => folder.name),
+      ["Engineering", "Quality", "Audits", "Training", "Safety", "Production", "CAPA", "NCR", "8D", "SOP"],
+    );
+    assert.equal(departmentForFolder(rows, 15)?.name, "Engineering");
+    assert.equal(departmentForFolder(rows, 12)?.name, "SOP");
+    assert.equal(departmentForFolder(rows, 1)?.name, "ISO Compliance Documents");
   });
 });

@@ -24,8 +24,10 @@ export const HIDDEN_CHILDREN: Record<string, Set<string>> = {
 
 /**
  * When a department is listed here, only these branches stay.
- * A kept folder keeps its own children (Training and Competency, Safety).
+ * A kept folder keeps its own children.
  * A kept name buried under a removed parent is lifted up to the department in the response only.
+ * After 0094_iso_compliance_folder_tree, Training and Safety are no longer under Production,
+ * so Production shows empty. This list still hides any older production branches that remain.
  */
 export const KEEP_BRANCHES: Record<string, Set<string>> = {
   "Shipping & Receiving": new Set([
@@ -64,8 +66,23 @@ export function presentDocumentFolders<T extends FolderRef>(folders: T[]): T[] {
     return (children.get(node.id) ?? []).some((child) => subtreeHasKeep(child, keep));
   }
 
+  function isIsoRoot(node: T): boolean {
+    return node.parentId === null && node.name === "ISO Compliance Documents";
+  }
+
+  /** Roots, and the departments nested directly under ISO Compliance Documents. */
+  function actsAsDepartment(node: T): boolean {
+    if (node.parentId === null) return true;
+    const parent = byId.get(node.parentId);
+    return parent != null && isIsoRoot(parent);
+  }
+
   function walk(node: T, department: string | null, keptAncestor: boolean) {
-    if (node.parentId === null) {
+    if (actsAsDepartment(node)) {
+      if (isIsoRoot(node)) {
+        for (const child of children.get(node.id) ?? []) walk(child, null, false);
+        return;
+      }
       if (HIDDEN_ROOTS.has(node.name)) {
         hideTree(node);
         return;

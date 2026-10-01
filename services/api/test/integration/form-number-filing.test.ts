@@ -88,9 +88,11 @@ describe("editable form numbers and folder filing", () => {
 
     const tree = await request(app).get("/document-folders").set("Authorization", `Bearer ${qualityToken}`);
     const folders = tree.body as { id: number; name: string; parentId: number | null }[];
-    let quality = folders.find((folder) => folder.parentId === null && folder.name === "Quality");
+    const iso = folders.find((folder) => folder.parentId === null && folder.name === "ISO Compliance Documents");
+    expect(iso?.id).toBeTruthy();
+    let quality = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Quality");
     if (!quality) {
-      const made = await request(app).post("/document-folders").set("Authorization", `Bearer ${qualityToken}`).send({ name: "Quality" });
+      const made = await request(app).post("/document-folders").set("Authorization", `Bearer ${qualityToken}`).send({ name: "Quality", parentId: iso!.id });
       quality = made.body;
     }
     let customer = folders.find((folder) => folder.parentId === quality?.id && folder.name === "Customer Quality");
@@ -102,7 +104,7 @@ describe("editable form numbers and folder filing", () => {
     expect(productAlerts?.id).toBeTruthy();
     const suggested = await request(app).get(`/document-folders/form-filings?formKey=frm-qa-001&recordId=${created.body.id}`).set("Authorization", `Bearer ${qualityToken}`);
     expect(suggested.body.suggestedFolderId).toBe(productAlerts!.id);
-    expect(suggested.body.suggestedPath).toEqual(["Quality", "Product Alerts"]);
+    expect(suggested.body.suggestedPath).toEqual(["ISO Compliance Documents", "Quality", "Product Alerts"]);
 
     const iso = folders.find((folder) => folder.parentId === null && folder.name === "ISO Compliance Documents");
     expect(iso?.id).toBeTruthy();
@@ -140,7 +142,7 @@ describe("editable form numbers and folder filing", () => {
     expect(ncrFiling.status).toBe(200);
     expect(ncrFiling.body.snapshotted).toBe(true);
     expect(ncrFiling.body.formNumber).toBe(masterId("frm-ncr-001"));
-    expect(ncrFiling.body.suggestedPath).toEqual(["NCR"]);
+    expect(ncrFiling.body.suggestedPath).toEqual(["ISO Compliance Documents", "NCR"]);
 
     const stillFiled = [
       ["quality_alert", "frm-qa-001"],
@@ -164,7 +166,8 @@ describe("editable form numbers and folder filing", () => {
 
     const tree = await request(app).get("/document-folders").set("Authorization", `Bearer ${qualityToken}`);
     const folders = tree.body as { id: number; name: string; parentId: number | null }[];
-    const ncrFolder = folders.find((folder) => folder.parentId === null && folder.name === "NCR");
+    const iso = folders.find((folder) => folder.parentId === null && folder.name === "ISO Compliance Documents");
+    const ncrFolder = folders.find((folder) => folder.parentId === iso?.id && folder.name === "NCR");
     expect(ncrFolder?.id).toBeTruthy();
 
     const filed = await request(app).post("/document-folders/form-filings").set("Authorization", `Bearer ${qualityToken}`).send({ formKey: "frm-ncr-001", recordId: ncr.body.id, folderId: ncrFolder!.id });
