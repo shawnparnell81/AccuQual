@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMPANY_DOCUMENT_FOLDERS, folderSeedPaths, inTemplateLibrary, locateSeedFolder, type FolderIdentity } from "../src/modules/document-folders/companyDocumentFolders.js";
+import { COMPANY_DOCUMENT_FOLDERS, folderSeedPaths, inTemplateLibrary, locateSeedFolder, planQualityTrainingRepair, type FolderIdentity } from "../src/modules/document-folders/companyDocumentFolders.js";
 import { DEFAULT_DOCUMENT_FOLDERS } from "../src/modules/document-folders/defaultDocumentFolders.js";
 
 function byPath(paths: string[][], names: string[]): boolean {
@@ -19,9 +19,10 @@ describe("company document folders", () => {
       expect(byPath(paths, ["ISO Compliance Documents", "Quality", "FAI", product])).toBe(true);
     }
     expect(paths.filter((path) => path.join("/") === "ISO Compliance Documents/Quality/FAI/CSA")).toHaveLength(1);
-    for (const name of ["Product Alerts", "Recalls", "Warranty", "Training", "Repair", "Inspections"]) {
+    for (const name of ["Product Alerts", "Recalls", "Warranty", "Repair", "Inspections"]) {
       expect(byPath(paths, ["ISO Compliance Documents", "Quality", name])).toBe(true);
     }
+    expect(byPath(paths, ["ISO Compliance Documents", "Quality", "Training"])).toBe(false);
     for (const name of ["CAPA", "NCR", "8D", "Audits"]) {
       expect(byPath(paths, ["ISO Compliance Documents", "Quality", name])).toBe(false);
     }
@@ -54,6 +55,40 @@ describe("company document folders", () => {
     expect(locateSeedFolder(folders, "Validation", 1)).toBeUndefined();
     expect(locateSeedFolder(folders, "CSA", 1)).toBeUndefined();
   });
+
+  it("folds Quality/Training into the ISO Training drawer and leaves blank-template Training alone", () => {
+    const folders: FolderIdentity[] = [
+      { id: 1, name: "ISO Compliance Documents", parentId: null },
+      { id: 2, name: "Quality", parentId: 1 },
+      { id: 3, name: "Training", parentId: 2 },
+      { id: 4, name: "Training", parentId: 1 },
+      { id: 5, name: "Operator Training Records", parentId: 4 },
+      { id: 6, name: "Blank Form Templates", parentId: 1 },
+      { id: 7, name: "Training", parentId: 6 },
+      { id: 8, name: "NCR", parentId: 1 },
+    ];
+    expect(planQualityTrainingRepair(folders)).toEqual([{ sourceId: 3, destId: 4, isoId: 1 }]);
+    expect(byPath(paths, ["ISO Compliance Documents", "Training", "Operator Training Records"])).toBe(true);
+  });
+
+  it("reparents the only Quality/Training folder onto ISO when no other Training drawer exists", () => {
+    const folders: FolderIdentity[] = [
+      { id: 1, name: "ISO Compliance Documents", parentId: null },
+      { id: 2, name: "Quality", parentId: 1 },
+      { id: 3, name: "Training", parentId: 2 },
+      { id: 9, name: "Safety Notes", parentId: 3 },
+    ];
+    expect(planQualityTrainingRepair(folders)).toEqual([{ sourceId: 3, destId: null, isoId: 1 }]);
+  });
+
+  it("does nothing when Training is already only under ISO", () => {
+    const folders: FolderIdentity[] = [
+      { id: 1, name: "ISO Compliance Documents", parentId: null },
+      { id: 2, name: "Quality", parentId: 1 },
+      { id: 4, name: "Training", parentId: 1 },
+    ];
+    expect(planQualityTrainingRepair(folders)).toEqual([]);
+  });
 });
 
 describe("default document folder seed", () => {
@@ -70,6 +105,7 @@ describe("default document folder seed", () => {
     expect(byPath(paths, ["ISO Compliance Documents", "Quality", "CAPA"])).toBe(false);
     expect(byPath(paths, ["ISO Compliance Documents", "Quality", "NCR"])).toBe(false);
     expect(byPath(paths, ["ISO Compliance Documents", "Quality", "8D"])).toBe(false);
+    expect(byPath(paths, ["ISO Compliance Documents", "Quality", "Training"])).toBe(false);
     expect(byPath(paths, ["ISO Compliance Documents", "Production", "Training & Competency"])).toBe(false);
     expect(byPath(paths, ["ISO Compliance Documents", "Production", "Safety & Compliance"])).toBe(false);
     expect(paths.filter((path) => path[path.length - 1] === "Production" && path.includes("ISO Compliance Documents"))).toHaveLength(1);

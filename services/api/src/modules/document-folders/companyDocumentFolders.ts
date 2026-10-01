@@ -6,10 +6,17 @@
  * reused if someone moved it, unless that copy sits in the blank-template
  * library (those names are reused on purpose, like "Training" and "Validation").
  * Moving an existing company onto this layout is the job of migration
- * 0094_iso_compliance_folder_tree. This seed does not reparent folders.
+ * 0094_iso_compliance_folder_tree.
+ * Training is its own drawer under ISO, never a child of Quality. A company
+ * that already has Quality/Training is repaired on this list load: saved
+ * forms and files move into the ISO Training drawer, then the Quality child
+ * is removed. Nothing else is reparented.
  */
+import { eq } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
+import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
+import { formFilings } from "../../drizzle/schema/formFilings.js";
 import type { DefaultFolderSeed } from "./defaultDocumentFolders.js";
 
 const TEMPLATE_LIBRARY_NAMES = new Set(["Blank Form Templates", "ISO Compliance Documents"]);
@@ -49,7 +56,6 @@ export const COMPANY_DOCUMENT_FOLDERS: DefaultFolderSeed[] = [
           { name: "Product Alerts", children: [] },
           { name: "Recalls", children: [] },
           { name: "Warranty", children: [] },
-          { name: "Training", children: [] },
           { name: "Repair", children: [] },
           { name: "Inspections", children: [] },
         ],
@@ -166,6 +172,148 @@ export function locateSeedFolder<T extends FolderIdentity>(folders: T[], name: s
 
 type FolderRow = typeof documentFolders.$inferSelect;
 
+const ISO_FOLDER_NAME = "ISO Compliance Documents";
+const TRAINING_FOLDER_NAME = "Training";
+const QUALITY_FOLDER_NAME = "Quality";
+
+/** One Quality/Training folder to fold into the ISO Training drawer. `destId` null reparents the source onto ISO. */
+export interface QualityTrainingRepair {
+  sourceId: number;
+  destId: number | null;
+  isoId: number;
+}
+
+function descendsFrom(folders: FolderIdentity[], nodeId: number, ancestorId: number): boolean {
+  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  let current = byId.get(nodeId);
+  const seen = new Set<number>();
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    if (current.parentId === ancestorId) return true;
+    current = current.parentId == null ? undefined : byId.get(current.parentId);
+  }
+  return false;
+}
+
+/**
+ * Quality must not keep a Training child. Prefer the Training folder that
+ * already sits under ISO, then a Training folder someone moved out of the
+ * template library. The first Quality/Training is reparented only when no
+ * other Training drawer exists yet.
+ */
+export function planQualityTrainingRepair(folders: FolderIdentity[]): QualityTrainingRepair[] {
+  const iso = folders.find((folder) => folder.parentId == null && folder.name === ISO_FOLDER_NAME);
+  if (!iso) return [];
+  const qualityIds = new Set(folders.filter((folder) => folder.name === QUALITY_FOLDER_NAME).map((folder) => folder.id));
+  const sources = folders
+    .filter((folder) => folder.name === TRAINING_FOLDER_NAME && folder.parentId != null && qualityIds.has(folder.parentId))
+    .sort((a, b) => a.id - b.id);
+  if (sources.length === 0) return [];
+
+  const sourceIds = new Set(sources.map((folder) => folder.id));
+  const isoTraining = folders.find((folder) => folder.parentId === iso.id && folder.name === TRAINING_FOLDER_NAME && !sourceIds.has(folder.id));
+  const movedTraining = folders.find((folder) => folder.name === TRAINING_FOLDER_NAME && !sourceIds.has(folder.id) && !inTemplateLibrary(folder, folders));
+  const canonical = isoTraining ?? movedTraining;
+  const repairs: QualityTrainingRepair[] = [];
+  let destId = canonical?.id ?? null;
+  for (const source of sources) {
+    if (destId != null && (source.id === destId || descendsFrom(folders, destId, source.id))) continue;
+    if (destId == null) {
+      repairs.push({ sourceId: source.id, destId: null, isoId: iso.id });
+      destId = source.id;
+      continue;
+    }
+    repairs.push({ sourceId: source.id, destId, isoId: iso.id });
+  }
+  return repairs;
+}
+
+function hasFolderPayload(folder: FolderRow): boolean {
+  return folder.pdfPath != null || folder.documentId != null || folder.linkedPath != null;
+}
+
+/**
+ * Same merge as migration 0094's accuqual_merge_document_folder: children move
+ * or fold by name, filings and blank-template rows follow, and a saved file
+ * is copied onto an empty destination. A source that still holds a file is
+ * kept as a child instead of deleted.
+ */
+async function mergeDocumentFolder(db: Db, list: FolderRow[], sourceId: number, destId: number, depth = 0): Promise<FolderRow[]> {
+  if (sourceId === destId || depth > 50) return list;
+  if (descendsFrom(list, destId, sourceId)) return list;
+
+  const children = list.filter((folder) => folder.parentId === sourceId).sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+  for (const child of children) {
+    const existing = list.filter((folder) => folder.parentId === destId && folder.name === child.name).sort((a, b) => a.id - b.id)[0];
+    if (!existing) {
+      await db.update(documentFolders).set({ parentId: destId, updatedAt: new Date() }).where(eq(documentFolders.id, child.id));
+      list = list.map((folder) => (folder.id === child.id ? { ...folder, parentId: destId } : folder));
+    } else {
+      list = await mergeDocumentFolder(db, list, child.id, existing.id, depth + 1);
+    }
+  }
+
+  await db.update(formFilings).set({ folderNodeId: destId, updatedAt: new Date() }).where(eq(formFilings.folderNodeId, sourceId));
+  await db.update(controlledFormTemplates).set({ folderId: destId }).where(eq(controlledFormTemplates.folderId, sourceId));
+
+  const source = list.find((folder) => folder.id === sourceId);
+  const dest = list.find((folder) => folder.id === destId);
+  const childLeft = list.some((folder) => folder.parentId === sourceId);
+  if (source && dest && !childLeft && hasFolderPayload(source) && !hasFolderPayload(dest)) {
+    const moved = source;
+    await db
+      .update(documentFolders)
+      .set({
+        pdfPath: moved.pdfPath,
+        pdfMimeType: moved.pdfMimeType,
+        documentId: moved.documentId,
+        linkedPath: moved.linkedPath,
+        updatedAt: new Date(),
+      })
+      .where(eq(documentFolders.id, destId));
+    await db
+      .update(documentFolders)
+      .set({ pdfPath: null, pdfMimeType: null, documentId: null, linkedPath: null, updatedAt: new Date() })
+      .where(eq(documentFolders.id, sourceId));
+    list = list.map((folder) => {
+      if (folder.id === destId) {
+        return { ...folder, pdfPath: moved.pdfPath, pdfMimeType: moved.pdfMimeType, documentId: moved.documentId, linkedPath: moved.linkedPath };
+      }
+      if (folder.id === sourceId) return { ...folder, pdfPath: null, pdfMimeType: null, documentId: null, linkedPath: null };
+      return folder;
+    });
+  }
+
+  const sourceNow = list.find((folder) => folder.id === sourceId);
+  if (!sourceNow) return list;
+  if (hasFolderPayload(sourceNow)) {
+    await db.update(documentFolders).set({ parentId: destId, updatedAt: new Date() }).where(eq(documentFolders.id, sourceId));
+    return list.map((folder) => (folder.id === sourceId ? { ...folder, parentId: destId } : folder));
+  }
+  if (!list.some((folder) => folder.parentId === sourceId)) {
+    await db.delete(documentFolders).where(eq(documentFolders.id, sourceId));
+    return list.filter((folder) => folder.id !== sourceId);
+  }
+  return list;
+}
+
+async function repairQualityTraining(db: Db, list: FolderRow[]): Promise<FolderRow[]> {
+  let current = list;
+  for (const move of planQualityTrainingRepair(current)) {
+    if (move.destId == null) {
+      const [updated] = await db
+        .update(documentFolders)
+        .set({ parentId: move.isoId, updatedAt: new Date() })
+        .where(eq(documentFolders.id, move.sourceId))
+        .returning();
+      if (updated) current = current.map((folder) => (folder.id === updated.id ? updated : folder));
+      continue;
+    }
+    current = await mergeDocumentFolder(db, current, move.sourceId, move.destId);
+  }
+  return current;
+}
+
 /** Inserts any missing drawers. Returns the list including rows just created. */
 export async function ensureCompanyDocumentFolders(db: Db, all: FolderRow[]): Promise<FolderRow[]> {
   let list = all;
@@ -188,5 +336,5 @@ export async function ensureCompanyDocumentFolders(db: Db, all: FolderRow[]): Pr
   }
 
   await ensureLevel(COMPANY_DOCUMENT_FOLDERS, null);
-  return list;
+  return repairQualityTraining(db, list);
 }
