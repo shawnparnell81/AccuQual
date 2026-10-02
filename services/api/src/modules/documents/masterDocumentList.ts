@@ -159,13 +159,30 @@ function formIdentity(documentId: string, title: string): string {
 }
 
 /**
- * The number already stored on the template. When that field is blank, the id
- * printed on the form itself (the two master lists). Never invents a number.
+ * A document id already written in a form name, title, or id slug.
+ * `frm-qa-001`, `FRM QA 001`, and `rpt_eng_001` all become the same
+ * `PREFIX-CATEGORY-NNN` shape used on the numbered templates.
+ * A name with no such id returns empty. Nothing is padded or invented.
  */
-export function documentNumberForForm(formKey: string, formId: string): string {
+const NAMED_DOCUMENT_ID = /\b(FRM|LST|RPT|DCR)[\s_-]+([A-Z]{2,4})[\s_-]+(\d{3})\b/;
+
+export function documentIdFromName(value: string): string {
+  const match = value.trim().toUpperCase().match(NAMED_DOCUMENT_ID);
+  if (!match) return "";
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
+/**
+ * The number already stored on the template. When that field is blank, the id
+ * printed on the form, then the id already in the title or the form key.
+ * A saved number wins, including one that does not match the name.
+ */
+export function documentNumberForForm(formKey: string, formId: string, title = ""): string {
   const stored = formId.trim();
   if (stored) return stored;
-  return PRINTED_FORM_ID_WHEN_BLANK[formKey] ?? "";
+  const printed = PRINTED_FORM_ID_WHEN_BLANK[formKey];
+  if (printed) return printed;
+  return documentIdFromName(title) || documentIdFromName(formKey);
 }
 
 /**
@@ -178,12 +195,12 @@ export function withRegisteredForms(documentRows: MasterDocumentRow[], templates
   const present = new Set(documentRows.map((row) => formIdentity(row.documentId, row.title)));
   const added: MasterDocumentRow[] = [];
   const ordered = [...templates].sort((a, b) => {
-    const left = documentNumberForForm(a.formKey, a.formId);
-    const right = documentNumberForForm(b.formKey, b.formId);
+    const left = documentNumberForForm(a.formKey, a.formId, a.title);
+    const right = documentNumberForForm(b.formKey, b.formId, b.title);
     return left.localeCompare(right) || a.title.localeCompare(b.title) || a.formKey.localeCompare(b.formKey);
   });
   for (const template of ordered) {
-    const documentId = documentNumberForForm(template.formKey, template.formId);
+    const documentId = documentNumberForForm(template.formKey, template.formId, template.title);
     if (!documentId) continue;
     const key = formIdentity(documentId, template.title);
     if (present.has(key)) continue;

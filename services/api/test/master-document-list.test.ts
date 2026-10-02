@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FORM_TEMPLATES, PRINTED_FORM_ID_WHEN_BLANK, PRINTED_FORM_REVISION } from "../src/modules/document-folders/formFiling.js";
-import { buildMasterDocumentRows, documentNumberForForm, withRegisteredForms, type RegisteredFormSource } from "../src/modules/documents/masterDocumentList.js";
+import { FORM_TEMPLATES, PRINTED_FORM_REVISION } from "../src/modules/document-folders/formFiling.js";
+import { buildMasterDocumentRows, documentIdFromName, documentNumberForForm, withRegisteredForms, type RegisteredFormSource } from "../src/modules/documents/masterDocumentList.js";
 
 describe("master document list", () => {
   it("builds a live row from the document, its published revision, and its folder", () => {
@@ -120,7 +120,7 @@ describe("master document list", () => {
     const expected = FORM_TEMPLATES.map((seed) => ({
       formKey: seed.formKey,
       title: seed.title,
-      number: documentNumberForForm(seed.formKey, seed.formId),
+      number: documentNumberForForm(seed.formKey, seed.formId, seed.title),
       href: seed.subjectRoute,
     })).filter((seed) => seed.number);
     const formRows = rows.filter((row) => row.status === "Template" || (row.documentId === "FRM-NCR-001" && row.title === "NON-CONFORMANCE REPORT (NCR)"));
@@ -142,12 +142,25 @@ describe("master document list", () => {
       "AIR COMPRESSOR VALIDATION DOCUMENT",
       "BRAKE WEAR SENSOR VALIDATION DOCUMENT",
     ]);
+    expect(rows.filter((row) => row.documentId === "FRM-VAL-007").map((row) => row.title).sort()).toEqual([
+      "FUEL PUMP VALIDATION DOCUMENT",
+      "GAS LIFT SUPPORT VALIDATION DOCUMENT",
+    ]);
     expect(rows.find((row) => row.title === "Master Document List")).toMatchObject({ documentId: "LST-GEN-001", currentRev: "Rev B" });
     expect(rows.find((row) => row.title === "Master Equipment List")).toMatchObject({ documentId: "LST-EQP-001", currentRev: "Rev A" });
-    expect(rows.find((row) => row.title === "Part Submission Warrant")).toBeUndefined();
-    expect(rows.find((row) => row.title === "CSA VALIDATION REPORT")).toBeUndefined();
+    expect(rows.find((row) => row.title === "Part Submission Warrant")).toMatchObject({ documentId: "FRM-PSW-001", status: "Template" });
+    expect(rows.find((row) => row.title === "CSA VALIDATION REPORT")).toMatchObject({ documentId: "FRM-VAL-001", status: "Template" });
+    expect(rows.find((row) => row.title === "INTERNAL AUDIT SUMMARY REPORT")).toMatchObject({ documentId: "FRM-GEN-002" });
+    expect(rows.find((row) => row.title === "MONTHLY ENGINEERING DEVELOPMENT REPORT")).toMatchObject({ documentId: "RPT-ENG-001" });
+    expect(rows.filter((row) => row.title === "ASTM E542 Gravimetric Volume Calculator").map((row) => row.documentId).sort()).toEqual([
+      "FRM-TST-001",
+      "FRM-TST-002",
+    ]);
     expect(rows.find((row) => row.title === "Corrective Action Request")).toBeUndefined();
     expect(rows.find((row) => row.title === "8D Problem Solving")).toBeUndefined();
+    expect(rows.find((row) => row.title === "Document Revision Record")).toBeUndefined();
+    expect(FORM_TEMPLATES.find((seed) => seed.formKey === "frm-gen-002")?.formId).toBe("");
+    expect(FORM_TEMPLATES.find((seed) => seed.formKey === "frm-val-007")?.formId).toBe("");
 
     const custom = withRegisteredForms(
       [],
@@ -169,8 +182,87 @@ describe("master document list", () => {
       if (PRINTED_FORM_REVISION[seed.formKey]) expect(match?.currentRev).toBe(PRINTED_FORM_REVISION[seed.formKey]);
     }
     for (const seed of FORM_TEMPLATES) {
-      if (seed.formId.trim() || PRINTED_FORM_ID_WHEN_BLANK[seed.formKey]) continue;
+      const number = documentNumberForForm(seed.formKey, seed.formId, seed.title);
+      if (number) continue;
       expect(rows.some((row) => row.href === seed.subjectRoute && row.title === seed.title && row.status === "Template")).toBe(false);
     }
+  });
+
+  it("reads a document id from the form name and leaves a name with no id blank", () => {
+    expect(documentIdFromName("frm-qa-001")).toBe("FRM-QA-001");
+    expect(documentIdFromName("frm_gen_002")).toBe("FRM-GEN-002");
+    expect(documentIdFromName("DCR GEN 004")).toBe("DCR-GEN-004");
+    expect(documentIdFromName("rpt-eng-001")).toBe("RPT-ENG-001");
+    expect(documentIdFromName("8d")).toBe("");
+    expect(documentIdFromName("document_revision_record")).toBe("");
+    expect(documentIdFromName("capa")).toBe("");
+
+    expect(documentNumberForForm("frm-gen-002", "", "INTERNAL AUDIT SUMMARY REPORT")).toBe("FRM-GEN-002");
+    expect(documentNumberForForm("frm-psw-001", "QA-12", "Part Submission Warrant")).toBe("QA-12");
+    expect(documentNumberForForm("frm-val-003", "FRM-VAL-009", "AIR COMPRESSOR VALIDATION DOCUMENT")).toBe("FRM-VAL-009");
+    expect(documentNumberForForm("frm-val-005", "FRM-VAL-007", "GAS LIFT SUPPORT VALIDATION DOCUMENT")).toBe("FRM-VAL-007");
+    expect(documentNumberForForm("frm-val-007", "", "FUEL PUMP VALIDATION DOCUMENT")).toBe("FRM-VAL-007");
+    expect(documentNumberForForm("lst-eqp-001", "")).toBe("LST-EQP-001");
+    expect(documentNumberForForm("custom", "", "Turtle Diagram FRM-PRC-001")).toBe("FRM-PRC-001");
+    expect(documentNumberForForm("dcr", "", "Document Change Request")).toBe("");
+    expect(documentNumberForForm("ncr", "", "Nonconformance Report")).toBe("");
+
+    const fromName = FORM_TEMPLATES.filter((seed) => !seed.formId.trim()).map((seed) => ({
+      formKey: seed.formKey,
+      title: seed.title,
+      number: documentNumberForForm(seed.formKey, seed.formId, seed.title),
+    }));
+    expect(fromName.filter((seed) => seed.number).map((seed) => `${seed.number} ${seed.title}`).sort()).toEqual([
+      "FRM-CUS-001 Customer Scorecard",
+      "FRM-FAE-001 Failure Action Effectiveness Chart",
+      "FRM-FAI-001 First Article Inspection Report",
+      "FRM-GEN-002 INTERNAL AUDIT SUMMARY REPORT",
+      "FRM-MSA-001 Gage R&R",
+      "FRM-PAR-001 Pareto Chart",
+      "FRM-PRC-001 Turtle Diagram",
+      "FRM-PSW-001 Part Submission Warrant",
+      "FRM-QA-001 Quality Alert",
+      "FRM-TST-001 ASTM E542 Gravimetric Volume Calculator",
+      "FRM-TST-002 ASTM E542 Gravimetric Volume Calculator",
+      "FRM-VAL-001 CSA VALIDATION REPORT",
+      "FRM-VAL-007 FUEL PUMP VALIDATION DOCUMENT",
+      "LST-EQP-001 Master Equipment List",
+      "LST-GEN-001 Master Document List",
+      "RPT-ENG-001 MONTHLY ENGINEERING DEVELOPMENT REPORT",
+    ]);
+    expect(fromName.filter((seed) => !seed.number).map((seed) => seed.formKey).sort()).toEqual([
+      "8d",
+      "audit-plan",
+      "audit-report",
+      "audit_finding_action_log",
+      "cal-record",
+      "cal-register",
+      "capa",
+      "change_control_record",
+      "complaint",
+      "dcr",
+      "design_history_form",
+      "deviation-waiver",
+      "document_revision_record",
+      "eco",
+      "ecr",
+      "final_inspection_release",
+      "first_article_inspection",
+      "in_process_inspection",
+      "incoming_inspection_record",
+      "management_review_record",
+      "master_document_register",
+      "ncr",
+      "preventive_risk_action",
+      "quality_kpi_monitoring",
+      "quality_objectives_action_plan",
+      "quality_record_disposition",
+      "record_retention_log",
+      "risk",
+      "supplier-ncr",
+      "supplier_qualification_evaluation",
+      "training-record",
+      "training_matrix",
+    ]);
   });
 });

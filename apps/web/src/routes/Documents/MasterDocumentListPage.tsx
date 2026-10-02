@@ -50,7 +50,7 @@ export function MasterDocumentListPage() {
         <div>
           <h1 className="text-2xl font-semibold">Master Document List</h1>
           <p className="text-sm text-muted-foreground">
-            Document ID: LST-GEN-001 · Structure Rev: B{latest ? ` · Last Updated: ${latest}` : ""}. Controlled documents and in-app forms. A form keeps the number already printed on it.
+            Document ID: LST-GEN-001 · Structure Rev: B{latest ? ` · Last Updated: ${latest}` : ""}. Controlled documents and in-app forms. A form keeps the number stored on it, or the number already in its name.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
