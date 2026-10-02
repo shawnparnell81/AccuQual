@@ -16,6 +16,7 @@ interface MasterDocumentRow {
   location: string;
   status: string;
   revHistory: string;
+  href?: string;
 }
 
 export function MasterDocumentListPage() {
@@ -49,7 +50,7 @@ export function MasterDocumentListPage() {
         <div>
           <h1 className="text-2xl font-semibold">Master Document List</h1>
           <p className="text-sm text-muted-foreground">
-            Document ID: LST-GEN-001 · Structure Rev: B{latest ? ` · Last Updated: ${latest}` : ""}. Rows come from document control: revisions, approvals, and folders.
+            Document ID: LST-GEN-001 · Structure Rev: B{latest ? ` · Last Updated: ${latest}` : ""}. Controlled documents and in-app forms. A form keeps the number already printed on it.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -80,7 +81,7 @@ export function MasterDocumentListPage() {
                 <tr key={row.id}>
                   <td>{row.documentId}</td>
                   <td className="left">
-                    <Link to={`/documents/${row.id}`} className="text-primary hover:underline">{row.title}</Link>
+                    <Link to={row.href || `/documents/${row.id}`} className="text-primary hover:underline">{row.title}</Link>
                   </td>
                   <td>{row.currentRev}</td>
                   <td>{row.approvalDate ?? ""}</td>
