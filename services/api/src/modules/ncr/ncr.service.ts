@@ -6,6 +6,7 @@ import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { syncNcrFormData, ncrIsoDate } from "./ncr.formSync.js";
 import type { Db } from "../../lib/requestDb.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
+import { ncrQuarantineIsOnHold, onHoldBlockMessage } from "../quarantine/quarantine.service.js";
 
 /**
  * `expectedFrom`, when given, enforces the sequence the Transitions/Rules
@@ -73,6 +74,7 @@ export const setCorrectiveAction = async (db: Db, id: number, correctiveAction: 
 };
 
 export const close = async (db: Db, id: number, performedBy?: number, allowedSiteIds?: number[]) => {
+  if (await ncrQuarantineIsOnHold(db, id)) throw AppError.badRequest(onHoldBlockMessage(id));
   const updated = await patchNcr(db, id, { status: "closed", closedAt: new Date() }, "closed", performedBy, ["corrective_action"], allowedSiteIds);
   await syncNcrFormData(db, id, { documentStatus: "Closed", ncrClosureDate: ncrIsoDate(updated.closedAt ?? new Date()), finalDispositionConfirmed: "Yes" }, performedBy);
   return updated;

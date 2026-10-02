@@ -15,14 +15,15 @@ const suffix = Date.now();
 const userIds: number[] = [];
 let qualityToken: string;
 let engineeringToken: string;
+let managerToken: string;
 
-async function makeUser(department: string) {
+async function makeUser(department: string, roleName = "operator") {
   const [user] = await db
     .insert(users)
-    .values({ email: `ncr-quar-${department}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department })
+    .values({ email: `ncr-quar-${department}-${roleName}-${suffix}-${Math.random().toString(36).slice(2, 7)}@test.local`, passwordHash: "unused", department })
     .returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department });
+  return signAccessToken({ sub: String(user!.id), roleId: null, roleName, department });
 }
 
 describe("NCR quarantined items", () => {
@@ -31,6 +32,7 @@ describe("NCR quarantined items", () => {
     await seedDefaultPermissions(co!.id);
     qualityToken = await makeUser("quality");
     engineeringToken = await makeUser("engineering");
+    managerToken = await makeUser("quality", "quality_manager");
   });
 
   afterAll(async () => {
@@ -136,6 +138,100 @@ describe("NCR quarantined items", () => {
       expect(change?.concession).toBe(concession);
       expect(change?.dispositionLabel).toMatch(/concession/);
     }
+  });
+
+  async function advanceToFix(ncrId: number) {
+    expect((await request(app).post(`/ncr/${ncrId}/containment`).set("Authorization", `Bearer ${qualityToken}`).send({ containment: "Held the parts" })).status).toBe(200);
+    expect((await request(app).post(`/ncr/${ncrId}/root-cause`).set("Authorization", `Bearer ${qualityToken}`).send({ rootCause: "Worn fixture" })).status).toBe(200);
+    expect((await request(app).post(`/ncr/${ncrId}/corrective-action`).set("Authorization", `Bearer ${qualityToken}`).send({ correctiveAction: "Replaced the fixture" })).status).toBe(200);
+  }
+
+  it("keeps an NCR from being released or closed while quarantine disposition is On Hold", async () => {
+    const created = await request(app).post("/ncr").set("Authorization", `Bearer ${qualityToken}`).send({ title: "On hold disposition" });
+    expect(created.status).toBe(201);
+    const ncrId = created.body.id as number;
+    const added = await request(app).post(`/ncr/${ncrId}/quarantine-items`).set("Authorization", `Bearer ${qualityToken}`).send({ partNumber: "PN-HOLD", quantity: 3 });
+    expect(added.status).toBe(201);
+    const itemId = added.body.id as number;
+
+    const held = await request(app).post(`/ncr/${ncrId}/disposition`).set("Authorization", `Bearer ${qualityToken}`).send({ disposition: "on_hold" });
+    expect(held.status).toBe(200);
+    expect(held.body.released).toBe(false);
+    expect(held.body.disposition).toBe("on_hold");
+    expect(held.body.items).toHaveLength(1);
+    expect(held.body.items[0].disposition).toBe("on_hold");
+
+    const active = await request(app).get(`/ncr/${ncrId}/quarantine-items`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(active.body).toHaveLength(1);
+    expect(active.body[0].disposition).toBe("on_hold");
+    expect(active.body[0].dispositionLabel).toBe("On Hold");
+
+    const release = await request(app).post(`/ncr/${ncrId}/disposition`).set("Authorization", `Bearer ${qualityToken}`).send({ disposition: "scrap" });
+    expect(release.status).toBe(400);
+    expect(release.body.message).toMatch(/On Hold/);
+    expect(release.body.message).toMatch(/disposition/i);
+    expect((await request(app).get(`/quarantine/items?view=active&ncrId=${ncrId}`).set("Authorization", `Bearer ${qualityToken}`)).body).toHaveLength(1);
+
+    const directRelease = await request(app)
+      .post(`/quarantine/${itemId}/release`)
+      .set("Authorization", `Bearer ${managerToken}`)
+      .send({ disposition: "use_as_is", notes: "Trying to release while On Hold", quantity: 3 });
+    expect(directRelease.status).toBe(400);
+    expect(directRelease.body.message).toMatch(/On Hold/);
+
+    const directDestroy = await request(app)
+      .post(`/quarantine/${itemId}/destroy`)
+      .set("Authorization", `Bearer ${managerToken}`)
+      .send({ disposition: "scrapped", notes: "Trying to scrap while On Hold", quantity: 3 });
+    expect(directDestroy.status).toBe(400);
+    expect(directDestroy.body.message).toMatch(/On Hold/);
+
+    await advanceToFix(ncrId);
+    const closed = await request(app).post(`/ncr/${ncrId}/close`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(closed.status).toBe(400);
+    expect(closed.body.message).toMatch(/Change the quarantine disposition off On Hold/);
+
+    const patched = await request(app).patch(`/ncr/${ncrId}`).set("Authorization", `Bearer ${qualityToken}`).send({ status: "closed" });
+    expect(patched.status).toBe(400);
+    expect(patched.body.message).toMatch(/On Hold/);
+
+    const other = await request(app).post("/ncr").set("Authorization", `Bearer ${qualityToken}`).send({ title: "Bulk partner" });
+    const bulk = await request(app).patch("/ncr/bulk").set("Authorization", `Bearer ${qualityToken}`).send({ ids: [ncrId, other.body.id], patch: { status: "closed" } });
+    expect(bulk.status).toBe(400);
+    expect(bulk.body.message).toMatch(/On Hold/);
+    expect((await request(app).get(`/ncr/${ncrId}`).set("Authorization", `Bearer ${qualityToken}`)).body.status).toBe("corrective_action");
+    expect((await request(app).get(`/ncr/${other.body.id}`).set("Authorization", `Bearer ${qualityToken}`)).body.status).toBe("open");
+
+    const cleared = await request(app).post(`/ncr/${ncrId}/disposition`).set("Authorization", `Bearer ${qualityToken}`).send({ disposition: "scrap", release: false });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.released).toBe(false);
+    const stillHeld = await request(app).get(`/ncr/${ncrId}/quarantine-items`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(stillHeld.body).toHaveLength(1);
+    expect(stillHeld.body[0].disposition).toBe("scrap");
+
+    const released = await request(app).post(`/ncr/${ncrId}/disposition`).set("Authorization", `Bearer ${qualityToken}`).send({ disposition: "scrap" });
+    expect(released.status).toBe(200);
+    expect(released.body.released).toBe(true);
+    expect((await request(app).get(`/quarantine/items?view=active&ncrId=${ncrId}`).set("Authorization", `Bearer ${qualityToken}`)).body).toEqual([]);
+
+    const nowClosed = await request(app).post(`/ncr/${ncrId}/close`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(nowClosed.status).toBe(200);
+    expect(nowClosed.body.status).toBe("closed");
+  });
+
+  it("lets close succeed after disposition leaves On Hold, before the material is released", async () => {
+    const created = await request(app).post("/ncr").set("Authorization", `Bearer ${qualityToken}`).send({ title: "Close after leaving hold" });
+    const ncrId = created.body.id as number;
+    expect((await request(app).post(`/ncr/${ncrId}/quarantine-items`).set("Authorization", `Bearer ${qualityToken}`).send({ partNumber: "PN-LATER", quantity: 1 })).status).toBe(201);
+    expect((await request(app).post(`/ncr/${ncrId}/disposition`).set("Authorization", `Bearer ${qualityToken}`).send({ disposition: "on_hold", release: false })).status).toBe(200);
+    await advanceToFix(ncrId);
+    expect((await request(app).post(`/ncr/${ncrId}/close`).set("Authorization", `Bearer ${qualityToken}`)).status).toBe(400);
+
+    expect((await request(app).post(`/ncr/${ncrId}/disposition`).set("Authorization", `Bearer ${qualityToken}`).send({ disposition: "rework", release: false })).status).toBe(200);
+    const closed = await request(app).post(`/ncr/${ncrId}/close`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(closed.status).toBe(200);
+    expect(closed.body.status).toBe("closed");
+    expect((await request(app).get(`/quarantine/items?view=active&ncrId=${ncrId}`).set("Authorization", `Bearer ${qualityToken}`)).body).toHaveLength(1);
   });
 
   it("refuses a quarantined item with no part number or a zero quantity", async () => {

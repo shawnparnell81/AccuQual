@@ -25,6 +25,7 @@ import {
   rootCauseHandler,
   correctiveActionHandler,
   closeHandler,
+  rejectCloseWhileQuarantineOnHold,
   listNcrQuarantineItemsHandler,
   addNcrQuarantineItemHandler,
   completeNcrDispositionHandler,
@@ -38,10 +39,10 @@ ncrRouter.get("/", listHandler);
 ncrRouter.post("/", validate(createNcrSchema), baseHandlers.create);
 // Bulk actions pilot (see crudFactory.ts's bulkUpdate) — "bulk" must be registered before the ":id" param route
 // below, or a request to PATCH /ncr/bulk would be read as :id="bulk" instead of reaching this handler.
-ncrRouter.patch("/bulk", validate(bulkUpdateNcrSchema), baseHandlers.bulkUpdate);
+ncrRouter.patch("/bulk", validate(bulkUpdateNcrSchema), rejectCloseWhileQuarantineOnHold, baseHandlers.bulkUpdate);
 ncrRouter.get("/:id/repeats", repeatsHandler);
 ncrRouter.get("/:id", baseHandlers.getOne);
-ncrRouter.patch("/:id", validate(updateNcrSchema), baseHandlers.update);
+ncrRouter.patch("/:id", validate(updateNcrSchema), rejectCloseWhileQuarantineOnHold, baseHandlers.update);
 ncrRouter.delete("/:id", deleteRecordHandler("ncr"));
 
 ncrRouter.post("/:id/assign", validate(assignNcrSchema), assignHandler);

@@ -23,7 +23,7 @@ import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
 import { NCR_LOOP, READ_ONLY_REASON, duePhrase, formatPerson, isPastDue, ncrLoopIndex, ncrNextAction, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
-import { NcrQuarantineSection } from "./NcrQuarantineSection";
+import { NcrQuarantineSection, ON_HOLD_BLOCK_MESSAGE } from "./NcrQuarantineSection";
 import { RepeatNcrBanner } from "./RepeatNcrBanner";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import { FormSignProvider } from "../../components/forms/formSign";
@@ -58,6 +58,7 @@ export function NcrWorkspacePage() {
   const canEdit = useCanEditWorkflow("ncr");
   const { label, people } = usePersonDirectory();
   const [showHistory, setShowHistory] = useState(false);
+  const [quarantineOnHold, setQuarantineOnHold] = useState(false);
 
   const { data: ncr, isLoading, isError } = ncrHooks.useOne(ncrId);
   const updateNcr = ncrHooks.useUpdate();
@@ -177,13 +178,24 @@ export function NcrWorkspacePage() {
             <button onClick={handleDownload} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
               Download PDF
             </button>
+            {quarantineOnHold && ncr.status === "corrective_action" && (
+              <p className="max-w-sm text-xs text-destructive">{ON_HOLD_BLOCK_MESSAGE}</p>
+            )}
             <WorkflowActionButton
               label="Close issue"
               navKey="ncr"
               action={closeAction}
-              onClick={() => closeAction.mutate({ id: ncrId })}
+              onClick={() => {
+                if (quarantineOnHold) {
+                  toast.error(ON_HOLD_BLOCK_MESSAGE);
+                  return;
+                }
+                closeAction.mutate({ id: ncrId });
+              }}
               visible={ncr.status === "corrective_action"}
               variant="primary"
+              disabled={quarantineOnHold}
+              title={quarantineOnHold ? ON_HOLD_BLOCK_MESSAGE : undefined}
             />
           </>
         }
@@ -192,7 +204,7 @@ export function NcrWorkspacePage() {
 
       <RepeatNcrBanner ncrId={ncrId} canEdit={canEdit} />
 
-      <NcrQuarantineSection ncrId={ncrId} canEdit={canEdit} />
+      <NcrQuarantineSection ncrId={ncrId} canEdit={canEdit} onHoldChange={setQuarantineOnHold} />
 
       <div className="aq-print-stack grid grid-cols-1 gap-4 xl:grid-cols-2">
         {/* Left pane — status/linking controls + the real editable form. */}

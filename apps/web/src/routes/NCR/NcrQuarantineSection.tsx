@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { TextField, SelectField } from "../../components/forms/Field";
@@ -11,20 +11,34 @@ const DISPOSITIONS = [
   { value: "rework", label: "Rework" },
   { value: "scrap", label: "Scrap" },
   { value: "return_to_supplier", label: "Return to supplier" },
+  { value: "on_hold", label: "On Hold" },
 ] as const;
+
+export const ON_HOLD_DISPOSITION = "on_hold";
+export const ON_HOLD_BLOCK_MESSAGE = "This NCR is On Hold. Change the quarantine disposition off On Hold before you release or close it.";
+
+type DispositionValue = (typeof DISPOSITIONS)[number]["value"];
+
+function dispositionFromRows(rows: QuarantineItemRow[]): DispositionValue | null {
+  if (rows.some((row) => row.disposition === ON_HOLD_DISPOSITION)) return ON_HOLD_DISPOSITION;
+  const known = rows.find((row) => DISPOSITIONS.some((option) => option.value === row.disposition));
+  return (known?.disposition as DispositionValue | undefined) ?? null;
+}
 
 /**
  * Quarantine is started here, on the NCR. Each row becomes a quarantined item.
  * Completing the disposition releases every item still held for this NCR.
  */
-export function NcrQuarantineSection({ ncrId, canEdit }: { ncrId: number; canEdit: boolean }) {
+export function NcrQuarantineSection({ ncrId, canEdit, onHoldChange }: { ncrId: number; canEdit: boolean; onHoldChange?: (held: boolean) => void }) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [partNumber, setPartNumber] = useState("");
   const [quantity, setQuantity] = useState("");
   const [serialNumber, setSerialNumber] = useState("");
-  const [disposition, setDisposition] = useState<(typeof DISPOSITIONS)[number]["value"]>("use_as_is");
+  const [disposition, setDisposition] = useState<DispositionValue>("use_as_is");
   const [concession, setConcession] = useState<"" | "with" | "none">("");
+  const hydrated = useRef(false);
+  const previousDisposition = useRef<DispositionValue>("use_as_is");
 
   const items = useQuery<QuarantineItemRow[]>({
     queryKey: ["ncr", ncrId, "quarantine-items"],
@@ -55,6 +69,15 @@ export function NcrQuarantineSection({ ncrId, canEdit }: { ncrId: number; canEdi
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't quarantine that item.")),
   });
 
+  const saveDisposition = useMutation({
+    mutationFn: async (next: DispositionValue) => (await apiClient.post(`/ncr/${ncrId}/disposition`, { disposition: next, release: false })).data,
+    onSuccess: () => refresh(),
+    onError: (err) => {
+      setDisposition(previousDisposition.current);
+      toast.error(extractErrorMessage(err, "Couldn't save that disposition."));
+    },
+  });
+
   const complete = useMutation({
     mutationFn: async () =>
       (
@@ -71,7 +94,29 @@ export function NcrQuarantineSection({ ncrId, canEdit }: { ncrId: number; canEdi
   });
 
   const rows = items.data ?? [];
+  const held = disposition === ON_HOLD_DISPOSITION || rows.some((row) => row.disposition === ON_HOLD_DISPOSITION);
   const showSerial = rows.some((row) => !!row.serialNumber) || canEdit;
+  const showDisposition = rows.some((row) => !!row.dispositionLabel);
+
+  useEffect(() => {
+    if (hydrated.current || items.isLoading || items.isFetching || items.isError || !items.data) return;
+    hydrated.current = true;
+    const fromServer = dispositionFromRows(items.data);
+    if (fromServer) setDisposition(fromServer);
+  }, [items.isLoading, items.isFetching, items.isError, items.data]);
+
+  useEffect(() => {
+    onHoldChange?.(held);
+  }, [held, onHoldChange]);
+
+  function chooseDisposition(next: DispositionValue) {
+    if (next === disposition) return;
+    hydrated.current = true;
+    previousDisposition.current = disposition;
+    setDisposition(next);
+    if (next !== "use_as_is") setConcession("");
+    saveDisposition.mutate(next);
+  }
 
   return (
     <section className="no-print flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
@@ -92,6 +137,7 @@ export function NcrQuarantineSection({ ncrId, canEdit }: { ncrId: number; canEdi
                 <th className="py-1 pr-3 font-medium">Part #</th>
                 <th className="py-1 pr-3 font-medium">Qty</th>
                 {showSerial && <th className="py-1 pr-3 font-medium">S/N</th>}
+                {showDisposition && <th className="py-1 pr-3 font-medium">Disposition</th>}
               </tr>
             </thead>
             <tbody>
@@ -100,6 +146,7 @@ export function NcrQuarantineSection({ ncrId, canEdit }: { ncrId: number; canEdi
                   <td className="py-1.5 pr-3">{row.partNumber}</td>
                   <td className="py-1.5 pr-3">{Number(row.quantity)}</td>
                   {showSerial && <td className="py-1.5 pr-3">{row.serialNumber ?? ""}</td>}
+                  {showDisposition && <td className="py-1.5 pr-3">{row.dispositionLabel ?? ""}</td>}
                 </tr>
               ))}
             </tbody>
@@ -129,15 +176,7 @@ export function NcrQuarantineSection({ ncrId, canEdit }: { ncrId: number; canEdi
       {canEdit && (
         <div className="flex flex-wrap items-end gap-3 border-t border-border pt-3">
           <div className="min-w-[14rem]">
-            <SelectField
-              label="Disposition"
-              value={disposition}
-              onChange={(e) => {
-                const next = e.target.value as (typeof DISPOSITIONS)[number]["value"];
-                setDisposition(next);
-                if (next !== "use_as_is") setConcession("");
-              }}
-            >
+            <SelectField label="Disposition" value={disposition} onChange={(e) => chooseDisposition(e.target.value as DispositionValue)}>
               {DISPOSITIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -160,14 +199,21 @@ export function NcrQuarantineSection({ ncrId, canEdit }: { ncrId: number; canEdi
           )}
           <button
             type="button"
-            disabled={complete.isPending || rows.length === 0}
-            onClick={() => complete.mutate()}
+            disabled={complete.isPending || saveDisposition.isPending || rows.length === 0 || held}
+            onClick={() => {
+              if (held) {
+                toast.error(ON_HOLD_BLOCK_MESSAGE);
+                return;
+              }
+              complete.mutate();
+            }}
             className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
           >
             {complete.isPending ? "Releasing…" : "Complete disposition"}
           </button>
         </div>
       )}
+      {held && <p className="text-sm text-destructive">{ON_HOLD_BLOCK_MESSAGE}</p>}
     </section>
   );
 }
