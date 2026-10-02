@@ -19,6 +19,7 @@ import { onlyOfficeSettings } from "../onlyoffice/settings.js";
 import { signOfficeToken } from "../onlyoffice/token.js";
 import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
 import { ensureCompanyDocumentFolders, FILING_DRAWER_NAMES } from "./companyDocumentFolders.js";
+import { MASTER_DOCUMENT_LIST_PATH, retargetRetiredRegisterLink } from "./formFiling.js";
 import { ensureFormTemplates, listFormTemplates } from "./formTemplates.js";
 import { fileFormRecord, filingQuery, getFormFiling, updateFormNumber } from "./formRecordFiling.js";
 import { UPLOAD_TYPE_ERROR, sniffUpload } from "../../utils/fileSniff.js";
@@ -99,7 +100,7 @@ const FORM_LINK_RULES: { pattern: RegExp; path: string }[] = [
   // module for, so each gets its own real /qms-forms/:formType link
   // instead of a static file slot.
   { pattern: /\brevision history\b/i, path: "/qms-forms/document_revision_record" },
-  { pattern: /\bmaster document list\b/i, path: "/qms-forms/master_document_register" },
+  { pattern: /\bmaster document list\b/i, path: MASTER_DOCUMENT_LIST_PATH },
   { pattern: /\brecord retention log\b/i, path: "/qms-forms/record_retention_log" },
   { pattern: /\bquality objectives\b/i, path: "/qms-forms/quality_objectives_action_plan" },
   { pattern: /\bpreventive actions?\b/i, path: "/qms-forms/preventive_risk_action" },
@@ -180,6 +181,12 @@ async function ensureAdditionalSubfolders(db: Db, all: (typeof documentFolders.$
  * (a reference document about the process, not the live record type).
  */
 async function linkKnownForms(db: Db, all: (typeof documentFolders.$inferSelect)[]): Promise<void> {
+  for (const folder of all) {
+    const next = retargetRetiredRegisterLink(folder.linkedPath);
+    if (!next || next === folder.linkedPath) continue;
+    await db.update(documentFolders).set({ linkedPath: next }).where(eq(documentFolders.id, folder.id));
+    folder.linkedPath = next;
+  }
   const hasChildren = new Set(all.map((f) => f.parentId).filter((id): id is number => id !== null));
   const toLink = all.filter((f) => !hasChildren.has(f.id) && !f.linkedPath && !/procedure/i.test(f.name) && !FILING_DRAWER_NAMES.has(f.name));
 

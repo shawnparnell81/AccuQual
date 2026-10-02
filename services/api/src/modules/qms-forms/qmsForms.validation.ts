@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { reasonableDate } from "../../utils/validation.js";
-import { QMS_FORM_DEFINITIONS } from "./qmsFormDefinitions.js";
+import { liveQmsFormDefinitions } from "./qmsFormDefinitions.js";
 
-const FORM_TYPES = QMS_FORM_DEFINITIONS.map((d) => d.formType) as [string, ...string[]];
+const FORM_TYPES = liveQmsFormDefinitions().map((d) => d.formType) as [string, ...string[]];
 export const QMS_FORM_STATUSES = ["draft", "active", "obsolete"] as const;
 
 export const createQmsFormSchema = z.object({

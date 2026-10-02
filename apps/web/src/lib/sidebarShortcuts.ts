@@ -52,6 +52,11 @@ const PIN_ICONS: Record<string, SidebarLink["icon"]> = {
   "pin-work-instruction": ScrollText,
 };
 
+/** Blank Register pin. The live list pin (`pin-master-document-list`) stays. */
+export function isRetiredShortcut(pin: { key?: string; path?: string }): boolean {
+  return pin.key === "blank:master_document_register" || pin.path === "/qms-forms/master_document_register";
+}
+
 export function isPersonalShortcutKey(key: string): boolean {
   return key === SHORTCUTS_FOLDER_KEY || key.startsWith("pin-") || key.startsWith("blank:");
 }
@@ -90,7 +95,7 @@ export function applyUserShortcuts(nodes: SidebarNode[], prefs: SidebarShortcutP
   const seen = new Set<string>();
   const pins: SidebarLink[] = [];
   for (const pin of prefs?.pinned ?? []) {
-    if (!pin?.key || hidden.has(pin.key)) continue;
+    if (!pin?.key || hidden.has(pin.key) || isRetiredShortcut(pin)) continue;
     const path = pin.path === LEGACY_VALIDATION_REPORTS_PATH ? faiValidationDocumentsHref() : pin.path;
     if (seen.has(pin.key) || seen.has(path) || visiblePaths.has(path)) continue;
     seen.add(pin.key);

@@ -9,7 +9,7 @@ import { retainSignatureValues } from "../signatures/signaturePin.js";
 import { deleteRecord } from "../records/recordDeletion.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { keptRevision, templateRevisionFor } from "../forms/templateRevision.js";
-import { getQmsFormDefinition, QMS_FORM_DEFINITIONS } from "./qmsFormDefinitions.js";
+import { getQmsFormDefinition, isRetiredQmsFormType, liveQmsFormDefinitions } from "./qmsFormDefinitions.js";
 
 async function loadForm(req: Request, id: number) {
   const [row] = await req.db!.select().from(qmsForms).where(and(eq(qmsForms.id, id)));
@@ -18,7 +18,7 @@ async function loadForm(req: Request, id: number) {
 }
 
 export const listQmsFormTypesHandler = asyncHandler(async (_req: Request, res: Response) => {
-  res.json(QMS_FORM_DEFINITIONS);
+  res.json(liveQmsFormDefinitions());
 });
 
 export const listQmsFormsHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -32,6 +32,7 @@ export const listQmsFormsHandler = asyncHandler(async (req: Request, res: Respon
 
 export const createQmsFormHandler = asyncHandler(async (req: Request, res: Response) => {
   const { formType } = req.body as { formType: string };
+  if (isRetiredQmsFormType(formType)) throw AppError.badRequest("Master Document Register is retired. Use the Master Document List.");
   const definition = getQmsFormDefinition(formType);
   if (!definition) throw AppError.badRequest(`Unknown form type "${formType}"`);
   const revision = templateRevisionFor(`qms:${formType}`).revision;
