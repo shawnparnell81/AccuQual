@@ -99,7 +99,7 @@ export async function ensureFormTemplates(db: Db): Promise<void> {
     const folderGone = existing.folderId == null || !byId.has(existing.folderId);
     const nextFolderId = folderGone ? folderId : existing.folderId!;
     keep.add(nextFolderId);
-    const nextFormId = storedFormId(existing.formId, seed.formId);
+    const nextFormId = storedFormId(existing.formId, seed.formId, seed.formKey);
     if (folderGone || existing.formId !== nextFormId || existing.title !== seed.title || existing.subjectRoute !== seed.subjectRoute) {
       await db
         .update(controlledFormTemplates)

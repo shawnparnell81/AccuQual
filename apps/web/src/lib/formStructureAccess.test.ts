@@ -59,10 +59,10 @@ test("published ISO letters and source Doc IDs stay on the masters", () => {
   assert.equal(title["frm-trn-002"], "GRADING RUBRIC: CROSS-TRAINING EVALUATION");
   assert.equal(id["frm-ncr-001"], "FRM-NCR-001");
   assert.equal(title["frm-ncr-001"], "NON-CONFORMANCE REPORT (NCR)");
-  assert.equal(id["frm-gen-002"], "");
+  assert.equal(id["frm-gen-002"], "TMP-GEN-001");
   assert.equal(title["frm-gen-002"], "INTERNAL AUDIT SUMMARY REPORT");
-  assert.equal(id["frm-tst-001"], "");
-  assert.equal(id["frm-tst-002"], "");
+  assert.equal(id["frm-tst-001"], "FRM-TST-001");
+  assert.equal(id["frm-tst-002"], "FRM-TST-002");
   assert.equal(title["frm-tst-001"], "ASTM E542 Gravimetric Volume Calculator");
   assert.equal(title["frm-tst-002"], "ASTM E542 Gravimetric Volume Calculator");
 });
