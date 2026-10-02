@@ -21,8 +21,11 @@ export function TextField({ label, ...props }: { label: string } & InputHTMLAttr
 export function TextAreaField({ label, allowPictures = true, ...props }: { label: string; allowPictures?: boolean } & TextareaHTMLAttributes<HTMLTextAreaElement>) {
   const record = usePictureRecord();
   if (allowPictures && record) {
+    // A <label> would forward every click in this block to Insert Picture's
+    // file input (NCR Containment, and the same fields beside it). The caption
+    // stays a span; the editor carries the accessible name.
     return (
-      <label className="flex flex-col gap-1 text-sm">
+      <div className="flex flex-col gap-1 text-sm">
         <span className="text-xs font-semibold text-muted-foreground">{label}</span>
         <PictureText
           value={props.value == null ? "" : String(props.value)}
@@ -35,7 +38,7 @@ export function TextAreaField({ label, allowPictures = true, ...props }: { label
           entityId={record.entityId}
           onChange={(next) => props.onChange?.({ target: { value: next } } as ChangeEvent<HTMLTextAreaElement>)}
         />
-      </label>
+      </div>
     );
   }
   return (
