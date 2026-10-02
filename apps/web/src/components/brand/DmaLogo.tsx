@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useAuthStore } from "../../store/authStore";
 
 /** Official DMA Industries mark. Dark navy on transparent; CSS turns it white on dark chrome. */
@@ -34,16 +35,17 @@ export function CompanyLogo({ height = 40 }: { height?: number }) {
 }
 
 /**
- * Shared form header. New forms pick this up through GenericFormRenderer,
- * the ISO and validation sheet pages, and FormEditor. The grid underneath
- * is unchanged. The mark is the company logo from branding.
+ * Shared form header. Logo, title, and an optional revision block sit in
+ * three columns so a long title wraps in the middle instead of painting
+ * across the revision. With no meta, the balance column keeps the title centered.
+ * The mark is the company logo from branding.
  */
-export function FormHeader({ title }: { title?: string }) {
+export function FormHeader({ title, meta }: { title?: string; meta?: ReactNode }) {
   return (
     <div className="dma-form-header">
       <CompanyLogo height={40} />
       {title ? <h2 className="dma-form-title">{title}</h2> : <div className="dma-form-title" />}
-      <span className="dma-form-balance" aria-hidden="true" />
+      {meta ? <div className="dma-form-meta">{meta}</div> : <span className="dma-form-balance" aria-hidden="true" />}
     </div>
   );
 }

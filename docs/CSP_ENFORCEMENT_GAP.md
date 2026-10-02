@@ -5,7 +5,7 @@
 ## Policy today
 
 ```
-default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none';
+default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self';
 form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
 img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self';
 worker-src 'self' blob:; frame-src 'self' blob:; manifest-src 'self'
@@ -25,7 +25,7 @@ The header name is `Content-Security-Policy-Report-Only`. A violating load is re
 | `connect-src 'self'` | XHR/fetch only to this origin (the `/api` rewrite is same-origin) |
 | `frame-src 'self' blob:` | No third-party editor frame |
 | `object-src 'none'` | No plugins |
-| `frame-ancestors 'none'` | Page cannot be framed (matches `X-Frame-Options: DENY`) |
+| `frame-ancestors 'self'` | Only this origin may frame the page (matches `X-Frame-Options: SAMEORIGIN`). Print preview loads the page in a same-origin frame; `DENY` / `'none'` makes that frame fail while the live page can still print. |
 
 ## What enforcement would break
 
@@ -45,7 +45,7 @@ Same-origin `/api/*` rewrites to `https://api.accuqualqms.com` are browser reque
 
 ## Not changed in this pass
 
-- The header stays `Content-Security-Policy-Report-Only` with the same policy string.
+- The header stays `Content-Security-Policy-Report-Only`. `frame-ancestors` is `'self'` so a same-origin print preview can frame the page. The policy is still not enforced.
 - Inline scripts were not rewritten to external files. Moving them is safe only after the marketing redirect and theme paint are retested on both hosts.
 - Google Fonts were not vendored.
 - ONLYOFFICE and Sentry hosts were not added to the policy. Adding them would widen the policy before the inline-script break is fixed, and would still not make enforce safe.

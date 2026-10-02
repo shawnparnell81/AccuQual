@@ -53,10 +53,10 @@ export function DocumentChangeRequestForm({ dcr }: { dcr: DocumentChangeRequest 
         <tbody>
           <tr>
             <td colSpan={6} className={`${cell} p-2`}>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="dma-form-header">
                 <CompanyLogo height={36} />
-                <h1 className="min-w-[12rem] flex-1 text-center text-sm font-bold tracking-wide">Document Change Request Form</h1>
-                <dl className="grid grid-cols-[auto_auto] gap-x-2 gap-y-0.5 text-[11px] leading-tight">
+                <h1 className="dma-form-title dma-form-title-plain">Document Change Request Form</h1>
+                <dl className="dma-form-meta grid grid-cols-[auto_auto] gap-x-2 gap-y-0.5 text-[11px] leading-tight">
                   <dt>Document:</dt>
                   <dd className="font-medium">{DOCUMENT_ID}</dd>
                   <dt>Rev. Level:</dt>

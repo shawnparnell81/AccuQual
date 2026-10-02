@@ -9,7 +9,6 @@
 
 .iso {
   width: 100%;
-  min-width: 880px;
   border-collapse: collapse;
   table-layout: fixed;
   font-family: var(--fb), "Inter", system-ui, sans-serif;
@@ -38,9 +37,16 @@
 }
 
 .iso .title {
+  height: auto;
+  min-height: 40px;
+  padding: 8px 8px 12px;
   font-size: 22px;
   font-weight: 700;
+  line-height: 1.25;
   text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   color: var(--form-heading, hsl(var(--foreground)));
   background: transparent;
   border: 0;
@@ -189,6 +195,12 @@
   font-size: 13px;
 }
 
+@media screen {
+  .iso {
+    min-width: 880px;
+  }
+}
+
 @media print {
   .iso-wrap {
     overflow: visible;
@@ -292,9 +304,16 @@
   vertical-align: top;
 }
 .dense-log .title {
+  height: auto;
+  min-height: 36px;
+  padding: 8px 8px 12px;
   font-size: 16px;
   font-weight: 700;
+  line-height: 1.25;
   text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .dense-log .section {
   background: #1f4e79;

@@ -3,6 +3,7 @@ import { Printer } from "lucide-react";
 import { exportFormPdf } from "../../api/formHooks";
 import { useToast } from "../shared/ToastProvider";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
+import { presentPdf, PRINT_NOT_DOCUMENT, PRINT_PREPARE_FAILED, PRINT_SAVE_FAILED, printShouldToast } from "../../lib/printDocument";
 
 interface PrintFormButtonProps {
   formType: string;
@@ -11,16 +12,10 @@ interface PrintFormButtonProps {
 }
 
 /**
- * A direct, one-click "Print" for any of this app's older-generic-engine
- * form types — real PDF bytes via the same self-healing exportFormPdf path
- * FormEditor's own "Export PDF" button uses (see forms.service.ts's
- * loadTemplate), triggered right from the record's own page instead of
- * requiring "Open Form" -> the floating window -> Export PDF three clicks
- * deep. Drop this next to OpenFormButton wherever one exists — every real
- * document in the app needs a print action reachable in one click, not just
- * the bespoke standalone ones (DCR/SCAR/Quality Inspection/Feasibility/QMS
- * Forms/Work Order Traveler all already have their own window.print()
- * button for the same reason).
+ * One-click print for a generic-engine form. The PDF comes from the same
+ * export path as FormEditor. Opening the print dialog, or saving the file
+ * when the dialog cannot attach, is success — the button does not toast
+ * those. A toast is reserved for a missing document or a real failure.
  */
 export function PrintFormButton({ formType, entityId, label = "Print" }: PrintFormButtonProps) {
   const toast = useToast();
@@ -30,15 +25,14 @@ export function PrintFormButton({ formType, entityId, label = "Print" }: PrintFo
     setIsExporting(true);
     try {
       const bytes = await exportFormPdf(formType, entityId);
-      const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${formType}-${entityId}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const outcome = await presentPdf(bytes, `${formType}-${entityId}.pdf`);
+      if (printShouldToast(outcome)) toast.error(PRINT_SAVE_FAILED);
     } catch (err) {
-      toast.error(await extractErrorMessageAsync(err, "Couldn't print this document."));
+      if (err instanceof Error && (err.message === PRINT_NOT_DOCUMENT || err.message === PRINT_SAVE_FAILED)) {
+        toast.error(err.message);
+      } else {
+        toast.error(await extractErrorMessageAsync(err, PRINT_PREPARE_FAILED));
+      }
     } finally {
       setIsExporting(false);
     }
