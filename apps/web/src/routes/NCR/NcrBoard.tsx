@@ -2,28 +2,30 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
-import type { Ncr } from "../../api/types";
+import type { Ncr, NcrStep } from "../../api/types";
 import { KanbanBoard, type BoardColumn } from "../../components/board/KanbanBoard";
 import { StepMoveModal, type StepRequest } from "../../components/board/StepMoveModal";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
-import { duePhrase, formatPerson, isPastDue, statusPhrase } from "../../lib/opsLanguage";
+import { duePhrase, formatPerson, isPastDue, ncrStepKey, ncrStepLabel } from "../../lib/opsLanguage";
 
 const COLUMNS: BoardColumn[] = [
-  { key: "open", label: "Open", tone: "danger" },
-  { key: "contained", label: "Contained", tone: "warning" },
-  { key: "investigating", label: "Investigating", tone: "info" },
-  { key: "corrective_action", label: "Fixing", tone: "primary" },
+  { key: "ncr_created", label: "NCR Created", tone: "danger" },
+  { key: "contain", label: "Contain", tone: "warning" },
+  { key: "disposition", label: "Disposition", tone: "info" },
+  { key: "fix", label: "Fix", tone: "primary" },
+  { key: "verify", label: "Verify", tone: "info" },
   { key: "closed", label: "Closed", tone: "success" },
 ];
 
-const NEXT: Record<Ncr["status"], Ncr["status"] | null> = {
-  open: "contained",
-  contained: "investigating",
-  investigating: "corrective_action",
-  corrective_action: "closed",
+const NEXT: Record<NcrStep, NcrStep | null> = {
+  ncr_created: "contain",
+  contain: "disposition",
+  disposition: "fix",
+  fix: "verify",
+  verify: "closed",
   closed: null,
 };
 
@@ -48,14 +50,16 @@ export function NcrBoard({ ncrs, canEdit }: { ncrs: Ncr[]; canEdit: boolean }) {
 
   function requestMove(ncr: Ncr, to: string) {
     const name = `NCR #${ncr.id}`;
-    if (to === "contained")
-      setStep({ title: `Contain ${name}`, description: "Describe what you did to stop the problem from spreading. This is what moves it to Contained.", fieldLabel: "Containment", submitLabel: "Mark contained", run: (t) => post(ncr, "containment", { containment: t }, `${name} contained.`) });
-    else if (to === "investigating")
-      setStep({ title: `Investigate ${name}`, description: "Write down the root cause you found.", fieldLabel: "Root cause", submitLabel: "Save root cause", run: (t) => post(ncr, "root-cause", { rootCause: t }, `${name} is being investigated.`) });
-    else if (to === "corrective_action")
-      setStep({ title: `Fix ${name}`, description: "Describe the corrective action being taken.", fieldLabel: "Corrective action", submitLabel: "Save corrective action", run: (t) => post(ncr, "corrective-action", { correctiveAction: t }, `${name} moved to fixing.`) });
+    if (to === "contain")
+      setStep({ title: `Contain ${name}`, description: "Describe what you did to stop the problem from spreading. This moves it to Contain.", fieldLabel: "Containment", submitLabel: "Mark contained", run: (t) => post(ncr, "containment", { containment: t }, `${name} is at Contain.`) });
+    else if (to === "disposition")
+      setStep({ title: `Disposition for ${name}`, description: "Record the disposition. Quarantine decisions stay on the NCR itself.", fieldLabel: "Disposition note", submitLabel: "Save disposition", run: (t) => post(ncr, "disposition-step", t.trim() ? { note: t.trim() } : {}, `${name} is at Disposition.`) });
+    else if (to === "fix")
+      setStep({ title: `Fix ${name}`, description: "Describe the fix being taken.", fieldLabel: "Fix", submitLabel: "Save fix", run: (t) => post(ncr, "corrective-action", { correctiveAction: t }, `${name} is at Fix.`) });
+    else if (to === "verify")
+      setStep({ title: `Verify ${name}`, description: "Describe how you checked that the fix held.", fieldLabel: "Verification", submitLabel: "Mark verified", run: (t) => post(ncr, "verify", { verification: t }, `${name} is at Verify.`) });
     else if (to === "closed")
-      setStep({ title: `Close ${name}?`, description: "Only close it once the corrective action is done.", submitLabel: "Close issue", run: () => post(ncr, "close", undefined, `${name} closed.`) });
+      setStep({ title: `Close ${name}?`, description: "Only close it once verification is done.", submitLabel: "Close issue", run: () => post(ncr, "close", undefined, `${name} closed.`) });
   }
 
   return (
@@ -63,16 +67,16 @@ export function NcrBoard({ ncrs, canEdit }: { ncrs: Ncr[]; canEdit: boolean }) {
       <KanbanBoard<Ncr>
         columns={COLUMNS}
         items={ncrs}
-        columnOf={(n) => n.status}
+        columnOf={(n) => ncrStepKey(n.status)}
         idOf={(n) => n.id}
-        nextOf={(n) => NEXT[n.status]}
+        nextOf={(n) => NEXT[ncrStepKey(n.status) as NcrStep]}
         canMove={canEdit}
         onMove={(n, to) => requestMove(n, to)}
         rejectMessage={(n, to) => {
-          const next = NEXT[n.status];
+          const next = NEXT[ncrStepKey(n.status) as NcrStep];
           return next
-            ? `NCRs move one step at a time. #${n.id} goes from ${statusPhrase(n.status)} to ${statusPhrase(next)} first — drop it there.`
-            : `#${n.id} is closed and can't move (${statusPhrase(to)}).`;
+            ? `NCRs move one step at a time. #${n.id} goes from ${ncrStepLabel(n.status)} to ${ncrStepLabel(next)} first — drop it there.`
+            : `#${n.id} is closed and can't move (${ncrStepLabel(to)}).`;
         }}
         people={people.map((person) => ({ id: person.id, name: formatPerson(person) }))}
         assignedTo={(n) => n.assignedTo}
@@ -92,7 +96,7 @@ export function NcrBoard({ ncrs, canEdit }: { ncrs: Ncr[]; canEdit: boolean }) {
             <p className="mt-1 text-sm font-medium leading-snug">{n.title}</p>
             <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
               <span className="truncate">{label(n.assignedTo)}</span>
-              <span className={isPastDue(n.dueDate, n.status === "closed") ? "font-medium text-destructive" : ""}>{duePhrase(n.dueDate, n.status === "closed")}</span>
+              <span className={isPastDue(n.dueDate, ncrStepKey(n.status) === "closed") ? "font-medium text-destructive" : ""}>{duePhrase(n.dueDate, ncrStepKey(n.status) === "closed")}</span>
             </div>
           </div>
         )}

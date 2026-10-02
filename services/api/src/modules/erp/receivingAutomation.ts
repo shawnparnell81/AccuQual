@@ -52,6 +52,7 @@ export async function maybeAutoCreateNcr(
     .values({
       title,
       description,
+      status: "ncr_created",
       severity: disposition === "rejected" ? "high" : "medium",
       supplierId: supplierId ?? undefined,
       receivingLineItemId: line.id,
@@ -67,7 +68,7 @@ export async function maybeAutoCreateNcr(
     changes: { message: "NCR auto-created from Receiving", receivingLineItemId: line.id, disposition, supplierId },
     performedBy,
   });
-  await publishEvent(WORKFLOW_STREAM, { module: "ncr", event: "auto_created_from_receiving", entityId: created!.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "ncr", event: "auto_created_from_receiving", step: "NCR Created", entityId: created!.id });
 
   return created!;
 }

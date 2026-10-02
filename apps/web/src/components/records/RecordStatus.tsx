@@ -25,7 +25,7 @@ export function RecordCrumbs({ items }: { items: { label: string; to?: string }[
 
 export function LoopTrail({ steps, current }: { steps: readonly string[]; current: number }) {
   return (
-    <ol className="flex flex-wrap items-center gap-y-2 text-xs">
+    <ol className="aq-step-trail flex flex-wrap items-center gap-y-2 text-xs">
       {steps.map((label, index) => {
         const state = index < current ? "done" : index === current ? "now" : "later";
         return (

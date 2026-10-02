@@ -142,8 +142,9 @@ describe("NCR quarantined items", () => {
 
   async function advanceToFix(ncrId: number) {
     expect((await request(app).post(`/ncr/${ncrId}/containment`).set("Authorization", `Bearer ${qualityToken}`).send({ containment: "Held the parts" })).status).toBe(200);
-    expect((await request(app).post(`/ncr/${ncrId}/root-cause`).set("Authorization", `Bearer ${qualityToken}`).send({ rootCause: "Worn fixture" })).status).toBe(200);
+    expect((await request(app).post(`/ncr/${ncrId}/disposition-step`).set("Authorization", `Bearer ${qualityToken}`).send({ note: "Scrap after the hold is cleared" })).status).toBe(200);
     expect((await request(app).post(`/ncr/${ncrId}/corrective-action`).set("Authorization", `Bearer ${qualityToken}`).send({ correctiveAction: "Replaced the fixture" })).status).toBe(200);
+    expect((await request(app).post(`/ncr/${ncrId}/verify`).set("Authorization", `Bearer ${qualityToken}`).send({ verification: "Next lot inspected and accepted" })).status).toBe(200);
   }
 
   it("keeps an NCR from being released or closed while quarantine disposition is On Hold", async () => {
@@ -199,8 +200,8 @@ describe("NCR quarantined items", () => {
     const bulk = await request(app).patch("/ncr/bulk").set("Authorization", `Bearer ${qualityToken}`).send({ ids: [ncrId, other.body.id], patch: { status: "closed" } });
     expect(bulk.status).toBe(400);
     expect(bulk.body.message).toMatch(/On Hold/);
-    expect((await request(app).get(`/ncr/${ncrId}`).set("Authorization", `Bearer ${qualityToken}`)).body.status).toBe("corrective_action");
-    expect((await request(app).get(`/ncr/${other.body.id}`).set("Authorization", `Bearer ${qualityToken}`)).body.status).toBe("open");
+    expect((await request(app).get(`/ncr/${ncrId}`).set("Authorization", `Bearer ${qualityToken}`)).body.status).toBe("verify");
+    expect((await request(app).get(`/ncr/${other.body.id}`).set("Authorization", `Bearer ${qualityToken}`)).body.status).toBe("ncr_created");
 
     const cleared = await request(app).post(`/ncr/${ncrId}/disposition`).set("Authorization", `Bearer ${qualityToken}`).send({ disposition: "scrap", release: false });
     expect(cleared.status).toBe(200);

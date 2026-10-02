@@ -29,6 +29,9 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   obsolete: "muted", // retired/superseded, not a problem state — distinct from "expired" below
 
   contained: "info",
+  contain: "info",
+  ncr_created: "warning",
+  disposition: "info",
   investigating: "info",
   in_progress: "info",
   request: "info",
@@ -40,6 +43,8 @@ export const BUCKET_BY_STATUS: Record<string, StatusBucket> = {
   in_review: "info",
   verifying: "info",
   corrective_action: "info",
+  fix: "info",
+  verify: "info",
   disposed: "info", // DI: awaiting close, one step past investigating
 
   open: "warning",

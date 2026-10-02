@@ -1,0 +1,28 @@
+{
+  "workflow": {
+    "steps": [
+      { "key": "ncr_created", "name": "NCR Created" },
+      { "key": "contain", "name": "Contain" },
+      { "key": "disposition", "name": "Disposition" },
+      { "key": "fix", "name": "Fix" },
+      { "key": "verify", "name": "Verify" },
+      { "key": "closed", "name": "Closed" }
+    ],
+    "currentStep": "NCR Created",
+    "allowedTransitions": {
+      "ncr_created": ["contain"],
+      "contain": ["disposition"],
+      "disposition": ["fix"],
+      "fix": ["verify"],
+      "verify": ["closed"],
+      "closed": []
+    },
+    "history": [{ "step": "NCR Created", "at": null }],
+    "legacyMap": {
+      "open": "ncr_created",
+      "contained": "contain",
+      "investigating": "disposition",
+      "corrective_action": "fix"
+    }
+  }
+}

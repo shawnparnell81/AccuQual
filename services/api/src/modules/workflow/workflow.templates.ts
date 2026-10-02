@@ -30,7 +30,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     definition: {
       nodes: [
         { id: "t1", type: "trigger", kind: "closed", config: {} },
-        { id: "a1", type: "action", kind: "notify_department", config: { department: "quality", subject: "NCR #{{entityId}} closed", body: "NCR #{{entityId}} was just closed." } },
+        { id: "a1", type: "action", kind: "notify_department", config: { department: "quality", subject: "NCR #{{entityId}} moved to Closed", body: "NCR #{{entityId}} is now at Closed." } },
         { id: "a2", type: "action", kind: "ai_suggestion", config: {} },
       ],
       edges: [

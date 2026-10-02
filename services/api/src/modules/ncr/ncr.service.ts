@@ -7,6 +7,7 @@ import { syncNcrFormData, ncrIsoDate } from "./ncr.formSync.js";
 import type { Db } from "../../lib/requestDb.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 import { ncrQuarantineIsOnHold, onHoldBlockMessage } from "../quarantine/quarantine.service.js";
+import { canonicalNcrStep, ncrStepLabel } from "./ncr.workflow.js";
 
 /**
  * `expectedFrom`, when given, enforces the sequence the Transitions/Rules
@@ -21,18 +22,27 @@ async function patchNcr(
   action: string,
   performedBy?: number,
   expectedFrom?: string[],
-  allowedSiteIds?: number[]
+  allowedSiteIds?: number[],
+  extraChanges?: Record<string, unknown>
 ) {
   const [current] = await db.select().from(ncr).where(and(eq(ncr.id, id)));
   if (!current) throw AppError.notFound("NCR");
   assertRecordOnAllowedSite(current.siteId, allowedSiteIds, "NCR");
-  if (expectedFrom && !expectedFrom.includes(current.status)) {
-    throw AppError.badRequest(`Cannot "${action}" an NCR from status "${current.status}" — must be one of: ${expectedFrom.join(", ")}`);
+  const currentKey = canonicalNcrStep(current.status);
+  if (expectedFrom) {
+    const allowed = expectedFrom.map((status) => canonicalNcrStep(status));
+    if (!allowed.includes(currentKey)) {
+      const names = [...new Set(allowed.map((status) => ncrStepLabel(status)))];
+      throw AppError.badRequest(`Cannot "${action}" an NCR from step "${ncrStepLabel(currentKey)}" — must be one of: ${names.join(", ")}`);
+    }
   }
+  const nextStatus = patch.status !== undefined ? canonicalNcrStep(String(patch.status)) : currentKey;
+  const fromLabel = ncrStepLabel(currentKey);
+  const toLabel = ncrStepLabel(nextStatus);
 
   const [updated] = await db
     .update(ncr)
-    .set({ ...patch, updatedAt: new Date() })
+    .set({ ...patch, status: nextStatus, updatedAt: new Date() })
     .where(and(eq(ncr.id, id)))
     .returning();
   if (!updated) throw AppError.notFound("NCR");
@@ -42,9 +52,27 @@ async function patchNcr(
   // since workflow.controller.ts's MODULE_ENTITY_TYPES filters by exact
   // string match (Postgres text comparison is case-sensitive). See the QA
   // sweep review.
-  await recordAuditTrail(db, { entityType: "NCR", entityId: id, action: "status_change", changes: { action, patch }, performedBy });
-  await publishEvent(WORKFLOW_STREAM, { module: "ncr", event: action, entityId: id });
+  await recordAuditTrail(db, {
+    entityType: "NCR",
+    entityId: id,
+    action: "status_change",
+    changes: {
+      action,
+      step: toLabel,
+      ...(fromLabel === toLabel ? {} : { from: fromLabel, to: toLabel }),
+      patch: { ...patch, status: nextStatus },
+      ...extraChanges,
+    },
+    performedBy,
+  });
+  await publishEvent(WORKFLOW_STREAM, { module: "ncr", event: action, step: toLabel, entityId: id });
   return updated;
+}
+
+async function currentStepKey(db: Db, id: number): Promise<string> {
+  const [current] = await db.select({ status: ncr.status }).from(ncr).where(eq(ncr.id, id));
+  if (!current) throw AppError.notFound("NCR");
+  return canonicalNcrStep(current.status);
 }
 
 // Assigning ownership isn't a lifecycle step — allowed from any status.
@@ -56,26 +84,63 @@ export const assign = (db: Db, id: number, assignedTo: number, performedBy?: num
 // left-pane text a quality engineer just saved now shows up in the
 // PDF-style form/preview immediately, not just in the bare workflow field.
 export const setContainment = async (db: Db, id: number, containment: string, performedBy?: number, allowedSiteIds?: number[]) => {
-  const updated = await patchNcr(db, id, { containment, status: "contained" }, "containment", performedBy, ["open"], allowedSiteIds);
+  const key = await currentStepKey(db, id);
+  const advancing = key === "ncr_created";
+  const updated = await patchNcr(
+    db,
+    id,
+    { containment, status: advancing ? "contain" : key },
+    "containment",
+    performedBy,
+    [advancing ? "ncr_created" : key],
+    allowedSiteIds,
+  );
   await syncNcrFormData(db, id, { containmentActionText: containment }, performedBy);
   return updated;
 };
 
+/** Root cause stays a field on the record. It is not one of the six workflow steps, and it does not move the step. */
 export const setRootCause = async (db: Db, id: number, rootCause: string, performedBy?: number, allowedSiteIds?: number[]) => {
-  const updated = await patchNcr(db, id, { rootCause, status: "investigating" }, "root_cause", performedBy, ["contained"], allowedSiteIds);
+  const key = await currentStepKey(db, id);
+  if (key === "ncr_created") {
+    throw AppError.badRequest(`Cannot "root_cause" an NCR from step "${ncrStepLabel(key)}" — record containment first.`);
+  }
+  const updated = await patchNcr(db, id, { rootCause, status: key }, "root_cause", performedBy, [key], allowedSiteIds);
   await syncNcrFormData(db, id, { identifiedRootCauseSummary: rootCause }, performedBy);
   return updated;
 };
 
+/** Workflow Disposition step. Quarantine material disposition stays on POST /ncr/:id/disposition and does not move this step. */
+export const setDispositionStep = async (db: Db, id: number, note: string | undefined, performedBy?: number, allowedSiteIds?: number[]) => {
+  return patchNcr(db, id, { status: "disposition" }, "disposition", performedBy, ["contain"], allowedSiteIds, note ? { note } : undefined);
+};
+
 export const setCorrectiveAction = async (db: Db, id: number, correctiveAction: string, performedBy?: number, allowedSiteIds?: number[]) => {
-  const updated = await patchNcr(db, id, { correctiveAction, status: "corrective_action" }, "corrective_action", performedBy, ["investigating"], allowedSiteIds);
+  const key = await currentStepKey(db, id);
+  const advancing = key === "disposition";
+  if (!advancing && key !== "fix" && key !== "verify" && key !== "closed") {
+    throw AppError.badRequest(`Cannot "fix" an NCR from step "${ncrStepLabel(key)}" — must be one of: Disposition`);
+  }
+  const updated = await patchNcr(
+    db,
+    id,
+    { correctiveAction, status: advancing ? "fix" : key },
+    advancing ? "fix" : "corrective_action",
+    performedBy,
+    [advancing ? "disposition" : key],
+    allowedSiteIds,
+  );
   await syncNcrFormData(db, id, { correctiveActionText: correctiveAction }, performedBy);
   return updated;
 };
 
+export const setVerify = async (db: Db, id: number, verification: string, performedBy?: number, allowedSiteIds?: number[]) => {
+  return patchNcr(db, id, { status: "verify" }, "verify", performedBy, ["fix"], allowedSiteIds, { verification });
+};
+
 export const close = async (db: Db, id: number, performedBy?: number, allowedSiteIds?: number[]) => {
   if (await ncrQuarantineIsOnHold(db, id)) throw AppError.badRequest(onHoldBlockMessage(id));
-  const updated = await patchNcr(db, id, { status: "closed", closedAt: new Date() }, "closed", performedBy, ["corrective_action"], allowedSiteIds);
+  const updated = await patchNcr(db, id, { status: "closed", closedAt: new Date() }, "closed", performedBy, ["verify"], allowedSiteIds);
   await syncNcrFormData(db, id, { documentStatus: "Closed", ncrClosureDate: ncrIsoDate(updated.closedAt ?? new Date()), finalDispositionConfirmed: "Yes" }, performedBy);
   return updated;
 };

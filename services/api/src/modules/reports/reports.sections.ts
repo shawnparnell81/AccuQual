@@ -3,6 +3,7 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import type { Db } from "../../lib/requestDb.js";
 import type { ResourceKey } from "../../middleware/departmentAccess.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
+import { canonicalNcrStep, ncrStepLabel } from "../ncr/ncr.workflow.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { sites } from "../../drizzle/schema/sites.js";
 import { suppliers } from "../../drizzle/schema/supplier.js";
@@ -130,8 +131,13 @@ async function ncrSection(spec: SectionSpec, ctx: SectionContext): Promise<Repor
     .from(ncr)
     .where(openedWhere)
     .groupBy(sql`coalesce(${ncr.severity}, 'unspecified')`);
+  const byStep = new Map<string, number>();
+  for (const row of byStatus) {
+    const label = ncrStepLabel(canonicalNcrStep(row.key));
+    byStep.set(label, (byStep.get(label) ?? 0) + num(row.count));
+  }
   return section(spec, { opened, closed, openNow, highOrCriticalOpen: highOpen }, [
-    ...byStatus.map((row) => ({ label: `Opened · ${row.key}`, value: num(row.count) })),
+    ...[...byStep].map(([label, count]) => ({ label: `Opened · ${label}`, value: count })),
     ...bySeverity.map((row) => ({ label: `Severity · ${row.key}`, value: num(row.count) })),
   ]);
 }

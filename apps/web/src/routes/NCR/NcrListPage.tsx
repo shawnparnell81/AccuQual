@@ -12,7 +12,7 @@ import { AiFieldAssistant } from "../../components/shared/AiFieldAssistant";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import { DetailsDisclosure } from "../../components/forms/DetailsDisclosure";
 import { formatDate } from "../../lib/dates";
-import { duePhrase, formatPerson, statusPhrase } from "../../lib/opsLanguage";
+import { duePhrase, formatPerson, ncrStepKey, ncrStepLabel } from "../../lib/opsLanguage";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { usePlantWrite } from "../../hooks/usePlantWrite";
@@ -24,7 +24,7 @@ import { uploadPendingAttachments } from "../../lib/attachments";
 import { NcrBoard } from "./NcrBoard";
 import { QuarantineDraftFields, saveDraftQuarantineItems } from "./NcrQuarantineSection";
 
-const NCR_STATUSES = ["open", "contained", "investigating", "corrective_action", "closed"] as const;
+const NCR_STATUSES = ["ncr_created", "contain", "disposition", "fix", "verify", "closed"] as const;
 
 const ncrHooks = createResourceHooks<Ncr>("ncr");
 
@@ -75,7 +75,7 @@ export function NcrListPage() {
     mutationFn: async (status: Ncr["status"]) => apiClient.patch("/ncr/bulk", { ids: [...selectedIds], patch: { status } }),
     onSuccess: (_data, status) => {
       qc.invalidateQueries({ queryKey: ["ncr"] });
-      toast.success(`${selectedIds.size} NCR${selectedIds.size === 1 ? "" : "s"} set to ${status.replace("_", " ")}.`);
+      toast.success(`${selectedIds.size} NCR${selectedIds.size === 1 ? "" : "s"} set to ${ncrStepLabel(status)}.`);
       setSelectedIds(new Set());
     },
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't update all of the selected NCRs — none were changed.")),
@@ -84,7 +84,7 @@ export function NcrListPage() {
   const filtered = useMemo(
     () =>
       ncrs.filter(
-        (n) => (!severityFilter || n.severity === severityFilter) && (!statusFilter || n.status === statusFilter)
+        (n) => (!severityFilter || n.severity === severityFilter) && (!statusFilter || ncrStepKey(n.status) === statusFilter)
       ),
     [ncrs, severityFilter, statusFilter]
   );
@@ -92,15 +92,15 @@ export function NcrListPage() {
   const columns: Column<Ncr>[] = [
     { header: "ID", accessor: (n) => `#${n.id}` },
     { header: "What happened", accessor: (n) => n.title },
-    { header: "State", accessor: (n) => <StatusBadge value={n.status} label={statusPhrase(n.status)} /> },
+    { header: "State", accessor: (n) => <StatusBadge value={ncrStepKey(n.status)} label={n.workflow?.currentStep ?? ncrStepLabel(n.status)} /> },
     { header: "Owner", accessor: (n) => label(n.assignedTo) },
-    { header: "Due", accessor: (n) => duePhrase(n.dueDate, n.status === "closed") },
+    { header: "Due", accessor: (n) => duePhrase(n.dueDate, ncrStepKey(n.status) === "closed") },
     { header: "Severity", accessor: (n) => <StatusBadge value={n.severity} /> },
     { header: "Opened", accessor: (n) => formatDate(n.createdAt) },
   ];
 
   function exportCsv() {
-    const rows = filtered.map((n) => `${n.id},${n.title},${n.severity},${n.status}`).join("\n");
+    const rows = filtered.map((n) => `${n.id},${n.title},${n.severity},${n.workflow?.currentStep ?? ncrStepLabel(n.status)}`).join("\n");
     const blob = new Blob([`id,title,severity,status\n${rows}`], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -155,9 +155,9 @@ export function NcrListPage() {
         {view === "list" && (
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-md border border-border px-3 py-2 text-sm">
           <option value="">All states</option>
-          {["open", "contained", "investigating", "corrective_action", "closed"].map((s) => (
+          {NCR_STATUSES.map((s) => (
             <option key={s} value={s}>
-              {statusPhrase(s)}
+              {ncrStepLabel(s)}
             </option>
           ))}
         </select>
@@ -182,7 +182,7 @@ export function NcrListPage() {
               disabled={bulkStatusChange.isPending}
               className="rounded-md border border-border px-2 py-1 text-xs capitalize hover:bg-muted disabled:opacity-60"
             >
-              {s.replace("_", " ")}
+              {ncrStepLabel(s)}
             </button>
           ))}
           <button onClick={() => setSelectedIds(new Set())} className="ml-auto text-xs text-muted-foreground hover:underline">

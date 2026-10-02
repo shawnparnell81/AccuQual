@@ -17,7 +17,7 @@ import { audits, auditItems } from "../drizzle/schema/audits.js";
 import { trainingCourses, trainingAssignments } from "../drizzle/schema/training.js";
 import { documents } from "../drizzle/schema/documents.js";
 import { recordAuditTrail } from "../modules/audit-trail/audit-trail.service.js";
-import { setContainment, setRootCause, setCorrectiveAction, close as closeNcr } from "../modules/ncr/ncr.service.js";
+import { setContainment, setRootCause, setDispositionStep, setCorrectiveAction, setVerify, close as closeNcr } from "../modules/ncr/ncr.service.js";
 import { transitionReceivingLineItem } from "../modules/erp/receivingWorkflow.js";
 import { receiveIntoLot } from "../modules/inventory/inventoryLots.service.js";
 import { recomputeSupplierRiskScore } from "../modules/supplier/supplier.qualityRisk.js";
@@ -157,6 +157,7 @@ async function main() {
       title: "Bracket dimensional out-of-spec — Titan Components lot TC-LOT-75",
       description: "Mounting holes on Titan Bracket Assembly 4400 measured outside drawing tolerance (+0.015in). Lot quarantined pending disposition.",
       severity: "high",
+      status: "ncr_created",
       supplierId: titan!.id,
       receivingLineItemId: firstQuarantinedLineId ?? undefined,
       createdBy: performedBy,
@@ -167,7 +168,9 @@ async function main() {
 
   await setContainment(tdb, demoNcr!.id, "Lot TC-LOT-75 quarantined in receiving inspection cage; production notified to hold any in-process assemblies using this lot.", performedBy);
   await setRootCause(tdb, demoNcr!.id, "Supplier's stamping die (Die #7) has worn beyond tolerance, producing mounting holes 0.010-0.015in oversized. Confirmed via Titan's own CMM report submitted with their 8D response.", performedBy);
+  await setDispositionStep(tdb, demoNcr!.id, "Scrap the out-of-tolerance brackets and return the lot to Titan.", performedBy);
   await setCorrectiveAction(tdb, demoNcr!.id, "Titan Components to replace Die #7 and requalify with a 30-piece first-article inspection before resuming shipment. AccuQual to increase incoming inspection sample size to 100% for the next 3 lots.", performedBy);
+  await setVerify(tdb, demoNcr!.id, "First-article inspection of the requalified lot passed. No oversized mounting holes in the sample.", performedBy);
   await closeNcr(tdb, demoNcr!.id, performedBy);
 
   // ---------------------------------------------------------------------
@@ -359,6 +362,7 @@ async function main() {
       title: "Gasket seal leak reported on Meridian Fasteners lot MF-LOT-20",
       description: "Field report of a minor seal leak; awaiting containment review.",
       severity: "medium",
+      status: "ncr_created",
       supplierId: meridian!.id,
       assignedTo: performedBy,
       createdBy: performedBy,

@@ -12,7 +12,7 @@ export const ncr = pgTable("ncr", {
   siteId: integer("site_id").references(() => sites.id),
   title: text("title").notNull(),
   description: text("description"),
-  status: text("status").notNull().default("open"), // open, contained, investigating, corrective_action, closed
+  status: text("status").notNull().default("ncr_created"), // ncr_created, contain, disposition, fix, verify, closed
   severity: text("severity"), // low, medium, high, critical
   containment: text("containment"),
   rootCause: text("root_cause"),

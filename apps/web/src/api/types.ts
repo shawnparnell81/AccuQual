@@ -60,11 +60,21 @@ export interface FieldChange {
 /** Friendly moduleName values the history endpoint accepts — kept in sync with services/api's workflow.controller.ts MODULE_ENTITY_TYPES. */
 export type WorkflowModuleName = "calibration" | "quarantine" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp" | "rma" | "work_orders" | "risk" | "feasibility" | "document_change_requests" | "qms_forms" | "scar_forms" | "quality_inspection_reports" | "crar" | "rma_log" | "complaints" | "eight_d" | "iso_forms";
 
+export type NcrStep = "ncr_created" | "contain" | "disposition" | "fix" | "verify" | "closed";
+
+export interface NcrWorkflow {
+  currentStep: "NCR Created" | "Contain" | "Disposition" | "Fix" | "Verify" | "Closed";
+  allowedTransitions: string[];
+  history: { step: string; at: string | null }[];
+}
+
 export interface Ncr {
   id: number;
   title: string;
   description: string | null;
-  status: "open" | "contained" | "investigating" | "corrective_action" | "closed";
+  /** Canonical step key. Older responses may still say open, contained, investigating, or corrective_action until they are read through the API. */
+  status: NcrStep | "open" | "contained" | "investigating" | "corrective_action";
+  workflow?: NcrWorkflow;
   severity: "low" | "medium" | "high" | "critical" | null;
   containment: string | null;
   rootCause: string | null;

@@ -15,6 +15,7 @@ import { feasibilityReviews } from "../../drizzle/schema/feasibility.js";
 import { ppapPackages } from "../../drizzle/schema/ppap.js";
 import { eightDIsClosed } from "../quality-automation/logic.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { OPEN_NCR_STATUSES } from "../ncr/ncr.workflow.js";
 
 /**
  * Work still in progress that names this person. Historical authorship,
@@ -26,7 +27,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
  * linked open NCR as the owner, so moving that NCR moves the 8D with it.
  */
 
-const OPEN_NCR = ["open", "contained", "investigating", "corrective_action"] as const;
+const OPEN_NCR = OPEN_NCR_STATUSES;
 const OPEN_CAPA = ["open", "in_progress", "verifying"] as const;
 const PREVIEW_LIMIT = 8;
 

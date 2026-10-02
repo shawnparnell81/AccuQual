@@ -20,7 +20,7 @@ test("a status change names the actor, the action, and the old and new values", 
 
   assert.equal(line.who, "Shawn Parnell");
   assert.equal(line.what, "Status changed");
-  assert.match(line.description, /Status changed from "corrective action" to closed/);
+  assert.match(line.description, /Status changed from Fix to closed/);
   assert.match(line.description, /Severity changed from low to high/);
   assert.doesNotMatch(line.description, /\{/);
 });

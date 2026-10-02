@@ -5,6 +5,7 @@ import { StatusBadge } from "../../components/tables/StatusBadge";
 import { useCurrentUser } from "../../hooks/useAuth";
 import type { Ncr } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { ncrStepKey, ncrStepLabel } from "../../lib/opsLanguage";
 
 /** Read-only NCR visibility, derived from real links (an RMA/warranty claim against this supplier, or a CAR/8D response this supplier already submitted) — NOT a new supplierId column on ncr itself (no schema/workflow change to the existing NCR module). Internal staff get a real link into the NCR module; a supplier login just sees the summary (it has no access to /ncr itself). */
 export function SupplierNCRList({ supplierId }: { supplierId?: number }) {
@@ -29,7 +30,7 @@ export function SupplierNCRList({ supplierId }: { supplierId?: number }) {
                 <span>
                   NCR #{n.id} — {n.title}
                 </span>
-                <StatusBadge value={n.status} />
+                <StatusBadge value={ncrStepKey(n.status)} label={n.workflow?.currentStep ?? ncrStepLabel(n.status)} />
               </Link>
             </li>
           ) : (
@@ -37,7 +38,7 @@ export function SupplierNCRList({ supplierId }: { supplierId?: number }) {
               <span>
                 NCR #{n.id} — {n.title}
               </span>
-              <StatusBadge value={n.status} />
+              <StatusBadge value={ncrStepKey(n.status)} label={n.workflow?.currentStep ?? ncrStepLabel(n.status)} />
             </li>
           )
         )}

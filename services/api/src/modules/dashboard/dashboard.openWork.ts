@@ -10,6 +10,8 @@
  * signature block stays listed, because the form has no close step.
  */
 
+import { canonicalNcrStep } from "../ncr/ncr.workflow.js";
+
 const DAY_MS = 86_400_000;
 const RECORD_LIMIT = 300;
 
@@ -315,14 +317,14 @@ function buildRecords(input: OpenWorkInput): Built {
   if (access.ncr) {
     modules.push({ key: "NCR", label: "NCR" });
     for (const row of input.ncrs) {
-      if (row.isDeleted || row.status === "closed" || !inScope(row.siteId, input.siteIds)) continue;
+      if (row.isDeleted || canonicalNcrStep(row.status) === "closed" || !inScope(row.siteId, input.siteIds)) continue;
       pushRecord(records, {
         id: `ncr-${row.id}`,
         module: "NCR",
         href: `/ncr/${row.id}`,
         number: `NCR-${row.id}`,
         title: row.title.trim() || `Issue #${row.id}`,
-        status: row.status,
+        status: canonicalNcrStep(row.status),
         plantId: row.siteId,
         owner: personName(names, row.assignedTo),
         createdAt: row.createdAt,
@@ -545,7 +547,7 @@ export function buildOpenWork(input: OpenWorkInput): OpenWork {
   const cards: OpenWorkCard[] = [];
 
   if (access.ncr) {
-    const rows = input.ncrs.filter((row) => !row.isDeleted && row.status !== "closed" && inScope(row.siteId, input.siteIds));
+    const rows = input.ncrs.filter((row) => !row.isDeleted && canonicalNcrStep(row.status) !== "closed" && inScope(row.siteId, input.siteIds));
     const high = rows.filter((row) => row.severity === "high" || row.severity === "critical").length;
     cards.push({ key: "ncr", label: "Open NCRs", value: rows.length, foot: `${high} high / critical`, href: "/iso-forms/frm-ncr-001", module: "NCR" });
   }

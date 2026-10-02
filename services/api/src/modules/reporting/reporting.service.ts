@@ -9,6 +9,7 @@ import { inventoryAlerts, inventoryMovements } from "../../drizzle/schema/invent
 import { erpReceivingLineItems } from "../../drizzle/schema/erp.js";
 import { computeSupplierPerformance } from "../supplier/supplier.performance.js";
 import type { Db } from "../../lib/requestDb.js";
+import { canonicalNcrStep } from "../ncr/ncr.workflow.js";
 
 /**
  * Phase 6 Reporting & Analytics Hub — the dedicated service layer the phase
@@ -102,11 +103,16 @@ export async function getNcrMetrics(db: Db, range?: DateRange): Promise<NcrMetri
       .from(ncr)
       .where(and(where, eq(ncr.status, "closed")));
 
+    const statusCounts = new Map<string, number>();
+    for (const row of byStatus) {
+      const key = canonicalNcrStep(row.status);
+      statusCounts.set(key, (statusCounts.get(key) ?? 0) + Number(row.count ?? 0));
+    }
     return {
       totalOpen: openRow?.count ?? 0,
       totalClosed: closedRow?.count ?? 0,
       bySeverity,
-      byStatus,
+      byStatus: [...statusCounts].map(([status, count]) => ({ status, count })),
       byMonth,
       avgClosureDays: avgRow?.avgDays !== null && avgRow?.avgDays !== undefined ? Math.round(Number(avgRow.avgDays) * 10) / 10 : null,
     };

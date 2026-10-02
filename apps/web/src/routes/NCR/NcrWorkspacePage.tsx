@@ -20,7 +20,7 @@ import { useFormEditorState } from "../../components/forms/useFormEditorState";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
-import { NCR_LOOP, READ_ONLY_REASON, duePhrase, formatPerson, isPastDue, ncrLoopIndex, ncrNextAction, statusPhrase } from "../../lib/opsLanguage";
+import { NCR_STEPS, READ_ONLY_REASON, duePhrase, formatPerson, isPastDue, ncrLoopIndex, ncrNextAction, ncrStepKey, ncrStepLabel, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { NcrQuarantineSection, ON_HOLD_BLOCK_MESSAGE } from "./NcrQuarantineSection";
@@ -72,7 +72,9 @@ export function NcrWorkspacePage() {
   const workflowInvalidateKeys = [...historyKey, ...formDataKey];
   const containmentAction = useWorkflowAction("ncr", "containment", { successMessage: "Containment recorded.", invalidateKeys: workflowInvalidateKeys });
   const rootCauseAction = useWorkflowAction("ncr", "root-cause", { successMessage: "Root cause recorded.", invalidateKeys: workflowInvalidateKeys });
-  const correctiveActionAction = useWorkflowAction("ncr", "corrective-action", { successMessage: "Corrective action recorded.", invalidateKeys: workflowInvalidateKeys });
+  const dispositionStepAction = useWorkflowAction("ncr", "disposition-step", { successMessage: "Disposition recorded.", invalidateKeys: workflowInvalidateKeys });
+  const correctiveActionAction = useWorkflowAction("ncr", "corrective-action", { successMessage: "Fix recorded.", invalidateKeys: workflowInvalidateKeys });
+  const verifyAction = useWorkflowAction("ncr", "verify", { successMessage: "Verification recorded.", invalidateKeys: workflowInvalidateKeys });
   const closeAction = useWorkflowAction("ncr", "close", { successMessage: "NCR closed.", invalidateKeys: workflowInvalidateKeys });
 
   const layout = getFormLayout(FORM_TYPE);
@@ -100,7 +102,9 @@ export function NcrWorkspacePage() {
   if (isLoading || !ncr) return <p className="text-sm text-muted-foreground">Loading this issue…</p>;
 
   const owner = label(ncr.assignedTo);
-  const closed = ncr.status === "closed";
+  const step = ncrStepKey(ncr.status);
+  const closed = step === "closed";
+  const stepLabel = ncr.workflow?.currentStep ?? ncrStepLabel(ncr.status);
 
   return (
     <FormSignProvider formType={FORM_TYPE} entityId={ncrId}>
@@ -113,8 +117,8 @@ export function NcrWorkspacePage() {
         ]}
         title={ncr.title}
         standard={`NCR #${ncr.id}`}
-        stateValue={ncr.status}
-        stateLabel={statusPhrase(ncr.status)}
+        stateValue={step}
+        stateLabel={stepLabel}
         owner={owner}
         ownerControl={
           canEdit && people.length > 0 ? (
@@ -178,7 +182,7 @@ export function NcrWorkspacePage() {
             <button onClick={handleDownload} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
               Download PDF
             </button>
-            {quarantineOnHold && ncr.status === "corrective_action" && (
+            {quarantineOnHold && step === "verify" && (
               <p className="max-w-sm text-xs text-destructive">{ON_HOLD_BLOCK_MESSAGE}</p>
             )}
             <WorkflowActionButton
@@ -192,14 +196,14 @@ export function NcrWorkspacePage() {
                 }
                 closeAction.mutate({ id: ncrId });
               }}
-              visible={ncr.status === "corrective_action"}
+              visible={step === "verify"}
               variant="primary"
               disabled={quarantineOnHold}
               title={quarantineOnHold ? ON_HOLD_BLOCK_MESSAGE : undefined}
             />
           </>
         }
-        trail={<LoopTrail steps={NCR_LOOP} current={ncrLoopIndex(ncr.status)} />}
+        trail={<LoopTrail steps={NCR_STEPS} current={ncrLoopIndex(step)} />}
       />
 
       <RepeatNcrBanner ncrId={ncrId} canEdit={canEdit} />
@@ -224,7 +228,7 @@ export function NcrWorkspacePage() {
                   " Keep it specific and actionable — this is a draft for a quality engineer to review and edit, not a final record.",
               }}
             />
-            {ncr.status === "open" ? (
+            {step === "ncr_created" ? (
               <p className="text-sm text-muted-foreground">Record containment first. The cause and the fix stay locked until the parts are held.</p>
             ) : (
               <div className="border-t border-border pt-4">
@@ -237,13 +241,34 @@ export function NcrWorkspacePage() {
                 />
               </div>
             )}
-            {ncr.status !== "open" && ncr.status !== "contained" && (
+            {step === "contain" && (
               <div className="border-t border-border pt-4">
                 <ActionForm
-                  label="Corrective action"
+                  label="Disposition"
+                  readOnly={!canEdit}
+                  value=""
+                  onSubmit={(value) => dispositionStepAction.mutate({ id: ncrId, ...(value.trim() ? { note: value.trim() } : {}) })}
+                />
+                <p className="text-xs text-muted-foreground">This moves the NCR to Disposition. Quarantine decisions stay in the section above.</p>
+              </div>
+            )}
+            {step !== "ncr_created" && step !== "contain" && (
+              <div className="border-t border-border pt-4">
+                <ActionForm
+                  label="Fix"
                   readOnly={!canEdit}
                   value={ncr.correctiveAction}
                   onSubmit={(value) => correctiveActionAction.mutate({ id: ncrId, correctiveAction: value })}
+                />
+              </div>
+            )}
+            {step === "fix" && (
+              <div className="border-t border-border pt-4">
+                <ActionForm
+                  label="Verify"
+                  readOnly={!canEdit}
+                  value=""
+                  onSubmit={(value) => verifyAction.mutate({ id: ncrId, verification: value })}
                 />
               </div>
             )}

@@ -60,10 +60,10 @@ describe("NCR bulk actions (real DB + real HTTP path)", () => {
     const res = await request(app).patch("/ncr/bulk").set("Authorization", `Bearer ${qualityToken}`).send({ ids: [a, b, c], patch: { status: "contained" } });
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(3);
-    expect(res.body.every((r: { status: string }) => r.status === "contained")).toBe(true);
+    expect(res.body.every((r: { status: string; workflow: { currentStep: string } }) => r.status === "contain" && r.workflow.currentStep === "Contain")).toBe(true);
 
     const rows = await db.select().from(ncr).where(inArray(ncr.id, [a, b, c]));
-    expect(rows.every((r) => r.status === "contained")).toBe(true);
+    expect(rows.every((r) => r.status === "contain")).toBe(true);
 
     const updateEntries = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "NCR"), eq(auditTrail.action, "update")));
     // One update-audit row per id, distinctly attributable to that id — not one row for the whole batch.
@@ -82,7 +82,7 @@ describe("NCR bulk actions (real DB + real HTTP path)", () => {
 
     const rows = await db.select().from(ncr).where(inArray(ncr.id, [a, b]));
     // Neither real NCR was changed, even though `a` was processed before the batch hit the bad id.
-    expect(rows.every((r) => r.status === "open")).toBe(true);
+    expect(rows.every((r) => r.status === "ncr_created")).toBe(true);
 
     const closedAudits = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "NCR"), eq(auditTrail.action, "update"), inArray(auditTrail.entityId, [a, b])));
     expect(closedAudits).toHaveLength(0);
