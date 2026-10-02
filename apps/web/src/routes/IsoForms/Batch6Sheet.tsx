@@ -1,6 +1,7 @@
 import { Fragment, useMemo } from "react";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
 import { BATCH6_PURPOSE, BATCH6_SHEET_TITLE, evaluateBatch6, showBatch6, type Batch6Kind } from "../../lib/batch6Reports";
+import { isChangeRequestForm } from "../../lib/changeRequestKinds";
 import type { CellValue } from "../../lib/isoFormLogic";
 import "../ValidationReports/validationReport.css";
 
@@ -19,6 +20,8 @@ interface Batch6SheetProps {
   cellLocked?: (addr: string) => boolean;
   managerLocked?: boolean;
   supplierLocked?: boolean;
+  managerCertify?: string;
+  supplierCertify?: string;
 }
 
 function text(value: CellValue | undefined): string {
@@ -127,10 +130,10 @@ export function Batch6Sheet(props: Batch6SheetProps) {
               {BATCH6_SHEET_TITLE[props.variant]}
             </td>
           </tr>
-          {props.variant === "engineering_change" ? (
+          {isChangeRequestForm(props.variant) ? (
             <tr>
               <td>{doc}</td>
-              <td>{`Rev: ${props.revision?.trim() || "B"}`}</td>
+              <td>{`Rev: ${props.revision?.trim() || (props.variant === "engineering_change" ? "B" : "A")}`}</td>
               <td colSpan={2}>Location: ISO Compliance Documents / Blank Form Templates</td>
               <td colSpan={2}>
                 Approved By: <Field {...shared} addr="F2" />
@@ -155,7 +158,7 @@ export function Batch6Sheet(props: Batch6SheetProps) {
           )}
           {props.variant === "dev_electronic_csa" && <ElectronicCsa {...shared} />}
           {props.variant === "dev_shock" && <ShockDev {...shared} />}
-          {props.variant === "engineering_change" && <ChangeRequest {...shared} />}
+          {isChangeRequestForm(props.variant) && <ChangeRequest {...shared} />}
         </tbody>
       </table>
     </div>
@@ -668,7 +671,7 @@ function ChangeRequest(props: SheetProps) {
         <td colSpan={3}>
           <SignatureStamp
             value={props.managerSignature ?? ""}
-            certify="I certify that I approve this engineering change request."
+            certify={props.managerCertify ?? "I certify that I approve this engineering change request."}
             disabled={(props.managerLocked ?? props.readOnly) || !props.onSign}
             variant="sheet"
             onSign={async (pin) => props.onSign?.("managerSignature", pin)}
@@ -684,7 +687,7 @@ function ChangeRequest(props: SheetProps) {
         <td colSpan={3}>
           <SignatureStamp
             value={props.supplierSignature ?? ""}
-            certify="I certify that I represent the supplier on this engineering change request."
+            certify={props.supplierCertify ?? "I certify that I represent the supplier on this engineering change request."}
             disabled={(props.supplierLocked ?? props.readOnly) || !props.onSign}
             variant="sheet"
             onSign={async (pin) => props.onSign?.("supplierRepSignature", pin)}

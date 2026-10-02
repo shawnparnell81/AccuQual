@@ -1,6 +1,7 @@
 import { AppError } from "../../utils/appError.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { nameStartsWithVicePresident, roleTokens } from "../roles/roleHierarchy.js";
+import { ENGINEERING_CHANGE, type ChangeRequestKindDef } from "./changeRequestKinds.js";
 
 /** Request, then parallel review, then one decision, then implementation, then close. */
 export const ECR_STATUSES = ["request", "review", "approved", "rejected", "implement", "closed"] as const;
@@ -131,7 +132,7 @@ function normCell(value: unknown): string {
 }
 
 /** Refuses answer edits the current stage does not allow. A save with no cell change is fine. */
-export function assertEcrAnswerEdit(previousData: unknown, incomingData: unknown): void {
+export function assertEcrAnswerEdit(previousData: unknown, incomingData: unknown, noun = ENGINEERING_CHANGE.noun): void {
   const status = readEcrWorkflow(previousData).status;
   const editing = ecrEditingMode(status);
   if (editing === "all") return;
@@ -144,7 +145,7 @@ export function assertEcrAnswerEdit(previousData: unknown, incomingData: unknown
       throw AppError.badRequest(
         editing === "implementation"
           ? "Only the implementation verification can be edited after approval."
-          : "This engineering change request can't be edited in its current stage.",
+          : `This ${noun} can't be edited in its current stage.`,
       );
     }
   }
@@ -178,8 +179,10 @@ export function applyEcrTransition(input: {
   note?: string;
   now: string;
   actorName: string;
+  kind?: ChangeRequestKindDef;
 }): EcrTransitionResult {
   const { workflow, action, actor, canEditRecord, now, actorName } = input;
+  const kind = input.kind ?? ENGINEERING_CHANGE;
   const from = workflow.status;
   const allowed = ecrActions({
     workflow,
@@ -188,11 +191,11 @@ export function applyEcrTransition(input: {
     hasManagerSignature: input.hasManagerSignature,
   });
   if (!allowed.includes(action)) {
-    throw AppError.forbidden(transitionRefusal(workflow, action, input.hasManagerSignature, canEditRecord));
+    throw AppError.forbidden(transitionRefusal(workflow, action, input.hasManagerSignature, canEditRecord, kind));
   }
 
   if (action === "submit") {
-    return { workflow: { ...workflow, status: "review" }, summary: "Submitted the engineering change request for review.", from, to: "review" };
+    return { workflow: { ...workflow, status: "review" }, summary: `Submitted the ${kind.noun} for review.`, from, to: "review" };
   }
   if (action === "engineering_review") {
     return {
@@ -211,46 +214,47 @@ export function applyEcrTransition(input: {
     };
   }
   if (action === "approve") {
-    return { workflow: { ...workflow, status: "approved" }, summary: "Approved the engineering change request.", from, to: "approved" };
+    return { workflow: { ...workflow, status: "approved" }, summary: `Approved the ${kind.noun}.`, from, to: "approved" };
   }
   if (action === "reject") {
     const note = (input.note ?? "").trim();
     if (!note) throw AppError.badRequest("Enter why this request is rejected.");
     return {
       workflow: { ...workflow, status: "rejected" },
-      summary: `Rejected the engineering change request. ${note}`,
+      summary: `Rejected the ${kind.noun}. ${note}`,
       from,
       to: "rejected",
     };
   }
   if (action === "implement") {
-    return { workflow: { ...workflow, status: "implement" }, summary: "Moved the engineering change request to implementation.", from, to: "implement" };
+    return { workflow: { ...workflow, status: "implement" }, summary: `Moved the ${kind.noun} to implementation.`, from, to: "implement" };
   }
   if (action === "close") {
-    if (!input.verificationAnswered) throw AppError.badRequest("Answer whether the change happened on the planned batch before closing.");
-    return { workflow: { ...workflow, status: "closed" }, summary: "Closed the engineering change request.", from, to: "closed" };
+    if (!input.verificationAnswered) throw AppError.badRequest(kind.closeBlocker);
+    return { workflow: { ...workflow, status: "closed" }, summary: `Closed the ${kind.noun}.`, from, to: "closed" };
   }
   return {
     workflow: { ...workflow, status: "request", engineeringReview: null, qualityReview: null },
-    summary: "Returned the engineering change request to the request stage for correction.",
+    summary: `Returned the ${kind.noun} to the request stage for correction.`,
     from,
     to: "request",
   };
 }
 
-function transitionRefusal(workflow: EcrWorkflow, action: EcrAction, hasManagerSignature: boolean, canEditRecord: boolean): string {
+function transitionRefusal(workflow: EcrWorkflow, action: EcrAction, hasManagerSignature: boolean, canEditRecord: boolean, kind: ChangeRequestKindDef): string {
   if ((action === "submit" || action === "implement" || action === "reopen") && !canEditRecord) {
-    return "Editing this engineering change request requires Documents edit.";
+    return `Editing this ${kind.noun} requires Documents edit.`;
   }
   if (action === "approve") {
     const blocker = ecrApproveBlockers(workflow, hasManagerSignature)[0];
     if (workflow.status === "review" && blocker) return blocker;
-    return "Approving an engineering change request is limited to quality and engineering management.";
+    const article = /^[aeiou]/i.test(kind.noun) ? "an" : "a";
+    return `Approving ${article} ${kind.noun} is limited to quality and engineering management.`;
   }
   if (action === "reject" || action === "close") {
     return "That decision is limited to quality and engineering management.";
   }
   if (action === "engineering_review") return "Engineering review is limited to engineering.";
   if (action === "quality_review") return "Quality review is limited to quality.";
-  return "That step isn't available on this engineering change request.";
+  return `That step isn't available on this ${kind.noun}.`;
 }

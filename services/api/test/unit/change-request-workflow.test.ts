@@ -8,7 +8,8 @@ import {
   ecrActions,
   ecrApproveBlockers,
 } from "../../src/modules/change-requests/changeRequestWorkflow.js";
-import { ECR_LABEL_DEFAULTS, defaultEcrLabels, ecrCodeStamp, nextEcrMaster, type EcrMaster } from "../../src/modules/change-requests/ecrTemplate.js";
+import { DRAWING_CHANGE, PROCESS_CHANGE, DOCUMENT_CHANGE } from "../../src/modules/change-requests/changeRequestKinds.js";
+import { ECR_LABEL_DEFAULTS, defaultEcrLabels, defaultKindLabels, ecrCodeStamp, kindCodeStamp, nextEcrMaster, type EcrMaster } from "../../src/modules/change-requests/ecrTemplate.js";
 import { AppError } from "../../src/utils/appError.js";
 
 const engineer = { roleName: "Engineer", department: "engineering" };
@@ -88,6 +89,30 @@ describe("engineering change request template revision", () => {
     expect(same.changed).toBe(false);
     expect(same.master.revision).toBe("B");
     expect(same.master.version).toBe(2);
+  });
+
+  it("clones the same stages onto a drawing change request", () => {
+    const request = blankEcrWorkflow();
+    const submitted = applyEcrTransition({
+      workflow: request,
+      action: "submit",
+      actor: quality,
+      canEditRecord: true,
+      hasManagerSignature: false,
+      verificationAnswered: false,
+      now: "2026-10-01T12:00:00.000Z",
+      actorName: "Shawn Parnell",
+      kind: DRAWING_CHANGE,
+    });
+    expect(submitted.summary).toBe("Submitted the drawing change request for review.");
+    expect(submitted.workflow.status).toBe("review");
+    expect(DRAWING_CHANGE.labels.partNumbers).toBe("Drawing Number:");
+    expect(PROCESS_CHANGE.labels.partNumbers).toBe("Process Name:");
+    expect(DOCUMENT_CHANGE.labels.section4).toBe("SECTION 4: OLD REVISION DISPOSITION");
+    expect(kindCodeStamp(DRAWING_CHANGE)).toMatchObject({ version: 1, revision: "A" });
+    expect(ECR_LABEL_DEFAULTS.partNumbers).toBe("Part Number(s) Affected:");
+    const current: EcrMaster = { companyId: 1, ...kindCodeStamp(DRAWING_CHANGE), labels: defaultKindLabels(DRAWING_CHANGE), lastChange: null };
+    expect(nextEcrMaster(current, defaultKindLabels(DRAWING_CHANGE), null).changed).toBe(false);
   });
 
   it("bumps VERSION and REV only when a label changes", () => {

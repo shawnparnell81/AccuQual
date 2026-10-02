@@ -1,10 +1,12 @@
 # Change request workflows
 
-Four requests share one stage pattern. Engineering Change Request (FRM-ECR-001) is the one built in the app. Drawing, process, and document requests stay on this page until they are cloned from that template.
+Four requests share one stage machine. Engineering Change Request (FRM-ECR-001) is the template. Drawing (FRM-DWG-001), process (FRM-PCR-001), and document (FRM-DOC-001) requests use the same cells, roles, PIN gate, and history, with their own labels.
 
-Blank forms open from Blank Forms. A filled copy is saved into a Documents folder. The sidebar does not gain a new item for each request. ECR can still be pinned, and the ECR folder is unchanged.
+Blank forms open from Blank Forms. A filled copy is saved into a Documents folder. The sidebar does not gain a new item for each request. ECR can still be pinned, and the ECR folder is unchanged. The existing Document changes page (`/document-change-requests`) and the Process Change sidebar item (`/change`, the product/process change notice) stay as they are. These sheets do not replace them.
 
-No database migration. The ECR master (its labels and revision) is stored on the company profile. Filled copies stay on the existing ISO form record.
+No database migration. Each master (its labels and revision) is stored on the company profile: `ecrTemplate`, `drawingChangeTemplate`, `processChangeTemplate`, and `documentChangeTemplate`. Filled copies stay on the existing ISO form record. Company Settings spreads the profile, so a settings save keeps the masters.
+
+The engine is `services/api/src/modules/change-requests/changeRequestWorkflow.ts`. The four kinds, including labels and the words used in the audit line, are `changeRequestKinds.ts`. The web sheet is the same grid as FRM-ECR-001.
 
 ## Shared stages
 
@@ -38,6 +40,25 @@ History on the record is the audit line: who, what, when, and a short descriptio
 
 Approve also needs both reviews and the manager signature already on the sheet.
 
+## Transitions
+
+| From | Action | To | Notes |
+| --- | --- | --- | --- |
+| Request | Submit for review | Review | Needs Documents edit. Freezes the label snapshot on the copy. |
+| Review | Engineering review complete | Review | Once. Engineering, or a title that can approve. |
+| Review | Quality review complete | Review | Once. Quality, or a title that can approve. Either review can finish first. |
+| Review | Approve | Approved | Both reviews and the manager PIN signature. The sheet freezes. |
+| Review | Reject | Rejected | Approver title. A reason is required and is written into the audit line. |
+| Rejected | Return to request | Request | Clears both reviews so they are done again on the corrected copy. |
+| Approved | Start implementation | Implementation | Documents edit. Only the verification cells (answer, verified by, date) stay open. |
+| Implementation | Close | Closed | Approver title. The verification answer must be YES or NO. A closed copy cannot be edited. |
+
+## Required content
+
+The sheet is the record. Submit does not block on an empty identification line, matching the ECR already in use. Close does block until the verification answer (YES or NO) is on the sheet. Approval blocks until both reviews and the manager signature are recorded.
+
+Each kind's identification line is the thing being changed: part numbers (ECR), drawing number, process name, or document number. The rest of that kind's typical fields are the labeled lines on the same grid.
+
 ## 1. Drawing Change Request (DCR)
 
 **Purpose.** Ask for a drawing to be revised, replaced, or withdrawn, and record what happens to the old revision.
@@ -50,7 +71,9 @@ Approve also needs both reviews and the manager signature already on the sheet.
 
 **Training and impact.** Training required, a training reference, customer notification, and whether PPAP or validation must be repeated.
 
-**Not built yet.** Clone the ECR sheet, stages, role checks, PIN structure gate, and history. Do not add a sidebar entry.
+**Where it lives.** Blank Forms and the filled-record list at `/iso-forms/frm-dwg-001`. Save to folder files the copy into Documents. History is the ISO form history panel. Suggested folder: Engineering / Engineering Change Control / Drawing Change Requests.
+
+**Built on the shared engine.** Same stages, role checks, PIN structure gate, and history as ECR. Rev A. Do not add a sidebar entry.
 
 ## 2. Engineering Change Request (ECR) — built
 
@@ -82,7 +105,9 @@ Approve also needs both reviews and the manager signature already on the sheet.
 
 **Training and impact.** Operators who run the process, customer notification, and PPAP or control-plan impact.
 
-**Not built yet.** Same stages, roles, PIN structure gate, and history as ECR.
+**Where it lives.** Blank Forms and `/iso-forms/frm-pcr-001`. Suggested folder: Engineering / Engineering Change Control / Process Change Requests. This is not the Process Change sidebar item.
+
+**Built on the shared engine.** Same stages, roles, PIN structure gate, and history as ECR. Rev A.
 
 ## 4. Document Change Request (DocCR)
 
@@ -96,9 +121,11 @@ Approve also needs both reviews and the manager signature already on the sheet.
 
 **Training and impact.** Training required before the new revision is used, training reference, and whether external distribution is required.
 
-**Not built yet.** Same stages, roles, PIN structure gate, and history as ECR.
+**Where it lives.** Blank Forms and `/iso-forms/frm-doc-001`. Suggested folder: Quality / Document Control / Document Change Requests. The Document changes page already in the app stays as it is.
 
-## What the next three clones reuse
+**Built on the shared engine.** Same stages, roles, PIN structure gate, and history as ECR. Rev A.
+
+## What the four requests share
 
 - The stage order and the two parallel reviews.
 - Documents edit to create and fill. Approver titles to approve, reject, and close.

@@ -24,7 +24,8 @@ import {
   type EcrAction,
   type EcrActor,
 } from "./changeRequestWorkflow.js";
-import { ECR_STRUCTURE_CERTIFY, labelSnapshot, loadEcrMaster, nextEcrMaster, parseEcrLabels, writeEcrMaster } from "./ecrTemplate.js";
+import { changeRequestByFormType, changeRequestBySlug, type ChangeRequestKindDef } from "./changeRequestKinds.js";
+import { labelSnapshot, loadChangeRequestMaster, nextEcrMaster, parseKindLabels, writeChangeRequestMaster } from "./ecrTemplate.js";
 
 function actorOf(req: Request): EcrActor {
   return { roleName: req.user?.roleName, department: req.user?.department };
@@ -57,10 +58,11 @@ function asData(value: unknown): Record<string, unknown> {
 }
 
 export async function stampNewEcr(db: Db, created: Record<string, unknown>): Promise<void> {
-  if (created.formType !== "engineering_change") return;
+  const kind = changeRequestByFormType(typeof created.formType === "string" ? created.formType : undefined);
+  if (!kind) return;
   const id = created.id;
   if (typeof id !== "number") return;
-  const master = await loadEcrMaster(db);
+  const master = await loadChangeRequestMaster(db, kind);
   const data = {
     ...asData(created.data),
     workflow: blankEcrWorkflow(),
@@ -70,7 +72,7 @@ export async function stampNewEcr(db: Db, created: Record<string, unknown>): Pro
   if (updated) Object.assign(created, updated);
 }
 
-function publicMaster(master: Awaited<ReturnType<typeof loadEcrMaster>>) {
+function publicMaster(master: Awaited<ReturnType<typeof loadChangeRequestMaster>>) {
   return {
     version: master.version,
     revision: master.revision,
@@ -80,12 +82,19 @@ function publicMaster(master: Awaited<ReturnType<typeof loadEcrMaster>>) {
   };
 }
 
+function kindFromRequest(req: Request): ChangeRequestKindDef {
+  const kind = changeRequestBySlug(typeof req.params.kind === "string" ? req.params.kind : undefined);
+  if (!kind) throw AppError.notFound("Change request template");
+  return kind;
+}
+
 export const getEcrStructure = asyncHandler(async (req: Request, res: Response) => {
   await assertCanReadDocuments(req);
-  res.json(publicMaster(await loadEcrMaster(req.db!)));
+  res.json(publicMaster(await loadChangeRequestMaster(req.db!, kindFromRequest(req))));
 });
 
 export const unlockEcrStructure = asyncHandler(async (req: Request, res: Response) => {
+  const kind = kindFromRequest(req);
   if (!canEditFormStructure(req.user)) throw AppError.forbidden("Changing a form template is limited to quality and engineering roles.");
   const [co] = await req.db!.select({ id: company.id }).from(company).limit(1);
   if (!co) throw AppError.notFound("Company");
@@ -94,34 +103,35 @@ export const unlockEcrStructure = asyncHandler(async (req: Request, res: Respons
     certified: req.body.certified,
     entityType: "Company",
     entityId: co.id,
-    field: "ecrTemplate",
-    description: ECR_STRUCTURE_CERTIFY,
+    field: kind.profileKey,
+    description: kind.structureCertify,
   });
   res.json({ unlocked: true });
 });
 
 export const saveEcrStructure = asyncHandler(async (req: Request, res: Response) => {
+  const kind = kindFromRequest(req);
   if (!canEditFormStructure(req.user)) throw AppError.forbidden("Changing a form template is limited to quality and engineering roles.");
   if (req.body.certified !== true) throw AppError.badRequest("Check the certification box before signing.");
   if (typeof req.body.pin !== "string") throw AppError.badRequest("Enter a 4-digit PIN.");
   const { displayName } = await verifySignaturePin(req.user!.id, req.body.pin);
-  const labels = parseEcrLabels(req.body.labels);
-  const current = await loadEcrMaster(req.db!);
+  const labels = parseKindLabels(kind, req.body.labels);
+  const current = await loadChangeRequestMaster(req.db!, kind);
   const when = new Date().toISOString();
   const { master, changed } = nextEcrMaster(current, labels, null);
   if (!changed) {
     res.json(publicMaster(current));
     return;
   }
-  const description = `Changed the engineering change request template from Rev ${current.revision} to Rev ${master.revision}.`;
+  const description = `Changed the ${kind.noun} template from Rev ${current.revision} to Rev ${master.revision}.`;
   master.lastChange = { who: displayName, what: "Template structure", when, description };
-  await writeEcrMaster(req.db!, master);
+  await writeChangeRequestMaster(req.db!, kind, master);
   await recordAuditTrail(req.db!, {
     entityType: "Company",
     entityId: master.companyId,
     action: "update",
     changes: {
-      action: "ecr_template",
+      action: `${kind.auditPrefix}_template`,
       summary: description,
       from: current.revision,
       to: master.revision,
@@ -135,19 +145,20 @@ export const saveEcrStructure = asyncHandler(async (req: Request, res: Response)
   res.json(publicMaster(master));
 });
 
-async function loadEcr(req: Request, id: number) {
+async function loadChangeRequest(req: Request, id: number) {
   if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("That record isn't recognized.");
   const [record] = await req.db!.select().from(isoQualityForms).where(eq(isoQualityForms.id, id));
   if (!record) throw AppError.notFound("ISO form");
-  if (record.formType !== "engineering_change") throw AppError.badRequest("That form is not an engineering change request.");
-  return record;
+  const kind = changeRequestByFormType(record.formType);
+  if (!kind) throw AppError.badRequest("That form is not a change request.");
+  return { record, kind };
 }
 
 export const getEcrWorkflow = asyncHandler(async (req: Request, res: Response) => {
   await assertCanReadDocuments(req);
-  const record = await loadEcr(req, Number(req.params.id));
+  const { record, kind } = await loadChangeRequest(req, Number(req.params.id));
   const level = await documentsLevel(req);
-  const master = await loadEcrMaster(req.db!);
+  const master = await loadChangeRequestMaster(req.db!, kind);
   const workflow = readEcrWorkflow(record.data);
   const frozen = labelSnapshot(record.data);
   const hasManagerSignature = ecrHasManagerSignature(record.data);
@@ -167,7 +178,7 @@ export const getEcrWorkflow = asyncHandler(async (req: Request, res: Response) =
 
 export const transitionEcr = asyncHandler(async (req: Request, res: Response) => {
   if (req.user?.roleName === "supplier") throw AppError.forbidden("Supplier logins can't open this.");
-  const record = await loadEcr(req, Number(req.params.id));
+  const { record, kind } = await loadChangeRequest(req, Number(req.params.id));
   const level = await documentsLevel(req);
   if (level === "none") throw AppError.forbidden("No access to 'documents' for your department");
   const action = req.body.action as EcrAction;
@@ -185,9 +196,10 @@ export const transitionEcr = asyncHandler(async (req: Request, res: Response) =>
     note: typeof req.body.note === "string" ? req.body.note : undefined,
     now: when,
     actorName: who,
+    kind,
   });
   if (action === "submit" && !labelSnapshot(data)) {
-    const master = await loadEcrMaster(req.db!);
+    const master = await loadChangeRequestMaster(req.db!, kind);
     data.templateLabels = master.labels;
     data._formTemplate = { version: master.version, revision: master.revision, structureHash: master.structureHash };
   }
@@ -198,7 +210,7 @@ export const transitionEcr = asyncHandler(async (req: Request, res: Response) =>
     entityId: record.id,
     action: result.from === result.to ? "update" : "status_change",
     changes: {
-      action: `ecr_${action}`,
+      action: `${kind.auditPrefix}_${action}`,
       summary: result.summary,
       from: result.from,
       to: result.to,

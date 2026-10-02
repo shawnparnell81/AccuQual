@@ -1,5 +1,14 @@
 import { pgTable, serial, text, jsonb, timestamp, boolean, integer, numeric } from "drizzle-orm/pg-core";
 
+/** Labels and revision for one change-request sheet. Stored on the company profile. */
+type ChangeRequestTemplateBlob = {
+  version: number;
+  revision: string;
+  structureHash: string;
+  labels: Record<string, string>;
+  lastChange?: { who: string; what: string; when: string; description: string } | null;
+};
+
 /**
  * The one company this installation belongs to: a single row (id 1). It holds the company's name and every company-wide
  * setting (theme, AI, plants and module rules) that used to live per organization.
@@ -191,17 +200,15 @@ export const company = pgTable("company", {
     contactEmail?: string;
     contactPhone?: string;
     /**
-     * Engineering change request master (labels and revision). Written only by
-     * the ECR structure endpoints. Company Settings spreads this object, so a
-     * profile save keeps it. No separate table.
+     * Change-request masters (labels and revision). Written only by the
+     * change-request structure endpoints. Company Settings spreads this
+     * object, so a profile save keeps them. No separate table. Engineering
+     * stays on ecrTemplate so copies already saved keep their master.
      */
-    ecrTemplate?: {
-      version: number;
-      revision: string;
-      structureHash: string;
-      labels: Record<string, string>;
-      lastChange?: { who: string; what: string; when: string; description: string } | null;
-    };
+    ecrTemplate?: ChangeRequestTemplateBlob;
+    drawingChangeTemplate?: ChangeRequestTemplateBlob;
+    processChangeTemplate?: ChangeRequestTemplateBlob;
+    documentChangeTemplate?: ChangeRequestTemplateBlob;
   }>().default({}),
   // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for the company's first admin.
   // `dismissed: true` for every company that existed before this shipped (backfillOnboardingChecklist.ts) — an

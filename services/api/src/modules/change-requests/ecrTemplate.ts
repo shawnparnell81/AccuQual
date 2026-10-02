@@ -3,68 +3,28 @@ import type { Db } from "../../lib/requestDb.js";
 import { company } from "../../drizzle/schema/company.js";
 import { AppError } from "../../utils/appError.js";
 import { bumpRevision, structureHash, type TemplateStamp } from "../forms/templateStructure.js";
+import {
+  CHANGE_REQUEST_LABEL_KEYS,
+  ENGINEERING_CHANGE,
+  ENGINEERING_LABEL_DEFAULTS,
+  type ChangeRequestKindDef,
+  type ChangeRequestLabelKey,
+  type ChangeRequestLabels,
+} from "./changeRequestKinds.js";
 
 /**
- * Labels on FRM-ECR-001. Keep the strings aligned with
- * apps/web/src/lib/ecrTemplate.ts. Rev B is this sheet: the workflow line
- * and the links, training, and impact section. A later label edit bumps
- * again only when the hash changes.
+ * Labels on FRM-ECR-001. The strings live with the shared change-request
+ * kinds so drawing, process, and document requests can clone the sheet.
+ * Rev B is this sheet: the workflow line and the links, training, and
+ * impact section. A later label edit bumps again only when the hash changes.
  */
-export const ECR_LABEL_DEFAULTS = {
-  workflowStatus: "Workflow Status:",
-  section1: "SECTION 1: IDENTIFICATION",
-  dateOfRequest: "Date of Request:",
-  requestedBy: "Requested By:",
-  partNumbers: "Part Number(s) Affected:",
-  currentRevision: "Current Revision:",
-  job: "Job / Project:",
-  newRevision: "New Revision (Proposed):",
-  section2: "SECTION 2: CHANGE DETAILS",
-  changeType: "Type of Change:",
-  changeSupplier: "Supplier Request",
-  changeCost: "Cost Reduction",
-  changeQuality: "Quality Improvement",
-  changeDimensional: "Dimensional Correction",
-  description: "Description of Change (Current vs. Proposed):",
-  reason: "Reason / Explanation:",
-  drawingUpdate: "Drawing Update Required?",
-  drawingNote: "If YES attach draft drawing.",
-  section3: "SECTION 3: ENGINEERING REVIEW & RISK",
-  fitFormFunction: "Does this affect Fit Form or Function?",
-  validationRequired: "Is Validation Testing required?",
-  testPlan: "If YES describe test plan:",
-  qcProcedure: "QC Procedure to Prevent Mixing Parts:",
-  implementationPlan: "Planned Implementation Batch/Date:",
-  section4: "SECTION 4: STOCK DISPOSITION (What about old parts?)",
-  useAsIs: "Use As-Is",
-  scrap: "Scrap",
-  rework: "Rework",
-  notes: "Notes",
-  rawMaterial: "Raw Material:",
-  wip: "WIP (In Process):",
-  finishedGoods: "Finished Goods:",
-  section7: "SECTION 7: LINKS, TRAINING, AND IMPACT",
-  affectedDrawing: "Affected Drawing:",
-  affectedDocument: "Affected Document:",
-  affectedProcess: "Affected Process:",
-  trainingRequired: "Training Required?",
-  trainingReference: "Training Reference:",
-  customerNotice: "Customer Notification Required?",
-  ppapImpact: "PPAP or Validation Impact?",
-  section5: "SECTION 5: AUTHORIZATION",
-  managerSign: "DMA Engineering/Quality Manager:",
-  signDate: "Date:",
-  supplierSign: "Supplier Representative (If Applicable):",
-  section6: "SECTION 6: VERIFICATION OF IMPLEMENTATION",
-  implemented: "Did the change occur successfully on the planned batch?",
-  verifiedBy: "Verified By:",
-} as const;
+export const ECR_LABEL_DEFAULTS = ENGINEERING_LABEL_DEFAULTS;
 
-export type EcrLabelKey = keyof typeof ECR_LABEL_DEFAULTS;
+export type EcrLabelKey = ChangeRequestLabelKey;
 
-export const ECR_LABEL_KEYS = Object.keys(ECR_LABEL_DEFAULTS) as EcrLabelKey[];
+export const ECR_LABEL_KEYS = CHANGE_REQUEST_LABEL_KEYS;
 
-export const ECR_STRUCTURE_CERTIFY = "I certify that I am authorized to change the engineering change request template.";
+export const ECR_STRUCTURE_CERTIFY = ENGINEERING_CHANGE.structureCertify;
 
 export interface EcrLastChange {
   who: string;
@@ -88,20 +48,28 @@ export function ecrLabelsHash(labels: Record<string, string>): string {
   return structureHash(sorted);
 }
 
+export function kindCodeStamp(kind: ChangeRequestKindDef): TemplateStamp {
+  return { version: kind.version, revision: kind.revision, structureHash: ecrLabelsHash(kind.labels) };
+}
+
 export function ecrCodeStamp(): TemplateStamp {
-  return { version: 2, revision: "B", structureHash: ecrLabelsHash(ECR_LABEL_DEFAULTS) };
+  return kindCodeStamp(ENGINEERING_CHANGE);
+}
+
+export function defaultKindLabels(kind: ChangeRequestKindDef): ChangeRequestLabels {
+  return { ...kind.labels };
 }
 
 export function defaultEcrLabels(): Record<EcrLabelKey, string> {
-  return { ...ECR_LABEL_DEFAULTS };
+  return defaultKindLabels(ENGINEERING_CHANGE);
 }
 
-export function parseEcrLabels(input: unknown): Record<EcrLabelKey, string> {
+export function parseKindLabels(kind: ChangeRequestKindDef, input: unknown): ChangeRequestLabels {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw AppError.badRequest("Enter a label for every line on the template.");
   const raw = input as Record<string, unknown>;
   const extra = Object.keys(raw).filter((key) => !(ECR_LABEL_KEYS as readonly string[]).includes(key));
-  if (extra.length > 0) throw AppError.badRequest("That template line isn't on the engineering change request.");
-  const labels = defaultEcrLabels();
+  if (extra.length > 0) throw AppError.badRequest(`That template line isn't on the ${kind.noun}.`);
+  const labels = defaultKindLabels(kind);
   for (const key of ECR_LABEL_KEYS) {
     const value = raw[key];
     if (typeof value !== "string" || !value.trim()) throw AppError.badRequest("Every template line needs a label.");
@@ -109,6 +77,10 @@ export function parseEcrLabels(input: unknown): Record<EcrLabelKey, string> {
     labels[key] = value.trim();
   }
   return labels;
+}
+
+export function parseEcrLabels(input: unknown): Record<EcrLabelKey, string> {
+  return parseKindLabels(ENGINEERING_CHANGE, input);
 }
 
 function storedLabels(value: unknown): Record<EcrLabelKey, string> | null {
@@ -130,10 +102,10 @@ function readLastChange(value: unknown): EcrLastChange | null {
   return { who: row.who, what: row.what, when: row.when, description: row.description };
 }
 
-export async function loadEcrMaster(db: Db): Promise<EcrMaster> {
+export async function loadChangeRequestMaster(db: Db, kind: ChangeRequestKindDef = ENGINEERING_CHANGE): Promise<EcrMaster> {
   const [co] = await db.select({ id: company.id, profile: company.profile }).from(company).limit(1);
-  const code = ecrCodeStamp();
-  const stored = co?.profile?.ecrTemplate;
+  const code = kindCodeStamp(kind);
+  const stored = co?.profile?.[kind.profileKey];
   const labels = storedLabels(stored?.labels);
   const version = stored?.version;
   const revision = stored?.revision?.trim();
@@ -146,9 +118,13 @@ export async function loadEcrMaster(db: Db): Promise<EcrMaster> {
     version: code.version,
     revision: code.revision,
     structureHash: code.structureHash,
-    labels: defaultEcrLabels(),
+    labels: defaultKindLabels(kind),
     lastChange: null,
   };
+}
+
+export async function loadEcrMaster(db: Db): Promise<EcrMaster> {
+  return loadChangeRequestMaster(db, ENGINEERING_CHANGE);
 }
 
 export function nextEcrMaster(current: EcrMaster, labels: Record<EcrLabelKey, string>, lastChange: EcrLastChange | null): { master: EcrMaster; changed: boolean } {
@@ -171,12 +147,12 @@ export function nextEcrMaster(current: EcrMaster, labels: Record<EcrLabelKey, st
   };
 }
 
-export async function writeEcrMaster(db: Db, master: EcrMaster): Promise<void> {
+export async function writeChangeRequestMaster(db: Db, kind: ChangeRequestKindDef, master: EcrMaster): Promise<void> {
   const [co] = await db.select({ id: company.id, profile: company.profile }).from(company).where(eq(company.id, master.companyId));
   if (!co) throw AppError.notFound("Company");
   const profile = {
     ...(co.profile ?? {}),
-    ecrTemplate: {
+    [kind.profileKey]: {
       version: master.version,
       revision: master.revision,
       structureHash: master.structureHash,
@@ -185,6 +161,10 @@ export async function writeEcrMaster(db: Db, master: EcrMaster): Promise<void> {
     },
   };
   await db.update(company).set({ profile }).where(eq(company.id, co.id));
+}
+
+export async function writeEcrMaster(db: Db, master: EcrMaster): Promise<void> {
+  await writeChangeRequestMaster(db, ENGINEERING_CHANGE, master);
 }
 
 export function labelSnapshot(data: unknown): Record<EcrLabelKey, string> | null {
