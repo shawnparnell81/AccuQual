@@ -194,6 +194,60 @@ export const FORM_TEMPLATES: FormTemplateSeed[] = [
   { formKey: "eco", formId: "", title: "Engineering Change Order", topic: "Change Control", subjectRoute: "/change", start: blank("/change", "/change/{id}", { title: "Engineering Change Order" }) },
 ];
 
+/**
+ * Doc ID printed on the form when the stored number field is blank by policy.
+ * These two lists show the id in the page header. It is not written back onto form_id.
+ */
+export const PRINTED_FORM_ID_WHEN_BLANK: Record<string, string> = {
+  "lst-gen-001": "LST-GEN-001",
+  "lst-eqp-001": "LST-EQP-001",
+};
+
+/**
+ * Revision already printed on the sheet or list header.
+ * A form with no printed revision is omitted here.
+ */
+export const PRINTED_FORM_REVISION: Record<string, string> = {
+  "frm-gen-001": "Rev A",
+  "frm-ncr-001": "Rev C",
+  "frm-ncr-002": "Rev A",
+  "frm-ncr-003": "Rev A",
+  "frm-trn-001": "Rev A",
+  "frm-trn-002": "Rev A",
+  "lst-vis-001": "Rev A",
+  "frm-trp-002": "Rev A",
+  "frm-trp-001": "Rev A",
+  "frm-dev-001": "Rev A",
+  "frm-dev-002": "Rev A",
+  "frm-dev-003": "Rev B",
+  "frm-dev-004": "Rev A",
+  "frm-dev-005": "Rev A",
+  "frm-dev-006": "Rev B",
+  "frm-dev-007": "Rev B",
+  "frm-dev-008": "Rev A",
+  "frm-dev-009": "Rev A",
+  "frm-dev-010": "Rev A",
+  "frm-dev-011": "Rev B",
+  "frm-dev-012": "Rev A",
+  "frm-dev-013": "Rev A",
+  "frm-ecr-001": "Rev B",
+  "frm-dwg-001": "Rev A",
+  "frm-pcr-001": "Rev A",
+  "frm-doc-001": "Rev A",
+  "frm-car-001": "Rev A",
+  "frm-val-010": "Rev A",
+  "frm-val-011": "Rev A",
+  "frm-val-008": "Rev B",
+  "frm-val-009": "Rev A",
+  "frm-val-002": "Rev B",
+  "frm-val-003": "Rev A",
+  "frm-val-004": "Rev B",
+  "frm-val-005": "Rev B",
+  "frm-val-006": "Rev A",
+  "lst-gen-001": "Rev B",
+  "lst-eqp-001": "Rev A",
+};
+
 /** Folders under the ISO documents root for one template: blank-forms folder, then its topic. */
 export function templateFolderPath(topic: string): string[] {
   return [BLANK_FORMS_FOLDER, topic];

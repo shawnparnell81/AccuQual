@@ -6,6 +6,9 @@ import { documents, documentVersions } from "../../drizzle/schema/documents.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { users } from "../../drizzle/schema/users.js";
 import { controlledVersions } from "../../drizzle/schema/versioning.js";
+import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
+import { PRINTED_FORM_ID_WHEN_BLANK, PRINTED_FORM_REVISION } from "../document-folders/formFiling.js";
+import { ensureFormTemplates } from "../document-folders/formTemplates.js";
 
 export interface MasterDocumentRow {
   id: number;
@@ -17,6 +20,18 @@ export interface MasterDocumentRow {
   location: string;
   status: string;
   revHistory: string;
+  /** Where the title opens. Controlled documents stay on /documents/:id. */
+  href: string;
+}
+
+/** A blank form already registered in document control. */
+export interface RegisteredFormSource {
+  id: number;
+  formKey: string;
+  formId: string;
+  title: string;
+  subjectRoute: string;
+  folderId: number | null;
 }
 
 interface FolderNode {
@@ -133,9 +148,61 @@ export function buildMasterDocumentRows(
         location: locationOf(doc.id, doc.category, folders, byId),
         status: STATUS_LABEL[doc.status] ?? doc.status,
         revHistory: history,
+        href: `/documents/${doc.id}`,
       };
     })
     .sort((a, b) => a.id - b.id);
+}
+
+function formIdentity(documentId: string, title: string): string {
+  return `${documentId.trim().toUpperCase()}\n${title.trim().toUpperCase()}`;
+}
+
+/**
+ * The number already stored on the template. When that field is blank, the id
+ * printed on the form itself (the two master lists). Never invents a number.
+ */
+export function documentNumberForForm(formKey: string, formId: string): string {
+  const stored = formId.trim();
+  if (stored) return stored;
+  return PRINTED_FORM_ID_WHEN_BLANK[formKey] ?? "";
+}
+
+/**
+ * Adds each registered form that already has a number. A form already on the
+ * list (same document id and title) is left as it is. Reading this again does
+ * not add a second row, and it does not write a number onto a blank template.
+ */
+export function withRegisteredForms(documentRows: MasterDocumentRow[], templates: RegisteredFormSource[], folders: FolderNode[]): MasterDocumentRow[] {
+  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const present = new Set(documentRows.map((row) => formIdentity(row.documentId, row.title)));
+  const added: MasterDocumentRow[] = [];
+  const ordered = [...templates].sort((a, b) => {
+    const left = documentNumberForForm(a.formKey, a.formId);
+    const right = documentNumberForForm(b.formKey, b.formId);
+    return left.localeCompare(right) || a.title.localeCompare(b.title) || a.formKey.localeCompare(b.formKey);
+  });
+  for (const template of ordered) {
+    const documentId = documentNumberForForm(template.formKey, template.formId);
+    if (!documentId) continue;
+    const key = formIdentity(documentId, template.title);
+    if (present.has(key)) continue;
+    present.add(key);
+    const folder = template.folderId == null ? undefined : byId.get(template.folderId);
+    added.push({
+      id: -template.id,
+      documentId,
+      title: template.title,
+      currentRev: PRINTED_FORM_REVISION[template.formKey] ?? "",
+      approvalDate: null,
+      approvedBy: "",
+      location: folder ? folderPath(folder, byId) : "Document Control",
+      status: "Template",
+      revHistory: "",
+      href: template.subjectRoute,
+    });
+  }
+  return [...documentRows, ...added];
 }
 
 export const masterDocumentListHandler = asyncHandler(async (req: Request, res: Response) => {
@@ -143,13 +210,16 @@ export const masterDocumentListHandler = asyncHandler(async (req: Request, res: 
 });
 
 export async function listMasterDocuments(db: Db): Promise<MasterDocumentRow[]> {
+  await ensureFormTemplates(db);
   const docs = await db.select().from(documents);
   const versions = await db.select().from(documentVersions);
   const published = await db.select().from(controlledVersions).where(eq(controlledVersions.subjectType, "document"));
   const peopleRows = await db.select({ id: users.id, name: users.name, email: users.email }).from(users);
   const folders = await db.select().from(documentFolders);
+  const templates = await db.select().from(controlledFormTemplates);
   const people = new Map(peopleRows.map((person) => [person.id, (person.name || person.email || "").trim()]));
-  return buildMasterDocumentRows(
+  const folderNodes = folders.map((folder) => ({ id: folder.id, name: folder.name, parentId: folder.parentId, documentId: folder.documentId }));
+  const rows = buildMasterDocumentRows(
     docs,
     versions.map((row) => ({
       documentId: row.documentId,
@@ -176,6 +246,18 @@ export async function listMasterDocuments(db: Db): Promise<MasterDocumentRow[]> 
       };
     }),
     people,
-    folders.map((folder) => ({ id: folder.id, name: folder.name, parentId: folder.parentId, documentId: folder.documentId })),
+    folderNodes,
+  );
+  return withRegisteredForms(
+    rows,
+    templates.map((template) => ({
+      id: template.id,
+      formKey: template.formKey,
+      formId: template.formId,
+      title: template.title,
+      subjectRoute: template.subjectRoute,
+      folderId: template.folderId,
+    })),
+    folderNodes,
   );
 }
