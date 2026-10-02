@@ -62,6 +62,7 @@ import { qualityInspectionReportsRouter } from "../modules/quality-inspection-re
 import { settingsRouter } from "../modules/settings/settings.routes.js";
 import { attachmentsRouter } from "../modules/attachments/attachments.routes.js";
 import { importRouter } from "../modules/import/import.routes.js";
+import { formImportRouter } from "../modules/form-import/formImport.routes.js";
 import { adminImportRouter } from "../modules/import/adminImport.routes.js";
 import { warrantyRouter } from "../modules/warranty/warranty.routes.js";
 import { supplierPortalRouter } from "../modules/supplier-portal/supplierPortal.routes.js";
@@ -156,6 +157,7 @@ apiRouter.use("/quality-inspection-reports", qualityInspectionReportsRouter);
 apiRouter.use("/settings", settingsRouter);
 apiRouter.use("/attachments", attachmentsRouter);
 apiRouter.use("/import", importRouter);
+apiRouter.use("/form-import", formImportRouter);
 apiRouter.use("/admin/imports", adminImportRouter);
 apiRouter.use("/warranty", warrantyRouter);
 apiRouter.use("/supplier-portal", supplierPortalRouter);
