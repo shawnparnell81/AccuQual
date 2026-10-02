@@ -85,9 +85,16 @@
 
 .csa-cell.title,
 .fp-cell.title {
+  height: auto;
+  min-height: 36px;
+  padding: 6px 8px 10px;
   font-size: 20px;
   font-weight: 700;
+  line-height: 1.25;
   letter-spacing: 0.02em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   color: var(--form-heading, #1d3a5c);
   justify-content: center;
   text-align: center;
@@ -225,9 +232,16 @@
   vertical-align: middle;
 }
 .insp .title {
+  height: auto;
+  min-height: 36px;
+  padding: 8px 8px 12px;
   font-size: 16px;
   font-weight: 700;
+  line-height: 1.25;
   text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .insp .section {
   background: #1f4e79;

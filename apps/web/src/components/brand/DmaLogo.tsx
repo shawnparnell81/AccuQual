@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 /** Official DMA Industries mark. Dark navy on transparent; CSS turns it white on dark chrome. */
 export const DMA_LOGO_SRC = "/branding/dma-logo.png";
 
@@ -20,16 +22,16 @@ export function DmaLogo({ height = 40, className, alt = "DMA Industries, LLC" }:
 }
 
 /**
- * Shared form header. New forms pick this up through GenericFormRenderer,
- * the ISO and validation sheet pages, and FormEditor. The grid underneath
- * is unchanged.
+ * Shared form header. Logo, title, and an optional revision block sit in
+ * three columns so a long title wraps in the middle instead of painting
+ * across the revision. With no meta, the balance column keeps the title centered.
  */
-export function FormHeader({ title }: { title?: string }) {
+export function FormHeader({ title, meta }: { title?: string; meta?: ReactNode }) {
   return (
     <div className="dma-form-header">
       <DmaLogo height={40} />
       {title ? <h2 className="dma-form-title">{title}</h2> : <div className="dma-form-title" />}
-      <span className="dma-form-balance" aria-hidden="true" />
+      {meta ? <div className="dma-form-meta">{meta}</div> : <span className="dma-form-balance" aria-hidden="true" />}
     </div>
   );
 }

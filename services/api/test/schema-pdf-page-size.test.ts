@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 import { capaLayout } from "../src/modules/forms/layouts/capa.js";
 import { controlPlanLayout } from "../src/modules/forms/layouts/controlPlan.js";
 import { fmeaLayout } from "../src/modules/forms/layouts/fmea.js";
 import { lpaLayout } from "../src/modules/forms/layouts/lpa.js";
 import { ncrLayout } from "../src/modules/forms/layouts/ncr.js";
-import { renderFormLayoutAsPdf } from "../src/modules/forms/schema-pdf-renderer.js";
+import { fitTextLines, renderFormLayoutAsPdf } from "../src/modules/forms/schema-pdf-renderer.js";
 
 async function pageSize(bytes: Uint8Array) {
   const doc = await PDFDocument.load(bytes);
@@ -28,5 +28,19 @@ describe("printable form page size", () => {
     expect(fmea).toEqual({ width: 792, height: 612 });
     expect(controlPlan).toEqual({ width: 792, height: 612 });
     expect(lpa).toEqual({ width: 792, height: 612 });
+  });
+
+  it("keeps table headers inside the column, including Current Rev", async () => {
+    const doc = await PDFDocument.create();
+    const font = await doc.embedFont(StandardFonts.HelveticaBold);
+    const narrow = 70;
+    for (const label of ["Inventory Scrap / Rework", "Current Rev"]) {
+      const lines = fitTextLines(label, font, 8, narrow);
+      expect(lines.length).toBeGreaterThan(0);
+      for (const line of lines) {
+        expect(font.widthOfTextAtSize(line, 8)).toBeLessThanOrEqual(narrow + 0.01);
+      }
+    }
+    expect(fitTextLines("Current Rev", font, 8, 80)).toEqual(["Current Rev"]);
   });
 });

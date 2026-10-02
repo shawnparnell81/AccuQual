@@ -87,7 +87,7 @@ export async function drawTitle(ctx: RenderContext, title: string) {
   const logoTop = ctx.y + 12;
   const logoW = drawDmaLogo(ctx.page, logo, MARGIN, logoTop, logoH);
   const textSpan = Math.max(80, span - logoW - 12);
-  const lines = wrapText(title, ctx.bold, 16, textSpan);
+  const lines = fitTextLines(title, ctx.bold, 16, textSpan);
   const textX = MARGIN + logoW + 8;
   let baseline = logoTop - Math.max(16, (logoH - lines.length * 20) / 2) - 2;
   for (const line of lines) {
@@ -132,7 +132,7 @@ function drawRow(ctx: RenderContext, fields: { name: string; label: string; hint
     const x = MARGIN + i * pairWidth;
     ctx.page.drawRectangle({ x, y: ctx.y - height, width: labelWidth, height, color: LABEL_BG, borderColor: BORDER, borderWidth: 0.5 });
     ctx.page.drawRectangle({ x: x + labelWidth, y: ctx.y - height, width: valueWidth, height, color: WHITE, borderColor: BORDER, borderWidth: 0.5 });
-    ctx.page.drawText(field.label, { x: x + 4, y: ctx.y - 12, size: 8, font: ctx.bold, color: TEXT_DARK });
+    ctx.page.drawText(clipText(field.label, ctx.bold, 8, labelWidth - 8), { x: x + 4, y: ctx.y - 12, size: 8, font: ctx.bold, color: TEXT_DARK });
     if (field.hint) {
       ctx.page.drawText(truncate(field.hint, ctx.italic, 6.5, labelWidth - 8), { x: x + 4, y: ctx.y - height + 5, size: 6.5, font: ctx.italic, color: TEXT_HINT });
     }
@@ -213,22 +213,23 @@ function drawTable(
   const remainingWidth = span - labelColWidth;
   const colWidth = remainingWidth / columns.length;
 
-  // Narrow tables (NCR, CAPA) keep a single 18pt header line, even when a
-  // label is wider than its column. Wide sheets wrap a label that does not fit.
-  const wide = columns.length >= WIDE_TABLE_COLUMNS;
+  // Every header stays inside its column. A label that fits stays one 18pt line.
   const headerLines = columns.map((col) => {
-    const label = pdfSafe(col.label);
-    if (!wide) return [label];
-    const wrapped = wrapText(label, ctx.bold, 8, Math.max(8, colWidth - 8));
-    return wrapped.length > 0 ? wrapped : [label];
+    const fitted = fitTextLines(pdfSafe(col.label), ctx.bold, 8, Math.max(8, colWidth - 8));
+    return fitted.length > 0 ? fitted : [""];
   });
-  const headerLineCount = Math.max(1, ...headerLines.map((lines) => lines.length));
-  const headerHeight = headerLineCount > 1 ? headerLineCount * 10 + 6 : 18;
+  const headerLabel = hasLabelColumn
+    ? fitTextLines(pdfSafe(labelColumnHeader ?? "Role"), ctx.bold, 8, Math.max(8, labelColWidth - 8))
+    : [];
+  const headerLineCount = Math.max(1, headerLabel.length, ...headerLines.map((lines) => lines.length));
+  const headerHeight = Math.max(18, headerLineCount * 10 + 6);
   ensureSpace(ctx, headerHeight);
   let x = MARGIN;
   if (hasLabelColumn) {
     ctx.page.drawRectangle({ x, y: ctx.y - headerHeight, width: labelColWidth, height: headerHeight, color: LABEL_BG, borderColor: BORDER, borderWidth: 0.5 });
-    ctx.page.drawText(labelColumnHeader ?? "Role", { x: x + 4, y: ctx.y - 13, size: 8, font: ctx.bold, color: TEXT_DARK });
+    headerLabel.forEach((line, lineIndex) => {
+      ctx.page.drawText(line, { x: x + 4, y: ctx.y - 13 - lineIndex * 10, size: 8, font: ctx.bold, color: TEXT_DARK });
+    });
     x += labelColWidth;
   }
   headerLines.forEach((lines, i) => {
@@ -248,14 +249,24 @@ function drawTable(
     const row = rows[r] ?? {};
     const besideLines = columns.reduce((count, col) => count + (col.beside?.choices.length ?? 0), 0);
     const optionLines = Math.max(0, ...columns.map((col) => (col.kind === "checkboxGroup" ? (col.options?.length ?? 0) : 0)));
-    const rowHeight = besideLines > 0 ? Math.max(32, (optionLines + besideLines) * 11 + 6) : 32;
+    const labelLines = hasLabelColumn
+      ? fitTextLines(pdfSafe(fixedRowLabels?.[r] ?? ""), ctx.bold, 7.5, Math.max(8, labelColWidth - 8)).slice(0, 8)
+      : [];
+    const valueLines = columns.map((col) => {
+      if (col.kind === "checkboxGroup") return [] as string[];
+      const value = measuredCellValue(col.formula, row, fmeaCellValue(col.formula, row, row[col.key]));
+      if (value == null || value === "") return [] as string[];
+      return fitTextLines(pictureTextToPlain(pdfSafe(String(value))), ctx.font, 8, Math.max(8, colWidth - 8)).slice(0, 8);
+    });
+    const textLineCount = Math.max(1, labelLines.length, ...valueLines.map((lines) => lines.length));
+    const textHeight = textLineCount <= 2 ? 32 : textLineCount * 10 + 8;
+    const rowHeight = besideLines > 0 ? Math.max(32, textHeight, (optionLines + besideLines) * 11 + 6) : textHeight;
     ensureSpace(ctx, rowHeight);
 
     x = MARGIN;
     if (hasLabelColumn) {
       ctx.page.drawRectangle({ x, y: ctx.y - rowHeight, width: labelColWidth, height: rowHeight, color: LABEL_BG, borderColor: BORDER, borderWidth: 0.5 });
-      const label = fixedRowLabels?.[r] ?? "";
-      wrapText(label, ctx.bold, 7.5, labelColWidth - 8).forEach((line, i) =>
+      labelLines.forEach((line, i) =>
         ctx.page.drawText(line, { x: x + 4, y: ctx.y - 12 - i * 9, size: 7.5, font: ctx.bold, color: TEXT_DARK })
       );
       x += labelColWidth;
@@ -293,9 +304,8 @@ function drawTable(
           }
         }
       } else if (value != null && value !== "") {
-        wrapText(pictureTextToPlain(pdfSafe(String(value))), ctx.font, 8, colWidth - 8)
-          .slice(0, 3)
-          .forEach((line, i) => ctx.page.drawText(line, { x: x + 4, y: ctx.y - 12 - i * 10, size: 8, font: ctx.font, color: textColor }));
+        const lines = valueLines[columns.indexOf(col)] ?? [];
+        lines.forEach((line, i) => ctx.page.drawText(line, { x: x + 4, y: ctx.y - 12 - i * 10, size: 8, font: ctx.font, color: textColor }));
       }
       x += colWidth;
     }
@@ -317,6 +327,22 @@ function drawTable(
 /** Helvetica is WinAnsi. An em dash in a column label must not abort the export. */
 function pdfSafe(text: string): string {
   return text.replace(/\u2014/g, "-").replace(/\u2013/g, "-");
+}
+
+/** WinAnsi-safe clip. The ellipsis glyph is not in Helvetica and would abort the export. */
+export function clipText(text: string, font: PDFFont, size: number, maxWidth: number): string {
+  if (font.widthOfTextAtSize(text, size) <= maxWidth) return text;
+  const ellipsis = "...";
+  let result = text;
+  while (result.length > 0 && font.widthOfTextAtSize(`${result}${ellipsis}`, size) > maxWidth) {
+    result = result.slice(0, -1);
+  }
+  return result ? `${result}${ellipsis}` : "";
+}
+
+/** Wrap, then keep every line inside maxWidth. A single long word is clipped. */
+export function fitTextLines(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+  return wrapText(text, font, size, maxWidth).map((line) => clipText(line, font, size, maxWidth));
 }
 
 /** Greedy word-wrap to a max pixel width for the given font/size. */

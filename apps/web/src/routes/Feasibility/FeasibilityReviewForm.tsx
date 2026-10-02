@@ -100,7 +100,7 @@ export function FeasibilityReviewForm({ review }: { review: FeasibilityReview })
   return (
     <div className="rounded-lg border border-border bg-card p-6 print:border-black print:bg-white print:text-black">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4 print:border-black">
+      <div className="aq-doc-head flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4 print:border-black">
         <div className="flex items-center gap-3">
           <BrandMark logoUrl={logoUrl} />
           <div>

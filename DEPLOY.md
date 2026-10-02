@@ -180,7 +180,7 @@ The static site's routes, in order:
 1. Rewrite `/api/*` → `https://api.accuqualqms.com/*`. The `*` is the path after `/api`, so `/api/health` is fetched as `https://api.accuqualqms.com/health`. The browser stays on `app.accuqualqms.com`. This URL is written in `render.yaml`; blueprint route destinations cannot be env vars, so it must stay equal to the API custom domain.
 2. Rewrite `/*` → `/index.html` (SPA fallback). Existing files, including `/assets/*`, are served before either rule.
 
-Security headers on `/*`: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`. `/assets/*` is cached as immutable. `/index.html` is `Cache-Control: no-cache`.
+Security headers on `/*`: `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`. Same-origin framing is allowed so the browser print preview can load this app; other sites still cannot frame it. `/assets/*` is cached as immutable. `/index.html` is `Cache-Control: no-cache`.
 
 **accuqual-api environment**
 
