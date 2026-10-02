@@ -20,7 +20,10 @@ export function DocumentsPage() {
           <h2 className="text-sm font-medium">Master Document List</h2>
           <p className="text-sm text-muted-foreground">LST-GEN-001. Revision, release date, and status for every controlled document. This list is shared by every plant.</p>
         </div>
-        <Link to="/documents/master-list" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">Open Master Document List</Link>
+        <div className="flex items-center gap-2">
+          <Link to="/documents/master-list" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">Open Master Document List</Link>
+          <Link to="/documents/import" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">Import filled form</Link>
+        </div>
       </div>
 
       <ResourceListPage<AccuQualDocument>
