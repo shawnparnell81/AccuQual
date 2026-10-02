@@ -5,7 +5,8 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import type { Db } from "../lib/requestDb.js";
 import { departmentPermissions, permissionRoleModules, userPermissionRoles } from "../drizzle/schema/permissions.js";
 import { isBroadViewRole, isFullAccessRole } from "../modules/roles/roleAccess.js";
-import { canMaintainMasterList, isMasterListWrite } from "../modules/roles/masterListAccess.js";
+import { documents } from "../drizzle/schema/documents.js";
+import { canMaintainMasterList, isMasterListWrite, isMasterToolListEditPath } from "../modules/roles/masterListAccess.js";
 
 export type AccessLevel = "none" | "read" | "edit";
 export type Department =
@@ -175,6 +176,20 @@ function isFormNumberWrite(req: Request): boolean {
   return req.baseUrl === "/document-folders" && req.method === "PATCH" && req.path.startsWith("/form-templates/");
 }
 
+/** A master-list maintainer may edit or upload a Master Tool List file when Documents is read-only. */
+async function isMasterToolListMaintainerWrite(req: Request): Promise<boolean> {
+  if (!req.user || !canMaintainMasterList(req.user) || req.baseUrl !== "/documents" || !req.db) return false;
+  if (!isMasterToolListEditPath(req.method, req.path)) return false;
+  if (req.method === "POST" && (req.path === "/" || req.path === "")) {
+    return (req.body as { category?: unknown } | undefined)?.category === "master-tool-list";
+  }
+  const match = req.path.match(/^\/(\d+)(?:\/|$)/);
+  const id = match ? Number(match[1]) : NaN;
+  if (!Number.isInteger(id) || id < 1) return false;
+  const [row] = await req.db.select({ category: documents.category }).from(documents).where(eq(documents.id, id));
+  return row?.category === "master-tool-list";
+}
+
 /** Quality managers may set a form number or file a filled form even when Documents is read-only for their department. Engineering may set a form number the same way. */
 function isQualityFormControlWrite(req: Request): boolean {
   if (req.baseUrl !== "/document-folders") return false;
@@ -285,6 +300,7 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
     if (role === "quality_manager" && (isRecordDeleteRequest(req) || isQualityFormControlWrite(req))) return next();
     if (req.user?.department === "engineering" && isFormNumberWrite(req)) return next();
     if (req.user && canMaintainMasterList(req.user) && isMasterListWrite(req.baseUrl, req.method, req.path)) return next();
+    if (await isMasterToolListMaintainerWrite(req)) return next();
     if (!req.user || !req.db) return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
 
     const level = await getUserAccessLevel(req.db as Db, req.user, resourceKey);

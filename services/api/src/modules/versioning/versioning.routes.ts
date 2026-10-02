@@ -40,10 +40,10 @@ export const validateSchema = z.object({ payload: z.record(z.string(), z.unknown
  *   review  approving or rejecting
  *   publish publishing
  */
-export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAdapter; permission: PermissionSubject; mountAt?: string }) {
+export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAdapter; permission: PermissionSubject; mountAt?: string; editGate?: ReturnType<typeof requirePermission> }) {
   const { adapter, permission } = cfg;
   const view = requirePermission(`${permission}.view`);
-  const edit = requirePermission(`${permission}.edit`);
+  const edit = cfg.editGate ?? requirePermission(`${permission}.edit`);
   const review = requirePermission(`${permission}.review`);
   const publish = requirePermission(`${permission}.publish`);
 

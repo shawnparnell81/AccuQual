@@ -39,3 +39,21 @@ export function isMasterListWrite(baseUrl: string, method: string, path: string)
   }
   return false;
 }
+
+/**
+ * Draft and file edits on one document. Used only after the row is confirmed
+ * to be a Master Tool List file. Review and publish stay on the reviewer check.
+ * Deleting the file is already a master-list write.
+ */
+export function isMasterToolListEditPath(method: string, path: string): boolean {
+  if (method === "POST" && (path === "/" || path === "")) return true;
+  if (method === "PATCH" && /^\/\d+$/.test(path)) return true;
+  if (method === "POST" && /^\/\d+\/(?:draft|review|rollback)$/.test(path)) return true;
+  if ((method === "PUT" || method === "DELETE") && /^\/\d+\/versions\/\d+$/.test(path)) return true;
+  if (method === "PATCH" && /^\/\d+\/draft\/\d+$/.test(path)) return true;
+  if (method === "POST" && /^\/\d+\/draft\/\d+\/review$/.test(path)) return true;
+  if (method === "POST" && /^\/\d+\/version\/\d+\/rollback$/.test(path)) return true;
+  if (method === "POST" && /^\/\d+\/version\/\d+\/attachments$/.test(path)) return true;
+  if (method === "DELETE" && /^\/\d+\/version\/\d+\/attachments\/\d+$/.test(path)) return true;
+  return false;
+}

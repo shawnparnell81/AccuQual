@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { faiValidationDocumentsHref, LEGACY_VALIDATION_REPORTS_PATH } from "../../lib/folderBrowse";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Eye, Upload } from "lucide-react";
@@ -11,6 +11,7 @@ import { DOCUMENT_FOLDER_PAGES, OBSOLETE_ARCHIVE_CATEGORY } from "../../componen
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
 import { useToast } from "../../components/shared/ToastProvider";
+import { canMaintainMasterList } from "../../lib/masterListAccess";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { onlyOfficeFile, previewKind, saveBytes } from "../../lib/filePreview";
 import { formatDate } from "../../lib/dates";
@@ -33,6 +34,7 @@ export function DocumentCategoryPage() {
   const toast = useToast();
   const user = useCurrentUser();
   const canRestore = user?.roleName === "admin" || user?.roleName === "owner";
+  const maintainToolList = category === "master-tool-list" && canMaintainMasterList(user);
   const queryClient = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -251,12 +253,17 @@ export function DocumentCategoryPage() {
                     <button type="button" onClick={() => void downloadDoc(doc).catch((err) => toast.error(extractErrorMessage(err, "Couldn't download that file.")))} className="mr-3 inline-flex items-center gap-1 text-primary hover:underline">
                       <Download size={14} /> Download
                     </button>
+                    {maintainToolList && (
+                      <Link to={`/documents/${doc.id}`} className="mr-3 text-primary hover:underline">Edit</Link>
+                    )}
                     <DeleteRecordButton
                       resource="documents"
                       id={doc.id}
                       kind="Document"
                       title={doc.title}
                       ownerIds={[doc.ownerId]}
+                      allowed={maintainToolList}
+                      label={maintainToolList ? "Remove" : "Delete"}
                       className="inline-flex items-center text-destructive hover:underline disabled:opacity-60"
                     />
                   </td>

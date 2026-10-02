@@ -108,8 +108,9 @@ export const LEGACY_ASSIGNED_FORM_IDS = new Set([
  * Blank templates taken out of the library.
  * The row is deleted the next time folders load. Filled records are left alone.
  * Master Document Register duplicated LST-GEN-001 (Master Document List).
+ * The two ASTM E542 gravimetric calculators are not blank-form templates and are not on the Master Document List.
  */
-export const RETIRED_FORM_KEYS = ["master_document_register"] as const;
+export const RETIRED_FORM_KEYS = ["master_document_register", "frm-tst-001", "frm-tst-002"] as const;
 
 /** Live Document Control register. The retired Register blank points here. */
 export const MASTER_DOCUMENT_LIST_PATH = "/documents/master-list";
@@ -155,8 +156,6 @@ export const FORM_TEMPLATES: FormTemplateSeed[] = [
   { formKey: "lst-vis-001", formId: "LST-VIS-001", title: "DMA Laboratory Visitor Log", topic: "Audit", subjectRoute: "/iso-forms/lst-vis-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "visitor_log", data: { cells: { F2: "Lab Entrance", I2: "Maxwell Tollefson" } } }) },
   { formKey: "rpt-eng-001", formId: "TMP-ENG-001", title: "MONTHLY ENGINEERING DEVELOPMENT REPORT", topic: "Engineering", subjectRoute: "/iso-forms/rpt-eng-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "monthly_engineering", data: { cells: { dept: "Product Engineering", prep: "Shawn Parnell" } } }) },
   { formKey: "frm-trp-002", formId: "FRM-TRP-002", title: "SALT SPRAY TEST REPORT (ASTM B117)", topic: "Inspection", subjectRoute: "/iso-forms/frm-trp-002", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "salt_spray", data: { cells: { E2: "Maxwell Tollefson", B41: "Shawn Parnell" } } }) },
-  { formKey: "frm-tst-001", formId: "FRM-TST-001", title: "ASTM E542 Gravimetric Volume Calculator", topic: "Engineering", subjectRoute: "/iso-forms/frm-tst-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "volume_water", data: { cells: { B10: 8, B11: 0.00001 } } }) },
-  { formKey: "frm-tst-002", formId: "FRM-TST-002", title: "ASTM E542 Gravimetric Volume Calculator", topic: "Engineering", subjectRoute: "/iso-forms/frm-tst-002", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "volume_heptane", data: { cells: { B10: 8, B11: 0.00001 } } }) },
   { formKey: "frm-trp-001", formId: "FRM-TRP-001", title: "PROTOTYPE EVALUATION REPORT (STRUT ASSEMBLY)", topic: "Engineering", subjectRoute: "/iso-forms/frm-trp-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "prototype_strut", data: { cells: { E2: "Maxwell Tollefson", B58: "Shawn Parnell" } } }) },
   { formKey: "frm-dev-001", formId: "FRM-DEV-001", title: "CSA DEVELOPMENT DOCUMENT", topic: "Engineering", subjectRoute: "/iso-forms/frm-dev-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "dev_csa", data: { cells: { E2: "Maxwell Tollefson", B10: "Shawn Parnell" } } }) },
   { formKey: "frm-dev-002", formId: "FRM-DEV-002", title: "FUEL PUMP DEVELOPMENT DOCUMENT", topic: "Engineering", subjectRoute: "/iso-forms/frm-dev-002", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "dev_fuel_pump", data: { cells: { D2: "Maxwell Tollefson", B8: "Shawn Parnell" } } }) },

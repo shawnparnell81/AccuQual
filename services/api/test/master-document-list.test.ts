@@ -206,10 +206,8 @@ describe("master document list", () => {
     expect(rows.find((row) => row.title === "CSA VALIDATION REPORT")).toMatchObject({ documentId: "FRM-VAL-001", status: "Template" });
     expect(rows.find((row) => row.title === "INTERNAL AUDIT SUMMARY REPORT")).toMatchObject({ documentId: "TMP-GEN-001" });
     expect(rows.find((row) => row.title === "MONTHLY ENGINEERING DEVELOPMENT REPORT")).toMatchObject({ documentId: "TMP-ENG-001" });
-    expect(rows.filter((row) => row.title === "ASTM E542 Gravimetric Volume Calculator").map((row) => row.documentId).sort()).toEqual([
-      "FRM-TST-001",
-      "FRM-TST-002",
-    ]);
+    expect(rows.filter((row) => row.title === "ASTM E542 Gravimetric Volume Calculator")).toEqual([]);
+    expect(rows.some((row) => row.documentId === "FRM-TST-001" || row.documentId === "FRM-TST-002")).toBe(false);
     expect(rows.find((row) => row.title === "Corrective Action Request")).toBeUndefined();
     expect(rows.find((row) => row.title === "8D Problem Solving")).toBeUndefined();
     expect(rows.find((row) => row.title === "Document Revision Record")).toBeUndefined();

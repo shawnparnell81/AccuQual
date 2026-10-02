@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FORM_TEMPLATES } from "../src/modules/document-folders/formFiling.js";
-import { canMaintainMasterList, isMasterListWrite } from "../src/modules/roles/masterListAccess.js";
+import { canMaintainMasterList, isMasterListWrite, isMasterToolListEditPath } from "../src/modules/roles/masterListAccess.js";
 
 describe("master list access", () => {
   it("lets Engineering, Quality Manager, VP of Engineering and Quality, and Admin maintain every master list", () => {
@@ -27,10 +27,19 @@ describe("master list access", () => {
     expect(isMasterListWrite("/ncr", "DELETE", "/4")).toBe(false);
   });
 
+  it("opens Master Tool List draft edits and leaves publish closed", () => {
+    expect(isMasterToolListEditPath("POST", "/")).toBe(true);
+    expect(isMasterToolListEditPath("POST", "/4/draft")).toBe(true);
+    expect(isMasterToolListEditPath("PATCH", "/4/draft/9")).toBe(true);
+    expect(isMasterToolListEditPath("POST", "/4/version/9/publish")).toBe(false);
+    expect(isMasterToolListEditPath("POST", "/4/version/9/review/approve")).toBe(false);
+  });
+
   it("keeps Master Document List and does not offer Document Control Master Index", () => {
     expect(FORM_TEMPLATES.some((form) => form.formKey === "lst-gen-001" && form.title === "Master Document List")).toBe(true);
     expect(FORM_TEMPLATES.some((form) => form.formKey === "document_revision_record")).toBe(true);
     expect(FORM_TEMPLATES.some((form) => form.formKey === "document_control_index" || /master index/i.test(form.title))).toBe(false);
     expect(FORM_TEMPLATES.some((form) => form.formKey === "master_document_register")).toBe(false);
+    expect(FORM_TEMPLATES.some((form) => form.formKey === "frm-tst-001" || form.formKey === "frm-tst-002")).toBe(false);
   });
 });
