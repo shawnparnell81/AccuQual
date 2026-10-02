@@ -742,6 +742,9 @@ label:has(> input[type="radio"]) > input[type="radio"],
   min-width: 0;
   transition: margin-left 0.25s ease;
 }
+body.aq-side-resizing .app-main {
+  transition: none;
+}
 
 .aq-topbar {
   position: fixed;
@@ -988,6 +991,44 @@ a:focus-visible {
   transition: transform 0.25s ease;
   display: flex;
   flex-direction: column;
+}
+/* Right edge of the nav box. Dragging sets --side-w; titles ellipsize only
+   when they still overflow the wider panel. */
+.aq-side-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 3;
+}
+.aq-side-resize::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 2px;
+  background: transparent;
+}
+.aq-side-resize:hover::after,
+.aq-side-resize:focus-visible::after {
+  background: hsl(var(--primary) / 0.85);
+}
+.aq-side-resize:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: -2px;
+}
+body.aq-side-resizing,
+body.aq-side-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 .aq-side-scroll {
   flex: 1;
@@ -1321,7 +1362,8 @@ body.side-collapsed .aq-nav-folder-link {
     justify-content: flex-start;
     padding: 9px 4px 9px 12px;
   }
-  .aq-collapse {
+  .aq-collapse,
+  .aq-side-resize {
     display: none;
   }
   .app-main {
