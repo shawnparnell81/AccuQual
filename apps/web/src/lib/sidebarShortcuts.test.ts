@@ -66,6 +66,20 @@ describe("per-user sidebar shortcuts", () => {
     assert.equal(flattenSidebarLinks(next).some((link) => link.path === LEGACY_VALIDATION_REPORTS_PATH), false);
   });
 
+  it("drops a pinned Master Document Register blank and keeps Master Document List", () => {
+    const next = applyUserShortcuts(SIDEBAR_FOLDERS, {
+      hidden: [],
+      pinned: [
+        { key: "blank:master_document_register", label: "Master Document Register", path: "/qms-forms/master_document_register" },
+        { key: "pin-master-document-list", label: "Master Document List", path: "/documents/master-list" },
+      ],
+    });
+    const links = flattenSidebarLinks(next);
+    assert.equal(links.some((link) => link.label === "Master Document Register" || link.path === "/qms-forms/master_document_register"), false);
+    assert.equal(links.some((link) => link.label === "Master Document List" && link.path === "/documents/master-list"), true);
+    assert.equal(PINNABLE_SHORTCUTS.some((item) => item.path === "/documents/master-list"), true);
+  });
+
   it("can pin the live NCR module because it is not on the shared menu", () => {
     const next = applyUserShortcuts(SIDEBAR_FOLDERS, {
       hidden: [],

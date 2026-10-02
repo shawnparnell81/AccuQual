@@ -8,6 +8,7 @@ import {
   EMPTY_SIDEBAR_SHORTCUTS,
   PINNABLE_SHORTCUTS,
   applyUserShortcuts,
+  isRetiredShortcut,
   sidebarToggleRows,
   type PinnedShortcut,
   type SidebarShortcutPrefs,
@@ -48,7 +49,7 @@ export function SidebarShortcutsDialog({ catalog, open, onClose }: { catalog: Si
   useEffect(() => {
     if (!open) return;
     setHidden(saved.data?.hidden ?? []);
-    setPinned(saved.data?.pinned ?? []);
+    setPinned((saved.data?.pinned ?? []).filter((pin) => !isRetiredShortcut(pin)));
     setFind("");
   }, [open, saved.data]);
 

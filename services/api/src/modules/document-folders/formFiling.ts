@@ -104,8 +104,24 @@ export const LEGACY_ASSIGNED_FORM_IDS = new Set([
   "DESIGN-HISTORY-FORM",
 ]);
 
-/** Blank templates taken out of the library. None right now — FRM-NCR-001 is a live blank again. */
-export const RETIRED_FORM_KEYS = [] as const;
+/**
+ * Blank templates taken out of the library.
+ * The row is deleted the next time folders load. Filled records are left alone.
+ * Master Document Register duplicated LST-GEN-001 (Master Document List).
+ */
+export const RETIRED_FORM_KEYS = ["master_document_register"] as const;
+
+/** Live Document Control register. The retired Register blank points here. */
+export const MASTER_DOCUMENT_LIST_PATH = "/documents/master-list";
+
+/** Blank Register route. A filled copy adds `/{id}` and is not this path. */
+export const RETIRED_REGISTER_BLANK_PATH = "/qms-forms/master_document_register";
+
+/** The blank Register shortcut becomes the live list. A filled copy keeps its record id. */
+export function retargetRetiredRegisterLink(linkedPath: string | null): string | null {
+  if (linkedPath === RETIRED_REGISTER_BLANK_PATH) return MASTER_DOCUMENT_LIST_PATH;
+  return linkedPath;
+}
 
 export const FORM_TEMPLATES: FormTemplateSeed[] = [
   { formKey: "frm-gen-001", formId: "FRM-GEN-001", title: "AUDIT CHECKLIST", topic: "Audit", subjectRoute: "/iso-forms/frm-gen-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "internal_audit", data: { cells: { F3: "Quality & Engineering" } } }) },
@@ -166,7 +182,6 @@ export const FORM_TEMPLATES: FormTemplateSeed[] = [
   { formKey: "supplier-ncr", formId: "", title: "Supplier NCR", topic: "Nonconformance", subjectRoute: "/ncr", start: blank("/ncr", "/ncr/{id}", { title: "Supplier NCR" }) },
   { formKey: "deviation-waiver", formId: "", title: "Deviation / Waiver Request", topic: "Nonconformance", subjectRoute: "/qms-forms/deviation_waiver_request", start: blank("/qms-forms", "/qms-forms/deviation_waiver_request/{id}", { formType: "deviation_waiver_request" }) },
   qms("document_revision_record", "Document Revision Record", "Document Control"),
-  qms("master_document_register", "Master Document Register", "Document Control"),
   qms("record_retention_log", "Record Retention Log", "Document Control"),
   qms("quality_record_disposition", "Quality Record Disposition Form", "Document Control"),
   qms("quality_objectives_action_plan", "Quality Objectives & Action Plan", "Quality Manual & Policies"),

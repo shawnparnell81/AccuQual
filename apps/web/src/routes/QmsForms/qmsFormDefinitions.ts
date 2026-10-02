@@ -357,6 +357,16 @@ export const QMS_FORM_DEFINITIONS: QmsFormDefinition[] = [
   },
 ];
 
+/**
+ * Master Document Register is the same index as LST-GEN-001 Master Document List.
+ * The definition stays so a filled copy can still open. New blanks are not offered.
+ */
+export const RETIRED_QMS_FORM_TYPES = new Set(["master_document_register"]);
+
+export function isRetiredQmsFormType(formType: string | undefined): boolean {
+  return formType != null && RETIRED_QMS_FORM_TYPES.has(formType);
+}
+
 export function getQmsFormDefinition(formType: string): QmsFormDefinition | undefined {
   return QMS_FORM_DEFINITIONS.find((d) => d.formType === formType);
 }

@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import type { QmsForm, QmsFormStatus } from "../../api/types";
 import { DataTable, type Column } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
-import { getQmsFormDefinition } from "./qmsFormDefinitions";
+import { getQmsFormDefinition, isRetiredQmsFormType } from "./qmsFormDefinitions";
 
 const qmsFormHooks = createResourceHooks<QmsForm>("qms-forms");
 const STATUSES: QmsFormStatus[] = ["draft", "active", "obsolete"];
@@ -13,12 +13,13 @@ export function QmsFormTypePage() {
   const { formType } = useParams();
   const navigate = useNavigate();
   const definition = getQmsFormDefinition(formType!);
-  const { data: rows = [], isLoading, isError } = qmsFormHooks.useList({ formType });
+  const { data: rows = [], isLoading, isError } = qmsFormHooks.useList({ formType }, { enabled: !isRetiredQmsFormType(formType) });
   const createForm = qmsFormHooks.useCreate();
   const [statusFilter, setStatusFilter] = useState("");
 
   const filtered = useMemo(() => rows.filter((r) => !statusFilter || r.status === statusFilter), [rows, statusFilter]);
 
+  if (isRetiredQmsFormType(formType)) return <Navigate to="/documents/master-list" replace />;
   if (!definition) return <p className="text-sm text-destructive">Unknown form type "{formType}".</p>;
 
   const columns: Column<QmsForm>[] = [

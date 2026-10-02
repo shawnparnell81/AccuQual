@@ -1,4 +1,4 @@
-import { QMS_FORM_DEFINITIONS } from "./qmsFormDefinitions";
+import { isRetiredQmsFormType, QMS_FORM_DEFINITIONS } from "./qmsFormDefinitions";
 
 export interface QmsDocumentEntry {
   title: string;
@@ -38,6 +38,6 @@ const HIDDEN_FORM_DEPARTMENTS = new Set(["Purchasing", "Sales and Marketing", "C
 const HIDDEN_FORM_TYPES = new Set(["po_quality_requirements", "customer_satisfaction_record", "product_traceability_record"]);
 
 export const ALL_QMS_DOCUMENTS: QmsDocumentEntry[] = [
-  ...QMS_FORM_DEFINITIONS.filter((def) => !HIDDEN_FORM_DEPARTMENTS.has(def.folderPath[0]) && !HIDDEN_FORM_TYPES.has(def.formType)).map((def) => ({ title: def.title, department: def.folderPath[0], route: `/qms-forms/${def.formType}`, isGeneric: true })),
+  ...QMS_FORM_DEFINITIONS.filter((def) => !HIDDEN_FORM_DEPARTMENTS.has(def.folderPath[0]) && !HIDDEN_FORM_TYPES.has(def.formType) && !isRetiredQmsFormType(def.formType)).map((def) => ({ title: def.title, department: def.folderPath[0], route: `/qms-forms/${def.formType}`, isGeneric: true })),
   ...REUSED_MODULE_DOCUMENTS,
 ];

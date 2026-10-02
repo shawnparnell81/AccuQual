@@ -7,7 +7,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
-import { getQmsFormDefinition } from "./qmsFormDefinitions";
+import { getQmsFormDefinition, isRetiredQmsFormType } from "./qmsFormDefinitions";
 import type { QmsForm, QmsFormRow, QmsFormStatus } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { PictureBoundText } from "../../components/forms/PictureText";
@@ -71,18 +71,20 @@ export function QmsFormRecordPage() {
   if (isLoading || !record) return <LoadingPlaceholder />;
 
   const rowsBySection = (sectionKey: string) => (record.rows ?? []).filter((r) => r.sectionKey === sectionKey);
+  const retired = isRetiredQmsFormType(formType);
+  const backTo = retired ? "/documents/master-list" : `/qms-forms/${formType}`;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between print:hidden">
-        <button onClick={() => navigate(`/qms-forms/${formType}`)} className="text-sm text-muted-foreground hover:text-foreground">
-          ← Back to list
+        <button onClick={() => navigate(backTo)} className="text-sm text-muted-foreground hover:text-foreground">
+          {retired ? "← Master Document List" : "← Back to list"}
         </button>
         <div className="flex gap-2">
           <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             Print
           </button>
-          <DeleteRecordButton resource="qms-forms" id={formId} kind={definition.title} title={record.formNo} ownerIds={[record.createdBy]} navigateTo={`/qms-forms/${formType}`} />
+          <DeleteRecordButton resource="qms-forms" id={formId} kind={definition.title} title={record.formNo} ownerIds={[record.createdBy]} navigateTo={backTo} />
         </div>
       </div>
 
