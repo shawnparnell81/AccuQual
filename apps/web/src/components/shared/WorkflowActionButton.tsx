@@ -21,6 +21,9 @@ interface WorkflowActionButtonProps {
    */
   visible?: boolean;
   variant?: "primary" | "outline";
+  /** Extra reason the action cannot run yet (the button stays visible). */
+  disabled?: boolean;
+  title?: string;
 }
 
 /**
@@ -30,14 +33,15 @@ interface WorkflowActionButtonProps {
  * of a bespoke inline <button onClick={...}> so permission-hiding and the
  * pending/error states aren't duplicated five times.
  */
-export function WorkflowActionButton({ label, navKey, action, onClick, visible = true, variant = "outline" }: WorkflowActionButtonProps) {
+export function WorkflowActionButton({ label, navKey, action, onClick, visible = true, variant = "outline", disabled = false, title }: WorkflowActionButtonProps) {
   const canEdit = useCanEditWorkflow(navKey);
   if (!visible || !canEdit) return null;
 
   return (
     <button
       onClick={onClick}
-      disabled={action.isPending}
+      disabled={action.isPending || disabled}
+      title={title}
       className={clsx(
         "rounded-md px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40",
         variant === "primary" ? "bg-button text-button-foreground" : "border border-border hover:bg-muted"

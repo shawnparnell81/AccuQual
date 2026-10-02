@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { rejectAiStubText, AI_STUB_REJECT_MESSAGE } from "../ai/ai.guardrails.js";
+import { NCR_ITEM_DISPOSITIONS } from "../quarantine/quarantine.service.js";
 
 export const createNcrSchema = z.object({
   title: z.string().min(1),
@@ -35,6 +36,8 @@ export const addNcrQuarantineItemSchema = z.object({
 });
 
 export const completeNcrDispositionSchema = z.object({
-  disposition: z.enum(["use_as_is", "rework", "scrap", "return_to_supplier"]),
+  disposition: z.enum(NCR_ITEM_DISPOSITIONS),
   concession: z.enum(["with", "none"]).optional(),
+  /** False saves the choice on the open quarantine lines without releasing them. Omitted still releases, except On Hold, which never releases. */
+  release: z.boolean().optional(),
 });

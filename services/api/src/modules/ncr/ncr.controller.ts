@@ -1,5 +1,6 @@
-import type { Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import { AppError } from "../../utils/appError.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import * as ncrService from "./ncr.service.js";
@@ -74,6 +75,17 @@ export const closeHandler = asyncHandler(async (req: Request, res: Response) => 
   res.json(updated);
 });
 
+/** PATCH can set status to closed without POST /close. Same On Hold gate, including bulk status changes. */
+export const rejectCloseWhileQuarantineOnHold = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
+  const status = req.body?.patch?.status ?? req.body?.status;
+  if (status !== "closed") return next();
+  const ids: number[] = Array.isArray(req.body?.ids) ? req.body.ids : [Number(req.params.id)];
+  for (const id of ids) {
+    if (await quarantineService.ncrQuarantineIsOnHold(req.db!, id)) throw AppError.badRequest(quarantineService.onHoldBlockMessage(id));
+  }
+  next();
+});
+
 export const listNcrQuarantineItemsHandler = asyncHandler(async (req: Request, res: Response) => {
   const ncrId = Number(req.params.id);
   res.json(await quarantineService.listQuarantineItems(req.db!, "active", ncrId));
@@ -87,6 +99,6 @@ export const addNcrQuarantineItemHandler = asyncHandler(async (req: Request, res
 export const completeNcrDispositionHandler = asyncHandler(async (req: Request, res: Response) => {
   const actor = { id: req.user?.id ?? 0, roleName: req.user?.roleName ?? null };
   const concession = req.body.disposition === "use_as_is" ? req.body.concession : undefined;
-  const result = await quarantineService.completeNcrDisposition(req.db!, Number(req.params.id), req.body.disposition, actor, concession);
+  const result = await quarantineService.completeNcrDisposition(req.db!, Number(req.params.id), req.body.disposition, actor, concession, req.body.release);
   res.json(result);
 });

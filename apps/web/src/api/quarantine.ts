@@ -50,6 +50,8 @@ export interface QuarantineRecord {
   releasedAt: string | null;
   destroyedAt: string | null;
   ageDays: number;
+  /** Set when an NCR saved On Hold (or another choice) on this line without releasing it. */
+  pendingDisposition?: string | null;
 }
 
 export interface QuarantineDetail extends QuarantineRecord {

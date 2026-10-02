@@ -8,6 +8,7 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
+import { ON_HOLD_BLOCK_MESSAGE, ON_HOLD_DISPOSITION } from "../NCR/NcrQuarantineSection";
 
 const STATUS_LABEL: Record<QuarantineStatus, string> = { quarantined: "On hold", released: "Released", destroyed: "Removed from stock" };
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "—");
@@ -33,6 +34,7 @@ export function QuarantineDetailPage() {
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !r) return <LoadingPlaceholder />;
   const open = r.status === "quarantined";
+  const onHold = r.pendingDisposition === ON_HOLD_DISPOSITION;
 
   return (
     <div className="flex flex-col gap-4">
@@ -56,7 +58,7 @@ export function QuarantineDetailPage() {
                 Move
               </button>
             )}
-            {mayRelease && (
+            {mayRelease && !onHold && (
               <>
                 <button onClick={() => setResolve("release")} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
                   Release…
@@ -76,7 +78,8 @@ export function QuarantineDetailPage() {
           {r.enforced ? "The inventory system won't let these units be issued, consumed, scrapped or reserved until this hold is decided." : "This hold is a record only: the system can't stop this item being used. People are expected to follow it."}
         </p>
       )}
-      {open && !mayRelease && <p className="text-xs text-muted-foreground">Releasing or removing held material needs an admin or quality manager, and not the person who placed the hold.</p>}
+      {open && onHold && <p className="text-sm text-destructive">{ON_HOLD_BLOCK_MESSAGE}</p>}
+      {open && !onHold && !mayRelease && <p className="text-xs text-muted-foreground">Releasing or removing held material needs an admin or quality manager, and not the person who placed the hold.</p>}
 
       <div className="rounded-lg border border-border bg-card p-4">
         <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

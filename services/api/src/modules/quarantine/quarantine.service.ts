@@ -87,6 +87,32 @@ async function emit(event: string, id: number, extra: Record<string, unknown> = 
 
 const ageDays = (r: QuarantineRecord, now = new Date()) => (r.createdAt ? Math.floor((now.getTime() - r.createdAt.getTime()) / DAY_MS) : 0);
 
+/** Saved on an open quarantine line until a releasing disposition is completed. Not a workflow status. */
+export const ON_HOLD_DISPOSITION = "on_hold" as const;
+
+export function onHoldBlockMessage(ncrId?: number): string {
+  const which = ncrId ? `NCR #${ncrId} is` : "This NCR is";
+  return `${which} On Hold. Change the quarantine disposition off On Hold before you release or close it.`;
+}
+
+export function pendingDispositionOf(record: { metadata: unknown }): string | null {
+  const meta = record.metadata as { pendingDisposition?: unknown } | null;
+  if (meta && typeof meta.pendingDisposition === "string") {
+    const value = meta.pendingDisposition.trim();
+    if (value) return value;
+  }
+  return null;
+}
+
+export function quarantineRecordIsOnHold(record: { metadata: unknown }): boolean {
+  return pendingDispositionOf(record) === ON_HOLD_DISPOSITION;
+}
+
+export async function ncrQuarantineIsOnHold(db: Db, ncrId: number): Promise<boolean> {
+  const open = await db.select({ metadata: quarantineRecords.metadata }).from(quarantineRecords).where(and(eq(quarantineRecords.ncrId, ncrId), eq(quarantineRecords.status, "quarantined")));
+  return open.some((row) => quarantineRecordIsOnHold(row));
+}
+
 // ---- Create ---------------------------------------------------------------------------------------------------------------------------------------
 
 export async function createQuarantine(db: Db, input: CreateInput, actor?: number): Promise<QuarantineRecord> {
@@ -141,7 +167,7 @@ export async function getQuarantine(db: Db, id: number) {
   if (!record) throw AppError.notFound("Quarantine record");
   const inventory = await db.select().from(quarantineInventory).where(and(eq(quarantineInventory.quarantineId, id))).orderBy(asc(quarantineInventory.id));
   const resolutions = await db.select().from(quarantineResolutions).where(and(eq(quarantineResolutions.quarantineId, id))).orderBy(asc(quarantineResolutions.id));
-  return { ...record, ageDays: ageDays(record), inventory, resolutions };
+  return { ...record, pendingDisposition: pendingDispositionOf(record), ageDays: ageDays(record), inventory, resolutions };
 }
 
 export interface ListFilters {
@@ -294,6 +320,7 @@ export async function resolveQuarantine(db: Db, id: number, action: "release" | 
   const [record] = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.id, id)));
   if (!record) throw AppError.notFound("Quarantine record");
   if (record.status !== "quarantined") throw new AppError("This hold is already closed.", 409);
+  if (record.ncrId && (await ncrQuarantineIsOnHold(db, record.ncrId))) throw AppError.badRequest(onHoldBlockMessage(record.ncrId));
 
   const allowed: readonly string[] = action === "release" ? RELEASE_DISPOSITIONS : DESTROY_DISPOSITIONS;
   if (!allowed.includes(input.disposition)) throw AppError.badRequest(`A ${action} needs a disposition: ${allowed.join(", ")}.`);
@@ -382,12 +409,13 @@ export async function linkNcrFromReceiving(db: Db, quarantineId: number, ncrId: 
 
 // ---- NCR quarantined items ------------------------------------------------------------------------------------------------------------------------
 
-/** What an NCR disposition can do to the material it quarantined. Mapped onto the existing release/destroy dispositions. */
-export const NCR_ITEM_DISPOSITIONS = ["use_as_is", "rework", "scrap", "return_to_supplier"] as const;
+/** What an NCR disposition can do to the material it quarantined. Mapped onto the existing release/destroy dispositions. On Hold is saved on the line and does not release it. */
+export const NCR_ITEM_DISPOSITIONS = ["use_as_is", "rework", "scrap", "return_to_supplier", "on_hold"] as const;
 export type NcrItemDisposition = (typeof NCR_ITEM_DISPOSITIONS)[number];
 export type NcrConcession = "with" | "none";
+type NcrReleaseDisposition = Exclude<NcrItemDisposition, "on_hold">;
 
-const NCR_DISPOSITION_RESOLVE: Record<NcrItemDisposition, { action: "release" | "destroy"; disposition: string; label: string }> = {
+const NCR_DISPOSITION_RESOLVE: Record<NcrReleaseDisposition, { action: "release" | "destroy"; disposition: string; label: string }> = {
   use_as_is: { action: "release", disposition: "use_as_is", label: "Use as is" },
   rework: { action: "release", disposition: "reworked", label: "Rework" },
   scrap: { action: "destroy", disposition: "scrapped", label: "Scrap" },
@@ -402,6 +430,7 @@ export const DISPOSITION_LABEL: Record<string, string> = {
   scrap: "Scrap",
   returned_to_supplier: "Return to supplier",
   return_to_supplier: "Return to supplier",
+  on_hold: "On Hold",
   sorted: "Sorted",
   other: "Other",
 };
@@ -463,7 +492,11 @@ export async function listQuarantineItems(db: Db, view: "active" | "released", n
   if (ncrId !== undefined) conditions.push(eq(quarantineRecords.ncrId, ncrId));
   const rows = await db.select().from(quarantineRecords).where(and(...conditions)).orderBy(desc(quarantineRecords.createdAt), desc(quarantineRecords.id));
   const resolutions = await latestResolutions(db, rows.map((r) => r.id));
-  return rows.map((r) => toItemView(r, resolutions.get(r.id)?.disposition ?? null, view === "active"));
+  return rows.map((r) => {
+    const resolved = resolutions.get(r.id)?.disposition ?? null;
+    const disposition = view === "active" ? (pendingDispositionOf(r) ?? resolved) : resolved;
+    return toItemView(r, disposition, view === "active");
+  });
 }
 
 /** Puts one part on the quarantined-items list from an NCR. Reuses quarantine_records; the part number and optional serial live on that row. */
@@ -494,14 +527,49 @@ export async function addNcrQuarantineItem(
     },
     actor,
   );
+  if (await ncrQuarantineIsOnHold(db, ncrId)) {
+    const metadata = { ...(record.metadata ?? {}), pendingDisposition: ON_HOLD_DISPOSITION };
+    const [updated] = await db.update(quarantineRecords).set({ metadata, updatedAt: new Date() }).where(eq(quarantineRecords.id, record.id)).returning();
+    return toItemView(updated ?? record, ON_HOLD_DISPOSITION, true);
+  }
   return toItemView(record, null, true);
+}
+
+async function saveNcrQuarantineDisposition(
+  db: Db,
+  ncrId: number,
+  disposition: NcrItemDisposition,
+  actor: ResolveActor,
+): Promise<{ disposition: NcrItemDisposition; released: false; items: QuarantineItemView[] }> {
+  const [row] = await db.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, ncrId), eq(ncr.isDeleted, false)));
+  if (!row) throw AppError.notFound("NCR");
+  const open = await db.select().from(quarantineRecords).where(and(eq(quarantineRecords.ncrId, ncrId), eq(quarantineRecords.status, "quarantined")));
+  if (open.length === 0) {
+    if (disposition === ON_HOLD_DISPOSITION) throw AppError.badRequest("Add a quarantined item before setting disposition to On Hold.");
+    return { disposition, released: false, items: [] };
+  }
+  const items: QuarantineItemView[] = [];
+  for (const record of open) {
+    const metadata = { ...(record.metadata ?? {}), pendingDisposition: disposition };
+    const [updated] = await db.update(quarantineRecords).set({ metadata, updatedAt: new Date() }).where(eq(quarantineRecords.id, record.id)).returning();
+    items.push(toItemView(updated ?? record, disposition, true));
+  }
+  await recordAuditTrail(db, {
+    entityType: "NCR",
+    entityId: ncrId,
+    action: "update",
+    changes: { event: "ncr_quarantine_disposition_set", disposition, dispositionLabel: DISPOSITION_LABEL[disposition] ?? disposition, itemIds: items.map((item) => item.id) },
+    performedBy: actor.id > 0 ? actor.id : undefined,
+  });
+  return { disposition, released: false, items };
 }
 
 /**
  * Completing the NCR disposition releases every item still quarantined against that NCR.
  * Use-as-is (with or without a concession) and rework go back into use; scrap and return-to-supplier leave stock.
  * Either way they leave the active list and stay in the released history.
- * The person working the NCR is allowed to finish this — it is the disposition, not a second person deciding a hold they opened.
+ * On Hold is stored on those lines and does not release them. Release and close stay blocked until the disposition changes.
+ * The person working the NCR is allowed to finish a releasing disposition — it is the disposition, not a second person deciding a hold they opened.
  */
 export async function completeNcrDisposition(
   db: Db,
@@ -509,9 +577,11 @@ export async function completeNcrDisposition(
   disposition: NcrItemDisposition,
   actor: ResolveActor,
   concession?: NcrConcession,
-): Promise<{ disposition: NcrItemDisposition; concession?: NcrConcession; items: QuarantineItemView[] }> {
+  release?: boolean,
+): Promise<{ disposition: NcrItemDisposition; concession?: NcrConcession; released?: boolean; items: QuarantineItemView[] }> {
+  if (disposition === ON_HOLD_DISPOSITION || release === false) return saveNcrQuarantineDisposition(db, ncrId, disposition, actor);
+  if (await ncrQuarantineIsOnHold(db, ncrId)) throw AppError.badRequest(onHoldBlockMessage(ncrId));
   const mapped = NCR_DISPOSITION_RESOLVE[disposition];
-  if (!mapped) throw AppError.badRequest("Choose a disposition: use as is, rework, scrap, or return to supplier.");
   const appliedConcession = disposition === "use_as_is" ? concession : undefined;
   const label = appliedConcession === "with" ? "Use as is with concession" : appliedConcession === "none" ? "Use as is, no concession" : mapped.label;
   const [row] = await db.select({ id: ncr.id }).from(ncr).where(and(eq(ncr.id, ncrId), eq(ncr.isDeleted, false)));
@@ -536,5 +606,5 @@ export async function completeNcrDisposition(
     changes: { event: "ncr_quarantine_released", disposition, ...(appliedConcession ? { concession: appliedConcession } : {}), dispositionLabel: label, itemIds: items.map((item) => item.id) },
     performedBy: actor.id > 0 ? actor.id : undefined,
   });
-  return { disposition, ...(appliedConcession ? { concession: appliedConcession } : {}), items };
+  return { disposition, released: true, ...(appliedConcession ? { concession: appliedConcession } : {}), items };
 }
