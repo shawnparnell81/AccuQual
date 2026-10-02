@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { extendZodWithOpenApi, OpenAPIRegistry, OpenApiGeneratorV3 } from "@asteasolutions/zod-to-openapi";
-import { createNcrSchema, updateNcrSchema, containmentNcrSchema, rootCauseNcrSchema, correctiveActionNcrSchema } from "../modules/ncr/ncr.validation.js";
+import { createNcrSchema, updateNcrSchema, containmentNcrSchema, rootCauseNcrSchema, correctiveActionNcrSchema, dispositionStepNcrSchema, verifyNcrSchema } from "../modules/ncr/ncr.validation.js";
 import { createCapaSchema, updateCapaSchema, verifyCapaSchema } from "../modules/capa/capa.validation.js";
 import { createDocumentSchema, updateDocumentSchema, requestReviewSchema, decisionSchema } from "../modules/documents/documents.validation.js";
 import { createCourseSchema, updateCourseSchema, assignSchema, completeAssignmentSchema } from "../modules/training/training.validation.js";
@@ -70,7 +70,7 @@ registry.registerPath({
   method: "post",
   path: "/ncr/{id}/containment",
   tags: ["NCR"],
-  summary: "Record containment (open → contained)",
+  summary: "Record containment (NCR Created → Contain)",
   request: { params: z.object({ id: z.string() }), body: { content: { "application/json": { schema: containmentNcrSchema } } } },
   responses: { 200: genericResponses[200], 400: genericResponses[400] },
 });
@@ -86,8 +86,32 @@ registry.registerPath({
   method: "post",
   path: "/ncr/{id}/corrective-action",
   tags: ["NCR"],
-  summary: "Record corrective action",
+  summary: "Record the fix (Disposition → Fix)",
   request: { params: z.object({ id: z.string() }), body: { content: { "application/json": { schema: correctiveActionNcrSchema } } } },
+  responses: { 200: genericResponses[200], 400: genericResponses[400] },
+});
+registry.registerPath({
+  method: "post",
+  path: "/ncr/{id}/disposition-step",
+  tags: ["NCR"],
+  summary: "Disposition step (Contain → Disposition). Does not release quarantined material.",
+  request: { params: z.object({ id: z.string() }), body: { content: { "application/json": { schema: dispositionStepNcrSchema } } } },
+  responses: { 200: genericResponses[200], 400: genericResponses[400] },
+});
+registry.registerPath({
+  method: "post",
+  path: "/ncr/{id}/verify",
+  tags: ["NCR"],
+  summary: "Verify step (Fix → Verify)",
+  request: { params: z.object({ id: z.string() }), body: { content: { "application/json": { schema: verifyNcrSchema } } } },
+  responses: { 200: genericResponses[200], 400: genericResponses[400] },
+});
+registry.registerPath({
+  method: "post",
+  path: "/ncr/{id}/close",
+  tags: ["NCR"],
+  summary: "Close (Verify → Closed). Blocked while quarantine disposition is On Hold.",
+  request: { params: z.object({ id: z.string() }) },
   responses: { 200: genericResponses[200], 400: genericResponses[400] },
 });
 

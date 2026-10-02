@@ -17,6 +17,7 @@ import { qualityReminderLog } from "../../drizzle/schema/qualityAutomation.js";
 import { notifyRecipients, normalizeNotificationPreferences } from "../notifications/notification.service.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
+import { OPEN_NCR_STATUSES, canonicalNcrStep, ncrStepLabel } from "../ncr/ncr.workflow.js";
 import { AppError } from "../../utils/appError.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 import {
@@ -43,7 +44,7 @@ import {
 } from "./logic.js";
 
 const OPEN_CAPA = ["open", "in_progress", "verifying"] as const;
-const OPEN_NCR = ["open", "contained", "investigating", "corrective_action"] as const;
+const OPEN_NCR = OPEN_NCR_STATUSES;
 
 interface Claim {
   kind: string;
@@ -163,11 +164,12 @@ export async function runQualityAutomation(db: Db, now = new Date()): Promise<{ 
   for (const row of ncrRows) {
     const ownerId = row.assignedTo;
     const touched = row.updatedAt ?? row.createdAt ?? now;
+    const step = ncrStepLabel(canonicalNcrStep(row.status));
     const itemBase = { label: `NCR #${row.id}`, href: href(`/ncr/${row.id}`) };
     if (row.dueDate) {
       const kind = classifyDue(row.dueDate, now, settings, timeZone);
       if (kind) {
-        const item = { ...itemBase, detail: `${row.title} — ${dueDetail(kind, row.dueDate, timeZone)}` };
+        const item = { ...itemBase, detail: `${step} — ${row.title} — ${dueDetail(kind, row.dueDate, timeZone)}` };
         const recipients = kind === "escalated" ? escalationRecipients(ownerId, people) : [ownerEmail(ownerId, people) ?? ""].filter(Boolean);
         const fallback = recipients.length > 0 ? recipients : escalationRecipients(ownerId, people);
         remind({ kind, entityType: "NCR", entityId: row.id, bucket: `${kind}:${calendarDay(row.dueDate, timeZone)}`, recipients: fallback, item });
@@ -175,7 +177,7 @@ export async function runQualityAutomation(db: Db, now = new Date()): Promise<{ 
       }
     }
     if (ageInCalendarDays(touched, now, timeZone) >= settings.stuckDays) {
-      const item = { ...itemBase, detail: `${row.title} — no update for ${settings.stuckDays}+ days` };
+      const item = { ...itemBase, detail: `${step} — ${row.title} — no update for ${settings.stuckDays}+ days` };
       remind({
         kind: "escalated",
         entityType: "NCR",

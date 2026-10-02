@@ -7,12 +7,15 @@ import * as ncrService from "./ncr.service.js";
 import { syncNcrFormData, mapSeverityToClassification, ncrIsoDate } from "./ncr.formSync.js";
 import * as quarantineService from "../quarantine/quarantine.service.js";
 import { noteRepeatNcr, repeatReport } from "../quality-automation/qualityAutomation.service.js";
+import { canonicalNcrStep, decorateNcrBody, ncrStatusAliases } from "./ncr.workflow.js";
 
 export const baseHandlers = crudFactory(ncr, {
   entityName: "NCR",
   idColumn: "id",
   softDelete: true,
   siteScoped: true,
+  expandStatusFilter: ncrStatusAliases,
+  prepareCreate: (body) => ({ ...body, status: typeof body.status === "string" ? canonicalNcrStep(body.status) : "ncr_created" }),
   // Phase 2 NCR unified-data-model fix — see ncr.formSync.ts's own comment.
   // A brand-new NCR gets its official document seeded immediately (never
   // starts totally blank again); a direct PATCH to description/severity
@@ -74,6 +77,23 @@ export const closeHandler = asyncHandler(async (req: Request, res: Response) => 
   const updated = await ncrService.close(req.db!, Number(req.params.id), req.user?.id, req.allowedSiteIds);
   res.json(updated);
 });
+
+export const dispositionStepHandler = asyncHandler(async (req: Request, res: Response) => {
+  const updated = await ncrService.setDispositionStep(req.db!, Number(req.params.id), req.body.note, req.user?.id, req.allowedSiteIds);
+  res.json(updated);
+});
+
+export const verifyHandler = asyncHandler(async (req: Request, res: Response) => {
+  const updated = await ncrService.setVerify(req.db!, Number(req.params.id), req.body.verification, req.user?.id, req.allowedSiteIds);
+  res.json(updated);
+});
+
+/** Every NCR JSON response uses the current step key and carries workflow.currentStep, allowedTransitions, and history. */
+export function presentNcrWorkflow(_req: Request, res: Response, next: NextFunction) {
+  const send = res.json.bind(res);
+  res.json = ((body: unknown) => send(decorateNcrBody(body))) as Response["json"];
+  next();
+}
 
 /** PATCH can set status to closed without POST /close. Same On Hold gate, including bulk status changes. */
 export const rejectCloseWhileQuarantineOnHold = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {

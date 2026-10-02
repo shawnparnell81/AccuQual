@@ -116,7 +116,7 @@ export const escalateToNcrHandler = asyncHandler(async (req: Request, res: Respo
   }
 
   const title = `Customer complaint #${current.id}${current.customerName ? ` — ${current.customerName}` : ""}`.slice(0, 200);
-  const [createdNcr] = await req.db!.insert(ncr).values({ title, description: current.description, severity: current.severity ?? undefined, createdBy: req.user?.id, ...(req.siteId ? { siteId: req.siteId } : {}) }).returning();
+  const [createdNcr] = await req.db!.insert(ncr).values({ title, description: current.description, severity: current.severity ?? undefined, status: "ncr_created", createdBy: req.user?.id, ...(req.siteId ? { siteId: req.siteId } : {}) }).returning();
   await recordAuditTrail(req.db!, { entityType: "NCR", entityId: createdNcr!.id, action: "create", changes: { fromComplaintId: current.id }, performedBy: req.user?.id });
   await syncNcrFormData(
     req.db!,

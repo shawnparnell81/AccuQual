@@ -4,6 +4,7 @@ import { ListChecks } from "lucide-react";
 import type { OpenWork } from "../../api/dashboard";
 import { cardFilterKeys, filterToken, rowInModuleFilter } from "../../lib/openWorkFilter";
 import { StatusBadge } from "../tables/StatusBadge";
+import { statusPhrase } from "../../lib/opsLanguage";
 
 const TONE: Record<string, string> = {
   ncr: "primary",
@@ -158,7 +159,7 @@ export function OpenWorkSection({
               <option value="">All statuses</option>
               {statuses.map((item) => (
                 <option key={item} value={item}>
-                  {item.replace(/_/g, " ")}
+                  {statusPhrase(item)}
                 </option>
               ))}
             </select>
@@ -208,7 +209,7 @@ export function OpenWorkSection({
                         </Link>
                       </td>
                       <td className="py-2">
-                        <StatusBadge value={row.status} />
+                        <StatusBadge value={row.status} label={statusPhrase(row.status)} />
                       </td>
                       <td className="py-2">{row.plant ?? "—"}</td>
                       <td className="py-2">{row.owner ?? "—"}</td>

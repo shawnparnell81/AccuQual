@@ -1512,6 +1512,10 @@ body.side-collapsed .aq-nav-folder-link {
 }
 
 @media print {
+  .aq-step-trail {
+    break-inside: avoid;
+    gap: 0.35rem 0;
+  }
   /* Paper is light with dark type in either app theme. !important beats a
      Classic palette stored as inline custom properties. Status fills
      (red / yellow / green) are their own colors and are not reset here.

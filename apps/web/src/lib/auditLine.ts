@@ -105,6 +105,17 @@ function fieldLabel(key: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
+/** NCR workflow steps, including the words stored before the six-step process. Shared words (open, closed, investigating) stay as they are so other modules are unchanged. */
+const NCR_AUDIT_STATUS: Record<string, string> = {
+  ncr_created: "NCR Created",
+  contain: "Contain",
+  contained: "Contain",
+  disposition: "Disposition",
+  fix: "Fix",
+  verify: "Verify",
+  corrective_action: "Fix",
+};
+
 function isDateKey(key: string): boolean {
   return /(At|Date)$/.test(key) || /_(at|date)$/.test(key);
 }
@@ -120,6 +131,10 @@ function displayValue(value: unknown, key?: string): string | null {
   if (typeof value === "boolean") return value ? "yes" : "no";
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   if (typeof value !== "string") return null;
+  if (key === "status") {
+    const named = NCR_AUDIT_STATUS[value];
+    if (named) return named.includes(" ") ? `"${named}"` : named;
+  }
   if (mentionsAi(value)) return null;
   if (value === "[redacted]") return "a hidden value";
   if (value.startsWith("[large value:")) return "a long value";
@@ -271,11 +286,16 @@ function eventDetail(changes: Record<string, unknown> | null, code: string | nul
     case "close":
       return "Closed this record.";
     case "containment":
-      return "Recorded containment.";
+      return "Recorded containment. Step is now Contain.";
+    case "disposition":
+      return "Recorded disposition. Step is now Disposition.";
     case "root_cause":
       return "Recorded the root cause.";
+    case "fix":
     case "corrective_action":
-      return "Recorded the corrective action.";
+      return "Recorded the fix. Step is now Fix.";
+    case "verify":
+      return "Recorded verification. Step is now Verify.";
     case "assigned":
       return "Updated the assignee.";
     case "obsolete":

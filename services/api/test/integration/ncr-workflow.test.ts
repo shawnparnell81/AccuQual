@@ -5,7 +5,7 @@ import { ensureTestCompany } from "../helpers/company.js";
 // hangs off — had zero dedicated test coverage. Every existing reference to
 // POST /ncr in the suite was incidental (a fixture for an unrelated RBAC or
 // audit-trail test), never a test of the NCR workflow itself
-// (open -> contained -> investigating -> corrective_action -> closed, each
+// (NCR Created -> Contain -> Disposition -> Fix -> Verify -> Closed, each
 // step gated by ncr.service.ts's own expectedFrom check).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
@@ -61,10 +61,13 @@ describe("NCR workflow (real DB + real HTTP path)", () => {
     expect(res.status).toBe(403);
   });
 
-  it("a fresh NCR starts in status open", async () => {
+  it("a fresh NCR starts at NCR Created", async () => {
     const id = await createNcr(qualityToken, "Fresh NCR");
     const res = await request(app).get(`/ncr/${id}`).set("Authorization", `Bearer ${qualityToken}`);
-    expect(res.body.status).toBe("open");
+    expect(res.body.status).toBe("ncr_created");
+    expect(res.body.workflow.currentStep).toBe("NCR Created");
+    expect(res.body.workflow.allowedTransitions).toEqual(["Contain"]);
+    expect(res.body.workflow.history.map((entry: { step: string }) => entry.step)).toEqual(["NCR Created"]);
   });
 
   it("root-cause cannot be recorded before containment — the workflow rejects out-of-order steps", async () => {
@@ -79,32 +82,61 @@ describe("NCR workflow (real DB + real HTTP path)", () => {
     expect(res.status).toBe(400);
   });
 
-  it("walks the real containment -> root-cause -> corrective-action -> close sequence, each step advancing status", async () => {
+  it("walks NCR Created -> Contain -> Disposition -> Fix -> Verify -> Closed", async () => {
     const id = await createNcr(qualityToken, "Full lifecycle NCR");
 
     const containment = await request(app).post(`/ncr/${id}/containment`).set("Authorization", `Bearer ${qualityToken}`).send({ containment: "Quarantined the affected lot" });
     expect(containment.status).toBe(200);
-    expect(containment.body.status).toBe("contained");
+    expect(containment.body.status).toBe("contain");
     expect(containment.body.containment).toBe("Quarantined the affected lot");
+    expect(containment.body.workflow.currentStep).toBe("Contain");
 
     const rootCause = await request(app).post(`/ncr/${id}/root-cause`).set("Authorization", `Bearer ${qualityToken}`).send({ rootCause: "Fixture misalignment on line 2" });
     expect(rootCause.status).toBe(200);
-    expect(rootCause.body.status).toBe("investigating");
+    expect(rootCause.body.status).toBe("contain");
+    expect(rootCause.body.rootCause).toBe("Fixture misalignment on line 2");
+
+    const disposition = await request(app).post(`/ncr/${id}/disposition-step`).set("Authorization", `Bearer ${qualityToken}`).send({ note: "Scrap the lot" });
+    expect(disposition.status).toBe(200);
+    expect(disposition.body.status).toBe("disposition");
+    expect(disposition.body.workflow.allowedTransitions).toEqual(["Fix"]);
 
     const correctiveAction = await request(app).post(`/ncr/${id}/corrective-action`).set("Authorization", `Bearer ${qualityToken}`).send({ correctiveAction: "Replaced and recalibrated fixture" });
     expect(correctiveAction.status).toBe(200);
-    expect(correctiveAction.body.status).toBe("corrective_action");
+    expect(correctiveAction.body.status).toBe("fix");
+
+    const verify = await request(app).post(`/ncr/${id}/verify`).set("Authorization", `Bearer ${qualityToken}`).send({ verification: "Re-inspection of the next lot found no misalignment" });
+    expect(verify.status).toBe(200);
+    expect(verify.body.status).toBe("verify");
 
     const closed = await request(app).post(`/ncr/${id}/close`).set("Authorization", `Bearer ${qualityToken}`);
     expect(closed.status).toBe(200);
     expect(closed.body.status).toBe("closed");
     expect(closed.body.closedAt).toBeTruthy();
+    expect(closed.body.workflow.currentStep).toBe("Closed");
+    expect(closed.body.workflow.allowedTransitions).toEqual([]);
+    expect(closed.body.workflow.history.map((entry: { step: string }) => entry.step)).toEqual([
+      "NCR Created",
+      "Contain",
+      "Disposition",
+      "Fix",
+      "Verify",
+      "Closed",
+    ]);
 
-    // Real audit trail, not just the row's own status column — this is what
-    // the record's History tab and workflow-engine triggers both read from.
     const trail = await db.select().from(auditTrail).where(eq(auditTrail.entityId, id));
-    const actions = trail.filter((t) => t.entityType === "NCR").map((t) => (t.changes as { action?: string })?.action);
-    expect(actions).toEqual(expect.arrayContaining(["containment", "root_cause", "corrective_action", "closed"]));
+    const actions = trail.filter((t) => t.entityType === "NCR").map((t) => (t.changes as { action?: string; step?: string })?.action);
+    expect(actions).toEqual(expect.arrayContaining(["containment", "root_cause", "disposition", "fix", "verify", "closed"]));
+    const steps = trail.filter((t) => t.entityType === "NCR").map((t) => (t.changes as { step?: string })?.step);
+    expect(steps).toEqual(expect.arrayContaining(["Contain", "Disposition", "Fix", "Verify", "Closed"]));
+  });
+
+  it("reads an old stored step as the new one", async () => {
+    const id = await createNcr(qualityToken, "Legacy step NCR");
+    await db.update(ncr).set({ status: "investigating" }).where(eq(ncr.id, id));
+    const res = await request(app).get(`/ncr/${id}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(res.body.status).toBe("disposition");
+    expect(res.body.workflow.currentStep).toBe("Disposition");
   });
 
   it("assign works from any status — it isn't a lifecycle step", async () => {
@@ -115,6 +147,6 @@ describe("NCR workflow (real DB + real HTTP path)", () => {
     const res = await request(app).post(`/ncr/${id}/assign`).set("Authorization", `Bearer ${qualityToken}`).send({ assignedTo: target!.id });
     expect(res.status).toBe(200);
     expect(res.body.assignedTo).toBe(target!.id);
-    expect(res.body.status).toBe("open"); // unchanged — assignment isn't a status transition
+    expect(res.body.status).toBe("ncr_created"); // unchanged — assignment isn't a status transition
   });
 });

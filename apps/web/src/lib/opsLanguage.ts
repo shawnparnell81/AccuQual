@@ -80,9 +80,14 @@ const NAV_PLAIN: Record<string, { label: string; standard?: string }> = {
 
 const STATUS_PHRASE: Record<string, string> = {
   open: "Open",
-  contained: "Contained",
+  ncr_created: "NCR Created",
+  contain: "Contain",
+  contained: "Contain",
+  disposition: "Disposition",
   investigating: "Looking into it",
-  corrective_action: "Fix in progress",
+  fix: "Fix",
+  verify: "Verify",
+  corrective_action: "Fix",
   closed: "Closed",
   in_progress: "In progress",
   verifying: "Checking the fix",
@@ -97,7 +102,20 @@ const STATUS_PHRASE: Record<string, string> = {
   active: "Active",
 };
 
-export const NCR_LOOP = ["Contain", "Disposition", "Fix", "Check it"] as const;
+export const NCR_STEPS = ["NCR Created", "Contain", "Disposition", "Fix", "Verify", "Closed"] as const;
+const NCR_STEP_KEYS = ["ncr_created", "contain", "disposition", "fix", "verify", "closed"] as const;
+const NCR_STEP_INDEX: Record<string, number> = {
+  ncr_created: 0,
+  open: 0,
+  contain: 1,
+  contained: 1,
+  disposition: 2,
+  investigating: 2,
+  fix: 3,
+  corrective_action: 3,
+  verify: 4,
+  closed: 5,
+};
 export const CAPA_LOOP = ["Start", "Do the fix", "Check it"] as const;
 export const DOC_LOOP = ["Draft", "Review", "Release", "Train"] as const;
 
@@ -164,32 +182,37 @@ export function duePhrase(due: string | null | undefined, terminal: boolean, tod
   return day;
 }
 
-export function ncrLoopIndex(status: "open" | "contained" | "investigating" | "corrective_action" | "closed"): number {
-  switch (status) {
-    case "open":
-      return 0;
-    case "contained":
-      return 1;
-    case "investigating":
-      return 2;
-    case "corrective_action":
-      return 3;
-    case "closed":
-      return 4;
-  }
+export function ncrLoopIndex(status: string): number {
+  return NCR_STEP_INDEX[status] ?? 0;
 }
 
-export function ncrNextAction(status: "open" | "contained" | "investigating" | "corrective_action" | "closed", hasFix: boolean): string {
-  switch (status) {
-    case "open":
+export function ncrStepKey(status: string): string {
+  const index = NCR_STEP_INDEX[status];
+  if (index === undefined) return status;
+  return NCR_STEP_KEYS[index] ?? status;
+}
+
+/** Exact step name. Old stored words map onto the same six steps. Other modules keep using statusPhrase. */
+export function ncrStepLabel(status: string | null | undefined): string {
+  if (!status) return "—";
+  const index = NCR_STEP_INDEX[status];
+  if (index === undefined) return statusPhrase(status);
+  return NCR_STEPS[index] ?? statusPhrase(status);
+}
+
+export function ncrNextAction(status: string, hasFix: boolean): string {
+  switch (ncrLoopIndex(status)) {
+    case 0:
       return "Contain it and decide what happens to the parts.";
-    case "contained":
-      return "Write the cause, then open a CAPA.";
-    case "investigating":
-      return hasFix ? "Write the corrective action on this NCR." : "Open a CAPA so this doesn't stop at containment.";
-    case "corrective_action":
-      return "Check the CAPA, then close this NCR.";
-    case "closed":
+    case 1:
+      return "Record the disposition.";
+    case 2:
+      return hasFix ? "Write the fix on this NCR." : "Write the fix, and open a CAPA if this should not stop here.";
+    case 3:
+      return "Verify the fix held.";
+    case 4:
+      return "Close this NCR.";
+    default:
       return "Nothing left on this NCR.";
   }
 }

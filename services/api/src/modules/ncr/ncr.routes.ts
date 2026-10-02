@@ -11,6 +11,8 @@ import {
   containmentNcrSchema,
   rootCauseNcrSchema,
   correctiveActionNcrSchema,
+  dispositionStepNcrSchema,
+  verifyNcrSchema,
   bulkUpdateNcrSchema,
   addNcrQuarantineItemSchema,
   completeNcrDispositionSchema,
@@ -25,6 +27,9 @@ import {
   rootCauseHandler,
   correctiveActionHandler,
   closeHandler,
+  dispositionStepHandler,
+  verifyHandler,
+  presentNcrWorkflow,
   rejectCloseWhileQuarantineOnHold,
   listNcrQuarantineItemsHandler,
   addNcrQuarantineItemHandler,
@@ -33,7 +38,7 @@ import {
 
 export const ncrRouter = Router();
 // Turns on PERMISSION_MATRIX.ncr (quality: edit) — previously unenforced.
-ncrRouter.use(requireAuth, withDb, withSiteContext, requireDepartmentAccess("ncr"));
+ncrRouter.use(requireAuth, withDb, withSiteContext, requireDepartmentAccess("ncr"), presentNcrWorkflow);
 
 ncrRouter.get("/", listHandler);
 ncrRouter.post("/", validate(createNcrSchema), baseHandlers.create);
@@ -49,6 +54,8 @@ ncrRouter.post("/:id/assign", validate(assignNcrSchema), assignHandler);
 ncrRouter.post("/:id/containment", validate(containmentNcrSchema), containmentHandler);
 ncrRouter.post("/:id/root-cause", validate(rootCauseNcrSchema), rootCauseHandler);
 ncrRouter.post("/:id/corrective-action", validate(correctiveActionNcrSchema), correctiveActionHandler);
+ncrRouter.post("/:id/disposition-step", validate(dispositionStepNcrSchema), dispositionStepHandler);
+ncrRouter.post("/:id/verify", validate(verifyNcrSchema), verifyHandler);
 ncrRouter.post("/:id/close", closeHandler);
 ncrRouter.get("/:id/quarantine-items", listNcrQuarantineItemsHandler);
 ncrRouter.post("/:id/quarantine-items", validate(addNcrQuarantineItemSchema), addNcrQuarantineItemHandler);

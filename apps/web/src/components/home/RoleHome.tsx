@@ -79,10 +79,10 @@ export function RoleHome() {
 
   const waiting = [
     ...openIssues
-      .filter((ncr) => ncr.status === "open" && !ncr.containment)
-      .map((ncr) => ({ key: `ncr-${ncr.id}`, label: `NCR #${ncr.id} — ${ncr.title}`, detail: "Not contained yet", link: `/ncr/${ncr.id}` })),
+      .filter((ncr) => (ncr.status === "ncr_created" || ncr.status === "open") && !ncr.containment)
+      .map((ncr) => ({ key: `ncr-${ncr.id}`, label: `NCR #${ncr.id} — ${ncr.title}`, detail: "Still on NCR Created", link: `/ncr/${ncr.id}` })),
     ...openIssues
-      .filter((ncr) => (ncr.status === "investigating" || ncr.status === "corrective_action") && !fixIds.has(ncr.id))
+      .filter((ncr) => (ncr.status === "disposition" || ncr.status === "fix" || ncr.status === "verify" || ncr.status === "investigating" || ncr.status === "corrective_action") && !fixIds.has(ncr.id))
       .map((ncr) => ({ key: `link-${ncr.id}`, label: `NCR #${ncr.id} — ${ncr.title}`, detail: "No CAPA linked yet", link: `/ncr/${ncr.id}` })),
     ...openFixes
       .filter((capa) => capa.status === "verifying" || capa.status === "open")

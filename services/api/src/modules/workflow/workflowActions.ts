@@ -160,6 +160,7 @@ registerActionHandler("create_ncr", async (node, context, dryRun) => {
     .values({
       title,
       description,
+      status: "ncr_created",
       severity: config.severity,
       supplierId: toNumber(context.supplierId),
       receivingLineItemId: toNumber(context.receivingLineItemId),
@@ -174,7 +175,7 @@ registerActionHandler("create_ncr", async (node, context, dryRun) => {
     changes: { message: "NCR auto-created by workflow action", workflowNode: node.id },
     performedBy: context.__performedBy as number | undefined,
   });
-  await publishEvent(WORKFLOW_STREAM, { module: "ncr", event: "created", entityId: created!.id });
+  await publishEvent(WORKFLOW_STREAM, { module: "ncr", event: "created", step: "NCR Created", entityId: created!.id });
   recordActionRun(context, "create_ncr", { ncrId: created!.id, title });
 });
 

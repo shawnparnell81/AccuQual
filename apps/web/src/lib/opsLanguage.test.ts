@@ -13,6 +13,8 @@ import {
   navSearchText,
   ncrLoopIndex,
   ncrNextAction,
+  ncrStepLabel,
+  NCR_STEPS,
   personLabel,
   plainNav,
   recordPath,
@@ -33,7 +35,8 @@ describe("home and role language", () => {
     assert.equal(rolePhrase("quality_manager"), "Quality lead");
     assert.equal(rolePhrase("operator"), "Operator");
     assert.equal(departmentPhrase("customer_service"), "Customer service");
-    assert.equal(statusPhrase("corrective_action"), "Fix in progress");
+    assert.equal(statusPhrase("corrective_action"), "Fix");
+    assert.equal(statusPhrase("ncr_created"), "NCR Created");
     assert.equal(statusPhrase("approved"), "Released");
     assert.equal(statusPhrase("obsolete"), "Obsolete");
   });
@@ -51,13 +54,18 @@ describe("nav search", () => {
 });
 
 describe("close-the-loop copy", () => {
-  it("walks an issue from containment to the check", () => {
+  it("walks an issue through the six NCR steps", () => {
+    assert.deepEqual([...NCR_STEPS], ["NCR Created", "Contain", "Disposition", "Fix", "Verify", "Closed"]);
     assert.equal(ncrLoopIndex("open"), 0);
-    assert.match(ncrNextAction("open", false), /Contain/);
+    assert.equal(ncrStepLabel("open"), "NCR Created");
+    assert.match(ncrNextAction("ncr_created", false), /Contain/);
     assert.equal(ncrLoopIndex("contained"), 1);
-    assert.match(ncrNextAction("investigating", false), /Open a CAPA/);
-    assert.match(ncrNextAction("investigating", true), /corrective action/);
-    assert.equal(ncrLoopIndex("closed"), 4);
+    assert.equal(ncrStepLabel("investigating"), "Disposition");
+    assert.match(ncrNextAction("disposition", false), /fix/i);
+    assert.match(ncrNextAction("fix", true), /Verify/);
+    assert.equal(ncrNextAction("verify", false), "Close this NCR.");
+    assert.equal(ncrLoopIndex("closed"), 5);
+    assert.equal(ncrStepLabel("corrective_action"), "Fix");
   });
 
   it("walks a fix from start to the effectiveness check", () => {

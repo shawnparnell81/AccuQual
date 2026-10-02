@@ -27,6 +27,8 @@ interface CrudOptions {
   afterUpdate?: (updated: Record<string, unknown>, req: Request) => Promise<void>;
   /** Rewrites a create body before insert. Used to stamp a form's template revision. */
   prepareCreate?: (body: Record<string, unknown>) => Record<string, unknown>;
+  /** A status query matches every stored word that means that step. Other modules keep an exact match. */
+  expandStatusFilter?: (status: string) => string[];
   /** Rewrites an update patch using the row already stored. Answer saves keep the template revision. */
   mergeUpdate?: (existing: Record<string, unknown>, patch: Record<string, unknown>) => Record<string, unknown>;
   /**
@@ -123,7 +125,10 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
     for (const key of LIST_FILTERS) {
       const raw = req.query[key];
       if (typeof raw !== "string" || raw === "" || columns[key] == null) continue;
-      if (key === "status") predicates.push(eq(columns[key] as never, raw));
+      if (key === "status") {
+        const values = options.expandStatusFilter?.(raw) ?? [raw];
+        predicates.push(values.length === 1 ? eq(columns[key] as never, values[0]!) : inArray(columns[key] as never, values));
+      }
       else {
         const parsed = Number(raw);
         if (!Number.isInteger(parsed)) continue;
