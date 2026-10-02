@@ -1888,3 +1888,7 @@ body.side-collapsed .aq-nav-folder-link {
   color: #fff;
   border-color: hsl(0 0% 100% / 0.45);
 }
+
+.aq-grid-selected {
+  box-shadow: inset 0 0 0 2px hsl(var(--primary));
+}

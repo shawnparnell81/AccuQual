@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCreateFormVersion, exportFormPdf, useFormTemplate } from "../../api/formHooks";
 import { useToast } from "../shared/ToastProvider";
@@ -16,6 +16,8 @@ import { ProcessFlowDiagramEditor } from "./processFlowDiagram/ProcessFlowDiagra
 import { PictureRecordProvider, pictureRecordForForm } from "./pictureRecord";
 import { FormSignProvider } from "./formSign";
 import { FormHeader } from "../brand/DmaLogo";
+import { focusFirstEditable } from "../shared/GridClipboard";
+import { RecordEditButton } from "../shared/RecordEditButton";
 
 interface FormEditorProps {
   formType: string;
@@ -39,6 +41,8 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
   const toast = useToast();
 
   const [showHistory, setShowHistory] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
   const [previewBytes, setPreviewBytes] = useState<Uint8Array | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
@@ -79,10 +83,18 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
   return (
     <FormSignProvider formType={formType} entityId={entityId}>
     <PictureRecordProvider entityType={pictureRecord.entityType} entityId={pictureRecord.entityId}>
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
+    <div ref={editorRef} className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <RecordEditButton
+          editing={editing}
+          onClick={() => {
+            const next = !editing;
+            setEditing(next);
+            if (next) focusFirstEditable(editorRef.current);
+          }}
+        />
         <span>{`Rev ${formData?.templateRevision ?? templateQuery.data?.templateRevision ?? "A"}`}</span>
-        <span>{isSaving || pending ? "Saving…" : saveNote == null ? "Auto-saved" : ""}</span>
+        <span className="ml-auto">{isSaving || pending ? "Saving…" : saveNote == null ? "Auto-saved" : ""}</span>
         <SaveResult result={saveNote} />
         {formType === "gage_rr" && (
           <button

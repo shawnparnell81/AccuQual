@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+/** Approval Date / Approved By typed on the Master Document List. Null clears a saved override. */
+export const patchMasterListRowSchema = z
+  .object({
+    id: z.number().int().refine((id) => id !== 0, "A list row is required"),
+    approvalDate: z.string().trim().max(40).nullable().optional(),
+    approvedBy: z.string().trim().max(200).nullable().optional(),
+  })
+  .strict();
+
 export const createDocumentSchema = z.object({
   title: z.string().trim().min(1).max(300),
   category: z.string().trim().max(100).optional(),

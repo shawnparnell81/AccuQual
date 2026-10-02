@@ -687,6 +687,13 @@
       "when": 1792450800000,
       "tag": "0097_ncr_workflow_steps",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1792537200000,
+      "tag": "0098_master_list_register",
+      "breakpoints": true
     }
   ]
 }

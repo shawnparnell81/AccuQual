@@ -3,7 +3,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
-import { createDocumentSchema, moveToObsoleteSchema, restoreArchivedDocumentSchema, updateDocumentSchema } from "./documents.validation.js";
+import { createDocumentSchema, moveToObsoleteSchema, patchMasterListRowSchema, restoreArchivedDocumentSchema, updateDocumentSchema } from "./documents.validation.js";
 import {
   baseHandlers,
   createDocumentHandler,
@@ -18,7 +18,7 @@ import {
   applyRetentionHandler,
   archiveHandler,
 } from "./documents.controller.js";
-import { masterDocumentListHandler } from "./masterDocumentList.js";
+import { masterDocumentListHandler, patchMasterListRowHandler } from "./masterDocumentList.js";
 import { registerDocumentVersionRoutes } from "./documents.versions.routes.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
 import { createDocumentCommentHandler, listDocumentCommentsHandler } from "./documentComments.js";
@@ -40,6 +40,7 @@ documentsRouter.use(requireAuth, withDb, requireDepartmentAccess("documents"), r
 // swallowed by GET/POST "/:id"-shaped routes below.
 documentsRouter.get("/expiring", listExpiringHandler);
 documentsRouter.get("/master-list", masterDocumentListHandler);
+documentsRouter.patch("/master-list/rows", validate(patchMasterListRowSchema), patchMasterListRowHandler);
 documentsRouter.post("/retention/apply", applyRetentionHandler);
 registerDocumentVersionRoutes(documentsRouter);
 
