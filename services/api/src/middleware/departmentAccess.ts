@@ -5,6 +5,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import type { Db } from "../lib/requestDb.js";
 import { departmentPermissions, permissionRoleModules, userPermissionRoles } from "../drizzle/schema/permissions.js";
 import { isBroadViewRole, isFullAccessRole } from "../modules/roles/roleAccess.js";
+import { canMaintainMasterList, isMasterListWrite } from "../modules/roles/masterListAccess.js";
 
 export type AccessLevel = "none" | "read" | "edit";
 export type Department =
@@ -283,6 +284,7 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
     // Nested deletes (a checklist row, a calibration, a folder) stay on the normal write check.
     if (role === "quality_manager" && (isRecordDeleteRequest(req) || isQualityFormControlWrite(req))) return next();
     if (req.user?.department === "engineering" && isFormNumberWrite(req)) return next();
+    if (req.user && canMaintainMasterList(req.user) && isMasterListWrite(req.baseUrl, req.method, req.path)) return next();
     if (!req.user || !req.db) return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
 
     const level = await getUserAccessLevel(req.db as Db, req.user, resourceKey);

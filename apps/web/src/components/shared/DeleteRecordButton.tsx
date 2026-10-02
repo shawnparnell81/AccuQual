@@ -18,9 +18,13 @@ interface DeleteRecordButtonProps {
   /** Where to go after a successful delete. Omit on a list row so the page stays put. */
   navigateTo?: string;
   className?: string;
+  /** Show the control for a master-list maintainer who is not the record owner. */
+  allowed?: boolean;
+  /** Button text. Defaults to Delete. */
+  label?: string;
 }
 
-export function DeleteRecordButton({ resource, id, kind, title, ownerIds = [], navigateTo, className }: DeleteRecordButtonProps) {
+export function DeleteRecordButton({ resource, id, kind, title, ownerIds = [], navigateTo, className, allowed = false, label = "Delete" }: DeleteRecordButtonProps) {
   const user = useCurrentUser();
   const confirm = useConfirm();
   const toast = useToast();
@@ -35,14 +39,14 @@ export function DeleteRecordButton({ resource, id, kind, title, ownerIds = [], n
     },
   });
 
-  if (!canDeleteRecord(user?.roleName, user?.id, ownerIds)) return null;
+  if (!allowed && !canDeleteRecord(user?.roleName, user?.id, ownerIds)) return null;
 
-  const label = recordDeleteLabel(kind, id, title);
+  const recordName = recordDeleteLabel(kind, id, title);
 
   async function onClick() {
     const ok = await confirm({
       title: "Are you sure?",
-      message: `Delete ${label}? This can't be undone.`,
+      message: `Delete ${recordName}? This can't be undone.`,
       confirmLabel: "Delete",
       tone: "danger",
     });
@@ -50,7 +54,7 @@ export function DeleteRecordButton({ resource, id, kind, title, ownerIds = [], n
     setPending(true);
     try {
       await remove.mutateAsync();
-      toast.success(`Deleted ${label}.`);
+      toast.success(`Deleted ${recordName}.`);
       if (navigateTo) navigate(navigateTo);
     } catch (err) {
       toast.error(extractErrorMessage(err, "Couldn't delete this record."));
@@ -66,7 +70,7 @@ export function DeleteRecordButton({ resource, id, kind, title, ownerIds = [], n
       disabled={pending}
       className={className ?? "rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-60"}
     >
-      {pending ? "Deleting…" : "Delete"}
+      {pending ? "Deleting…" : label}
     </button>
   );
 }
