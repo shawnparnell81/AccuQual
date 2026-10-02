@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import { apiClient } from "../../api/client";
 import { uploadAttachmentFor } from "../../lib/attachments";
 import { useToast } from "../shared/ToastProvider";
@@ -85,6 +86,10 @@ interface PictureTextProps {
 /**
  * The same text field as before, plus pictures placed in the text.
  * Paste, drop, or Insert Picture. The words already in the field stay words.
+ *
+ * Insert Picture is not a real button, and the file input is rendered
+ * outside this tree. A surrounding label treats the first button or file
+ * input as its control and opens the file picker on any click in the text.
  */
 export function PictureText({
   value,
@@ -201,31 +206,43 @@ export function PictureText({
         onMouseUp={rememberCaret}
       />
       {canInsert && (
-        <>
-          <button
-            type="button"
-            className="aq-picture-tools no-print"
-            onMouseDown={(event) => {
-              event.preventDefault();
-              rememberCaret();
-            }}
-            onClick={() => fileRef.current?.click()}
-          >
-            Insert Picture
-          </button>
+        <span
+          role="button"
+          tabIndex={0}
+          className="aq-picture-tools no-print cursor-pointer"
+          onMouseDown={(event) => {
+            event.preventDefault();
+            rememberCaret();
+          }}
+          onClick={() => fileRef.current?.click()}
+          onKeyDown={(event: KeyboardEvent<HTMLSpanElement>) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            fileRef.current?.click();
+          }}
+        >
+          Insert Picture
+        </span>
+      )}
+      {canInsert &&
+        typeof document !== "undefined" &&
+        createPortal(
           <input
             ref={fileRef}
             type="file"
             accept="image/png,image/jpeg,image/gif,image/webp"
             className="hidden"
+            style={{ display: "none" }}
+            tabIndex={-1}
+            aria-hidden="true"
             onChange={(event) => {
               const files = Array.from(event.target.files ?? []);
               event.target.value = "";
               void addFiles(files, true);
             }}
-          />
-        </>
-      )}
+          />,
+          document.body,
+        )}
     </div>
   );
 }
