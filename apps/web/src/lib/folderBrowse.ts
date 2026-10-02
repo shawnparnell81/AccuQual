@@ -24,6 +24,36 @@ export function documentsFolderHref(folderId: number): string {
   return `/documents/folders?folder=${folderId}`;
 }
 
+/**
+ * Quality's former FAI drawer, renamed in place. The string matches
+ * FAI_VALIDATION_FOLDER_NAME in services/api companyDocumentFolders.ts.
+ */
+export const FAI_VALIDATION_FOLDER_NAME = "FAI / Validation";
+
+/** Sidebar and bookmark URL for the old Validation Reports folder page. */
+export const LEGACY_VALIDATION_REPORTS_PATH = "/folders/validation-reports";
+
+/** Folder Explorer opened on FAI / Validation, without needing its numeric id. */
+export function faiValidationDocumentsHref(): string {
+  return `/documents/folders?name=${encodeURIComponent(FAI_VALIDATION_FOLDER_NAME)}`;
+}
+
+/** Crumb on a validation record. The list lives in the Documents folder, not a sidebar tab. */
+export function validationReportsCrumb(): { label: string; to: string } {
+  return { label: FAI_VALIDATION_FOLDER_NAME, to: faiValidationDocumentsHref() };
+}
+
+/**
+ * Folder id for a Documents deep link by name.
+ * When the same name exists twice, the copy under Quality wins.
+ */
+export function folderIdByName<T extends BrowseFolder>(folders: T[], name: string): number | null {
+  const matches = folders.filter((folder) => folder.name === name);
+  if (matches.length === 0) return null;
+  const underQuality = matches.find((folder) => folders.some((parent) => parent.id === folder.parentId && parent.name === "Quality"));
+  return (underQuality ?? matches[0])!.id;
+}
+
 /** The only content root in Documents. Departments are children of this folder. */
 export const ISO_DOCUMENTS_FOLDER = "ISO Compliance Documents";
 

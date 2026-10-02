@@ -10,7 +10,10 @@
  * Training is its own drawer under ISO, never a child of Quality. A company
  * that already has Quality/Training is repaired on this list load: saved
  * forms and files move into the ISO Training drawer, then the Quality child
- * is removed. Nothing else is reparented.
+ * is removed.
+ * The Quality FAI drawer is renamed in place to "FAI / Validation" on this
+ * same load. Children, filings, and files stay on that row. A second copy is
+ * folded in. Engineering product Validation folders are left alone.
  */
 import { eq } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
@@ -43,7 +46,7 @@ export const COMPANY_DOCUMENT_FOLDERS: DefaultFolderSeed[] = [
         name: "Quality",
         children: [
           {
-            name: "FAI",
+            name: "FAI / Validation",
             children: [
               { name: "CSA", children: [] },
               { name: "Shocks", children: [] },
@@ -175,6 +178,16 @@ type FolderRow = typeof documentFolders.$inferSelect;
 const ISO_FOLDER_NAME = "ISO Compliance Documents";
 const TRAINING_FOLDER_NAME = "Training";
 const QUALITY_FOLDER_NAME = "Quality";
+const LEGACY_FAI_FOLDER_NAME = "FAI";
+
+/** Quality drawer that holds the former FAI children. Engineering Validation folders keep their own names. */
+export const FAI_VALIDATION_FOLDER_NAME = "FAI / Validation";
+
+/** Folder Explorer deep link. The web app uses this same query. */
+export const FAI_VALIDATION_DOCUMENTS_PATH = `/documents/folders?name=${encodeURIComponent(FAI_VALIDATION_FOLDER_NAME)}`;
+
+/** Old Validation Reports folder page. The web app redirects this to FAI / Validation. */
+export const LEGACY_VALIDATION_REPORTS_PATH = "/folders/validation-reports";
 
 /** One Quality/Training folder to fold into the ISO Training drawer. `destId` null reparents the source onto ISO. */
 export interface QualityTrainingRepair {
@@ -193,6 +206,64 @@ function descendsFrom(folders: FolderIdentity[], nodeId: number, ancestorId: num
     current = current.parentId == null ? undefined : byId.get(current.parentId);
   }
   return false;
+}
+
+/** One legacy Quality FAI drawer to rename, or to fold into an existing FAI / Validation folder. */
+export interface FaiValidationRepair {
+  sourceId: number;
+  /** When set, merge the legacy FAI folder into this one. When null, rename the source in place. */
+  destId: number | null;
+}
+
+function parentName(folders: FolderIdentity[], folder: FolderIdentity): string | undefined {
+  if (folder.parentId == null) return undefined;
+  return folders.find((row) => row.id === folder.parentId)?.name;
+}
+
+/** Blank Form Templates only. inTemplateLibrary also matches ISO, which is where this drawer lives. */
+function inBlankTemplates(folder: FolderIdentity, folders: FolderIdentity[]): boolean {
+  const byId = new Map(folders.map((row) => [row.id, row]));
+  let current: FolderIdentity | undefined = folder;
+  const seen = new Set<number>();
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    if (current.name === "Blank Form Templates") return true;
+    current = current.parentId == null ? undefined : byId.get(current.parentId);
+  }
+  return false;
+}
+
+/**
+ * Rename the company FAI drawer to FAI / Validation without creating a second row.
+ * "First Article Inspection (FAI)" and Engineering "Validation" folders are different names.
+ * A copy that lives in the blank-template library is not the company drawer.
+ */
+export function planFaiValidationRepair(folders: FolderIdentity[]): FaiValidationRepair[] {
+  const legacy = folders
+    .filter((folder) => folder.name === LEGACY_FAI_FOLDER_NAME && !inBlankTemplates(folder, folders))
+    .sort((a, b) => {
+      const aQuality = parentName(folders, a) === QUALITY_FOLDER_NAME ? 0 : 1;
+      const bQuality = parentName(folders, b) === QUALITY_FOLDER_NAME ? 0 : 1;
+      return aQuality - bQuality || a.id - b.id;
+    });
+  if (legacy.length === 0) return [];
+
+  const canonical = folders
+    .filter((folder) => folder.name === FAI_VALIDATION_FOLDER_NAME && !inBlankTemplates(folder, folders))
+    .sort((a, b) => a.id - b.id)[0];
+
+  const repairs: FaiValidationRepair[] = [];
+  let destId = canonical?.id ?? null;
+  for (const source of legacy) {
+    if (destId != null && (source.id === destId || descendsFrom(folders, destId, source.id))) continue;
+    if (destId == null) {
+      repairs.push({ sourceId: source.id, destId: null });
+      destId = source.id;
+      continue;
+    }
+    repairs.push({ sourceId: source.id, destId });
+  }
+  return repairs;
 }
 
 /**
@@ -297,6 +368,23 @@ async function mergeDocumentFolder(db: Db, list: FolderRow[], sourceId: number, 
   return list;
 }
 
+async function repairFaiValidation(db: Db, list: FolderRow[]): Promise<FolderRow[]> {
+  let current = list;
+  for (const move of planFaiValidationRepair(current)) {
+    if (move.destId == null) {
+      const [updated] = await db
+        .update(documentFolders)
+        .set({ name: FAI_VALIDATION_FOLDER_NAME, updatedAt: new Date() })
+        .where(eq(documentFolders.id, move.sourceId))
+        .returning();
+      if (updated) current = current.map((folder) => (folder.id === updated.id ? updated : folder));
+      continue;
+    }
+    current = await mergeDocumentFolder(db, current, move.sourceId, move.destId);
+  }
+  return current;
+}
+
 async function repairQualityTraining(db: Db, list: FolderRow[]): Promise<FolderRow[]> {
   let current = list;
   for (const move of planQualityTrainingRepair(current)) {
@@ -316,7 +404,7 @@ async function repairQualityTraining(db: Db, list: FolderRow[]): Promise<FolderR
 
 /** Inserts any missing drawers. Returns the list including rows just created. */
 export async function ensureCompanyDocumentFolders(db: Db, all: FolderRow[]): Promise<FolderRow[]> {
-  let list = all;
+  let list = await repairFaiValidation(db, all);
 
   async function ensureLevel(nodes: DefaultFolderSeed[], parentId: number | null): Promise<void> {
     for (const node of nodes) {

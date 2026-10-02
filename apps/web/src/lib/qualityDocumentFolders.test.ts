@@ -10,12 +10,14 @@ describe("Quality document folders", () => {
     const quality = SIDEBAR_FOLDERS.find((folder) => folder.key === "quality");
     assert.ok(quality);
     const labels = quality.children.map((child) => child.label);
-    const reports = labels.indexOf("Validation Reports");
+    const inspections = labels.indexOf("Inspections");
     const alerts = labels.indexOf("Product Alerts");
     const recalls = labels.indexOf("Recalls");
     const warranty = labels.indexOf("Warranty");
-    assert.ok(reports >= 0 && alerts === reports + 1 && recalls === alerts + 1 && warranty === recalls + 1);
+    assert.ok(inspections >= 0 && alerts === inspections + 1 && recalls === alerts + 1 && warranty === recalls + 1);
     assert.equal(labels.includes("FAI"), false);
+    assert.equal(labels.includes("Validation Reports"), false);
+    assert.equal(labels.includes("Document Control"), false);
 
     const links = flattenSidebarLinks(quality.children);
     assert.deepEqual(
@@ -47,15 +49,13 @@ describe("Quality document folders", () => {
     assert.equal(links.filter((link) => link.label === "Internal Audits").length, 1);
   });
 
-  it("adds Obsolete / Archive as a Quality folder, beside Document Control", () => {
+  it("adds Obsolete / Archive as the first Quality folder", () => {
     assert.equal(DOCUMENT_FOLDER_PAGES["obsolete-archive"]?.title, "Obsolete / Archive");
 
     const quality = SIDEBAR_FOLDERS.find((folder) => folder.key === "quality");
     assert.ok(quality);
     const labels = quality.children.map((child) => child.label);
-    const control = labels.indexOf("Document Control");
-    const archive = labels.indexOf("Obsolete / Archive");
-    assert.equal(archive, control + 1);
+    assert.equal(labels[0], "Obsolete / Archive");
     assert.equal(labels.filter((label) => label === "Obsolete / Archive").length, 1);
 
     const audits = quality.children.find((child) => isFolder(child) && child.key === "audits");

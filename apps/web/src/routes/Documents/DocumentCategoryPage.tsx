@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
+import { faiValidationDocumentsHref, LEGACY_VALIDATION_REPORTS_PATH } from "../../lib/folderBrowse";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Eye, Upload } from "lucide-react";
 import { apiClient } from "../../api/client";
@@ -18,7 +19,6 @@ import { TextField } from "../../components/forms/Field";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { ObsoleteArchiveDialog } from "./ObsoleteArchiveDialog";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
-import { ValidationReportsPanel } from "../ValidationReports/ValidationReportsPanel";
 
 /**
  * A single document folder (Drawings, Master Tool List, Shipping, and the other
@@ -28,6 +28,7 @@ import { ValidationReportsPanel } from "../ValidationReports/ValidationReportsPa
  */
 export function DocumentCategoryPage() {
   const { category = "" } = useParams();
+  const legacyValidation = `/folders/${category}` === LEGACY_VALIDATION_REPORTS_PATH;
   const page = DOCUMENT_FOLDER_PAGES[category];
   const toast = useToast();
   const user = useCurrentUser();
@@ -44,7 +45,7 @@ export function DocumentCategoryPage() {
   const documents = useQuery<AccuQualDocument[]>({
     queryKey: ["documents", undefined],
     queryFn: async () => (await apiClient.get<AccuQualDocument[]>("/documents")).data,
-    enabled: !!page,
+    enabled: !!page && !legacyValidation,
   });
 
   if (!page) {
@@ -153,6 +154,10 @@ export function DocumentCategoryPage() {
     }
   }
 
+  if (legacyValidation) {
+    return <Navigate to={faiValidationDocumentsHref()} replace />;
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -186,8 +191,6 @@ export function DocumentCategoryPage() {
           </button>
         </div>
       </div>
-
-      {category === "validation-reports" && <ValidationReportsPanel />}
 
       {documents.isLoading && <LoadingPlaceholder />}
       {documents.isError && <p className="text-sm text-destructive">Couldn't load this folder. Refresh the page and try again.</p>}

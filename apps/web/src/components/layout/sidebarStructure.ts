@@ -104,6 +104,18 @@ function doc(key: keyof typeof DOCUMENT_FOLDER_PAGES, icon: LucideIcon): Sidebar
   return { key, label: page.title, path: `/folders/${key}`, icon };
 }
 
+const DOCUMENT_CONTROL_FOLDER: SidebarFolder = {
+  key: "document-control",
+  label: "Document Control",
+  icon: FileText,
+  path: "/documents",
+  children: [
+    { key: "folder-explorer", label: "Folder Explorer", path: "/documents/folders", icon: FolderTree },
+    { key: "dcr", label: "Document changes", path: "/document-change-requests", icon: FileEdit },
+    { key: "management-system", label: "Management System", path: "/management-system", icon: Building2 },
+  ],
+};
+
 export const SIDEBAR_FOLDERS: SidebarFolder[] = [
   {
     key: "workspace",
@@ -131,27 +143,16 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
       { key: "engineering-planner", label: "Engineering Planner", path: ENGINEERING_PLANNER_URL, icon: CalendarRange, external: true },
     ],
   },
+  DOCUMENT_CONTROL_FOLDER,
   {
     key: "quality",
     label: "Quality",
     icon: ShieldCheck,
     children: [
-      {
-        key: "document-control",
-        label: "Document Control",
-        icon: FileText,
-        path: "/documents",
-        children: [
-          { key: "folder-explorer", label: "Folder Explorer", path: "/documents/folders", icon: FolderTree },
-          { key: "dcr", label: "Document changes", path: "/document-change-requests", icon: FileEdit },
-          { key: "management-system", label: "Management System", path: "/management-system", icon: Building2 },
-        ],
-      },
       doc(OBSOLETE_ARCHIVE_CATEGORY, Archive),
       { key: "training", label: "Training", path: "/training", icon: GraduationCap },
       { key: "workers", label: "Workers", path: "/workers", icon: Users },
       { key: "inspections", label: "Inspections", path: "/quality-inspection-reports", icon: ClipboardCheck },
-      doc("validation-reports", FileText),
       doc("product-alerts", FileText),
       doc("recalls", FileText),
       { key: "warranty", label: "Warranty", path: "/warranty", icon: ShieldCheck },

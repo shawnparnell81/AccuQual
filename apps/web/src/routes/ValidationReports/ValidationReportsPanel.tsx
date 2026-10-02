@@ -66,7 +66,7 @@ export function ValidationReportsPanel() {
         <div>
           <h2 className="text-lg font-semibold">Validation Reports</h2>
           <p className="text-sm text-muted-foreground">
-            Start a validation, choose a Documents folder, and save. Open folder on the save line takes you there. You can also browse Quality, Document Control, Folder Explorer.
+            Start a validation here under FAI / Validation. Choose a Documents folder when you save. Open folder on the save line takes you there.
           </p>
           <div className="mt-2 flex flex-wrap gap-4">
             {(Object.keys(VALIDATION_FORMS) as ValidationFormType[]).map((kind) => (

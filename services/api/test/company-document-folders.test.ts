@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMPANY_DOCUMENT_FOLDERS, folderSeedPaths, inTemplateLibrary, locateSeedFolder, planQualityTrainingRepair, type FolderIdentity } from "../src/modules/document-folders/companyDocumentFolders.js";
+import { COMPANY_DOCUMENT_FOLDERS, FAI_VALIDATION_FOLDER_NAME, folderSeedPaths, inTemplateLibrary, locateSeedFolder, planFaiValidationRepair, planQualityTrainingRepair, type FolderIdentity } from "../src/modules/document-folders/companyDocumentFolders.js";
 import { DEFAULT_DOCUMENT_FOLDERS } from "../src/modules/document-folders/defaultDocumentFolders.js";
 
 function byPath(paths: string[][], names: string[]): boolean {
@@ -16,9 +16,13 @@ describe("company document folders", () => {
       expect(byPath(paths, ["ISO Compliance Documents", "Engineering", product, "Development"])).toBe(true);
     }
     for (const product of ["CSA", "Shocks", "Fuel", "Brake Wear sensors", "Gas/Electric Lifts", "Air Suspension"]) {
-      expect(byPath(paths, ["ISO Compliance Documents", "Quality", "FAI", product])).toBe(true);
+      expect(byPath(paths, ["ISO Compliance Documents", "Quality", FAI_VALIDATION_FOLDER_NAME, product])).toBe(true);
     }
-    expect(paths.filter((path) => path.join("/") === "ISO Compliance Documents/Quality/FAI/CSA")).toHaveLength(1);
+    expect(paths.filter((path) => path.join("/") === `ISO Compliance Documents/Quality/${FAI_VALIDATION_FOLDER_NAME}/CSA`)).toHaveLength(1);
+    expect(byPath(paths, ["ISO Compliance Documents", "Quality", "FAI"])).toBe(false);
+    const faiParent = COMPANY_DOCUMENT_FOLDERS[0]?.children.find((folder) => folder.name === "Quality")?.children.find((folder) => folder.name === FAI_VALIDATION_FOLDER_NAME);
+    expect(faiParent?.children.map((folder) => folder.name)).toEqual(["CSA", "Shocks", "Fuel", "Brake Wear sensors", "Gas/Electric Lifts", "Air Suspension"]);
+    expect(COMPANY_DOCUMENT_FOLDERS[0]?.children.find((folder) => folder.name === "Quality")?.children.some((folder) => folder.name === "Document Control")).toBe(false);
     for (const name of ["Product Alerts", "Recalls", "Warranty", "Repair", "Inspections"]) {
       expect(byPath(paths, ["ISO Compliance Documents", "Quality", name])).toBe(true);
     }
@@ -79,6 +83,45 @@ describe("company document folders", () => {
       { id: 9, name: "Safety Notes", parentId: 3 },
     ];
     expect(planQualityTrainingRepair(folders)).toEqual([{ sourceId: 3, destId: null, isoId: 1 }]);
+  });
+
+  it("renames the Quality FAI drawer in place and leaves Engineering Validation folders alone", () => {
+    const folders: FolderIdentity[] = [
+      { id: 1, name: "ISO Compliance Documents", parentId: null },
+      { id: 2, name: "Quality", parentId: 1 },
+      { id: 3, name: "FAI", parentId: 2 },
+      { id: 4, name: "CSA", parentId: 3 },
+      { id: 5, name: "Shocks", parentId: 3 },
+      { id: 10, name: "Engineering", parentId: 1 },
+      { id: 11, name: "CSA", parentId: 10 },
+      { id: 12, name: "Validation", parentId: 11 },
+      { id: 13, name: "First Article Inspection (FAI)", parentId: 2 },
+      { id: 14, name: "Blank Form Templates", parentId: 1 },
+      { id: 15, name: "FAI", parentId: 14 },
+    ];
+    expect(planFaiValidationRepair(folders)).toEqual([{ sourceId: 3, destId: null }]);
+    expect(byPath(paths, ["ISO Compliance Documents", "Engineering", "CSA", "Validation"])).toBe(true);
+  });
+
+  it("folds a leftover FAI drawer into the renamed folder instead of keeping both", () => {
+    const folders: FolderIdentity[] = [
+      { id: 1, name: "ISO Compliance Documents", parentId: null },
+      { id: 2, name: "Quality", parentId: 1 },
+      { id: 3, name: "FAI", parentId: 2 },
+      { id: 4, name: "CSA", parentId: 3 },
+      { id: 8, name: FAI_VALIDATION_FOLDER_NAME, parentId: 2 },
+    ];
+    expect(planFaiValidationRepair(folders)).toEqual([{ sourceId: 3, destId: 8 }]);
+  });
+
+  it("does nothing when the drawer is already named FAI / Validation", () => {
+    const folders: FolderIdentity[] = [
+      { id: 1, name: "ISO Compliance Documents", parentId: null },
+      { id: 2, name: "Quality", parentId: 1 },
+      { id: 3, name: FAI_VALIDATION_FOLDER_NAME, parentId: 2 },
+      { id: 4, name: "CSA", parentId: 3 },
+    ];
+    expect(planFaiValidationRepair(folders)).toEqual([]);
   });
 
   it("does nothing when Training is already only under ISO", () => {

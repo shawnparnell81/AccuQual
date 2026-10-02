@@ -59,6 +59,61 @@ function insertMissing(defaults: SidebarNode[], parentKey: string | null, built:
   }
 }
 
+function qualityOwnedKeys(catalog: SidebarNode[]): Set<string> {
+  const quality = catalog.find((node) => node.key === "quality");
+  const keys = new Set<string>();
+  if (quality && isFolder(quality)) {
+    for (const child of quality.children) keys.add(child.key);
+  }
+  return keys;
+}
+
+function takeNode(nodes: SidebarNode[], key: string): SidebarNode | null {
+  const index = nodes.findIndex((node) => node.key === key);
+  if (index >= 0) return nodes.splice(index, 1)[0] ?? null;
+  for (const node of nodes) {
+    if (!isFolder(node)) continue;
+    const found = takeNode(node.children, key);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Document Control is a top-level section immediately above Quality.
+ * A saved arrangement that still nests it under Quality, or that parked
+ * Quality items inside it, is put back. The objects come from materialize,
+ * so this does not rewrite the catalog.
+ */
+export function hoistDocumentControl(nodes: SidebarNode[], catalog: SidebarNode[] = SIDEBAR_FOLDERS): SidebarNode[] {
+  const nestedControl = findNode(nodes, "document-control");
+  if (nestedControl && isFolder(nestedControl) && findNode(nestedControl.children, "quality")) {
+    const quality = takeNode(nodes, "quality");
+    if (quality) nodes.push(quality);
+  }
+  const control = takeNode(nodes, "document-control");
+  if (!control || !isFolder(control)) return nodes;
+  const ownedByQuality = qualityOwnedKeys(catalog);
+  const misplaced: SidebarNode[] = [];
+  const kept: SidebarNode[] = [];
+  for (const child of control.children) {
+    if (ownedByQuality.has(child.key)) misplaced.push(child);
+    else kept.push(child);
+  }
+  control.children = kept;
+  const quality = findNode(nodes, "quality");
+  if (quality && isFolder(quality)) {
+    const present = new Set(quality.children.map((child) => child.key));
+    for (const child of misplaced) {
+      if (!present.has(child.key)) quality.children.push(child);
+    }
+  }
+  const qualityIndex = nodes.findIndex((node) => node.key === "quality");
+  if (qualityIndex >= 0) nodes.splice(qualityIndex, 0, control);
+  else nodes.unshift(control);
+  return nodes;
+}
+
 /** Applies a saved arrangement. New catalog items appear in their usual section. */
 export function applySidebarLayout(saved: SidebarPlacement[] | null | undefined, catalog: SidebarNode[] = SIDEBAR_FOLDERS): SidebarNode[] {
   if (!saved || saved.length === 0) return catalog;
@@ -66,7 +121,7 @@ export function applySidebarLayout(saved: SidebarPlacement[] | null | undefined,
   const used = new Set<string>();
   const built = materialize(saved, byKey, used);
   insertMissing(catalog, null, built, used);
-  return built;
+  return hoistDocumentControl(built, catalog);
 }
 
 export function placementsFromNodes(nodes: SidebarNode[]): SidebarPlacement[] {

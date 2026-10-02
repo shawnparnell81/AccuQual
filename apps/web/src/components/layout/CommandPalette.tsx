@@ -9,6 +9,7 @@ import { useOpenTab } from "../../hooks/useOpenTab";
 import { readRecentRecords, rememberRecord, type RecentRecord } from "../../lib/recentRecords";
 import { useDialogBehavior } from "../shared/useDialogBehavior";
 import { FRM_NCR_PATH } from "../../lib/qualityEntry";
+import { faiValidationDocumentsHref } from "../../lib/folderBrowse";
 import { flattenSidebarLinks, sidebarLinkOpensNewTab } from "./sidebarStructure";
 import { useArrangedSidebar } from "./sidebarOrganize";
 
@@ -58,18 +59,18 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       { id: "new-ncr", label: "New NCR", hint: "Action", run: () => navigate(FRM_NCR_PATH) },
       { id: "new-capa", label: "New CAPA", hint: "Action", run: () => navigate("/capa?new=1") },
       { id: "start-validation", label: "Start validation", hint: "Action", run: () => navigate("/workflow?template=validation") },
-      { id: "upload-validation", label: "Upload to Validation Reports", hint: "Action", run: () => navigate("/folders/validation-reports") },
-      { id: "new-validation-report", label: "New CSA VALIDATION REPORT", hint: "Action", run: () => navigate("/folders/validation-reports") },
-      { id: "new-fuel-pump", label: "New FUEL PUMP VALIDATION DOCUMENT", hint: "Action", run: () => navigate("/folders/validation-reports") },
-      { id: "new-air-strut", label: "New FRM-VAL-010 AIR STRUT VALIDATION DOCUMENT", hint: "Action", run: () => navigate("/folders/validation-reports") },
-      { id: "new-air-spring", label: "New FRM-VAL-011 AIR STRUT VALIDATION DOCUMENT", hint: "Action", run: () => navigate("/folders/validation-reports") },
-      { id: "new-fuel-injector", label: "New FRM-VAL-008 FUEL INJECTOR VALIDATION DOCUMENT", hint: "Action", run: () => navigate("/folders/validation-reports") },
-      { id: "new-brake-wear", label: "New FRM-VAL-009 BRAKE WEAR SENSOR VALIDATION DOCUMENT", hint: "Action", run: () => navigate("/folders/validation-reports") },
-      { id: "new-shock", label: "New FRM-VAL-002 SHOCK VALIDATION REPORT", hint: "Action", run: () => navigate("/folders/validation-reports") },
-      { id: "new-air-compressor", label: "New FRM-VAL-009 AIR COMPRESSOR VALIDATION DOCUMENT", hint: "Action", run: () => navigate("/folders/validation-reports") },
-      { id: "new-electric-lift", label: "New FRM-VAL-011 ELECTRIC LIFT SUPPORT VALIDATION DOCUMENT", hint: "Action", run: () => navigate("/folders/validation-reports") },
-      { id: "new-gas-lift", label: "New FRM-VAL-007 GAS LIFT SUPPORT VALIDATION DOCUMENT", hint: "Action", run: () => navigate("/folders/validation-reports") },
-      { id: "new-coil-spring", label: "New FRM-VAL-006 COIL SPRING VALIDATION DOCUMENT", hint: "Action", run: () => navigate("/folders/validation-reports") },
+      { id: "upload-validation", label: "Upload to Validation Reports", hint: "Action", run: () => navigate(faiValidationDocumentsHref()) },
+      { id: "new-validation-report", label: "New CSA VALIDATION REPORT", hint: "Action", run: () => navigate(faiValidationDocumentsHref()) },
+      { id: "new-fuel-pump", label: "New FUEL PUMP VALIDATION DOCUMENT", hint: "Action", run: () => navigate(faiValidationDocumentsHref()) },
+      { id: "new-air-strut", label: "New FRM-VAL-010 AIR STRUT VALIDATION DOCUMENT", hint: "Action", run: () => navigate(faiValidationDocumentsHref()) },
+      { id: "new-air-spring", label: "New FRM-VAL-011 AIR STRUT VALIDATION DOCUMENT", hint: "Action", run: () => navigate(faiValidationDocumentsHref()) },
+      { id: "new-fuel-injector", label: "New FRM-VAL-008 FUEL INJECTOR VALIDATION DOCUMENT", hint: "Action", run: () => navigate(faiValidationDocumentsHref()) },
+      { id: "new-brake-wear", label: "New FRM-VAL-009 BRAKE WEAR SENSOR VALIDATION DOCUMENT", hint: "Action", run: () => navigate(faiValidationDocumentsHref()) },
+      { id: "new-shock", label: "New FRM-VAL-002 SHOCK VALIDATION REPORT", hint: "Action", run: () => navigate(faiValidationDocumentsHref()) },
+      { id: "new-air-compressor", label: "New FRM-VAL-009 AIR COMPRESSOR VALIDATION DOCUMENT", hint: "Action", run: () => navigate(faiValidationDocumentsHref()) },
+      { id: "new-electric-lift", label: "New FRM-VAL-011 ELECTRIC LIFT SUPPORT VALIDATION DOCUMENT", hint: "Action", run: () => navigate(faiValidationDocumentsHref()) },
+      { id: "new-gas-lift", label: "New FRM-VAL-007 GAS LIFT SUPPORT VALIDATION DOCUMENT", hint: "Action", run: () => navigate(faiValidationDocumentsHref()) },
+      { id: "new-coil-spring", label: "New FRM-VAL-006 COIL SPRING VALIDATION DOCUMENT", hint: "Action", run: () => navigate(faiValidationDocumentsHref()) },
       { id: "new-audit-summary", label: "New INTERNAL AUDIT SUMMARY REPORT", hint: "Action", run: () => navigate("/iso-forms/frm-gen-002") },
       { id: "new-visitor-log", label: "New LST-VIS-001 DMA Laboratory Visitor Log", hint: "Action", run: () => navigate("/iso-forms/lst-vis-001") },
       { id: "new-monthly-eng", label: "New MONTHLY ENGINEERING DEVELOPMENT REPORT", hint: "Action", run: () => navigate("/iso-forms/rpt-eng-001") },
