@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import clsx from "clsx";
 import { ChevronDown, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, Settings, X } from "lucide-react";
@@ -336,6 +336,8 @@ function SidebarResizeHandle({
 }) {
   const max = maxSidebarWidth(viewportWidth);
   const shown = collapsed ? SIDEBAR_RAIL_WIDTH : clampSidebarWidth(width, viewportWidth);
+  const lastPointerDown = useRef(0);
+  const gesture = useRef<{ reset: boolean } | null>(null);
 
   function applyDrag(startWidth: number, deltaX: number, wasCollapsed: boolean) {
     const result = widthAfterDrag(startWidth, deltaX, window.innerWidth, wasCollapsed);
@@ -344,24 +346,36 @@ function SidebarResizeHandle({
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0) return;
+    const now = event.timeStamp;
+    if (lastPointerDown.current > 0 && (event.detail > 1 || now - lastPointerDown.current < 400)) {
+      lastPointerDown.current = 0;
+      if (gesture.current) gesture.current.reset = true;
+      onPanelWidth(SIDEBAR_WIDTH_DEFAULT);
+      return;
+    }
+    lastPointerDown.current = now;
     event.preventDefault();
     const handle = event.currentTarget;
     const startX = event.clientX;
     const startWidth = collapsed ? SIDEBAR_RAIL_WIDTH : shown;
     const wasCollapsed = collapsed;
+    const token = { reset: false };
+    gesture.current = token;
     try {
       handle.setPointerCapture(event.pointerId);
     } catch {
       // The pointer can already be gone. The move listeners still resize.
     }
     document.body.classList.add("aq-side-resizing");
-    const move = (ev: PointerEvent) => applyDrag(startWidth, ev.clientX - startX, wasCollapsed);
+    const move = (ev: PointerEvent) => {
+      if (!token.reset) applyDrag(startWidth, ev.clientX - startX, wasCollapsed);
+    };
     const finish = (ev: PointerEvent) => {
       document.body.classList.remove("aq-side-resizing");
       handle.removeEventListener("pointermove", move);
       handle.removeEventListener("pointerup", finish);
       handle.removeEventListener("pointercancel", finish);
-      applyDrag(startWidth, ev.clientX - startX, wasCollapsed);
+      if (!token.reset) applyDrag(startWidth, ev.clientX - startX, wasCollapsed);
     };
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", finish);
@@ -399,7 +413,6 @@ function SidebarResizeHandle({
       title="Drag to resize the sidebar. Double-click to reset the width."
       onPointerDown={onPointerDown}
       onKeyDown={onKeyDown}
-      onDoubleClick={() => onPanelWidth(SIDEBAR_WIDTH_DEFAULT)}
     />
   );
 }
