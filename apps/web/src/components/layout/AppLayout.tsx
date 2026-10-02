@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { Outlet, useLocation, Navigate } from "react-router-dom";
 import { NavigationShell } from "./NavigationShell";
+import { SplitWorkspace } from "./SplitWorkspace";
 import { TabBar } from "./TabBar";
 import { CommandPalette } from "./CommandPalette";
 import { useGlobalHotkey } from "../../hooks/useGlobalHotkey";
@@ -132,12 +133,8 @@ export function AppLayout() {
           <TabBar />
           <MfaGraceBanner />
         </div>
-        <main id="main-content" className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-7 print:overflow-visible print:p-0">
-          <div key={location.pathname} className="page-enter mx-auto h-full max-w-[1500px]">
-            <Suspense fallback={<LoadingPlaceholder />}>
-              <Outlet />
-            </Suspense>
-          </div>
+        <main id="main-content" className="min-h-0 flex-1 overflow-hidden print:overflow-visible print:p-0">
+          <SplitWorkspace />
         </main>
         <div className="border-t border-border bg-card px-4 py-1 text-center print:hidden">
           <StandardsDisclaimer />

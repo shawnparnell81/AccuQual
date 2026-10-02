@@ -11,8 +11,12 @@ import {
   SIDEBAR_WIDTH_MIN,
   appliedSidebarWidth,
   clampSidebarWidth,
+  dragViewport,
   maxSidebarWidth,
   readSidebarWidth,
+  sidebarFitWidth,
+  sidebarNavPixels,
+  widthAfterDoubleClick,
   widthAfterDrag,
   writeSidebarWidth,
   type SidebarWidthStorage,
@@ -95,6 +99,24 @@ describe("sidebar width", () => {
     assert.deepEqual(widthAfterDrag(252, 400, 1400, false), { width: SIDEBAR_WIDTH_MAX, collapsed: false });
     assert.deepEqual(widthAfterDrag(SIDEBAR_RAIL_WIDTH, 40, 1400, true), { width: SIDEBAR_RAIL_WIDTH, collapsed: true });
     assert.deepEqual(widthAfterDrag(SIDEBAR_RAIL_WIDTH, 200, 1400, true), { width: 272, collapsed: false });
+  });
+
+  it("puts the expanded width on the nav box, including the narrow-screen drawer", () => {
+    assert.equal(sidebarNavPixels(400, 1400, false), 400);
+    assert.equal(sidebarNavPixels(400, 1400, true), null);
+    assert.equal(sidebarNavPixels(400, 800, false), 400);
+    assert.equal(dragViewport(800), 900);
+    assert.equal(dragViewport(1400), 1400);
+  });
+
+  it("double-click toggles the default and a width that fits long titles", () => {
+    const labels = ["Master Equipment List", "Management System", "Document Control", "Master Document Register"];
+    const fit = sidebarFitWidth(labels, 1400);
+    assert.ok(fit > SIDEBAR_WIDTH_DEFAULT, `fit ${fit} should clear the default`);
+    assert.ok(fit <= SIDEBAR_WIDTH_MAX);
+    assert.equal(widthAfterDoubleClick(SIDEBAR_WIDTH_DEFAULT, fit), fit);
+    assert.equal(widthAfterDoubleClick(fit, fit), SIDEBAR_WIDTH_DEFAULT);
+    assert.equal(widthAfterDoubleClick(SIDEBAR_WIDTH_DEFAULT + 4, fit), fit);
   });
 
   it("fits the longest nav title at the maximum width", () => {

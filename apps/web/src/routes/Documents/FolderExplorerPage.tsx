@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderIdByName, isFolderEntry, leftHandFolders, listFolder, openTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
 import { ValidationReportsPanel } from "../ValidationReports/ValidationReportsPanel";
-import { ChevronDown, ChevronRight, Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical, Folder, FolderOpen } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical, Folder, FolderOpen } from "lucide-react";
+import { canGoBack, canGoForward, explorerCrumbs, initialExplorerHistory, pushExplorerPlace, stepExplorerHistory, virtualRange, type ExplorerHistory, type ExplorerPlace } from "../../lib/explorerNav";
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
 import { StatusBadge } from "../../components/tables/StatusBadge";
@@ -87,6 +88,8 @@ function FolderTreeBranch({
   trailingGap,
   dragKind,
   gapHint,
+  expandingId,
+  busy,
   hintClass,
   onToggle,
   onSelect,
@@ -109,6 +112,8 @@ function FolderTreeBranch({
   trailingGap: boolean;
   dragKind: DragKind | null;
   gapHint: string | null;
+  expandingId: number | null;
+  busy: boolean;
   hintClass: (id: number) => string;
   onToggle: (id: number) => void;
   onSelect: (folder: DocumentFolder) => void;
@@ -140,8 +145,8 @@ function FolderTreeBranch({
         />
       )}
       <div
-        className={`group flex items-center rounded-md border-l-2 pr-1 text-sm ${
-          selected ? "border-primary bg-primary/10 font-medium" : "border-transparent hover:bg-muted"
+        className={`group flex min-h-8 items-center rounded-md border-l-2 pr-1 text-sm transition-colors ${
+          selected ? "border-primary bg-primary/15 font-medium text-foreground" : "border-transparent text-foreground hover:bg-muted"
         } ${hintClass(folder.id)}`}
         style={{ paddingLeft: 4 + depth * 14 }}
         draggable={draggable}
@@ -169,12 +174,18 @@ function FolderTreeBranch({
         ) : (
           <span className="h-7 w-6 shrink-0" aria-hidden />
         )}
-        <button type="button" className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left" aria-current={selected ? "page" : undefined} onClick={() => onSelect(folder)}>
-          <Icon size={15} className={selected ? "shrink-0 text-primary" : "shrink-0 text-muted-foreground"} />
-          <span className="truncate">{folder.name}</span>
+        <button type="button" className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left" aria-current={selected ? "page" : undefined} title={folder.name} onClick={() => onSelect(folder)}>
+          <Icon size={16} className={selected ? "shrink-0 text-primary" : "shrink-0 text-muted-foreground"} />
+          <span className="min-w-0 flex-1 whitespace-normal break-words text-left leading-snug">{folder.name}</span>
         </button>
         {draggable && <GripVertical size={12} className="mr-1 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-70" />}
       </div>
+      {open && busy && expandingId === folder.id && (
+        <div className="flex flex-col gap-1 py-1" style={{ paddingLeft: 18 + depth * 14 }} aria-hidden>
+          <div className="skeleton h-7 w-3/4" />
+          <div className="skeleton h-7 w-1/2" />
+        </div>
+      )}
       {open && children.length > 0 && (
         <ul>
           {children.map((child, index) => (
@@ -190,6 +201,8 @@ function FolderTreeBranch({
               trailingGap={index === children.length - 1}
               dragKind={dragKind}
               gapHint={gapHint}
+              expandingId={expandingId}
+              busy={busy}
               hintClass={hintClass}
               onToggle={onToggle}
               onSelect={onSelect}
@@ -341,7 +354,7 @@ function useUploadDocument() {
  * This page lists the folder and the forms or files that were saved into it.
  */
 export function FolderExplorerPage() {
-  const { data: folders = [], isLoading } = useDocumentFolders();
+  const { data: folders = [], isLoading, isFetching } = useDocumentFolders();
   const visibleFolders = useMemo(() => visibleExplorerFolders(folders), [folders]);
   const updateFolder = useUpdateFolder();
   const createFolder = useCreateFolder();
@@ -383,6 +396,9 @@ export function FolderExplorerPage() {
   const [poolHover, setPoolHover] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [newDepartmentName, setNewDepartmentName] = useState("");
+  const [history, setHistory] = useState<ExplorerHistory>(initialExplorerHistory);
+  const [expandingId, setExpandingId] = useState<number | null>(null);
+  const applyingHistory = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingUploadTarget = useRef<number | null>(null);
   const uploadDocInputRef = useRef<HTMLInputElement>(null);
@@ -452,6 +468,10 @@ export function FolderExplorerPage() {
       return changed ? next : current;
     });
   }, [selectedTreeId, visibleFolders]);
+
+  useEffect(() => {
+    if (!isFetching) setExpandingId(null);
+  }, [isFetching]);
 
   function beginDrag(event: DragEvent, id: number, kind: DragKind) {
     dragRef.current = { id, kind };
@@ -650,6 +670,11 @@ export function FolderExplorerPage() {
     uploadDocInputRef.current?.click();
   }
 
+  function remember(place: ExplorerPlace) {
+    if (applyingHistory.current) return;
+    setHistory((current) => pushExplorerPlace(current, place));
+  }
+
   function showFolder(id: number) {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
@@ -658,6 +683,8 @@ export function FolderExplorerPage() {
       if (dept) next.set("dept", String(dept.id));
       return next;
     });
+    const dept = departmentForFolder(folders, id);
+    remember({ deptId: dept?.id ?? null, folderId: id });
   }
 
   function showDepartmentList() {
@@ -666,11 +693,33 @@ export function FolderExplorerPage() {
       next.delete("folder");
       return next;
     });
+    remember({ deptId: activeDeptId, folderId: null });
+  }
+
+  function goHistory(delta: number) {
+    const next = stepExplorerHistory(history, delta);
+    if (next === history) return;
+    const place = next.entries[next.index] ?? { deptId: null, folderId: null };
+    applyingHistory.current = true;
+    setHistory(next);
+    if (place.deptId != null) setActiveDeptId(place.deptId);
+    setSearchParams((current) => {
+      const params = new URLSearchParams(current);
+      if (place.folderId == null) params.delete("folder");
+      else params.set("folder", String(place.folderId));
+      if (place.deptId != null) params.set("dept", String(place.deptId));
+      else params.delete("dept");
+      return params;
+    });
+    queueMicrotask(() => {
+      applyingHistory.current = false;
+    });
   }
 
   const hiddenBlank = requestedFolderId != null && !openFolder && folders.some((folder) => folder.id === requestedFolderId);
 
   function toggleTree(id: number) {
+    setExpandingId(id);
     setTreeOpen((current) => {
       const wasOpen = current[id] ?? id === isoRoot?.id;
       return { ...current, [id]: !wasOpen };
@@ -688,12 +737,23 @@ export function FolderExplorerPage() {
         next.delete("folder");
         return next;
       });
+      remember({ deptId: folder.id, folderId: null });
       return;
     }
     showFolder(folder.id);
   }
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading folder tree…</p>;
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading folders">
+        <div className="skeleton h-8 w-64" />
+        <div className="skeleton h-4 w-full max-w-xl" />
+        {Array.from({ length: 7 }, (_, index) => (
+          <div key={index} className="skeleton h-9" style={{ width: `${92 - (index % 4) * 8}%` }} />
+        ))}
+      </div>
+    );
+  }
   if (!activeDept) return <p className="text-sm text-muted-foreground">No departments found.</p>;
 
   const query = search.trim().toLowerCase();
@@ -741,7 +801,7 @@ export function FolderExplorerPage() {
         </div>
       </div>
 
-      <div ref={boardPaneRef} className="grid min-h-0 flex-1 gap-4 overflow-y-auto md:grid-cols-[minmax(220px,17.5rem)_minmax(0,1fr)] md:overflow-hidden">
+      <div ref={boardPaneRef} className="grid min-h-0 flex-1 gap-4 overflow-y-auto md:grid-cols-[minmax(240px,22rem)_minmax(0,1fr)] md:overflow-hidden">
         <nav ref={treePaneRef} className="flex flex-col gap-1 rounded-lg border border-border bg-card p-2 md:min-h-0 md:overflow-y-auto" aria-label="Document folders">
           <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">Folders</p>
           <ul data-testid="folder-tree">
@@ -758,6 +818,8 @@ export function FolderExplorerPage() {
                 trailingGap={false}
                 dragKind={dragKind}
                 gapHint={gapHint}
+                expandingId={expandingId}
+                busy={isFetching}
                 hintClass={hintClass}
                 onToggle={toggleTree}
                 onSelect={selectTreeFolder}
@@ -824,6 +886,10 @@ export function FolderExplorerPage() {
               hintClass={hintClass}
               onOpenFolder={showFolder}
               onBackToDepartments={showDepartmentList}
+              canBack={canGoBack(history)}
+              canForward={canGoForward(history)}
+              onBack={() => goHistory(-1)}
+              onForward={() => goHistory(1)}
               onBeginDrag={beginDrag}
               onEndDrag={endDrag}
               onAllowDrop={allowDrop}
@@ -846,6 +912,16 @@ export function FolderExplorerPage() {
             />
           ) : (
           <>
+          <ExplorerPathBar
+            crumbs={explorerCrumbs(activeDept ? [{ id: activeDept.id, name: activeDept.name }] : [])}
+            canBack={canGoBack(history)}
+            canForward={canGoForward(history)}
+            canUp={false}
+            onBack={() => goHistory(-1)}
+            onForward={() => goHistory(1)}
+            onUp={showDepartmentList}
+            onCrumb={() => showDepartmentList()}
+          />
           <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
             <FolderOpen size={18} className="shrink-0 text-primary" />
             <h2 className="text-lg font-semibold">{activeDept.name}</h2>
@@ -969,7 +1045,7 @@ export function FolderExplorerPage() {
                       dropOnParent(e, sub.id);
                     }}
                   >
-                    {subfolders.length === 0 && docs.length === 0 && <span className="text-xs italic text-muted-foreground">{query ? "Nothing in this folder matches." : "Nothing saved here yet."}</span>}
+                    {subfolders.length === 0 && docs.length === 0 && <EmptyFolder filtered={query.length > 0} />}
                     {subfolders.map((row, rowIndex) => {
                       const beforeRow = gapKey(sub.id, row.id, "folder");
                       const afterRows = gapKey(sub.id, null, "folder");
@@ -1333,6 +1409,97 @@ function DocPill({
   );
 }
 
+function EmptyFolder({ filtered }: { filtered: boolean }) {
+  return (
+    <div className="flex flex-col items-center gap-1 rounded-md border border-dashed border-border px-3 py-6 text-center" data-testid="folder-empty">
+      <Folder size={18} className="text-muted-foreground" />
+      <p className="text-sm text-muted-foreground">{filtered ? "Nothing in this folder matches." : "Nothing saved in this folder yet."}</p>
+      {!filtered && <p className="text-xs text-muted-foreground">Blank templates stay on Blank Forms. A form shows up here after it is saved into this folder.</p>}
+    </div>
+  );
+}
+
+function ExplorerPathBar({
+  crumbs,
+  canBack,
+  canForward,
+  canUp,
+  onBack,
+  onForward,
+  onUp,
+  onCrumb,
+}: {
+  crumbs: { id: number | null; name: string }[];
+  canBack: boolean;
+  canForward: boolean;
+  canUp: boolean;
+  onBack: () => void;
+  onForward: () => void;
+  onUp: () => void;
+  onCrumb: (id: number | null) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-2 py-1.5">
+      <button type="button" className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40" aria-label="Back" disabled={!canBack} onClick={onBack}>
+        <ChevronLeft size={16} />
+      </button>
+      <button type="button" className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40" aria-label="Forward" disabled={!canForward} onClick={onForward}>
+        <ChevronRight size={16} />
+      </button>
+      <button type="button" className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40" disabled={!canUp} onClick={onUp}>
+        Up
+      </button>
+      <nav aria-label="Folder path" data-testid="folder-breadcrumbs" className="flex min-w-0 flex-1 flex-wrap items-center gap-1 text-sm">
+        {crumbs.map((crumb, index) => {
+          const last = index === crumbs.length - 1;
+          return (
+            <span key={`${crumb.id ?? "root"}-${index}`} className="inline-flex min-w-0 items-center gap-1">
+              {index > 0 && <span className="text-muted-foreground">/</span>}
+              {last ? (
+                <span className="truncate font-semibold" data-testid="folder-title">
+                  {crumb.name}
+                </span>
+              ) : (
+                <button type="button" className="truncate text-primary hover:underline" onClick={() => onCrumb(crumb.id)}>
+                  {crumb.name}
+                </button>
+              )}
+            </span>
+          );
+        })}
+      </nav>
+    </div>
+  );
+}
+
+function WindowedRows<T>({ items, forceAll, render }: { items: T[]; forceAll?: boolean; render: (item: T, index: number) => ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewport, setViewport] = useState(320);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const update = () => {
+      setScrollTop(el.scrollTop);
+      setViewport(el.clientHeight || 320);
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    return () => el.removeEventListener("scroll", update);
+  }, [items.length]);
+  if (forceAll || items.length <= 40) return <>{items.map((item, index) => render(item, index))}</>;
+  const range = virtualRange(items.length, scrollTop, viewport, 44);
+  return (
+    <div ref={ref} className="max-h-80 overflow-y-auto" data-testid="windowed-rows">
+      <div style={{ height: range.height, position: "relative" }}>
+        <div style={{ position: "absolute", top: range.offset, left: 0, right: 0 }}>
+          {items.slice(range.start, range.end).map((item, index) => render(item, range.start + index))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FolderBrowser({
   folder,
   folders,
@@ -1340,6 +1507,10 @@ function FolderBrowser({
   hintClass,
   onOpenFolder,
   onBackToDepartments,
+  canBack,
+  canForward,
+  onBack,
+  onForward,
   onBeginDrag,
   onEndDrag,
   onAllowDrop,
@@ -1366,6 +1537,10 @@ function FolderBrowser({
   hintClass: (id: number) => string;
   onOpenFolder: (id: number) => void;
   onBackToDepartments: () => void;
+  canBack: boolean;
+  canForward: boolean;
+  onBack: () => void;
+  onForward: () => void;
   onBeginDrag: (event: DragEvent, id: number, kind: DragKind) => void;
   onEndDrag: () => void;
   onAllowDrop: (event: DragEvent, targetParentId: number | null) => boolean;
@@ -1403,25 +1578,16 @@ function FolderBrowser({
 
   return (
     <div className="flex flex-col gap-3" data-testid="folder-browser">
-      <nav aria-label="Folder path" data-testid="folder-breadcrumbs" className="flex flex-wrap items-center gap-1 text-sm">
-        <button type="button" onClick={onBackToDepartments} className="text-primary hover:underline">
-          Documents
-        </button>
-        {chain.map((crumb, index) => (
-          <span key={crumb.id} className="inline-flex items-center gap-1">
-            <span className="text-muted-foreground">/</span>
-            {index === chain.length - 1 ? (
-              <span className="font-semibold" data-testid="folder-title">
-                {crumb.name}
-              </span>
-            ) : (
-              <button type="button" onClick={() => onOpenFolder(crumb.id)} className="text-primary hover:underline">
-                {crumb.name}
-              </button>
-            )}
-          </span>
-        ))}
-      </nav>
+      <ExplorerPathBar
+        crumbs={explorerCrumbs(chain)}
+        canBack={canBack}
+        canForward={canForward}
+        canUp={parent != null || chain.length > 0}
+        onBack={onBack}
+        onForward={onForward}
+        onUp={() => (parent ? onOpenFolder(parent.id) : onBackToDepartments())}
+        onCrumb={(id) => (id == null ? onBackToDepartments() : onOpenFolder(id))}
+      />
 
       <div className="flex items-center gap-2">
         <FolderOpen size={18} className="shrink-0 text-primary" />
@@ -1508,7 +1674,7 @@ function FolderBrowser({
           onNest(event, folder.id);
         }}
       >
-        {empty && <p className="px-2 py-3 text-sm italic text-muted-foreground">{query ? "Nothing in this folder matches." : "Nothing saved in this folder yet."}</p>}
+        {empty && <EmptyFolder filtered={query.length > 0} />}
         {subfolders.map((row, index) => {
           const beforeRow = gapKey(folder.id, row.id, "folder");
           const afterRows = gapKey(folder.id, null, "folder");
@@ -1556,7 +1722,10 @@ function FolderBrowser({
           </div>
           );
         })}
-        {files.map((file, index) => {
+        <WindowedRows
+          items={files}
+          forceAll={dragKind != null}
+          render={(file, index) => {
           const target = openTarget(file);
           const beforeFile = gapKey(folder.id, file.id, "doc");
           const afterFiles = gapKey(folder.id, null, "doc");
@@ -1617,7 +1786,8 @@ function FolderBrowser({
             )}
             </div>
           );
-        })}
+        }}
+        />
       </div>
 
       <form
