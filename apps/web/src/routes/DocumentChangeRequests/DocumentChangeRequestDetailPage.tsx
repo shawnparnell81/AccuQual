@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
@@ -27,18 +27,9 @@ export function DocumentChangeRequestDetailPage() {
           <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             Print
           </button>
-          <DeleteRecordButton resource="document-change-requests" id={dcrId} kind="Document change request" title={dcr.formNo} ownerIds={[dcr.createdBy]} navigateTo="/document-change-requests" />
+          <DeleteRecordButton resource="document-change-requests" id={dcrId} kind="Document change request" title={dcr.documentProcessName || dcr.currentDocNumber || dcr.formNo} ownerIds={[dcr.createdBy]} navigateTo="/document-change-requests" />
         </div>
       </div>
-
-      <p className="rounded-lg border border-border bg-card p-3 text-sm text-muted-foreground">
-        {dcr.status === "draft" && "Add the document you're changing. After it's approved, update the controlled document and assign training."}
-        {dcr.status === "active" && "This change is active. Update the controlled document, then assign training so people learn the new revision."}
-        {dcr.status === "obsolete" && "This change is retired."}{" "}
-        <Link to="/documents" className="text-primary hover:underline">Documents</Link>
-        {" · "}
-        <Link to="/training" className="text-primary hover:underline">Training</Link>
-      </p>
 
       <DocumentChangeRequestForm dcr={dcr} />
 
