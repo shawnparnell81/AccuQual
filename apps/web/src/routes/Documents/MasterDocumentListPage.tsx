@@ -55,6 +55,7 @@ export function MasterDocumentListPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link to="/documents" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">Documents</Link>
+          <Link to="/documents/import" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">Import</Link>
           <button type="button" onClick={() => void exportExcel()} disabled={exporting} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-60">
             {exporting ? "Exporting…" : "Export to Excel"}
           </button>
