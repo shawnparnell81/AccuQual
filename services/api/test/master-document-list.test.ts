@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FORM_TEMPLATES, PRINTED_FORM_ID_WHEN_BLANK, PRINTED_FORM_REVISION } from "../src/modules/document-folders/formFiling.js";
+import { FORM_TEMPLATES, PRINTED_FORM_REVISION } from "../src/modules/document-folders/formFiling.js";
 import { buildMasterDocumentRows, documentNumberForForm, withRegisteredForms, type RegisteredFormSource } from "../src/modules/documents/masterDocumentList.js";
 
 describe("master document list", () => {
@@ -138,16 +138,27 @@ describe("master document list", () => {
       location: "ISO Compliance Documents / Blank Form Templates / Nonconformance",
     });
 
-    expect(rows.filter((row) => row.documentId === "FRM-VAL-009").map((row) => row.title).sort()).toEqual([
-      "AIR COMPRESSOR VALIDATION DOCUMENT",
-      "BRAKE WEAR SENSOR VALIDATION DOCUMENT",
-    ]);
+    expect(rows.filter((row) => row.documentId === "FRM-VAL-009").map((row) => row.title)).toEqual(["BRAKE WEAR SENSOR VALIDATION DOCUMENT"]);
+    expect(rows.filter((row) => row.documentId === "FRM-VAL-011").map((row) => row.title)).toEqual(["AIR STRUT VALIDATION DOCUMENT"]);
+    expect(rows.find((row) => row.title === "AIR COMPRESSOR VALIDATION DOCUMENT")).toMatchObject({ documentId: "FRM-VAL-003" });
+    expect(rows.find((row) => row.title === "ELECTRIC LIFT SUPPORT VALIDATION DOCUMENT")).toMatchObject({ documentId: "FRM-VAL-004" });
+    expect(rows.find((row) => row.title === "GAS LIFT SUPPORT VALIDATION DOCUMENT")).toMatchObject({ documentId: "FRM-VAL-005" });
+    expect(rows.filter((row) => row.documentId === "FRM-VAL-007").map((row) => row.title)).toEqual(["FUEL PUMP VALIDATION DOCUMENT"]);
     expect(rows.find((row) => row.title === "Master Document List")).toMatchObject({ documentId: "LST-GEN-001", currentRev: "Rev B" });
     expect(rows.find((row) => row.title === "Master Equipment List")).toMatchObject({ documentId: "LST-EQP-001", currentRev: "Rev A" });
     expect(rows.find((row) => row.title === "Part Submission Warrant")).toBeUndefined();
-    expect(rows.find((row) => row.title === "CSA VALIDATION REPORT")).toBeUndefined();
+    expect(rows.find((row) => row.title === "CSA VALIDATION REPORT")).toMatchObject({ documentId: "FRM-VAL-001", status: "Template" });
+    expect(rows.find((row) => row.title === "INTERNAL AUDIT SUMMARY REPORT")).toMatchObject({ documentId: "TMP-GEN-001" });
+    expect(rows.find((row) => row.title === "MONTHLY ENGINEERING DEVELOPMENT REPORT")).toMatchObject({ documentId: "TMP-ENG-001" });
+    expect(rows.filter((row) => row.title === "ASTM E542 Gravimetric Volume Calculator").map((row) => row.documentId).sort()).toEqual([
+      "FRM-TST-001",
+      "FRM-TST-002",
+    ]);
     expect(rows.find((row) => row.title === "Corrective Action Request")).toBeUndefined();
     expect(rows.find((row) => row.title === "8D Problem Solving")).toBeUndefined();
+    expect(rows.find((row) => row.title === "Document Revision Record")).toBeUndefined();
+    expect(rows.find((row) => row.title === "Master Document Register")).toBeUndefined();
+    expect(new Set(rows.map((row) => `${row.documentId}\n${row.title}`)).size).toBe(rows.length);
 
     const custom = withRegisteredForms(
       [],
@@ -169,7 +180,7 @@ describe("master document list", () => {
       if (PRINTED_FORM_REVISION[seed.formKey]) expect(match?.currentRev).toBe(PRINTED_FORM_REVISION[seed.formKey]);
     }
     for (const seed of FORM_TEMPLATES) {
-      if (seed.formId.trim() || PRINTED_FORM_ID_WHEN_BLANK[seed.formKey]) continue;
+      if (documentNumberForForm(seed.formKey, seed.formId)) continue;
       expect(rows.some((row) => row.href === seed.subjectRoute && row.title === seed.title && row.status === "Template")).toBe(false);
     }
   });

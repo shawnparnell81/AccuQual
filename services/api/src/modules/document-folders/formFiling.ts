@@ -125,7 +125,7 @@ export function retargetRetiredRegisterLink(linkedPath: string | null): string |
 
 export const FORM_TEMPLATES: FormTemplateSeed[] = [
   { formKey: "frm-gen-001", formId: "FRM-GEN-001", title: "AUDIT CHECKLIST", topic: "Audit", subjectRoute: "/iso-forms/frm-gen-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "internal_audit", data: { cells: { F3: "Quality & Engineering" } } }) },
-  { formKey: "frm-gen-002", formId: "", title: "INTERNAL AUDIT SUMMARY REPORT", topic: "Audit", subjectRoute: "/iso-forms/frm-gen-002", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "audit_summary", data: { cells: { D5: "Shawn Parnell" } } }) },
+  { formKey: "frm-gen-002", formId: "TMP-GEN-001", title: "INTERNAL AUDIT SUMMARY REPORT", topic: "Audit", subjectRoute: "/iso-forms/frm-gen-002", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "audit_summary", data: { cells: { D5: "Shawn Parnell" } } }) },
   { formKey: "frm-ncr-001", formId: "FRM-NCR-001", title: "NON-CONFORMANCE REPORT (NCR)", topic: "Nonconformance", subjectRoute: "/iso-forms/frm-ncr-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "ncr_report", data: { cells: {} } }) },
   { formKey: "frm-ncr-002", formId: "FRM-NCR-002", title: "QUARANTINE NOTICE", topic: "Nonconformance", subjectRoute: "/iso-forms/frm-ncr-002", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "quarantine_notice", data: { cells: {} } }) },
   { formKey: "frm-ncr-003", formId: "FRM-NCR-003", title: "CONCESSION / DEVIATION REQUEST", topic: "Nonconformance", subjectRoute: "/iso-forms/frm-ncr-003", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "concession", data: { cells: {} } }) },
@@ -141,22 +141,22 @@ export const FORM_TEMPLATES: FormTemplateSeed[] = [
   { formKey: "frm-par-001", formId: "", title: "Pareto Chart", topic: "Problem Solving", subjectRoute: "/pareto", fileNamePattern: "Pareto_{recordNumber}_{date}", start: null },
   { formKey: "lst-eqp-001", formId: "", title: "Master Equipment List", topic: "Calibration", subjectRoute: "/calibration/master-list", start: null },
   { formKey: "lst-gen-001", formId: "", title: "Master Document List", topic: "Document Control", subjectRoute: "/documents/master-list", start: null },
-  { formKey: "frm-val-001", formId: "", title: "CSA VALIDATION REPORT", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "csa", cells: {} } }) },
-  { formKey: "frm-val-007", formId: "", title: "FUEL PUMP VALIDATION DOCUMENT", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "fuel_pump", cells: {} } }) },
+  { formKey: "frm-val-001", formId: "FRM-VAL-001", title: "CSA VALIDATION REPORT", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "csa", cells: {} } }) },
+  { formKey: "frm-val-007", formId: "FRM-VAL-007", title: "FUEL PUMP VALIDATION DOCUMENT", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "fuel_pump", cells: {} } }) },
   { formKey: "frm-val-010", formId: "FRM-VAL-010", title: "AIR STRUT VALIDATION DOCUMENT", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "air_strut", cells: {} } }) },
   { formKey: "frm-val-011", formId: "FRM-VAL-011", title: "AIR STRUT VALIDATION DOCUMENT", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "air_spring", cells: {} } }) },
   { formKey: "frm-val-008", formId: "FRM-VAL-008", title: "FUEL INJECTOR VALIDATION DOCUMENT", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "fuel_injector", cells: {} } }) },
   { formKey: "frm-val-009", formId: "FRM-VAL-009", title: "BRAKE WEAR SENSOR VALIDATION DOCUMENT", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "brake_wear", cells: {} } }) },
   { formKey: "frm-val-002", formId: "FRM-VAL-002", title: "SHOCK VALIDATION REPORT", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "shock", cells: {} } }) },
-  { formKey: "frm-val-003", formId: "FRM-VAL-009", title: "AIR COMPRESSOR VALIDATION DOCUMENT", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "air_compressor", cells: {} } }) },
-  { formKey: "frm-val-004", formId: "FRM-VAL-011", title: "ELECTRIC LIFT SUPPORT VALIDATION DOCUMENT", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "electric_lift", cells: {} } }) },
-  { formKey: "frm-val-005", formId: "FRM-VAL-007", title: "GAS LIFT SUPPORT VALIDATION DOCUMENT", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "gas_lift", cells: {} } }) },
+  { formKey: "frm-val-003", formId: "FRM-VAL-003", title: "AIR COMPRESSOR VALIDATION DOCUMENT", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "air_compressor", cells: {} } }) },
+  { formKey: "frm-val-004", formId: "FRM-VAL-004", title: "ELECTRIC LIFT SUPPORT VALIDATION DOCUMENT", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "electric_lift", cells: {} } }) },
+  { formKey: "frm-val-005", formId: "FRM-VAL-005", title: "GAS LIFT SUPPORT VALIDATION DOCUMENT", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "gas_lift", cells: {} } }) },
   { formKey: "frm-val-006", formId: "FRM-VAL-006", title: "COIL SPRING VALIDATION DOCUMENT", topic: "Validation", subjectRoute: "/folders/validation-reports", start: blank("/validation-reports", "/validation-reports/{id}", { data: { formType: "coil_spring", cells: {} } }) },
   { formKey: "lst-vis-001", formId: "LST-VIS-001", title: "DMA Laboratory Visitor Log", topic: "Audit", subjectRoute: "/iso-forms/lst-vis-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "visitor_log", data: { cells: { F2: "Lab Entrance", I2: "Maxwell Tollefson" } } }) },
-  { formKey: "rpt-eng-001", formId: "", title: "MONTHLY ENGINEERING DEVELOPMENT REPORT", topic: "Engineering", subjectRoute: "/iso-forms/rpt-eng-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "monthly_engineering", data: { cells: { dept: "Product Engineering", prep: "Shawn Parnell" } } }) },
+  { formKey: "rpt-eng-001", formId: "TMP-ENG-001", title: "MONTHLY ENGINEERING DEVELOPMENT REPORT", topic: "Engineering", subjectRoute: "/iso-forms/rpt-eng-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "monthly_engineering", data: { cells: { dept: "Product Engineering", prep: "Shawn Parnell" } } }) },
   { formKey: "frm-trp-002", formId: "FRM-TRP-002", title: "SALT SPRAY TEST REPORT (ASTM B117)", topic: "Inspection", subjectRoute: "/iso-forms/frm-trp-002", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "salt_spray", data: { cells: { E2: "Maxwell Tollefson", B41: "Shawn Parnell" } } }) },
-  { formKey: "frm-tst-001", formId: "", title: "ASTM E542 Gravimetric Volume Calculator", topic: "Engineering", subjectRoute: "/iso-forms/frm-tst-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "volume_water", data: { cells: { B10: 8, B11: 0.00001 } } }) },
-  { formKey: "frm-tst-002", formId: "", title: "ASTM E542 Gravimetric Volume Calculator", topic: "Engineering", subjectRoute: "/iso-forms/frm-tst-002", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "volume_heptane", data: { cells: { B10: 8, B11: 0.00001 } } }) },
+  { formKey: "frm-tst-001", formId: "FRM-TST-001", title: "ASTM E542 Gravimetric Volume Calculator", topic: "Engineering", subjectRoute: "/iso-forms/frm-tst-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "volume_water", data: { cells: { B10: 8, B11: 0.00001 } } }) },
+  { formKey: "frm-tst-002", formId: "FRM-TST-002", title: "ASTM E542 Gravimetric Volume Calculator", topic: "Engineering", subjectRoute: "/iso-forms/frm-tst-002", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "volume_heptane", data: { cells: { B10: 8, B11: 0.00001 } } }) },
   { formKey: "frm-trp-001", formId: "FRM-TRP-001", title: "PROTOTYPE EVALUATION REPORT (STRUT ASSEMBLY)", topic: "Engineering", subjectRoute: "/iso-forms/frm-trp-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "prototype_strut", data: { cells: { E2: "Maxwell Tollefson", B58: "Shawn Parnell" } } }) },
   { formKey: "frm-dev-001", formId: "FRM-DEV-001", title: "CSA DEVELOPMENT DOCUMENT", topic: "Engineering", subjectRoute: "/iso-forms/frm-dev-001", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "dev_csa", data: { cells: { E2: "Maxwell Tollefson", B10: "Shawn Parnell" } } }) },
   { formKey: "frm-dev-002", formId: "FRM-DEV-002", title: "FUEL PUMP DEVELOPMENT DOCUMENT", topic: "Engineering", subjectRoute: "/iso-forms/frm-dev-002", start: blank("/iso-quality-forms", "/iso-forms/record/{id}", { formType: "dev_fuel_pump", data: { cells: { D2: "Maxwell Tollefson", B8: "Shawn Parnell" } } }) },
@@ -268,13 +268,24 @@ export function templateFolderPath(topic: string): string[] {
   return [BLANK_FORMS_FOLDER, topic];
 }
 
-/** Empty rows take the source Doc ID. A saved custom number stays. A leftover invented id does not. */
-export function storedFormId(existing: string, seed: string): string {
+/**
+ * Sheet-header ids that disagreed with the filename on that one form.
+ * Brake wear keeps FRM-VAL-009. The air spring sheet keeps FRM-VAL-011.
+ */
+const FILENAME_REPLACES_SHEET_ID: Record<string, string> = {
+  "frm-val-003": "FRM-VAL-009",
+  "frm-val-004": "FRM-VAL-011",
+  "frm-val-005": "FRM-VAL-007",
+};
+
+/** Empty rows take the filename number. A saved custom number stays. A leftover invented id, or one of the three sheet ids above, does not. */
+export function storedFormId(existing: string, seed: string, formKey = ""): string {
   const current = existing.trim();
   const official = seed.trim();
   if (!current) return official;
   if (current === official) return current;
   if (LEGACY_ASSIGNED_FORM_IDS.has(current)) return official;
+  if (formKey && FILENAME_REPLACES_SHEET_ID[formKey] === current) return official;
   return current;
 }
 

@@ -159,8 +159,8 @@ function formIdentity(documentId: string, title: string): string {
 }
 
 /**
- * The number already stored on the template. When that field is blank, the id
- * printed on the form itself (the two master lists). Never invents a number.
+ * The number stored on the template. When that field is blank, the id printed
+ * on the two master lists. A blank field with no printed id stays off the list.
  */
 export function documentNumberForForm(formKey: string, formId: string): string {
   const stored = formId.trim();
@@ -171,7 +171,7 @@ export function documentNumberForForm(formKey: string, formId: string): string {
 /**
  * Adds each registered form that already has a number. A form already on the
  * list (same document id and title) is left as it is. Reading this again does
- * not add a second row, and it does not write a number onto a blank template.
+ * not add a second row. Template numbers are stored by the form-template sync.
  */
 export function withRegisteredForms(documentRows: MasterDocumentRow[], templates: RegisteredFormSource[], folders: FolderNode[]): MasterDocumentRow[] {
   const byId = new Map(folders.map((folder) => [folder.id, folder]));

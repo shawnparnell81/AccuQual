@@ -40,9 +40,9 @@ describe("ISO Compliance Documents form templates", () => {
     const ncr = templates.find((form) => form.formKey === "ncr");
     const training = templates.find((form) => form.formKey === "training-record");
     const audit = templates.find((form) => form.formKey === "audit-plan");
-    expect(csa?.formId).toBe("");
+    expect(csa?.formId).toBe("FRM-VAL-001");
     expect(csa?.title).toBe("CSA VALIDATION REPORT");
-    expect(pump?.formId).toBe("");
+    expect(pump?.formId).toBe("FRM-VAL-007");
     expect(pump?.title).toBe("FUEL PUMP VALIDATION DOCUMENT");
     expect(csa?.isoPath).toEqual(["Blank Form Templates", "Validation"]);
     expect(pump?.folderId).toBe(csa?.folderId);

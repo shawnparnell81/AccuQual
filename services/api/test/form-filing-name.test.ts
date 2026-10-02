@@ -19,6 +19,14 @@ describe("cross-training filing name", () => {
     expect(storedFormId("QA-14", "")).toBe("QA-14");
     expect(storedFormId("FRM-VAL-007", "FRM-VAL-007")).toBe("FRM-VAL-007");
     expect(storedFormId("FRM-VAL-007", "")).toBe("");
+    expect(storedFormId("", "FRM-VAL-001", "frm-val-001")).toBe("FRM-VAL-001");
+    expect(storedFormId("", "TMP-GEN-001", "frm-gen-002")).toBe("TMP-GEN-001");
+    expect(storedFormId("FRM-VAL-009", "FRM-VAL-003", "frm-val-003")).toBe("FRM-VAL-003");
+    expect(storedFormId("FRM-VAL-009", "FRM-VAL-009", "frm-val-009")).toBe("FRM-VAL-009");
+    expect(storedFormId("FRM-VAL-011", "FRM-VAL-004", "frm-val-004")).toBe("FRM-VAL-004");
+    expect(storedFormId("FRM-VAL-011", "FRM-VAL-011", "frm-val-011")).toBe("FRM-VAL-011");
+    expect(storedFormId("FRM-VAL-007", "FRM-VAL-005", "frm-val-005")).toBe("FRM-VAL-005");
+    expect(storedFormId("QA-14", "FRM-VAL-003", "frm-val-003")).toBe("QA-14");
   });
 
   it("names quality and engineering copies without a form number", () => {
