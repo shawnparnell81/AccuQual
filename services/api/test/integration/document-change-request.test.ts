@@ -10,17 +10,16 @@ import { ensureTestCompany } from "../helpers/company.js";
 // all, same convention as Document Control itself).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db, pool } from "../../src/db/index.js";
-import { company } from "../../src/drizzle/schema/company.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { documentChangeRequests, documentChangeItems, documentChangeReviews } from "../../src/drizzle/schema/documentChangeRequests.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
+import { setTestPin, TEST_PIN } from "../helpers/signaturePin.js";
 
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
-import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 const app = createApp();
 const suffix = Date.now();
 
@@ -28,6 +27,7 @@ let companyId: number;
 let dcrId: number;
 let itemId: number;
 let reviewId: number;
+let productionUserId: number;
 const userIds: number[] = [];
 
 let productionToken: string; // no department gate at all — any authenticated user should work
@@ -35,7 +35,7 @@ let productionToken: string; // no department gate at all — any authenticated 
 async function makeUser(department: string | null) {
   const [user] = await db.insert(users).values({ email: `dcr-test-${department ?? "none"}-${suffix}@test.local`, passwordHash: "unused" }).returning();
   userIds.push(user!.id);
-  return signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department });
+  return { id: user!.id, token: signAccessToken({ sub: String(user!.id), roleId: null, roleName: "operator", department }) };
 }
 
 describe("Document Change Request (real DB + real HTTP path)", () => {
@@ -44,7 +44,9 @@ describe("Document Change Request (real DB + real HTTP path)", () => {
     companyId = co!.id;
 
     await seedDefaultPermissions(companyId);
-    productionToken = await makeUser("production"); // deliberately a department NOT in most PERMISSION_MATRIX entries — proves this module really is ungated
+    const production = await makeUser("production"); // deliberately a department NOT in most PERMISSION_MATRIX entries — proves this module really is ungated
+    productionUserId = production.id;
+    productionToken = production.token;
   });
 
   afterAll(async () => {
@@ -59,7 +61,9 @@ describe("Document Change Request (real DB + real HTTP path)", () => {
       .send({ formNo: "SOP-014", revision: "REV C", preparedBy: "J. Smith" });
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("draft");
-    expect(res.body.revision).toBe("A");
+    expect(res.body.revision).toBe("B");
+    expect(res.body.actionNew).toBe(false);
+    expect(res.body.requesterApprovalSignature).toBeNull();
     dcrId = res.body.id;
 
     const [row] = await db.select().from(auditTrail).where(eq(auditTrail.entityType, "DocumentChangeRequest"));
@@ -72,7 +76,38 @@ describe("Document Change Request (real DB + real HTTP path)", () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("active");
     expect(res.body.approvedBy).toBe("R. Lee");
-    expect(res.body.revision).toBe("A");
+    expect(res.body.revision).toBe("B");
+  });
+
+  it("saves the DCR-F-001 requester fields and ignores a forged signature", async () => {
+    const res = await request(app)
+      .patch(`/document-change-requests/${dcrId}`)
+      .set("Authorization", `Bearer ${productionToken}`)
+      .send({
+        requesterName: "J. Smith",
+        requesterTitle: "Quality Tech",
+        actionRevision: true,
+        docTypeSop: true,
+        documentProcessName: "Welding SOP",
+        currentDocNumber: "SOP-014",
+        currentDocRev: "B",
+        changeDescription: "New torque spec",
+        newDocRev: "C",
+        requestExecutedBy: "A. Nguyen",
+        requestExecutedTitle: "Document Control",
+        requesterApprovalSignature: "forged",
+        vpApprovalSignature: "forged",
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.requesterName).toBe("J. Smith");
+    expect(res.body.actionRevision).toBe(true);
+    expect(res.body.docTypeSop).toBe(true);
+    expect(res.body.documentProcessName).toBe("Welding SOP");
+    expect(res.body.currentDocNumber).toBe("SOP-014");
+    expect(res.body.changeDescription).toBe("New torque spec");
+    expect(res.body.requestExecutedBy).toBe("A. Nguyen");
+    expect(res.body.requesterApprovalSignature).toBeNull();
+    expect(res.body.vpApprovalSignature).toBeNull();
   });
 
   it("adds a Change Request row", async () => {
@@ -108,6 +143,39 @@ describe("Document Change Request (real DB + real HTTP path)", () => {
     const res = await request(app).patch(`/document-change-requests/${dcrId}/reviews/${reviewId}`).set("Authorization", `Bearer ${productionToken}`).send({ comments: "No further impact identified." });
     expect(res.status).toBe(200);
     expect(res.body.reviewDate).toBe(firstStamp);
+  });
+
+  it("stamps a SIGN cell only through the PIN certification flow", async () => {
+    await setTestPin(productionUserId);
+    const refused = await request(app)
+      .post(`/document-change-requests/${dcrId}/sign`)
+      .set("Authorization", `Bearer ${productionToken}`)
+      .send({ field: "cpio", pin: TEST_PIN, certified: true });
+    expect(refused.status).toBe(400);
+
+    const missingBox = await request(app)
+      .post(`/document-change-requests/${dcrId}/sign`)
+      .set("Authorization", `Bearer ${productionToken}`)
+      .send({ field: "requester", pin: TEST_PIN, certified: false });
+    expect(missingBox.status).toBe(400);
+
+    const signed = await request(app)
+      .post(`/document-change-requests/${dcrId}/sign`)
+      .set("Authorization", `Bearer ${productionToken}`)
+      .send({ field: "requester", pin: TEST_PIN, certified: true });
+    expect(signed.status).toBe(200);
+    expect(signed.body.requesterApprovalSignature).toContain("dcr-test-production-");
+    expect(signed.body.requesterApprovalSignature.length).toBeGreaterThan(3);
+    expect(signed.body.requesterApprovalDate).toBeTruthy();
+    expect(signed.body.vpApprovalSignature).toBeNull();
+
+    const kept = await request(app)
+      .patch(`/document-change-requests/${dcrId}`)
+      .set("Authorization", `Bearer ${productionToken}`)
+      .send({ requesterTitle: "Quality Technician", requesterApprovalSignature: "forged" });
+    expect(kept.status).toBe(200);
+    expect(kept.body.requesterTitle).toBe("Quality Technician");
+    expect(kept.body.requesterApprovalSignature).toBe(signed.body.requesterApprovalSignature);
   });
 
   it("removes the Change Request row", async () => {

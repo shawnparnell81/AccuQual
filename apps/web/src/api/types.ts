@@ -890,10 +890,34 @@ export interface DocumentChangeRequest {
   approvedBy: string | null;
   status: DocumentChangeStatus;
   additionalComments: string | null;
+  requesterName: string | null;
+  requesterTitle: string | null;
+  actionNew: boolean;
+  actionRevision: boolean;
+  actionCancellation: boolean;
+  docTypeSop: boolean;
+  docTypeBulletin: boolean;
+  docTypeTemplate: boolean;
+  docTypeForm: boolean;
+  documentProcessName: string | null;
+  currentDocNumber: string | null;
+  currentDocRev: string | null;
+  currentDocRevDate: string | null;
+  changeDescription: string | null;
+  newDocNumber: string | null;
+  newDocRev: string | null;
+  newRevDate: string | null;
+  requesterApprovalSignature: string | null;
+  requesterApprovalDate: string | null;
+  vpApprovalSignature: string | null;
+  vpApprovalDate: string | null;
+  requestExecutedBy: string | null;
+  requestExecutedTitle: string | null;
+  requestExecutedDate: string | null;
   createdBy: number | null;
   createdAt: string;
   updatedAt: string | null;
-  // Detail endpoint only.
+  // Detail endpoint only. Older child rows; the DCR-F-001 form does not edit them.
   items?: DocumentChangeItem[];
   reviews?: DocumentChangeReview[];
 }

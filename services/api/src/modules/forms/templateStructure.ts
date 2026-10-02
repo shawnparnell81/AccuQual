@@ -156,8 +156,10 @@ function feasibilityStructure() {
 function dcrStructure() {
   return {
     form: "dcr",
-    title: "Document Change Request",
+    document: "DCR-F-001",
+    title: "Document Change Request Form",
     header: sortedKeys(updateDocumentChangeRequestSchema),
+    signatures: ["requesterApproval", "vpEngineeringQaApproval"],
     items: sortedKeys(createChangeItemSchema),
     reviews: sortedKeys(createReviewSchema),
   };

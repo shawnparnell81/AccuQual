@@ -6,6 +6,7 @@ import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { keptRevision, templateRevisionFor } from "../forms/templateRevision.js";
 import { deleteRecord } from "../records/recordDeletion.js";
+import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 
 async function loadDcr(req: Request, id: number) {
   const [row] = await req.db!.select().from(documentChangeRequests).where(and(eq(documentChangeRequests.id, id)));
@@ -39,9 +40,47 @@ export const updateDcrHandler = asyncHandler(async (req: Request, res: Response)
   const record = await loadDcr(req, Number(req.params.id));
   const body = { ...(req.body as Record<string, unknown>) };
   delete body.revision;
+  // SIGN cells are written only by the PIN endpoint.
+  delete body.requesterApprovalSignature;
+  delete body.requesterApprovalDate;
+  delete body.vpApprovalSignature;
+  delete body.vpApprovalDate;
   const revision = keptRevision(record.revision, templateRevisionFor("dcr").revision);
   const [updated] = await req.db!.update(documentChangeRequests).set({ ...body, revision, updatedAt: new Date() }).where(eq(documentChangeRequests.id, record.id)).returning();
   await recordAuditTrail(req.db!, { entityType: "DocumentChangeRequest", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
+  res.json(updated);
+});
+
+const DCR_SIGNOFF = {
+  requester: {
+    column: "requesterApprovalSignature",
+    date: "requesterApprovalDate",
+    description: "I certify that I request this document change and the information above is accurate.",
+  },
+  vpEngineering: {
+    column: "vpApprovalSignature",
+    date: "vpApprovalDate",
+    description: "I certify that I approve this document change as VP of Engineering and Quality Assurance.",
+  },
+} as const;
+
+export const signDcrHandler = asyncHandler(async (req: Request, res: Response) => {
+  const record = await loadDcr(req, Number(req.params.id));
+  const field = req.body.field as keyof typeof DCR_SIGNOFF;
+  const spec = DCR_SIGNOFF[field];
+  const stamp = await requireSignatureStamp(req, {
+    pin: req.body.pin,
+    certified: req.body.certified,
+    entityType: "DocumentChangeRequest",
+    entityId: record.id,
+    field: spec.column,
+    description: spec.description,
+  });
+  const [updated] = await req
+    .db!.update(documentChangeRequests)
+    .set({ [spec.column]: stamp.stamp, [spec.date]: stamp.signedAt, updatedAt: new Date() })
+    .where(eq(documentChangeRequests.id, record.id))
+    .returning();
   res.json(updated);
 });
 

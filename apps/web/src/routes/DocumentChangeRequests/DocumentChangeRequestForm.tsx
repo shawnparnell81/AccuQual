@@ -1,30 +1,36 @@
-import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
-import { useAuthStore } from "../../store/authStore";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
-import type { DocumentChangeRequest, DocumentChangeItem, DocumentChangeReview, DocumentChangeStatus } from "../../api/types";
+import type { DocumentChangeRequest } from "../../api/types";
 import { PictureBoundText } from "../../components/forms/PictureText";
-import { BrandMark } from "../../components/brand/DmaLogo";
+import { DmaLogo } from "../../components/brand/DmaLogo";
+import { SignatureStamp } from "../../components/forms/SignatureStamp";
 
-const STATUSES: DocumentChangeStatus[] = ["draft", "active", "obsolete"];
+/** Printed identity of paper form DCR-F-001. These are not record answers. */
+const DOCUMENT_ID = "DCR-F-001";
+const REV_LEVEL = "0";
+const RELEASED_DATE = "10/9/2024";
+const REV_DATE = "N/A";
+
+const CHANGE_HELPER = "Attach a copy of the document with the requested changes highlighted.";
+const FOOTER = "This document is the property of DMA Industries, LLC. Unauthorized use, reproduction, or distribution is prohibited.";
+
+const REQUESTER_CERTIFY = "I certify that I request this document change and the information above is accurate.";
+const VP_CERTIFY = "I certify that I approve this document change as VP of Engineering and Quality Assurance.";
+
+const cell = "border border-border px-1.5 py-1 align-middle print:border-black";
+const labelCell = `${cell} bg-muted/50 text-[11px] font-medium text-muted-foreground print:bg-transparent print:text-black`;
+const inputClass = "w-full min-w-0 bg-transparent px-1 py-0.5 text-xs outline-none focus:bg-background focus:ring-1 focus:ring-primary print:text-black";
 
 /**
- * The Document Change Request form — form 01 of the "ACCUQUAL Forms" batch
- * (see qmsFormDefinitions.ts's schema comment for why it's not on the
- * generic QMS Simple Form engine those other 22 forms share: this module
- * already existed, fully built and tested, before that batch shipped).
- * Re-skinned to the app's own theme tokens per that batch's explicit
- * "follow the color scheme of the app" instruction — it originally matched
- * the Work Order traveler's confirmed one-off dark/cyan/violet scheme,
- * which stays as its own deliberate exception; this form does not.
+ * Fillable DCR-F-001. One requester block and a fixed approval block.
+ * SIGN cells use the shared PIN certification control. The previous
+ * multi-row change table and free-form review rows are not on this sheet.
  */
 export function DocumentChangeRequestForm({ dcr }: { dcr: DocumentChangeRequest }) {
   const toast = useToast();
   const queryClient = useQueryClient();
-  const logoUrl = useAuthStore((s) => s.company?.branding?.logoUrl);
-
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["document-change-requests", dcr.id] });
 
   const patchHeader = useMutation({
@@ -33,231 +39,239 @@ export function DocumentChangeRequestForm({ dcr }: { dcr: DocumentChangeRequest 
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't update.")),
   });
 
-  const addItem = useMutation({
-    mutationFn: async () => (await apiClient.post(`/document-change-requests/${dcr.id}/items`, {})).data,
+  const sign = useMutation({
+    mutationFn: async ({ field, pin }: { field: "requester" | "vpEngineering"; pin: string }) =>
+      (await apiClient.post(`/document-change-requests/${dcr.id}/sign`, { field, pin, certified: true })).data,
     onSuccess: invalidate,
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't add that row.")),
-  });
-  const patchItem = useMutation({
-    mutationFn: async ({ itemId, body }: { itemId: number; body: Record<string, unknown> }) => (await apiClient.patch(`/document-change-requests/${dcr.id}/items/${itemId}`, body)).data,
-    onSuccess: invalidate,
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't update that row.")),
-  });
-  const deleteItem = useMutation({
-    mutationFn: async (itemId: number) => apiClient.delete(`/document-change-requests/${dcr.id}/items/${itemId}`),
-    onSuccess: invalidate,
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't remove that row.")),
   });
 
-  const addReview = useMutation({
-    mutationFn: async () => (await apiClient.post(`/document-change-requests/${dcr.id}/reviews`, {})).data,
-    onSuccess: invalidate,
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't add that row.")),
-  });
-  const patchReview = useMutation({
-    mutationFn: async ({ reviewId, body }: { reviewId: number; body: Record<string, unknown> }) => (await apiClient.patch(`/document-change-requests/${dcr.id}/reviews/${reviewId}`, body)).data,
-    onSuccess: invalidate,
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't update that row.")),
-  });
-  const deleteReview = useMutation({
-    mutationFn: async (reviewId: number) => apiClient.delete(`/document-change-requests/${dcr.id}/reviews/${reviewId}`),
-    onSuccess: invalidate,
-    onError: (err) => toast.error(extractErrorMessage(err, "Couldn't remove that row.")),
-  });
-
-  const items = dcr.items ?? [];
-  const reviews = dcr.reviews ?? [];
+  const save = (body: Record<string, unknown>) => patchHeader.mutate(body);
 
   return (
-    <div className="rounded-lg border border-border bg-card p-6 print:border-black print:bg-white print:text-black">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4 print:border-black">
-        <div className="flex items-center gap-3">
-          <BrandMark logoUrl={logoUrl} />
-          <div>
-            <h1 className="text-xl font-semibold uppercase tracking-wide">Document Change Request</h1>
-            <p className="text-xs text-muted-foreground print:text-black">A change to a controlled document (document change request).</p>
-          </div>
-        </div>
-        <div className="text-right text-xs text-muted-foreground print:text-black">
-          <div>DCR NO.</div>
-          <div className="text-lg font-semibold text-foreground print:text-black">#{dcr.id}</div>
-        </div>
-      </div>
+    <div key={dcr.id} className="overflow-x-auto rounded-md border border-border bg-card print:border-black print:bg-white print:text-black" data-testid="dcr-f001-form">
+      <table className="w-full min-w-[760px] border-collapse text-xs">
+        <tbody>
+          <tr>
+            <td colSpan={6} className={`${cell} p-2`}>
+              <div className="flex flex-wrap items-center gap-3">
+                <DmaLogo height={36} />
+                <h1 className="min-w-[12rem] flex-1 text-center text-sm font-bold tracking-wide">Document Change Request Form</h1>
+                <dl className="grid grid-cols-[auto_auto] gap-x-2 gap-y-0.5 text-[11px] leading-tight">
+                  <dt>Document:</dt>
+                  <dd className="font-medium">{DOCUMENT_ID}</dd>
+                  <dt>Rev. Level:</dt>
+                  <dd className="font-medium">{REV_LEVEL}</dd>
+                  <dt>Released Date:</dt>
+                  <dd className="font-medium">{RELEASED_DATE}</dd>
+                  <dt>Rev. Date:</dt>
+                  <dd className="font-medium">{REV_DATE}</dd>
+                </dl>
+              </div>
+            </td>
+          </tr>
 
-      <h2 className="mb-2 mt-4 border-l-4 border-primary bg-muted/50 px-3 py-1.5 text-xs font-bold uppercase tracking-wide print:border-black print:bg-transparent print:text-black">
-        Document / Record Information
-      </h2>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <HeaderField label="Form No." value={dcr.formNo} onSave={(v) => patchHeader.mutate({ formNo: v || null })} />
-        <HeaderField label="Revision" value={dcr.revision || "A"} readOnly />
-        <HeaderField label="Effective Date" type="date" value={dcr.effectiveDate ? dcr.effectiveDate.slice(0, 10) : ""} onSave={(v) => patchHeader.mutate({ effectiveDate: v || null })} />
-        <HeaderField label="Prepared By" value={dcr.preparedBy} onSave={(v) => patchHeader.mutate({ preparedBy: v || null })} />
-        <HeaderField label="Approved By" value={dcr.approvedBy} onSave={(v) => patchHeader.mutate({ approvedBy: v || null })} />
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase text-muted-foreground print:text-black">Status</span>
-          <div className="flex flex-wrap gap-3 pt-1">
-            {STATUSES.map((s) => (
-              <label key={s} className="flex items-center gap-1.5 text-sm capitalize">
-                <input type="checkbox" checked={dcr.status === s} onChange={() => patchHeader.mutate({ status: s })} className="print:accent-black" />
-                {s}
-              </label>
-            ))}
-          </div>
-        </div>
-      </div>
+          <tr>
+            <th colSpan={6} scope="colgroup" className={`${cell} bg-muted px-2 py-1 text-left text-[11px] font-bold print:bg-transparent`}>
+              To Be Filled by Requester
+            </th>
+          </tr>
 
-      <h2 className="mb-2 mt-6 border-l-4 border-primary bg-muted/50 px-3 py-1.5 text-xs font-bold uppercase tracking-wide print:border-black print:bg-transparent print:text-black">
-        Change Request
-      </h2>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] border-collapse text-sm">
-          <thead>
-            <tr className="bg-foreground text-background print:bg-black print:text-white">
-              {["Change ID", "Document / Process", "Cur. Rev", "Prop. Rev", "Reason", "Requested By"].map((h) => (
-                <th key={h} className="border border-border px-2 py-1.5 text-left text-xs uppercase print:border-black">
-                  {h}
-                </th>
-              ))}
-              <th className="w-8 border border-border print:hidden" />
-            </tr>
-          </thead>
-          <tbody>
-            {items.length === 0 && (
-              <tr>
-                <td colSpan={7} className="border border-border px-2 py-2 text-center text-muted-foreground print:border-black">
-                  Add the document or process you're changing. That's the row this form needs.
-                </td>
-              </tr>
-            )}
-            {items.map((item) => (
-              <ChangeItemRow key={item.id} item={item} onPatch={(body) => patchItem.mutate({ itemId: item.id, body })} onDelete={() => deleteItem.mutate(item.id)} />
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <button onClick={() => addItem.mutate()} disabled={addItem.isPending} className="mt-2 rounded-md border border-dashed border-primary px-3 py-1.5 text-xs text-primary hover:bg-primary/10 print:hidden">
-        + Add Row
-      </button>
+          <tr>
+            <th scope="row" className={labelCell}>Requester Name</th>
+            <td className={cell} colSpan={2}>
+              <TextCell ariaLabel="Requester Name" value={dcr.requesterName} onSave={(value) => save({ requesterName: value || null })} />
+            </td>
+            <th scope="row" className={labelCell}>Title</th>
+            <td className={cell} colSpan={2}>
+              <TextCell ariaLabel="Title" value={dcr.requesterTitle} onSave={(value) => save({ requesterTitle: value || null })} />
+            </td>
+          </tr>
 
-      <h2 className="mb-2 mt-6 border-l-4 border-primary bg-muted/50 px-3 py-1.5 text-xs font-bold uppercase tracking-wide print:border-black print:bg-transparent print:text-black">
-        Review &amp; Approval
-      </h2>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[560px] border-collapse text-sm">
-          <thead>
-            <tr className="bg-foreground text-background print:bg-black print:text-white">
-              {["Reviewer", "Comments / Impact", "Decision", "Date"].map((h) => (
-                <th key={h} className="border border-border px-2 py-1.5 text-left text-xs uppercase print:border-black">
-                  {h}
-                </th>
-              ))}
-              <th className="w-8 border border-border print:hidden" />
-            </tr>
-          </thead>
-          <tbody>
-            {reviews.length === 0 && (
-              <tr>
-                <td colSpan={5} className="border border-border px-2 py-2 text-center text-muted-foreground print:border-black">
-                  No reviews yet.
-                </td>
-              </tr>
-            )}
-            {reviews.map((review) => (
-              <ReviewRow key={review.id} review={review} onPatch={(body) => patchReview.mutate({ reviewId: review.id, body })} onDelete={() => deleteReview.mutate(review.id)} />
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <button onClick={() => addReview.mutate()} disabled={addReview.isPending} className="mt-2 rounded-md border border-dashed border-primary px-3 py-1.5 text-xs text-primary hover:bg-primary/10 print:hidden">
-        + Add Row
-      </button>
+          <tr>
+            <th scope="row" className={labelCell}>Request Action</th>
+            <td className={cell} colSpan={5}>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 px-1 py-0.5">
+                <Check label="New" checked={dcr.actionNew} onChange={(checked) => save({ actionNew: checked })} />
+                <Check label="Revision" checked={dcr.actionRevision} onChange={(checked) => save({ actionRevision: checked })} />
+                <Check label="Cancellation/Obsolete" checked={dcr.actionCancellation} onChange={(checked) => save({ actionCancellation: checked })} />
+              </div>
+            </td>
+          </tr>
 
-      <h2 className="mb-2 mt-6 border-l-4 border-primary bg-muted/50 px-3 py-1.5 text-xs font-bold uppercase tracking-wide print:border-black print:bg-transparent print:text-black">
-        Additional Comments / Attachments
-      </h2>
-      <PictureBoundText
-        className="w-full rounded-md border border-border bg-background p-2 text-sm print:border-black print:bg-white print:text-black"
-        rows={3}
-        saved={dcr.additionalComments ?? ""}
-        entityType="document_change_requests"
-        entityId={dcr.id}
-        onSave={(value) => patchHeader.mutate({ additionalComments: value || null })}
-      />
+          <tr>
+            <th scope="row" className={labelCell}>Document Type</th>
+            <td className={cell} colSpan={5}>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 px-1 py-0.5">
+                <Check label="SOP" checked={dcr.docTypeSop} onChange={(checked) => save({ docTypeSop: checked })} />
+                <Check label="Bulletin" checked={dcr.docTypeBulletin} onChange={(checked) => save({ docTypeBulletin: checked })} />
+                <Check label="Template" checked={dcr.docTypeTemplate} onChange={(checked) => save({ docTypeTemplate: checked })} />
+                <Check label="Form" checked={dcr.docTypeForm} onChange={(checked) => save({ docTypeForm: checked })} />
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <th scope="row" className={labelCell}>Document/Process Name</th>
+            <td className={cell} colSpan={5}>
+              <TextCell ariaLabel="Document/Process Name" value={dcr.documentProcessName} onSave={(value) => save({ documentProcessName: value || null })} />
+            </td>
+          </tr>
+
+          <tr>
+            <th scope="row" className={labelCell}>Current Doc#</th>
+            <td className={cell}>
+              <TextCell ariaLabel="Current Doc#" value={dcr.currentDocNumber} onSave={(value) => save({ currentDocNumber: value || null })} />
+            </td>
+            <th scope="row" className={labelCell}>Current Doc Rev#</th>
+            <td className={cell}>
+              <TextCell ariaLabel="Current Doc Rev#" value={dcr.currentDocRev} onSave={(value) => save({ currentDocRev: value || null })} />
+            </td>
+            <th scope="row" className={labelCell}>Current Doc Rev. Date</th>
+            <td className={cell}>
+              <TextCell ariaLabel="Current Doc Rev. Date" type="date" value={dcr.currentDocRevDate} onSave={(value) => save({ currentDocRevDate: value || null })} />
+            </td>
+          </tr>
+
+          <tr>
+            <td colSpan={6} className={`${cell} p-1.5`}>
+              <div className="px-0.5 text-[11px] font-medium text-muted-foreground print:text-black">Description of the change requested with rationale</div>
+              <p className="px-0.5 pb-1 text-[11px] italic text-muted-foreground print:text-black">{CHANGE_HELPER}</p>
+              <PictureBoundText
+                className="min-h-[7rem] w-full rounded-sm border border-border bg-background px-1.5 py-1 text-xs outline-none focus:ring-1 focus:ring-primary print:border-black print:bg-white print:text-black"
+                rows={6}
+                saved={dcr.changeDescription ?? ""}
+                entityType="document_change_requests"
+                entityId={dcr.id}
+                onSave={(value) => save({ changeDescription: value || null })}
+              />
+            </td>
+          </tr>
+
+          <tr>
+            <th scope="row" className={labelCell}>New Doc #</th>
+            <td className={cell}>
+              <TextCell ariaLabel="New Doc #" value={dcr.newDocNumber} onSave={(value) => save({ newDocNumber: value || null })} />
+            </td>
+            <th scope="row" className={labelCell}>New Doc Rev#</th>
+            <td className={cell}>
+              <TextCell ariaLabel="New Doc Rev#" value={dcr.newDocRev} onSave={(value) => save({ newDocRev: value || null })} />
+            </td>
+            <th scope="row" className={labelCell}>New Rev. Date</th>
+            <td className={cell}>
+              <TextCell ariaLabel="New Rev. Date" type="date" value={dcr.newRevDate} onSave={(value) => save({ newRevDate: value || null })} />
+            </td>
+          </tr>
+
+          <tr>
+            <th colSpan={6} scope="colgroup" className={`${cell} bg-muted px-2 py-1 text-left text-[11px] font-bold print:bg-transparent`}>
+              Official Approval
+            </th>
+          </tr>
+
+          <SignRow
+            label="Requester Review and Approval"
+            signature={dcr.requesterApprovalSignature}
+            date={dcr.requesterApprovalDate}
+            certify={REQUESTER_CERTIFY}
+            onSign={(pin) => sign.mutateAsync({ field: "requester", pin })}
+          />
+          <SignRow
+            label="VP of Engineering and Quality Assurance Approval"
+            signature={dcr.vpApprovalSignature}
+            date={dcr.vpApprovalDate}
+            certify={VP_CERTIFY}
+            onSign={(pin) => sign.mutateAsync({ field: "vpEngineering", pin })}
+          />
+
+          <tr>
+            <th scope="row" className={labelCell}>Request Executed by</th>
+            <td className={cell}>
+              <TextCell ariaLabel="Request Executed by" value={dcr.requestExecutedBy} onSave={(value) => save({ requestExecutedBy: value || null })} />
+            </td>
+            <th scope="row" className={labelCell}>Title</th>
+            <td className={cell}>
+              <TextCell ariaLabel="Request executed title" value={dcr.requestExecutedTitle} onSave={(value) => save({ requestExecutedTitle: value || null })} />
+            </td>
+            <th scope="row" className={labelCell}>Date</th>
+            <td className={cell}>
+              <TextCell ariaLabel="Request executed date" type="date" value={dcr.requestExecutedDate} onSave={(value) => save({ requestExecutedDate: value || null })} />
+            </td>
+          </tr>
+
+          <tr>
+            <td colSpan={6} className={`${cell} px-2 py-1.5 text-center text-[10px] leading-snug text-muted-foreground print:text-black`}>
+              {FOOTER}
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
 
-function HeaderField({ label, value, onSave, type = "text", readOnly = false }: { label: string; value: string | null | undefined; onSave?: (v: string) => void; type?: string; readOnly?: boolean }) {
+function TextCell({
+  value,
+  onSave,
+  type = "text",
+  ariaLabel,
+}: {
+  value: string | null | undefined;
+  onSave: (value: string) => void;
+  type?: string;
+  ariaLabel: string;
+}) {
+  const saved = type === "date" ? (value ? value.slice(0, 10) : "") : (value ?? "");
   return (
-    <label className="flex flex-col gap-1 text-sm">
-      <span className="text-xs font-medium uppercase text-muted-foreground print:text-black">{label}</span>
-      <input
-        type={type}
-        defaultValue={value ?? ""}
-        readOnly={readOnly}
-        onBlur={(e) => !readOnly && onSave && e.target.value !== (value ?? "") && onSave(e.target.value)}
-        className="rounded-md border border-form-field bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary read-only:bg-muted print:border-black print:bg-white print:text-black"
-      />
+    <input
+      type={type}
+      aria-label={ariaLabel}
+      defaultValue={saved}
+      onBlur={(event) => {
+        if (event.target.value !== saved) onSave(event.target.value);
+      }}
+      className={inputClass}
+    />
+  );
+}
+
+function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <label className="flex items-center gap-1.5 text-xs normal-case tracking-normal text-foreground">
+      <input type="checkbox" checked={!!checked} onChange={(event) => onChange(event.target.checked)} className="print:accent-black" />
+      {label}
     </label>
   );
 }
 
-function ChangeItemRow({ item, onPatch, onDelete }: { item: DocumentChangeItem; onPatch: (body: Record<string, unknown>) => void; onDelete: () => void }) {
-  const cell = (key: keyof DocumentChangeItem) => ({
-    defaultValue: (item[key] as string) ?? "",
-    onBlur: (e: React.FocusEvent<HTMLInputElement>) => e.target.value !== ((item[key] as string) ?? "") && onPatch({ [key]: e.target.value || null }),
-  });
-  const inputClass = "w-full bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary print:text-black";
+function SignRow({
+  label,
+  signature,
+  date,
+  certify,
+  onSign,
+}: {
+  label: string;
+  signature: string | null;
+  date: string | null;
+  certify: string;
+  onSign: (pin: string) => Promise<unknown>;
+}) {
+  const shown = date ? new Date(date).toLocaleDateString() : "";
   return (
     <tr>
-      <td className="border border-border p-0 print:border-black">
-        <input className={inputClass} {...cell("changeId")} />
+      <th scope="row" className={labelCell}>
+        {label}
+      </th>
+      <td className={cell} colSpan={3}>
+        <div className="flex items-start gap-2">
+          <span className="pt-1 text-[10px] font-semibold text-muted-foreground print:text-black">SIGN</span>
+          <div className="min-w-0 flex-1">
+            <SignatureStamp value={signature} certify={certify} variant="sheet" onSign={onSign} />
+          </div>
+        </div>
       </td>
-      <td className="border border-border p-0 print:border-black">
-        <input className={inputClass} {...cell("documentProcess")} />
-      </td>
-      <td className="border border-border p-0 print:border-black">
-        <input className={inputClass} {...cell("currentRevision")} />
-      </td>
-      <td className="border border-border p-0 print:border-black">
-        <input className={inputClass} {...cell("proposedRevision")} />
-      </td>
-      <td className="border border-border p-0 print:border-black">
-        <input className={inputClass} {...cell("reason")} />
-      </td>
-      <td className="border border-border p-0 print:border-black">
-        <input className={inputClass} {...cell("requestedBy")} />
-      </td>
-      <td className="border border-border text-center print:hidden">
-        <button className="px-1 text-muted-foreground hover:text-destructive" onClick={onDelete} title="Remove row">
-          ✕
-        </button>
-      </td>
-    </tr>
-  );
-}
-
-function ReviewRow({ review, onPatch, onDelete }: { review: DocumentChangeReview; onPatch: (body: Record<string, unknown>) => void; onDelete: () => void }) {
-  const [decisionDraft, setDecisionDraft] = useState(review.decision ?? "");
-  const inputClass = "w-full bg-transparent px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary print:text-black";
-
-  return (
-    <tr>
-      <td className="border border-border p-0 print:border-black">
-        <input className={inputClass} defaultValue={review.reviewer ?? ""} onBlur={(e) => e.target.value !== (review.reviewer ?? "") && onPatch({ reviewer: e.target.value || null })} />
-      </td>
-      <td className="border border-border p-0 print:border-black">
-        <input className={inputClass} defaultValue={review.comments ?? ""} onBlur={(e) => e.target.value !== (review.comments ?? "") && onPatch({ comments: e.target.value || null })} />
-      </td>
-      <td className="border border-border p-0 print:border-black">
-        <input className={inputClass} value={decisionDraft} onChange={(e) => setDecisionDraft(e.target.value)} onBlur={() => decisionDraft !== (review.decision ?? "") && onPatch({ decision: decisionDraft || null })} />
-      </td>
-      <td className="border border-border px-2 py-1.5 text-xs text-muted-foreground print:border-black print:text-black">{review.reviewDate ? new Date(review.reviewDate).toLocaleDateString() : "—"}</td>
-      <td className="border border-border text-center print:hidden">
-        <button className="px-1 text-muted-foreground hover:text-destructive" onClick={onDelete} title="Remove row">
-          ✕
-        </button>
-      </td>
+      <th scope="row" className={labelCell}>Date</th>
+      <td className={`${cell} text-xs`}>{shown}</td>
     </tr>
   );
 }

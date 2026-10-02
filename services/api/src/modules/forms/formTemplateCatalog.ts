@@ -298,9 +298,9 @@ export const FORM_TEMPLATE_CATALOG: Record<string, TemplateStamp> = {
     "structureHash": "76aeba98cf43fe3c531edbee84b33a8996229d4856cda86d3ae945e42ce34b7e"
   },
   "dcr": {
-    "version": 1,
-    "revision": "A",
-    "structureHash": "d00a0ad39ba8d44f1205af9ed5d2e3e48e8b2e1232a621e94472d63c205169d9"
+    "version": 2,
+    "revision": "B",
+    "structureHash": "a89bbf3716740621a0a7b0d1cd3ad37b24394bf39d37e4bc4a3d7e50720e38da"
   },
   "feasibility": {
     "version": 1,

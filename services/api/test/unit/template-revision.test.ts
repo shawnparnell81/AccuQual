@@ -34,7 +34,7 @@ describe("template revision", () => {
     expect(keptRevision("  ", "A")).toBe("A");
     expect(keptRevision(null, "1.0")).toBe("1.0");
     expect(templateRevisionFor("feasibility").revision).toBe("1.0");
-    expect(templateRevisionFor("dcr").revision).toBe("A");
+    expect(templateRevisionFor("dcr").revision).toBe("B");
   });
 
   it("matches every API master hash, and records the published ISO and validation letters", () => {
