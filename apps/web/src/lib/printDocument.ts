@@ -60,7 +60,9 @@ export async function presentPdf(bytes: Uint8Array, filename: string): Promise<E
     throw new Error(PRINT_NOT_DOCUMENT);
   }
 
-  const blob = new Blob([bytes], { type: "application/pdf" });
+  const copy = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copy).set(bytes);
+  const blob = new Blob([copy], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const frame = document.createElement("iframe");
   frame.title = filename;
