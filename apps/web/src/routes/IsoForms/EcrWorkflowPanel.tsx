@@ -13,12 +13,20 @@ export function EcrWorkflowPanel({
   canEditStructure,
   busy,
   onTransition,
+  structureSlug = "engineering-change",
+  structureCertify = ECR_STRUCTURE_CERTIFY,
+  labelDefaults = ECR_LABEL_DEFAULTS,
+  noun = "engineering change request",
 }: {
   recordId: number;
   view: EcrWorkflowView;
   canEditStructure: boolean;
   busy: boolean;
   onTransition: (action: string, note?: string) => Promise<void>;
+  structureSlug?: string;
+  structureCertify?: string;
+  labelDefaults?: Record<string, string>;
+  noun?: string;
 }) {
   const queryClient = useQueryClient();
   const [note, setNote] = useState("");
@@ -32,12 +40,12 @@ export function EcrWorkflowPanel({
 
   const saveStructure = useMutation({
     mutationFn: async (next: Record<string, string>) =>
-      (await apiClient.put("/iso-quality-forms/structure/engineering-change", { pin, certified: true, labels: next })).data,
+      (await apiClient.put(`/iso-quality-forms/structure/${structureSlug}`, { pin, certified: true, labels: next })).data,
     onSuccess: async () => {
       setPin("");
       setEditing(false);
-      await queryClient.invalidateQueries({ queryKey: ["ecr-workflow", recordId] });
-      await queryClient.invalidateQueries({ queryKey: ["ecr-structure"] });
+      await queryClient.invalidateQueries({ queryKey: ["change-request-workflow", recordId] });
+      await queryClient.invalidateQueries({ queryKey: ["change-request-structure"] });
     },
   });
 
@@ -47,7 +55,7 @@ export function EcrWorkflowPanel({
       await onTransition(action, action === "reject" ? note.trim() : undefined);
       if (action === "reject") setNote("");
     } catch (err) {
-      setError(extractErrorMessage(err, "Couldn't update this engineering change request."));
+      setError(extractErrorMessage(err, `Couldn't update this ${noun}.`));
     }
   }
 
@@ -103,9 +111,9 @@ export function EcrWorkflowPanel({
         <div className="border-t border-border pt-3">
           <p className="mb-2 text-sm text-muted-foreground">Changing the template needs your role and your PIN. Filling this copy does not.</p>
           <SignatureStamp
-            certify={ECR_STRUCTURE_CERTIFY}
+            certify={structureCertify}
             onSign={async (entered) => {
-              await apiClient.post("/iso-quality-forms/structure/engineering-change/unlock", { pin: entered, certified: true });
+              await apiClient.post(`/iso-quality-forms/structure/${structureSlug}/unlock`, { pin: entered, certified: true });
               setLabels(view.labels);
               setPin(entered);
               setEditing(true);
@@ -123,9 +131,9 @@ export function EcrWorkflowPanel({
         >
           <p className="text-sm font-medium">Template labels</p>
           <div className="grid gap-2 sm:grid-cols-2">
-            {Object.keys(ECR_LABEL_DEFAULTS).map((key) => (
+            {Object.keys(labelDefaults).map((key) => (
               <label key={key} className="flex flex-col gap-1 text-xs">
-                {ECR_LABEL_DEFAULTS[key]}
+                {labelDefaults[key]}
                 <input
                   aria-label={key}
                   value={labels[key] ?? ""}

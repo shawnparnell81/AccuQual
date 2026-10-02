@@ -11,6 +11,7 @@ import { blankBatch5, isBatch5, summaryBatch5 } from "../../lib/batch5Reports";
 import { blankBatch6, isBatch6, summaryBatch6 } from "../../lib/batch6Reports";
 import { monthlyStarter } from "../../lib/monthlyEngineeringReport";
 import { visitorStarter, visitorSummary } from "../../lib/visitorLog";
+import { changeRequestByFormType } from "../../lib/changeRequestKinds";
 import { formByKey, type IsoFormType } from "../../lib/isoFormCatalog";
 import { showCell, type CellValue } from "../../lib/isoFormLogic";
 import type { FailureRow, ScorecardRow } from "../../lib/qualitySheetLogic";
@@ -60,10 +61,11 @@ function summary(formType: IsoFormType, data: IsoQualityForm["data"]): string {
 export function IsoFormListPage() {
   const { formKey = "" } = useParams();
   const meta = formByKey(formKey);
+  const requestKind = changeRequestByFormType(meta?.formType);
   const ecrMaster = useQuery({
-    queryKey: ["ecr-structure"],
-    enabled: meta?.formType === "engineering_change",
-    queryFn: async () => (await apiClient.get<{ revision: string }>("/iso-quality-forms/structure/engineering-change")).data,
+    queryKey: ["change-request-structure", requestKind?.slug],
+    enabled: requestKind != null,
+    queryFn: async () => (await apiClient.get<{ revision: string }>(`/iso-quality-forms/structure/${requestKind?.slug}`)).data,
   });
   const navigate = useNavigate();
   const user = useCurrentUser();

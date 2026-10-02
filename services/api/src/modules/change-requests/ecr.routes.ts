@@ -10,8 +10,8 @@ export const ecrRouter = Router();
 
 const signedIn = [requireAuth, withDb] as const;
 
-ecrRouter.get("/structure/engineering-change", ...signedIn, getEcrStructure);
-ecrRouter.post("/structure/engineering-change/unlock", ...signedIn, validate(ecrStructureUnlockSchema), unlockEcrStructure);
-ecrRouter.put("/structure/engineering-change", ...signedIn, validate(ecrStructureSaveSchema), saveEcrStructure);
+ecrRouter.get("/structure/:kind", ...signedIn, getEcrStructure);
+ecrRouter.post("/structure/:kind/unlock", ...signedIn, validate(ecrStructureUnlockSchema), unlockEcrStructure);
+ecrRouter.put("/structure/:kind", ...signedIn, validate(ecrStructureSaveSchema), saveEcrStructure);
 ecrRouter.get("/:id/workflow", ...signedIn, getEcrWorkflow);
 ecrRouter.post("/:id/transition", ...signedIn, validate(ecrTransitionSchema), transitionEcr);

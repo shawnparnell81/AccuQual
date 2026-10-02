@@ -108,6 +108,11 @@ describe("new blank forms", () => {
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-trn-001")).toMatchObject({ formId: "FRM-TRN-001", title: "COMPETENCY AND TRAINING RECORD" });
     expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-trn-002")).toMatchObject({ formId: "FRM-TRN-002", title: "GRADING RUBRIC: CROSS-TRAINING EVALUATION" });
     expect(SUGGESTED_SUBJECT_PATH["frm-ecr-001"]).toEqual(["ISO Compliance Documents", "Engineering", "Engineering Change Control", "Engineering Change Requests (ECR)"]);
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-dwg-001")).toMatchObject({ formId: "FRM-DWG-001", title: "DRAWING CHANGE REQUEST", subjectRoute: "/iso-forms/frm-dwg-001" });
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-pcr-001")?.title).toBe("PROCESS CHANGE REQUEST");
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "frm-doc-001")?.title).toBe("DOCUMENT CHANGE REQUEST");
+    expect(FILEABLE_FORM_KEYS.has("frm-dwg-001")).toBe(true);
+    expect(SUGGESTED_SUBJECT_PATH["frm-doc-001"]).toEqual(["ISO Compliance Documents", "Quality", "Document Control", "Document Change Requests"]);
     expect(SUGGESTED_SUBJECT_PATH["frm-dev-009"]).toEqual(["ISO Compliance Documents", "Engineering", "Design & Development"]);
     expect(SUGGESTED_SUBJECT_PATH["frm-val-001"]).toEqual(["ISO Compliance Documents", "Engineering", "CSA", "Validation"]);
     expect(SUGGESTED_SUBJECT_PATH["frm-dev-001"]).toEqual(["ISO Compliance Documents", "Engineering", "CSA", "Development"]);

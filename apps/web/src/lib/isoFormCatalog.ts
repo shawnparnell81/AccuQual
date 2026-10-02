@@ -36,6 +36,9 @@ export const ISO_FORM_TYPES = [
   "dev_electronic_csa",
   "dev_shock",
   "engineering_change",
+  "drawing_change",
+  "process_change",
+  "document_change",
   "scar_request",
 ] as const;
 export type IsoFormType = (typeof ISO_FORM_TYPES)[number];
@@ -86,6 +89,9 @@ export const ISO_FORMS: IsoFormMeta[] = [
   { formKey: "frm-dev-012", formType: "dev_electronic_csa", formId: "FRM-DEV-012", title: "ELECTRONIC CSA DEVELOPMENT DOCUMENT", rev: "A", layout: null, photos: false },
   { formKey: "frm-dev-013", formType: "dev_shock", formId: "FRM-DEV-013", title: "SHOCK ABSORBER DEVELOPMENT DOCUMENT", rev: "A", layout: null, photos: false },
   { formKey: "frm-ecr-001", formType: "engineering_change", formId: "FRM-ECR-001", title: "ENGINEERING CHANGE REQUEST (ECR)", rev: "B", layout: null, photos: false },
+  { formKey: "frm-dwg-001", formType: "drawing_change", formId: "FRM-DWG-001", title: "DRAWING CHANGE REQUEST", rev: "A", layout: null, photos: false },
+  { formKey: "frm-pcr-001", formType: "process_change", formId: "FRM-PCR-001", title: "PROCESS CHANGE REQUEST", rev: "A", layout: null, photos: false },
+  { formKey: "frm-doc-001", formType: "document_change", formId: "FRM-DOC-001", title: "DOCUMENT CHANGE REQUEST", rev: "A", layout: null, photos: false },
   { formKey: "frm-car-001", formType: "scar_request", formId: "FRM-CAR-001", title: "SUPPLIER CORRECTIVE ACTION REQUEST (SCAR)", rev: "A", layout: null, photos: false },
 ];
 

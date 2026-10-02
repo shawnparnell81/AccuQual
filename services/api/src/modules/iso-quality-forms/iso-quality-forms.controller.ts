@@ -9,6 +9,7 @@ import { retainSignatureValues } from "../signatures/signaturePin.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { assertEcrAnswerEdit, blankEcrWorkflow, canApproveChangeRequest, readEcrWorkflow } from "../change-requests/changeRequestWorkflow.js";
+import { CHANGE_REQUEST_KINDS, changeRequestByFormType } from "../change-requests/changeRequestKinds.js";
 import { stampNewEcr } from "../change-requests/ecr.controller.js";
 import { syncQuarantineNotice } from "../quarantine/quarantineNotice.js";
 
@@ -30,12 +31,13 @@ export const baseHandlers = crudFactory(isoQualityForms, {
   idColumn: "id",
   prepareCreate: (body) => {
     const data = answersWithTemplateStamp(`iso:${String(body.formType ?? "")}`, undefined, asRecord(body.data), true);
-    if (body.formType === "engineering_change") return { ...body, data: { ...data, workflow: blankEcrWorkflow() } };
+    if (changeRequestByFormType(String(body.formType ?? ""))) return { ...body, data: { ...data, workflow: blankEcrWorkflow() } };
     return { ...body, data };
   },
   mergeUpdate: (existing, patch) => {
     if (!patch.data || typeof patch.data !== "object" || Array.isArray(patch.data)) return patch;
-    if (existing.formType === "engineering_change") assertEcrAnswerEdit(existing.data, patch.data);
+    const changeKind = changeRequestByFormType(typeof existing.formType === "string" ? existing.formType : undefined);
+    if (changeKind) assertEcrAnswerEdit(existing.data, patch.data, changeKind.noun);
     const previous = asRecord(existing.data);
     const stamped = answersWithTemplateStamp(`iso:${String(existing.formType ?? "")}`, existing.data, patch.data as Record<string, unknown>, false);
     return { ...patch, data: retainSignatureValues(previous, stamped) };
@@ -66,10 +68,15 @@ const FORM_SIGNATURES: Record<string, Record<string, string>> = {
   scar_request: {
     managerSignature: "I certify that I verified this supplier corrective action request.",
   },
-  engineering_change: {
-    managerSignature: "I certify that I approve this engineering change request.",
-    supplierRepSignature: "I certify that I represent the supplier on this engineering change request.",
-  },
+  ...Object.fromEntries(
+    CHANGE_REQUEST_KINDS.map((kind) => [
+      kind.formType,
+      {
+        managerSignature: kind.managerCertify,
+        supplierRepSignature: kind.supplierCertify,
+      },
+    ]),
+  ),
 };
 
 export const signIsoQualityForm = asyncHandler(async (req: Request, res: Response) => {
@@ -79,9 +86,10 @@ export const signIsoQualityForm = asyncHandler(async (req: Request, res: Respons
   if (!record) throw AppError.notFound("ISO form");
   const description = FORM_SIGNATURES[record.formType]?.[field];
   if (!description) throw AppError.badRequest("That signature field is not recognized.");
-  if (record.formType === "engineering_change") {
+  const changeKind = changeRequestByFormType(record.formType);
+  if (changeKind) {
     const status = readEcrWorkflow(record.data).status;
-    if (status === "closed") throw AppError.badRequest("This engineering change request is closed.");
+    if (status === "closed") throw AppError.badRequest(`This ${changeKind.noun} is closed.`);
     if (field === "managerSignature" && status !== "request" && status !== "review") {
       throw AppError.badRequest("The manager signature is recorded during request or review.");
     }

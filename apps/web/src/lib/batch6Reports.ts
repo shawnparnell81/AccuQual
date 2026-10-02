@@ -1,6 +1,7 @@
+import { isChangeRequestForm } from "./changeRequestKinds";
 import type { CellValue } from "./isoFormLogic";
 
-export const BATCH6_KINDS = ["dev_electronic_csa", "dev_shock", "engineering_change"] as const;
+export const BATCH6_KINDS = ["dev_electronic_csa", "dev_shock", "engineering_change", "drawing_change", "process_change", "document_change"] as const;
 export type Batch6Kind = (typeof BATCH6_KINDS)[number];
 
 export function isBatch6(kind: string): kind is Batch6Kind {
@@ -17,12 +18,18 @@ export const BATCH6_SHEET_TITLE: Record<Batch6Kind, string> = {
   dev_electronic_csa: "ELECTRONIC CSA DEVELOPMENT DOCUMENT",
   dev_shock: "SHOCK ABSORBER DEVELOPMENT DOCUMENT",
   engineering_change: "ENGINEERING CHANGE REQUEST (ECR)",
+  drawing_change: "DRAWING CHANGE REQUEST",
+  process_change: "PROCESS CHANGE REQUEST",
+  document_change: "DOCUMENT CHANGE REQUEST",
 };
 
 export const BATCH6_PURPOSE: Record<Batch6Kind, string> = {
   dev_electronic_csa: "Purpose: To record baseline benchmarking data on used OE and competitor CSAs prior to factory prototype development.",
   dev_shock: "Purpose: To record baseline benchmarking data on OE and competitor Shocks prior to prototype development.",
   engineering_change: "",
+  drawing_change: "",
+  process_change: "",
+  document_change: "",
 };
 
 export function blankBatch6(kind: Batch6Kind): Record<string, CellValue> {
@@ -115,7 +122,7 @@ export function evaluateBatch6(kind: Batch6Kind, cells: Record<string, CellValue
 }
 
 export function summaryBatch6(kind: Batch6Kind, cells: Record<string, CellValue>): string {
-  if (kind === "engineering_change") {
+  if (isChangeRequestForm(kind)) {
     const part = cells.B6;
     const job = cells.B7;
     return [part, job].filter((value) => value !== undefined && value !== null && String(value).trim() !== "").map(String).join(" · ");

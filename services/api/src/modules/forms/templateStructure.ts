@@ -66,6 +66,9 @@ export const FIXED_TEMPLATE_REVISIONS: Record<string, { version: number; revisio
   "iso:dev_electronic_csa": { version: 1, revision: "A" },
   "iso:dev_shock": { version: 1, revision: "A" },
   "iso:engineering_change": { version: 2, revision: "B" },
+  "iso:drawing_change": { version: 1, revision: "A" },
+  "iso:process_change": { version: 1, revision: "A" },
+  "iso:document_change": { version: 1, revision: "A" },
   "iso:scar_request": { version: 1, revision: "A" },
 };
 

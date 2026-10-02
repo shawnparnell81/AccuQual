@@ -142,4 +142,38 @@ describe("engineering change request", () => {
     const restored = await request(app).get("/iso-quality-forms/structure/engineering-change").set("Authorization", `Bearer ${qualityToken}`);
     expect(restored.body.revision).toBe("B");
   });
+
+  it("files a drawing change request on the shared stages", async () => {
+    const created = await request(app).post("/iso-quality-forms").set("Authorization", `Bearer ${qualityToken}`).send({ formType: "drawing_change", data: { cells: { B6: "DWG-14", D5: "Shawn Parnell" } } });
+    expect(created.status).toBe(201);
+    expect(created.body.data.workflow.status).toBe("request");
+    expect(created.body.data._formTemplate.revision).toBe("A");
+    const id = created.body.id as number;
+
+    const submitted = await request(app).post(`/iso-quality-forms/${id}/transition`).set("Authorization", `Bearer ${qualityToken}`).send({ action: "submit" });
+    expect(submitted.status).toBe(200);
+    expect(submitted.body.data.workflow.status).toBe("review");
+    expect(submitted.body.data.templateLabels.partNumbers).toBe("Drawing Number:");
+
+    const history = await request(app).get(`/workflow/history/iso_forms/${id}`).set("Authorization", `Bearer ${productionToken}`);
+    expect(history.status).toBe(200);
+    const summaries = history.body.map((row: { changes?: { summary?: string; who?: string; what?: string; when?: string; description?: string } }) => row.changes);
+    expect(summaries).toContainEqual(expect.objectContaining({
+      summary: "Submitted the drawing change request for review.",
+      who: "Quality Staff",
+      what: "Submitted the drawing change request for review.",
+    }));
+
+    const master = await request(app).get("/iso-quality-forms/structure/drawing-change").set("Authorization", `Bearer ${qualityToken}`);
+    expect(master.status).toBe(200);
+    expect(master.body.revision).toBe("A");
+    expect(master.body.labels.implemented).toBe("Was the new revision released?");
+
+    const processMaster = await request(app).get("/iso-quality-forms/structure/process-change").set("Authorization", `Bearer ${qualityToken}`);
+    expect(processMaster.body.labels.partNumbers).toBe("Process Name:");
+    const documentMaster = await request(app).get("/iso-quality-forms/structure/document-change").set("Authorization", `Bearer ${qualityToken}`);
+    expect(documentMaster.body.labels.section4).toBe("SECTION 4: OLD REVISION DISPOSITION");
+    const missing = await request(app).get("/iso-quality-forms/structure/not-a-change").set("Authorization", `Bearer ${qualityToken}`);
+    expect(missing.status).toBe(404);
+  });
 });

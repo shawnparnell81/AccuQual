@@ -35,6 +35,9 @@ export const ISO_FORM_TYPES = [
   "dev_electronic_csa",
   "dev_shock",
   "engineering_change",
+  "drawing_change",
+  "process_change",
+  "document_change",
   "scar_request",
 ] as const;
 export type IsoFormType = (typeof ISO_FORM_TYPES)[number];
