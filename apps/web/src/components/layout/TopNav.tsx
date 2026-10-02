@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import clsx from "clsx";
 import { ChevronDown, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, Settings, X } from "lucide-react";
@@ -28,6 +28,18 @@ import { SHORTCUTS_FOLDER_KEY, isPersonalShortcutKey } from "../../lib/sidebarSh
 import { LayoutDashboard } from "lucide-react";
 import { prefetchRoute } from "../../routes/pages";
 import { DmaLogo, PRODUCT_LINE, ProductLine } from "../brand/DmaLogo";
+import {
+  SIDEBAR_RAIL_WIDTH,
+  SIDEBAR_WIDTH_DEFAULT,
+  SIDEBAR_WIDTH_MAX,
+  SIDEBAR_WIDTH_MIN,
+  appliedSidebarWidth,
+  clampSidebarWidth,
+  maxSidebarWidth,
+  readSidebarWidth,
+  widthAfterDrag,
+  writeSidebarWidth,
+} from "../../lib/sidebarWidth";
 
 const SIDEBAR_KEY = "accuqual-sidebar-collapsed";
 
@@ -60,6 +72,14 @@ export function TopNav() {
       return false;
     }
   });
+  const [sideWidth, setSideWidth] = useState(() => {
+    try {
+      return readSidebarWidth(localStorage);
+    } catch {
+      return SIDEBAR_WIDTH_DEFAULT;
+    }
+  });
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [query, setQuery] = useState("");
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>(() => readOpenFolders(user?.id));
 
@@ -76,13 +96,24 @@ export function TopNav() {
     setSideOpen(false);
   }, [location.pathname]);
 
-  useEffect(() => {
-    document.body.classList.toggle("side-collapsed", sideCollapsed);
-    document.body.classList.toggle("side-open", sideOpen);
-    return () => {
-      document.body.classList.remove("side-collapsed", "side-open");
+  useLayoutEffect(() => {
+    const apply = () => {
+      const viewport = window.innerWidth;
+      setViewportWidth(viewport);
+      document.body.classList.toggle("side-collapsed", sideCollapsed);
+      document.body.classList.toggle("side-open", sideOpen);
+      const applied = appliedSidebarWidth(sideWidth, viewport, sideCollapsed);
+      if (applied == null) document.documentElement.style.removeProperty("--side-w");
+      else document.documentElement.style.setProperty("--side-w", `${applied}px`);
     };
-  }, [sideCollapsed, sideOpen]);
+    apply();
+    window.addEventListener("resize", apply);
+    return () => {
+      window.removeEventListener("resize", apply);
+      document.body.classList.remove("side-collapsed", "side-open");
+      document.documentElement.style.removeProperty("--side-w");
+    };
+  }, [sideCollapsed, sideOpen, sideWidth]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -101,16 +132,32 @@ export function TopNav() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
+  function persistCollapsed(next: boolean) {
+    try {
+      localStorage.setItem(SIDEBAR_KEY, next ? "1" : "0");
+    } catch {
+      // Preference only — the layout still toggles for this session.
+    }
+  }
+
   function toggleCollapsed() {
     setSideCollapsed((current) => {
       const next = !current;
-      try {
-        localStorage.setItem(SIDEBAR_KEY, next ? "1" : "0");
-      } catch {
-        // Preference only — the layout still toggles for this session.
-      }
+      persistCollapsed(next);
       return next;
     });
+  }
+
+  function setPanelWidth(next: number) {
+    const clamped = clampSidebarWidth(next, window.innerWidth);
+    setSideCollapsed(false);
+    persistCollapsed(false);
+    setSideWidth(clamped);
+    try {
+      writeSidebarWidth(localStorage, clamped);
+    } catch {
+      // Preference only.
+    }
   }
 
   function toggleFolder(key: string, currentlyOpen: boolean) {
@@ -202,10 +249,10 @@ export function TopNav() {
       <div className="aq-scrim" onClick={closeSide} />
       {isAdmin ? (
         <SidebarOrganizeProvider arranged={arranged}>
-          <SidebarNav folders={folders} catalog={catalog} folderOpen={folderOpen} toggleFolder={toggleFolder} closeSide={closeSide} pathname={location.pathname} companyName={company?.name} sideCollapsed={sideCollapsed} toggleCollapsed={toggleCollapsed} />
+          <SidebarNav folders={folders} catalog={catalog} folderOpen={folderOpen} toggleFolder={toggleFolder} closeSide={closeSide} pathname={location.pathname} companyName={company?.name} sideCollapsed={sideCollapsed} toggleCollapsed={toggleCollapsed} sideWidth={sideWidth} viewportWidth={viewportWidth} onPanelWidth={setPanelWidth} />
         </SidebarOrganizeProvider>
       ) : (
-        <SidebarNav folders={folders} catalog={catalog} folderOpen={folderOpen} toggleFolder={toggleFolder} closeSide={closeSide} pathname={location.pathname} companyName={company?.name} sideCollapsed={sideCollapsed} toggleCollapsed={toggleCollapsed} />
+        <SidebarNav folders={folders} catalog={catalog} folderOpen={folderOpen} toggleFolder={toggleFolder} closeSide={closeSide} pathname={location.pathname} companyName={company?.name} sideCollapsed={sideCollapsed} toggleCollapsed={toggleCollapsed} sideWidth={sideWidth} viewportWidth={viewportWidth} onPanelWidth={setPanelWidth} />
       )}
     </>
   );
@@ -221,6 +268,9 @@ function SidebarNav({
   companyName,
   sideCollapsed,
   toggleCollapsed,
+  sideWidth,
+  viewportWidth,
+  onPanelWidth,
 }: {
   folders: SidebarNode[];
   catalog: SidebarNode[];
@@ -231,6 +281,9 @@ function SidebarNav({
   companyName?: string;
   sideCollapsed: boolean;
   toggleCollapsed: () => void;
+  sideWidth: number;
+  viewportWidth: number;
+  onPanelWidth: (width: number) => void;
 }) {
   return (
     <nav className="aq-sidebar" id="sidebar" aria-label="Main navigation">
@@ -262,10 +315,105 @@ function SidebarNav({
         <SidebarResetButton />
         <button type="button" className="aq-collapse" onClick={toggleCollapsed} aria-label={sideCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
           {sideCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-          <span>Collapse</span>
+          <span>{sideCollapsed ? "Expand" : "Collapse"}</span>
         </button>
       </div>
+      <SidebarResizeHandle collapsed={sideCollapsed} width={sideWidth} viewportWidth={viewportWidth} onPanelWidth={onPanelWidth} />
     </nav>
+  );
+}
+
+function SidebarResizeHandle({
+  collapsed,
+  width,
+  viewportWidth,
+  onPanelWidth,
+}: {
+  collapsed: boolean;
+  width: number;
+  viewportWidth: number;
+  onPanelWidth: (width: number) => void;
+}) {
+  const max = maxSidebarWidth(viewportWidth);
+  const shown = collapsed ? SIDEBAR_RAIL_WIDTH : clampSidebarWidth(width, viewportWidth);
+  const lastPointerDown = useRef(0);
+  const gesture = useRef<{ reset: boolean } | null>(null);
+
+  function applyDrag(startWidth: number, deltaX: number, wasCollapsed: boolean) {
+    const result = widthAfterDrag(startWidth, deltaX, window.innerWidth, wasCollapsed);
+    if (!result.collapsed) onPanelWidth(result.width);
+  }
+
+  function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+    const now = event.timeStamp;
+    if (lastPointerDown.current > 0 && (event.detail > 1 || now - lastPointerDown.current < 400)) {
+      lastPointerDown.current = 0;
+      if (gesture.current) gesture.current.reset = true;
+      onPanelWidth(SIDEBAR_WIDTH_DEFAULT);
+      return;
+    }
+    lastPointerDown.current = now;
+    event.preventDefault();
+    const handle = event.currentTarget;
+    const startX = event.clientX;
+    const startWidth = collapsed ? SIDEBAR_RAIL_WIDTH : shown;
+    const wasCollapsed = collapsed;
+    const token = { reset: false };
+    gesture.current = token;
+    try {
+      handle.setPointerCapture(event.pointerId);
+    } catch {
+      // The pointer can already be gone. The move listeners still resize.
+    }
+    document.body.classList.add("aq-side-resizing");
+    const move = (ev: PointerEvent) => {
+      if (!token.reset) applyDrag(startWidth, ev.clientX - startX, wasCollapsed);
+    };
+    const finish = (ev: PointerEvent) => {
+      document.body.classList.remove("aq-side-resizing");
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", finish);
+      handle.removeEventListener("pointercancel", finish);
+      if (!token.reset) applyDrag(startWidth, ev.clientX - startX, wasCollapsed);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", finish);
+    handle.addEventListener("pointercancel", finish);
+  }
+
+  function onKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const step = event.shiftKey ? 48 : 24;
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      if (collapsed) onPanelWidth(SIDEBAR_WIDTH_MIN);
+      else applyDrag(shown, step, false);
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      if (!collapsed) onPanelWidth(shown - step);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      onPanelWidth(SIDEBAR_WIDTH_MIN);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      onPanelWidth(SIDEBAR_WIDTH_MAX);
+    }
+  }
+
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize sidebar"
+      aria-valuemin={collapsed ? SIDEBAR_RAIL_WIDTH : SIDEBAR_WIDTH_MIN}
+      aria-valuemax={max}
+      aria-valuenow={shown}
+      tabIndex={0}
+      className="aq-side-resize"
+      title="Drag to resize the sidebar. Double-click to reset the width."
+      onPointerDown={onPointerDown}
+      onKeyDown={onKeyDown}
+    />
   );
 }
 
@@ -301,7 +449,7 @@ function FolderBlock({
             <span className="aq-nav-label min-w-0 flex-1 truncate text-left">{node.label}</span>
           </NavLink>
         ) : (
-          <button type="button" className="aq-nav-folder-link" onClick={onToggle}>
+          <button type="button" className="aq-nav-folder-link" onClick={onToggle} title={node.label}>
             <node.icon size={18} className="shrink-0" />
             <span className="aq-nav-label min-w-0 flex-1 truncate text-left">{node.label}</span>
           </button>
