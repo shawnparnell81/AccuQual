@@ -4,8 +4,6 @@ import { requireAuth } from "../../middleware/auth.js";
 import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { requirePermission } from "../../middleware/requirePermission.js";
-import { asyncHandler } from "../../utils/asyncHandler.js";
-import { canMaintainMasterList } from "../roles/roleHierarchy.js";
 import { validate } from "../../middleware/validate.js";
 import { createEquipmentSchema, updateEquipmentSchema, addCalibrationSchema, completeCalibrationSchema, changeStatusSchema } from "./calibration.validation.js";
 import {
@@ -35,14 +33,6 @@ const view = requirePermission("equipment.view");
 const manage = requirePermission("equipment.manage");
 const calibrate = requirePermission("equipment.calibrate");
 
-/** Master-list maintainers may change or remove a gage even when Calibration is read-only for their department. */
-function maintainOr(gate: ReturnType<typeof requirePermission>) {
-  return asyncHandler(async (req, _res, next) => {
-    if (canMaintainMasterList(req.user)) return next();
-    return gate(req, _res, next);
-  });
-}
-
 // Same pattern as document-folders.routes.ts: memoryStorage, handler decides
 // the on-disk path (needs the calibration id multer already parsed).
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -58,14 +48,14 @@ calibrationRouter.get("/:id", view, getEquipmentHandler);
 // were never mounted at all; equipment could be created but never edited
 // or deleted. removeEquipmentHandler deletes through the shared record
 // delete path, which refuses the delete when calibration history exists.
-calibrationRouter.patch("/:id", maintainOr(manage), validate(updateEquipmentSchema), baseHandlers.update);
+calibrationRouter.patch("/:id", manage, validate(updateEquipmentSchema), baseHandlers.update);
 calibrationRouter.delete("/:id", removeEquipmentHandler);
 // Status moves (active / inactive / out of service) always carry a reason; returning equipment a failed calibration took out of
 // service without a passing calibration is an override and is checked inside (equipment.override).
-calibrationRouter.post("/:id/status", maintainOr(manage), validate(changeStatusSchema), changeStatusHandler);
+calibrationRouter.post("/:id/status", manage, validate(changeStatusSchema), changeStatusHandler);
 
 calibrationRouter.get("/:id/calibration", view, listCalibrationsHandler);
-calibrationRouter.post("/:id/calibration", maintainOr(calibrate), validate(addCalibrationSchema), addCalibrationHandler);
+calibrationRouter.post("/:id/calibration", calibrate, validate(addCalibrationSchema), addCalibrationHandler);
 
 calibrationRouter.post("/calibration/:calibrationId/complete", calibrate, validate(completeCalibrationSchema), completeCalibrationHandler);
 calibrationRouter.delete("/calibration/:calibrationId", calibrate, cancelScheduleHandler);

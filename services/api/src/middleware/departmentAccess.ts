@@ -4,9 +4,9 @@ import { AppError } from "../utils/appError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import type { Db } from "../lib/requestDb.js";
 import { departmentPermissions, permissionRoleModules, userPermissionRoles } from "../drizzle/schema/permissions.js";
-import { documents } from "../drizzle/schema/documents.js";
 import { isBroadViewRole, isFullAccessRole } from "../modules/roles/roleAccess.js";
-import { canMaintainMasterList } from "../modules/roles/roleHierarchy.js";
+import { documents } from "../drizzle/schema/documents.js";
+import { canMaintainMasterList, isMasterListWrite, isMasterToolListEditPath } from "../modules/roles/masterListAccess.js";
 
 export type AccessLevel = "none" | "read" | "edit";
 export type Department =
@@ -176,39 +176,12 @@ function isFormNumberWrite(req: Request): boolean {
   return req.baseUrl === "/document-folders" && req.method === "PATCH" && req.path.startsWith("/form-templates/");
 }
 
-/**
- * Writes a master-list maintainer may make even when their department grant is read-only.
- * Master Tool List files are checked separately, and only that category is opened.
- */
-export function isMasterListMaintainerWrite(req: { baseUrl?: string; method: string; path: string; user?: { roleName?: string | null; department?: string | null } | null }): boolean {
-  if (!canMaintainMasterList(req.user)) return false;
-  const base = req.baseUrl ?? "";
-  if (base === "/documents" && (req.method === "PATCH" || req.method === "DELETE") && req.path === "/master-list/rows") return true;
-  if (base === "/equipment" && (req.method === "PATCH" || req.method === "DELETE") && /^\/\d+$/.test(req.path)) return true;
-  if (base === "/equipment" && req.method === "POST" && /^\/\d+\/(status|calibration)$/.test(req.path)) return true;
-  return false;
-}
-
-/** Draft and file edits on one document. Review and publish stay on the normal reviewer check. */
-export function isMasterToolListEditPath(method: string, path: string): boolean {
-  if (method === "POST" && path === "/") return true;
-  if ((method === "PATCH" || method === "DELETE") && /^\/\d+$/.test(path)) return true;
-  if (method === "POST" && /^\/\d+\/(?:draft|review|rollback)$/.test(path)) return true;
-  if ((method === "PUT" || method === "DELETE") && /^\/\d+\/versions\/\d+$/.test(path)) return true;
-  if (method === "PATCH" && /^\/\d+\/draft\/\d+$/.test(path)) return true;
-  if (method === "POST" && /^\/\d+\/draft\/\d+\/review$/.test(path)) return true;
-  if (method === "POST" && /^\/\d+\/version\/\d+\/rollback$/.test(path)) return true;
-  if (method === "POST" && /^\/\d+\/version\/\d+\/attachments$/.test(path)) return true;
-  if (method === "DELETE" && /^\/\d+\/version\/\d+\/attachments\/\d+$/.test(path)) return true;
-  return false;
-}
-
+/** A master-list maintainer may edit or upload a Master Tool List file when Documents is read-only. */
 async function isMasterToolListMaintainerWrite(req: Request): Promise<boolean> {
-  if (!canMaintainMasterList(req.user) || req.baseUrl !== "/documents" || !req.db) return false;
+  if (!req.user || !canMaintainMasterList(req.user) || req.baseUrl !== "/documents" || !req.db) return false;
   if (!isMasterToolListEditPath(req.method, req.path)) return false;
-  if (req.method === "POST" && req.path === "/") {
-    const category = (req.body as { category?: unknown } | undefined)?.category;
-    return category === "master-tool-list";
+  if (req.method === "POST" && (req.path === "/" || req.path === "")) {
+    return (req.body as { category?: unknown } | undefined)?.category === "master-tool-list";
   }
   const match = req.path.match(/^\/(\d+)(?:\/|$)/);
   const id = match ? Number(match[1]) : NaN;
@@ -326,7 +299,7 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
     // Nested deletes (a checklist row, a calibration, a folder) stay on the normal write check.
     if (role === "quality_manager" && (isRecordDeleteRequest(req) || isQualityFormControlWrite(req))) return next();
     if (req.user?.department === "engineering" && isFormNumberWrite(req)) return next();
-    if (isMasterListMaintainerWrite(req)) return next();
+    if (req.user && canMaintainMasterList(req.user) && isMasterListWrite(req.baseUrl, req.method, req.path)) return next();
     if (await isMasterToolListMaintainerWrite(req)) return next();
     if (!req.user || !req.db) return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
 

@@ -108,7 +108,6 @@ BEGIN
       ('validation_reports',          ARRAY[]::text[]),
       ('iso_quality_forms',           ARRAY[]::text[]),
       ('controlled_form_templates',   ARRAY[]::text[]),
-      ('master_list_omissions',       ARRAY[]::text[]),
       ('audits',                      ARRAY[]::text[]),
       ('audit_items',                 ARRAY[]::text[]),
       ('training_courses',            ARRAY[]::text[]),

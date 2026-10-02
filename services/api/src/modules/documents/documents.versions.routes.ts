@@ -7,7 +7,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { validate } from "../../middleware/validate.js";
 import { requirePermission } from "../../middleware/requirePermission.js";
-import { canMaintainMasterList } from "../roles/roleHierarchy.js";
+import { canMaintainMasterList } from "../roles/masterListAccess.js";
 import type { Db } from "../../lib/requestDb.js";
 import { db as ownerDb, pool } from "../../db/index.js";
 import { documentFiles, documents } from "../../drizzle/schema/documents.js";

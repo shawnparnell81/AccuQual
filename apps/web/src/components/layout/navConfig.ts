@@ -423,7 +423,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
         access: {},
         kpi: false,
         priority: 3,
-        notes: "Master index + controlled-document register — folder browsing lives under Document Library instead",
+        notes: "Master Document List (LST-GEN-001) — folder browsing lives under Document Library instead",
         section: "quality",
       },
       {

@@ -803,6 +803,16 @@ body.aq-side-resizing .app-main {
 :root[data-theme="light"] .wot-header .dma-logo {
   filter: brightness(0) invert(1);
 }
+.dma-form-logo {
+  display: block;
+  width: auto;
+  max-width: 180px;
+  object-fit: contain;
+  flex: 0 0 auto;
+  background: transparent;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
 .dma-form-header {
   display: flex;
   align-items: center;

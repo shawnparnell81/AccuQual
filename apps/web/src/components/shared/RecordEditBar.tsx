@@ -3,7 +3,6 @@ import { useLocation } from "react-router-dom";
 import { useMayEditEquipment } from "../calibration/EquipmentPanels";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
-import { canMaintainMasterList } from "../../lib/masterListAccess";
 import { recordSurface, type RecordSurface } from "../../lib/recordSurface";
 import { focusFirstEditable } from "./GridClipboard";
 import { RecordEditButton } from "./RecordEditButton";
@@ -46,7 +45,6 @@ export function useCanEditSurface(surface: RecordSurface | null): boolean {
   const { effective, isLoading } = useEffectivePermissions();
   const equipment = useMayEditEquipment();
   if (!surface || !user) return false;
-  if (surface.kind === "list" && canMaintainMasterList(user)) return true;
   if (surface.access === "equipment-list") return equipment.mayEdit;
   if (surface.access === "any") return true;
   if (user.roleName === "admin" || user.roleName === "owner") return true;

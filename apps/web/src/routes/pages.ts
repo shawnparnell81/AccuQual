@@ -40,6 +40,7 @@ export const IsoFormListPage = lazyNamed("/iso-forms", () => import("./IsoForms/
 export const IsoFormDetailPage = lazyNamed("/iso-forms", () => import("./IsoForms/IsoFormDetailPage"), "IsoFormDetailPage");
 export const MasterEquipmentListPage = lazyNamed("/calibration/master-list", () => import("./Calibration/MasterEquipmentListPage"), "MasterEquipmentListPage");
 export const MasterDocumentListPage = lazyNamed("/documents/master-list", () => import("./Documents/MasterDocumentListPage"), "MasterDocumentListPage");
+export const FormImportPage = lazyNamed("/documents/import", () => import("./Documents/FormImportPage"), "FormImportPage");
 export const AuditsPage = lazyNamed("/audits", () => import("./Audits/AuditsPage"), "AuditsPage");
 export const BlankFormsPage = lazyNamed("/blank-forms", () => import("./BlankForms/BlankFormsPage"), "BlankFormsPage");
 export const AuditDetailPage = lazyNamed("/audits", () => import("./Audits/AuditDetailPage"), "AuditDetailPage");

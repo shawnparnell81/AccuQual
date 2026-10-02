@@ -10,7 +10,6 @@ import type { AccuQualDocument } from "../../api/types";
 import { DOCUMENT_FOLDER_PAGES, OBSOLETE_ARCHIVE_CATEGORY } from "../../components/layout/sidebarStructure";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
-import { useConfirm } from "../../components/shared/ConfirmDialog";
 import { useToast } from "../../components/shared/ToastProvider";
 import { canMaintainMasterList } from "../../lib/masterListAccess";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
@@ -33,7 +32,6 @@ export function DocumentCategoryPage() {
   const legacyValidation = `/folders/${category}` === LEGACY_VALIDATION_REPORTS_PATH;
   const page = DOCUMENT_FOLDER_PAGES[category];
   const toast = useToast();
-  const confirm = useConfirm();
   const user = useCurrentUser();
   const canRestore = user?.roleName === "admin" || user?.roleName === "owner";
   const maintainToolList = category === "master-tool-list" && canMaintainMasterList(user);
@@ -116,23 +114,6 @@ export function DocumentCategoryPage() {
     const file = version?.payload?.attachments?.[0];
     if (!version || !file) return null;
     return { versionId: version.id, file };
-  }
-
-  async function removeTool(doc: AccuQualDocument) {
-    const ok = await confirm({
-      title: "Remove from the Master Tool List?",
-      message: `Remove ${doc.title}? This deletes the document.`,
-      confirmLabel: "Remove",
-      tone: "danger",
-    });
-    if (!ok) return;
-    try {
-      await apiClient.delete(`/documents/${doc.id}`);
-      await queryClient.invalidateQueries({ queryKey: ["documents"] });
-      toast.success("Removed from the Master Tool List.");
-    } catch (err) {
-      toast.error(extractErrorMessage(err, "Couldn't remove that file."));
-    }
   }
 
   async function downloadDoc(doc: AccuQualDocument) {
@@ -275,25 +256,16 @@ export function DocumentCategoryPage() {
                     {maintainToolList && (
                       <Link to={`/documents/${doc.id}`} className="mr-3 text-primary hover:underline">Edit</Link>
                     )}
-                    {maintainToolList ? (
-                      <button
-                        type="button"
-                        data-testid="master-list-remove"
-                        className="text-destructive hover:underline"
-                        onClick={() => void removeTool(doc)}
-                      >
-                        Remove
-                      </button>
-                    ) : (
-                      <DeleteRecordButton
-                        resource="documents"
-                        id={doc.id}
-                        kind="Document"
-                        title={doc.title}
-                        ownerIds={[doc.ownerId]}
-                        className="inline-flex items-center text-destructive hover:underline disabled:opacity-60"
-                      />
-                    )}
+                    <DeleteRecordButton
+                      resource="documents"
+                      id={doc.id}
+                      kind="Document"
+                      title={doc.title}
+                      ownerIds={[doc.ownerId]}
+                      allowed={maintainToolList}
+                      label={maintainToolList ? "Remove" : "Delete"}
+                      className="inline-flex items-center text-destructive hover:underline disabled:opacity-60"
+                    />
                   </td>
                 </tr>
               ))}

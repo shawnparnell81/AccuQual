@@ -9,13 +9,6 @@ export const patchMasterListRowSchema = z
   })
   .strict();
 
-/** Takes one Master Document List row off the list. The underlying record stays. */
-export const omitMasterListRowSchema = z
-  .object({
-    id: z.number().int().refine((id) => id !== 0, "A list row is required"),
-  })
-  .strict();
-
 export const createDocumentSchema = z.object({
   title: z.string().trim().min(1).max(300),
   category: z.string().trim().max(100).optional(),

@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
+import { FormHeader } from "../../components/brand/DmaLogo";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { RecordEditButton } from "../../components/shared/RecordEditButton";
 import { useCanEditSurface, useRecordEdit } from "../../components/shared/RecordEditBar";
-import { useConfirm } from "../../components/shared/ConfirmDialog";
 import { useToast } from "../../components/shared/ToastProvider";
 import { useCurrentUser } from "../../hooks/useAuth";
-import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { downloadXlsx } from "../../lib/downloadTable";
 import { canMaintainMasterList } from "../../lib/masterListAccess";
 import { recordSurface } from "../../lib/recordSurface";
@@ -33,12 +33,11 @@ interface CellDraft {
 
 export function MasterDocumentListPage() {
   const toast = useToast();
-  const confirm = useConfirm();
-  const user = useCurrentUser();
   const queryClient = useQueryClient();
+  const user = useCurrentUser();
+  const maintain = canMaintainMasterList(user);
   const { editing, setEditing } = useRecordEdit();
-  const canEdit = useCanEditSurface(recordSurface("/documents/master-list"));
-  const canRemove = canMaintainMasterList(user);
+  const canEdit = useCanEditSurface(recordSurface("/documents/master-list")) || maintain;
   const [exporting, setExporting] = useState(false);
   const [drafts, setDrafts] = useState<Record<number, CellDraft>>({});
   const timers = useRef<Map<number, number>>(new Map());
@@ -101,23 +100,6 @@ export function MasterDocumentListPage() {
     queueSave(row, next);
   }
 
-  async function removeRow(row: MasterDocumentRow) {
-    const ok = await confirm({
-      title: "Remove from the Master Document List?",
-      message: `Remove ${row.documentId} ${row.title}? This takes the row off the list. The document or blank form stays.`,
-      confirmLabel: "Remove",
-      tone: "danger",
-    });
-    if (!ok) return;
-    try {
-      await apiClient.delete("/documents/master-list/rows", { data: { id: row.id } });
-      await queryClient.invalidateQueries({ queryKey: ["documents", "master-list"] });
-      toast.success("Row removed from the Master Document List.");
-    } catch (err) {
-      toast.error(extractErrorMessage(err, "Couldn't remove that row."));
-    }
-  }
-
   async function exportExcel() {
     setExporting(true);
     try {
@@ -144,12 +126,12 @@ export function MasterDocumentListPage() {
           <p className="text-sm text-muted-foreground">
             Document ID: LST-GEN-001 · Structure Rev: B{latest ? ` · Last Updated: ${latest}` : ""}. Controlled documents and in-app forms. A form uses the document number stored on its template.
             {canEdit ? " Edit to fill Approval Date and Approved By. What you type is saved. Cells you leave untouched keep the value already on the record." : ""}
-            {canRemove ? " Remove takes a row off this list. The document or blank form stays." : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {canEdit && <RecordEditButton editing={editing} onClick={() => setEditing(!editing)} />}
           <Link to="/documents" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">Documents</Link>
+          <Link to="/documents/import" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">Import</Link>
           <button type="button" onClick={() => void exportExcel()} disabled={exporting} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-60">
             {exporting ? "Exporting…" : "Export to Excel"}
           </button>
@@ -160,6 +142,7 @@ export function MasterDocumentListPage() {
       </div>
 
       <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
+        <FormHeader title="MASTER DOCUMENT LIST" />
         {list.isLoading && <p className="text-sm text-muted-foreground">Loading documents…</p>}
         {list.isError && <p className="text-sm text-destructive">Couldn't load the document register.</p>}
         <div className="iso-wrap">
@@ -169,7 +152,7 @@ export function MasterDocumentListPage() {
                 {["Document ID", "Document Title", "Current Rev", "Approval Date", "Approved By", "Location / Folder", "Status", "Rev History / Notes"].map((heading) => (
                   <th key={heading} className="header">{heading}</th>
                 ))}
-                {canRemove && <th className="header no-print" />}
+                {maintain && <th className="header no-print" />}
               </tr>
             </thead>
             <tbody>
@@ -210,16 +193,19 @@ export function MasterDocumentListPage() {
                     <td className="left">{row.location}</td>
                     <td>{row.status}</td>
                     <td className="left">{row.revHistory}</td>
-                    {canRemove && (
+                    {maintain && (
                       <td className="no-print">
-                        <button
-                          type="button"
-                          className="text-sm text-destructive hover:underline"
-                          data-testid="master-list-remove"
-                          onClick={() => void removeRow(row)}
-                        >
-                          Remove
-                        </button>
+                        {row.id > 0 && (
+                          <DeleteRecordButton
+                            resource="documents"
+                            id={row.id}
+                            kind="Document"
+                            title={row.title}
+                            allowed
+                            label="Remove"
+                            className="text-sm text-destructive hover:underline"
+                          />
+                        )}
                       </td>
                     )}
                   </tr>
@@ -227,7 +213,7 @@ export function MasterDocumentListPage() {
               })}
               {rows.length === 0 && !list.isLoading && (
                 <tr>
-                  <td colSpan={canRemove ? 9 : 8} className="left">No controlled documents yet.</td>
+                  <td colSpan={maintain ? 9 : 8} className="left">No controlled documents yet.</td>
                 </tr>
               )}
             </tbody>
