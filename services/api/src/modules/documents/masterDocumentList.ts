@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
 import { eq } from "drizzle-orm";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import { AppError } from "../../utils/appError.js";
+import { ARCHIVED_READ_ONLY, isInObsoleteArchive } from "./obsoleteArchive.js";
 import type { Db } from "../../lib/requestDb.js";
 import { documents, documentVersions } from "../../drizzle/schema/documents.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
@@ -32,6 +34,18 @@ export interface RegisteredFormSource {
   title: string;
   subjectRoute: string;
   folderId: number | null;
+  registerApprovalDate?: string | null;
+  registerApprovedBy?: string | null;
+}
+
+/**
+ * Null keeps the value already on the record. A saved string replaces it.
+ * A blank string stays blank — nothing is filled in from the signed-in user.
+ */
+export function registerText(saved: string | null | undefined, derived: string | null): string | null {
+  if (saved == null) return derived;
+  const trimmed = saved.trim();
+  return trimmed.length ? trimmed : null;
 }
 
 interface FolderNode {
@@ -105,7 +119,17 @@ function locationOf(docId: number, category: string | null, folders: FolderNode[
 
 /** One live row per controlled document. Revisions, approvals, and folders come from the records already stored. */
 export function buildMasterDocumentRows(
-  docs: Array<{ id: number; title: string; category: string | null; status: string; revisionCode: string | null; effectiveDate: Date | null; isDeleted: boolean }>,
+  docs: Array<{
+    id: number;
+    title: string;
+    category: string | null;
+    status: string;
+    revisionCode: string | null;
+    effectiveDate: Date | null;
+    isDeleted: boolean;
+    registerApprovalDate?: string | null;
+    registerApprovedBy?: string | null;
+  }>,
   versions: VersionNote[],
   published: PublishedNote[],
   people: Map<number, string>,
@@ -121,8 +145,10 @@ export function buildMasterDocumentRows(
       const ledger = versions.filter((row) => row.documentId === doc.id).sort((a, b) => a.version - b.version);
       const latestRelease = releases.at(-1) ?? null;
       const latestLedger = ledger.at(-1) ?? null;
-      const approvalDate = day(latestRelease?.publishedAt ?? latestRelease?.reviewedAt ?? latestLedger?.approvedAt ?? (doc.status === "approved" ? doc.effectiveDate : null));
-      const approvedBy = personName(people, latestRelease?.reviewedBy ?? latestLedger?.approvedBy ?? null);
+      const derivedDate = day(latestRelease?.publishedAt ?? latestRelease?.reviewedAt ?? latestLedger?.approvedAt ?? (doc.status === "approved" ? doc.effectiveDate : null));
+      const derivedBy = personName(people, latestRelease?.reviewedBy ?? latestLedger?.approvedBy ?? null);
+      const approvalDate = registerText(doc.registerApprovalDate, derivedDate);
+      const approvedBy = registerText(doc.registerApprovedBy, derivedBy) ?? "";
       const history = releases.length
         ? releases
             .map((row) => {
@@ -194,8 +220,8 @@ export function withRegisteredForms(documentRows: MasterDocumentRow[], templates
       documentId,
       title: template.title,
       currentRev: PRINTED_FORM_REVISION[template.formKey] ?? "",
-      approvalDate: null,
-      approvedBy: "",
+      approvalDate: registerText(template.registerApprovalDate, null),
+      approvedBy: registerText(template.registerApprovedBy, "") ?? "",
       location: folder ? folderPath(folder, byId) : "Document Control",
       status: "Template",
       revHistory: "",
@@ -207,6 +233,39 @@ export function withRegisteredForms(documentRows: MasterDocumentRow[], templates
 
 export const masterDocumentListHandler = asyncHandler(async (req: Request, res: Response) => {
   res.json(await listMasterDocuments(req.db!));
+});
+
+/** Saves Approval Date and Approved By typed on the Master Document List. Does not invent either value. */
+export const patchMasterListRowHandler = asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body as { id: number; approvalDate?: string | null; approvedBy?: string | null };
+  if (body.approvalDate === undefined && body.approvedBy === undefined) {
+    throw AppError.badRequest("Nothing to update");
+  }
+  const patch: { registerApprovalDate?: string | null; registerApprovedBy?: string | null } = {};
+  if (body.approvalDate !== undefined) patch.registerApprovalDate = body.approvalDate;
+  if (body.approvedBy !== undefined) patch.registerApprovedBy = body.approvedBy;
+
+  if (body.id > 0) {
+    const [existing] = await req.db!.select({ status: documents.status, category: documents.category }).from(documents).where(eq(documents.id, body.id));
+    if (!existing) throw AppError.notFound("Document");
+    if (isInObsoleteArchive(existing)) throw new AppError(ARCHIVED_READ_ONLY, 409);
+    const [updated] = await req
+      .db!.update(documents)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(documents.id, body.id))
+      .returning({ id: documents.id });
+    if (!updated) throw AppError.notFound("Document");
+  } else {
+    const [updated] = await req
+      .db!.update(controlledFormTemplates)
+      .set(patch)
+      .where(eq(controlledFormTemplates.id, -body.id))
+      .returning({ id: controlledFormTemplates.id });
+    if (!updated) throw AppError.notFound("Form");
+  }
+
+  const rows = await listMasterDocuments(req.db!);
+  res.json(rows.find((item) => item.id === body.id) ?? { id: body.id });
 });
 
 export async function listMasterDocuments(db: Db): Promise<MasterDocumentRow[]> {
@@ -257,6 +316,8 @@ export async function listMasterDocuments(db: Db): Promise<MasterDocumentRow[]> 
       title: template.title,
       subjectRoute: template.subjectRoute,
       folderId: template.folderId,
+      registerApprovalDate: template.registerApprovalDate,
+      registerApprovedBy: template.registerApprovedBy,
     })),
     folderNodes,
   );

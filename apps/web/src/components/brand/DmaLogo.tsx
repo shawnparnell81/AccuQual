@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useAuthStore } from "../../store/authStore";
 
 /** Official DMA Industries mark. Dark navy on transparent; CSS turns it white on dark chrome. */
 export const DMA_LOGO_SRC = "/branding/dma-logo.png";
@@ -22,14 +23,27 @@ export function DmaLogo({ height = 40, className, alt = "DMA Industries, LLC" }:
 }
 
 /**
+ * Company mark from Admin branding when one is set. Otherwise the DMA logo.
+ * This is display only. Form headers do not offer a picture upload.
+ */
+export function CompanyLogo({ height = 40 }: { height?: number }) {
+  const logoUrl = useAuthStore((s) => s.company?.branding?.logoUrl);
+  if (logoUrl) {
+    return <img src={logoUrl} alt="Company logo" className="dma-form-logo" style={{ height }} />;
+  }
+  return <DmaLogo height={height} />;
+}
+
+/**
  * Shared form header. Logo, title, and an optional revision block sit in
  * three columns so a long title wraps in the middle instead of painting
  * across the revision. With no meta, the balance column keeps the title centered.
+ * The mark is the company logo from branding.
  */
 export function FormHeader({ title, meta }: { title?: string; meta?: ReactNode }) {
   return (
     <div className="dma-form-header">
-      <DmaLogo height={40} />
+      <CompanyLogo height={40} />
       {title ? <h2 className="dma-form-title">{title}</h2> : <div className="dma-form-title" />}
       {meta ? <div className="dma-form-meta">{meta}</div> : <span className="dma-form-balance" aria-hidden="true" />}
     </div>
@@ -39,7 +53,7 @@ export function FormHeader({ title, meta }: { title?: string; meta?: ReactNode }
 /** A company-uploaded mark when one is set; otherwise the DMA logo in the same header slot. */
 export function BrandMark({ logoUrl, height = 48 }: { logoUrl?: string | null; height?: number }) {
   if (logoUrl) {
-    return <img src={logoUrl} alt="Logo" className="h-12 w-12 rounded-md border border-border object-cover print:border-black" />;
+    return <img src={logoUrl} alt="Company logo" className="dma-form-logo" style={{ height }} />;
   }
   return <DmaLogo height={height} />;
 }

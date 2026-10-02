@@ -4,7 +4,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import type { DocumentChangeRequest } from "../../api/types";
 import { PictureBoundText } from "../../components/forms/PictureText";
-import { DmaLogo } from "../../components/brand/DmaLogo";
+import { CompanyLogo } from "../../components/brand/DmaLogo";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
 
 /** Printed identity of paper form DCR-F-001. These are not record answers. */
@@ -54,7 +54,7 @@ export function DocumentChangeRequestForm({ dcr }: { dcr: DocumentChangeRequest 
           <tr>
             <td colSpan={6} className={`${cell} p-2`}>
               <div className="dma-form-header">
-                <DmaLogo height={36} />
+                <CompanyLogo height={36} />
                 <h1 className="dma-form-title dma-form-title-plain">Document Change Request Form</h1>
                 <dl className="dma-form-meta grid grid-cols-[auto_auto] gap-x-2 gap-y-0.5 text-[11px] leading-tight">
                   <dt>Document:</dt>
@@ -139,6 +139,7 @@ export function DocumentChangeRequestForm({ dcr }: { dcr: DocumentChangeRequest 
               <PictureBoundText
                 className="min-h-[7rem] w-full rounded-sm border border-border bg-background px-1.5 py-1 text-xs outline-none focus:ring-1 focus:ring-primary print:border-black print:bg-white print:text-black"
                 rows={6}
+                allowInsert={false}
                 saved={dcr.changeDescription ?? ""}
                 entityType="document_change_requests"
                 entityId={dcr.id}

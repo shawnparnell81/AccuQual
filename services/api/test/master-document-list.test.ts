@@ -71,6 +71,62 @@ describe("master document list", () => {
     expect(rows[0]?.href).toBe("/documents/7");
   });
 
+  it("uses a typed approval and leaves a cleared cell blank", () => {
+    const rows = buildMasterDocumentRows(
+      [
+        {
+          id: 7,
+          title: "Control of Documents",
+          category: null,
+          status: "approved",
+          revisionCode: "Rev B",
+          effectiveDate: new Date("2026-03-01T00:00:00Z"),
+          isDeleted: false,
+          registerApprovalDate: "",
+          registerApprovedBy: "Quality",
+        },
+      ],
+      [],
+      [
+        {
+          subjectId: 7,
+          versionNumber: 1,
+          status: "published",
+          revisionCode: "Rev B",
+          summary: "",
+          publishedAt: new Date("2026-03-18T00:00:00Z"),
+          reviewedAt: null,
+          reviewedBy: 3,
+        },
+      ],
+      new Map([[3, "Ron Wertz"]]),
+      [],
+    );
+
+    expect(rows[0]).toMatchObject({ approvalDate: null, approvedBy: "Quality" });
+  });
+
+  it("leaves a form row blank until an approval is saved", () => {
+    const rows = withRegisteredForms(
+      [],
+      [
+        {
+          id: 4,
+          formKey: "lst-gen-001",
+          formId: "LST-GEN-001",
+          title: "Master Document List",
+          subjectRoute: "/documents/master-list",
+          folderId: null,
+          registerApprovalDate: "2026-04-02",
+          registerApprovedBy: null,
+        },
+      ],
+      [],
+    );
+
+    expect(rows[0]).toMatchObject({ id: -4, documentId: "LST-GEN-001", approvalDate: "2026-04-02", approvedBy: "" });
+  });
+
   it("adds each current form that already has a number, and does not add a second row", () => {
     const templates: RegisteredFormSource[] = FORM_TEMPLATES.map((seed, index) => ({
       id: index + 1,
@@ -150,10 +206,8 @@ describe("master document list", () => {
     expect(rows.find((row) => row.title === "CSA VALIDATION REPORT")).toMatchObject({ documentId: "FRM-VAL-001", status: "Template" });
     expect(rows.find((row) => row.title === "INTERNAL AUDIT SUMMARY REPORT")).toMatchObject({ documentId: "TMP-GEN-001" });
     expect(rows.find((row) => row.title === "MONTHLY ENGINEERING DEVELOPMENT REPORT")).toMatchObject({ documentId: "TMP-ENG-001" });
-    expect(rows.filter((row) => row.title === "ASTM E542 Gravimetric Volume Calculator").map((row) => row.documentId).sort()).toEqual([
-      "FRM-TST-001",
-      "FRM-TST-002",
-    ]);
+    expect(rows.filter((row) => row.title === "ASTM E542 Gravimetric Volume Calculator")).toEqual([]);
+    expect(rows.some((row) => row.documentId === "FRM-TST-001" || row.documentId === "FRM-TST-002")).toBe(false);
     expect(rows.find((row) => row.title === "Corrective Action Request")).toBeUndefined();
     expect(rows.find((row) => row.title === "8D Problem Solving")).toBeUndefined();
     expect(rows.find((row) => row.title === "Document Revision Record")).toBeUndefined();

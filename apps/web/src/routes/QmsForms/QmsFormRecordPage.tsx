@@ -166,6 +166,7 @@ export function QmsFormRecordPage() {
           <PictureBoundText
             className="w-full rounded-md border border-border bg-background p-2 text-sm print:border-black print:bg-white print:text-black"
             rows={3}
+            allowInsert={false}
             saved={record.additionalComments ?? ""}
             entityType="qms_forms"
             entityId={formId}

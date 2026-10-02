@@ -8,6 +8,7 @@ import { useTabStore } from "../../store/useTabStore";
 import { deriveTabMeta } from "../../lib/tabMeta";
 import { isLiveTabPath } from "../../lib/tabPaths";
 import { locationPath, paneLocation, readSplit, resolvePaneTarget, writeSplit } from "../../lib/splitView";
+import { RecordEditBar } from "../shared/RecordEditBar";
 
 /**
  * Main workspace under the tab bar. One pane is the real router outlet.
@@ -87,6 +88,7 @@ export function SplitWorkspace() {
           {open && <PaneBar title="Left pane" onExpand={expandLeft} onClose={expandRight} closeLabel="Close left pane" />}
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-7">
             <div key={location.pathname + location.search} className={`page-enter mx-auto h-full ${open ? "max-w-none" : "max-w-[1500px]"}`}>
+              <RecordEditBar />
               <Suspense fallback={<LoadingPlaceholder />}>
                 <Outlet />
               </Suspense>
@@ -240,6 +242,7 @@ function RightPaneRouter({ path }: { path: string }) {
 
   return (
     <Router location={location} navigator={navigator}>
+      <RecordEditBar />
       <Suspense fallback={<LoadingPlaceholder />}>
         <Routes key={path}>{workspaceRouteElements()}</Routes>
       </Suspense>
