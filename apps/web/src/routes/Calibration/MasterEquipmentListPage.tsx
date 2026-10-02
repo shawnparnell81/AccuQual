@@ -6,7 +6,10 @@ import { Modal } from "../../components/modals/Modal";
 import { useMayEditEquipment } from "../../components/calibration/EquipmentPanels";
 import { useCanEditSurface, useRecordEdit } from "../../components/shared/RecordEditBar";
 import { RecordEditButton } from "../../components/shared/RecordEditButton";
+import { useConfirm } from "../../components/shared/ConfirmDialog";
 import { useToast } from "../../components/shared/ToastProvider";
+import { useCurrentUser } from "../../hooks/useAuth";
+import { canMaintainMasterList } from "../../lib/masterListAccess";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { downloadXlsx, TONE_ARGB } from "../../lib/downloadTable";
 import { daysForMonths, EQUIPMENT_LIST_ID, EQUIPMENT_STATUSES, equipmentListRow, type EquipmentListStatus, type EquipmentSource } from "../../lib/equipmentMasterList";
@@ -89,11 +92,14 @@ function operationalTarget(status: EquipmentListStatus): EquipmentSource["status
 
 export function MasterEquipmentListPage() {
   const toast = useToast();
+  const confirm = useConfirm();
+  const user = useCurrentUser();
   const queryClient = useQueryClient();
   const { mayEdit } = useMayEditEquipment();
+  const maintain = canMaintainMasterList(user);
   const { editing, setEditing } = useRecordEdit();
   const canEditList = useCanEditSurface(recordSurface("/calibration/master-list"));
-  const inline = mayEdit && canEditList && editing;
+  const inline = canEditList && editing;
   const [draft, setDraft] = useState<Draft | null>(null);
   const [cellEdits, setCellEdits] = useState<Record<number, Record<string, string>>>({});
   const cellEditsRef = useRef(cellEdits);
@@ -193,6 +199,23 @@ export function MasterEquipmentListPage() {
     }
   }
 
+  async function removeRow(id: number, name: string) {
+    const ok = await confirm({
+      title: "Remove from the Master Equipment List?",
+      message: `Remove ${name}? This deletes the equipment record. A gage with calibration history cannot be removed.`,
+      confirmLabel: "Remove",
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await apiClient.delete(`/equipment/${id}`);
+      await queryClient.invalidateQueries({ queryKey: ["equipment"] });
+      toast.success("Equipment removed from the Master Equipment List.");
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't remove that equipment."));
+    }
+  }
+
   function openEdit(item: EquipmentRecord) {
     const row = equipmentListRow(item);
     setDraft({
@@ -279,12 +302,17 @@ export function MasterEquipmentListPage() {
                     ) : row.status}
                   </td>
                   <td className="no-print">
-                    {mayEdit && (
-                      <button type="button" className="text-sm text-primary hover:underline" onClick={() => {
+                    {(mayEdit || maintain) && (
+                      <button type="button" className="mr-3 text-sm text-primary hover:underline" onClick={() => {
                         const item = equipment.data?.find((entry) => entry.id === row.id);
                         if (item) openEdit(item);
                       }}>
                         Edit
+                      </button>
+                    )}
+                    {maintain && (
+                      <button type="button" className="text-sm text-destructive hover:underline" data-testid="master-list-remove" onClick={() => void removeRow(row.id, row.name)}>
+                        Remove
                       </button>
                     )}
                   </td>

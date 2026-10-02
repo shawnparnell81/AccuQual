@@ -9,8 +9,11 @@ import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { users } from "../../drizzle/schema/users.js";
 import { controlledVersions } from "../../drizzle/schema/versioning.js";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
+import { masterListOmissions } from "../../drizzle/schema/masterListOmissions.js";
 import { PRINTED_FORM_ID_WHEN_BLANK, PRINTED_FORM_REVISION } from "../document-folders/formFiling.js";
 import { ensureFormTemplates } from "../document-folders/formTemplates.js";
+import { canMaintainMasterList } from "../roles/roleHierarchy.js";
+import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 
 export interface MasterDocumentRow {
   id: number;
@@ -231,6 +234,20 @@ export function withRegisteredForms(documentRows: MasterDocumentRow[], templates
   return [...documentRows, ...added];
 }
 
+const DOCUMENT_LIST_KEY = "documents";
+
+/** Drops rows someone removed from the Master Document List. A template is matched by form key, a document by id. */
+export function withoutOmittedMasterRows(
+  rows: MasterDocumentRow[],
+  hidden: { source: string; sourceKey: string }[],
+  templates: { id: number; formKey: string }[],
+): MasterDocumentRow[] {
+  const documentsHidden = new Set(hidden.filter((row) => row.source === "document").map((row) => Number(row.sourceKey)));
+  const formKeys = new Set(hidden.filter((row) => row.source === "template").map((row) => row.sourceKey));
+  const templateIds = new Set(templates.filter((template) => formKeys.has(template.formKey)).map((template) => -template.id));
+  return rows.filter((row) => !documentsHidden.has(row.id) && !templateIds.has(row.id));
+}
+
 export const masterDocumentListHandler = asyncHandler(async (req: Request, res: Response) => {
   res.json(await listMasterDocuments(req.db!));
 });
@@ -268,6 +285,51 @@ export const patchMasterListRowHandler = asyncHandler(async (req: Request, res: 
   res.json(rows.find((item) => item.id === body.id) ?? { id: body.id });
 });
 
+const MASTER_LIST_FORBIDDEN = "Editing a master list is limited to Engineering, Quality Manager, VP of Engineering and Quality, and Administrator.";
+
+/** Takes one row off the Master Document List. The document or blank form stays. */
+export const omitMasterListRowHandler = asyncHandler(async (req: Request, res: Response) => {
+  if (!canMaintainMasterList(req.user)) throw AppError.forbidden(MASTER_LIST_FORBIDDEN);
+  const id = (req.body as { id: number }).id;
+  const db = req.db!;
+  await ensureFormTemplates(db);
+  const templates = await db.select().from(controlledFormTemplates);
+  const visible = await listMasterDocuments(db);
+  const row = visible.find((item) => item.id === id);
+  if (!row) throw AppError.notFound("That row is not on the Master Document List");
+
+  const omissions: { source: string; sourceKey: string }[] = [];
+  if (id > 0) {
+    omissions.push({ source: "document", sourceKey: String(id) });
+    const identity = formIdentity(row.documentId, row.title);
+    for (const template of templates) {
+      const number = documentNumberForForm(template.formKey, template.formId);
+      if (number && formIdentity(number, template.title) === identity) {
+        omissions.push({ source: "template", sourceKey: template.formKey });
+      }
+    }
+  } else {
+    const template = templates.find((item) => item.id === -id);
+    if (!template) throw AppError.notFound("Form");
+    omissions.push({ source: "template", sourceKey: template.formKey });
+  }
+
+  for (const omission of omissions) {
+    await db
+      .insert(masterListOmissions)
+      .values({ listKey: DOCUMENT_LIST_KEY, source: omission.source, sourceKey: omission.sourceKey, createdBy: req.user?.id })
+      .onConflictDoNothing({ target: [masterListOmissions.listKey, masterListOmissions.source, masterListOmissions.sourceKey] });
+  }
+  await recordAuditTrail(db, {
+    entityType: id > 0 ? "Document" : "ControlledFormTemplate",
+    entityId: Math.abs(id),
+    action: "delete",
+    performedBy: req.user?.id,
+    changes: { event: "omit_master_document_row", documentId: row.documentId, title: row.title, omissions },
+  });
+  res.status(204).send();
+});
+
 export async function listMasterDocuments(db: Db): Promise<MasterDocumentRow[]> {
   await ensureFormTemplates(db);
   const docs = await db.select().from(documents);
@@ -276,6 +338,11 @@ export async function listMasterDocuments(db: Db): Promise<MasterDocumentRow[]> 
   const peopleRows = await db.select({ id: users.id, name: users.name, email: users.email }).from(users);
   const folders = await db.select().from(documentFolders);
   const templates = await db.select().from(controlledFormTemplates);
+  const omissions = await db.select().from(masterListOmissions).where(eq(masterListOmissions.listKey, DOCUMENT_LIST_KEY));
+  const hiddenDocuments = new Set(
+    omissions.filter((row) => row.source === "document").map((row) => Number(row.sourceKey)).filter((rowId) => Number.isInteger(rowId)),
+  );
+  const hiddenFormKeys = new Set(omissions.filter((row) => row.source === "template").map((row) => row.sourceKey));
   const people = new Map(peopleRows.map((person) => [person.id, (person.name || person.email || "").trim()]));
   const folderNodes = folders.map((folder) => ({ id: folder.id, name: folder.name, parentId: folder.parentId, documentId: folder.documentId }));
   const rows = buildMasterDocumentRows(
@@ -307,18 +374,24 @@ export async function listMasterDocuments(db: Db): Promise<MasterDocumentRow[]> 
     people,
     folderNodes,
   );
-  return withRegisteredForms(
-    rows,
-    templates.map((template) => ({
-      id: template.id,
-      formKey: template.formKey,
-      formId: template.formId,
-      title: template.title,
-      subjectRoute: template.subjectRoute,
-      folderId: template.folderId,
-      registerApprovalDate: template.registerApprovalDate,
-      registerApprovedBy: template.registerApprovedBy,
-    })),
-    folderNodes,
+  return withoutOmittedMasterRows(
+    withRegisteredForms(
+      rows.filter((row) => !hiddenDocuments.has(row.id)),
+      templates
+        .filter((template) => !hiddenFormKeys.has(template.formKey))
+        .map((template) => ({
+          id: template.id,
+          formKey: template.formKey,
+          formId: template.formId,
+          title: template.title,
+          subjectRoute: template.subjectRoute,
+          folderId: template.folderId,
+          registerApprovalDate: template.registerApprovalDate,
+          registerApprovedBy: template.registerApprovedBy,
+        })),
+      folderNodes,
+    ),
+    omissions,
+    templates,
   );
 }

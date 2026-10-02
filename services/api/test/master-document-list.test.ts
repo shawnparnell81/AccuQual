@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FORM_TEMPLATES, PRINTED_FORM_REVISION } from "../src/modules/document-folders/formFiling.js";
-import { buildMasterDocumentRows, documentNumberForForm, withRegisteredForms, type RegisteredFormSource } from "../src/modules/documents/masterDocumentList.js";
+import { buildMasterDocumentRows, documentNumberForForm, withRegisteredForms, withoutOmittedMasterRows, type RegisteredFormSource } from "../src/modules/documents/masterDocumentList.js";
 
 describe("master document list", () => {
   it("builds a live row from the document, its published revision, and its folder", () => {
@@ -206,10 +206,8 @@ describe("master document list", () => {
     expect(rows.find((row) => row.title === "CSA VALIDATION REPORT")).toMatchObject({ documentId: "FRM-VAL-001", status: "Template" });
     expect(rows.find((row) => row.title === "INTERNAL AUDIT SUMMARY REPORT")).toMatchObject({ documentId: "TMP-GEN-001" });
     expect(rows.find((row) => row.title === "MONTHLY ENGINEERING DEVELOPMENT REPORT")).toMatchObject({ documentId: "TMP-ENG-001" });
-    expect(rows.filter((row) => row.title === "ASTM E542 Gravimetric Volume Calculator").map((row) => row.documentId).sort()).toEqual([
-      "FRM-TST-001",
-      "FRM-TST-002",
-    ]);
+    expect(rows.filter((row) => row.title === "ASTM E542 Gravimetric Volume Calculator")).toEqual([]);
+    expect(rows.some((row) => row.documentId === "FRM-TST-001" || row.documentId === "FRM-TST-002")).toBe(false);
     expect(rows.find((row) => row.title === "Corrective Action Request")).toBeUndefined();
     expect(rows.find((row) => row.title === "8D Problem Solving")).toBeUndefined();
     expect(rows.find((row) => row.title === "Document Revision Record")).toBeUndefined();
@@ -239,5 +237,24 @@ describe("master document list", () => {
       if (documentNumberForForm(seed.formKey, seed.formId)) continue;
       expect(rows.some((row) => row.href === seed.subjectRoute && row.title === seed.title && row.status === "Template")).toBe(false);
     }
+  });
+
+  it("keeps a removed master document row off the list and leaves the other rows", () => {
+    const templates = [
+      { id: 4, formKey: "frm-ncr-002", formId: "FRM-NCR-002", title: "QUARANTINE NOTICE", subjectRoute: "/iso-forms/frm-ncr-002", folderId: null },
+      { id: 5, formKey: "frm-trp-002", formId: "FRM-TRP-002", title: "SALT SPRAY TEST REPORT (ASTM B117)", subjectRoute: "/iso-forms/frm-trp-002", folderId: null },
+    ];
+    const rows = withRegisteredForms([], templates, []);
+    const hidden = withoutOmittedMasterRows(rows, [{ source: "template", sourceKey: "frm-ncr-002" }], templates);
+    expect(hidden.map((row) => row.documentId)).toEqual(["FRM-TRP-002"]);
+    const documents = buildMasterDocumentRows(
+      [{ id: 7, title: "Control of Documents", category: null, status: "approved", revisionCode: "Rev A", effectiveDate: null, isDeleted: false }],
+      [],
+      [],
+      new Map(),
+      [],
+    );
+    const withoutDocument = withoutOmittedMasterRows(documents, [{ source: "document", sourceKey: "7" }], []);
+    expect(withoutDocument).toEqual([]);
   });
 });

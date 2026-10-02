@@ -23,6 +23,7 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { OBSOLETE_ARCHIVE_CATEGORY } from "../../components/layout/sidebarStructure";
 import { ObsoleteArchiveDialog } from "./ObsoleteArchiveDialog";
 import { isFullAccessRole } from "../../lib/fullAccess";
+import { canMaintainMasterList } from "../../lib/masterListAccess";
 import { documentControlStandard, revisionCodeFieldHint, revisionCodeFieldLabel, showingVersionLabel } from "../../lib/documentRevision";
 import { DOC_EDIT_REASON, DOC_LOOP, documentLoop, duePhrase, formatPerson, isPastDue, statusPhrase } from "../../lib/opsLanguage";
 import { useReportTabDirty } from "../../hooks/useReportTabDirty";
@@ -100,7 +101,7 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
   const shown: VersionFull<DocumentPayload> | null | undefined = shownId === null ? null : shownId === openId ? current?.open : shownId === publishedId ? current?.published : other.data;
 
   const isReviewer = !!user?.roleName && REVIEWER_ROLES.includes(user.roleName);
-  const mayEdit = isReviewer || user?.department === "quality" || user?.department === "engineering";
+  const mayEdit = isReviewer || user?.department === "quality" || user?.department === "engineering" || (doc?.category === "master-tool-list" && canMaintainMasterList(user));
   const archived = doc?.status === "obsolete" && doc?.category === OBSOLETE_ARCHIVE_CATEGORY;
   const canRestore = user?.roleName === "admin" || user?.roleName === "owner";
   const editable = !!shown && shown.status === "draft" && shown.id === openId && mayEdit && !archived;

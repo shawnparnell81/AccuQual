@@ -219,3 +219,27 @@ export function canEditFormStructure(user: { roleName?: string | null } | null |
   if (nameStartsWithVicePresident(roleName) && (has("quality") || has("engineering") || engineer)) return true;
   return false;
 }
+
+/**
+ * Who may edit and remove rows on a master list.
+ * Engineering (the department, or a title that says Engineering / Engineer),
+ * Quality Manager, VP of Engineering and Quality (and the built-in Vice President role),
+ * and Administrator. Owner stays included because that role already has full access.
+ */
+export function canMaintainMasterList(user: { roleName?: string | null; department?: string | null } | null | undefined): boolean {
+  if (!user) return false;
+  const roleName = user.roleName?.trim() ?? "";
+  if (roleName && isFullAccessRole(roleName)) return true;
+  if (user.department === "engineering") return true;
+  if (!roleName) return false;
+  const key = roleName.toLowerCase();
+  if (key === "quality_manager" || key === "vice_president" || key === "admin" || key === "administrator") return true;
+  const tokens = roleTokens(roleName);
+  const has = (word: string) => tokens.includes(word);
+  const engineer = tokens.some((token) => token === "engineer" || token === "engineers" || token === "engineering");
+  if (has("admin") || has("administrator")) return true;
+  if (has("quality") && has("manager")) return true;
+  if (engineer) return true;
+  if (nameStartsWithVicePresident(roleName) && (has("quality") || has("engineering") || tokens.some((token) => token === "engineer" || token === "engineers"))) return true;
+  return false;
+}
