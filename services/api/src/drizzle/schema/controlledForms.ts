@@ -13,6 +13,9 @@ export const controlledFormTemplates = pgTable("controlled_form_templates", {
   title: text("title").notNull(),
   subjectRoute: text("subject_route").notNull(),
   folderId: integer("folder_id").references(() => documentFolders.id),
+  // Master Document List overrides for this blank. Null leaves the list cells empty.
+  registerApprovalDate: text("register_approval_date"),
+  registerApprovedBy: text("register_approved_by"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

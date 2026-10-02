@@ -18,6 +18,7 @@ import { StandardsDisclaimer } from "../shared/StandardsDisclaimer";
 import { MfaGraceBanner } from "../auth/MfaGraceBanner";
 import { LoadingPlaceholder } from "../shared/LoadingPlaceholder";
 import { DmaLogo, ProductLine } from "../brand/DmaLogo";
+import { GridClipboard } from "../shared/GridClipboard";
 
 /**
  * An external Supplier Portal login (roleName:"supplier") gets none of the
@@ -42,6 +43,7 @@ function SupplierPortalShell() {
           Log Out
         </button>
       </header>
+      <GridClipboard />
       <main className="flex-1 overflow-y-auto p-6">
         <Suspense fallback={<LoadingPlaceholder />}>
           <Outlet />
@@ -140,6 +142,7 @@ export function AppLayout() {
           <StandardsDisclaimer />
         </div>
       </div>
+      <GridClipboard />
       <div className="print:hidden">
         <WindowContainer />
         <OpenWindowsTaskbar />

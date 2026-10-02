@@ -27,6 +27,10 @@ export const documents = pgTable("documents", {
   currentVersionId: integer("current_version_id").references(() => controlledVersions.id),
   revisionCode: text("revision_code"), // Rev A, Rev B, ... of the published version
   effectiveDate: timestamp("effective_date"),
+  // Master Document List overrides. Null keeps the date and name taken from the
+  // revision record. A saved string, including a blank, is what was typed on the list.
+  registerApprovalDate: text("register_approval_date"),
+  registerApprovedBy: text("register_approved_by"),
   tags: jsonb("tags").$type<string[]>().notNull().default([]),
   linkedModules: jsonb("linked_modules").$type<string[]>().notNull().default([]), // the kinds of record the published version links to
   createdAt: timestamp("created_at").defaultNow(),
