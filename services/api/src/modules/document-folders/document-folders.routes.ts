@@ -6,6 +6,7 @@ import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createDocumentFolderSchema, fileFormRecordSchema, updateDocumentFolderSchema, updateFormNumberSchema } from "./document-folders.validation.js";
 import { list, create, update, remove, uploadTemplate, uploadDocument, downloadTemplate, folderOfficeSessionHandler, removeTemplate, formTemplates, setFormNumber, formFiling, fileForm } from "./document-folders.controller.js";
+import { createFolderCommentHandler, listFolderCommentsHandler } from "../documents/documentComments.js";
 
 export const documentFoldersRouter = Router();
 // Security audit finding (high): this router had no RBAC gate at all — any
@@ -33,6 +34,8 @@ documentFoldersRouter.post("/upload", upload.single("file"), uploadDocument);
 documentFoldersRouter.patch("/:id", validate(updateDocumentFolderSchema), update);
 documentFoldersRouter.delete("/:id", remove);
 
+documentFoldersRouter.get("/:id/comments", listFolderCommentsHandler);
+documentFoldersRouter.post("/:id/comments", createFolderCommentHandler);
 documentFoldersRouter.post("/:id/template", upload.single("file"), uploadTemplate);
 documentFoldersRouter.get("/:id/template", downloadTemplate);
 documentFoldersRouter.get("/:id/office-session", folderOfficeSessionHandler);

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { apiClient } from "../../api/client";
 import type { SearchResult } from "../../api/types";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useOpenTab } from "../../hooks/useOpenTab";
+import { useCurrentUser } from "../../hooks/useAuth";
 import { readRecentRecords, rememberRecord, type RecentRecord } from "../../lib/recentRecords";
+import { paletteFilterValue, paletteQueryWithout, parsePaletteQuery } from "../../lib/paletteQuery";
 import { useDialogBehavior } from "../shared/useDialogBehavior";
 import { FRM_NCR_PATH } from "../../lib/qualityEntry";
 import { faiValidationDocumentsHref } from "../../lib/folderBrowse";
@@ -31,9 +33,12 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [recent, setRecent] = useState<RecentRecord[]>([]);
   const navigate = useNavigate();
   const openTab = useOpenTab();
+  const user = useCurrentUser();
   const { folders } = useArrangedSidebar();
   const dialogRef = useDialogBehavior(open, onClose);
-  const debouncedQuery = useDebouncedValue(query.trim(), 250);
+  const debouncedRaw = useDebouncedValue(query.trim(), 250);
+  const debounced = useMemo(() => parsePaletteQuery(debouncedRaw), [debouncedRaw]);
+  const live = useMemo(() => parsePaletteQuery(query), [query]);
 
   const pages = useMemo(() => flattenSidebarLinks(folders), [folders]);
 
@@ -43,20 +48,35 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       setActive(0);
       return;
     }
-    setRecent(readRecentRecords());
-  }, [open]);
+    setRecent(readRecentRecords(user?.id));
+  }, [open, user?.id]);
 
   const { data, isFetching } = useQuery<{ results: SearchResult[] }>({
-    queryKey: ["search", debouncedQuery],
-    queryFn: async () => (await apiClient.get("/search", { params: { q: debouncedQuery } })).data,
-    enabled: open && debouncedQuery.length > 0,
+    queryKey: ["search", debounced.text, debounced.filters],
+    queryFn: async () =>
+      (
+        await apiClient.get("/search", {
+          params: {
+            q: debounced.text,
+            type: paletteFilterValue(debounced.filters, "type"),
+            plant: paletteFilterValue(debounced.filters, "plant"),
+            status: paletteFilterValue(debounced.filters, "status"),
+            assigned: paletteFilterValue(debounced.filters, "assigned"),
+          },
+        })
+      ).data,
+    enabled: open && (debounced.text.length > 0 || debounced.filters.length > 0),
   });
 
-  const needle = query.trim().toLowerCase();
+  const needle = live.text.toLowerCase();
+  const typeFilter = paletteFilterValue(live.filters, "type")?.toLowerCase() ?? "";
 
   const items = useMemo(() => {
     const actions: PaletteItem[] = [
-      { id: "new-ncr", label: "New NCR", hint: "Action", run: () => navigate(FRM_NCR_PATH) },
+      { id: "create-ncr", label: "Create NCR", hint: "Action", run: () => navigate(FRM_NCR_PATH) },
+      { id: "schedule-audit", label: "Schedule Audit", hint: "Action", run: () => navigate("/audits?new=1") },
+      { id: "log-calibration", label: "Log Calibration", hint: "Action", run: () => navigate("/calibration?new=1") },
+      { id: "folder-explorer", label: "Folder Explorer", hint: "Go to", run: () => navigate("/documents/folders") },
       { id: "new-capa", label: "New CAPA", hint: "Action", run: () => navigate("/capa?new=1") },
       { id: "start-validation", label: "Start validation", hint: "Action", run: () => navigate("/workflow?template=validation") },
       { id: "upload-validation", label: "Upload to Validation Reports", hint: "Action", run: () => navigate(faiValidationDocumentsHref()) },
@@ -100,11 +120,17 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       { id: "new-cross-training", label: "New FRM-TRN-002 GRADING RUBRIC: CROSS-TRAINING EVALUATION", hint: "Action", run: () => navigate("/iso-forms/frm-trn-002") },
       { id: "assignments", label: "Go to my assignments", hint: "Action", run: () => navigate("/home") },
       { id: "theme", label: "Toggle theme", hint: "Action", run: () => window.dispatchEvent(new Event("accuqual-toggle-theme")) },
-    ].filter((action) => !needle || action.label.toLowerCase().includes(needle));
+    ].filter((action) => {
+      const blob = `${action.label} ${action.hint ?? ""}`.toLowerCase();
+      if (needle && !blob.includes(needle)) return false;
+      if (typeFilter && !blob.includes(typeFilter)) return false;
+      return true;
+    });
 
-    const recentItems: PaletteItem[] = needle
+    const hideRecent = Boolean(needle) || live.filters.some((filter) => filter.key !== "type");
+    const recentItems: PaletteItem[] = hideRecent
       ? []
-      : recent.map((record) => ({
+      : recent.filter((record) => !typeFilter || record.type.toLowerCase().includes(typeFilter)).map((record) => ({
           id: `recent-${record.path}`,
           label: record.title,
           hint: "Recent",
@@ -113,7 +139,15 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           },
         }));
 
-    const pageItems: PaletteItem[] = (needle ? pages.filter((page) => `${page.label} ${page.key}`.toLowerCase().includes(needle)).slice(0, 8) : []).map((page) => ({
+    const pageItems: PaletteItem[] = (needle || typeFilter
+      ? pages.filter((page) => {
+          const blob = `${page.label} ${page.key}`.toLowerCase();
+          if (needle && !blob.includes(needle)) return false;
+          if (typeFilter && !blob.includes(typeFilter)) return false;
+          return true;
+        }).slice(0, 8)
+      : []
+    ).map((page) => ({
         id: `page-${page.key}`,
         label: page.label,
         hint: sidebarLinkOpensNewTab(page) ? "New tab" : "Go to",
@@ -131,17 +165,23 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       label: result.label,
       hint: result.type,
       run: () => {
-        rememberRecord({ path: result.path, title: result.label, type: result.type });
+        rememberRecord({ path: result.path, title: result.label, type: result.type }, user?.id);
         openTab({ path: result.path, title: result.label, icon: "default" });
       },
     }));
 
     return [...actions, ...recentItems, ...pageItems, ...recordItems];
-  }, [data?.results, navigate, needle, openTab, pages, recent]);
+  }, [data?.results, live.filters, navigate, needle, openTab, pages, recent, typeFilter, user?.id]);
 
   useEffect(() => {
     setActive(0);
-  }, [needle]);
+  }, [needle, typeFilter]);
+
+  useEffect(() => {
+    const id = items[active]?.id;
+    if (!id) return;
+    document.getElementById(`palette-item-${id}`)?.scrollIntoView({ block: "nearest" });
+  }, [active, items]);
 
   useEffect(() => {
     if (active >= items.length) setActive(0);
@@ -183,6 +223,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           <Search size={15} className="flex-none text-muted-foreground" />
           <input
             autoFocus
+            role="combobox"
+            aria-expanded={open}
+            aria-autocomplete="list"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
@@ -194,7 +237,24 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           />
           <kbd className="flex-none rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">Esc</kbd>
         </div>
-        <div id="palette-list" role="listbox" className="max-h-[60vh] overflow-y-auto p-1">
+        {live.filters.length > 0 && (
+          <div className="flex flex-wrap gap-1 border-b border-border px-3 py-2">
+            {live.filters.map((filter) => (
+              <button
+                key={`${filter.key}:${filter.value}`}
+                type="button"
+                onClick={() => setQuery(paletteQueryWithout(query, filter.key, filter.value))}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2 py-0.5 text-xs"
+              >
+                <span className="font-medium text-muted-foreground">{filter.key}:</span>
+                {filter.value}
+                <X size={12} aria-hidden />
+                <span className="sr-only">Remove {filter.key} filter</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div id="palette-list" role="listbox" aria-label="Commands" className="max-h-[60vh] overflow-y-auto p-1">
           {items.length === 0 && (
             <p className="p-4 text-center text-sm text-muted-foreground">{isFetching ? "Searching…" : "No matches. Try a page name or a record number."}</p>
           )}

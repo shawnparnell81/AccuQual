@@ -181,6 +181,13 @@ function isQualityFormControlWrite(req: Request): boolean {
   return req.path === "/form-filings" || req.path.startsWith("/form-templates/");
 }
 
+/** A comment is not a revision edit. Anyone who can read documents may leave one. */
+function isDocumentCommentPost(req: Request): boolean {
+  if (req.method !== "POST") return false;
+  if (req.baseUrl !== "/documents" && req.baseUrl !== "/document-folders") return false;
+  return /^\/\d+\/comments$/.test(req.path);
+}
+
 function isRecordDeleteRequest(req: Request): boolean {
   if (req.method !== "DELETE" || !RECORD_DELETE_MOUNTS.has(req.baseUrl)) return false;
   const parts = req.path.split("/").filter(Boolean);
@@ -283,6 +290,7 @@ export function requireDepartmentAccess(resourceKey: ResourceKey) {
     if (level === "none") {
       return next(AppError.forbidden(`No access to '${resourceKey}' for your department`));
     }
+    if (level === "read" && resourceKey === "documents" && isDocumentCommentPost(req)) return next();
     if (level === "read" && !READ_METHODS.has(req.method)) {
       return next(AppError.forbidden(`'${resourceKey}' is read-only for your department`));
     }

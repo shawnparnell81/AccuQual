@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useFormData, useSaveForm } from "../../api/formHooks";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { useReportTabDirty } from "../../hooks/useReportTabDirty";
 import { useToast } from "../shared/ToastProvider";
 import { useFormStore } from "../../store/formStore";
 
@@ -25,6 +26,8 @@ export function useFormEditorState(formType: string, entityId: number, windowId?
   const { setDirty, setSaving } = useFormStore();
 
   const [values, setValues] = useState<Record<string, unknown>>({});
+  const [unsaved, setUnsaved] = useState(false);
+  useReportTabDirty(unsaved);
   // Kept off the render path on purpose. Assigning `values` back onto this
   // ref during render lets a parent re-render (or a burst of summary writes)
   // replace a just-typed payload with the previous state before it is saved.
@@ -66,6 +69,7 @@ export function useFormEditorState(formType: string, entityId: number, windowId?
         await saveForm.mutateAsync(payload);
         if (editGeneration.current === generation) {
           isDirty.current = false;
+          setUnsaved(false);
           if (windowId) setDirty(windowId, false);
         }
       } catch (err) {
@@ -88,6 +92,7 @@ export function useFormEditorState(formType: string, entityId: number, windowId?
     valuesRef.current = next;
     setValues(next);
     isDirty.current = true;
+    setUnsaved(true);
     if (windowId) setDirty(windowId, true);
 
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);

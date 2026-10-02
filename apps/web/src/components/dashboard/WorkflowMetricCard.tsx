@@ -23,7 +23,7 @@ interface WorkflowMetricCardProps {
 /** The one shared metric tile every dashboard section uses — a plain count, color-coded by what it means, optionally linking to where the underlying records actually live. */
 export function WorkflowMetricCard({ label, value, bucket = "muted", to }: WorkflowMetricCardProps) {
   const content = (
-    <div className={clsx("rounded-lg border border-border bg-card p-4 transition-colors", to && "hover:border-primary/40")}>
+    <div className={clsx("rounded-lg border border-border bg-card p-4 transition-colors", to && "cursor-pointer hover:border-primary/40")}>
       <p className="text-sm text-muted-foreground">{label}</p>
       <p className={clsx("mt-1 text-2xl font-semibold", BUCKET_CLASSES[bucket])}>{value}</p>
     </div>

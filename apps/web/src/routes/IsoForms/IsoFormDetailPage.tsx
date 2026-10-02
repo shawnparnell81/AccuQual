@@ -10,6 +10,7 @@ import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { SaveStatus } from "../../components/shared/SaveStatus";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { useReportTabDirty } from "../../hooks/useReportTabDirty";
 import { fileChosenFolder, RecordFolderField, SaveResult, useFormFiling, type SaveResultState } from "../../components/forms/FormDocumentControls";
 import { canEditFormStructure } from "../../lib/formStructureAccess";
 import { changeRequestByFormType } from "../../lib/changeRequestKinds";
@@ -302,6 +303,7 @@ function IsoFormDetailBody({
   const [saveNote, setSaveNote] = useState<SaveResultState>(null);
   const [pending, setPending] = useState(false);
   const filing = useFormFiling(formKey, record.id);
+  useReportTabDirty(dirty);
   const templates = useFormTemplates({ enabled: !!formKey });
   const formType = record.formType;
   const requestKind = changeRequestByFormType(formType);

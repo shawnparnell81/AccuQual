@@ -547,7 +547,7 @@ export function buildOpenWork(input: OpenWorkInput): OpenWork {
   if (access.ncr) {
     const rows = input.ncrs.filter((row) => !row.isDeleted && row.status !== "closed" && inScope(row.siteId, input.siteIds));
     const high = rows.filter((row) => row.severity === "high" || row.severity === "critical").length;
-    cards.push({ key: "ncr", label: "Open NCRs", value: rows.length, foot: `${high} high / critical`, href: "/iso-forms/frm-ncr-001", module: null });
+    cards.push({ key: "ncr", label: "Open NCRs", value: rows.length, foot: `${high} high / critical`, href: "/iso-forms/frm-ncr-001", module: "NCR" });
   }
 
   if (access.capa || access.scar) {
@@ -561,6 +561,7 @@ export function buildOpenWork(input: OpenWorkInput): OpenWork {
       foot: both ? `${capas} ${capas === 1 ? "CAPA" : "CAPAs"} · ${cars} supplier ${cars === 1 ? "CAR" : "CARs"}` : "Not closed",
       href: access.capa ? "/capa" : "/scar-forms",
       module: both ? null : access.capa ? "CAPA" : "CAR",
+      modules: both ? ["CAPA", "CAR"] : null,
     });
   }
 

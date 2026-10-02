@@ -1,4 +1,5 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { AttentionStrip, EquipmentStatusBadge, type EquipmentState } from "../../components/calibration/EquipmentPanels";
 
@@ -16,6 +17,13 @@ interface Equipment extends EquipmentState {
  */
 export function CalibrationPage() {
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (params.get("new") !== "1") return;
+    const next = new URLSearchParams(params);
+    next.delete("new");
+    setParams(next, { replace: true });
+  }, [params, setParams]);
   return (
     <div className="flex flex-col gap-4">
       <AttentionStrip />
@@ -26,6 +34,7 @@ export function CalibrationPage() {
       <ResourceListPage<Equipment>
         title="Calibration"
         resource="equipment"
+        createOnMount={params.get("new") === "1"}
         onRowClick={(e) => navigate(`/calibration/${e.id}`)}
         onCreated={(e) => navigate(`/calibration/${e.id}`)}
         columns={[

@@ -41,4 +41,12 @@ describe("recent records", () => {
     localStorage.setItem("accuqual-recent-records", "{\"nope\":true}");
     assert.deepEqual(readRecentRecords(), []);
   });
+
+  it("keeps one person's recent list separate from another's", () => {
+    installStorage();
+    rememberRecord({ path: "/ncr/1", title: "NCR #1", type: "NCR" }, 4);
+    rememberRecord({ path: "/capa/2", title: "CAPA #2", type: "CAPA" }, 9);
+    assert.deepEqual(readRecentRecords(4).map((row) => row.path), ["/ncr/1"]);
+    assert.deepEqual(readRecentRecords(9).map((row) => row.path), ["/capa/2"]);
+  });
 });

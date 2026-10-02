@@ -242,9 +242,16 @@ export async function notifyRecipients(db: Db, recipients: string[], subject: st
 }
 
 export type NotificationPreferences = { inApp: boolean; email: boolean; dailyDigest: boolean };
+export type EmailDeliveryMode = "ready" | "log_only";
+export type NotificationPreferencesView = NotificationPreferences & { emailDelivery: EmailDeliveryMode };
 
 export function normalizeNotificationPreferences(raw: Partial<NotificationPreferences> | null | undefined): NotificationPreferences {
   return { inApp: raw?.inApp !== false, email: raw?.email !== false, dailyDigest: raw?.dailyDigest !== false };
+}
+
+/** Whether this server can actually send mail. Log-only means alerts are stored and not delivered. */
+export function emailDeliveryMode(): EmailDeliveryMode {
+  return activeTransport ? "ready" : "log_only";
 }
 
 async function emailAllowed(db: Db, recipient: string): Promise<boolean> {
@@ -342,16 +349,16 @@ export async function listMyNotifications(db: Db, userId: number, limit = 30) {
   return { rows, unreadCount: Number(countRow?.count ?? 0) };
 }
 
-export async function getMyNotificationPreferences(db: Db, userId: number): Promise<NotificationPreferences> {
+export async function getMyNotificationPreferences(db: Db, userId: number): Promise<NotificationPreferencesView> {
   const [user] = await db.select({ notificationPreferences: users.notificationPreferences }).from(users).where(eq(users.id, userId));
-  return normalizeNotificationPreferences(user?.notificationPreferences);
+  return { ...normalizeNotificationPreferences(user?.notificationPreferences), emailDelivery: emailDeliveryMode() };
 }
 
-export async function updateMyNotificationPreferences(db: Db, userId: number, patch: Partial<NotificationPreferences>): Promise<NotificationPreferences> {
+export async function updateMyNotificationPreferences(db: Db, userId: number, patch: Partial<NotificationPreferences>): Promise<NotificationPreferencesView> {
   const current = await getMyNotificationPreferences(db, userId);
   const next = normalizeNotificationPreferences({ ...current, ...patch });
   await db.update(users).set({ notificationPreferences: next, updatedAt: new Date() }).where(eq(users.id, userId));
-  return next;
+  return { ...next, emailDelivery: emailDeliveryMode() };
 }
 
 export async function markAllNotificationsRead(db: Db, userId: number): Promise<number> {
