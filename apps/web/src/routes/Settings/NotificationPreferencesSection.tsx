@@ -8,6 +8,8 @@ export interface NotificationPreferences {
   inApp: boolean;
   email: boolean;
   dailyDigest: boolean;
+  /** ready: the server has a mail connection. log_only: alerts are stored and not sent. */
+  emailDelivery?: "ready" | "log_only";
 }
 
 export function NotificationPreferencesSection({ mode }: { mode: "inApp" | "email" }) {
@@ -48,7 +50,10 @@ export function NotificationPreferencesSection({ mode }: { mode: "inApp" | "emai
     <section className="rounded-lg border border-border bg-card p-4">
       <h3 className="text-sm font-medium">Email alerts</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        AccuQual already sends email for calibration and training digests and for workflow notices, through the company's mail connection. This switch is yours: leave it on to receive those messages, or turn it off to keep them in the app only. Password resets still go to your email either way.
+        {data.emailDelivery === "ready"
+          ? "Email delivery is connected. Calibration, training, and workflow notices can leave this server. This switch is yours: leave it on to receive those messages, or turn it off to keep them in the app only."
+          : "Email delivery is not connected on this server, so alerts are recorded in AccuQual and are not sent. The switch still saves your preference for when mail is connected."}{" "}
+        Password resets still try your email either way.
       </p>
       <label className="mt-3 flex items-center gap-2 text-sm">
         <input type="checkbox" checked={data.email} disabled={save.isPending} onChange={(e) => save.mutate({ email: e.target.checked })} />

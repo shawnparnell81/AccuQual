@@ -21,6 +21,7 @@ import {
 import { masterDocumentListHandler } from "./masterDocumentList.js";
 import { registerDocumentVersionRoutes } from "./documents.versions.routes.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
+import { createDocumentCommentHandler, listDocumentCommentsHandler } from "./documentComments.js";
 
 // Sprint 1 fix (accuqual-implementation-sequencing.md) — previously had NO
 // RBAC gate at all. Solved without blocking the "read-by-everyone,
@@ -44,6 +45,8 @@ registerDocumentVersionRoutes(documentsRouter);
 
 documentsRouter.get("/", baseHandlers.list);
 documentsRouter.post("/", validate(createDocumentSchema), createDocumentHandler);
+documentsRouter.get("/:id/comments", listDocumentCommentsHandler);
+documentsRouter.post("/:id/comments", createDocumentCommentHandler);
 documentsRouter.get("/:id", baseHandlers.getOne);
 documentsRouter.patch("/:id", validate(updateDocumentSchema), baseHandlers.update);
 documentsRouter.delete("/:id", deleteRecordHandler("document"));

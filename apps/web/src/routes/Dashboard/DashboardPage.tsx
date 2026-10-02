@@ -24,6 +24,8 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { usePlantWrite } from "../../hooks/usePlantWrite";
 import { useSites, useSwitchPlant } from "../../hooks/useSites";
 import { FRM_NCR_PATH } from "../../lib/qualityEntry";
+import { filterToken } from "../../lib/openWorkFilter";
+import type { OpenWork } from "../../api/dashboard";
 import { useSiteStore } from "../../store/siteStore";
 import { OpenWorkSection } from "../../components/dashboard/OpenWorkSection";
 import { AgingChart, ParetoChart, PlantChart, Sparkline, TrendChart } from "./charts";
@@ -106,8 +108,15 @@ function Legend({ items }: { items: { token: string; label: string }[] }) {
   );
 }
 
+function sliceToken(work: OpenWork, keys: string[]): string | null {
+  const present = keys.filter((key) => work.modules.some((module) => module.key === key));
+  if (present.length === 0) return null;
+  return filterToken(present);
+}
+
 function Kpi({
   href,
+  onDrill,
   token,
   delay,
   icon,
@@ -119,6 +128,7 @@ function Kpi({
   spark,
 }: {
   href?: string;
+  onDrill?: () => void;
   token: string;
   delay: number;
   icon: ReactNode;
@@ -146,8 +156,16 @@ function Kpi({
       </div>
     </>
   );
-  const className = `kpi-tile reveal block rounded-[14px] p-4 no-underline${href ? " kpi-hover cursor-pointer" : ""}`;
+  const clickable = Boolean(href || onDrill);
+  const className = `kpi-tile reveal block w-full rounded-[14px] p-4 text-left no-underline${clickable ? " kpi-hover cursor-pointer" : ""}`;
   const style = { ["--tone" as string]: `var(--${token})`, ["--d" as string]: `${delay}ms` };
+  if (onDrill) {
+    return (
+      <button type="button" onClick={onDrill} className={className} style={style} title="Show these records in the open list">
+        {body}
+      </button>
+    );
+  }
   if (!href) {
     return (
       <div className={className} style={style}>
@@ -188,6 +206,7 @@ export function DashboardPage() {
   const activePlants = (plants?.sites ?? []).filter((site) => site.status === "active");
   const multi = activePlants.length > 1;
   const [allPlants, setAllPlants] = useState(true);
+  const [drill, setDrill] = useState("");
   const scope = multi && allPlants ? "all" : "current";
 
   const query = useQuery({
@@ -200,6 +219,11 @@ export function DashboardPage() {
   const first = user?.name?.split(" ")[0];
   const today = new Date().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   const singlePlant = !data?.scope.allPlants && data?.scope.label !== "All plants";
+
+  function drillTo(token: string) {
+    setDrill(token);
+    document.getElementById("open-records")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   const calFoot = (row: DashboardOverview["kpis"]["calibration"]) => {
     if (row.overdue == null || row.failed == null || row.dueSoon == null) return "No access";
@@ -271,9 +295,10 @@ export function DashboardPage() {
       {data && (
         <>
           {data.partial && <p className="text-xs text-muted-foreground">Some older records were left out of these counts so the page stays fast.</p>}
-          <OpenWorkSection work={data.openWork} singlePlant={singlePlant} />
+          <OpenWorkSection work={data.openWork} singlePlant={singlePlant} moduleFilter={drill} onModuleFilter={setDrill} />
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
             <Kpi
+              onDrill={data.kpis.openIssues.access && sliceToken(data.openWork, ["NCR"]) ? () => drillTo(sliceToken(data.openWork, ["NCR"])!) : undefined}
               href={data.kpis.openIssues.access ? FRM_NCR_PATH : undefined}
               token="primary"
               delay={0}
@@ -285,6 +310,7 @@ export function DashboardPage() {
               spark={data.kpis.openIssues.spark}
             />
             <Kpi
+              onDrill={data.kpis.overdueFixes.access && sliceToken(data.openWork, ["CAPA"]) ? () => drillTo(sliceToken(data.openWork, ["CAPA"])!) : undefined}
               href={data.kpis.overdueFixes.access ? "/capa" : undefined}
               token="destructive"
               delay={60}
@@ -354,6 +380,7 @@ export function DashboardPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {data.engineering.changes.access ? (
                 <Kpi
+                  onDrill={sliceToken(data.openWork, ["ECR", "Change"]) ? () => drillTo(sliceToken(data.openWork, ["ECR", "Change"])!) : undefined}
                   href="/change"
                   token="primary"
                   delay={0}
@@ -367,6 +394,7 @@ export function DashboardPage() {
               )}
               {data.engineering.ppap.access ? (
                 <Kpi
+                  onDrill={sliceToken(data.openWork, ["PPAP"]) ? () => drillTo(sliceToken(data.openWork, ["PPAP"])!) : undefined}
                   href="/ppap"
                   token="brand-purple"
                   delay={0}

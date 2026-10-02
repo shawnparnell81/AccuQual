@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
@@ -25,20 +25,28 @@ import { ObsoleteArchiveDialog } from "./ObsoleteArchiveDialog";
 import { isFullAccessRole } from "../../lib/fullAccess";
 import { documentControlStandard, revisionCodeFieldHint, revisionCodeFieldLabel, showingVersionLabel } from "../../lib/documentRevision";
 import { DOC_EDIT_REASON, DOC_LOOP, documentLoop, duePhrase, formatPerson, isPastDue, statusPhrase } from "../../lib/opsLanguage";
+import { useReportTabDirty } from "../../hooks/useReportTabDirty";
+import { DocumentCommentThread } from "../../components/documents/DocumentCommentThread";
+import { RevisionSideBySide } from "../../components/documents/RevisionSideBySide";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import type { TrainingCourse } from "../../api/types";
 
 const documentHooks = createResourceHooks<AccuQualDocument>("documents");
 const BASE = "/documents";
 
-type Tab = "details" | "files" | "links" | "versions" | "compliance";
+type Tab = "details" | "files" | "links" | "versions" | "comments" | "compliance";
 const TABS: { id: Tab; label: string }[] = [
   { id: "details", label: "Document" },
   { id: "files", label: "Files" },
   { id: "links", label: "Linked records" },
   { id: "versions", label: "Versions" },
+  { id: "comments", label: "Comments" },
   { id: "compliance", label: "Retention & history" },
 ];
+
+function initialTab(value: string | null): Tab {
+  return TABS.some((tab) => tab.id === value) ? (value as Tab) : "details";
+}
 
 const blankPayload = (title = ""): DocumentPayload => ({ title, category: null, content: "", revisionCode: "Rev A", effectiveDate: null, expirationDate: null, retentionPeriodDays: null, attachments: [], links: [] });
 
@@ -72,12 +80,16 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
   const reviewers = useReviewers();
   const current = v.current.data;
 
-  const [tab, setTab] = useState<Tab>("details");
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => initialTab(searchParams.get("tab")));
+  const [unsaved, setUnsaved] = useState(false);
+  useReportTabDirty(unsaved);
   const [archiveDialog, setArchiveDialog] = useState<"archive" | "restore" | null>(null);
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [viewId, setViewId] = useState<number | null>(null);
   const [compareId, setCompareId] = useState<number | null>(null);
   const [againstId, setAgainstId] = useState<number | null>(null);
+  const [compareMode, setCompareMode] = useState<"changes" | "side">("side");
 
   // What is on screen: an explicitly chosen version, else the open draft, else what is in force.
   const openId = current?.open?.id ?? null;
@@ -103,6 +115,7 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
     if (shown && loadedFor.current !== shown.id) {
       loadedFor.current = shown.id;
       dirty.current = false;
+      setUnsaved(false);
       setValues({ ...blankPayload(), ...(shown.payload ?? {}) });
       setSummary(typeof shown.metadata?.summary === "string" ? shown.metadata.summary : "");
       setSaveState("idle");
@@ -119,6 +132,7 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
     try {
       await v.saveDraft.mutateAsync({ versionId: shown.id, payload: valuesRef.current, summary: summaryRef.current });
       dirty.current = false;
+      setUnsaved(false);
       setSaveState("saved");
     } catch (err) {
       setSaveState("idle");
@@ -133,6 +147,7 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
 
   function change(patch: Partial<DocumentPayload>) {
     dirty.current = true;
+    setUnsaved(true);
     setValues((prev) => ({ ...prev, ...patch }));
   }
 
@@ -368,7 +383,7 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
 
       {tab === "details" && (
         <div className="rounded-lg border border-border bg-card p-4">
-          {!shown ? (v.current.isLoading ? <LoadingPlaceholder /> : <p className="text-sm text-muted-foreground">Nothing here yet. Start a draft above to write this document.</p>) : <DocumentDetailsPanel values={shownValues} editable={editable} onChange={change} summary={summary} onSummaryChange={(s) => { dirty.current = true; setSummary(s); }} revisionLabel={revisionCodeFieldLabel(shown.status)} revisionHint={revisionCodeFieldHint(shown.status)} />}
+          {!shown ? (v.current.isLoading ? <LoadingPlaceholder /> : <p className="text-sm text-muted-foreground">Nothing here yet. Start a draft above to write this document.</p>) : <DocumentDetailsPanel values={shownValues} editable={editable} onChange={change} summary={summary} onSummaryChange={(s) => { dirty.current = true; setUnsaved(true); setSummary(s); }} revisionLabel={revisionCodeFieldLabel(shown.status)} revisionHint={revisionCodeFieldHint(shown.status)} />}
           {editable && report && report.errors.length > 0 && (
             <ul className="mt-3 list-disc pl-5 text-xs text-destructive">
               {report.errors.map((e) => (
@@ -466,12 +481,30 @@ export function DocumentDetailPage({ entityId }: DocumentDetailPageProps = {}) {
                     </select>
                   </label>
                 </div>
-                <VersionDiffViewer basePath={BASE} id={documentId} versionId={compareId} againstId={againstId} />
+                <div className="flex gap-2 text-xs">
+                  <button type="button" className={compareMode === "side" ? "rounded-md bg-secondary px-2 py-1 font-medium" : "rounded-md px-2 py-1 text-muted-foreground"} onClick={() => setCompareMode("side")}>
+                    Side by side
+                  </button>
+                  <button type="button" className={compareMode === "changes" ? "rounded-md bg-secondary px-2 py-1 font-medium" : "rounded-md px-2 py-1 text-muted-foreground"} onClick={() => setCompareMode("changes")}>
+                    What changed
+                  </button>
+                </div>
+                {compareMode === "changes" ? (
+                  <VersionDiffViewer basePath={BASE} id={documentId} versionId={compareId} againstId={againstId} />
+                ) : (
+                  <RevisionSideBySide documentId={documentId} versionList={versionList} versionId={compareId} againstId={againstId} />
+                )}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">Pick “Compare with previous” on a version in the history.</p>
             )}
           </div>
+        </div>
+      )}
+
+      {tab === "comments" && (
+        <div className="rounded-lg border border-border bg-card p-4">
+          <DocumentCommentThread documentId={documentId} versionId={shown?.id ?? null} versionLabel={shown ? `version ${shown.versionNumber}` : null} canComment={!archived} />
         </div>
       )}
 

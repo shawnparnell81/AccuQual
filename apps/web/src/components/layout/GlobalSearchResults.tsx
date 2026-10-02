@@ -3,6 +3,7 @@ import { apiClient } from "../../api/client";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useOpenTab } from "../../hooks/useOpenTab";
 import type { SearchResult } from "../../api/types";
+import { useCurrentUser } from "../../hooks/useAuth";
 import { rememberRecord } from "../../lib/recentRecords";
 
 const TYPE_TO_ICON: Record<SearchResult["type"], string> = {
@@ -32,6 +33,7 @@ const TYPE_TO_ICON: Record<SearchResult["type"], string> = {
 export function GlobalSearchResults({ query, onSelect }: { query: string; onSelect: () => void }) {
   const debouncedQuery = useDebouncedValue(query.trim(), 250);
   const openTab = useOpenTab();
+  const user = useCurrentUser();
 
   const { data, isFetching } = useQuery<{ results: SearchResult[] }>({
     queryKey: ["search", debouncedQuery],
@@ -52,7 +54,7 @@ export function GlobalSearchResults({ query, onSelect }: { query: string; onSele
         <button
           key={`${r.type}-${r.id}`}
           onClick={() => {
-            rememberRecord({ path: r.path, title: r.label, type: r.type });
+            rememberRecord({ path: r.path, title: r.label, type: r.type }, user?.id);
             openTab({ path: r.path, title: r.label, icon: TYPE_TO_ICON[r.type] });
             onSelect();
           }}

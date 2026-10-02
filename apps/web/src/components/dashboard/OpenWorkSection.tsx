@@ -58,8 +58,20 @@ function CardShell({
 }
 
 /** Counts and one list of open quality records the signed-in person can already open. */
-export function OpenWorkSection({ work, singlePlant }: { work: OpenWork; singlePlant: boolean }) {
-  const [module, setModule] = useState("");
+export function OpenWorkSection({
+  work,
+  singlePlant,
+  moduleFilter,
+  onModuleFilter,
+}: {
+  work: OpenWork;
+  singlePlant: boolean;
+  moduleFilter?: string;
+  onModuleFilter?: (module: string) => void;
+}) {
+  const [localModule, setLocalModule] = useState("");
+  const module = moduleFilter ?? localModule;
+  const setModule = onModuleFilter ?? setLocalModule;
   const [status, setStatus] = useState("");
   const [plant, setPlant] = useState("");
 
@@ -121,7 +133,7 @@ export function OpenWorkSection({ work, singlePlant }: { work: OpenWork; singleP
         })}
       </div>
 
-      <div className="min-w-0 rounded-[14px] border border-border bg-card shadow-[inset_0_1px_0_hsl(var(--foreground)/0.04)]">
+      <div id="open-records" className="min-w-0 scroll-mt-4 rounded-[14px] border border-border bg-card shadow-[inset_0_1px_0_hsl(var(--foreground)/0.04)]">
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3.5">
           <h3 className="font-display text-base font-bold">Open records</h3>
           <div className="flex flex-wrap items-center gap-2">

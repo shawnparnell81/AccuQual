@@ -67,6 +67,22 @@ export const documentFiles = pgTable("document_files", {
   uploadedAt: timestamp("uploaded_at").defaultNow(),
 });
 
+/**
+ * A short note on a controlled document or a folder file. Company-scoped because
+ * each company has its own database. version_id, when set, is the controlled
+ * revision the note was written against.
+ */
+export const documentComments = pgTable("document_comments", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id").references(() => documents.id),
+  folderId: integer("folder_id"),
+  versionId: integer("version_id"),
+  body: text("body").notNull(),
+  authorId: integer("author_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type DocumentComment = typeof documentComments.$inferSelect;
 export type DocumentFile = typeof documentFiles.$inferSelect;
 export type Document = typeof documents.$inferSelect;
 export type NewDocument = typeof documents.$inferInsert;

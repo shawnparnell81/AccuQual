@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { isLiveTabPath, selectRestoredTabs } from "../lib/tabPaths";
+import { moveTab, setTabPinned, withPinsLeft } from "../lib/tabLayout";
 
 export interface TabInstance {
   id: string;
@@ -7,6 +8,8 @@ export interface TabInstance {
   title: string;
   /** A short key into TabBar.tsx's icon lookup — kept as a plain string (not a component) so a tab survives round-tripping through localStorage. */
   icon: string;
+  /** Pinned tabs stay on the left and survive a refresh with the rest of the strip. */
+  pinned?: boolean;
 }
 
 interface TabState {
@@ -40,6 +43,9 @@ interface TabState {
   activateTab: (id: string) => string | null;
   /** Removes a tab; if it was active, returns the new active tab's path (or null if none remain) so the caller can navigate there. */
   closeTab: (id: string) => string | null;
+  /** Drag-and-drop reorder. Pinned tabs are gathered back to the left. */
+  reorderTabs: (fromId: string, toId: string) => void;
+  togglePin: (id: string) => void;
 }
 
 function storageKey(ownerId: string) {
@@ -77,7 +83,9 @@ export const useTabStore = create<TabState>((set, get) => ({
   activeId: null,
 
   loadForUser: (ownerId) => {
-    const { tabs, activeId } = restore(ownerId);
+    const restored = restore(ownerId);
+    const tabs = withPinsLeft(restored.tabs);
+    const activeId = restored.activeId;
     set({ ownerId, tabs, activeId });
     // Write the filtered list back so a removed page (ERP, requisitions, …) is not opened again next time.
     persist(ownerId, tabs, activeId);
@@ -95,7 +103,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       return existing.id;
     }
     const tab: TabInstance = { id: newTabId(), path, title, icon };
-    const nextTabs = [...tabs, tab];
+    const nextTabs = withPinsLeft([...tabs, tab]);
     persist(ownerId, nextTabs, tab.id);
     set({ tabs: nextTabs, activeId: tab.id });
     return tab.id;
@@ -114,7 +122,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       return;
     }
     const tab: TabInstance = { id: newTabId(), path, title, icon };
-    const nextTabs = [...tabs, tab];
+    const nextTabs = withPinsLeft([...tabs, tab]);
     persist(ownerId, nextTabs, tab.id);
     set({ tabs: nextTabs, activeId: tab.id });
   },
@@ -142,5 +150,21 @@ export const useTabStore = create<TabState>((set, get) => ({
     persist(ownerId, nextTabs, nextActiveId);
     set({ tabs: nextTabs, activeId: nextActiveId });
     return nextTabs.find((t) => t.id === nextActiveId)?.path ?? null;
+  },
+
+  reorderTabs: (fromId, toId) => {
+    const { ownerId, tabs, activeId } = get();
+    const nextTabs = moveTab(tabs, fromId, toId);
+    persist(ownerId, nextTabs, activeId);
+    set({ tabs: nextTabs });
+  },
+
+  togglePin: (id) => {
+    const { ownerId, tabs, activeId } = get();
+    const current = tabs.find((tab) => tab.id === id);
+    if (!current) return;
+    const nextTabs = setTabPinned(tabs, id, !current.pinned);
+    persist(ownerId, nextTabs, activeId);
+    set({ tabs: nextTabs });
   },
 }));

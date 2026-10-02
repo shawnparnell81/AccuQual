@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderIdByName, isFolderEntry, leftHandFolders, listFolder, openTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
 import { ValidationReportsPanel } from "../ValidationReports/ValidationReportsPanel";
-import { ChevronDown, ChevronLeft, ChevronRight, Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical, Folder, FolderOpen } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical, Folder, FolderOpen, MessageSquare } from "lucide-react";
 import { canGoBack, canGoForward, explorerCrumbs, initialExplorerHistory, pushExplorerPlace, stepExplorerHistory, virtualRange, type ExplorerHistory, type ExplorerPlace } from "../../lib/explorerNav";
 import { apiClient } from "../../api/client";
 import { TextField } from "../../components/forms/Field";
@@ -16,6 +16,8 @@ import { onlyOfficeFile, previewKind, saveBytes } from "../../lib/filePreview";
 import { paneScrollDelta } from "../../lib/dragAutoScroll";
 import { folderMoveIsBlocked, planNest, planSiblingGap, planSiblingReorder, type NodePlacement } from "../../lib/folderMove";
 import { dropPosition, reorderDropClass, type DropPosition } from "../../lib/listReorder";
+import { Modal } from "../../components/modals/Modal";
+import { DocumentCommentThread } from "../../components/documents/DocumentCommentThread";
 
 const DRAG_FOLDER = "application/x-accuqual-folder";
 const DRAG_DOC = "application/x-accuqual-doc";
@@ -1329,6 +1331,7 @@ function DocPill({
   onRemoveAttachment: () => void;
 }) {
   const [preview, setPreview] = useState<PreviewRequest | null>(null);
+  const [commentsOpen, setCommentsOpen] = useState(false);
 
   function attachedFileName() {
     const ext = doc.pdfPath?.match(/\.[a-z0-9]+$/i)?.[0] ?? "";
@@ -1358,7 +1361,7 @@ function DocPill({
   }
 
   return (
-    <span
+    <div
       draggable
       onDragStart={(event) => {
         event.stopPropagation();
@@ -1384,7 +1387,7 @@ function DocPill({
       )}
       {doc.pdfPath ? (
         <>
-          <button onClick={viewAttachment} className="text-primary hover:opacity-80" aria-label={`View attached file for ${doc.name}`}>
+          <button onClick={viewAttachment} className="text-primary hover:opacity-80" title={previewKind(attachedFileName(), doc.pdfMimeType) === "pdf" ? "View PDF" : "View file"} aria-label={`View attached file for ${doc.name}`}>
             <FileText size={12} />
           </button>
           <button onClick={() => void downloadAttachment()} className="text-muted-foreground hover:text-primary" aria-label={`Download attached file for ${doc.name}`}>
@@ -1400,12 +1403,22 @@ function DocPill({
           <Paperclip size={12} />
         </button>
       )}
+      <button type="button" onClick={() => setCommentsOpen(true)} className="text-muted-foreground hover:text-primary" title="Comments" aria-label={`Comments on ${doc.name}`}>
+        <MessageSquare size={12} />
+      </button>
+      <Modal title={`Comments · ${doc.name}`} isOpen={commentsOpen} onClose={() => setCommentsOpen(false)} wide>
+        {doc.documentId ? (
+          <DocumentCommentThread documentId={doc.documentId} canComment />
+        ) : (
+          <DocumentCommentThread folderId={doc.id} canComment />
+        )}
+      </Modal>
       {onSendToLibrary && (
         <button onClick={onSendToLibrary} className="text-muted-foreground hover:text-destructive" aria-label={`Send ${doc.name} to the library pool`}>
           <Inbox size={12} />
         </button>
       )}
-    </span>
+    </div>
   );
 }
 

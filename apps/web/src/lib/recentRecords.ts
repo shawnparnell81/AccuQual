@@ -1,15 +1,19 @@
 const KEY = "accuqual-recent-records";
 const MAX = 8;
 
+function bucket(userId?: number | null) {
+  return userId == null ? KEY : `${KEY}:user:${userId}`;
+}
+
 export interface RecentRecord {
   path: string;
   title: string;
   type: string;
 }
 
-export function readRecentRecords(): RecentRecord[] {
+export function readRecentRecords(userId?: number | null): RecentRecord[] {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(bucket(userId));
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
@@ -23,10 +27,10 @@ export function readRecentRecords(): RecentRecord[] {
   }
 }
 
-export function rememberRecord(record: RecentRecord): RecentRecord[] {
-  const next = [record, ...readRecentRecords().filter((row) => row.path !== record.path)].slice(0, MAX);
+export function rememberRecord(record: RecentRecord, userId?: number | null): RecentRecord[] {
+  const next = [record, ...readRecentRecords(userId).filter((row) => row.path !== record.path)].slice(0, MAX);
   try {
-    localStorage.setItem(KEY, JSON.stringify(next));
+    localStorage.setItem(bucket(userId), JSON.stringify(next));
   } catch {
     // Preference only.
   }

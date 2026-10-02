@@ -62,7 +62,7 @@ describe("open quality work", () => {
         ],
       }),
     );
-    expect(work.cards.find((card) => card.key === "ncr")).toMatchObject({ value: 2, foot: "1 high / critical", href: "/iso-forms/frm-ncr-001", module: null });
+    expect(work.cards.find((card) => card.key === "ncr")).toMatchObject({ value: 2, foot: "1 high / critical", href: "/iso-forms/frm-ncr-001", module: "NCR" });
     const rows = work.records.filter((row) => row.module === "NCR");
     expect(rows.map((row) => row.number)).toEqual(["NCR-2", "NCR-1"]);
     expect(rows[0]).toMatchObject({ title: "Scratch", status: "investigating", plant: "Dayton Machining", owner: "Unassigned", ageDays: 10 });
@@ -108,6 +108,8 @@ describe("open quality work", () => {
       label: "Open CAPAs / CARs",
       value: 2,
       foot: "1 CAPA · 1 supplier CAR",
+      module: null,
+      modules: ["CAPA", "CAR"],
     });
     expect(work.records.find((row) => row.module === "CAPA")).toMatchObject({ number: "CAPA-4", status: "in_progress", href: "/capa/4", owner: "Dana Wells" });
     expect(work.records.find((row) => row.module === "CAR")).toMatchObject({ number: "CAR-18", title: "Valve body", owner: "Glen", href: "/scar-forms/8", plant: null });

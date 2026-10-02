@@ -666,6 +666,13 @@
       "when": 1792191600000,
       "tag": "0094_iso_compliance_folder_tree",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1792278000000,
+      "tag": "0095_document_comments",
+      "breakpoints": true
     }
   ]
 }
