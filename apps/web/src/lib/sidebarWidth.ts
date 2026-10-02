@@ -6,7 +6,13 @@ export const SIDEBAR_WIDTH_KEY = "accuqual-sidebar-width";
 export const SIDEBAR_WIDTH_DEFAULT = 252;
 
 /** Narrowest panel that still shows an icon and the start of a title. */
-export const SIDEBAR_WIDTH_MIN = 220;
+export const SIDEBAR_WIDTH_MIN = 200;
+
+/**
+ * Space around a nav label: sidebar padding, nested indent, icon, gap,
+ * and the chevron. Used to turn a measured label into a panel width.
+ */
+export const SIDEBAR_LABEL_CHROME = 168;
 
 /**
  * Widest panel. Keeps the page usable and fits the longest nav title
@@ -83,4 +89,48 @@ export function widthAfterDrag(startWidth: number, deltaX: number, viewportWidth
     return { width: SIDEBAR_RAIL_WIDTH, collapsed: true };
   }
   return { width: clampSidebarWidth(raw, viewportWidth), collapsed: false };
+}
+
+/** Inter medium at the nav's size. Wide enough that a fit width does not clip. */
+export function estimateLabelPx(label: string): number {
+  return Math.ceil(label.trim().length * 7.7);
+}
+
+/** Panel width that clears the longest label, never narrower than the default. */
+export function sidebarFitWidth(labels: string[], viewportWidth: number, chrome = SIDEBAR_LABEL_CHROME): number {
+  const widest = labels.reduce((max, label) => Math.max(max, estimateLabelPx(label)), 0);
+  const needed = widest <= 0 ? SIDEBAR_WIDTH_DEFAULT : Math.max(SIDEBAR_WIDTH_DEFAULT, widest + chrome);
+  return clampSidebarWidth(needed, viewportWidth);
+}
+
+/**
+ * Double-click toggles the compact default and the width that clears labels.
+ * A width already sitting on the default expands; any other width returns home.
+ */
+export function widthAfterDoubleClick(current: number, fit: number): number {
+  const safeFit = clampSidebarWidth(Number.isFinite(fit) ? Math.max(fit, SIDEBAR_WIDTH_DEFAULT) : SIDEBAR_WIDTH_DEFAULT);
+  if (!Number.isFinite(current) || Math.abs(current - SIDEBAR_WIDTH_DEFAULT) <= 12) return safeFit;
+  return SIDEBAR_WIDTH_DEFAULT;
+}
+
+/**
+ * Pixel width to set on the `<nav>` itself.
+ * Null keeps the icon-rail stylesheet in charge.
+ * On a narrow window the nav is an overlay, so the saved width still applies
+ * to that drawer — the page margin stays put via `appliedSidebarWidth`.
+ */
+export function sidebarNavPixels(stored: number, viewportWidth: number, collapsed: boolean): number | null {
+  if (collapsed && viewportWidth > SIDEBAR_NARROW_BREAKPOINT) return null;
+  if (viewportWidth <= SIDEBAR_NARROW_BREAKPOINT) {
+    return clampSidebarWidth(stored, SIDEBAR_WIDTH_MAX + SIDEBAR_CONTENT_RESERVE);
+  }
+  return clampSidebarWidth(stored, viewportWidth);
+}
+
+/** Viewport passed into the drag clamp. An overlay drawer may use the full max. */
+export function dragViewport(viewportWidth: number): number {
+  if (!Number.isFinite(viewportWidth) || viewportWidth <= SIDEBAR_NARROW_BREAKPOINT) {
+    return SIDEBAR_WIDTH_MAX + SIDEBAR_CONTENT_RESERVE;
+  }
+  return viewportWidth;
 }

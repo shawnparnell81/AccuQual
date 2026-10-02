@@ -1,6 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import {
-  AlertTriangle,
+import { Columns2, AlertTriangle,
   ClipboardCheck,
   Truck,
   Package,
@@ -19,6 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useTabStore } from "../../store/useTabStore";
+import { useSplitStore } from "../../store/useSplitStore";
 
 // Same icon-per-module choices as navConfig.ts, reused here for visual
 // consistency between the top nav and the tab strip.
@@ -55,6 +55,7 @@ export function TabBar() {
   const activeId = useTabStore((s) => s.activeId);
   const activateTab = useTabStore((s) => s.activateTab);
   const closeTab = useTabStore((s) => s.closeTab);
+  const openSplit = useSplitStore((s) => s.openSplit);
 
   // One tab is just the page you're on — the strip only earns its space once there's something to switch between.
   if (tabs.length < 2) return null;
@@ -90,6 +91,25 @@ export function TabBar() {
             {isActive && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" aria-hidden />}
             <Icon size={14} className={isActive ? "shrink-0 text-accent" : "shrink-0"} />
             <span className="min-w-0 flex-1 truncate text-left">{tab.title}</span>
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label={`Open ${tab.title} in right pane`}
+              title="Open in right pane"
+              onClick={(e) => {
+                e.stopPropagation();
+                openSplit(tab.path);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  openSplit(tab.path);
+                }
+              }}
+              className="shrink-0 rounded p-0.5 hover:bg-muted-foreground/20"
+            >
+              <Columns2 size={12} />
+            </span>
             <span
               role="button"
               tabIndex={0}

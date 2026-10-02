@@ -983,7 +983,8 @@ a:focus-visible {
   left: 0;
   width: var(--side-w);
   z-index: 30;
-  overflow: hidden;
+  /* Visible so the drag gutter can sit on the seam. The scroll region clips labels. */
+  overflow: visible;
   padding: 14px 10px 12px;
   background: hsl(var(--brand-header) / 0.6);
   backdrop-filter: blur(12px);
@@ -992,34 +993,42 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
 }
-/* Right edge of the nav box. Dragging sets --side-w; titles ellipsize only
-   when they still overflow the wider panel. */
+.aq-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The gutter straddles the nav's right border so a drag on the seam hits
+   this control. It used to sit 10px inside an overflow:hidden box, so the
+   border the user grabbed was the page, not the handle. */
 .aq-side-resize {
   position: absolute;
   top: 0;
-  right: 0;
+  right: -7px;
   bottom: 0;
-  width: 10px;
+  width: 16px;
   margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
   cursor: col-resize;
   touch-action: none;
-  z-index: 3;
+  z-index: 50;
 }
 .aq-side-resize::after {
   content: "";
   position: absolute;
   top: 0;
   bottom: 0;
-  right: 0;
-  width: 2px;
-  background: transparent;
+  right: 6px;
+  width: 3px;
+  border-radius: 3px;
+  background: hsl(var(--border));
 }
 .aq-side-resize:hover::after,
 .aq-side-resize:focus-visible::after {
-  background: hsl(var(--primary) / 0.85);
+  background: hsl(var(--primary) / 0.9);
 }
 .aq-side-resize:focus-visible {
   outline: 2px solid hsl(var(--primary));
@@ -1326,7 +1335,8 @@ body.side-collapsed .aq-nav-folder-link {
     display: inline-grid;
   }
   .aq-sidebar {
-    width: 270px;
+    /* Drawer width follows the saved size. --side-w stays 0 so the page is not pushed. */
+    width: var(--side-drawer, 280px);
     transform: translateX(-100%);
     box-shadow: 30px 0 60px -20px rgba(0, 0, 0, 0.6);
     background: hsl(var(--brand-header) / 0.97);
@@ -1362,8 +1372,7 @@ body.side-collapsed .aq-nav-folder-link {
     justify-content: flex-start;
     padding: 9px 4px 9px 12px;
   }
-  .aq-collapse,
-  .aq-side-resize {
+  .aq-collapse {
     display: none;
   }
   .app-main {
@@ -1535,6 +1544,14 @@ body.side-collapsed .aq-nav-folder-link {
     background: #fff !important;
     color: #111 !important;
   }
+  .aq-split,
+  .aq-split-pane {
+    display: block !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+  .aq-split-bar,
+  .aq-split-divider,
   .aq-topbar,
   .aq-sidebar,
   .aq-scrim,
