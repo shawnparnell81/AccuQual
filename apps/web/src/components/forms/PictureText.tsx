@@ -80,12 +80,15 @@ interface PictureTextProps {
   ariaLabel?: string;
   entityType?: string;
   entityId?: number;
+  /** Issue and evidence fields keep this. Ordinary form text leaves it off. */
+  allowInsert?: boolean;
   onBlur?: () => void;
 }
 
 /**
  * The same text field as before, plus pictures placed in the text.
- * Paste, drop, or Insert Picture. The words already in the field stay words.
+ * Paste, drop, or Insert Picture on issue and evidence fields. Ordinary
+ * form text keeps the words and any picture already saved, without the control.
  *
  * Insert Picture is not a real button, and the file input is rendered
  * outside this tree. A surrounding label treats the first button or file
@@ -102,6 +105,7 @@ export function PictureText({
   ariaLabel,
   entityType,
   entityId,
+  allowInsert = true,
   onBlur,
 }: PictureTextProps) {
   const toast = useToast();
@@ -109,7 +113,7 @@ export function PictureText({
   const fileRef = useRef<HTMLInputElement>(null);
   const own = useRef<string | null>(null);
   const caret = useRef<Range | null>(null);
-  const canInsert = !readOnly && entityType != null && entityId != null;
+  const canInsert = allowInsert && !readOnly && entityType != null && entityId != null;
 
   function commit(next: string) {
     own.current = next;
@@ -379,6 +383,7 @@ export function PictureBoundText({
   className,
   rows = 3,
   readOnly = false,
+  allowInsert = true,
   placeholder,
 }: {
   saved: string;
@@ -388,6 +393,7 @@ export function PictureBoundText({
   className?: string;
   rows?: number;
   readOnly?: boolean;
+  allowInsert?: boolean;
   placeholder?: string;
 }) {
   const [value, setValue] = useState(saved);
@@ -411,6 +417,7 @@ export function PictureBoundText({
       placeholder={placeholder}
       entityType={entityType}
       entityId={entityId}
+      allowInsert={allowInsert}
       className={className}
       rows={rows}
       onChange={(next) => {

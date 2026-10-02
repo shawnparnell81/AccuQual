@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCreateFormVersion, exportFormPdf, useFormTemplate } from "../../api/formHooks";
 import { useToast } from "../shared/ToastProvider";
@@ -13,6 +14,7 @@ import { getCustomFormComponent } from "./customForms";
 import { fileChosenFolder, FormNumberEditor, RecordFolderField, SaveResult, useFormFiling, type SaveResultState } from "./FormDocumentControls";
 import { useFormEditorState } from "./useFormEditorState";
 import { ProcessFlowDiagramEditor } from "./processFlowDiagram/ProcessFlowDiagramEditor";
+import { formAllowsInlinePictures } from "./inlinePictures";
 import { PictureRecordProvider, pictureRecordForForm } from "./pictureRecord";
 import { FormSignProvider } from "./formSign";
 import { FormHeader } from "../brand/DmaLogo";
@@ -77,12 +79,21 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
   }
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading form…</p>;
+  if (formType === "document_control_index") {
+    return (
+      <p className="text-sm">
+        Document Control Master Index is retired. Use the{" "}
+        <Link to="/documents/master-list" className="text-primary hover:underline">
+          Master Document List
+        </Link>
+        .
+      </p>
+    );
+  }
 
   const pictureRecord = pictureRecordForForm(formType, entityId);
-
-  return (
-    <FormSignProvider formType={formType} entityId={entityId}>
-    <PictureRecordProvider entityType={pictureRecord.entityType} entityId={pictureRecord.entityId}>
+  const allowPictures = formAllowsInlinePictures(formType);
+  const editor = (
     <div ref={editorRef} className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <RecordEditButton
@@ -158,7 +169,17 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
       {showHistory && <FormVersionHistory formType={formType} entityId={entityId} />}
       {(previewBytes || previewLoading) && <PdfViewer data={previewBytes} isLoading={previewLoading} />}
     </div>
-    </PictureRecordProvider>
+  );
+
+  return (
+    <FormSignProvider formType={formType} entityId={entityId}>
+      {allowPictures ? (
+        <PictureRecordProvider entityType={pictureRecord.entityType} entityId={pictureRecord.entityId}>
+          {editor}
+        </PictureRecordProvider>
+      ) : (
+        editor
+      )}
     </FormSignProvider>
   );
 }

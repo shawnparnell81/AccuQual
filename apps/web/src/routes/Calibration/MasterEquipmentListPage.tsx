@@ -2,12 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
+import { FormHeader } from "../../components/brand/DmaLogo";
 import { Modal } from "../../components/modals/Modal";
 import { useMayEditEquipment } from "../../components/calibration/EquipmentPanels";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { useCanEditSurface, useRecordEdit } from "../../components/shared/RecordEditBar";
 import { RecordEditButton } from "../../components/shared/RecordEditButton";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { useCurrentUser } from "../../hooks/useAuth";
+import { canMaintainMasterList } from "../../lib/masterListAccess";
 import { downloadXlsx, TONE_ARGB } from "../../lib/downloadTable";
 import { daysForMonths, EQUIPMENT_LIST_ID, EQUIPMENT_STATUSES, equipmentListRow, type EquipmentListStatus, type EquipmentSource } from "../../lib/equipmentMasterList";
 import { normalizePastedCell } from "../../lib/gridPaste";
@@ -90,10 +94,13 @@ function operationalTarget(status: EquipmentListStatus): EquipmentSource["status
 export function MasterEquipmentListPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const user = useCurrentUser();
+  const maintain = canMaintainMasterList(user);
   const { mayEdit } = useMayEditEquipment();
   const { editing, setEditing } = useRecordEdit();
   const canEditList = useCanEditSurface(recordSurface("/calibration/master-list"));
-  const inline = mayEdit && canEditList && editing;
+  const canChange = (mayEdit && canEditList) || maintain;
+  const inline = canChange && editing;
   const [draft, setDraft] = useState<Draft | null>(null);
   const [cellEdits, setCellEdits] = useState<Record<number, Record<string, string>>>({});
   const cellEditsRef = useRef(cellEdits);
@@ -222,9 +229,9 @@ export function MasterEquipmentListPage() {
           <p className="text-sm text-muted-foreground">STATUS KEY: Active, Out of Service, Scrapped, Cal Not Required (CNR).</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {canEditList && <RecordEditButton editing={editing} onClick={() => setEditing(!editing)} />}
+          {canChange && <RecordEditButton editing={editing} onClick={() => setEditing(!editing)} />}
           <Link to="/calibration" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">Calibration</Link>
-          {mayEdit && (
+          {canChange && (
             <button type="button" onClick={() => setDraft(emptyDraft())} className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">
               Add equipment
             </button>
@@ -239,8 +246,8 @@ export function MasterEquipmentListPage() {
       </div>
 
       <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
+        <FormHeader title="MASTER EQUIPMENT LIST" />
         <div className="iso-print-title mb-3">
-          <h1 className="text-xl font-semibold">MASTER EQUIPMENT LIST</h1>
           <p className="text-sm">Doc ID: {EQUIPMENT_LIST_ID} · Rev A · STATUS KEY: Active, Out of Service, Scrapped, Cal Not Required (CNR)</p>
         </div>
         {equipment.isLoading && <p className="text-sm text-muted-foreground">Loading equipment…</p>}
@@ -279,13 +286,24 @@ export function MasterEquipmentListPage() {
                     ) : row.status}
                   </td>
                   <td className="no-print">
-                    {mayEdit && (
+                    {canChange && (
                       <button type="button" className="text-sm text-primary hover:underline" onClick={() => {
                         const item = equipment.data?.find((entry) => entry.id === row.id);
                         if (item) openEdit(item);
                       }}>
                         Edit
                       </button>
+                    )}
+                    {maintain && (
+                      <DeleteRecordButton
+                        resource="equipment"
+                        id={row.id}
+                        kind="Equipment"
+                        title={row.name}
+                        allowed
+                        label="Remove"
+                        className="ml-2 text-sm text-destructive hover:underline"
+                      />
                     )}
                   </td>
                 </tr>

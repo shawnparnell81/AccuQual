@@ -5,6 +5,7 @@ import { materializeRow, STATUS_COLORS } from "./formulas";
 import { FMEA_TONE_CLASS, FMEA_TONE_NAME, fmeaCellValue, fmeaComputedTone } from "./fmeaPriority";
 import { DetailsDisclosure } from "./DetailsDisclosure";
 import { inputTypeForFieldKind } from "./formInputType";
+import { formAllowsInlinePictures } from "./inlinePictures";
 import { PictureText } from "./PictureText";
 import { usePictureRecord } from "./pictureRecord";
 import { DEFAULT_CERTIFY, SIGNATURE_DATE_FIELD, SignatureStamp } from "./SignatureStamp";
@@ -47,11 +48,13 @@ function SectionCard({
   data,
   onChange,
   readOnly,
+  pictures,
 }: {
   section: FormLayout["sections"][number];
   data: Record<string, unknown>;
   onChange: (name: string, value: unknown) => void;
   readOnly: boolean;
+  pictures: boolean;
 }) {
   return (
     <div className="overflow-hidden rounded-md border border-border">
@@ -60,7 +63,7 @@ function SectionCard({
       </div>
       <div className="flex flex-col divide-y divide-border">
         {section.blocks.map((block, i) => (
-          <BlockView key={i} block={block} data={data} onChange={onChange} readOnly={readOnly} />
+          <BlockView key={i} block={block} data={data} onChange={onChange} readOnly={readOnly} pictures={pictures} />
         ))}
       </div>
     </div>
@@ -71,16 +74,17 @@ export function GenericFormRenderer({ layout, data, onChange, readOnly = false, 
   const parked = new Set(detailSectionNumbers ?? []);
   const primary = layout.sections.filter((section) => !parked.has(section.number));
   const details = layout.sections.filter((section) => parked.has(section.number));
+  const pictures = formAllowsInlinePictures(layout.formType);
   return (
     <div className={`flex flex-col gap-5${readOnly ? " aq-form-copy min-w-0" : ""}`}>
       <FormHeader title={layout.title} />
       {primary.map((section) => (
-        <SectionCard key={section.number} section={section} data={data} onChange={onChange} readOnly={readOnly} />
+        <SectionCard key={section.number} section={section} data={data} onChange={onChange} readOnly={readOnly} pictures={pictures} />
       ))}
       {details.length > 0 && (
         <DetailsDisclosure label="Add details — cause, fix, and closure">
           {details.map((section) => (
-            <SectionCard key={section.number} section={section} data={data} onChange={onChange} readOnly={readOnly} />
+            <SectionCard key={section.number} section={section} data={data} onChange={onChange} readOnly={readOnly} pictures={pictures} />
           ))}
         </DetailsDisclosure>
       )}
@@ -93,18 +97,19 @@ interface BlockViewProps<B> {
   data: Record<string, unknown>;
   onChange: (name: string, value: unknown) => void;
   readOnly: boolean;
+  pictures: boolean;
 }
 
-function BlockView({ block, data, onChange, readOnly }: BlockViewProps<Block>) {
+function BlockView({ block, data, onChange, readOnly, pictures }: BlockViewProps<Block>) {
   switch (block.type) {
     case "row":
-      return <RowBlockView block={block} data={data} onChange={onChange} readOnly={readOnly} />;
+      return <RowBlockView block={block} data={data} onChange={onChange} readOnly={readOnly} pictures={pictures} />;
     case "textarea":
-      return <TextareaBlockView block={block} data={data} onChange={onChange} readOnly={readOnly} />;
+      return <TextareaBlockView block={block} data={data} onChange={onChange} readOnly={readOnly} pictures={pictures} />;
     case "yesno":
-      return <YesNoBlockView block={block} data={data} onChange={onChange} readOnly={readOnly} />;
+      return <YesNoBlockView block={block} data={data} onChange={onChange} readOnly={readOnly} pictures={pictures} />;
     case "table":
-      return <TableBlockView block={block} data={data} onChange={onChange} readOnly={readOnly} />;
+      return <TableBlockView block={block} data={data} onChange={onChange} readOnly={readOnly} pictures={pictures} />;
   }
 }
 
@@ -170,8 +175,9 @@ function RowBlockView({ block, data, onChange, readOnly }: BlockViewProps<RowBlo
   );
 }
 
-function TextareaBlockView({ block, data, onChange, readOnly }: BlockViewProps<TextareaBlock>) {
+function TextareaBlockView({ block, data, onChange, readOnly, pictures }: BlockViewProps<TextareaBlock>) {
   const record = usePictureRecord();
+  const picture = pictures ? record : null;
   return (
     <div>
       <div className={`${labelCell} px-2 py-1.5`}>
@@ -184,8 +190,9 @@ function TextareaBlockView({ block, data, onChange, readOnly }: BlockViewProps<T
         value={String(data[block.name] ?? "")}
         readOnly={readOnly}
         ariaLabel={block.label}
-        entityType={record?.entityType}
-        entityId={record?.entityId}
+        allowInsert={pictures}
+        entityType={picture?.entityType}
+        entityId={picture?.entityId}
         onChange={(value) => onChange(block.name, value)}
       />
     </div>
@@ -216,8 +223,9 @@ function YesNoBlockView({ block, data, onChange, readOnly }: BlockViewProps<YesN
   );
 }
 
-function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<TableBlock>) {
+function TableBlockView({ block, data, onChange, readOnly, pictures }: BlockViewProps<TableBlock>) {
   const record = usePictureRecord();
+  const picture = pictures ? record : null;
   const rows: Record<string, unknown>[] =
     (data[block.name] as Record<string, unknown>[] | undefined) ??
     (block.fixedRowLabels ? block.fixedRowLabels.map(() => ({})) : Array.from({ length: block.minRows ?? 1 }, () => ({})));
@@ -385,8 +393,9 @@ function TableBlockView({ block, data, onChange, readOnly }: BlockViewProps<Tabl
                       value={String(row[col.key] ?? "")}
                       readOnly={readOnly}
                       ariaLabel={col.label}
-                      entityType={record?.entityType}
-                      entityId={record?.entityId}
+                      allowInsert={pictures}
+                      entityType={picture?.entityType}
+                      entityId={picture?.entityId}
                       onChange={(value) => updateCell(rowIndex, col.key, value)}
                     />
                   ) : readOnly ? (

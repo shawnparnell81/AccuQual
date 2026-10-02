@@ -1,22 +1,13 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ResourceListPage } from "../../components/layout/ResourceListPage";
 import { StatusBadge } from "../../components/tables/StatusBadge";
-import { OpenFormButton } from "../../components/forms/OpenFormButton";
-import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { OpenWindowButton } from "../../components/shared/OpenWindowButton";
 import type { AccuQualDocument } from "../../api/types";
 import { listRevisionLabel } from "../../lib/documentRevision";
 
-/** A company-wide master index of every controlled document, not one document record — a fixed singleton, same pattern as the Production Logs page. */
-const DOCUMENT_CONTROL_INDEX_ENTITY_ID = 1;
-
 /**
- * Document Control: the master index + controlled-document register.
- * Folder/taxonomy browsing used to have a shortcut card here too, but that
- * was a second path to the exact same page the nav's "Document Library"
- * dropdown already opens directly (with a department pre-selected, which
- * this shortcut couldn't do) — removed rather than leave two nav routes to
- * one destination.
+ * Document Control. The live register is LST-GEN-001 Master Document List.
+ * Document Control Master Index is not offered. Folder browsing stays on Folder Explorer.
  */
 export function DocumentsPage() {
   const navigate = useNavigate();
@@ -26,14 +17,10 @@ export function DocumentsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between rounded-lg border border-border bg-card p-4">
         <div>
-          <h2 className="text-sm font-medium">Master index</h2>
-          <p className="text-sm text-muted-foreground">Revision, release date, next review, and state for every controlled document. This catalog is shared by every plant.</p>
+          <h2 className="text-sm font-medium">Master Document List</h2>
+          <p className="text-sm text-muted-foreground">LST-GEN-001. Revision, release date, and status for every controlled document. This list is shared by every plant.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link to="/documents/master-list" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">Master Document List</Link>
-          <OpenFormButton formType="document_control_index" entityId={DOCUMENT_CONTROL_INDEX_ENTITY_ID} title="Document Control Master Index" label="Open Master Index" />
-          <PrintFormButton formType="document_control_index" entityId={DOCUMENT_CONTROL_INDEX_ENTITY_ID} />
-        </div>
+        <Link to="/documents/master-list" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">Open Master Document List</Link>
       </div>
 
       <ResourceListPage<AccuQualDocument>

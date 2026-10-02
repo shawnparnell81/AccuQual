@@ -2,10 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
+import { FormHeader } from "../../components/brand/DmaLogo";
+import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { RecordEditButton } from "../../components/shared/RecordEditButton";
 import { useCanEditSurface, useRecordEdit } from "../../components/shared/RecordEditBar";
 import { useToast } from "../../components/shared/ToastProvider";
+import { useCurrentUser } from "../../hooks/useAuth";
 import { downloadXlsx } from "../../lib/downloadTable";
+import { canMaintainMasterList } from "../../lib/masterListAccess";
 import { recordSurface } from "../../lib/recordSurface";
 import "../IsoForms/isoForm.css";
 
@@ -30,8 +34,10 @@ interface CellDraft {
 export function MasterDocumentListPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const user = useCurrentUser();
+  const maintain = canMaintainMasterList(user);
   const { editing, setEditing } = useRecordEdit();
-  const canEdit = useCanEditSurface(recordSurface("/documents/master-list"));
+  const canEdit = useCanEditSurface(recordSurface("/documents/master-list")) || maintain;
   const [exporting, setExporting] = useState(false);
   const [drafts, setDrafts] = useState<Record<number, CellDraft>>({});
   const timers = useRef<Map<number, number>>(new Map());
@@ -135,6 +141,7 @@ export function MasterDocumentListPage() {
       </div>
 
       <div className="aq-print-sheet rounded-lg border border-border bg-card p-4">
+        <FormHeader title="MASTER DOCUMENT LIST" />
         {list.isLoading && <p className="text-sm text-muted-foreground">Loading documents…</p>}
         {list.isError && <p className="text-sm text-destructive">Couldn't load the document register.</p>}
         <div className="iso-wrap">
@@ -144,6 +151,7 @@ export function MasterDocumentListPage() {
                 {["Document ID", "Document Title", "Current Rev", "Approval Date", "Approved By", "Location / Folder", "Status", "Rev History / Notes"].map((heading) => (
                   <th key={heading} className="header">{heading}</th>
                 ))}
+                {maintain && <th className="header no-print" />}
               </tr>
             </thead>
             <tbody>
@@ -184,12 +192,27 @@ export function MasterDocumentListPage() {
                     <td className="left">{row.location}</td>
                     <td>{row.status}</td>
                     <td className="left">{row.revHistory}</td>
+                    {maintain && (
+                      <td className="no-print">
+                        {row.id > 0 && (
+                          <DeleteRecordButton
+                            resource="documents"
+                            id={row.id}
+                            kind="Document"
+                            title={row.title}
+                            allowed
+                            label="Remove"
+                            className="text-sm text-destructive hover:underline"
+                          />
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
               {rows.length === 0 && !list.isLoading && (
                 <tr>
-                  <td colSpan={8} className="left">No controlled documents yet.</td>
+                  <td colSpan={maintain ? 9 : 8} className="left">No controlled documents yet.</td>
                 </tr>
               )}
             </tbody>

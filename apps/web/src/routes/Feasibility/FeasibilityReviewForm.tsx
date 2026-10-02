@@ -367,6 +367,7 @@ function BoundPicture({
       saved={defaultValue ?? ""}
       onSave={onSave}
       readOnly={Boolean(disabled)}
+      allowInsert={false}
       placeholder={placeholder}
       className={className}
       rows={rows}
