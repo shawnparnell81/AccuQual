@@ -20,6 +20,33 @@ export const updateDocumentChangeRequestSchema = z.object({
   approvedBy: z.string().nullable().optional(),
   status: z.enum(DOCUMENT_CHANGE_STATUSES).optional(),
   additionalComments: z.string().nullable().optional(),
+  requesterName: z.string().nullable().optional(),
+  requesterTitle: z.string().nullable().optional(),
+  actionNew: z.boolean().optional(),
+  actionRevision: z.boolean().optional(),
+  actionCancellation: z.boolean().optional(),
+  docTypeSop: z.boolean().optional(),
+  docTypeBulletin: z.boolean().optional(),
+  docTypeTemplate: z.boolean().optional(),
+  docTypeForm: z.boolean().optional(),
+  documentProcessName: z.string().nullable().optional(),
+  currentDocNumber: z.string().nullable().optional(),
+  currentDocRev: z.string().nullable().optional(),
+  currentDocRevDate: reasonableDate.nullable().optional(),
+  changeDescription: z.string().nullable().optional(),
+  newDocNumber: z.string().nullable().optional(),
+  newDocRev: z.string().nullable().optional(),
+  newRevDate: reasonableDate.nullable().optional(),
+  requestExecutedBy: z.string().nullable().optional(),
+  requestExecutedTitle: z.string().nullable().optional(),
+  requestExecutedDate: reasonableDate.nullable().optional(),
+});
+
+/** SIGN cells only. Dates are server-stamped. Typed names cannot become a signature. */
+export const signDocumentChangeRequestSchema = z.object({
+  field: z.enum(["requester", "vpEngineering"]),
+  pin: z.string().regex(/^\d{4}$/, "Enter a 4-digit PIN."),
+  certified: z.literal(true),
 });
 
 export const createChangeItemSchema = z.object({

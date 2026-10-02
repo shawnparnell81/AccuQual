@@ -1,33 +1,29 @@
-import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 
 /**
- * Document Change Request — a real, standalone QMS-document revision-control
- * record, built pixel-for-pixel to a real supplied mockup ("QMS Forms Batch
- * 1", Form 01), the SAME bespoke-standalone-page treatment (deliberately
- * outside the shared FormLayout/GenericFormRenderer engine) already
- * confirmed for the Production Work Order traveler — see workOrders.ts's
- * schema comment for the same tradeoff (no automatic PDF export, its own
- * visual identity).
+ * Document Change Request — the fillable copy of paper form DCR-F-001
+ * (Document Change Request Form). The page is bespoke, outside the shared
+ * FormLayout engine, same tradeoff as the work-order traveler.
  *
- * Distinct from `change_requests` (Change Management's PCN — a single
- * product/process change, one row per change): this is a QMS-DOCUMENT
- * revision-control form that can batch several document changes (see
- * `document_change_items` below) under one header and one shared review/
- * approval trail (see `document_change_reviews`) — the two tables this
- * mockup's own two repeatable tables map to.
+ * The paper sheet is one requester block and a fixed Official Approval
+ * block (requester sign, VP of Engineering and Quality Assurance sign,
+ * then Request Executed by / Title / Date). Those answers live on this
+ * header. SIGN cells are PIN stamps, not typed names.
  *
- * Deliberately ungated (no requireDepartmentAccess) — same convention as
- * Document Control itself (documents.routes.ts's own comment): every
- * authenticated company user may raise/edit one, matching how QMS document
- * revisions are typically proposed by whoever owns that document, not one
- * fixed department.
+ * `document_change_items` and `document_change_reviews` are the previous
+ * layout's repeatable tables. They stay so rows saved before DCR-F-001
+ * are not deleted. The form no longer edits them. Migration 0096 copies
+ * the closest values onto the paper columns.
  *
- * status: draft | active | obsolete (the mockup's own 3-checkbox set —
- * the document's own lifecycle state, not an approval workflow with
- * separate transition actions; approvedBy/preparedBy are plain typed names,
- * same "paper form" convention as Work Order's operator/inspector
- * signatures, not a User FK).
+ * Older header columns (formNo, preparedBy, approvedBy, effectiveDate,
+ * additionalComments, status) also stay. status is still draft | active |
+ * obsolete for records that already had one. The paper form does not show
+ * those checkboxes. `revision` is the software template letter, not the
+ * printed Rev. Level on DCR-F-001.
+ *
+ * Ungated, same convention as Document Control: any signed-in user may
+ * raise or edit one.
  */
 export const documentChangeRequests = pgTable("document_change_requests", {
   id: serial("id").primaryKey(),
@@ -38,12 +34,36 @@ export const documentChangeRequests = pgTable("document_change_requests", {
   approvedBy: text("approved_by"),
   status: text("status").notNull().default("draft"),
   additionalComments: text("additional_comments"),
+  requesterName: text("requester_name"),
+  requesterTitle: text("requester_title"),
+  actionNew: boolean("action_new").notNull().default(false),
+  actionRevision: boolean("action_revision").notNull().default(false),
+  actionCancellation: boolean("action_cancellation").notNull().default(false),
+  docTypeSop: boolean("doc_type_sop").notNull().default(false),
+  docTypeBulletin: boolean("doc_type_bulletin").notNull().default(false),
+  docTypeTemplate: boolean("doc_type_template").notNull().default(false),
+  docTypeForm: boolean("doc_type_form").notNull().default(false),
+  documentProcessName: text("document_process_name"),
+  currentDocNumber: text("current_doc_number"),
+  currentDocRev: text("current_doc_rev"),
+  currentDocRevDate: timestamp("current_doc_rev_date"),
+  changeDescription: text("change_description"),
+  newDocNumber: text("new_doc_number"),
+  newDocRev: text("new_doc_rev"),
+  newRevDate: timestamp("new_rev_date"),
+  requesterApprovalSignature: text("requester_approval_signature"),
+  requesterApprovalDate: timestamp("requester_approval_date"),
+  vpApprovalSignature: text("vp_approval_signature"),
+  vpApprovalDate: timestamp("vp_approval_date"),
+  requestExecutedBy: text("request_executed_by"),
+  requestExecutedTitle: text("request_executed_title"),
+  requestExecutedDate: timestamp("request_executed_date"),
   createdBy: integer("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
 });
 
-/** The mockup's "Change Request" table — one row per document/process being changed. */
+/** Previous layout's change rows. Kept so saved DCRs are not deleted. The DCR-F-001 form does not edit this table. */
 export const documentChangeItems = pgTable("document_change_items", {
   id: serial("id").primaryKey(),
   documentChangeRequestId: integer("document_change_request_id").references(() => documentChangeRequests.id).notNull(),
@@ -57,7 +77,7 @@ export const documentChangeItems = pgTable("document_change_items", {
   updatedAt: timestamp("updated_at"),
 });
 
-/** The mockup's "Review & Approval" table — one row per reviewer's decision. */
+/** Previous layout's free-form review rows. Kept so saved DCRs are not deleted. The DCR-F-001 form does not edit this table. */
 export const documentChangeReviews = pgTable("document_change_reviews", {
   id: serial("id").primaryKey(),
   documentChangeRequestId: integer("document_change_request_id").references(() => documentChangeRequests.id).notNull(),

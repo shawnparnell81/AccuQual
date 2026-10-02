@@ -9,12 +9,14 @@ import {
   updateChangeItemSchema,
   createReviewSchema,
   updateReviewSchema,
+  signDocumentChangeRequestSchema,
 } from "./documentChangeRequests.validation.js";
 import {
   listDcrHandler,
   createDcrHandler,
   getDcrHandler,
   updateDcrHandler,
+  signDcrHandler,
   deleteDcrHandler,
   createChangeItemHandler,
   updateChangeItemHandler,
@@ -34,6 +36,7 @@ documentChangeRequestsRouter.get("/", listDcrHandler);
 documentChangeRequestsRouter.post("/", validate(createDocumentChangeRequestSchema), createDcrHandler);
 documentChangeRequestsRouter.get("/:id", getDcrHandler);
 documentChangeRequestsRouter.patch("/:id", validate(updateDocumentChangeRequestSchema), updateDcrHandler);
+documentChangeRequestsRouter.post("/:id/sign", validate(signDocumentChangeRequestSchema), signDcrHandler);
 documentChangeRequestsRouter.delete("/:id", deleteDcrHandler);
 
 documentChangeRequestsRouter.post("/:id/items", validate(createChangeItemSchema), createChangeItemHandler);
