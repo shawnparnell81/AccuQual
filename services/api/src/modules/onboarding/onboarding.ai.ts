@@ -32,6 +32,7 @@ const MODULE_DESCRIPTIONS: Partial<Record<ResourceKey, { label: string; descript
   rma: { label: "RMA/RGA", description: "Return Merchandise/Goods Authorizations sent to suppliers." },
   work_orders: { label: "Work Orders", description: "Production work orders — plan, start, and complete production runs." },
   purchase_requisitions: { label: "Purchase Requisitions", description: "Request a purchase; purchasing approves and converts it to a real PO." },
+  fai: { label: "First Article", description: "Reusable inspection plans, numbered first articles, and part-supplier approval. Does not receive material." },
 };
 
 /**

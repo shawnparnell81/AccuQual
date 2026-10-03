@@ -54,6 +54,7 @@ const NAV_PLAIN: Record<string, { label: string; standard?: string }> = {
   qms_forms: { label: "Forms" },
   scar_forms: { label: "Supplier fixes", standard: "SCAR" },
   quality_inspection_reports: { label: "Inspections" },
+  fai: { label: "First article", standard: "FAI" },
   risk: { label: "Risks", standard: "FMEA" },
   mgmt_system: { label: "Management system" },
   workflow: { label: "Workflow builder" },
@@ -292,6 +293,7 @@ const RECORD_BASE: Record<string, string> = {
   Rma: "/rma",
   Supplier: "/suppliers",
   InventoryItem: "/inventory",
+  FaiRecord: "/fai/records",
 };
 
 /** In-app path for a notification's related record. Null when the type has no stable page. */
