@@ -88,7 +88,8 @@ describe("NCR process workflow", () => {
     const tags = journal.entries.map((entry) => entry.tag);
     expect(tags).toContain("0101_clear_published_versions");
     expect(tags).not.toContain("0101_ncr_process_workflow");
-    expect(journal.entries.at(-1)).toMatchObject({ idx: 102, tag: "0102_ncr_process_workflow" });
+    expect(journal.entries.find((entry) => entry.tag === "0102_ncr_process_workflow")).toMatchObject({ idx: 102, tag: "0102_ncr_process_workflow" });
+    expect(journal.entries.at(-1)).toMatchObject({ idx: 103, tag: "0103_csa_first_article" });
   });
 });
 

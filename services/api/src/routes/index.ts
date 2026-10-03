@@ -36,6 +36,7 @@ import { workflowRouter } from "../modules/workflow/workflow.routes.js";
 // right alongside the router it backs, in the one file every real server
 // AND every integration test's createApp() both already load.
 import "../modules/workflow/workflowActions.js";
+import "../modules/csa-fai/csaFai.actions.js";
 import { aiRouter } from "../modules/ai/ai.routes.js";
 import { digitalTwinRouter } from "../modules/digital-twin/digital-twin.routes.js";
 import { deviceIngestRouter } from "../modules/digital-twin/digital-twin.deviceIngest.routes.js";

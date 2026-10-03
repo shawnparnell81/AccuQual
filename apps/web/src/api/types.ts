@@ -799,6 +799,7 @@ export interface WorkflowTemplate {
   module: string;
   description: string;
   definition: { nodes: WorkflowNode[]; edges: WorkflowEdge[] };
+  metadata?: Record<string, unknown>;
 }
 
 export interface WorkflowDefinitionHealth {

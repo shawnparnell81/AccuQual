@@ -126,13 +126,20 @@ export function validateWorkflow(input: WorkflowGraphInput): WorkflowGraphReport
         break;
       case "approval": {
         const cfg = n.config ?? {};
+        const routes = Array.isArray(cfg.routes) ? (cfg.routes as { decision?: string; branch?: string }[]) : [];
         const assignee = typeof cfg.assignee === "string" && cfg.assignee.trim() !== "";
-        const assignees = Array.isArray(cfg.assignees) && cfg.assignees.some((item) => typeof item === "string" && item.trim() !== "");
-        if (!cfg.approverRole && !cfg.approverDepartment && !assignee && !assignees) err("approval_approver", `${name(n)} needs an approver role, department, or assignee.`, { nodeId: n.id });
+        const stringAssignees = Array.isArray(cfg.assignees) && cfg.assignees.some((item) => typeof item === "string" && item.trim() !== "");
+        const objectAssignees = Array.isArray(cfg.assignees) && cfg.assignees.some((item) => item != null && typeof item === "object");
+        if (!cfg.approverRole && !cfg.approverDepartment && !assignee && !stringAssignees && !objectAssignees && !cfg.assigneeField) err("approval_approver", `${name(n)} needs an approver role, department, or assignee.`, { nodeId: n.id });
+        const allowed = new Set(["", "approved", "rejected"]);
+        for (const route of routes) {
+          if (route.branch) allowed.add(route.branch);
+          if (route.decision) allowed.add(route.decision);
+        }
         if (outgoing.length === 0) err("dead_end", `${name(n)} has nothing after it — an approval must lead somewhere.`, { nodeId: n.id });
         else if (!branches.has("") && !branches.has("approved")) err("approval_approved", `${name(n)} has no "approved" path.`, { nodeId: n.id });
-        for (const b of branches) if (b && b !== "approved" && b !== "rejected") err("approval_branch", `${name(n)} has a transition labelled "${b}" — an approval's paths are "approved" or "rejected".`, { nodeId: n.id });
-        if (!branches.has("rejected")) warn("approval_rejected", `${name(n)} has no "rejected" path, so a rejection simply ends the run.`, { nodeId: n.id });
+        for (const b of branches) if (b && !allowed.has(b)) err("approval_branch", `${name(n)} has a transition labelled "${b}" — an approval's paths are "approved", "rejected", or a route stored on the step.`, { nodeId: n.id });
+        if (!branches.has("rejected") && !routes.some((route) => route.branch === "rejected" || route.decision === "rejected")) warn("approval_rejected", `${name(n)} has no "rejected" path, so a rejection simply ends the run.`, { nodeId: n.id });
         break;
       }
       case "parallel":

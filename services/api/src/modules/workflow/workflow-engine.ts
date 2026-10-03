@@ -42,9 +42,11 @@ export interface WorkflowNode {
 export interface WorkflowEdge {
   from: string;
   to: string;
-  /** "true" | "false" out of a condition, "approved" | "rejected" out of an approval. Unlabelled = the default path. */
+  /** "true" | "false" out of a condition, "approved" | "rejected" out of an approval, or a route id stored on the approval. Unlabelled = the default path. */
   branch?: string;
   label?: string;
+  /** When this transition is taken, the target and everything after it may run again. Existing graphs leave this unset. */
+  revisit?: boolean;
 }
 
 export interface WorkflowDefinition {
@@ -181,7 +183,7 @@ export class WorkflowNodeError extends Error {
   }
 }
 
-export type ApprovalDecision = "approved" | "rejected";
+export type ApprovalDecision = "approved" | "rejected" | (string & {});
 
 interface ExecuteOptions {
   triggerKind?: string;
@@ -193,16 +195,44 @@ function recordStep(context: Record<string, unknown>, node: WorkflowNode, result
 }
 
 /** Which of a node's outgoing transitions to follow, given what the node decided. */
-function followable(edges: WorkflowEdge[], outcome: "default" | "true" | "false" | ApprovalDecision): string[] {
-  return edges
-    .filter((e) => {
-      if (outcome === "true") return e.branch === undefined || e.branch === "" || e.branch === "true";
-      if (outcome === "false") return e.branch === "false";
-      if (outcome === "approved") return e.branch === undefined || e.branch === "" || e.branch === "approved";
-      if (outcome === "rejected") return e.branch === "rejected";
-      return true;
-    })
-    .map((e) => e.to);
+function matchesOutcome(edge: WorkflowEdge, outcome: string): boolean {
+  if (outcome === "default") return true;
+  if (outcome === "true") return edge.branch === undefined || edge.branch === "" || edge.branch === "true";
+  if (outcome === "false") return edge.branch === "false";
+  if (outcome === "approved") return edge.branch === undefined || edge.branch === "" || edge.branch === "approved";
+  if (outcome === "rejected") return edge.branch === "rejected";
+  return edge.branch === outcome;
+}
+
+function followable(edges: WorkflowEdge[], outcome: string): string[] {
+  return edges.filter((edge) => matchesOutcome(edge, outcome)).map((edge) => edge.to);
+}
+
+function reachableIds(definition: WorkflowDefinition, start: string): string[] {
+  const next = new Map<string, string[]>();
+  for (const edge of definition.edges) next.set(edge.from, [...(next.get(edge.from) ?? []), edge.to]);
+  const seen = new Set<string>();
+  const pending = [start];
+  while (pending.length > 0) {
+    const id = pending.pop()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    for (const child of next.get(id) ?? []) pending.push(child);
+  }
+  return [...seen];
+}
+
+function pendingFrom(node: WorkflowNode, context: Record<string, unknown>): Record<string, unknown> {
+  const field = node.config.assigneeField;
+  const assigneeUserId = typeof field === "string" && context[field] != null ? context[field] : undefined;
+  return { nodeId: node.id, label: node.label ?? node.kind, ...node.config, ...(assigneeUserId != null ? { assigneeUserId } : {}) };
+}
+
+function simulatedDecision(node: WorkflowNode, context: Record<string, unknown>): string {
+  const requested = typeof context.simulateApproval === "string" ? context.simulateApproval : "approved";
+  const routes = Array.isArray(node.config.routes) ? (node.config.routes as { decision?: string }[]) : [];
+  if (routes.length > 0 && !routes.some((route) => route.decision === requested) && requested !== "approved" && requested !== "rejected") return "approved";
+  return requested;
 }
 
 async function drive(
@@ -314,30 +344,63 @@ async function drive(
             context.unregisteredActions = [...((context.unregisteredActions as unknown[]) ?? []), { node: node.id, kind: node.kind }];
             recordStep(context, node, "skipped: no handler registered");
           }
+          const pauseUntil = typeof node.config.pauseUntil === "string" ? node.config.pauseUntil : null;
+          if (!dryRun && pauseUntil && context[pauseUntil] !== true) {
+            context.pendingApproval = pendingFrom(node, context);
+            recordStep(context, node, "waiting for input");
+            return { context, status: "waiting_approval", currentNodeId: node.id, state: { stack, visited: [...visited], waitingNodeId: node.id } };
+          }
+          if (node.config.signalsJoin === true && context.__join && typeof context.__join === "object") {
+            const join = context.__join as { target?: string; remaining?: number };
+            join.remaining = (join.remaining ?? 0) - 1;
+            if (join.remaining <= 0 && join.target) {
+              visited.delete(join.target);
+              push([join.target]);
+            }
+          }
           push(followable(outgoing, "default"));
           break;
         }
         case "approval": {
           if (dryRun) {
             // A simulation never waits on a person; it takes the path named in the context (default: approved).
-            const decision: ApprovalDecision = context.simulateApproval === "rejected" ? "rejected" : "approved";
+            const decision = simulatedDecision(node, context);
             recordStep(context, node, `simulated: ${decision}`);
             push(followable(outgoing, decision));
             break;
           }
-          context.pendingApproval = { nodeId: node.id, label: node.label ?? node.kind, ...node.config };
+          context.pendingApproval = pendingFrom(node, context);
           recordStep(context, node, "waiting for approval");
           const held = [...deferred, ...stack];
           deferred.clear();
           return { context, status: "waiting_approval", currentNodeId: node.id, state: { stack: held, visited: [...visited], waitingNodeId: node.id } };
         }
         case "end":
+          if (typeof node.config.display === "string") context.outcomeDisplay = node.config.display;
+          if (node.label) context.outcomeLabel = node.label;
           recordStep(context, node, "end");
           break; // nothing follows an end node
-        case "parallel":
-          recordStep(context, node, `fan-out to ${outgoing.length}`);
-          push(followable(outgoing, "default"));
+        case "parallel": {
+          const hold = new Set(Array.isArray(node.config.holdBranches) ? (node.config.holdBranches as string[]) : []);
+          if (hold.size === 0) {
+            recordStep(context, node, `fan-out to ${outgoing.length}`);
+            push(followable(outgoing, "default"));
+            break;
+          }
+          const applies = Array.isArray(context.branchApplies) ? (context.branchApplies as string[]) : null;
+          const live = outgoing.filter((item) => !hold.has(item.branch ?? "") && (applies == null || applies.includes(item.branch ?? "")));
+          const joinEdge = outgoing.find((item) => hold.has(item.branch ?? ""));
+          recordStep(context, node, `fan-out to ${live.length}`);
+          if (joinEdge) {
+            context.__join = { target: joinEdge.to, remaining: live.length };
+            if (live.length === 0) {
+              visited.delete(joinEdge.to);
+              push([joinEdge.to]);
+            }
+          }
+          push(live.map((item) => item.to));
           break;
+        }
         default: // trigger reached as a child, or an unknown type: pass through
           push(followable(outgoing, "default"));
       }
@@ -375,12 +438,27 @@ export async function resumeWorkflow(
   options: { dryRun?: boolean } = {}
 ): Promise<WorkflowExecutionResult> {
   if (!state.waitingNodeId) throw new Error("This run is not waiting for an approval");
-  const outgoing = definition.edges.filter((e) => e.from === state.waitingNodeId);
-  const next = followable(outgoing, decision);
+  const waiting = definition.nodes.find((node) => node.id === state.waitingNodeId);
+  if (!waiting) throw new Error("This run is not waiting for an approval");
+  const visited = new Set(state.visited);
   const stack = [...state.stack];
-  for (let i = next.length - 1; i >= 0; i--) stack.push(next[i]!);
+  const pauseUntil = typeof waiting.config.pauseUntil === "string" ? waiting.config.pauseUntil : null;
   delete context.pendingApproval;
-  return drive(definition, context, { stack, visited: state.visited, waitingNodeId: null }, options.dryRun ?? false);
+  if (pauseUntil && context[pauseUntil] === true) {
+    visited.delete(waiting.id);
+    stack.push(waiting.id);
+    return drive(definition, context, { stack, visited: [...visited], waitingNodeId: null }, options.dryRun ?? false);
+  }
+  const routes = Array.isArray(waiting.config.routes) ? (waiting.config.routes as { decision?: string; revisit?: boolean }[]) : [];
+  const route = routes.find((item) => item.decision === decision);
+  const outgoing = definition.edges.filter((edge) => edge.from === state.waitingNodeId && matchesOutcome(edge, decision));
+  for (const edge of outgoing) {
+    if (route?.revisit || edge.revisit) {
+      for (const id of reachableIds(definition, edge.to)) visited.delete(id);
+    }
+  }
+  for (let i = outgoing.length - 1; i >= 0; i--) stack.push(outgoing[i]!.to);
+  return drive(definition, context, { stack, visited: [...visited], waitingNodeId: null }, options.dryRun ?? false);
 }
 
 /** The original entry point: runs to the end (or to the first approval) and returns just the context. */

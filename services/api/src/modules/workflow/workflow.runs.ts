@@ -11,6 +11,10 @@ import { controlledVersions } from "../../drizzle/schema/versioning.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { resumeWorkflow, WorkflowNodeError, type WorkflowDefinition, type WorkflowRunState } from "./workflow-engine.js";
 import { isFullAccessRole, isReviewerRole } from "../roles/roleAccess.js";
+import { permissionRoles, userPermissionRoles } from "../../drizzle/schema/permissions.js";
+import { CSA_WORKFLOW_KEY, prepareCsaDecision, readCsa, userMatchesAssignees, writeCsa } from "../csa-fai/csaFai.logic.js";
+import { persistCsa } from "../csa-fai/csaFai.persist.js";
+import { rememberCsaSla } from "../csa-fai/csaFai.service.js";
 import { nextApprovalState, roleTitleMatches, titlesFromConfig } from "./assignees.js";
 
 const EXECUTIVE_APPROVER_STEPS = new Set(["quality_manager", "president", "vice_president"]);
@@ -24,19 +28,56 @@ const EXECUTIVE_APPROVER_STEPS = new Set(["quality_manager", "president", "vice_
 export const workflowRunsRouter = Router();
 workflowRunsRouter.use(requireAuth, withDb);
 
+interface PendingAssignee {
+  label?: string;
+  roleName?: string;
+}
+
+interface PendingRoute {
+  decision: string;
+  label?: string;
+  branch?: string;
+  commentsRequired?: boolean;
+}
+
 interface PendingApproval {
   nodeId: string;
   label?: string;
   approverRole?: string;
   approverDepartment?: string;
   message?: string;
+  workflowKey?: string;
   assignee?: string;
-  assignees?: string[];
+  assignees?: (PendingAssignee | string)[];
+  assigneeUserId?: number | string;
   approvalMode?: string;
+  routes?: PendingRoute[];
+  branch?: string;
+  pauseUntil?: string;
 }
 
-function canDecide(user: { roleName: string | null; department: string | null }, pending: PendingApproval): boolean {
+async function assigneeKeys(db: Db, userId: number, roleName: string | null): Promise<string[]> {
+  const custom = await db
+    .select({ roleName: permissionRoles.roleName })
+    .from(userPermissionRoles)
+    .innerJoin(permissionRoles, eq(permissionRoles.id, userPermissionRoles.roleId))
+    .where(eq(userPermissionRoles.userId, userId));
+  return [...(roleName ? [roleName] : []), ...custom.map((row) => row.roleName)];
+}
+
+function objectAssignees(value: PendingApproval["assignees"]): PendingAssignee[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const objects = value.filter((item): item is PendingAssignee => item != null && typeof item === "object");
+  return objects.length === value.length ? objects : null;
+}
+
+function canDecide(user: { id: number; roleName: string | null; department: string | null }, pending: PendingApproval, keys: string[]): boolean {
   if (isFullAccessRole(user.roleName)) return true;
+  const objects = objectAssignees(pending.assignees);
+  if (objects) {
+    if (pending.assigneeUserId != null && Number(pending.assigneeUserId) === user.id) return true;
+    return userMatchesAssignees(keys, objects);
+  }
   if (pending.approverRole && (user.roleName === pending.approverRole || roleTitleMatches(user.roleName, pending.approverRole))) return true;
   if (isReviewerRole(user.roleName) && pending.approverRole != null && EXECUTIVE_APPROVER_STEPS.has(pending.approverRole)) return true;
   if (pending.approverDepartment && user.department === pending.approverDepartment) return true;
@@ -55,31 +96,41 @@ workflowRunsRouter.get(
       .innerJoin(workflowDefinitions, eq(workflowDefinitions.id, workflowRuns.workflowId))
       .where(and(eq(workflowRuns.status, "waiting_approval")))
       .orderBy(desc(workflowRuns.startedAt));
+    const keys = await assigneeKeys(req.db!, req.user!.id, req.user!.roleName);
     res.json(
       rows
         .filter(({ run }) => {
           const pending = pendingOf(run);
-          return pending && canDecide(req.user!, pending);
+          return pending && canDecide(req.user!, pending, keys);
         })
         .map(({ run, workflowName }) => ({ id: run.id, workflowId: run.workflowId, workflowName, startedAt: run.startedAt, currentNodeId: run.currentNodeId, pendingApproval: pendingOf(run) })),
     );
   }),
 );
 
-export const decisionSchema = z.object({ decision: z.enum(["approved", "rejected"]), notes: z.string().max(4000).optional() });
+export const decisionSchema = z.object({
+  decision: z.string().min(1).max(80),
+  notes: z.string().max(4000).optional(),
+  details: z.record(z.string(), z.unknown()).optional(),
+});
 
 workflowRunsRouter.post(
   "/:runId/decision",
   validate(decisionSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const runId = Number(req.params.runId);
-    const { decision, notes } = req.body as z.infer<typeof decisionSchema>;
+    const { decision, notes, details } = req.body as z.infer<typeof decisionSchema>;
     const [run] = await req.db!.select().from(workflowRuns).where(and(eq(workflowRuns.id, runId)));
     if (!run) throw AppError.notFound("Workflow run");
     if (run.status !== "waiting_approval" || !run.runState) throw new AppError("This run isn't waiting for an approval.", 409);
 
     const pending = pendingOf(run);
-    if (!pending || !canDecide(req.user!, pending)) throw AppError.forbidden("This approval is assigned to someone else.");
+    const keys = await assigneeKeys(req.db!, req.user!.id, req.user!.roleName);
+    if (!pending || !canDecide(req.user!, pending, keys)) throw AppError.forbidden("This approval is assigned to someone else.");
+    const routes = Array.isArray(pending.routes) ? pending.routes : [];
+    if (decision !== "approved" && decision !== "rejected" && !routes.some((route) => route.decision === decision)) {
+      throw AppError.badRequest("That decision is not on this step.");
+    }
 
     // Resume on the exact graph the run started with — the published version it captured — not whatever is live now.
     const [pinned] = run.definitionVersion
@@ -96,7 +147,7 @@ workflowRunsRouter.post(
     const approvals = [...((previous.approvals as unknown[]) ?? []), { node: pending.nodeId, decision, by: req.user!.id, notes: notes ?? null, at: new Date().toISOString() }];
     const approvedMap = (previous.approvedTitles as Record<string, string[]> | undefined) ?? {};
     const gate = nextApprovalState({
-      decision,
+      decision: decision === "rejected" ? "rejected" : "approved",
       titles: titlesFromConfig(pending as unknown as Record<string, unknown>),
       approvalMode: pending.approvalMode,
       roleName: req.user!.roleName,
@@ -117,9 +168,28 @@ workflowRunsRouter.post(
       return;
     }
     const context = { ...previous, approvals, approvedTitles: { ...approvedMap, [pending.nodeId]: gate.approvedTitles }, __db: req.db, __performedBy: req.user!.id } as Record<string, unknown>;
+    if (pending.workflowKey === CSA_WORKFLOW_KEY) {
+      if (readCsa(context).locked === "Yes") throw AppError.badRequest("This CSA FAI is locked.");
+      try {
+        const patch = prepareCsaDecision(
+          { ...pending, routes: (pending.routes ?? []).map((route) => ({ ...route, branch: route.branch ?? route.decision, label: route.label ?? route.decision })) },
+          decision,
+          notes,
+          details,
+          context,
+        );
+        writeCsa(context, { ...readCsa(context), ...patch });
+      } catch (err) {
+        throw AppError.badRequest((err as Error).message);
+      }
+    }
 
     try {
       const execution = await resumeWorkflow(graph, run.runState as WorkflowRunState, context, decision);
+      if (pending.workflowKey === CSA_WORKFLOW_KEY) {
+        await rememberCsaSla(req.db as Db, execution.context, execution.currentNodeId);
+        await persistCsa(req.db as Db, readCsa(execution.context));
+      }
       const { __db: _db, __performedBy: _performedBy, ...persistable } = execution.context;
       const waiting = execution.status === "waiting_approval";
       const [updated] = await req
@@ -131,7 +201,7 @@ workflowRunsRouter.post(
         entityType: "WorkflowRun",
         entityId: run.id,
         action: "status_change",
-        changes: { event: decision === "approved" ? "approval_approved" : "approval_rejected", node: pending.nodeId, workflowId: run.workflowId, notes: notes ?? null, result: updated!.status },
+        changes: { event: decision === "approved" ? "approval_approved" : decision === "rejected" ? "approval_rejected" : `approval_${decision}`, node: pending.nodeId, workflowId: run.workflowId, notes: notes ?? null, result: updated!.status },
         performedBy: req.user!.id,
       });
       res.json(updated);

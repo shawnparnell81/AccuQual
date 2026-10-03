@@ -66,6 +66,9 @@ export function FaiQueuePage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link to="/fai/csa" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+            CSA first article
+          </Link>
           <Link to="/fai/plans/new" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             New inspection plan
           </Link>

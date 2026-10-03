@@ -13,12 +13,18 @@ import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 const workflowHooks = createResourceHooks<WorkflowDefinition>("workflow");
 
+interface PendingRoute {
+  decision: string;
+  label: string;
+  commentsRequired?: boolean;
+}
+
 interface PendingApproval {
   id: number;
   workflowId: number;
   workflowName: string;
   startedAt: string;
-  pendingApproval?: { nodeId: string; label?: string; message?: string; approverRole?: string; approverDepartment?: string };
+  pendingApproval?: { nodeId: string; label?: string; message?: string; approverRole?: string; approverDepartment?: string; workflowKey?: string; routes?: PendingRoute[] };
 }
 
 /** Approvals waiting on the signed-in user. Shown to everyone; empty for most people. */
@@ -28,11 +34,18 @@ function PendingApprovals() {
   const { data: pending = [] } = useQuery<PendingApproval[]>({ queryKey: ["workflow/pending-approval"], queryFn: async () => (await apiClient.get("/workflow/runs/pending-approval")).data, refetchInterval: 60_000 });
   const [active, setActive] = useState<PendingApproval | null>(null);
   const [notes, setNotes] = useState("");
+  const [rejectedBy, setRejectedBy] = useState("");
+  const [rejectionDate, setRejectionDate] = useState("");
 
   const decide = useMutation({
-    mutationFn: async ({ id, decision }: { id: number; decision: "approved" | "rejected" }) => (await apiClient.post(`/workflow/runs/${id}/decision`, { decision, notes: notes || undefined })).data,
+    mutationFn: async ({ id, decision }: { id: number; decision: string }) => {
+      const pending = active?.pendingApproval;
+      const details = pending?.workflowKey === "csa_fai" && decision === "rejected" ? { rejectionReason: notes, rejectedBy, rejectionDate } : undefined;
+      return (await apiClient.post(`/workflow/runs/${id}/decision`, { decision, notes: notes || undefined, details })).data;
+    },
     onSuccess: (_d, v) => {
-      toast.success(v.decision === "approved" ? "Approved — the workflow continues." : "Rejected.");
+      const label = active?.pendingApproval?.routes?.find((route) => route.decision === v.decision)?.label;
+      toast.success(label ? `${label} recorded. The workflow continues.` : v.decision === "approved" ? "Approved — the workflow continues." : "Rejected.");
       setActive(null);
       setNotes("");
       void queryClient.invalidateQueries({ queryKey: ["workflow/pending-approval"] });
@@ -62,16 +75,35 @@ function PendingApprovals() {
         <div className="flex flex-col gap-3 text-sm">
           <p>{active?.pendingApproval?.message || active?.pendingApproval?.label}</p>
           <label className="flex flex-col gap-1">
-            <span className="font-medium">Notes (optional)</span>
+            <span className="font-medium">{active?.pendingApproval?.routes?.some((route) => route.commentsRequired) ? "Notes" : "Notes (optional)"}</span>
             <textarea className="min-h-16 rounded-md border border-border bg-background p-2 text-sm" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </label>
-          <div className="flex justify-end gap-2">
-            <button disabled={decide.isPending} onClick={() => active && decide.mutate({ id: active.id, decision: "rejected" })} className="rounded-md border border-destructive/50 px-4 py-2 text-destructive disabled:opacity-60">
-              Reject
-            </button>
-            <button disabled={decide.isPending} onClick={() => active && decide.mutate({ id: active.id, decision: "approved" })} className="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-60">
-              Approve
-            </button>
+          {active?.pendingApproval?.workflowKey === "csa_fai" && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="flex flex-col gap-1">
+                <span className="font-medium">Rejected by</span>
+                <input className="rounded-md border border-border bg-background p-2 text-sm" value={rejectedBy} onChange={(e) => setRejectedBy(e.target.value)} />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="font-medium">Rejection date</span>
+                <input type="date" className="rounded-md border border-border bg-background p-2 text-sm" value={rejectionDate} onChange={(e) => setRejectionDate(e.target.value)} />
+              </label>
+            </div>
+          )}
+          <div className="flex flex-wrap justify-end gap-2">
+            {(active?.pendingApproval?.routes?.length ? active.pendingApproval.routes : [
+              { decision: "rejected", label: "Reject" },
+              { decision: "approved", label: "Approve" },
+            ]).map((route) => (
+              <button
+                key={route.decision}
+                disabled={decide.isPending || (route.commentsRequired && notes.trim() === "")}
+                onClick={() => active && decide.mutate({ id: active.id, decision: route.decision })}
+                className={route.decision === "approved" ? "rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-60" : "rounded-md border border-border px-4 py-2 disabled:opacity-60"}
+              >
+                {route.label}
+              </button>
+            ))}
           </div>
         </div>
       </Modal>
@@ -101,7 +133,7 @@ export function WorkflowBuilderPage() {
   const [runningSimulated, setRunningSimulated] = useState(false);
 
   const create = useMutation({
-    mutationFn: async (input: { name: string; module?: string; definition?: WorkflowTemplate["definition"] }) => (await apiClient.post<{ id: number }>("/workflow", input)).data,
+    mutationFn: async (input: { name: string; module?: string; definition?: WorkflowTemplate["definition"]; metadata?: WorkflowTemplate["metadata"] }) => (await apiClient.post<{ id: number }>("/workflow", input)).data,
     onSuccess: (created) => navigate(`/workflow/${created.id}`),
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't create the workflow.")),
   });
@@ -115,7 +147,7 @@ export function WorkflowBuilderPage() {
     const next = new URLSearchParams(params);
     next.delete("template");
     setParams(next, { replace: true });
-    create.mutate({ name: template.name, module: template.module, definition: template.definition });
+    create.mutate({ name: template.name, module: template.module, definition: template.definition, metadata: template.metadata });
   }, [create, params, setParams, templates]);
 
   const run = useMutation({
@@ -271,7 +303,7 @@ export function WorkflowBuilderPage() {
               {templates.map((t) => (
                 <button
                   key={t.key}
-                  onClick={() => create.mutate({ name: t.name, module: t.module, definition: t.definition })}
+                  onClick={() => create.mutate({ name: t.name, module: t.module, definition: t.definition, metadata: t.metadata })}
                   disabled={create.isPending}
                   title={t.description}
                   className="rounded-md border border-border px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-60"
