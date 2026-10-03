@@ -100,7 +100,15 @@ export function validateWorkflow(input: WorkflowGraphInput): WorkflowGraphReport
         break;
       case "condition": {
         const cfg = n.config ?? {};
-        if (!cfg.field) err("condition_field", `${name(n)} needs a field to test.`, { nodeId: n.id });
+        const clauses = Array.isArray(cfg.allOf) ? cfg.allOf : Array.isArray(cfg.anyOf) ? cfg.anyOf : null;
+        const clauseReady = (clause: unknown) => {
+          if (!clause || typeof clause !== "object") return false;
+          const item = clause as Record<string, unknown>;
+          return typeof item.field === "string" && item.field.trim() !== "" && CONDITION_OPERATORS.some((op) => item[op] !== undefined);
+        };
+        if (clauses) {
+          if (clauses.length === 0 || !clauses.every(clauseReady)) err("condition_operator", `${name(n)} needs a comparison on each part of the rule.`, { nodeId: n.id });
+        } else if (!cfg.field) err("condition_field", `${name(n)} needs a field to test.`, { nodeId: n.id });
         else if (!CONDITION_OPERATORS.some((op) => cfg[op] !== undefined)) err("condition_operator", `${name(n)} needs a comparison (equals, greater than, ...).`, { nodeId: n.id });
         if (outgoing.length === 0) err("dead_end", `${name(n)} has no transitions out — a decision must lead somewhere.`, { nodeId: n.id });
         else {
@@ -118,9 +126,11 @@ export function validateWorkflow(input: WorkflowGraphInput): WorkflowGraphReport
         break;
       case "approval": {
         const cfg = n.config ?? {};
-        const assignees = Array.isArray(cfg.assignees) ? cfg.assignees : [];
         const routes = Array.isArray(cfg.routes) ? (cfg.routes as { decision?: string; branch?: string }[]) : [];
-        if (!cfg.approverRole && !cfg.approverDepartment && assignees.length === 0 && !cfg.assigneeField) err("approval_approver", `${name(n)} needs an approver role, department, or assignee.`, { nodeId: n.id });
+        const assignee = typeof cfg.assignee === "string" && cfg.assignee.trim() !== "";
+        const stringAssignees = Array.isArray(cfg.assignees) && cfg.assignees.some((item) => typeof item === "string" && item.trim() !== "");
+        const objectAssignees = Array.isArray(cfg.assignees) && cfg.assignees.some((item) => item != null && typeof item === "object");
+        if (!cfg.approverRole && !cfg.approverDepartment && !assignee && !stringAssignees && !objectAssignees && !cfg.assigneeField) err("approval_approver", `${name(n)} needs an approver role, department, or assignee.`, { nodeId: n.id });
         const allowed = new Set(["", "approved", "rejected"]);
         for (const route of routes) {
           if (route.branch) allowed.add(route.branch);

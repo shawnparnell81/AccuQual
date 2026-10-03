@@ -15,6 +15,7 @@ import { permissionRoles, userPermissionRoles } from "../../drizzle/schema/permi
 import { CSA_WORKFLOW_KEY, prepareCsaDecision, readCsa, userMatchesAssignees, writeCsa } from "../csa-fai/csaFai.logic.js";
 import { persistCsa } from "../csa-fai/csaFai.persist.js";
 import { rememberCsaSla } from "../csa-fai/csaFai.service.js";
+import { nextApprovalState, roleTitleMatches, titlesFromConfig } from "./assignees.js";
 
 const EXECUTIVE_APPROVER_STEPS = new Set(["quality_manager", "president", "vice_president"]);
 
@@ -46,8 +47,10 @@ interface PendingApproval {
   approverDepartment?: string;
   message?: string;
   workflowKey?: string;
-  assignees?: PendingAssignee[];
+  assignee?: string;
+  assignees?: (PendingAssignee | string)[];
   assigneeUserId?: number | string;
+  approvalMode?: string;
   routes?: PendingRoute[];
   branch?: string;
   pauseUntil?: string;
@@ -62,17 +65,23 @@ async function assigneeKeys(db: Db, userId: number, roleName: string | null): Pr
   return [...(roleName ? [roleName] : []), ...custom.map((row) => row.roleName)];
 }
 
+function objectAssignees(value: PendingApproval["assignees"]): PendingAssignee[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const objects = value.filter((item): item is PendingAssignee => item != null && typeof item === "object");
+  return objects.length === value.length ? objects : null;
+}
+
 function canDecide(user: { id: number; roleName: string | null; department: string | null }, pending: PendingApproval, keys: string[]): boolean {
   if (isFullAccessRole(user.roleName)) return true;
-  const assignees = Array.isArray(pending.assignees) ? pending.assignees : [];
-  if (assignees.length > 0) {
+  const objects = objectAssignees(pending.assignees);
+  if (objects) {
     if (pending.assigneeUserId != null && Number(pending.assigneeUserId) === user.id) return true;
-    return userMatchesAssignees(keys, assignees);
+    return userMatchesAssignees(keys, objects);
   }
-  if (pending.approverRole && user.roleName === pending.approverRole) return true;
+  if (pending.approverRole && (user.roleName === pending.approverRole || roleTitleMatches(user.roleName, pending.approverRole))) return true;
   if (isReviewerRole(user.roleName) && pending.approverRole != null && EXECUTIVE_APPROVER_STEPS.has(pending.approverRole)) return true;
   if (pending.approverDepartment && user.department === pending.approverDepartment) return true;
-  return false;
+  return titlesFromConfig(pending as unknown as Record<string, unknown>).some((title) => roleTitleMatches(user.roleName, title));
 }
 
 const pendingOf = (run: WorkflowRun) => (run.context as { pendingApproval?: PendingApproval } | null)?.pendingApproval;
@@ -136,7 +145,29 @@ workflowRunsRouter.post(
 
     const previous = (run.context ?? {}) as Record<string, unknown>;
     const approvals = [...((previous.approvals as unknown[]) ?? []), { node: pending.nodeId, decision, by: req.user!.id, notes: notes ?? null, at: new Date().toISOString() }];
-    const context = { ...previous, approvals, __db: req.db, __performedBy: req.user!.id } as Record<string, unknown>;
+    const approvedMap = (previous.approvedTitles as Record<string, string[]> | undefined) ?? {};
+    const gate = nextApprovalState({
+      decision: decision === "rejected" ? "rejected" : "approved",
+      titles: titlesFromConfig(pending as unknown as Record<string, unknown>),
+      approvalMode: pending.approvalMode,
+      roleName: req.user!.roleName,
+      fullAccess: isFullAccessRole(req.user!.roleName),
+      alreadyApproved: approvedMap[pending.nodeId] ?? [],
+    });
+    if (gate.waiting) {
+      const partial = { ...previous, approvals, approvedTitles: { ...approvedMap, [pending.nodeId]: gate.approvedTitles } };
+      const [updated] = await req.db!.update(workflowRuns).set({ context: partial, status: "waiting_approval" }).where(eq(workflowRuns.id, run.id)).returning();
+      await recordAuditTrail(req.db as Db, {
+        entityType: "WorkflowRun",
+        entityId: run.id,
+        action: "status_change",
+        changes: { event: "approval_partial", node: pending.nodeId, workflowId: run.workflowId, notes: notes ?? null, approvedTitles: gate.approvedTitles },
+        performedBy: req.user!.id,
+      });
+      res.json(updated);
+      return;
+    }
+    const context = { ...previous, approvals, approvedTitles: { ...approvedMap, [pending.nodeId]: gate.approvedTitles }, __db: req.db, __performedBy: req.user!.id } as Record<string, unknown>;
     if (pending.workflowKey === CSA_WORKFLOW_KEY) {
       if (readCsa(context).locked === "Yes") throw AppError.badRequest("This CSA FAI is locked.");
       try {

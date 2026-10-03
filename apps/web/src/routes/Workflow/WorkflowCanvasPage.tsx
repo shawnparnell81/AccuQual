@@ -308,6 +308,16 @@ function DetailsPanel({ metadata, setMetadata, editable }: { metadata: WfMetadat
           </option>
         ))}
       </SelectField>
+      {Array.isArray(metadata.slaSummary) && metadata.slaSummary.length > 0 && (
+        <div className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">SLA rules</span>
+          <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+            {(metadata.slaSummary as unknown[]).filter((line): line is string => typeof line === "string").map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <label className="flex items-start gap-2 text-sm">
         <input type="checkbox" className="mt-1" checked={metadata.allowLoops === true} onChange={(e) => set({ allowLoops: e.target.checked })} />
         <span>

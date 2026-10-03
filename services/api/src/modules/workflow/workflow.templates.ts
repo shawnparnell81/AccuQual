@@ -1,5 +1,6 @@
 import type { WorkflowDefinition } from "./workflow-engine.js";
 import { CSA_FAI_DEFINITION, CSA_FAI_METADATA } from "../csa-fai/csaFai.workflow.js";
+import { NCR_PROCESS_NAME, ncrProcessDefinition } from "./ncrProcess.workflow.js";
 
 export interface WorkflowTemplate {
   key: string;
@@ -25,6 +26,13 @@ export interface WorkflowTemplate {
  * row, same as hand-building one from scratch.
  */
 export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
+  {
+    key: "ncr_process",
+    name: NCR_PROCESS_NAME,
+    module: "ncr",
+    description: "The NCR process: review, containment, root cause, corrective action, implementation, approval, and effectiveness, with the SLA rules on the same workflow.",
+    definition: ncrProcessDefinition,
+  },
   {
     key: "ncr_closure_notification",
     name: "NCR Closure Notification",

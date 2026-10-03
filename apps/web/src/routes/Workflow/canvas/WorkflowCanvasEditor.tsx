@@ -20,7 +20,7 @@ import "@xyflow/react/dist/style.css";
 import clsx from "clsx";
 import { Trash2 } from "lucide-react";
 import { SelectField, TextField } from "../../../components/forms/Field";
-import { ActionFields, ConditionFields, DEPARTMENT_OPTIONS, TRIGGER_KINDS } from "../WorkflowConfigFields";
+import { ActionFields, ConditionFields, conditionSummary, DEPARTMENT_OPTIONS, TRIGGER_KINDS } from "../WorkflowConfigFields";
 import { INTEGRATION_KINDS, NODE_META, NODE_ORDER, edgeId, fromPayload, newNodeId, nodeExits, toPayload, type CanvasEdge, type CanvasNode, type NodeData, type WfMetadata, type WfNodeType, type WfPayload } from "./graph";
 import type { ValidationIssue } from "../../../api/versioning";
 
@@ -33,14 +33,19 @@ function WorkflowNodeView({ data, selected }: NodeProps<CanvasNode>) {
   const node = data.node;
   const meta = NODE_META[node.type];
   const Icon = meta.icon;
-  const assigneeLabels = Array.isArray(node.config.assignees)
-    ? (node.config.assignees as { label?: string; roleName?: string }[]).map((assignee) => assignee.label || assignee.roleName).filter(Boolean).join(", ")
-    : "";
+  const approvalConfig = node.config as { approverRole?: string; approverDepartment?: string; assignee?: string; assignees?: unknown };
+  const storedAssignees = Array.isArray(approvalConfig.assignees) ? approvalConfig.assignees : [];
+  const assigneeSummary = [
+    approvalConfig.assignee,
+    ...storedAssignees.map((item) => (typeof item === "string" ? item : item && typeof item === "object" ? (item as { label?: string; roleName?: string }).label || (item as { roleName?: string }).roleName : "")),
+  ]
+    .filter((item): item is string => typeof item === "string" && item.trim() !== "")
+    .join(", ");
   const summary =
     node.type === "condition"
-      ? String((node.config as { field?: string }).field ?? "set a field")
+      ? (conditionSummary(node.config) ?? String((node.config as { field?: string }).field ?? "set a field"))
       : node.type === "approval"
-        ? assigneeLabels || String((node.config as { approverRole?: string; approverDepartment?: string }).approverRole ?? (node.config as { approverDepartment?: string }).approverDepartment ?? "choose an approver")
+        ? assigneeSummary || approvalConfig.approverRole || approvalConfig.approverDepartment || "choose an approver"
         : node.kind.replace(/_/g, " ");
   const exits = nodeExits(node);
   return (
@@ -171,7 +176,7 @@ function Inspector({ node, edge, nodes, editable, actionKinds, onNodeChange, onE
         </>
       )}
 
-      {n.type === "condition" && <ConditionFields key={n.id} node={n} onChange={setConfig} />}
+      {n.type === "condition" && (conditionSummary(n.config) ? <p className="text-xs text-muted-foreground">{conditionSummary(n.config)}</p> : <ConditionFields key={n.id} node={n} onChange={setConfig} />)}
 
       {(n.type === "action" || n.type === "integration") && (
         <>
@@ -212,6 +217,11 @@ function Inspector({ node, edge, nodes, editable, actionKinds, onNodeChange, onE
           ) : (
             <p className="text-xs text-muted-foreground">Admins can always decide. Draw one connection labelled “approved” and, optionally, one labelled “rejected”.</p>
           )}
+          {(() => {
+            const stored = n.config as { assignee?: unknown; assignees?: unknown };
+            const names = [stored.assignee, ...(Array.isArray(stored.assignees) ? stored.assignees : [])].filter((item): item is string => typeof item === "string" && item.trim() !== "");
+            return names.length > 0 ? <p className="text-xs text-muted-foreground">Notification targets on this step: {names.join(", ")}. An administrator assigns the matching role.</p> : null;
+          })()}
         </>
       )}
 
@@ -316,7 +326,7 @@ function EditorInner({ initial, editable, actionKinds, issues, onChange, sidePan
       es.map((e) => {
         if (e.id !== id) return e;
         const data = { ...e.data, ...patch };
-        return { ...e, id: edgeId(e.source, e.target, data.branch), sourceHandle: data.branch || "out", label: data.branch || data.label || undefined, data };
+        return { ...e, id: edgeId(e.source, e.target, data.branch), sourceHandle: data.branch || "out", label: data.label || data.branch || undefined, data };
       }),
     );
   const deleteSelected = () => {

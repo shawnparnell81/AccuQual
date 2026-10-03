@@ -185,7 +185,10 @@ describe("CSA first article workflow", () => {
     expect(sql).toContain("csa_fai_records");
     expect(sql.toLowerCase()).not.toContain("controlled_versions");
     const journal = readFileSync(new URL("../src/drizzle/migrations/meta/_journal.json", import.meta.url), "utf8");
+    expect(journal).toContain('"tag": "0102_ncr_process_workflow"');
     expect(journal).toContain('"tag": "0103_csa_first_article"');
-    expect(journal).not.toContain("0102_");
+    expect(journal.indexOf('"tag": "0102_ncr_process_workflow"')).toBeLessThan(journal.indexOf('"tag": "0103_csa_first_article"'));
+    expect(journal).toContain('"idx": 102');
+    expect(journal).toContain('"idx": 103');
   });
 });

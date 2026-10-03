@@ -19,7 +19,28 @@ export const TRIGGER_KINDS = [
   "auto_created_from_receiving",
   "escalated_from_receiving",
   "reorder-sent",
+  "submitted",
 ];
+
+function clauseText(clause: unknown): string {
+  if (!clause || typeof clause !== "object") return "";
+  const item = clause as Record<string, unknown>;
+  const field = typeof item.field === "string" ? item.field : "field";
+  const op = CONDITION_OPERATORS.find((name) => item[name] !== undefined);
+  if (!op) return field;
+  const value = item[op];
+  const shown = Array.isArray(value) ? value.map(String).join(", ") : String(value);
+  return `${field} ${op} ${shown}`;
+}
+
+/** Read-only line for a rule made of several comparisons. The single-field editor would wipe those comparisons. */
+export function conditionSummary(config: Record<string, unknown>): string | null {
+  const allOf = Array.isArray(config.allOf) ? config.allOf : null;
+  const anyOf = Array.isArray(config.anyOf) ? config.anyOf : null;
+  const clauses = allOf ?? anyOf;
+  if (!clauses || clauses.length === 0) return null;
+  return clauses.map(clauseText).filter(Boolean).join(allOf ? " AND " : " OR ");
+}
 export const CONDITION_OPERATORS = ["equals", "notEquals", "in", "greaterThan", "greaterOrEqual", "lessThan", "lessOrEqual", "contains"] as const;
 type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
 export const DEPARTMENT_OPTIONS = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management"];
@@ -135,6 +156,22 @@ export function ActionFields({ node, onChange }: { node: WorkflowNode; onChange:
       );
     case "ai_suggestion":
       return <p className="text-xs text-muted-foreground">No configuration needed — calls the workflow AI-note pipeline with this run's full event context.</p>;
+    case "ncr_process": {
+      const raw = node.config as Record<string, unknown>;
+      const list = (value: unknown) => (Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []);
+      const fields = [...list(raw.fields), ...list(raw.requiredFields)];
+      const notify = list(raw.notify);
+      const updates = raw.updates && typeof raw.updates === "object" ? Object.entries(raw.updates as Record<string, unknown>) : [];
+      return (
+        <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+          {typeof raw.workflowStage === "string" && <p>Stage: {raw.workflowStage}</p>}
+          {fields.length > 0 && <p>Fields: {fields.join(", ")}</p>}
+          {notify.length > 0 && <p>Notify: {notify.join(", ")}</p>}
+          {updates.length > 0 && <p>Updates: {updates.map(([key, value]) => `${key} = ${String(value)}`).join("; ")}</p>}
+          {typeof raw.note === "string" && <p>{raw.note}</p>}
+        </div>
+      );
+    }
     default:
       return <p className="text-xs text-muted-foreground">Unrecognized action kind — check Health for details.</p>;
   }

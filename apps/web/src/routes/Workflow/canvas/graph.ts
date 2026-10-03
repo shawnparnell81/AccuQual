@@ -143,7 +143,7 @@ export function fromPayload(payload: WfPayload | undefined): { nodes: CanvasNode
       source: e.from,
       target: e.to,
       sourceHandle: e.branch || "out",
-      label: e.branch || e.label || undefined,
+      label: e.label || e.branch || undefined,
       data: { branch: e.branch, label: e.label },
     })),
     metadata: payload?.metadata ?? {},
