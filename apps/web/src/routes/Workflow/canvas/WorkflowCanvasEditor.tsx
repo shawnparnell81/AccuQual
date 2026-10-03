@@ -20,7 +20,7 @@ import "@xyflow/react/dist/style.css";
 import clsx from "clsx";
 import { Trash2 } from "lucide-react";
 import { SelectField, TextField } from "../../../components/forms/Field";
-import { ActionFields, ConditionFields, DEPARTMENT_OPTIONS, TRIGGER_KINDS } from "../WorkflowConfigFields";
+import { ActionFields, ConditionFields, conditionSummary, DEPARTMENT_OPTIONS, TRIGGER_KINDS } from "../WorkflowConfigFields";
 import { INTEGRATION_KINDS, NODE_META, NODE_ORDER, edgeId, fromPayload, newNodeId, toPayload, type CanvasEdge, type CanvasNode, type NodeData, type WfMetadata, type WfNodeType, type WfPayload } from "./graph";
 import type { ValidationIssue } from "../../../api/versioning";
 
@@ -33,11 +33,13 @@ function WorkflowNodeView({ data, selected }: NodeProps<CanvasNode>) {
   const node = data.node;
   const meta = NODE_META[node.type];
   const Icon = meta.icon;
+  const approvalConfig = node.config as { approverRole?: string; approverDepartment?: string; assignee?: string; assignees?: string[] };
+  const assigneeSummary = [approvalConfig.assignee, ...(approvalConfig.assignees ?? [])].filter((item): item is string => typeof item === "string" && item.trim() !== "").join(", ");
   const summary =
     node.type === "condition"
-      ? String((node.config as { field?: string }).field ?? "set a field")
+      ? (conditionSummary(node.config) ?? String((node.config as { field?: string }).field ?? "set a field"))
       : node.type === "approval"
-        ? String((node.config as { approverRole?: string; approverDepartment?: string }).approverRole ?? (node.config as { approverDepartment?: string }).approverDepartment ?? "choose an approver")
+        ? assigneeSummary || approvalConfig.approverRole || approvalConfig.approverDepartment || "choose an approver"
         : node.kind.replace(/_/g, " ");
   return (
     <div className={clsx("relative w-52 rounded-lg border-2 bg-card px-3 py-2 shadow-sm", meta.accent.split(" ")[0], selected && "ring-2 ring-primary/60", data.issueCount > 0 && "!border-destructive")}>
@@ -163,7 +165,7 @@ function Inspector({ node, edge, nodes, editable, actionKinds, onNodeChange, onE
         </>
       )}
 
-      {n.type === "condition" && <ConditionFields key={n.id} node={n} onChange={setConfig} />}
+      {n.type === "condition" && (conditionSummary(n.config) ? <p className="text-xs text-muted-foreground">{conditionSummary(n.config)}</p> : <ConditionFields key={n.id} node={n} onChange={setConfig} />)}
 
       {(n.type === "action" || n.type === "integration") && (
         <>
@@ -199,6 +201,11 @@ function Inspector({ node, edge, nodes, editable, actionKinds, onNodeChange, onE
             ))}
           </SelectField>
           <TextField label="What is being approved" value={cfg.message ?? ""} onChange={(e) => setConfig({ ...n.config, message: e.target.value || undefined })} />
+          {(() => {
+            const stored = n.config as { assignee?: unknown; assignees?: unknown };
+            const names = [stored.assignee, ...(Array.isArray(stored.assignees) ? stored.assignees : [])].filter((item): item is string => typeof item === "string" && item.trim() !== "");
+            return names.length > 0 ? <p className="text-xs text-muted-foreground">Notification targets on this step: {names.join(", ")}. An administrator assigns the matching role.</p> : null;
+          })()}
           <p className="text-xs text-muted-foreground">Admins can always decide. Draw one connection labelled “approved” and, optionally, one labelled “rejected”.</p>
         </>
       )}
@@ -304,7 +311,7 @@ function EditorInner({ initial, editable, actionKinds, issues, onChange, sidePan
       es.map((e) => {
         if (e.id !== id) return e;
         const data = { ...e.data, ...patch };
-        return { ...e, id: edgeId(e.source, e.target, data.branch), sourceHandle: data.branch || "out", label: data.branch || data.label || undefined, data };
+        return { ...e, id: edgeId(e.source, e.target, data.branch), sourceHandle: data.branch || "out", label: data.label || data.branch || undefined, data };
       }),
     );
   const deleteSelected = () => {

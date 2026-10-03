@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { and, eq } from "drizzle-orm";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
@@ -8,6 +9,7 @@ import { syncNcrFormData, mapSeverityToClassification, ncrIsoDate } from "./ncr.
 import * as quarantineService from "../quarantine/quarantine.service.js";
 import { noteRepeatNcr, repeatReport } from "../quality-automation/qualityAutomation.service.js";
 import { canonicalNcrStep, decorateNcrBody, ncrStatusAliases } from "./ncr.workflow.js";
+import { ncrProcessMetrics, type NcrMetricSource } from "./ncrSla.js";
 
 export const baseHandlers = crudFactory(ncr, {
   entityName: "NCR",
@@ -48,6 +50,42 @@ export const baseHandlers = crudFactory(ncr, {
 
 /** GET /ncr — filters (supplier, receiving line, owner, status, limit, offset) live on the shared list helper. */
 export const listHandler = baseHandlers.list;
+
+/** GET /ncr/process-metrics — dashboard counts for the NCR Process. Registered before /:id. */
+export const processMetricsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const conditions = [eq(ncr.isDeleted, false)];
+  if (req.siteId) conditions.push(eq(ncr.siteId, req.siteId));
+  const rows = await req.db!.select().from(ncr).where(and(...conditions));
+  const sources: NcrMetricSource[] = rows.map((row) => ({
+    id: row.id,
+    status: row.status,
+    severity: row.severity,
+    title: row.title,
+    description: row.description,
+    supplierId: row.supplierId,
+    createdAt: row.createdAt,
+    closedAt: row.closedAt,
+    workflowStage: row.workflowStage,
+    slaStatus: row.slaStatus,
+    daysOpen: row.daysOpen,
+    daysInStage: row.daysInStage,
+    processData: row.processData,
+  }));
+  res.json(ncrProcessMetrics(sources));
+});
+
+/** A workflow close locks the record. The six-step form stays editable until that lock is set. */
+export const rejectLockedNcr = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
+  const ids = new Set<number>();
+  const paramId = Number(req.params.id);
+  if (Number.isFinite(paramId)) ids.add(paramId);
+  if (Array.isArray(req.body?.ids)) for (const id of req.body.ids) if (Number.isFinite(Number(id))) ids.add(Number(id));
+  for (const id of ids) {
+    const [row] = await req.db!.select({ processData: ncr.processData }).from(ncr).where(eq(ncr.id, id));
+    if (row?.processData?.locked === true) throw AppError.badRequest("This NCR is closed and locked.");
+  }
+  next();
+});
 
 export const repeatsHandler = asyncHandler(async (req: Request, res: Response) => {
   res.json(await repeatReport(req.db!, Number(req.params.id), req.allowedSiteIds));

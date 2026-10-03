@@ -100,7 +100,15 @@ export function validateWorkflow(input: WorkflowGraphInput): WorkflowGraphReport
         break;
       case "condition": {
         const cfg = n.config ?? {};
-        if (!cfg.field) err("condition_field", `${name(n)} needs a field to test.`, { nodeId: n.id });
+        const clauses = Array.isArray(cfg.allOf) ? cfg.allOf : Array.isArray(cfg.anyOf) ? cfg.anyOf : null;
+        const clauseReady = (clause: unknown) => {
+          if (!clause || typeof clause !== "object") return false;
+          const item = clause as Record<string, unknown>;
+          return typeof item.field === "string" && item.field.trim() !== "" && CONDITION_OPERATORS.some((op) => item[op] !== undefined);
+        };
+        if (clauses) {
+          if (clauses.length === 0 || !clauses.every(clauseReady)) err("condition_operator", `${name(n)} needs a comparison on each part of the rule.`, { nodeId: n.id });
+        } else if (!cfg.field) err("condition_field", `${name(n)} needs a field to test.`, { nodeId: n.id });
         else if (!CONDITION_OPERATORS.some((op) => cfg[op] !== undefined)) err("condition_operator", `${name(n)} needs a comparison (equals, greater than, ...).`, { nodeId: n.id });
         if (outgoing.length === 0) err("dead_end", `${name(n)} has no transitions out — a decision must lead somewhere.`, { nodeId: n.id });
         else {
@@ -118,7 +126,9 @@ export function validateWorkflow(input: WorkflowGraphInput): WorkflowGraphReport
         break;
       case "approval": {
         const cfg = n.config ?? {};
-        if (!cfg.approverRole && !cfg.approverDepartment) err("approval_approver", `${name(n)} needs an approver role or department.`, { nodeId: n.id });
+        const assignee = typeof cfg.assignee === "string" && cfg.assignee.trim() !== "";
+        const assignees = Array.isArray(cfg.assignees) && cfg.assignees.some((item) => typeof item === "string" && item.trim() !== "");
+        if (!cfg.approverRole && !cfg.approverDepartment && !assignee && !assignees) err("approval_approver", `${name(n)} needs an approver role, department, or assignee.`, { nodeId: n.id });
         if (outgoing.length === 0) err("dead_end", `${name(n)} has nothing after it — an approval must lead somewhere.`, { nodeId: n.id });
         else if (!branches.has("") && !branches.has("approved")) err("approval_approved", `${name(n)} has no "approved" path.`, { nodeId: n.id });
         for (const b of branches) if (b && b !== "approved" && b !== "rejected") err("approval_branch", `${name(n)} has a transition labelled "${b}" — an approval's paths are "approved" or "rejected".`, { nodeId: n.id });

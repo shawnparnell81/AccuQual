@@ -52,7 +52,7 @@ describe("workflow execution model", () => {
     };
     ran.length = 0;
     await executeWorkflow(def, {}, { triggerKind: "go" });
-    expect(ran.filter((r) => r === "c")).toHaveLength(1);
+    expect(ran).toEqual(["a", "b", "c"]);
   });
 
   it("an end node stops its branch", async () => {
