@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { StatusBadge } from "../../components/tables/StatusBadge";
-import { criteriaForBranch, type CsaCriterion } from "../../../../services/api/src/modules/csa-fai/csaFai.logic";
+import { criteriaForBranch, type CsaCriterion } from "../../../../../services/api/src/modules/csa-fai/csaFai.logic";
 
 interface CsaListRow {
   id: number;

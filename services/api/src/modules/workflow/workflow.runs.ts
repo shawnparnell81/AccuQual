@@ -35,6 +35,7 @@ interface PendingAssignee {
 interface PendingRoute {
   decision: string;
   label?: string;
+  branch?: string;
   commentsRequired?: boolean;
 }
 
@@ -139,7 +140,13 @@ workflowRunsRouter.post(
     if (pending.workflowKey === CSA_WORKFLOW_KEY) {
       if (readCsa(context).locked === "Yes") throw AppError.badRequest("This CSA FAI is locked.");
       try {
-        const patch = prepareCsaDecision(pending, decision, notes, details, context);
+        const patch = prepareCsaDecision(
+          { ...pending, routes: (pending.routes ?? []).map((route) => ({ ...route, branch: route.branch ?? route.decision, label: route.label ?? route.decision })) },
+          decision,
+          notes,
+          details,
+          context,
+        );
         writeCsa(context, { ...readCsa(context), ...patch });
       } catch (err) {
         throw AppError.badRequest((err as Error).message);
