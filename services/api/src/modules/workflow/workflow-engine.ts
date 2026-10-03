@@ -50,6 +50,8 @@ export interface WorkflowEdge {
 export interface WorkflowDefinition {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
+  /** Canvas settings. The engine walks nodes and edges; it does not read this. */
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -64,11 +66,18 @@ export interface WorkflowDefinition {
  * would, not a separate, potentially-diverging code path.
  */
 export type ActionHandler = (node: WorkflowNode, context: Record<string, unknown>, dryRun: boolean) => Promise<void> | void;
+export type WorkflowProgressHook = (node: WorkflowNode, context: Record<string, unknown>, dryRun: boolean) => Promise<void> | void;
 
 const actionRegistry: Record<string, ActionHandler> = {};
+const progressHooks: WorkflowProgressHook[] = [];
 
 export function registerActionHandler(kind: string, handler: ActionHandler) {
   actionRegistry[kind] = handler;
+}
+
+/** Called when a node is entered. Action handlers stay responsible for their own kind; this is for steps such as approvals that have no action handler. */
+export function registerWorkflowProgressHook(hook: WorkflowProgressHook) {
+  progressHooks.push(hook);
 }
 
 /** The real, currently-registered action kinds — read by workflow.controller.ts's actionKindsHandler and healthHandler (a definition referencing an unregistered kind is a real "missing action" health warning, task 8). */
@@ -93,30 +102,55 @@ function resolveField(context: Record<string, unknown>, field: string): unknown 
   return resolveField(nested as Record<string, unknown>, rest.join("."));
 }
 
-function evaluateCondition(node: WorkflowNode, context: Record<string, unknown>): boolean {
-  const { field, equals, notEquals, in: inList, greaterThan, greaterOrEqual, lessThan, lessOrEqual, contains } = node.config as {
-    field?: string;
-    equals?: unknown;
-    notEquals?: unknown;
-    in?: unknown[];
-    greaterThan?: number;
-    greaterOrEqual?: number;
-    lessThan?: number;
-    lessOrEqual?: number;
-    contains?: string;
-  };
-  if (!field) return true;
-  const value = resolveField(context, field);
+interface ConditionClause {
+  field?: string;
+  equals?: unknown;
+  notEquals?: unknown;
+  in?: unknown[];
+  greaterThan?: number;
+  greaterOrEqual?: number;
+  lessThan?: number;
+  lessOrEqual?: number;
+  contains?: string;
+}
 
-  if (equals !== undefined) return value === equals;
-  if (notEquals !== undefined) return value !== notEquals;
-  if (Array.isArray(inList)) return inList.includes(value);
-  if (greaterThan !== undefined) return typeof value === "number" && value > greaterThan;
-  if (greaterOrEqual !== undefined) return typeof value === "number" && value >= greaterOrEqual;
-  if (lessThan !== undefined) return typeof value === "number" && value < lessThan;
-  if (lessOrEqual !== undefined) return typeof value === "number" && value <= lessOrEqual;
-  if (contains !== undefined) return typeof value === "string" && value.includes(contains);
+function asNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) return Number(value);
+  return undefined;
+}
+
+function evalClause(clause: ConditionClause, context: Record<string, unknown>): boolean {
+  if (!clause.field) return true;
+  const value = resolveField(context, clause.field);
+  if (clause.equals !== undefined) return value === clause.equals;
+  if (clause.notEquals !== undefined) return value !== clause.notEquals;
+  if (Array.isArray(clause.in)) return clause.in.includes(value);
+  if (clause.greaterThan !== undefined) {
+    const number = asNumber(value);
+    return number !== undefined && number > clause.greaterThan;
+  }
+  if (clause.greaterOrEqual !== undefined) {
+    const number = asNumber(value);
+    return number !== undefined && number >= clause.greaterOrEqual;
+  }
+  if (clause.lessThan !== undefined) {
+    const number = asNumber(value);
+    return number !== undefined && number < clause.lessThan;
+  }
+  if (clause.lessOrEqual !== undefined) {
+    const number = asNumber(value);
+    return number !== undefined && number <= clause.lessOrEqual;
+  }
+  if (clause.contains !== undefined) return typeof value === "string" && value.includes(clause.contains);
   return true;
+}
+
+function evaluateCondition(node: WorkflowNode, context: Record<string, unknown>): boolean {
+  const config = node.config as ConditionClause & { anyOf?: ConditionClause[]; allOf?: ConditionClause[] };
+  if (Array.isArray(config.allOf) && config.allOf.length > 0) return config.allOf.every((clause) => evalClause(clause, context));
+  if (Array.isArray(config.anyOf) && config.anyOf.length > 0) return config.anyOf.some((clause) => evalClause(clause, context));
+  return evalClause(config, context);
 }
 
 /** The saved position of a run that stopped at an approval node. */
@@ -179,10 +213,17 @@ async function drive(
 ): Promise<WorkflowExecutionResult> {
   const nodesById = new Map(definition.nodes.map((n) => [n.id, n]));
   const edgesFrom = new Map<string, WorkflowEdge[]>();
-  for (const edge of definition.edges) edgesFrom.set(edge.from, [...(edgesFrom.get(edge.from) ?? []), edge]);
+  const incoming = new Map<string, string[]>();
+  for (const edge of definition.edges) {
+    edgesFrom.set(edge.from, [...(edgesFrom.get(edge.from) ?? []), edge]);
+    incoming.set(edge.to, [...(incoming.get(edge.to) ?? []), edge.from]);
+  }
 
   const visited = new Set(state.visited);
   const stack = [...state.stack];
+  const deferred = new Set<string>();
+  const forced = new Set<string>();
+  const deferCount = new Map<string, number>();
   let currentNodeId: string | null = state.waitingNodeId;
 
   // Push children so the FIRST transition is visited first (and its whole subtree before the next) — the depth-first order
@@ -192,16 +233,69 @@ async function drive(
     for (let i = ids.length - 1; i >= 0; i--) stack.push(ids[i]!);
   };
 
-  while (stack.length > 0) {
+  const sourceStillComing = (sourceId: string, joinId: string): boolean => {
+    if (visited.has(sourceId)) return false;
+    const pending = [...stack, ...deferred];
+    if (pending.includes(sourceId)) return true;
+    const seen = new Set<string>([joinId]);
+    const queue = [...pending];
+    while (queue.length > 0) {
+      const id = queue.pop()!;
+      if (id === sourceId) return true;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      for (const edge of edgesFrom.get(id) ?? []) {
+        if (edge.to !== joinId) queue.push(edge.to);
+      }
+    }
+    return false;
+  };
+
+  // A step with several incoming branches (the parallel join) waits until every branch that is still going to run has arrived.
+  // An untaken condition path is not "still coming", so it does not hold the join.
+  const waitingOnOthers = (nodeId: string): boolean => {
+    const sources = incoming.get(nodeId) ?? [];
+    if (sources.length < 2) return false;
+    return sources.some((sourceId) => sourceStillComing(sourceId, nodeId));
+  };
+
+  const releaseReady = () => {
+    for (const id of [...deferred]) {
+      if (!waitingOnOthers(id)) {
+        deferred.delete(id);
+        stack.push(id);
+      }
+    }
+  };
+
+  while (stack.length > 0 || deferred.size > 0) {
+    if (stack.length === 0) {
+      for (const id of deferred) {
+        forced.add(id);
+        stack.push(id);
+      }
+      deferred.clear();
+    }
     const nodeId = stack.pop()!;
     if (visited.has(nodeId)) continue;
-    visited.add(nodeId);
     const node = nodesById.get(nodeId);
     if (!node) continue;
+    if (!forced.has(nodeId) && waitingOnOthers(nodeId)) {
+      const times = (deferCount.get(nodeId) ?? 0) + 1;
+      deferCount.set(nodeId, times);
+      if (times <= definition.nodes.length + 2) {
+        deferred.add(nodeId);
+        continue;
+      }
+    }
+    forced.delete(nodeId);
+    deferred.delete(nodeId);
+    visited.add(nodeId);
     currentNodeId = node.id;
     const outgoing = edgesFrom.get(node.id) ?? [];
 
     try {
+      for (const hook of progressHooks) await hook(node, context, dryRun);
       switch (node.type) {
         case "condition": {
           const passed = evaluateCondition(node, context);
@@ -233,7 +327,9 @@ async function drive(
           }
           context.pendingApproval = { nodeId: node.id, label: node.label ?? node.kind, ...node.config };
           recordStep(context, node, "waiting for approval");
-          return { context, status: "waiting_approval", currentNodeId: node.id, state: { stack, visited: [...visited], waitingNodeId: node.id } };
+          const held = [...deferred, ...stack];
+          deferred.clear();
+          return { context, status: "waiting_approval", currentNodeId: node.id, state: { stack: held, visited: [...visited], waitingNodeId: node.id } };
         }
         case "end":
           recordStep(context, node, "end");
@@ -245,6 +341,7 @@ async function drive(
         default: // trigger reached as a child, or an unknown type: pass through
           push(followable(outgoing, "default"));
       }
+      releaseReady();
     } catch (err) {
       throw new WorkflowNodeError(node.id, err);
     }

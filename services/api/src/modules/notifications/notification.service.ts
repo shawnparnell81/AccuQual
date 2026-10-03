@@ -242,6 +242,22 @@ export async function notifyRecipients(db: Db, recipients: string[], subject: st
   return notify(db, recipients, subject, body, relatedEntityType, relatedEntityId, html);
 }
 
+/**
+ * Bell notice only. AccuQual has no outbound email for these reminders, so this never calls the mail transport
+ * and never invents an address. The bell reads every channel for the signed-in user's own email.
+ */
+export async function notifyInApp(db: Db, recipients: string[], subject: string, body: string, relatedEntityType?: string, relatedEntityId?: number): Promise<number> {
+  let sent = 0;
+  for (const recipient of recipients) {
+    if (!recipient.includes("@")) continue;
+    const [row] = await db.select({ notificationPreferences: users.notificationPreferences }).from(users).where(eq(users.email, recipient));
+    if (row && !normalizeNotificationPreferences(row.notificationPreferences).inApp) continue;
+    await db.insert(notificationLog).values({ channel: "in_app", recipient, subject, body, status: "in_app", relatedEntityType, relatedEntityId });
+    sent += 1;
+  }
+  return sent;
+}
+
 export type NotificationPreferences = { inApp: boolean; email: boolean; dailyDigest: boolean };
 export type EmailDeliveryMode = "ready" | "log_only";
 export type NotificationPreferencesView = NotificationPreferences & { emailDelivery: EmailDeliveryMode };

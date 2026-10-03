@@ -13,6 +13,7 @@ import type { Department } from "../../middleware/departmentAccess.js";
 import { runPipelineAndRecord } from "../ai/ai.usage.js";
 import { runWorkflowAiNotePipeline } from "../ai/ai.pipelines.js";
 import { triggerErpSync } from "../settings/settings.erpSync.js";
+import "../ncr/ncrProcess.apply.js";
 
 /**
  * Phase 9 task 4 — real action handlers registered into workflow-engine.ts's

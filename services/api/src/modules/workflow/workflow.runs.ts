@@ -11,6 +11,7 @@ import { controlledVersions } from "../../drizzle/schema/versioning.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { resumeWorkflow, WorkflowNodeError, type WorkflowDefinition, type WorkflowRunState } from "./workflow-engine.js";
 import { isFullAccessRole, isReviewerRole } from "../roles/roleAccess.js";
+import { nextApprovalState, roleTitleMatches, titlesFromConfig } from "./assignees.js";
 
 const EXECUTIVE_APPROVER_STEPS = new Set(["quality_manager", "president", "vice_president"]);
 
@@ -29,14 +30,17 @@ interface PendingApproval {
   approverRole?: string;
   approverDepartment?: string;
   message?: string;
+  assignee?: string;
+  assignees?: string[];
+  approvalMode?: string;
 }
 
 function canDecide(user: { roleName: string | null; department: string | null }, pending: PendingApproval): boolean {
   if (isFullAccessRole(user.roleName)) return true;
-  if (pending.approverRole && user.roleName === pending.approverRole) return true;
+  if (pending.approverRole && (user.roleName === pending.approverRole || roleTitleMatches(user.roleName, pending.approverRole))) return true;
   if (isReviewerRole(user.roleName) && pending.approverRole != null && EXECUTIVE_APPROVER_STEPS.has(pending.approverRole)) return true;
   if (pending.approverDepartment && user.department === pending.approverDepartment) return true;
-  return false;
+  return titlesFromConfig(pending as unknown as Record<string, unknown>).some((title) => roleTitleMatches(user.roleName, title));
 }
 
 const pendingOf = (run: WorkflowRun) => (run.context as { pendingApproval?: PendingApproval } | null)?.pendingApproval;
@@ -90,7 +94,29 @@ workflowRunsRouter.post(
 
     const previous = (run.context ?? {}) as Record<string, unknown>;
     const approvals = [...((previous.approvals as unknown[]) ?? []), { node: pending.nodeId, decision, by: req.user!.id, notes: notes ?? null, at: new Date().toISOString() }];
-    const context = { ...previous, approvals, __db: req.db, __performedBy: req.user!.id } as Record<string, unknown>;
+    const approvedMap = (previous.approvedTitles as Record<string, string[]> | undefined) ?? {};
+    const gate = nextApprovalState({
+      decision,
+      titles: titlesFromConfig(pending as unknown as Record<string, unknown>),
+      approvalMode: pending.approvalMode,
+      roleName: req.user!.roleName,
+      fullAccess: isFullAccessRole(req.user!.roleName),
+      alreadyApproved: approvedMap[pending.nodeId] ?? [],
+    });
+    if (gate.waiting) {
+      const partial = { ...previous, approvals, approvedTitles: { ...approvedMap, [pending.nodeId]: gate.approvedTitles } };
+      const [updated] = await req.db!.update(workflowRuns).set({ context: partial, status: "waiting_approval" }).where(eq(workflowRuns.id, run.id)).returning();
+      await recordAuditTrail(req.db as Db, {
+        entityType: "WorkflowRun",
+        entityId: run.id,
+        action: "status_change",
+        changes: { event: "approval_partial", node: pending.nodeId, workflowId: run.workflowId, notes: notes ?? null, approvedTitles: gate.approvedTitles },
+        performedBy: req.user!.id,
+      });
+      res.json(updated);
+      return;
+    }
+    const context = { ...previous, approvals, approvedTitles: { ...approvedMap, [pending.nodeId]: gate.approvedTitles }, __db: req.db, __performedBy: req.user!.id } as Record<string, unknown>;
 
     try {
       const execution = await resumeWorkflow(graph, run.runState as WorkflowRunState, context, decision);

@@ -30,6 +30,8 @@ import {
   dispositionStepHandler,
   verifyHandler,
   presentNcrWorkflow,
+  processMetricsHandler,
+  rejectLockedNcr,
   rejectCloseWhileQuarantineOnHold,
   listNcrQuarantineItemsHandler,
   addNcrQuarantineItemHandler,
@@ -41,22 +43,23 @@ export const ncrRouter = Router();
 ncrRouter.use(requireAuth, withDb, withSiteContext, requireDepartmentAccess("ncr"), presentNcrWorkflow);
 
 ncrRouter.get("/", listHandler);
+ncrRouter.get("/process-metrics", processMetricsHandler);
 ncrRouter.post("/", validate(createNcrSchema), baseHandlers.create);
 // Bulk actions pilot (see crudFactory.ts's bulkUpdate) — "bulk" must be registered before the ":id" param route
 // below, or a request to PATCH /ncr/bulk would be read as :id="bulk" instead of reaching this handler.
-ncrRouter.patch("/bulk", validate(bulkUpdateNcrSchema), rejectCloseWhileQuarantineOnHold, baseHandlers.bulkUpdate);
+ncrRouter.patch("/bulk", validate(bulkUpdateNcrSchema), rejectLockedNcr, rejectCloseWhileQuarantineOnHold, baseHandlers.bulkUpdate);
 ncrRouter.get("/:id/repeats", repeatsHandler);
 ncrRouter.get("/:id", baseHandlers.getOne);
-ncrRouter.patch("/:id", validate(updateNcrSchema), rejectCloseWhileQuarantineOnHold, baseHandlers.update);
-ncrRouter.delete("/:id", deleteRecordHandler("ncr"));
+ncrRouter.patch("/:id", validate(updateNcrSchema), rejectLockedNcr, rejectCloseWhileQuarantineOnHold, baseHandlers.update);
+ncrRouter.delete("/:id", rejectLockedNcr, deleteRecordHandler("ncr"));
 
-ncrRouter.post("/:id/assign", validate(assignNcrSchema), assignHandler);
-ncrRouter.post("/:id/containment", validate(containmentNcrSchema), containmentHandler);
-ncrRouter.post("/:id/root-cause", validate(rootCauseNcrSchema), rootCauseHandler);
-ncrRouter.post("/:id/corrective-action", validate(correctiveActionNcrSchema), correctiveActionHandler);
-ncrRouter.post("/:id/disposition-step", validate(dispositionStepNcrSchema), dispositionStepHandler);
-ncrRouter.post("/:id/verify", validate(verifyNcrSchema), verifyHandler);
-ncrRouter.post("/:id/close", closeHandler);
+ncrRouter.post("/:id/assign", rejectLockedNcr, validate(assignNcrSchema), assignHandler);
+ncrRouter.post("/:id/containment", rejectLockedNcr, validate(containmentNcrSchema), containmentHandler);
+ncrRouter.post("/:id/root-cause", rejectLockedNcr, validate(rootCauseNcrSchema), rootCauseHandler);
+ncrRouter.post("/:id/corrective-action", rejectLockedNcr, validate(correctiveActionNcrSchema), correctiveActionHandler);
+ncrRouter.post("/:id/disposition-step", rejectLockedNcr, validate(dispositionStepNcrSchema), dispositionStepHandler);
+ncrRouter.post("/:id/verify", rejectLockedNcr, validate(verifyNcrSchema), verifyHandler);
+ncrRouter.post("/:id/close", rejectLockedNcr, closeHandler);
 ncrRouter.get("/:id/quarantine-items", listNcrQuarantineItemsHandler);
-ncrRouter.post("/:id/quarantine-items", validate(addNcrQuarantineItemSchema), addNcrQuarantineItemHandler);
-ncrRouter.post("/:id/disposition", validate(completeNcrDispositionSchema), completeNcrDispositionHandler);
+ncrRouter.post("/:id/quarantine-items", rejectLockedNcr, validate(addNcrQuarantineItemSchema), addNcrQuarantineItemHandler);
+ncrRouter.post("/:id/disposition", rejectLockedNcr, validate(completeNcrDispositionSchema), completeNcrDispositionHandler);

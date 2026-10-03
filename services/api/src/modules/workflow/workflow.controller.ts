@@ -27,8 +27,17 @@ export const listHandler = asyncHandler(async (req: Request, res: Response) => {
  * the row is never empty, but nothing reads it as in force until then.
  */
 export const createHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { name, module, definition, metadata } = req.body as { name: string; module?: string; definition?: { nodes?: never[]; edges?: never[] }; metadata?: Record<string, unknown> };
-  const payload = toWorkflowPayload({ nodes: definition?.nodes, edges: definition?.edges, metadata: { ...(metadata ?? {}), name, ...(module ? { module } : {}) } });
+  const { name, module, definition, metadata } = req.body as {
+    name: string;
+    module?: string;
+    definition?: { nodes?: never[]; edges?: never[]; metadata?: Record<string, unknown> };
+    metadata?: Record<string, unknown>;
+  };
+  const payload = toWorkflowPayload({
+    nodes: definition?.nodes,
+    edges: definition?.edges,
+    metadata: { ...(definition?.metadata ?? {}), ...(metadata ?? {}), name, ...(module ? { module } : {}) },
+  });
   const [created] = await req
     .db!.insert(workflowDefinitions)
     .values({ name, module, createdBy: req.user?.id, isActive: "false", definition: payload as unknown as Record<string, unknown>, version: 1, versionHistory: [] })

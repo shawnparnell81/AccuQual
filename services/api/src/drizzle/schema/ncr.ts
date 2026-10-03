@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
 import { sites } from "./sites.js";
@@ -37,6 +37,17 @@ export const ncr = pgTable("ncr", {
   // no due-date concept on this table before).
   dueDate: timestamp("due_date"),
   closedAt: timestamp("closed_at"),
+  // Process stage for the NCR Process workflow. The six-step record status stays in `status`.
+  workflowStage: text("workflow_stage"),
+  processData: jsonb("process_data").$type<Record<string, unknown>>(),
+  slaTargetDate: timestamp("sla_target_date"),
+  slaDueDate: timestamp("sla_due_date"),
+  slaStatus: text("sla_status"),
+  slaWarningSent: boolean("sla_warning_sent").notNull().default(false),
+  slaEscalated: boolean("sla_escalated").notNull().default(false),
+  stageDueDate: timestamp("stage_due_date"),
+  daysOpen: integer("days_open"),
+  daysInStage: integer("days_in_stage"),
   isDeleted: boolean("is_deleted").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
