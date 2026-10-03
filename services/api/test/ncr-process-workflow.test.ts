@@ -73,7 +73,7 @@ describe("NCR process workflow", () => {
   });
 
   it("stores the same graph in the migration", () => {
-    const sql = readFileSync(new URL("../src/drizzle/migrations/0101_ncr_process_workflow.sql", import.meta.url), "utf8");
+    const sql = readFileSync(new URL("../src/drizzle/migrations/0102_ncr_process_workflow.sql", import.meta.url), "utf8");
     const match = sql.match(/\$ncrdef\$([\s\S]*)\$ncrdef\$/);
     expect(match).toBeTruthy();
     const stored = JSON.parse(match![1]!) as { nodes: { id: string }[]; edges: { from: string; to: string }[]; metadata: { allowLoops?: boolean; sla?: { overallDays?: { Minor: number } } } };
@@ -81,6 +81,14 @@ describe("NCR process workflow", () => {
     expect(stored.edges).toEqual(def.edges);
     expect(stored.metadata.allowLoops).toBe(true);
     expect(stored.metadata.sla?.overallDays?.Minor).toBe(30);
+    expect(sql).toContain("'draft'");
+    expect(sql).not.toContain("'published'");
+    expect(sql).toContain("'false'");
+    const journal = JSON.parse(readFileSync(new URL("../src/drizzle/migrations/meta/_journal.json", import.meta.url), "utf8")) as { entries: { idx: number; tag: string }[] };
+    const tags = journal.entries.map((entry) => entry.tag);
+    expect(tags).toContain("0101_clear_published_versions");
+    expect(tags).not.toContain("0101_ncr_process_workflow");
+    expect(journal.entries.at(-1)).toMatchObject({ idx: 102, tag: "0102_ncr_process_workflow" });
   });
 });
 

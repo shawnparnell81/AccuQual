@@ -1,5 +1,6 @@
 -- NCR Process on the existing workflow builder, plus SLA columns on each NCR.
 -- The six-step NCR status column is not changed.
+-- The workflow stays inactive. Version 1 is a draft so Shawn can publish it himself.
 ALTER TABLE "ncr" ADD COLUMN IF NOT EXISTS "workflow_stage" text;--> statement-breakpoint
 ALTER TABLE "ncr" ADD COLUMN IF NOT EXISTS "process_data" jsonb;--> statement-breakpoint
 ALTER TABLE "ncr" ADD COLUMN IF NOT EXISTS "sla_target_date" timestamp;--> statement-breakpoint
@@ -15,11 +16,11 @@ SELECT 'NCR Process', 'ncr', 'false', $ncrdef${"nodes":[{"id":"t1","type":"trigg
 WHERE NOT EXISTS (
   SELECT 1 FROM "workflow_definitions" WHERE "name" = 'NCR Process' AND "module" = 'ncr'
 );--> statement-breakpoint
-INSERT INTO "controlled_versions" ("subject_type", "subject_id", "version_number", "status", "payload", "metadata", "published_at")
-SELECT 'workflow', d."id", 1, 'published', d."definition", '{"changeSummary":"NCR Process with stage SLAs"}'::jsonb, now()
+INSERT INTO "controlled_versions" ("subject_type", "subject_id", "version_number", "status", "payload", "metadata")
+SELECT 'workflow', d."id", 1, 'draft', d."definition", '{"changeSummary":"NCR Process with stage SLAs"}'::jsonb
 FROM "workflow_definitions" d
 WHERE d."name" = 'NCR Process' AND d."module" = 'ncr'
   AND NOT EXISTS (
     SELECT 1 FROM "controlled_versions" cv
-    WHERE cv."subject_type" = 'workflow' AND cv."subject_id" = d."id" AND cv."version_number" = 1
+    WHERE cv."subject_type" = 'workflow' AND cv."subject_id" = d."id"
   );
