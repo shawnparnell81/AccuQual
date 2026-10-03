@@ -40,7 +40,7 @@ function PendingApprovals() {
   const decide = useMutation({
     mutationFn: async ({ id, decision }: { id: number; decision: string }) => {
       const pending = active?.pendingApproval;
-      const details = pending?.workflowKey === "csa_fai" && decision === "rejected" ? { rejectionReason: notes, rejectedBy, rejectionDate } : undefined;
+      const details = (pending?.workflowKey === "csa_fai" || pending?.workflowKey === "fpm_fai") && decision === "rejected" ? { rejectionReason: notes, rejectedBy, rejectionDate } : undefined;
       return (await apiClient.post(`/workflow/runs/${id}/decision`, { decision, notes: notes || undefined, details })).data;
     },
     onSuccess: (_d, v) => {
@@ -78,7 +78,7 @@ function PendingApprovals() {
             <span className="font-medium">{active?.pendingApproval?.routes?.some((route) => route.commentsRequired) ? "Notes" : "Notes (optional)"}</span>
             <textarea className="min-h-16 rounded-md border border-border bg-background p-2 text-sm" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </label>
-          {active?.pendingApproval?.workflowKey === "csa_fai" && (
+          {(active?.pendingApproval?.workflowKey === "csa_fai" || active?.pendingApproval?.workflowKey === "fpm_fai") && (
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="flex flex-col gap-1">
                 <span className="font-medium">Rejected by</span>

@@ -37,6 +37,7 @@ import { workflowRouter } from "../modules/workflow/workflow.routes.js";
 // AND every integration test's createApp() both already load.
 import "../modules/workflow/workflowActions.js";
 import "../modules/csa-fai/csaFai.actions.js";
+import "../modules/fuel-pump-fai/fuelPumpFai.actions.js";
 import { aiRouter } from "../modules/ai/ai.routes.js";
 import { digitalTwinRouter } from "../modules/digital-twin/digital-twin.routes.js";
 import { deviceIngestRouter } from "../modules/digital-twin/digital-twin.deviceIngest.routes.js";

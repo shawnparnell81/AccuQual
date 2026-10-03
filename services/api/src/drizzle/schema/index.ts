@@ -66,3 +66,4 @@ export * from "./versioning.js";
 export * from "./qualityAutomation.js";
 export * from "./faiSourceControl.js";
 export * from "./csaFai.js";
+export * from "./fuelPumpFai.js";

@@ -5,6 +5,7 @@ import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { assignFaiSchema, assignPullSchema, completePullSchema, faiDecisionSchema, openFaiSchema, savePlanSchema, saveResultsSchema } from "./fai.validation.js";
 import { csaFaiRouter } from "../csa-fai/csaFai.routes.js";
+import { fuelPumpFaiRouter } from "../fuel-pump-fai/fuelPumpFai.routes.js";
 import {
   approveRecordHandler,
   assignPullHandler,
@@ -55,3 +56,4 @@ faiRouter.post("/records/:id/approve", validate(faiDecisionSchema), approveRecor
 faiRouter.post("/records/:id/reject", validate(faiDecisionSchema), rejectRecordHandler);
 
 faiRouter.use("/csa", csaFaiRouter);
+faiRouter.use("/fuel-pump", fuelPumpFaiRouter);

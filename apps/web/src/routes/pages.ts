@@ -72,6 +72,8 @@ export const ScarFormDetailPage = lazyNamed("/scar-forms", () => import("./ScarF
 export const FaiQueuePage = lazyNamed("/fai", () => import("./Fai/FaiQueuePage"), "FaiQueuePage");
 export const CsaFaiListPage = lazyNamed("/fai/csa", () => import("./Fai/CsaFaiPage"), "CsaFaiListPage");
 export const CsaFaiRecordPage = lazyNamed("/fai/csa", () => import("./Fai/CsaFaiPage"), "CsaFaiRecordPage");
+export const FuelPumpFaiListPage = lazyNamed("/fai/fuel-pump", () => import("./Fai/FuelPumpFaiPage"), "FuelPumpFaiListPage");
+export const FuelPumpFaiRecordPage = lazyNamed("/fai/fuel-pump", () => import("./Fai/FuelPumpFaiPage"), "FuelPumpFaiRecordPage");
 export const FaiPlanPage = lazyNamed("/fai", () => import("./Fai/FaiPlanPage"), "FaiPlanPage");
 export const FaiRecordPage = lazyNamed("/fai", () => import("./Fai/FaiRecordPage"), "FaiRecordPage");
 export const FaiSourcesPage = lazyNamed("/fai", () => import("./Fai/FaiSourcesPage"), "FaiSourcesPage");

@@ -69,6 +69,9 @@ export function FaiQueuePage() {
           <Link to="/fai/csa" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             CSA first article
           </Link>
+          <Link to="/fai/fuel-pump" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
+            Fuel pump FAI
+          </Link>
           <Link to="/fai/plans/new" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             New inspection plan
           </Link>
