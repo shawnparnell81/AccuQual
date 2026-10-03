@@ -19,8 +19,8 @@ describe("retired Master Document Register", () => {
       start: null,
     });
     expect(FORM_TEMPLATES.some((form) => form.formKey === "master_document_register" || form.title === "Master Document Register")).toBe(false);
-    expect(RETIRED_FORM_KEYS).toEqual(["master_document_register", "frm-tst-001", "frm-tst-002"]);
-    expect(FORM_TEMPLATES.some((form) => form.formKey === "frm-tst-001" || form.formKey === "frm-tst-002")).toBe(false);
+    expect(RETIRED_FORM_KEYS).toEqual(["master_document_register"]);
+    expect(FORM_TEMPLATES.filter((form) => form.formKey === "frm-tst-001" || form.formKey === "frm-tst-002").map((form) => form.formKey)).toEqual(["frm-tst-001", "frm-tst-002"]);
     const revision = FORM_TEMPLATES.find((form) => form.formKey === "document_revision_record");
     expect(revision).toMatchObject({
       title: "Document Revision Record",

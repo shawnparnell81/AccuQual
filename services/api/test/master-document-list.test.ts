@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FORM_TEMPLATES, PRINTED_FORM_REVISION } from "../src/modules/document-folders/formFiling.js";
+import { FORM_TEMPLATES, OMITTED_FROM_MASTER_DOCUMENT_LIST, PRINTED_FORM_REVISION } from "../src/modules/document-folders/formFiling.js";
 import { buildMasterDocumentRows, documentNumberForForm, withRegisteredForms, type RegisteredFormSource } from "../src/modules/documents/masterDocumentList.js";
 
 describe("master document list", () => {
@@ -178,7 +178,7 @@ describe("master document list", () => {
       title: seed.title,
       number: documentNumberForForm(seed.formKey, seed.formId),
       href: seed.subjectRoute,
-    })).filter((seed) => seed.number);
+    })).filter((seed) => seed.number && !OMITTED_FROM_MASTER_DOCUMENT_LIST.has(seed.formKey));
     const formRows = rows.filter((row) => row.status === "Template" || (row.documentId === "FRM-NCR-001" && row.title === "NON-CONFORMANCE REPORT (NCR)"));
     expect(formRows).toHaveLength(expected.length);
     expect(rows.filter((row) => row.documentId === "DOC-7")).toHaveLength(1);
@@ -208,6 +208,20 @@ describe("master document list", () => {
     expect(rows.find((row) => row.title === "MONTHLY ENGINEERING DEVELOPMENT REPORT")).toMatchObject({ documentId: "TMP-ENG-001" });
     expect(rows.filter((row) => row.title === "ASTM E542 Gravimetric Volume Calculator")).toEqual([]);
     expect(rows.some((row) => row.documentId === "FRM-TST-001" || row.documentId === "FRM-TST-002")).toBe(false);
+    expect(FORM_TEMPLATES.find((seed) => seed.formKey === "frm-tst-001")).toMatchObject({
+      formId: "FRM-TST-001",
+      title: "ASTM E542 Gravimetric Volume Calculator",
+      topic: "Engineering",
+      subjectRoute: "/iso-forms/frm-tst-001",
+    });
+    expect(FORM_TEMPLATES.find((seed) => seed.formKey === "frm-tst-001")?.start?.body).toEqual({ formType: "volume_water", data: { cells: { B10: 8, B11: 0.00001 } } });
+    expect(FORM_TEMPLATES.find((seed) => seed.formKey === "frm-tst-002")).toMatchObject({
+      formId: "FRM-TST-002",
+      title: "ASTM E542 Gravimetric Volume Calculator",
+      topic: "Engineering",
+      subjectRoute: "/iso-forms/frm-tst-002",
+    });
+    expect(FORM_TEMPLATES.find((seed) => seed.formKey === "frm-tst-002")?.start?.body).toEqual({ formType: "volume_heptane", data: { cells: { B10: 8, B11: 0.00001 } } });
     expect(rows.find((row) => row.title === "Corrective Action Request")).toBeUndefined();
     expect(rows.find((row) => row.title === "8D Problem Solving")).toBeUndefined();
     expect(rows.find((row) => row.title === "Document Revision Record")).toBeUndefined();
