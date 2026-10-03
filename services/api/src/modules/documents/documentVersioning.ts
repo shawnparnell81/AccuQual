@@ -16,6 +16,7 @@ import { capa } from "../../drizzle/schema/capa.js";
 import { audits } from "../../drizzle/schema/audits.js";
 import { trainingCourses } from "../../drizzle/schema/training.js";
 import { AppError } from "../../utils/appError.js";
+import { isInObsoleteArchive } from "./obsoleteArchive.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import * as engine from "../versioning/versioning.service.js";
@@ -191,6 +192,13 @@ export const documentAdapter: SubjectAdapter = {
   },
 
   bootstrapStatus: (live) => (live.legacyStatus === "in_review" ? "in_review" : live.legacyStatus === "draft" ? "draft" : "published"),
+
+  // An obsolete archived document cannot take a new version row. Leaving it unversioned keeps the archive lock and
+  // does not invent a published revision the freeze would then protect.
+  async shouldBootstrap(db, id) {
+    const doc = await loadDocument(db, id);
+    return !isInObsoleteArchive(doc);
+  },
 
   async guardDraft(db, id) {
     const doc = await loadDocument(db, id);
