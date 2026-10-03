@@ -115,9 +115,9 @@ describe("new blank forms", () => {
     expect(FILEABLE_FORM_KEYS.has("frm-dwg-001")).toBe(true);
     expect(SUGGESTED_SUBJECT_PATH["frm-doc-001"]).toEqual(["ISO Compliance Documents", "Quality", "Document Control", "Document Change Requests"]);
     expect(SUGGESTED_SUBJECT_PATH["frm-dev-009"]).toEqual(["ISO Compliance Documents", "Engineering", "Design & Development"]);
-    expect(SUGGESTED_SUBJECT_PATH["frm-val-001"]).toEqual(["ISO Compliance Documents", "Engineering", "CSA", "Validation"]);
-    expect(SUGGESTED_SUBJECT_PATH["frm-dev-001"]).toEqual(["ISO Compliance Documents", "Engineering", "CSA", "Development"]);
-    expect(SUGGESTED_SUBJECT_PATH["frm-val-005"]).toEqual(["ISO Compliance Documents", "Engineering", "Gas/Electric Lifts", "Validation"]);
+    expect(SUGGESTED_SUBJECT_PATH["frm-val-001"]).toEqual(["ISO Compliance Documents", "Quality", "FAI / Validation", "CSA"]);
+    expect(SUGGESTED_SUBJECT_PATH["frm-dev-001"]).toEqual(["ISO Compliance Documents", "Quality", "FAI / Validation", "CSA"]);
+    expect(SUGGESTED_SUBJECT_PATH["frm-val-005"]).toEqual(["ISO Compliance Documents", "Quality", "FAI / Validation", "Gas/Electric Lifts"]);
     expect(SUGGESTED_SUBJECT_PATH["frm-fai-001"]).toEqual(["ISO Compliance Documents", "Quality", "FAI / Validation"]);
     expect(SUGGESTED_SUBJECT_PATH["frm-qa-001"]).toEqual(["ISO Compliance Documents", "Quality", "Product Alerts"]);
     expect(FILEABLE_FORM_KEYS.has("ncr")).toBe(false);

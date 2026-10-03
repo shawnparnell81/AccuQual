@@ -4,7 +4,7 @@ import { withDb } from "../../lib/requestDb.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import type { Db } from "../../lib/requestDb.js";
-import { getMyNotificationPreferences, listMyNotifications, markAllNotificationsRead, markNotificationRead, updateMyNotificationPreferences } from "./notification.service.js";
+import { getMyNotificationPreferences, listMyNotifications, markAllNotificationsRead, markNotificationRead, openMyNotification, updateMyNotificationPreferences } from "./notification.service.js";
 
 // Self-service only — no requireRole here. Deliberately its own router,
 // mounted at /notifications BEFORE notification.routes.ts's admin-only
@@ -56,6 +56,18 @@ notificationsMeRouter.post(
   asyncHandler(async (req, res) => {
     const updated = await markAllNotificationsRead(req.db! as Db, req.user!.id);
     res.json({ updated });
+  })
+);
+
+/** POST /notifications/:id/open — mark read and return a path only when the caller can open the record. */
+notificationsMeRouter.post(
+  "/:id/open",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) throw AppError.badRequest("Invalid notification id");
+    const result = await openMyNotification(req.db! as Db, id, req.user!);
+    if (!result) throw AppError.notFound("Notification");
+    res.json(result);
   })
 );
 

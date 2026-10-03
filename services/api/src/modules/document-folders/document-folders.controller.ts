@@ -22,6 +22,9 @@ import { ensureCompanyDocumentFolders, FILING_DRAWER_NAMES } from "./companyDocu
 import { MASTER_DOCUMENT_LIST_PATH, retargetRetiredRegisterLink } from "./formFiling.js";
 import { ensureFormTemplates, listFormTemplates } from "./formTemplates.js";
 import { fileFormRecord, filingQuery, getFormFiling, updateFormNumber } from "./formRecordFiling.js";
+import { formFilings } from "../../drizzle/schema/formFilings.js";
+import { folderNameKey } from "./editableForms.js";
+import { ancestorNames, isRetiredFolderPlacement } from "./retiredFolderCleanup.js";
 import { UPLOAD_TYPE_ERROR, sniffUpload } from "../../utils/fileSniff.js";
 import { sendStoredFile } from "../../utils/storedFile.js";
 
@@ -240,7 +243,7 @@ export const formFiling = asyncHandler(async (req: Request, res: Response) => {
 
 /** Files a filled copy into the chosen Documents folder, or moves it there. */
 export const fileForm = asyncHandler(async (req: Request, res: Response) => {
-  const body = req.body as { formKey: string; recordId: number; folderId: number };
+  const body = req.body as { formKey: string; recordId: number; folderId: number; partNumber?: string };
   res.status(201).json(await fileFormRecord(req.db!, body, req.user?.id));
 });
 
@@ -276,15 +279,27 @@ export const create = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
   const { name, parentId } = req.body as { name: string; parentId?: number };
 
+  const all = await db.select({ id: documentFolders.id, name: documentFolders.name, parentId: documentFolders.parentId }).from(documentFolders);
   if (parentId !== undefined) {
-    const [parent] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, parentId)));
+    const parent = all.find((folder) => folder.id === parentId);
     if (!parent) throw AppError.notFound("Parent folder");
+    const chain = [...ancestorNames(all, parent.id), parent.name];
+    if (isRetiredFolderPlacement(name.trim(), chain)) {
+      throw AppError.badRequest("That folder was removed. Use the folder that already holds those records.");
+    }
+  } else if (isRetiredFolderPlacement(name.trim(), [])) {
+    throw AppError.badRequest("That folder was removed. Use the folder that already holds those records.");
   }
 
-  const siblings = await db
-    .select()
-    .from(documentFolders)
-    .where(and(parentId === undefined ? isNull(documentFolders.parentId) : eq(documentFolders.parentId, parentId)));
+  const siblings = all.filter((folder) => (parentId === undefined ? folder.parentId === null : folder.parentId === parentId));
+  const existing = siblings.find((folder) => folderNameKey(folder.name) === folderNameKey(name));
+  if (existing) {
+    const [row] = await db.select().from(documentFolders).where(eq(documentFolders.id, existing.id));
+    if (row) {
+      res.status(200).json(row);
+      return;
+    }
+  }
 
   const [created] = await db
     .insert(documentFolders)
@@ -374,6 +389,13 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
   if (children.length > 0) {
     throw AppError.badRequest("Move or delete this folder's contents before deleting it");
   }
+  const [current] = await db.select().from(documentFolders).where(eq(documentFolders.id, id));
+  if (!current) throw AppError.notFound("Document folder");
+  if (current.pdfPath != null || current.documentId != null || current.linkedPath != null) {
+    throw AppError.badRequest("Move the records out of this folder before removing it");
+  }
+  const [filing] = await db.select({ id: formFilings.id }).from(formFilings).where(eq(formFilings.folderNodeId, id)).limit(1);
+  if (filing) throw AppError.badRequest("Move the records out of this folder before removing it");
 
   const [deleted] = await db
     .delete(documentFolders)

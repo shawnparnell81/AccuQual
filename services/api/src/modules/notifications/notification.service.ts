@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import type { Db } from "../../lib/requestDb.js";
 import { users } from "../../drizzle/schema/users.js";
 import { notificationLog } from "../../drizzle/schema/notifications.js";
+import { resolveNotificationTarget, type NotificationOpenResult } from "./notificationTarget.js";
 import { logger } from "../../utils/logger.js";
 import { env } from "../../config/env.js";
 import type { Department } from "../../middleware/departmentAccess.js";
@@ -370,6 +371,29 @@ export async function markAllNotificationsRead(db: Db, userId: number): Promise<
     .where(and(eq(notificationLog.recipient, email), isNull(notificationLog.readAt)))
     .returning({ id: notificationLog.id });
   return updated.length;
+}
+
+/**
+ * One click: mark the caller's notice read and, when it points at a record
+ * they can open, return that page. A missing or forbidden record returns
+ * unavailable with no path and no record fields.
+ */
+export async function openMyNotification(
+  db: Db,
+  id: number,
+  user: { id: number; roleName: string | null; department: string | null },
+): Promise<NotificationOpenResult | null> {
+  const email = await ownEmail(db, user.id);
+  if (!email) return null;
+  const [row] = await db
+    .select()
+    .from(notificationLog)
+    .where(and(eq(notificationLog.id, id), eq(notificationLog.recipient, email)));
+  if (!row) return null;
+  if (!row.readAt) {
+    await db.update(notificationLog).set({ readAt: new Date() }).where(eq(notificationLog.id, row.id));
+  }
+  return resolveNotificationTarget(db, user, row.relatedEntityType, row.relatedEntityId);
 }
 
 /** Marks one notification read — ownership is `recipient = the caller's own email`, not just a matching id, so a guessed id can never mark someone else's notification read (or reveal whether it exists). */

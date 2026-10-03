@@ -1,20 +1,49 @@
 import { useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Megaphone } from "lucide-react";
-import { CHANGELOG } from "../../data/changelog";
+import { apiClient } from "../../api/client";
 import { useChangelogSeen } from "../../hooks/useChangelogSeen";
 
-/**
- * "What's new" — a small header dropdown over the hand-maintained
- * CHANGELOG data, with a per-user "have you opened this since the
- * latest entry" badge (see useChangelogSeen). Same dropdown-panel
- * styling as TopNav.tsx's search/notification dropdowns (absolute,
- * top-full, z-30, border/shadow), kept local here since this is a
- * simple static list, not another search box.
- */
+interface ReleaseNote {
+  id: string;
+  text: string;
+  createdAt: string;
+  createdByName: string;
+}
+
+interface ReleaseNotesResponse {
+  notes: ReleaseNote[];
+  canEdit: boolean;
+}
+
+/** What's new comes from the company list. An empty list stays empty — nothing is invented here. */
 export function WhatsNewDropdown() {
   const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const { hasUnseen, markSeenAsCurrent } = useChangelogSeen();
+  const qc = useQueryClient();
+  const notesQuery = useQuery<ReleaseNotesResponse>({
+    queryKey: ["company/release-notes"],
+    queryFn: async () => (await apiClient.get<ReleaseNotesResponse>("/company/release-notes")).data,
+  });
+  const notes = notesQuery.data?.notes ?? [];
+  const canEdit = notesQuery.data?.canEdit === true;
+  const latestId = notes[0]?.id ?? null;
+  const { hasUnseen, markSeenAsCurrent } = useChangelogSeen(latestId);
+
+  const create = useMutation({
+    mutationFn: async (text: string) => (await apiClient.post<ReleaseNote>("/company/release-notes", { text })).data,
+    onSuccess: async () => {
+      setDraft("");
+      await qc.invalidateQueries({ queryKey: ["company/release-notes"] });
+    },
+  });
+  const archive = useMutation({
+    mutationFn: async (id: string) => apiClient.post(`/company/release-notes/${id}/archive`),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["company/release-notes"] });
+    },
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -50,18 +79,49 @@ export function WhatsNewDropdown() {
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
           <div className="aq-menu absolute right-0 top-full z-30 mt-1 w-80 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-card p-3 text-foreground shadow-lg">
             <h3 className="mb-2 text-sm font-medium">What's new</h3>
-            <div className="flex flex-col gap-3">
-              {CHANGELOG.map((entry) => (
-                <div key={entry.version}>
-                  <p className="text-xs font-medium text-muted-foreground">{new Date(entry.date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}</p>
-                  <ul className="mt-1 list-disc pl-4 text-sm">
-                    {entry.items.map((item, i) => (
-                      <li key={i}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
+            {notes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nothing new right now.</p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {notes.map((note) => (
+                  <div key={note.id}>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {new Date(note.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                      {note.createdByName ? ` · ${note.createdByName}` : ""}
+                    </p>
+                    <p className="mt-1 text-sm">{note.text}</p>
+                    {canEdit && (
+                      <button type="button" onClick={() => archive.mutate(note.id)} className="mt-1 text-xs text-muted-foreground hover:underline">
+                        Archive
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {canEdit && (
+              <form
+                className="mt-3 flex flex-col gap-2 border-t border-border pt-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const text = draft.trim();
+                  if (text) create.mutate(text);
+                }}
+              >
+                <textarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  maxLength={500}
+                  rows={3}
+                  aria-label="New note"
+                  placeholder="Write a current note"
+                  className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+                />
+                <button type="submit" disabled={create.isPending || draft.trim().length === 0} className="self-end rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50">
+                  {create.isPending ? "Saving…" : "Add note"}
+                </button>
+              </form>
+            )}
           </div>
         </>
       )}

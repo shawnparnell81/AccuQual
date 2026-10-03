@@ -2,15 +2,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { isFullAccessRole } from "../../lib/fullAccess";
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
+import { exportFormPdf } from "../../api/formHooks";
 import { GenericFormRenderer } from "../../components/forms/GenericFormRenderer";
 import { PictureRecordProvider, pictureRecordForForm } from "../../components/forms/pictureRecord";
 import { getFormLayout } from "../../components/forms/layouts";
 import { LifecycleBar, VersionDiffViewer, VersionStatusBadge, VersionTimeline } from "../../components/versioning/VersionParts";
 import { useVersioning, useVersionPayload, type VersionFull } from "../../api/versioning";
 import { useCurrentUser } from "../../hooks/useAuth";
+import { focusFirstEditable } from "../../components/shared/GridClipboard";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { canMaintainManagementSystem } from "../../lib/managementSystemAccess";
 
 // Both documents are a single record per organization (id 1) — the same singleton the generic forms engine has always used.
 const RECORD_ID = 1;
@@ -49,8 +52,10 @@ export function ControlledDocumentPage({ basePath, formType, title, noun, descri
   const shown: VersionFull<Payload> | null | undefined = shownId === null ? null : shownId === openId ? current?.open : shownId === publishedId ? current?.published : other.data;
 
   const isAdmin = isFullAccessRole(user?.roleName);
-  const mayEdit = isAdmin || user?.department === "quality" || user?.roleName === "quality_manager";
+  const mayEdit = canMaintainManagementSystem(user);
   const editable = !!shown && shown.status === "draft" && shown.id === openId && mayEdit;
+  const editorRef = useRef<HTMLDivElement>(null);
+  const focusPending = useRef(false);
 
   // Local copy of the draft being typed into, autosaved a moment after the last keystroke.
   const [values, setValues] = useState<Payload>({});
@@ -86,6 +91,27 @@ export function ControlledDocumentPage({ basePath, formType, title, noun, descri
     return () => clearTimeout(t);
   }, [values, editable]);
 
+  useEffect(() => {
+    if (!focusPending.current || !editable) return;
+    focusPending.current = false;
+    focusFirstEditable(editorRef.current);
+  }, [editable, shown?.id]);
+
+  async function download() {
+    try {
+      const bytes = await exportFormPdf(formType, RECORD_ID);
+      const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${title.replace(/[\\/:*?"<>|]+/g, "").trim() || formType}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Couldn't download this document."));
+    }
+  }
+
   function change(name: string, value: unknown) {
     dirty.current = true;
     setValues((prev) => ({ ...prev, [name]: value }));
@@ -98,6 +124,7 @@ export function ControlledDocumentPage({ basePath, formType, title, noun, descri
   const actions = useMemo(
     () => ({
       startDraft: async () => {
+        focusPending.current = true;
         const d = await v.createDraft.mutateAsync({});
         setViewId(d.id);
         setPanel("history");
@@ -129,7 +156,10 @@ export function ControlledDocumentPage({ basePath, formType, title, noun, descri
       </div>
 
       {current && (
-        <LifecycleBar noun={noun} state={current} canEdit={mayEdit} actions={actions}>
+        <LifecycleBar noun={noun} state={current} canEdit={mayEdit} actions={actions} draftLabel="Edit">
+          <button type="button" onClick={() => void download()} className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted">
+            Download
+          </button>
           {saveState !== "idle" && editable && <span className="text-xs text-muted-foreground">{saveState === "saving" ? "Saving…" : "Draft saved"}</span>}
         </LifecycleBar>
       )}
@@ -150,7 +180,7 @@ export function ControlledDocumentPage({ basePath, formType, title, noun, descri
               )}
             </div>
           )}
-          <div className="rounded-lg border border-border bg-card p-4">
+          <div ref={editorRef} className="rounded-lg border border-border bg-card p-4">
             {noVersions || !shown ? (
               v.current.isLoading ? <LoadingPlaceholder /> : <p className="text-sm text-muted-foreground">Nothing here yet.</p>
             ) : layout ? (
@@ -189,6 +219,21 @@ export function ControlledDocumentPage({ basePath, formType, title, noun, descri
                         toast.success(`Started a draft restoring version ${n}. Review and publish it like any change.`);
                       } catch (err) {
                         toast.error(extractErrorMessage(err, "Couldn't start the rollback."));
+                      }
+                    }
+                  : undefined
+              }
+              onVoid={
+                mayEdit
+                  ? async (versionId, reason) => {
+                      try {
+                        await v.voidVersion.mutateAsync({ versionId, reason });
+                        loadedFor.current = null;
+                        setViewId(null);
+                        toast.success("That version was voided.");
+                      } catch (err) {
+                        toast.error(extractErrorMessage(err, "Couldn't void that version."));
+                        throw err;
                       }
                     }
                   : undefined

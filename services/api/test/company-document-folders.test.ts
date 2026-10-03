@@ -12,8 +12,8 @@ describe("company document folders", () => {
   it("seeds Shawn's departments under ISO Compliance Documents", () => {
     expect(byPath(paths, ["ISO Compliance Documents"])).toBe(true);
     for (const product of ["CSA", "Fuel", "Shocks", "Air Suspension", "Gas/Electric Lifts"]) {
-      expect(byPath(paths, ["ISO Compliance Documents", "Engineering", product, "Validation"])).toBe(true);
-      expect(byPath(paths, ["ISO Compliance Documents", "Engineering", product, "Development"])).toBe(true);
+      expect(byPath(paths, ["ISO Compliance Documents", "Engineering", product, "Validation"])).toBe(false);
+      expect(byPath(paths, ["ISO Compliance Documents", "Engineering", product, "Development"])).toBe(false);
     }
     for (const product of ["CSA", "Shocks", "Fuel", "Brake Wear sensors", "Gas/Electric Lifts", "Air Suspension"]) {
       expect(byPath(paths, ["ISO Compliance Documents", "Quality", FAI_VALIDATION_FOLDER_NAME, product])).toBe(true);
@@ -100,7 +100,7 @@ describe("company document folders", () => {
       { id: 15, name: "FAI", parentId: 14 },
     ];
     expect(planFaiValidationRepair(folders)).toEqual([{ sourceId: 3, destId: null }]);
-    expect(byPath(paths, ["ISO Compliance Documents", "Engineering", "CSA", "Validation"])).toBe(true);
+    expect(byPath(paths, ["ISO Compliance Documents", "Engineering", "CSA", "Validation"])).toBe(false);
   });
 
   it("folds a leftover FAI drawer into the renamed folder instead of keeping both", () => {

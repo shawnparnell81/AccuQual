@@ -1,4 +1,7 @@
+import { Fragment, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { WorkspaceArrange } from "./WorkspaceArrange";
+import { useWorkspaceSurface } from "../../hooks/useWorkspaceLayout";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import type { AccuQualDocument, Audit, Capa, Ncr } from "../../api/types";
@@ -108,8 +111,19 @@ export function RoleHome() {
   const firstName = user?.name?.split(" ")[0];
   const lateCount = kind === "floor" ? summary.overdueCount : late.length;
 
-  return (
-    <div className="flex flex-col gap-8">
+  const allowed = (id: string) => {
+    if (id === "hero" || id === "kpis" || id === "onboarding" || id === "inbox" || id === "calendar") return true;
+    if (id === "next") return kind !== "floor" && (can("ncr") || can("capa") || can("audit") || can("documents"));
+    if (id === "whos-late" || id === "waiting") return kind === "lead" && (can("ncr") || can("capa") || can("documents"));
+    if (id === "audits") return kind === "auditor" && can("audit");
+    if (id === "documents") return kind === "auditor" && can("documents");
+    if (id === "training") return (kind === "floor" || kind === "lead") && can("training");
+    if (id === "attention") return kind !== "auditor" && can("calibration");
+    return false;
+  };
+  const { shown } = useWorkspaceSurface("home", allowed);
+  const sections: Record<string, ReactNode> = {
+    hero: (
       <Reveal>
         <div className="hero-surface rounded-2xl p-6 md:p-8">
           <div className="relative">
@@ -129,65 +143,101 @@ export function RoleHome() {
           </div>
         </div>
       </Reveal>
-
+    ),
+    kpis: (
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <KpiTile index={1} label="On your list" value={summary.openCount} tone="primary" />
         <KpiTile index={2} label="Late" value={lateCount} tone={lateCount > 0 ? "danger" : "success"} sub={lateCount > 0 ? "Past their due date" : "All on schedule"} />
         <KpiTile index={3} label={kind === "auditor" ? "In review" : "Waiting"} value={kind === "auditor" ? inReview.length : waiting.length} tone="warning" />
         <KpiTile index={4} label="Done this month" value={summary.completedThisMonthCount} tone="success" />
       </div>
+    ),
+    next: <NextCallout kind={kind} issue={nextIssue} hasFix={nextIssue ? fixIds.has(nextIssue.id) : false} audit={nextAudit} doc={nextDoc} who={nextIssue ? label(nextIssue.assignedTo) : ""} />,
+    "whos-late": (
+      <NamedList
+        title="Who's late"
+        empty="Nobody is past a due date."
+        rows={late.slice(0, 8).map((row) => ({ key: row.link, href: row.link, label: row.label, detail: `${row.who} · due ${row.due}` }))}
+      />
+    ),
+    waiting: <NamedList title="Waiting on a step" empty="Nothing is sitting between steps." rows={waiting.map((row) => ({ key: row.key, href: row.link, label: row.label, detail: row.detail }))} />,
+    audits: (
+      <NamedList
+        title="Audits still open"
+        empty="No audits are scheduled or in progress."
+        rows={upcomingAudits.slice(0, 8).map((audit) => ({
+          key: `audit-${audit.id}`,
+          href: `/audits/${audit.id}`,
+          label: audit.name,
+          detail: statusPhrase(audit.status),
+        }))}
+      />
+    ),
+    documents: (
+      <NamedList
+        title="Documents in review"
+        empty="No document is waiting on a reviewer."
+        rows={inReview.slice(0, 8).map((doc) => ({ key: `doc-${doc.id}`, href: `/documents/${doc.id}`, label: doc.title, detail: "In review" }))}
+      />
+    ),
+    training: <TrainingAttentionStrip />,
+    onboarding: <OnboardingChecklist />,
+    attention: <AttentionStrip />,
+    inbox: (
+      <WorkflowInbox
+        title={kind === "floor" ? "Assigned to you" : "Your next actions"}
+        emptyMessage={
+          kind === "floor"
+            ? "Nothing is assigned to you. Issues and training show up here when someone sends them your way."
+            : "Nothing on your own list. Plant-wide items that are late or waiting are above."
+        }
+      />
+    ),
+    calendar: <MonthCalendar compact />,
+  };
+  const homeLabels: Record<string, string> = {
+    hero: "Greeting",
+    kpis: "Counts",
+    next: "Next step",
+    "whos-late": "Who's late",
+    waiting: "Waiting on a step",
+    audits: "Audits still open",
+    documents: "Documents in review",
+    training: "Training",
+    onboarding: "Getting started",
+    attention: "Equipment",
+    inbox: "Your next actions",
+    calendar: "Calendar",
+  };
 
-      {kind !== "floor" && <NextCallout kind={kind} issue={nextIssue} hasFix={nextIssue ? fixIds.has(nextIssue.id) : false} audit={nextAudit} doc={nextDoc} who={nextIssue ? label(nextIssue.assignedTo) : ""} />}
-
-      {kind === "lead" && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <NamedList
-            title="Who's late"
-            empty="Nobody is past a due date."
-            rows={late.slice(0, 8).map((row) => ({ key: row.link, href: row.link, label: row.label, detail: `${row.who} · due ${row.due}` }))}
-          />
-          <NamedList title="Waiting on a step" empty="Nothing is sitting between steps." rows={waiting.map((row) => ({ key: row.key, href: row.link, label: row.label, detail: row.detail }))} />
-        </div>
-      )}
-
-      {kind === "auditor" && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <NamedList
-            title="Audits still open"
-            empty="No audits are scheduled or in progress."
-            rows={upcomingAudits.slice(0, 8).map((audit) => ({
-              key: `audit-${audit.id}`,
-              href: `/audits/${audit.id}`,
-              label: audit.name,
-              detail: statusPhrase(audit.status),
-            }))}
-          />
-          <NamedList
-            title="Documents in review"
-            empty="No document is waiting on a reviewer."
-            rows={inReview.slice(0, 8).map((doc) => ({ key: `doc-${doc.id}`, href: `/documents/${doc.id}`, label: doc.title, detail: "In review" }))}
-          />
-        </div>
-      )}
-
-      {kind === "floor" && <TrainingAttentionStrip />}
-      <OnboardingChecklist />
-      {kind === "lead" && <TrainingAttentionStrip />}
-      {kind !== "auditor" && <AttentionStrip />}
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <WorkflowInbox
-          title={kind === "floor" ? "Assigned to you" : "Your next actions"}
-          emptyMessage={
-            kind === "floor"
-              ? "Nothing is assigned to you. Issues and training show up here when someone sends them your way."
-              : "Nothing on your own list. Plant-wide items that are late or waiting are above."
-          }
-        />
-        <MonthCalendar compact />
-      </div>
+  return (
+    <div className="flex flex-col gap-8">
+      <WorkspaceArrange surface="home" labels={homeLabels} allowed={allowed} />
+      {pairSections(shown, sections)}
     </div>
   );
+}
+
+const HOME_PAIRS = new Set(["whos-late|waiting", "waiting|whos-late", "audits|documents", "documents|audits", "inbox|calendar", "calendar|inbox"]);
+
+function pairSections(shown: string[], sections: Record<string, ReactNode>) {
+  const nodes: ReactNode[] = [];
+  for (let index = 0; index < shown.length; index += 1) {
+    const id = shown[index]!;
+    const next = shown[index + 1];
+    if (next && HOME_PAIRS.has(`${id}|${next}`)) {
+      nodes.push(
+        <div key={`${id}-${next}`} className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {sections[id]}
+          {sections[next]}
+        </div>,
+      );
+      index += 1;
+    } else {
+      nodes.push(<Fragment key={id}>{sections[id]}</Fragment>);
+    }
+  }
+  return nodes;
 }
 
 function NextCallout({

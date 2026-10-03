@@ -33,6 +33,12 @@ export function useNotifications(limit = 30) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications/me"] }),
   });
 
+  const openNotice = useMutation({
+    mutationFn: async (id: number) =>
+      (await apiClient.post<{ status: "open"; path: string } | { status: "none" } | { status: "unavailable" }>(`/notifications/${id}/open`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications/me"] }),
+  });
+
   return {
     notifications: data?.notifications ?? [],
     unreadCount: data?.unreadCount ?? 0,
@@ -40,5 +46,6 @@ export function useNotifications(limit = 30) {
     markRead: markRead.mutate,
     markAllRead: markAllRead.mutate,
     markingAll: markAllRead.isPending,
+    openNotice: openNotice.mutateAsync,
   };
 }

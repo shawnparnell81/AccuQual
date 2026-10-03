@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell } from "lucide-react";
 import { useNotifications } from "../../hooks/useNotifications";
-import { recordPath } from "../../lib/opsLanguage";
 
 function groupLabel(iso: string) {
   return new Date(iso).toDateString() === new Date().toDateString() ? "Today" : "Earlier";
@@ -17,7 +16,8 @@ export function NotificationDropdown() {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  const { notifications, unreadCount, markRead, markAllRead, markingAll } = useNotifications();
+  const { notifications, unreadCount, markAllRead, markingAll, openNotice } = useNotifications();
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -51,6 +51,7 @@ export function NotificationDropdown() {
                 Mark all read
               </button>
             </div>
+            {notice && <p className="px-2 py-1 text-xs text-muted-foreground">{notice}</p>}
             {notifications.length === 0 ? (
               <p className="px-2 py-3 text-sm text-muted-foreground">No notifications yet.</p>
             ) : (
@@ -58,17 +59,21 @@ export function NotificationDropdown() {
                 <div key={group.label}>
                   <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{group.label}</p>
                   {group.items.map((n) => {
-                    const path = recordPath(n.relatedEntityType, n.relatedEntityId);
+                    const hasTarget = n.relatedEntityType != null && n.relatedEntityId != null;
                     return (
                       <button
                         key={n.id}
                         type="button"
                         onClick={() => {
-                          if (!n.readAt) markRead(n.id);
-                          if (path) {
-                            navigate(path);
-                            setOpen(false);
-                          }
+                          setNotice(null);
+                          void openNotice(n.id).then((result) => {
+                            if (result.status === "open") {
+                              navigate(result.path);
+                              setOpen(false);
+                              return;
+                            }
+                            setNotice(result.status === "none" ? "This notice has no record to open." : "This record isn't available.");
+                          });
                         }}
                         className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-2 text-left text-sm hover:bg-secondary"
                       >
@@ -78,7 +83,7 @@ export function NotificationDropdown() {
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {new Date(n.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-                          {path ? " · Open" : ""}
+                          {hasTarget ? " · Open" : ""}
                         </span>
                       </button>
                     );

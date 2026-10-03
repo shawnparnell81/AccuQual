@@ -274,6 +274,34 @@ export async function saveDraft(
   return updated!;
 }
 
+/**
+ * Voids a draft or in-review version. The row stays, with the reason, and is archived.
+ * A published revision is left alone — it is the approved released copy.
+ */
+export async function voidVersion(db: Db, adapter: SubjectAdapter, subjectId: number, versionId: number, actor: Actor, reason: string): Promise<ControlledVersion> {
+  if (adapter.subject !== "management_review" && adapter.subject !== "context_of_organization") {
+    throw AppError.forbidden("Only a Management System version can be voided this way.");
+  }
+  const trimmed = reason.trim();
+  if (!trimmed) throw AppError.badRequest("Say why this version is being voided.");
+  if (trimmed.length > 500) throw AppError.badRequest("Keep the reason under 500 characters.");
+  const v = await getVersion(db, adapter, subjectId, versionId);
+  if (v.status === "published") throw conflict("An approved released revision stays on record. Start a new draft to correct it.");
+  if (v.status === "archived") throw conflict("This version is already archived.");
+  const [updated] = await db
+    .update(controlledVersions)
+    .set({
+      status: "archived",
+      metadata: { ...v.metadata, voided: true, voidReason: trimmed, voidedBy: actor.id, voidedAt: new Date().toISOString() },
+      updatedAt: new Date(),
+      updatedBy: actor.id,
+    })
+    .where(eq(controlledVersions.id, v.id))
+    .returning();
+  await audit(db, adapter, subjectId, "status_change", actor.id, { event: "voided", version: v.versionNumber, reason: trimmed });
+  return updated!;
+}
+
 /** Discards an unpublished draft. */
 export async function discardDraft(db: Db, adapter: SubjectAdapter, subjectId: number, versionId: number, actor: Actor): Promise<void> {
   const v = await getVersion(db, adapter, subjectId, versionId);

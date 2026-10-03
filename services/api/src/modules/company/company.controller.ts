@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
+import { randomUUID } from "node:crypto";
 import { eq, and, gte, inArray, sql } from "drizzle-orm";
 import { company } from "../../drizzle/schema/company.js";
+import { users } from "../../drizzle/schema/users.js";
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
@@ -8,6 +10,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { encryptSecret, decryptSecret, maskSecret } from "./crypto.js";
 import { validateApiKey } from "../ai/llm-gateway.js";
 import { env } from "../../config/env.js";
+import { canMaintainManagementSystem } from "../roles/managementSystemAccess.js";
 
 /**
  * Self-service settings for the company
@@ -366,4 +369,62 @@ export const resetSidebarLayoutHandler = asyncHandler(async (req: Request, res: 
     performedBy: req.user?.id,
   });
   res.json({ layout: null });
+});
+
+type ReleaseNote = { id: string; text: string; createdAt: string; createdByName: string; archivedAt?: string };
+
+/** Current What's New notes. Archived notes stay stored and are not shown as current. */
+export const listReleaseNotesHandler = asyncHandler(async (req: Request, res: Response) => {
+  const co = await loadCompany(req);
+  const notes = (co.releaseNotes ?? []).filter((note) => !note.archivedAt);
+  res.json({
+    notes,
+    canEdit: canMaintainManagementSystem(req.user),
+  });
+});
+
+export const createReleaseNoteHandler = asyncHandler(async (req: Request, res: Response) => {
+  if (!canMaintainManagementSystem(req.user)) {
+    throw AppError.forbidden("Only an Administrator, the VP of Engineering and Quality, the President, or the CEO can update What's New.");
+  }
+  const text = String((req.body as { text?: string }).text ?? "").trim();
+  if (!text || text.length > 500) throw AppError.badRequest("Write a short note.");
+  const co = await loadCompany(req);
+  const [author] = req.user ? await req.db!.select({ name: users.name }).from(users).where(eq(users.id, req.user.id)) : [];
+  const note: ReleaseNote = {
+    id: randomUUID(),
+    text,
+    createdAt: new Date().toISOString(),
+    createdByName: author?.name?.trim() || "Someone",
+  };
+  const releaseNotes = [note, ...(co.releaseNotes ?? [])].slice(0, 30);
+  await req.db!.update(company).set({ releaseNotes }).where(eq(company.id, co.id));
+  await recordAuditTrail(req.db!, {
+    entityType: "Company",
+    entityId: co.id,
+    action: "update",
+    changes: { event: "release_note_added", noteId: note.id },
+    performedBy: req.user?.id,
+  });
+  res.status(201).json(note);
+});
+
+export const archiveReleaseNoteHandler = asyncHandler(async (req: Request, res: Response) => {
+  if (!canMaintainManagementSystem(req.user)) {
+    throw AppError.forbidden("Only an Administrator, the VP of Engineering and Quality, the President, or the CEO can update What's New.");
+  }
+  const co = await loadCompany(req);
+  const id = String(req.params.id ?? "");
+  const notes = co.releaseNotes ?? [];
+  if (!notes.some((note) => note.id === id)) throw AppError.notFound("Note");
+  const releaseNotes = notes.map((note) => (note.id === id ? { ...note, archivedAt: new Date().toISOString() } : note));
+  await req.db!.update(company).set({ releaseNotes }).where(eq(company.id, co.id));
+  await recordAuditTrail(req.db!, {
+    entityType: "Company",
+    entityId: co.id,
+    action: "update",
+    changes: { event: "release_note_archived", noteId: id },
+    performedBy: req.user?.id,
+  });
+  res.status(204).send();
 });

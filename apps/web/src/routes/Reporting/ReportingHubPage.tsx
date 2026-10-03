@@ -13,6 +13,7 @@ import { RiskHeatmap } from "../../components/charts/RiskHeatmap";
 import { ReportExportButtons } from "../../components/shared/ReportExportButtons";
 import { AiStructuredSuggestion } from "../../components/shared/AiStructuredSuggestion";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { ReportsPage } from "../Reports/ReportsPage";
 
 // ---------------------------------------------------------------------------
 // Types — local to this page, matching reporting.service.ts's real response
@@ -435,6 +436,7 @@ const TABS = [
   { key: "supplier", label: "Supplier Overview", navKey: "suppliers" },
   { key: "warranty", label: "Warranty Overview", navKey: "warranty" },
   { key: "production", label: "Production / Receiving", navKey: "inventory" },
+  { key: "runner", label: "Quality reports", navKey: "" },
 ] as const;
 
 export function ReportingHubPage() {
@@ -446,7 +448,7 @@ export function ReportingHubPage() {
   const inventoryAccess = useWorkflowAccessLevel("inventory");
   const accessByKey: Record<string, string> = { ncr: ncrAccess, suppliers: supplierAccess, warranty: warrantyAccess, inventory: inventoryAccess };
 
-  const visibleTabs = TABS.filter((t) => accessByKey[t.navKey] !== "none");
+  const visibleTabs = TABS.filter((t) => t.navKey === "" || accessByKey[t.navKey] !== "none");
   const [activeTab, setActiveTab] = useState<string>(visibleTabs[0]?.key ?? "quality");
   const [showSchedules, setShowSchedules] = useState(false);
 
@@ -457,7 +459,7 @@ export function ReportingHubPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Reporting & Analytics Hub</h1>
+        <h1 className="text-2xl font-semibold">Reports</h1>
         {isAdmin && (
           <button onClick={() => setShowSchedules((v) => !v)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             {showSchedules ? "View Dashboards" : "Manage Scheduled Reports"}
@@ -485,6 +487,7 @@ export function ReportingHubPage() {
           {activeTab === "supplier" && accessByKey.suppliers !== "none" && <SupplierOverview />}
           {activeTab === "warranty" && accessByKey.warranty !== "none" && <WarrantyOverview />}
           {activeTab === "production" && accessByKey.inventory !== "none" && <ProductionReceivingOverview />}
+          {activeTab === "runner" && <ReportsPage embedded />}
         </>
       )}
     </div>

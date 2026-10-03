@@ -69,6 +69,14 @@ export function isShortcutPath(path: string): boolean {
   return /^\/[A-Za-z0-9][A-Za-z0-9_./-]*$/.test(path);
 }
 
+const layoutIds = z.array(z.string().trim().min(1).max(40)).max(30);
+
+/** One person's home and dashboard sections. Replaces that person's layout only. */
+export const updateMyWorkspaceLayoutSchema = z.object({
+  home: z.object({ order: layoutIds, hidden: layoutIds }).optional(),
+  dashboard: z.object({ order: layoutIds, hidden: layoutIds }).optional(),
+});
+
 /** Saved list-view search filters — a body of `{ [pageKey]: view[] }`, merge-patched one page key at a time (see updateMySavedViews). Each page key is capped at 20 saved views; a page id itself is just a short caller-chosen slug like "ncr-list". */
 export const updateMySavedViewsSchema = z.record(
   z.string().trim().min(1).max(60),

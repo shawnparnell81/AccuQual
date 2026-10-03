@@ -69,8 +69,9 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
       const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
+      const title = layout?.title?.replace(/[\\/:*?"<>|]+/g, "").trim();
       a.href = url;
-      a.download = `${formType}-${entityId}.pdf`;
+      a.download = `${title || formType}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -93,6 +94,7 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
 
   const pictureRecord = pictureRecordForForm(formType, entityId);
   const allowPictures = formAllowsInlinePictures(formType);
+  const managed = formType === "management_review" || formType === "context_of_organization" || formType === "management_review_minutes" || formType === "staff_meeting_minutes";
   const editor = (
     <div ref={editorRef} className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -136,7 +138,7 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
       {formType === "process_flow_diagram" && <ProcessFlowDiagramEditor data={values} onChange={updateField} />}
 
       {layout ? (
-        <GenericFormRenderer layout={layout} data={values} onChange={updateField} />
+        <GenericFormRenderer layout={layout} data={values} onChange={updateField} readOnly={managed && !editing} />
       ) : CustomComponent ? (
         <>
           <FormHeader />

@@ -34,7 +34,7 @@ const TABS: { key: TabKey; label: string; supplierOnly?: boolean }[] = [
   { key: "8d", label: "8D Responses" },
   { key: "messages", label: "Messages" },
   { key: "scorecard", label: "Scorecard" },
-  { key: "performance", label: "Performance" },
+  { key: "performance", label: "Activity counts" },
   { key: "ncr", label: "NCRs" },
   { key: "capa", label: "CAPAs" },
   { key: "rma", label: "RMAs" },

@@ -30,6 +30,7 @@ export const reviewSchema = z.object({
 });
 export const publishSchema = z.object({ versionId: z.number().int().positive() });
 export const rollbackSchema = z.object({ versionNumber: z.number().int().positive() });
+export const voidSchema = z.object({ reason: z.string().trim().min(1).max(500) });
 export const validateSchema = z.object({ payload: z.record(z.string(), z.unknown()) });
 
 /**
@@ -108,6 +109,16 @@ export function registerVersionRoutes(router: Router, cfg: { adapter: SubjectAda
     asyncHandler(async (req: Request, res: Response) => {
       await engine.discardDraft(dbOf(req), adapter, idParam(req), Number(req.params.versionId), actorOf(req));
       res.status(204).send();
+    }),
+  );
+
+  router.post(
+    "/:id/versions/:versionId/void",
+    edit,
+    validate(voidSchema),
+    asyncHandler(async (req: Request, res: Response) => {
+      const body = req.body as z.infer<typeof voidSchema>;
+      res.json(await engine.voidVersion(dbOf(req), adapter, idParam(req), Number(req.params.versionId), actorOf(req), body.reason));
     }),
   );
 

@@ -61,7 +61,7 @@ function downloadBlob(blob: Blob, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
-export function ReportsPage() {
+export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
   const toast = useToast();
   const sites = useSites();
   const [kind, setKind] = useState<ReportKind>("weekly");
@@ -114,9 +114,9 @@ export function ReportsPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+    <div className={embedded ? "flex w-full flex-col gap-6" : "mx-auto flex w-full max-w-5xl flex-col gap-6"}>
       <div>
-        <h1 className="text-2xl font-semibold">Reports</h1>
+        {!embedded && <h1 className="text-2xl font-semibold">Reports</h1>}
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           Weekly, monthly, and custom quality reports from the records already in NCR, CAPA, receiving, and the other modules. A section you can't read is left out. A section whose table isn't in this database is skipped.
         </p>

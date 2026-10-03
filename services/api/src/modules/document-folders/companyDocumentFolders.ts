@@ -13,7 +13,8 @@
  * is removed.
  * The Quality FAI drawer is renamed in place to "FAI / Validation" on this
  * same load. Children, filings, and files stay on that row. A second copy is
- * folded in. Engineering product Validation folders are left alone.
+ * folded in. Engineering product trees that duplicate that drawer are moved
+ * onto it and then removed (see retireNamedDocumentFolders).
  */
 import { eq } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
@@ -21,18 +22,9 @@ import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { formFilings } from "../../drizzle/schema/formFilings.js";
 import type { DefaultFolderSeed } from "./defaultDocumentFolders.js";
+import { retireNamedDocumentFolders } from "./retiredFolderCleanup.js";
 
 const TEMPLATE_LIBRARY_NAMES = new Set(["Blank Form Templates", "ISO Compliance Documents"]);
-
-function productLine(name: string): DefaultFolderSeed {
-  return {
-    name,
-    children: [
-      { name: "Validation", children: [] },
-      { name: "Development", children: [] },
-    ],
-  };
-}
 
 export const COMPANY_DOCUMENT_FOLDERS: DefaultFolderSeed[] = [
   {
@@ -40,7 +32,7 @@ export const COMPANY_DOCUMENT_FOLDERS: DefaultFolderSeed[] = [
     children: [
       {
         name: "Engineering",
-        children: [productLine("CSA"), productLine("Fuel"), productLine("Shocks"), productLine("Air Suspension"), productLine("Gas/Electric Lifts")],
+        children: [],
       },
       {
         name: "Quality",
@@ -424,5 +416,6 @@ export async function ensureCompanyDocumentFolders(db: Db, all: FolderRow[]): Pr
   }
 
   await ensureLevel(COMPANY_DOCUMENT_FOLDERS, null);
-  return repairQualityTraining(db, list);
+  list = await repairQualityTraining(db, list);
+  return retireNamedDocumentFolders(db, list);
 }

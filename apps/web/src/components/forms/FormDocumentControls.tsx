@@ -203,9 +203,9 @@ export function RecordFolderField({ formKey, recordId, prepare }: { formKey: str
   }, [filing.data, formKey, queryClient, recordId, signature, synced]);
 
   const file = useMutation({
-    mutationFn: async (folderId: number) =>
-      (await apiClient.post<FormFilingView>("/document-folders/form-filings", { formKey, recordId, folderId })).data,
-    onSuccess: async (_saved, folderId) => {
+    mutationFn: async ({ folderId, partNumber }: { folderId: number; partNumber?: string }) =>
+      (await apiClient.post<FormFilingView>("/document-folders/form-filings", { formKey, recordId, folderId, partNumber })).data,
+    onSuccess: async (_saved, { folderId }) => {
       setMessage(null);
       setPickerOpen(false);
       rememberFolderChoice(queryClient, formKey, recordId, folderId);
@@ -247,12 +247,12 @@ export function RecordFolderField({ formKey, recordId, prepare }: { formKey: str
           selectedId={selected}
           pending={file.isPending}
           onClose={() => setPickerOpen(false)}
-          onSave={(folderId) => {
+          onSave={(folderId, partNumber) => {
             setMessage(null);
             void (async () => {
               try {
                 if (prepare) await prepare();
-                file.mutate(folderId);
+                file.mutate({ folderId, partNumber });
               } catch {
                 setMessage("Couldn't file this record.");
               }

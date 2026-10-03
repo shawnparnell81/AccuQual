@@ -8,7 +8,7 @@ const ROOT_ORDER = [ISO_DOCUMENTS_FOLDER, "Engineering", "Quality", "Audits", "T
 
 const CHILD_ORDER: Record<string, string[]> = {
   [ISO_DOCUMENTS_FOLDER]: ["Engineering", "Quality", "Audits", "Training", "Safety", "Production", "CAPA", "NCR", "8D", "Work Instruction", "Procedures", "SOP"],
-  Engineering: ["CSA", "Fuel", "Shocks", "Air Suspension", "Gas/Electric Lifts"],
+  Engineering: [],
   Quality: [FAI_VALIDATION_FOLDER_NAME, "Product Alerts", "Recalls", "Warranty", "Training", "Repair", "Inspections"],
   [FAI_VALIDATION_FOLDER_NAME]: ["CSA", "Shocks", "Fuel", "Brake Wear sensors", "Gas/Electric Lifts", "Air Suspension"],
   SOP: ["Policies", "Procedures"],
@@ -108,12 +108,13 @@ export function SaveAsFolderDialog({
   folders: BrowseFolder[];
   selectedId: number | "";
   onClose: () => void;
-  onSave: (folderId: number) => void;
+  onSave: (folderId: number, partNumber?: string) => void;
   pending: boolean;
 }) {
   const ref = useDialogBehavior(true, onClose);
   const destinations = useMemo(() => saveAsFolders(folders), [folders]);
   const [query, setQuery] = useState("");
+  const [partNumber, setPartNumber] = useState("");
   const [chosen, setChosen] = useState<number | "">(selectedId);
   const [openIds, setOpenIds] = useState<Set<number>>(() => {
     const open = new Set<number>();
@@ -181,6 +182,17 @@ export function SaveAsFolderDialog({
           )}
         </div>
         <p className="mt-2 text-xs text-muted-foreground">{chosenFolder ? `Selected: ${chosenFolder.name}` : "Select a folder."}</p>
+        <label className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
+          Part number
+          <input
+            value={partNumber}
+            onChange={(event) => setPartNumber(event.target.value)}
+            maxLength={80}
+            aria-label="Part number"
+            placeholder="Optional — files under the folder you picked"
+            className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+          />
+        </label>
         <div className="mt-3 flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted">
             Cancel
@@ -190,7 +202,7 @@ export function SaveAsFolderDialog({
             disabled={pending || chosen === ""}
             onClick={() => {
               if (chosen === "") return;
-              onSave(chosen);
+              onSave(chosen, partNumber.trim() || undefined);
             }}
             className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
           >

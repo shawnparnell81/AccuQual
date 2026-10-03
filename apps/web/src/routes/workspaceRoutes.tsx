@@ -81,7 +81,6 @@ import {
   QuarantineDetailPage,
   QuarantinePage,
   ReportingHubPage,
-  ReportsPage,
   RetiredModulePage,
   RiskDashboardPage,
   RiskDetailPage,
@@ -246,7 +245,7 @@ export function workspaceRouteElements() {
       <Route path="digital-twin" element={<AdminDigitalTwinSetupPage />} />
     </Route>,
     <Route key="/reporting" path="/reporting" element={<ReportingHubPage />} />,
-    <Route key="/reports" path="/reports" element={<ReportsPage />} />,
+    <Route key="/reports" path="/reports" element={<Navigate to="/reporting" replace />} />,
     <Route key="/notifications" path="/notifications" element={<NotificationsPage />} />,
   ];
 }

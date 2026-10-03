@@ -36,6 +36,7 @@ import {
   sendMessageHandler,
   sendMessageEmailHandler,
   getThreadHandler,
+  messageAudienceHandler,
   scorecardHandler,
   performanceHandler,
   supplierNcrListHandler,
@@ -92,6 +93,7 @@ supplierPortalRouter.post("/8d/:id/review", validate(reviewResponseSchema), revi
 // Messaging
 supplierPortalRouter.post("/messages/send", validate(sendMessageSchema), sendMessageHandler);
 supplierPortalRouter.post("/messages/send-email", validate(sendMessageEmailSchema), sendMessageEmailHandler);
+supplierPortalRouter.get("/messages/audience", messageAudienceHandler);
 supplierPortalRouter.get("/messages/thread", getThreadHandler);
 
 // Scorecard + performance
