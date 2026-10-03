@@ -46,6 +46,11 @@ export interface SubjectAdapter {
   // ---- Optional hooks. A subject that does not define them behaves exactly as before. ----
   /** Status version 1 starts in for a subject that pre-dates versioning (default "published"). */
   bootstrapStatus?(live: LiveState): "published" | "draft" | "in_review";
+  /**
+   * Return false to leave a subject that has no versions without one. Used when inserting a version would be rejected
+   * (an obsolete archived document) or would put a released revision back in force. Default: create version 1.
+   */
+  shouldBootstrap?(db: Db, subjectId: number, live: LiveState): Promise<boolean>;
   /** Refuses starting a new draft or rollback draft (e.g. a retired document). Throw an AppError. */
   guardDraft?(db: Db, subjectId: number): Promise<void>;
   /** Refuses sending a version for review or publishing it (e.g. a document already marked obsolete). Throw an AppError. */
@@ -96,6 +101,7 @@ export async function ensureBootstrapped(db: Db, adapter: SubjectAdapter, subjec
     .where(and(eq(controlledVersions.subjectType, adapter.subject), eq(controlledVersions.subjectId, subjectId)))
     .limit(1);
   if (any) return;
+  if (adapter.shouldBootstrap && !(await adapter.shouldBootstrap(db, subjectId, live))) return;
   const startStatus = adapter.bootstrapStatus?.(live) ?? "published";
   await db.insert(controlledVersions).values({
     subjectType: adapter.subject,
