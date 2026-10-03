@@ -90,6 +90,12 @@ export const users = pgTable("users", {
     hidden?: string[];
     pinned?: { key: string; label: string; path: string }[];
   } | null>(),
+  // Which home and dashboard sections this person shows, and in what order.
+  // Null means the built-in arrangement. Another user's row is never read for this.
+  workspaceLayout: jsonb("workspace_layout").$type<{
+    home?: { order?: string[]; hidden?: string[] };
+    dashboard?: { order?: string[]; hidden?: string[] };
+  } | null>(),
   // Who to escalate this person's overdue or stuck records to. Null means a quality manager.
   managerId: integer("manager_id"),
   createdAt: timestamp("created_at").defaultNow(),

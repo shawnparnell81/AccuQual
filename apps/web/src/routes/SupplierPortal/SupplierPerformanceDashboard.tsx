@@ -47,6 +47,7 @@ export function SupplierPerformanceDashboard({ supplierId }: { supplierId?: numb
           <StatusBadge value={data.supplier.status} />
         </div>
         <p className="text-xs text-muted-foreground">Risk level: {data.supplier.riskLevel ?? "Unrated"}</p>
+        <p className="mt-2 text-sm text-muted-foreground">Activity counts for corrective actions, PPAP submissions, and quality records. This is not a scorecard.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">

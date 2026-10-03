@@ -462,6 +462,55 @@ export const setTemporaryPassword = asyncHandler(async (req: Request, res: Respo
   res.status(204).send();
 });
 
+const WORKSPACE_IDS = {
+  home: ["hero", "kpis", "next", "whos-late", "waiting", "audits", "documents", "training", "onboarding", "attention", "inbox", "calendar"],
+  dashboard: ["hero", "open-work", "kpis", "engineering", "trend", "aging", "stuck", "activity"],
+} as const;
+
+function cleanLayout(surface: keyof typeof WORKSPACE_IDS, value: { order?: string[]; hidden?: string[] } | undefined) {
+  if (!value) return undefined;
+  const allowed = new Set<string>(WORKSPACE_IDS[surface]);
+  const order = [...new Set((value.order ?? []).filter((id) => allowed.has(id)))];
+  const hidden = [...new Set((value.hidden ?? []).filter((id) => allowed.has(id)))];
+  return { order: [...order, ...WORKSPACE_IDS[surface].filter((id) => !order.includes(id))], hidden };
+}
+
+/** This person's home and dashboard arrangement. Null means the built-in order. */
+export const getMyWorkspaceLayout = asyncHandler(async (req: Request, res: Response) => {
+  const [row] = await req.db!.select({ workspaceLayout: users.workspaceLayout }).from(users).where(eq(users.id, req.user!.id));
+  res.json(row?.workspaceLayout ?? null);
+});
+
+export const updateMyWorkspaceLayout = asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body as { home?: { order?: string[]; hidden?: string[] }; dashboard?: { order?: string[]; hidden?: string[] } };
+  const [existing] = await req.db!.select({ workspaceLayout: users.workspaceLayout }).from(users).where(eq(users.id, req.user!.id));
+  const previous = existing?.workspaceLayout ?? {};
+  const next = {
+    home: body.home ? cleanLayout("home", body.home) : previous.home,
+    dashboard: body.dashboard ? cleanLayout("dashboard", body.dashboard) : previous.dashboard,
+  };
+  const [updated] = await req.db!.update(users).set({ workspaceLayout: next, updatedAt: new Date() }).where(eq(users.id, req.user!.id)).returning({ workspaceLayout: users.workspaceLayout });
+  res.json(updated?.workspaceLayout ?? next);
+});
+
+export const resetMyWorkspaceLayout = asyncHandler(async (req: Request, res: Response) => {
+  const surface = req.query.surface === "home" || req.query.surface === "dashboard" ? req.query.surface : null;
+  if (!surface) {
+    await req.db!.update(users).set({ workspaceLayout: null, updatedAt: new Date() }).where(eq(users.id, req.user!.id));
+    res.json(null);
+    return;
+  }
+  const [existing] = await req.db!.select({ workspaceLayout: users.workspaceLayout }).from(users).where(eq(users.id, req.user!.id));
+  const previous = existing?.workspaceLayout ?? {};
+  const next = {
+    home: surface === "home" ? undefined : previous.home,
+    dashboard: surface === "dashboard" ? undefined : previous.dashboard,
+  };
+  const stored = next.home || next.dashboard ? next : null;
+  await req.db!.update(users).set({ workspaceLayout: stored, updatedAt: new Date() }).where(eq(users.id, req.user!.id));
+  res.json(stored);
+});
+
 /** Lost phone and no recovery codes: an admin clears the user's second factor. Their sessions end, and they re-enroll at next sign-in if policy requires it. */
 export const resetUserMfa = asyncHandler(async (req: Request, res: Response) => {
   const [target] = await req.db!.select({ id: users.id, mfaEnabled: users.mfaEnabled }).from(users).where(and(eq(users.id, Number(req.params.id))));

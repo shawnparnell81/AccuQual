@@ -31,12 +31,18 @@ interface TimelineProps {
   onCompare: (id: number) => void;
   /** Present only when the signed-in user may roll back and nothing is already open. */
   onRollback?: (versionNumber: number) => void;
+  /** Archives a draft or in-review copy. A published revision is not offered. */
+  onVoid?: (versionId: number, reason: string) => Promise<unknown>;
 }
 
 /** Newest first. Each entry says what happened and who did it; select one to view it, compare it with the version before, or roll back to it. */
-export function VersionTimeline({ versions, selectedId, onSelect, onCompare, onRollback }: TimelineProps) {
+export function VersionTimeline({ versions, selectedId, onSelect, onCompare, onRollback, onVoid }: TimelineProps) {
+  const [voiding, setVoiding] = useState<VersionSummary | null>(null);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
   if (versions.length === 0) return <p className="text-sm text-muted-foreground">No versions yet.</p>;
   return (
+    <>
     <ol className="flex flex-col">
       {versions.map((v, i) => {
         const revisionNote = versionRevisionNote(v);
@@ -54,6 +60,7 @@ export function VersionTimeline({ versions, selectedId, onSelect, onCompare, onR
               <VersionStatusBadge status={v.status} />
               {v.isRollback && <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"><RotateCcw size={11} /> restores v{v.basedOnVersion}</span>}
             </div>
+            {typeof v.metadata?.voidReason === "string" && v.metadata.voidReason && <p className="mt-0.5 text-xs text-muted-foreground">Voided — {v.metadata.voidReason}</p>}
             {revisionNote && <p className="mt-0.5 text-xs text-muted-foreground">{revisionNote}</p>}
             {v.metadata?.summary && <p className="mt-0.5 text-xs">{v.metadata.summary}</p>}
             <p className="mt-0.5 text-xs text-muted-foreground">{versionActivityLine(v)}</p>
@@ -72,12 +79,40 @@ export function VersionTimeline({ versions, selectedId, onSelect, onCompare, onR
                   <RotateCcw size={12} /> Roll back to this
                 </button>
               )}
+              {onVoid && (v.status === "draft" || v.status === "in_review") && (
+                <button type="button" onClick={() => { setVoiding(v); setReason(""); }} className="text-primary hover:underline">
+                  Void
+                </button>
+              )}
             </div>
           </div>
         </li>
         );
       })}
     </ol>
+    <Modal title="Void this version" isOpen={voiding != null} onClose={() => { if (!busy) setVoiding(null); }}>
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!voiding || !onVoid || reason.trim().length === 0) return;
+          setBusy(true);
+          void onVoid(voiding.id, reason.trim())
+            .then(() => setVoiding(null))
+            .finally(() => setBusy(false));
+        }}
+      >
+        <p className="text-sm text-muted-foreground">This archives version {voiding?.versionNumber}. An approved released revision is left on record. The reason is kept on the audit line.</p>
+        <textarea value={reason} onChange={(event) => setReason(event.target.value)} required maxLength={500} rows={3} aria-label="Reason" className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm" />
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => setVoiding(null)} className="rounded-md border border-border px-3 py-1.5 text-sm">Cancel</button>
+          <button type="submit" disabled={busy || reason.trim().length === 0} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50">
+            {busy ? "Voiding…" : "Void version"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+    </>
   );
 }
 
@@ -355,11 +390,13 @@ interface LifecycleBarProps {
   actions: LifecycleActions;
   /** People who could be named as the reviewer when asking for review. */
   reviewers?: { id: number; label: string }[];
+  /** Label for the button that opens a draft. */
+  draftLabel?: string;
   children?: ReactNode;
 }
 
 /** The status strip and the one or two buttons that make sense for where the open version is in its lifecycle. */
-export function LifecycleBar({ noun, state, canEdit, blockedReason, warnings, actions, reviewers, children }: LifecycleBarProps) {
+export function LifecycleBar({ noun, state, canEdit, blockedReason, warnings, actions, reviewers, draftLabel = "Start a draft", children }: LifecycleBarProps) {
   const user = useCurrentUser();
   const toast = useToast();
   const isReviewer = !!user?.roleName && REVIEWER_ROLES.includes(user.roleName);
@@ -398,7 +435,7 @@ export function LifecycleBar({ noun, state, canEdit, blockedReason, warnings, ac
           {children}
           {!open && canEdit && (
             <button onClick={() => void run(actions.startDraft, "Couldn't start a draft.")} className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground">
-              Start a draft
+              {draftLabel}
             </button>
           )}
           {open?.status === "draft" && canEdit && (

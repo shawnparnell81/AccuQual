@@ -3,8 +3,8 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
 import { validate } from "../../middleware/validate.js";
 import { withDb } from "../../lib/requestDb.js";
-import { createUserSchema, updateUserSchema, temporaryPasswordSchema, updateMyThemeSchema, updateMyChangelogSeenSchema, updateMySavedViewsSchema, updateMySidebarShortcutsSchema } from "./users.validation.js";
-import { listUsers, getUser, createUser, updateUser, deleteUser, getUserOpenWork, unlockUser, resetUserMfa, setTemporaryPassword, getMyTheme, updateMyTheme, getMyChangelogSeen, updateMyChangelogSeen, getMySavedViews, updateMySavedViews, getMySidebarShortcuts, updateMySidebarShortcuts } from "./users.controller.js";
+import { createUserSchema, updateUserSchema, temporaryPasswordSchema, updateMyThemeSchema, updateMyChangelogSeenSchema, updateMySavedViewsSchema, updateMySidebarShortcutsSchema, updateMyWorkspaceLayoutSchema } from "./users.validation.js";
+import { listUsers, getUser, createUser, updateUser, deleteUser, getUserOpenWork, unlockUser, resetUserMfa, setTemporaryPassword, getMyTheme, updateMyTheme, getMyChangelogSeen, updateMyChangelogSeen, getMySavedViews, updateMySavedViews, getMySidebarShortcuts, updateMySidebarShortcuts, getMyWorkspaceLayout, updateMyWorkspaceLayout, resetMyWorkspaceLayout } from "./users.controller.js";
 
 export const usersRouter = Router();
 
@@ -23,6 +23,9 @@ usersRouter.get("/me/saved-views", getMySavedViews);
 usersRouter.patch("/me/saved-views", validate(updateMySavedViewsSchema), updateMySavedViews);
 usersRouter.get("/me/sidebar-shortcuts", getMySidebarShortcuts);
 usersRouter.put("/me/sidebar-shortcuts", validate(updateMySidebarShortcutsSchema), updateMySidebarShortcuts);
+usersRouter.get("/me/workspace-layout", getMyWorkspaceLayout);
+usersRouter.put("/me/workspace-layout", validate(updateMyWorkspaceLayoutSchema), updateMyWorkspaceLayout);
+usersRouter.delete("/me/workspace-layout", resetMyWorkspaceLayout);
 
 usersRouter.get("/:id/open-work", requireRole("admin"), getUserOpenWork);
 usersRouter.get("/:id", getUser);

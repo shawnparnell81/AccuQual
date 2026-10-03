@@ -27,8 +27,31 @@ import { FRM_NCR_PATH } from "../../lib/qualityEntry";
 import { filterToken } from "../../lib/openWorkFilter";
 import type { OpenWork } from "../../api/dashboard";
 import { useSiteStore } from "../../store/siteStore";
+import { WorkspaceArrange } from "../../components/home/WorkspaceArrange";
+import { useWorkspaceSurface } from "../../hooks/useWorkspaceLayout";
 import { OpenWorkSection } from "../../components/dashboard/OpenWorkSection";
 import { AgingChart, ParetoChart, PlantChart, Sparkline, TrendChart } from "./charts";
+
+const DASHBOARD_LABELS: Record<string, string> = {
+  hero: "Greeting",
+  "open-work": "Open work",
+  kpis: "Counts",
+  engineering: "Engineering",
+  trend: "Trends",
+  aging: "Aging and tasks",
+  stuck: "What's stuck",
+  activity: "Recent activity",
+};
+
+function OrderedBlock({ id, shown, children }: { id: string; shown: string[]; children: ReactNode }) {
+  const index = shown.indexOf(id);
+  if (index < 0) return null;
+  return (
+    <div style={{ order: index }} className="min-w-0">
+      {children}
+    </div>
+  );
+}
 
 function greeting() {
   const hour = new Date().getHours();
@@ -180,16 +203,6 @@ function Kpi({
   );
 }
 
-function StatusTile({ label, value, detail, token }: { label: string; value: string; detail: string; token: string }) {
-  return (
-    <div className="kpi-tile rounded-[14px] p-4" style={{ ["--tone" as string]: `var(--${token})` }}>
-      <div className="relative text-[0.76rem] text-muted-foreground">{label}</div>
-      <p className="relative mt-2 font-display text-lg font-bold text-muted-foreground">{value}</p>
-      <p className="relative mt-1 text-[0.74rem] text-muted-foreground">{detail}</p>
-    </div>
-  );
-}
-
 function EmptyNote({ children }: { children: string }) {
   return <p className="py-6 text-center text-sm text-muted-foreground">{children}</p>;
 }
@@ -226,13 +239,25 @@ export function DashboardPage() {
   }
 
   const calFoot = (row: DashboardOverview["kpis"]["calibration"]) => {
-    if (row.overdue == null || row.failed == null || row.dueSoon == null) return "No access";
-    const base = row.failed > 0 ? `${row.failed} failed · ${row.overdue} overdue · ${row.dueSoon} due ≤30d` : `${row.overdue} overdue · ${row.dueSoon} due ≤30d`;
+    const base = (row.failed ?? 0) > 0 ? `${row.failed} failed · ${row.overdue} overdue · ${row.dueSoon} due ≤30d` : `${row.overdue} overdue · ${row.dueSoon} due ≤30d`;
     return singlePlant ? `${base} · company-wide` : base;
   };
+  const dashAllowed = (id: string) => {
+    if (id === "hero") return true;
+    if (!data) return false;
+    if (id === "kpis") return Object.values(data.kpis).some((row) => row.access);
+    if (id === "engineering") return data.engineering.changes.access || data.engineering.ppap.access || data.kpis.docsDue.access;
+    if (id === "trend") return data.trend.access || data.pareto.access;
+    if (id === "aging") return Boolean(data.aging.issues || data.aging.fixes) || data.tasks.length > 0;
+    return true;
+  };
+  const { shown } = useWorkspaceSurface("dashboard", dashAllowed);
 
   return (
     <div className="flex flex-col gap-4 pb-8">
+      <WorkspaceArrange surface="dashboard" labels={DASHBOARD_LABELS} allowed={dashAllowed} />
+      <div className="flex flex-col gap-4">
+      <OrderedBlock id="hero" shown={shown}>
       <section className="hero-surface rounded-[14px] px-5 py-5 md:px-6">
         <div className="cc-grid" aria-hidden />
         <div className="relative z-[1] flex flex-wrap items-start justify-between gap-4">
@@ -274,6 +299,7 @@ export function DashboardPage() {
           </div>
         </div>
       </section>
+      </OrderedBlock>
 
       {query.isError && (
         <div className="rounded-[14px] border border-destructive/40 bg-card p-4 text-sm">
@@ -295,81 +321,88 @@ export function DashboardPage() {
       {data && (
         <>
           {data.partial && <p className="text-xs text-muted-foreground">Some older records were left out of these counts so the page stays fast.</p>}
+          <OrderedBlock id="open-work" shown={shown}>
           <OpenWorkSection work={data.openWork} singlePlant={singlePlant} moduleFilter={drill} onModuleFilter={setDrill} />
+          </OrderedBlock>
+          <OrderedBlock id="kpis" shown={shown}>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
+            {data.kpis.openIssues.access && (
             <Kpi
-              onDrill={data.kpis.openIssues.access && sliceToken(data.openWork, ["NCR"]) ? () => drillTo(sliceToken(data.openWork, ["NCR"])!) : undefined}
-              href={data.kpis.openIssues.access ? FRM_NCR_PATH : undefined}
+              onDrill={sliceToken(data.openWork, ["NCR"]) ? () => drillTo(sliceToken(data.openWork, ["NCR"])!) : undefined}
+              href={FRM_NCR_PATH}
               token="primary"
               delay={0}
               icon={<AlertTriangle size={15} />}
               label="Open issues"
               pill="NCR"
-              value={data.kpis.openIssues.access ? data.kpis.openIssues.value : "—"}
-              foot={data.kpis.openIssues.access ? `${data.kpis.openIssues.highCritical ?? 0} high / critical` : "No access"}
+              value={data.kpis.openIssues.value}
+              foot={`${data.kpis.openIssues.highCritical ?? 0} high / critical`}
               spark={data.kpis.openIssues.spark}
             />
+            )}
+            {data.kpis.overdueFixes.access && (
             <Kpi
-              onDrill={data.kpis.overdueFixes.access && sliceToken(data.openWork, ["CAPA"]) ? () => drillTo(sliceToken(data.openWork, ["CAPA"])!) : undefined}
-              href={data.kpis.overdueFixes.access ? "/capa" : undefined}
+              onDrill={sliceToken(data.openWork, ["CAPA"]) ? () => drillTo(sliceToken(data.openWork, ["CAPA"])!) : undefined}
+              href="/capa"
               token="destructive"
               delay={60}
               icon={<ClipboardCheck size={15} />}
               label="Overdue fixes"
               pill="CAPA"
-              value={data.kpis.overdueFixes.access ? data.kpis.overdueFixes.value : "—"}
-              foot={data.kpis.overdueFixes.access ? `${data.kpis.overdueFixes.openTotal ?? 0} open in total` : "No access"}
+              value={data.kpis.overdueFixes.value}
+              foot={`${data.kpis.overdueFixes.openTotal ?? 0} open in total`}
             />
+            )}
+            {data.kpis.docsDue.access && (
             <Kpi
-              href={data.kpis.docsDue.access ? "/documents" : undefined}
+              href="/documents"
               token="warning"
               delay={120}
               icon={<FileText size={15} />}
               label="Docs due for review"
-              value={data.kpis.docsDue.access ? data.kpis.docsDue.value : "—"}
-              foot={
-                data.kpis.docsDue.access
-                  ? `${data.kpis.docsDue.waitingApproval ?? 0} waiting for approval${singlePlant ? " · company-wide" : ""}`
-                  : "No access"
-              }
+              value={data.kpis.docsDue.value}
+              foot={`${data.kpis.docsDue.waitingApproval ?? 0} waiting for approval${singlePlant ? " · company-wide" : ""}`}
             />
+            )}
+            {data.kpis.training.access && (
             <Kpi
-              href={data.kpis.training.access ? "/training" : undefined}
+              href="/training"
               token={data.kpis.training.percent != null && data.kpis.training.percent >= 90 ? "success" : "warning"}
               delay={180}
               icon={<GraduationCap size={15} />}
               label="Training compliance"
-              value={data.kpis.training.access ? (data.kpis.training.percent == null ? "—" : data.kpis.training.percent) : "—"}
+              value={data.kpis.training.percent == null ? "—" : data.kpis.training.percent}
               unit={data.kpis.training.percent != null ? "%" : undefined}
-              foot={
-                !data.kpis.training.access
-                  ? "No access"
-                  : data.kpis.training.assigned === 0
-                    ? "No assignments yet"
-                    : `${data.kpis.training.overdue ?? 0} overdue assignments`
-              }
+              foot={data.kpis.training.assigned === 0 ? "No assignments yet" : `${data.kpis.training.overdue ?? 0} overdue assignments`}
             />
+            )}
+            {data.kpis.calibration.access && (
             <Kpi
-              href={data.kpis.calibration.access ? "/calibration" : undefined}
+              href="/calibration"
               token={(data.kpis.calibration.overdue ?? 0) + (data.kpis.calibration.failed ?? 0) > 0 ? "destructive" : "info"}
               delay={240}
               icon={<Gauge size={15} />}
               label="Calibration due"
               pill="Gages"
-              value={data.kpis.calibration.access ? data.kpis.calibration.value : "—"}
+              value={data.kpis.calibration.value}
               foot={calFoot(data.kpis.calibration)}
             />
+            )}
+            {data.kpis.auditFindings.access && (
             <Kpi
-              href={data.kpis.auditFindings.access ? "/audits" : undefined}
+              href="/audits"
               token="brand-purple"
               delay={300}
               icon={<ClipboardCheck size={15} />}
               label="Open audit findings"
-              value={data.kpis.auditFindings.access ? data.kpis.auditFindings.value : "—"}
-              foot={data.kpis.auditFindings.access ? `${data.kpis.auditFindings.total ?? 0} findings & observations` : "No access"}
+              value={data.kpis.auditFindings.value}
+              foot={`${data.kpis.auditFindings.total ?? 0} findings & observations`}
             />
+            )}
           </div>
+          </OrderedBlock>
 
+          <OrderedBlock id="engineering" shown={shown}>
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h2 className="flex items-center gap-2 font-display text-base font-bold">
@@ -389,9 +422,7 @@ export function DashboardPage() {
                   value={data.engineering.changes.open}
                   foot={`${data.engineering.changes.inReview ?? 0} in review · ${data.engineering.changes.approved ?? 0} approved${singlePlant ? " · company-wide" : ""}`}
                 />
-              ) : (
-                <StatusTile label="Open change requests" value="No access" detail="You don't have access to change requests." token="primary" />
-              )}
+              ) : null}
               {data.engineering.ppap.access ? (
                 <Kpi
                   onDrill={sliceToken(data.openWork, ["PPAP"]) ? () => drillTo(sliceToken(data.openWork, ["PPAP"])!) : undefined}
@@ -403,9 +434,7 @@ export function DashboardPage() {
                   value={data.engineering.ppap.pending}
                   foot={`${data.engineering.ppap.awaitingCustomer ?? 0} awaiting customer${singlePlant ? " · company-wide" : ""}`}
                 />
-              ) : (
-                <StatusTile label="PPAPs pending" value="No access" detail="You don't have access to PPAP." token="brand-purple" />
-              )}
+              ) : null}
               {data.kpis.docsDue.access ? (
                 <Kpi
                   href="/iso-forms/frm-ncr-003"
@@ -416,9 +445,7 @@ export function DashboardPage() {
                   value="Open"
                   foot="Concession / deviation requests"
                 />
-              ) : (
-                <StatusTile label="Deviations" value="No access" detail="You don't have access to deviation requests." token="warning" />
-              )}
+              ) : null}
               {data.kpis.docsDue.access ? (
                 <Kpi
                   href="/folders/apqp"
@@ -429,38 +456,35 @@ export function DashboardPage() {
                   value="Open"
                   foot="Packets and gate documents"
                 />
-              ) : (
-                <StatusTile label="APQP gates" value="No access" detail="You don't have access to APQP gate documents." token="info" />
-              )}
+              ) : null}
             </div>
           </div>
+          </OrderedBlock>
 
+          <OrderedBlock id="trend" shown={shown}>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {data.trend.access && (
             <Card
               title="Issue trend"
               icon={<Sparkles size={16} className="text-primary" />}
               extra={<Legend items={[{ token: "primary", label: "Opened" }, { token: "success", label: "Closed" }]} />}
             >
-              {data.trend.access ? (
-                <>
-                  <TrendChart labels={data.trend.labels} opened={data.trend.opened} closed={data.trend.closed} />
-                  <p className="mt-2 text-xs text-muted-foreground">Weekly, last 12 weeks · {data.scope.label}</p>
-                </>
-              ) : (
-                <EmptyNote>You don't have access to issues.</EmptyNote>
-              )}
+              <TrendChart labels={data.trend.labels} opened={data.trend.opened} closed={data.trend.closed} />
+              <p className="mt-2 text-xs text-muted-foreground">Weekly, last 12 weeks · {data.scope.label}</p>
             </Card>
+            )}
+            {data.pareto.access && (
             <Card title="Top problems" icon={<Layers size={16} className="text-primary" />} extra={<span className="rounded-md bg-foreground/5 px-1.5 py-0.5 font-mono text-[0.7rem] text-muted-foreground">Pareto</span>}>
               <p className="-mt-1 mb-2 text-right text-xs text-muted-foreground">Recorded root causes · 180 days</p>
-              {data.pareto.access ? (
-                data.pareto.items.length > 0 ? <ParetoChart items={data.pareto.items} /> : <EmptyNote>No root causes recorded in the last 180 days.</EmptyNote>
-              ) : (
-                <EmptyNote>You don't have access to issues.</EmptyNote>
-              )}
+              {data.pareto.items.length > 0 ? <ParetoChart items={data.pareto.items} /> : <EmptyNote>No root causes recorded in the last 180 days.</EmptyNote>}
             </Card>
+            )}
           </div>
+          </OrderedBlock>
 
+          <OrderedBlock id="aging" shown={shown}>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {(data.aging.issues || data.aging.fixes) && (
             <Card
               title="Aging of open work"
               icon={<Clock size={16} className="text-primary" />}
@@ -473,12 +497,9 @@ export function DashboardPage() {
                 />
               }
             >
-              {data.aging.issues || data.aging.fixes ? (
-                <AgingChart categories={data.aging.categories} issues={data.aging.issues} fixes={data.aging.fixes} />
-              ) : (
-                <EmptyNote>You don't have access to issues or fixes.</EmptyNote>
-              )}
+              <AgingChart categories={data.aging.categories} issues={data.aging.issues} fixes={data.aging.fixes} />
             </Card>
+            )}
             <Card title="My tasks" icon={<Check size={16} className="text-primary" />} extra={<span className="rounded-full bg-foreground/5 px-2 py-0.5 font-mono text-xs text-muted-foreground">{data.tasks.length}</span>}>
               {data.tasks.length === 0 ? (
                 <EmptyNote>Nothing assigned to you right now.</EmptyNote>
@@ -498,7 +519,9 @@ export function DashboardPage() {
               )}
             </Card>
           </div>
+          </OrderedBlock>
 
+          <OrderedBlock id="stuck" shown={shown}>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <Card title="What's stuck" icon={<AlertTriangle size={16} className="text-primary" />} extra={<span className="rounded-full bg-foreground/5 px-2 py-0.5 font-mono text-xs text-muted-foreground">{data.stuck.length}</span>}>
               {data.stuck.length === 0 ? (
@@ -594,7 +617,9 @@ export function DashboardPage() {
               )}
             </Card>
           </div>
+          </OrderedBlock>
 
+          <OrderedBlock id="activity" shown={shown}>
           <Card title="Recent activity" icon={<Clock size={16} className="text-primary" />}>
             {data.activity.length === 0 ? (
               <EmptyNote>No recent changes yet.</EmptyNote>
@@ -618,8 +643,10 @@ export function DashboardPage() {
               </ul>
             )}
           </Card>
+          </OrderedBlock>
         </>
       )}
+      </div>
     </div>
   );
 }

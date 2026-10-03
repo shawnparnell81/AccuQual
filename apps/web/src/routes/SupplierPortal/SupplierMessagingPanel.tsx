@@ -35,6 +35,11 @@ export function SupplierMessagingPanel({ supplierId }: { supplierId?: number }) 
     setCategory("message");
   }
 
+  const audience = useQuery<{ supplierName: string; supplierContactName: string | null; internal: { name: string; department: string | null }[] }>({
+    queryKey: ["supplier-portal/messages/audience", supplierId ?? "self"],
+    queryFn: async () => (await apiClient.get("/supplier-portal/messages/audience", { params: supplierId ? { supplierId } : undefined })).data,
+  });
+
   const queryKey = ["supplier-portal/messages/thread", supplierId ?? "self"];
   const { data: messages = [], isLoading } = useQuery<SupplierMessage[]>({
     queryKey,
@@ -98,6 +103,17 @@ export function SupplierMessagingPanel({ supplierId }: { supplierId?: number }) 
           />
         )}
       </div>
+      <p className="text-xs text-muted-foreground">
+        {audience.isError
+          ? "The recipient list couldn't be loaded."
+          : audience.data
+            ? `This thread is visible to ${audience.data.supplierName}${audience.data.supplierContactName ? ` (${audience.data.supplierContactName})` : ""} and ${
+                audience.data.internal.length === 0
+                  ? "no internal people with supplier portal access."
+                  : audience.data.internal.map((person) => (person.department ? `${person.name} (${person.department})` : person.name)).join(", ") + "."
+              }`
+            : "Loading who can see this thread…"}
+      </p>
       {isLoading ? (
         <LoadingPlaceholder />
       ) : messages.length === 0 ? (

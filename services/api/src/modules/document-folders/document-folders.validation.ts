@@ -20,4 +20,5 @@ export const fileFormRecordSchema = z.object({
   formKey: z.string().min(1),
   recordId: z.number().int().positive(),
   folderId: z.number().int().positive(),
+  partNumber: z.string().trim().max(80).optional(),
 });

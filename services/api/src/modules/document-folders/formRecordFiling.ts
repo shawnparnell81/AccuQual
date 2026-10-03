@@ -9,6 +9,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { AppError } from "../../utils/appError.js";
 import { filedRecordName, fileNamePatternFor, FORM_TEMPLATES } from "./formFiling.js";
 import { ensureFormTemplates } from "./formTemplates.js";
+import { ancestorNames, isRetiredFolderPlacement } from "./retiredFolderCleanup.js";
 import {
   canEditFormNumber,
   EDITABLE_FORM_NUMBER_KEYS,
@@ -16,6 +17,7 @@ import {
   FORM_DATA_TYPE_TO_FORM_KEY,
   ISO_TYPE_TO_FORM_KEY,
   SUGGESTED_SUBJECT_PATH,
+  folderNameKey,
   folderPathNames,
   recordLinkedPath,
   resolveFolderPath,
@@ -165,11 +167,32 @@ export async function getFormFiling(db: Db, formKey: string, recordId: number): 
   return presentFiling(db, formKey, recordId, await loadFolders(db));
 }
 
-export async function fileFormRecord(db: Db, input: { formKey: string; recordId: number; folderId: number }, performedBy: number | undefined): Promise<FormFilingView> {
-  const { formKey, recordId, folderId } = input;
+export async function fileFormRecord(db: Db, input: { formKey: string; recordId: number; folderId: number; partNumber?: string }, performedBy: number | undefined): Promise<FormFilingView> {
+  const { formKey, recordId } = input;
+  let folderId = input.folderId;
   if (!FILEABLE_FORM_KEYS.has(formKey)) throw AppError.badRequest("This form cannot be filed from here");
   await ensureFormTemplates(db);
   const createdOn = await assertRecord(db, formKey, recordId);
+  const partNumber = input.partNumber?.trim().replace(/\s+/g, " ") ?? "";
+  if (partNumber) {
+    const all = await db.select({ id: documentFolders.id, name: documentFolders.name, parentId: documentFolders.parentId }).from(documentFolders);
+    const parentRow = all.find((folder) => folder.id === folderId);
+    if (!parentRow) throw AppError.notFound("Folder");
+    const chain = [...ancestorNames(all, parentRow.id), parentRow.name];
+    if (isRetiredFolderPlacement(partNumber, chain)) {
+      throw AppError.badRequest("That folder was removed. Use the folder that already holds those records.");
+    }
+    const key = folderNameKey(partNumber);
+    const existingChild = all.find((folder) => folder.parentId === folderId && folderNameKey(folder.name) === key);
+    if (existingChild) folderId = existingChild.id;
+    else {
+      const siblings = all.filter((folder) => folder.parentId === folderId);
+      const [created] = await db.insert(documentFolders).values({ name: partNumber, parentId: folderId, sortOrder: siblings.length }).returning();
+      if (!created) throw new AppError("Failed to file this form", 500);
+      folderId = created.id;
+    }
+  }
+
   const [parent] = await db.select().from(documentFolders).where(eq(documentFolders.id, folderId));
   if (!parent) throw AppError.notFound("Folder");
 

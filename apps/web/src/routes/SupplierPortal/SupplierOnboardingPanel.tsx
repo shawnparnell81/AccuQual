@@ -49,6 +49,11 @@ export function SupplierOnboardingPanel({ supplierId, isReviewer }: { supplierId
 
   return (
     <FileDropZone className="flex flex-col gap-4" disabled={upload.isPending} multiple={false} label="Drop to upload" onFiles={(dropped) => upload.mutate(dropped[0]!)}>
+      <ol className="list-decimal space-y-1 rounded-lg border border-border bg-card p-4 pl-8 text-sm text-muted-foreground">
+        <li>Upload the document types this supplier needs on file.</li>
+        <li>Quality or Purchasing reviews each upload.</li>
+        <li>Approved documents stay on this record.</li>
+      </ol>
       <div className="flex items-end gap-2 rounded-lg border border-border bg-card p-4">
         <SelectField label="Document Type" value={documentType} onChange={(e) => setDocumentType(e.target.value)}>
           {ONBOARDING_DOCUMENT_TYPES.map((t) => (

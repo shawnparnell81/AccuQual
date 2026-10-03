@@ -139,16 +139,16 @@ export const SUGGESTED_SUBJECT_PATH: Record<string, string[]> = {
   "frm-fae-001": subjectPath("Quality", "Corrective & Preventive Actions", "Effectiveness Checks"),
   "frm-msa-001": subjectPath("Quality", "Calibration & Equipment", "Gage R&R"),
   "frm-par-001": subjectPath("Quality", "Production & Inspection", "Pareto Charts"),
-  "frm-val-001": subjectPath("Engineering", "CSA", "Validation"),
-  "frm-val-007": subjectPath("Engineering", "Fuel", "Validation"),
-  "frm-val-010": subjectPath("Engineering", "Air Suspension", "Validation"),
-  "frm-val-011": subjectPath("Engineering", "Air Suspension", "Validation"),
-  "frm-val-008": subjectPath("Engineering", "Fuel", "Validation"),
+  "frm-val-001": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "CSA"),
+  "frm-val-007": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Fuel"),
+  "frm-val-010": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Air Suspension"),
+  "frm-val-011": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Air Suspension"),
+  "frm-val-008": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Fuel"),
   "frm-val-009": subjectPath("Engineering", "Manufacturing Engineering", "Process Validation"),
-  "frm-val-002": subjectPath("Engineering", "Shocks", "Validation"),
+  "frm-val-002": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Shocks"),
   "frm-val-003": subjectPath("Engineering", "Design & Development", "Design Validation"),
-  "frm-val-004": subjectPath("Engineering", "Gas/Electric Lifts", "Validation"),
-  "frm-val-005": subjectPath("Engineering", "Gas/Electric Lifts", "Validation"),
+  "frm-val-004": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Gas/Electric Lifts"),
+  "frm-val-005": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Gas/Electric Lifts"),
   "frm-val-006": subjectPath("Engineering", "Design & Development", "Design Validation"),
   "frm-gen-002": subjectPath("Audits"),
   "lst-vis-001": subjectPath("Quality", "Records", "Inspection Records"),
@@ -157,19 +157,19 @@ export const SUGGESTED_SUBJECT_PATH: Record<string, string[]> = {
   "frm-tst-001": subjectPath("Engineering", "Technical Records"),
   "frm-tst-002": subjectPath("Engineering", "Technical Records"),
   "frm-trp-001": subjectPath("Engineering", "Design & Development", "Design Validation"),
-  "frm-dev-001": subjectPath("Engineering", "CSA", "Development"),
-  "frm-dev-002": subjectPath("Engineering", "Fuel", "Development"),
-  "frm-dev-003": subjectPath("Engineering", "Gas/Electric Lifts", "Development"),
+  "frm-dev-001": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "CSA"),
+  "frm-dev-002": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Fuel"),
+  "frm-dev-003": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Gas/Electric Lifts"),
   "frm-dev-004": subjectPath("Engineering", "Design & Development"),
-  "frm-dev-005": subjectPath("Engineering", "Air Suspension", "Development"),
-  "frm-dev-006": subjectPath("Engineering", "Air Suspension", "Development"),
+  "frm-dev-005": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Air Suspension"),
+  "frm-dev-006": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Air Suspension"),
   "frm-dev-007": subjectPath("Engineering", "Design & Development"),
-  "frm-dev-008": subjectPath("Engineering", "Shocks", "Development"),
+  "frm-dev-008": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Shocks"),
   "frm-dev-009": subjectPath("Engineering", "Design & Development"),
-  "frm-dev-010": subjectPath("Engineering", "Fuel", "Development"),
-  "frm-dev-011": subjectPath("Engineering", "Gas/Electric Lifts", "Development"),
-  "frm-dev-012": subjectPath("Engineering", "CSA", "Development"),
-  "frm-dev-013": subjectPath("Engineering", "Shocks", "Development"),
+  "frm-dev-010": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Fuel"),
+  "frm-dev-011": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Gas/Electric Lifts"),
+  "frm-dev-012": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "CSA"),
+  "frm-dev-013": subjectPath("Quality", FAI_VALIDATION_FOLDER_NAME, "Shocks"),
   "frm-ecr-001": subjectPath("Engineering", "Engineering Change Control", "Engineering Change Requests (ECR)"),
   "frm-dwg-001": subjectPath("Engineering", "Engineering Change Control", "Drawing Change Requests"),
   "frm-pcr-001": subjectPath("Engineering", "Engineering Change Control", "Process Change Requests"),
@@ -267,12 +267,18 @@ export interface FolderNode {
   parentId: number | null;
 }
 
+/** Same folder title aside from capitalization and extra spaces. */
+export function folderNameKey(name: string): string {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 /** Deepest folder that matches the start of `path`. Null when even the first name is missing. */
 export function resolveFolderPath(folders: FolderNode[], path: string[]): number | null {
   let parentId: number | null = null;
   let found: number | null = null;
   for (const name of path) {
-    const next = folders.find((folder) => folder.parentId === parentId && folder.name === name);
+    const key = folderNameKey(name);
+    const next = folders.find((folder) => folder.parentId === parentId && folderNameKey(folder.name) === key);
     if (!next) break;
     found = next.id;
     parentId = next.id;

@@ -115,8 +115,12 @@ export function useVersioning<P = Record<string, unknown>>(basePath: string, id:
     mutationFn: async (versionNumber: number) => (await apiClient.post<VersionFull<P>>(`${root}/rollback`, { versionNumber })).data,
     onSuccess: invalidate,
   });
+  const voidVersion = useMutation({
+    mutationFn: async ({ versionId, reason }: { versionId: number; reason: string }) => (await apiClient.post<VersionFull<P>>(`${root}/versions/${versionId}/void`, { reason })).data,
+    onSuccess: invalidate,
+  });
 
-  return { root, current, versions, createDraft, saveDraft, discard, review, publish, rollback };
+  return { root, current, versions, createDraft, saveDraft, discard, review, publish, rollback, voidVersion };
 }
 
 export function useVersionPayload<P = Record<string, unknown>>(basePath: string, id: number, versionId: number | null) {

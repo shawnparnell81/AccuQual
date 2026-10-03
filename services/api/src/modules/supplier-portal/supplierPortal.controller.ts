@@ -11,6 +11,9 @@ import {
   type StoredFile,
 } from "../../drizzle/schema/supplierPortal.js";
 import { suppliers, supplierScorecards } from "../../drizzle/schema/supplier.js";
+import { users } from "../../drizzle/schema/users.js";
+import { roles } from "../../drizzle/schema/roles.js";
+import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { rma } from "../../drizzle/schema/rma.js";
 import { warrantyClaims } from "../../drizzle/schema/warranty.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
@@ -462,6 +465,26 @@ export const getThreadHandler = asyncHandler(async (req: Request, res: Response)
     .where(and(eq(supplierMessages.supplierId, supplierId), eq(supplierMessages.threadKey, threadKey)))
     .orderBy(supplierMessages.createdAt);
   res.json(rows);
+});
+
+/** Who can see this supplier's message thread. Names and departments only — no email addresses. */
+export const messageAudienceHandler = asyncHandler(async (req: Request, res: Response) => {
+  const supplierId = resolveSupplierScope(req, req.query.supplierId as string | undefined);
+  const [supplier] = await req.db!.select({ id: suppliers.id, name: suppliers.name, contactName: suppliers.contactName }).from(suppliers).where(eq(suppliers.id, supplierId));
+  if (!supplier) throw AppError.notFound("Supplier");
+  const people = await req.db!.select({ id: users.id, name: users.name, department: users.department, roleName: roles.name }).from(users).leftJoin(roles, eq(users.roleId, roles.id)).where(eq(users.isActive, true));
+  const internal: { name: string; department: string | null }[] = [];
+  for (const person of people) {
+    if (!person.roleName || person.roleName === "supplier" || person.roleName === "customer") continue;
+    const level = await getUserAccessLevel(req.db!, { id: person.id, roleName: person.roleName, department: person.department }, "supplier_portal");
+    if (level === "none") continue;
+    internal.push({ name: person.name?.trim() || "Unnamed", department: person.department });
+  }
+  res.json({
+    supplierName: supplier.name,
+    supplierContactName: supplier.contactName,
+    internal,
+  });
 });
 
 // ---------------------------------------------------------------------------

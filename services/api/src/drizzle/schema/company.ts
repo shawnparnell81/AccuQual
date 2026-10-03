@@ -233,6 +233,8 @@ export const company = pgTable("company", {
    * Only keys and nesting are stored. Labels and who can open each item stay in the app.
    */
   sidebarLayout: jsonb("sidebar_layout").$type<{ key: string; children?: { key: string; children?: unknown[] }[] }[] | null>(),
+  // What's New notes an authorized person wrote. Empty until someone adds one.
+  releaseNotes: jsonb("release_notes").$type<{ id: string; text: string; createdAt: string; createdByName: string; archivedAt?: string }[]>().notNull().default([]),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
