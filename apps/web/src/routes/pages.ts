@@ -69,6 +69,11 @@ export const QmsFormTypePage = lazyNamed("/qms-forms", () => import("./QmsForms/
 export const QmsFormRecordPage = lazyNamed("/qms-forms", () => import("./QmsForms/QmsFormRecordPage"), "QmsFormRecordPage");
 export const ScarFormsPage = lazyNamed("/scar-forms", () => import("./ScarForms/ScarFormsPage"), "ScarFormsPage");
 export const ScarFormDetailPage = lazyNamed("/scar-forms", () => import("./ScarForms/ScarFormDetailPage"), "ScarFormDetailPage");
+export const FaiQueuePage = lazyNamed("/fai", () => import("./Fai/FaiQueuePage"), "FaiQueuePage");
+export const FaiPlanPage = lazyNamed("/fai", () => import("./Fai/FaiPlanPage"), "FaiPlanPage");
+export const FaiRecordPage = lazyNamed("/fai", () => import("./Fai/FaiRecordPage"), "FaiRecordPage");
+export const FaiSourcesPage = lazyNamed("/fai", () => import("./Fai/FaiSourcesPage"), "FaiSourcesPage");
+export const FaiPullPage = lazyNamed("/fai", () => import("./Fai/FaiPullPage"), "FaiPullPage");
 export const QualityInspectionReportsPage = lazyNamed("/quality-inspection-reports", () => import("./QualityInspectionReports/QualityInspectionReportsPage"), "QualityInspectionReportsPage");
 export const QualityInspectionReportDetailPage = lazyNamed("/quality-inspection-reports", () => import("./QualityInspectionReports/QualityInspectionReportDetailPage"), "QualityInspectionReportDetailPage");
 export const PpapListPage = lazyNamed("/ppap", () => import("./Ppap/PpapListPage"), "PpapListPage");

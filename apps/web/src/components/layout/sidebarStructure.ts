@@ -205,6 +205,7 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
         ],
       },
       { key: "quarantine", label: "Quarantined items", path: "/quarantine", icon: ShieldAlert },
+      { key: "fai", label: "First Article", path: "/fai", icon: ClipboardList },
     ],
   },
   {

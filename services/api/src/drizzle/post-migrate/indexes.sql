@@ -27,6 +27,10 @@ CREATE INDEX IF NOT EXISTS warranty_claims_status_idx ON warranty_claims (status
 CREATE INDEX IF NOT EXISTS crar_status_idx ON crar (status);
 CREATE INDEX IF NOT EXISTS supplier_rma_requests_status_idx ON supplier_rma_requests (status);
 CREATE INDEX IF NOT EXISTS rma_log_status_idx ON rma_log (status);
+CREATE INDEX IF NOT EXISTS fai_records_status_idx ON fai_records (status);
+CREATE INDEX IF NOT EXISTS fai_result_lines_fai_idx ON fai_result_lines (fai_id, sort_order);
+CREATE INDEX IF NOT EXISTS fai_source_due_idx ON fai_source_approvals (next_due_date);
+CREATE INDEX IF NOT EXISTS fai_annual_pulls_part_idx ON fai_annual_pulls (part_number, completed_at);
 
 -- The single hottest lookup shape in the whole app: every module's history
 -- panel (WorkflowHistoryPanel) and the generic per-entity audit endpoint

@@ -17,6 +17,7 @@ const QUALITY_LABELS = [
   "Suppliers",
   "NCR & CAPA",
   "Quarantined items",
+  "First Article",
 ];
 
 describe("sidebar hierarchy", () => {

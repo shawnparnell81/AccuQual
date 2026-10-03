@@ -64,3 +64,4 @@ export * from "./trustedDevices.js";
 export * from "./sso.js";
 export * from "./versioning.js";
 export * from "./qualityAutomation.js";
+export * from "./faiSourceControl.js";

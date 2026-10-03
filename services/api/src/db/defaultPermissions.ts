@@ -328,4 +328,9 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
     purchasing: "read",
     material_management: "read",
   },
+  // First article plans, numbered FAIs, and part-supplier approval.
+  // Quality and Engineering both work the record. Approve and reject are
+  // Quality-only in the handler, same narrower-than-matrix pattern used elsewhere.
+  // This does not grant receiving, inventory, or purchase-order access.
+  fai: { quality: "edit", engineering: "edit" },
 };
