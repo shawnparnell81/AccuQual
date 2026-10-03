@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FORM_TEMPLATES } from "../src/modules/document-folders/formFiling.js";
+import { FORM_TEMPLATES, OMITTED_FROM_MASTER_DOCUMENT_LIST } from "../src/modules/document-folders/formFiling.js";
 import { canMaintainMasterList, isMasterListWrite, isMasterToolListEditPath } from "../src/modules/roles/masterListAccess.js";
 
 describe("master list access", () => {
@@ -40,6 +40,9 @@ describe("master list access", () => {
     expect(FORM_TEMPLATES.some((form) => form.formKey === "document_revision_record")).toBe(true);
     expect(FORM_TEMPLATES.some((form) => form.formKey === "document_control_index" || /master index/i.test(form.title))).toBe(false);
     expect(FORM_TEMPLATES.some((form) => form.formKey === "master_document_register")).toBe(false);
-    expect(FORM_TEMPLATES.some((form) => form.formKey === "frm-tst-001" || form.formKey === "frm-tst-002")).toBe(false);
+    const calculators = FORM_TEMPLATES.filter((form) => form.formKey === "frm-tst-001" || form.formKey === "frm-tst-002");
+    expect(calculators.map((form) => form.formKey)).toEqual(["frm-tst-001", "frm-tst-002"]);
+    expect(calculators.every((form) => form.start != null)).toBe(true);
+    expect([...OMITTED_FROM_MASTER_DOCUMENT_LIST]).toEqual(["frm-tst-001", "frm-tst-002"]);
   });
 });

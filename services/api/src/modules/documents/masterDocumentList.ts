@@ -9,7 +9,7 @@ import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { users } from "../../drizzle/schema/users.js";
 import { controlledVersions } from "../../drizzle/schema/versioning.js";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
-import { PRINTED_FORM_ID_WHEN_BLANK, PRINTED_FORM_REVISION } from "../document-folders/formFiling.js";
+import { OMITTED_FROM_MASTER_DOCUMENT_LIST, PRINTED_FORM_ID_WHEN_BLANK, PRINTED_FORM_REVISION } from "../document-folders/formFiling.js";
 import { ensureFormTemplates } from "../document-folders/formTemplates.js";
 
 export interface MasterDocumentRow {
@@ -198,6 +198,7 @@ export function documentNumberForForm(formKey: string, formId: string): string {
  * Adds each registered form that already has a number. A form already on the
  * list (same document id and title) is left as it is. Reading this again does
  * not add a second row. Template numbers are stored by the form-template sync.
+ * FRM-TST-001 and FRM-TST-002 stay off this list.
  */
 export function withRegisteredForms(documentRows: MasterDocumentRow[], templates: RegisteredFormSource[], folders: FolderNode[]): MasterDocumentRow[] {
   const byId = new Map(folders.map((folder) => [folder.id, folder]));
@@ -209,6 +210,7 @@ export function withRegisteredForms(documentRows: MasterDocumentRow[], templates
     return left.localeCompare(right) || a.title.localeCompare(b.title) || a.formKey.localeCompare(b.formKey);
   });
   for (const template of ordered) {
+    if (OMITTED_FROM_MASTER_DOCUMENT_LIST.has(template.formKey)) continue;
     const documentId = documentNumberForForm(template.formKey, template.formId);
     if (!documentId) continue;
     const key = formIdentity(documentId, template.title);
