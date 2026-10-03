@@ -10,7 +10,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { encryptSecret, decryptSecret, maskSecret } from "./crypto.js";
 import { validateApiKey } from "../ai/llm-gateway.js";
 import { env } from "../../config/env.js";
-import { canMaintainManagementSystem } from "../roles/managementSystemAccess.js";
+import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 
 /**
  * Self-service settings for the company
@@ -377,16 +377,14 @@ type ReleaseNote = { id: string; text: string; createdAt: string; createdByName:
 export const listReleaseNotesHandler = asyncHandler(async (req: Request, res: Response) => {
   const co = await loadCompany(req);
   const notes = (co.releaseNotes ?? []).filter((note) => !note.archivedAt);
+  const level = req.user && req.db ? await getUserAccessLevel(req.db, req.user, "management_review") : "none";
   res.json({
     notes,
-    canEdit: canMaintainManagementSystem(req.user),
+    canEdit: level === "edit",
   });
 });
 
 export const createReleaseNoteHandler = asyncHandler(async (req: Request, res: Response) => {
-  if (!canMaintainManagementSystem(req.user)) {
-    throw AppError.forbidden("Only an Administrator, the VP of Engineering and Quality, the President, or the CEO can update What's New.");
-  }
   const text = String((req.body as { text?: string }).text ?? "").trim();
   if (!text || text.length > 500) throw AppError.badRequest("Write a short note.");
   const co = await loadCompany(req);
@@ -410,9 +408,6 @@ export const createReleaseNoteHandler = asyncHandler(async (req: Request, res: R
 });
 
 export const archiveReleaseNoteHandler = asyncHandler(async (req: Request, res: Response) => {
-  if (!canMaintainManagementSystem(req.user)) {
-    throw AppError.forbidden("Only an Administrator, the VP of Engineering and Quality, the President, or the CEO can update What's New.");
-  }
   const co = await loadCompany(req);
   const id = String(req.params.id ?? "");
   const notes = co.releaseNotes ?? [];

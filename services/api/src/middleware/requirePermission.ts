@@ -7,7 +7,6 @@ import { recordAuditTrailStandalone } from "../modules/audit-trail/audit-trail.s
 import { getUserAccessLevel, type AccessLevel, type ResourceKey } from "./departmentAccess.js";
 import { REVIEWER_ROLES } from "../modules/roles/roleAccess.js";
 import { canMaintainMasterList } from "../modules/roles/masterListAccess.js";
-import { canMaintainManagementSystem } from "../modules/roles/managementSystemAccess.js";
 
 /**
  * `requirePermission("workflow.edit")` — a "<subject>.<action>" permission
@@ -61,9 +60,6 @@ export async function hasPermission(
 ): Promise<{ allowed: boolean; reason?: string }> {
   const { subject, action } = parsePermission(name);
   if (user.roleName && EXTERNAL_ROLES.has(user.roleName)) return { allowed: false, reason: "External accounts cannot use this feature" };
-  if ((subject === "managementReview" || subject === "context") && action !== "view" && !canMaintainManagementSystem(user)) {
-    return { allowed: false, reason: "Only an Administrator, the VP of Engineering and Quality, the President, or the CEO can change Management System forms." };
-  }
   if ((name === "equipment.manage" || name === "equipment.calibrate") && canMaintainMasterList(user)) return { allowed: true };
 
   const level = await getUserAccessLevel(db, user, PERMISSION_SUBJECTS[subject].resource);

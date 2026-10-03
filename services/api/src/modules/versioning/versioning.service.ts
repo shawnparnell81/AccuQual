@@ -145,6 +145,7 @@ async function userNames(db: Db, ids: (number | null)[]): Promise<Map<number, st
 const nameOf = (m: Map<number, string>, id: number | null) => (id === null ? null : (m.get(id) ?? null));
 
 export async function getVersion(db: Db, adapter: SubjectAdapter, subjectId: number, versionId: number): Promise<ControlledVersion> {
+  if (!Number.isInteger(versionId) || versionId < 1) throw AppError.badRequest("Invalid version id");
   const [row] = await db
     .select()
     .from(controlledVersions)

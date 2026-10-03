@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
+import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { rejectSupplierReads, requireRole } from "../../middleware/rbac.js";
 import { withDb } from "../../lib/requestDb.js";
 import { validate } from "../../middleware/validate.js";
@@ -33,8 +34,8 @@ companyRouter.get("/onboarding", getOnboardingHandler);
 companyRouter.patch("/onboarding", requireRole("admin"), validate(updateOnboardingSchema), updateOnboardingHandler);
 
 companyRouter.get("/release-notes", listReleaseNotesHandler);
-companyRouter.post("/release-notes", createReleaseNoteHandler);
-companyRouter.post("/release-notes/:id/archive", archiveReleaseNoteHandler);
+companyRouter.post("/release-notes", requireDepartmentAccess("management_review"), createReleaseNoteHandler);
+companyRouter.post("/release-notes/:id/archive", requireDepartmentAccess("management_review"), archiveReleaseNoteHandler);
 
 companyRouter.get("/sidebar-layout", getSidebarLayoutHandler);
 companyRouter.put("/sidebar-layout", requireRole("admin"), validate(updateSidebarLayoutSchema), updateSidebarLayoutHandler);

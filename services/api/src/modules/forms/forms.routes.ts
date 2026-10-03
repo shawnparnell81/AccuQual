@@ -13,7 +13,6 @@ import { listTemplatesHandler, uploadTemplateHandler, downloadTemplateHandler, d
 import type { ResourceKey } from "../../middleware/departmentAccess.js";
 import { canEditFormStructure } from "../roles/roleHierarchy.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
-import { canMaintainManagementSystem } from "../roles/managementSystemAccess.js";
 
 export const formsRouter = Router();
 
@@ -117,17 +116,6 @@ function gateFormRead(req: Request, res: Response, next: NextFunction) {
  * the generic save/snapshot endpoints refuse them — otherwise anyone could edit the live document around the review.
  */
 const CONTROLLED_FORM_TYPES = new Set(["management_review", "context_of_organization"]);
-const MANAGEMENT_SYSTEM_FORM_TYPES = new Set(["management_review", "context_of_organization", "management_review_minutes", "staff_meeting_minutes"]);
-const FORM_READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-
-function gateManagementSystemWrites(req: Request, _res: Response, next: NextFunction) {
-  const type = req.params.type;
-  if (!type || !MANAGEMENT_SYSTEM_FORM_TYPES.has(type) || FORM_READ_METHODS.has(req.method)) return next();
-  if (!canMaintainManagementSystem(req.user)) {
-    return next(AppError.forbidden("Only an Administrator, the VP of Engineering and Quality, the President, or the CEO can change Management System forms."));
-  }
-  next();
-}
 function refuseControlledForms(req: Request, _res: Response, next: NextFunction) {
   if (req.params.type && CONTROLLED_FORM_TYPES.has(req.params.type)) {
     return next(new AppError("This document is version-controlled. Start a draft under Management System, get it reviewed, and publish it.", 409));
@@ -153,8 +141,8 @@ formsRouter.post("/:type/template", requireFormStructureEditor, upload.single("f
 formsRouter.delete("/:type/template", requireFormStructureEditor, deleteTemplateHandler);
 formsRouter.get("/:type/template/file", downloadTemplateHandler);
 formsRouter.get("/:type/:id", gateFormRead, getForm);
-formsRouter.post("/:type/:id/save", refuseControlledForms, gateManagementSystemWrites, gateKnownFormTypes, validate(saveFormSchema), saveForm);
-formsRouter.post("/:type/:id/sign", refuseControlledForms, gateManagementSystemWrites, gateKnownFormTypes, validate(signFormSchema), signForm);
-formsRouter.post("/:type/:id/version", refuseControlledForms, gateManagementSystemWrites, gateKnownFormTypes, createVersion);
+formsRouter.post("/:type/:id/save", refuseControlledForms, gateKnownFormTypes, validate(saveFormSchema), saveForm);
+formsRouter.post("/:type/:id/sign", refuseControlledForms, gateKnownFormTypes, validate(signFormSchema), signForm);
+formsRouter.post("/:type/:id/version", refuseControlledForms, gateKnownFormTypes, createVersion);
 formsRouter.get("/:type/:id/history", gateFormRead, getHistory);
 formsRouter.post("/:type/:id/export", gateFormRead, exportForm);

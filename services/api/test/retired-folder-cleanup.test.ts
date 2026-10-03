@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { isRetiredFolderPlacement, planRetiredFolderMoves, type FolderIdentity } from "../src/modules/document-folders/retiredFolderCleanup.js";
-import { canMaintainManagementSystem } from "../src/modules/roles/managementSystemAccess.js";
 
 function row(id: number, name: string, parentId: number | null): FolderIdentity {
   return { id, name, parentId };
@@ -49,18 +48,5 @@ describe("retired folder placement", () => {
       { sourceId: 13, destId: 15 },
       { sourceId: 16, destId: 6 },
     ]);
-  });
-});
-
-describe("management system maintainers", () => {
-  it("allows admin, owner, president, CEO, and the VP of Engineering and Quality", () => {
-    expect(canMaintainManagementSystem({ roleName: "admin" })).toBe(true);
-    expect(canMaintainManagementSystem({ roleName: "owner" })).toBe(true);
-    expect(canMaintainManagementSystem({ roleName: "president" })).toBe(true);
-    expect(canMaintainManagementSystem({ roleName: "ceo" })).toBe(true);
-    expect(canMaintainManagementSystem({ roleName: "VP of Engineering and Quality" })).toBe(true);
-    expect(canMaintainManagementSystem({ roleName: "quality_manager" })).toBe(false);
-    expect(canMaintainManagementSystem({ roleName: "vice_president" })).toBe(false);
-    expect(canMaintainManagementSystem({ roleName: "operator" })).toBe(false);
   });
 });

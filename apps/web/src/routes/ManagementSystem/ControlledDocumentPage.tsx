@@ -13,7 +13,7 @@ import { focusFirstEditable } from "../../components/shared/GridClipboard";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
-import { canMaintainManagementSystem } from "../../lib/managementSystemAccess";
+import { useWorkflowAccessLevel } from "../../hooks/useWorkflowAccess";
 
 // Both documents are a single record per organization (id 1) — the same singleton the generic forms engine has always used.
 const RECORD_ID = 1;
@@ -52,7 +52,8 @@ export function ControlledDocumentPage({ basePath, formType, title, noun, descri
   const shown: VersionFull<Payload> | null | undefined = shownId === null ? null : shownId === openId ? current?.open : shownId === publishedId ? current?.published : other.data;
 
   const isAdmin = isFullAccessRole(user?.roleName);
-  const mayEdit = canMaintainManagementSystem(user);
+  const accessKey = basePath === "/context" ? "context_of_org" : "management_review";
+  const mayEdit = useWorkflowAccessLevel(accessKey) === "edit";
   const editable = !!shown && shown.status === "draft" && shown.id === openId && mayEdit;
   const editorRef = useRef<HTMLDivElement>(null);
   const focusPending = useRef(false);
