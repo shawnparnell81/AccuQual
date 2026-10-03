@@ -21,7 +21,7 @@ import clsx from "clsx";
 import { Trash2 } from "lucide-react";
 import { SelectField, TextField } from "../../../components/forms/Field";
 import { ActionFields, ConditionFields, DEPARTMENT_OPTIONS, TRIGGER_KINDS } from "../WorkflowConfigFields";
-import { INTEGRATION_KINDS, NODE_META, NODE_ORDER, edgeId, fromPayload, newNodeId, toPayload, type CanvasEdge, type CanvasNode, type NodeData, type WfMetadata, type WfNodeType, type WfPayload } from "./graph";
+import { INTEGRATION_KINDS, NODE_META, NODE_ORDER, edgeId, fromPayload, newNodeId, nodeExits, toPayload, type CanvasEdge, type CanvasNode, type NodeData, type WfMetadata, type WfNodeType, type WfPayload } from "./graph";
 import type { ValidationIssue } from "../../../api/versioning";
 
 const DRAG_TYPE = "application/x-accuqual-node";
@@ -33,12 +33,16 @@ function WorkflowNodeView({ data, selected }: NodeProps<CanvasNode>) {
   const node = data.node;
   const meta = NODE_META[node.type];
   const Icon = meta.icon;
+  const assigneeLabels = Array.isArray(node.config.assignees)
+    ? (node.config.assignees as { label?: string; roleName?: string }[]).map((assignee) => assignee.label || assignee.roleName).filter(Boolean).join(", ")
+    : "";
   const summary =
     node.type === "condition"
       ? String((node.config as { field?: string }).field ?? "set a field")
       : node.type === "approval"
-        ? String((node.config as { approverRole?: string; approverDepartment?: string }).approverRole ?? (node.config as { approverDepartment?: string }).approverDepartment ?? "choose an approver")
+        ? assigneeLabels || String((node.config as { approverRole?: string; approverDepartment?: string }).approverRole ?? (node.config as { approverDepartment?: string }).approverDepartment ?? "choose an approver")
         : node.kind.replace(/_/g, " ");
+  const exits = nodeExits(node);
   return (
     <div className={clsx("relative w-52 rounded-lg border-2 bg-card px-3 py-2 shadow-sm", meta.accent.split(" ")[0], selected && "ring-2 ring-primary/60", data.issueCount > 0 && "!border-destructive")}>
       {node.type !== "trigger" && <Handle type="target" position={Position.Left} className="!h-3 !w-3 !bg-muted-foreground" />}
@@ -49,15 +53,18 @@ function WorkflowNodeView({ data, selected }: NodeProps<CanvasNode>) {
       </div>
       <p className="mt-0.5 truncate text-sm font-medium">{node.label || summary}</p>
       {node.label && <p className="truncate text-xs text-muted-foreground">{summary}</p>}
-      {meta.exits ? (
-        meta.exits.map((exit, i) => (
+      {exits ? (
+        exits.map((exit, i) => {
+          const top = exits.length === 2 ? (i === 0 ? "34%" : "70%") : `${20 + (i * 60) / Math.max(exits.length - 1, 1)}%`;
+          return (
           <div key={exit.id}>
-            <Handle id={exit.id} type="source" position={Position.Right} style={{ top: `${i === 0 ? 34 : 70}%` }} className="!h-3 !w-3 !bg-primary" />
-            <span className="pointer-events-none absolute -right-1 translate-x-full text-[10px] text-muted-foreground" style={{ top: `${i === 0 ? 34 : 70}%`, transform: "translate(100%, -50%)" }}>
+            <Handle id={exit.id} type="source" position={Position.Right} style={{ top }} className="!h-3 !w-3 !bg-primary" />
+            <span className="pointer-events-none absolute -right-1 translate-x-full text-[10px] text-muted-foreground" style={{ top, transform: "translate(100%, -50%)" }}>
               {exit.label}
             </span>
           </div>
-        ))
+          );
+        })
       ) : node.type !== "end" ? (
         <Handle id="out" type="source" position={Position.Right} className="!h-3 !w-3 !bg-primary" />
       ) : null}
@@ -117,7 +124,8 @@ function Inspector({ node, edge, nodes, editable, actionKinds, onNodeChange, onE
 
   if (edge) {
     const source = nodes.find((n) => n.id === edge.source);
-    const exits = source ? NODE_META[source.data.node.type].exits : undefined;
+    const exits = source ? nodeExits(source.data.node) : undefined;
+    const customRoutes = Array.isArray(source?.data.node.config.routes) && (source.data.node.config.routes as unknown[]).length > 0;
     return (
       <div className="flex flex-col gap-3">
         <h3 className="text-sm font-semibold">Connection</h3>
@@ -126,7 +134,7 @@ function Inspector({ node, edge, nodes, editable, actionKinds, onNodeChange, onE
         </p>
         {exits ? (
           <SelectField label="Followed when" value={edge.data?.branch ?? ""} disabled={!editable} onChange={(e) => onEdgeChange(edge.id, { branch: e.target.value || undefined })}>
-            <option value="">{source!.data.node.type === "approval" ? "Approved (default)" : "True (default)"}</option>
+            {customRoutes ? null : <option value="">{source!.data.node.type === "approval" ? "Approved (default)" : "True (default)"}</option>}
             {exits.map((x) => (
               <option key={x.id} value={x.id}>
                 {x.label}
@@ -199,7 +207,11 @@ function Inspector({ node, edge, nodes, editable, actionKinds, onNodeChange, onE
             ))}
           </SelectField>
           <TextField label="What is being approved" value={cfg.message ?? ""} onChange={(e) => setConfig({ ...n.config, message: e.target.value || undefined })} />
-          <p className="text-xs text-muted-foreground">Admins can always decide. Draw one connection labelled “approved” and, optionally, one labelled “rejected”.</p>
+          {Array.isArray(n.config.routes) && (n.config.routes as unknown[]).length > 0 ? (
+            <p className="text-xs text-muted-foreground">Decisions on this step are stored with the step. Draw one connection for each decision.</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Admins can always decide. Draw one connection labelled “approved” and, optionally, one labelled “rejected”.</p>
+          )}
         </>
       )}
 

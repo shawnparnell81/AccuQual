@@ -4,6 +4,7 @@ import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { assignFaiSchema, assignPullSchema, completePullSchema, faiDecisionSchema, openFaiSchema, savePlanSchema, saveResultsSchema } from "./fai.validation.js";
+import { csaFaiRouter } from "../csa-fai/csaFai.routes.js";
 import {
   approveRecordHandler,
   assignPullHandler,
@@ -52,3 +53,5 @@ faiRouter.post("/records/:id/assign", validate(assignFaiSchema), assignRecordHan
 faiRouter.post("/records/:id/submit", submitRecordHandler);
 faiRouter.post("/records/:id/approve", validate(faiDecisionSchema), approveRecordHandler);
 faiRouter.post("/records/:id/reject", validate(faiDecisionSchema), rejectRecordHandler);
+
+faiRouter.use("/csa", csaFaiRouter);

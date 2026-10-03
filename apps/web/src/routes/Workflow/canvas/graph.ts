@@ -87,6 +87,23 @@ export type CanvasEdge = Edge<{ branch?: string; label?: string }>;
 
 export const edgeId = (from: string, to: string, branch?: string) => `${from}->${to}[${branch ?? ""}]`;
 
+/** Approval steps can store their own decisions. Other node types keep the built-in exits. */
+export function nodeExits(node: { type: WfNodeType; config?: Record<string, unknown> }): { id: string; label: string }[] | undefined {
+  if (node.type === "approval") {
+    const routes = Array.isArray(node.config?.routes) ? (node.config.routes as { branch?: string; decision?: string; label?: string }[]) : [];
+    const exits: { id: string; label: string }[] = [];
+    const seen = new Set<string>();
+    for (const route of routes) {
+      const id = route.branch || route.decision;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      exits.push({ id, label: route.label || id });
+    }
+    if (exits.length > 0) return exits;
+  }
+  return NODE_META[node.type].exits;
+}
+
 /**
  * Nodes saved before the canvas existed have no position. Lay them out left to right by depth from the triggers so an
  * old workflow opens readable rather than in a heap.

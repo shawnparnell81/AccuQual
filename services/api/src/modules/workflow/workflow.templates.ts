@@ -1,4 +1,5 @@
 import type { WorkflowDefinition } from "./workflow-engine.js";
+import { CSA_FAI_DEFINITION, CSA_FAI_METADATA } from "../csa-fai/csaFai.workflow.js";
 
 export interface WorkflowTemplate {
   key: string;
@@ -6,6 +7,8 @@ export interface WorkflowTemplate {
   module: string;
   description: string;
   definition: WorkflowDefinition;
+  /** Stored on the draft when the template is loaded. CSA uses this for allowLoops. */
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -216,5 +219,13 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
         { from: "s8", to: "end", branch: "approved" },
       ],
     },
+  },
+  {
+    key: "csa_fai",
+    name: "CSA First Article Inspection",
+    module: "fai",
+    description: "Complete Strut Assembly first article inspection. Aftermarket automotive parts. The controlled version stays a draft until it is published.",
+    definition: CSA_FAI_DEFINITION,
+    metadata: CSA_FAI_METADATA,
   },
 ];

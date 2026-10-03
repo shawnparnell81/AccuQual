@@ -70,6 +70,8 @@ export const QmsFormRecordPage = lazyNamed("/qms-forms", () => import("./QmsForm
 export const ScarFormsPage = lazyNamed("/scar-forms", () => import("./ScarForms/ScarFormsPage"), "ScarFormsPage");
 export const ScarFormDetailPage = lazyNamed("/scar-forms", () => import("./ScarForms/ScarFormDetailPage"), "ScarFormDetailPage");
 export const FaiQueuePage = lazyNamed("/fai", () => import("./Fai/FaiQueuePage"), "FaiQueuePage");
+export const CsaFaiListPage = lazyNamed("/fai/csa", () => import("./Fai/CsaFaiPage"), "CsaFaiListPage");
+export const CsaFaiRecordPage = lazyNamed("/fai/csa", () => import("./Fai/CsaFaiPage"), "CsaFaiRecordPage");
 export const FaiPlanPage = lazyNamed("/fai", () => import("./Fai/FaiPlanPage"), "FaiPlanPage");
 export const FaiRecordPage = lazyNamed("/fai", () => import("./Fai/FaiRecordPage"), "FaiRecordPage");
 export const FaiSourcesPage = lazyNamed("/fai", () => import("./Fai/FaiSourcesPage"), "FaiSourcesPage");

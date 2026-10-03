@@ -715,6 +715,13 @@
       "when": 1792796400000,
       "tag": "0101_clear_published_versions",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1792969200000,
+      "tag": "0103_csa_first_article",
+      "breakpoints": true
     }
   ]
 }
