@@ -1,6 +1,7 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { formTemplates, formData, formVersions } from "../../drizzle/schema/forms.js";
 import { AppError } from "../../utils/appError.js";
+import { logger } from "../../utils/logger.js";
 import type { Db } from "../../lib/requestDb.js";
 import { eightD } from "../../drizzle/schema/eightD.js";
 import { blank8dFromData } from "../eight-d/blank8dForm.js";
@@ -9,6 +10,11 @@ import { mergePdfFields } from "./pdf-merger.js";
 import { snapshotFormDataNumber } from "../document-folders/formRecordFiling.js";
 import { answersWithTemplateStamp, readTemplateStamp, templateRevisionFor } from "./templateRevision.js";
 import { retainSignatureValues } from "../signatures/signaturePin.js";
+import { auditTrail } from "../../drizzle/schema/auditTrail.js";
+import { attachments } from "../../drizzle/schema/attachments.js";
+import { users } from "../../drizzle/schema/users.js";
+import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { auditReason, emptyFrame, exportTrace, type AttachmentLine, type AuditLine, type ControlledPdfFrame } from "./controlledPdf.js";
 
 /**
  * Self-healing (same pattern as document-folders.controller.ts's
@@ -132,7 +138,88 @@ export function presentForm<T extends { data: unknown }>(formType: string, row: 
   return { ...row, templateRevision: stamp.revision, templateVersion: stamp.version };
 }
 
-export async function exportPdf(db: Db, formType: string, entityId?: number) {
+const PDF_AUDIT: Record<string, { audit: string; attachment: string }> = {
+  ncr: { audit: "NCR", attachment: "ncr" },
+  capa: { audit: "CAPA", attachment: "capa" },
+};
+
+function textOf(value: unknown): string {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function recordNumberFrom(formType: string, data: Record<string, unknown>, entityId?: number): string {
+  for (const key of ["ncrNumber", "capaNumber", "number", "documentNumber", "faiNumber", "recordNumber"]) {
+    const value = textOf(data[key]);
+    if (value) return value;
+  }
+  if (formType === "ncr" && entityId) return `NCR-${entityId}`;
+  if (formType === "capa" && entityId) return `CAPA-${entityId}`;
+  return "";
+}
+
+async function namesFor(db: Db, ids: number[]): Promise<Map<number, string>> {
+  const unique = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
+  if (unique.length === 0) return new Map();
+  const rows = await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, unique));
+  return new Map(rows.map((row) => [row.id, row.name?.trim() || ""]));
+}
+
+async function frameForForm(db: Db, formType: string, data: Record<string, unknown>, entityId: number | undefined, actorId: number | undefined): Promise<ControlledPdfFrame> {
+  const stamp = readTemplateStamp(data) ?? templateRevisionFor(`form:${formType}`);
+  const names = await namesFor(db, actorId ? [actorId] : []);
+  const generatedBy = (actorId ? names.get(actorId) : "") || "AccuQual";
+  const known = entityId != null ? PDF_AUDIT[formType] : undefined;
+  let audit: AuditLine[] = [];
+  let files: AttachmentLine[] = [];
+  if (known && entityId != null) {
+    const [history, filesRows] = await Promise.all([
+      db
+        .select({ action: auditTrail.action, changes: auditTrail.changes, performedBy: auditTrail.performedBy, createdAt: auditTrail.createdAt })
+        .from(auditTrail)
+        .where(and(eq(auditTrail.entityType, known.audit), eq(auditTrail.entityId, entityId)))
+        .orderBy(desc(auditTrail.id))
+        .limit(40),
+      db
+        .select({
+          fileName: attachments.fileName,
+          mimeType: attachments.mimeType,
+          fileSize: attachments.fileSize,
+          uploadedBy: attachments.uploadedBy,
+          createdAt: attachments.createdAt,
+        })
+        .from(attachments)
+        .where(and(eq(attachments.entityType, known.attachment), eq(attachments.entityId, entityId)))
+        .orderBy(desc(attachments.id))
+        .limit(40),
+    ]);
+    const who = await namesFor(db, [...history.map((row) => row.performedBy ?? 0), ...filesRows.map((row) => row.uploadedBy ?? 0)]);
+    audit = history.map((row) => ({
+      who: (row.performedBy ? who.get(row.performedBy) : "") || "Unknown",
+      action: row.action,
+      at: row.createdAt ? row.createdAt.toISOString().replace("T", " ").slice(0, 19) + " UTC" : "",
+      reason: auditReason(row.changes),
+    }));
+    files = filesRows.map((row) => ({
+      name: row.fileName,
+      type: row.mimeType ?? "",
+      size: row.fileSize != null ? `${row.fileSize} bytes` : "",
+      uploadedBy: (row.uploadedBy ? who.get(row.uploadedBy) : "") || "",
+      uploadedAt: row.createdAt ? row.createdAt.toISOString().slice(0, 10) : "",
+    }));
+  }
+  return emptyFrame({
+    sourceModule: formType,
+    recordNumber: recordNumberFrom(formType, data, entityId),
+    revision: stamp.revision,
+    generatedBy,
+    status: textOf(data.status) || textOf(data.documentStatus) || null,
+    formNumber: textOf(data.formNumber) || null,
+    audit,
+    attachments: files,
+  });
+}
+
+export async function exportPdf(db: Db, formType: string, entityId?: number, actorId?: number) {
   if (formType === "eight_d") {
     if (entityId == null) throw AppError.notFound("8D Report");
     const [row] = await db.select().from(eightD).where(eq(eightD.id, entityId));
@@ -145,5 +232,21 @@ export async function exportPdf(db: Db, formType: string, entityId?: number) {
   // A record can be printed before the form has been saved. A blank sheet
   // is still the form; refusing with "not found" left the Print button dead.
   const data = (current?.data ?? {}) as Record<string, unknown>;
-  return mergePdfFields(template, data);
+  const frame = await frameForForm(db, formType, data, entityId, actorId);
+  const bytes = await mergePdfFields(template, data, frame);
+  const known = entityId != null ? PDF_AUDIT[formType] : undefined;
+  if (known && entityId != null) {
+    try {
+      await recordAuditTrail(db, {
+        entityType: known.audit,
+        entityId,
+        action: "update",
+        changes: { event: "pdf_export", ...exportTrace(bytes, frame) },
+        performedBy: actorId,
+      });
+    } catch (err) {
+      logger.warn("pdf export audit failed", err);
+    }
+  }
+  return bytes;
 }

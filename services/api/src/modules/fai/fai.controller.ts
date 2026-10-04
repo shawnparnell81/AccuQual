@@ -42,6 +42,16 @@ export const listRecordsHandler = asyncHandler(async (req: Request, res: Respons
   res.json(await fai.listRecords(req.db!));
 });
 
+export const listPreviousRecordsHandler = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await fai.listPreviousRecords(req.db!, String(req.query.partNumber ?? "")));
+});
+
+export const copyRecordHandler = asyncHandler(async (req: Request, res: Response) => {
+  const sourceId = Number(req.body?.sourceId);
+  if (!Number.isInteger(sourceId) || sourceId < 1) throw AppError.badRequest("Choose a record to copy.");
+  res.status(201).json(await fai.copyRecord(req.db!, req.user!.id, sourceId));
+});
+
 export const openRecordHandler = asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json(await fai.openRecord(req.db!, req.user!.id, req.body));
 });

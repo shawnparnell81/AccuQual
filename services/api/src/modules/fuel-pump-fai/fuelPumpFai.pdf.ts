@@ -1,46 +1,124 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import type { FormLayout } from "../forms/layouts/types.js";
+import { renderFormLayoutAsPdf } from "../forms/schema-pdf-renderer.js";
+import { emptyFrame, type ApprovalLine } from "../forms/controlledPdf.js";
 import { vehicleApplication, type FpmState } from "./fuelPumpFai.logic.js";
 
 /** Final fuel-pump first-article report. Generated at release and kept in the archive. */
 export async function renderFuelPumpPdf(state: FpmState): Promise<Uint8Array> {
-  const doc = await PDFDocument.create();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  let page = doc.addPage([612, 792]);
-  let y = 750;
-  const draw = (text: string, size = 11, useBold = false) => {
-    for (const line of text.split("\n")) {
-      if (y < 48) {
-        page = doc.addPage([612, 792]);
-        y = 750;
-      }
-      page.drawText(line.slice(0, 110), { x: 48, y, size, font: useBold ? bold : font, color: rgb(0.1, 0.1, 0.1) });
-      y -= size + 6;
-    }
+  const attempts = [...state.history, state.attempt];
+  const data: Record<string, unknown> = {
+    number: state.number,
+    status: state.status,
+    partNumber: state.partNumber,
+    partDescription: state.partDescription,
+    supplier: state.supplier,
+    supplierPartNumber: state.supplierPartNumber,
+    sampleLotNumber: state.sampleLotNumber,
+    vehicle: vehicleApplication(state),
+    inspector: state.inspector,
+    dateOpened: state.dateOpened.slice(0, 10),
+    stage: state.stage,
+    productionRelease: state.productionRelease,
+    ncrNumber: state.ncrId ? `NCR-${state.ncrId}` : "",
+    flowRateResult: state.flowRateResult ?? "",
+    pressureResult: state.pressureResult ?? "",
+    currentDrawResult: state.currentDrawResult ?? "",
+    electricalResult: state.electricalResult ?? "",
+    fitmentResult: state.fitmentResult ?? "",
+    packagingResult: state.packagingResult ?? "",
   };
-  draw("Fuel Pump Module — First Article Inspection", 16, true);
-  draw(state.outcomeDisplay ?? state.status, 12, true);
-  draw(`${state.number} · ${state.productFamily}`);
-  draw(`Part ${state.partNumber} — ${state.partDescription}`);
-  draw(`Supplier ${state.supplier} · ${state.supplierPartNumber} · lot ${state.sampleLotNumber}`);
-  draw(`Vehicle ${vehicleApplication(state)}`);
-  draw(`Inspector ${state.inspector} · validation ${state.validationOwner || "—"} · opened ${state.dateOpened.slice(0, 10)}`);
-  draw(`Status ${state.status} · stage ${state.stage} · production release ${state.productionRelease}`);
-  draw(`Flow ${state.flowRateResult ?? "—"} · pressure ${state.pressureResult ?? "—"} · current draw ${state.currentDrawResult ?? "—"}`);
-  draw(`Electrical ${state.electricalResult ?? "—"} · fitment ${state.fitmentResult ?? "—"} · packaging ${state.packagingResult ?? "—"}`);
-  if (state.ncrId) draw(`Linked NCR ${state.ncrId} · NCR required ${state.ncrRequired}`);
-  for (const attempt of [...state.history, state.attempt]) {
-    draw(`Attempt ${attempt.number} · ${attempt.overall ?? "in progress"}`, 13, true);
-    if (attempt.totals) draw(`Criteria ${attempt.totals.criteria}, passed ${attempt.totals.passed}, failed ${attempt.totals.failed}, engineering review ${attempt.totals.engineeringReviewRequired}`);
-    for (const row of attempt.results) {
-      const actual = row.actual ? ` actual ${row.actual}${row.units ? ` ${row.units}` : ""}` : "";
-      const limits = row.specifiedLimits ? ` limits ${row.specifiedLimits}` : "";
-      draw(`${row.label}: ${row.result}${actual}${limits}`);
-    }
-  }
-  if (state.correctiveAction) {
-    draw("Corrective action", 13, true);
-    draw(`${state.correctiveAction.correctiveAction} · ${state.correctiveAction.responsiblePerson} · due ${state.correctiveAction.dueDate}`);
-  }
-  return doc.save();
+  const sections: FormLayout["sections"] = [
+    {
+      number: "1",
+      title: "Record",
+      blocks: [
+        {
+          type: "row",
+          fields: [
+            { kind: "text", name: "number", label: "Record number" },
+            { kind: "text", name: "status", label: "Status" },
+            { kind: "text", name: "stage", label: "Stage" },
+          ],
+        },
+        {
+          type: "row",
+          fields: [
+            { kind: "text", name: "partNumber", label: "Part" },
+            { kind: "text", name: "partDescription", label: "Description" },
+            { kind: "text", name: "supplier", label: "Supplier" },
+          ],
+        },
+        {
+          type: "row",
+          fields: [
+            { kind: "text", name: "sampleLotNumber", label: "Sample lot" },
+            { kind: "text", name: "vehicle", label: "Vehicle" },
+            { kind: "text", name: "inspector", label: "Inspector" },
+          ],
+        },
+        {
+          type: "row",
+          fields: [
+            { kind: "text", name: "flowRateResult", label: "Flow" },
+            { kind: "text", name: "pressureResult", label: "Pressure" },
+            { kind: "text", name: "currentDrawResult", label: "Current draw" },
+          ],
+        },
+        {
+          type: "row",
+          fields: [
+            { kind: "text", name: "electricalResult", label: "Electrical" },
+            { kind: "text", name: "fitmentResult", label: "Fitment" },
+            { kind: "text", name: "packagingResult", label: "Packaging" },
+            { kind: "text", name: "ncrNumber", label: "NCR" },
+          ],
+        },
+      ],
+    },
+  ];
+  attempts.forEach((attempt, index) => {
+    const name = `attempt_${index}`;
+    data[name] = attempt.results.map((row) => ({
+      name: row.label,
+      spec: row.specifiedLimits ?? "",
+      nominal: "",
+      limits: row.specifiedLimits ?? "",
+      units: row.units ?? "",
+      actual: row.actual ?? "",
+      result: row.result ?? "",
+      comments: row.comments ?? "",
+    }));
+    sections.push({
+      number: String(index + 2),
+      title: `Attempt ${attempt.number}`,
+      blocks: [
+        {
+          type: "table",
+          name,
+          columns: [
+            { key: "name", label: "Characteristic", kind: "text" },
+            { key: "spec", label: "Spec", kind: "text" },
+            { key: "nominal", label: "Nominal", kind: "text" },
+            { key: "limits", label: "Limits", kind: "text" },
+            { key: "units", label: "Units", kind: "text" },
+            { key: "actual", label: "Actual", kind: "text" },
+            { key: "result", label: "Pass/Fail", kind: "text" },
+            { key: "comments", label: "Comments", kind: "text" },
+          ],
+        },
+      ],
+    });
+  });
+  const approvals: ApprovalLine[] = [];
+  if (state.signatureStamp) approvals.push({ name: state.signatureStamp, role: "", action: "Signed", at: state.approvalDate ?? "", status: state.status });
+  const frame = emptyFrame({
+    sourceModule: "Fuel Pump First Article",
+    recordNumber: state.number,
+    revision: "",
+    generatedBy: state.inspector || "AccuQual",
+    status: state.status,
+    approvals,
+  });
+  const layout: FormLayout = { formType: "fuel_pump_fai", title: "Fuel Pump Module — First Article Inspection", sections };
+  return renderFormLayoutAsPdf(layout, data, frame);
 }

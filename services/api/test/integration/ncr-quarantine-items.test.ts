@@ -142,6 +142,7 @@ describe("NCR quarantined items", () => {
 
   async function advanceToFix(ncrId: number) {
     expect((await request(app).post(`/ncr/${ncrId}/containment`).set("Authorization", `Bearer ${qualityToken}`).send({ containment: "Held the parts" })).status).toBe(200);
+    expect((await request(app).post(`/ncr/${ncrId}/root-cause`).set("Authorization", `Bearer ${qualityToken}`).send({ rootCause: "Fixture wear" })).status).toBe(200);
     expect((await request(app).post(`/ncr/${ncrId}/disposition-step`).set("Authorization", `Bearer ${qualityToken}`).send({ note: "Scrap after the hold is cleared" })).status).toBe(200);
     expect((await request(app).post(`/ncr/${ncrId}/corrective-action`).set("Authorization", `Bearer ${qualityToken}`).send({ correctiveAction: "Replaced the fixture" })).status).toBe(200);
     expect((await request(app).post(`/ncr/${ncrId}/verify`).set("Authorization", `Bearer ${qualityToken}`).send({ verification: "Next lot inspected and accepted" })).status).toBe(200);

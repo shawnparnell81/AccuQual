@@ -20,6 +20,8 @@ import {
   listRecordsHandler,
   listSourcesHandler,
   lookupsHandler,
+  copyRecordHandler,
+  listPreviousRecordsHandler,
   openRecordHandler,
   pdfHandler,
   queueHandler,
@@ -47,6 +49,8 @@ faiRouter.put("/plans/:id", validate(savePlanSchema), updatePlanHandler);
 faiRouter.post("/plans/:id/retire", retirePlanHandler);
 
 faiRouter.get("/records", listRecordsHandler);
+faiRouter.get("/records/previous", listPreviousRecordsHandler);
+faiRouter.post("/records/copy", copyRecordHandler);
 faiRouter.post("/records", validate(openFaiSchema), openRecordHandler);
 faiRouter.get("/records/:id/pdf", pdfHandler);
 faiRouter.get("/records/:id", getRecordHandler);

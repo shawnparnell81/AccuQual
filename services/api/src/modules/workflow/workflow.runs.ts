@@ -90,6 +90,31 @@ function canDecide(user: { id: number; roleName: string | null; department: stri
 
 const pendingOf = (run: WorkflowRun) => (run.context as { pendingApproval?: PendingApproval } | null)?.pendingApproval;
 
+/** Approvals this person is already allowed to decide. Bounded so the home list does not scan every historical run. */
+export async function approvalsWaitingOnUser(
+  db: Db,
+  user: { id: number; roleName: string | null; department: string | null },
+): Promise<{ id: number; workflowName: string; label: string; startedAt: Date | null }[]> {
+  const rows = await db
+    .select({ run: workflowRuns, workflowName: workflowDefinitions.name })
+    .from(workflowRuns)
+    .innerJoin(workflowDefinitions, eq(workflowDefinitions.id, workflowRuns.workflowId))
+    .where(eq(workflowRuns.status, "waiting_approval"))
+    .orderBy(desc(workflowRuns.startedAt))
+    .limit(200);
+  const keys = await assigneeKeys(db, user.id, user.roleName);
+  return rows
+    .filter(({ run }) => {
+      const pending = pendingOf(run);
+      return pending != null && canDecide(user, pending, keys);
+    })
+    .slice(0, 40)
+    .map(({ run, workflowName }) => {
+      const pending = pendingOf(run);
+      return { id: run.id, workflowName, label: pending?.label?.trim() || "Waiting for approval", startedAt: run.startedAt };
+    });
+}
+
 /** Runs waiting on a decision that the signed-in user is allowed to make. */
 workflowRunsRouter.get(
   "/pending-approval",

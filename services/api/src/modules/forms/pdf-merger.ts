@@ -4,6 +4,7 @@ import { logger } from "../../utils/logger.js";
 import type { FormTemplate } from "../../drizzle/schema/forms.js";
 import { getFormLayout } from "./layouts/index.js";
 import { renderFormLayoutAsPdf } from "./schema-pdf-renderer.js";
+import type { ControlledPdfFrame } from "./controlledPdf.js";
 import { renderProcessFlowDiagramAsPdf } from "./diagram-pdf-renderer.js";
 import { TEMPLATE_STAMP_KEY, readTemplateStamp } from "./templateRevision.js";
 
@@ -18,7 +19,7 @@ import { TEMPLATE_STAMP_KEY, readTemplateStamp } from "./templateRevision.js";
  *   2. A plain key:value render otherwise.
  * Callers always get back a valid PDF, never an error.
  */
-export async function mergePdfFields(template: FormTemplate, data: Record<string, unknown>): Promise<Uint8Array> {
+export async function mergePdfFields(template: FormTemplate, data: Record<string, unknown>, frame: ControlledPdfFrame | null = null): Promise<Uint8Array> {
   const templateBytes = await readTemplateFile(template.pdfPath);
 
   if (templateBytes) {
@@ -34,7 +35,7 @@ export async function mergePdfFields(template: FormTemplate, data: Record<string
     if (template.formType === "process_flow_diagram") {
       return renderProcessFlowDiagramAsPdf(layout, data);
     }
-    return renderFormLayoutAsPdf(layout, data);
+    return renderFormLayoutAsPdf(layout, data, frame);
   }
 
   return renderPlainPdf(template.formType, data);

@@ -9,6 +9,7 @@ import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { parseLimitOffset } from "../../utils/listQuery.js";
 import { capaMatchesNcr, openRepeatCapa } from "../quality-automation/qualityAutomation.service.js";
+import { missingRequiredLabels, requiredMoveError } from "../workflow/requiredFields.js";
 
 export const baseHandlers = crudFactory(capa, { entityName: "CAPA", idColumn: "id", siteScoped: true });
 
@@ -125,6 +126,8 @@ export const closeHandler = asyncHandler(async (req: Request, res: Response) => 
   const id = Number(req.params.id);
   const current = await loadCapa(req, id);
   assertTransition(current.status, "closed");
+  const missing = missingRequiredLabels(["root_cause", "verification"], { root_cause: current.rootCause, verification: current.verification });
+  if (missing.length > 0) throw requiredMoveError(missing);
 
   const [updated] = await req.db!.update(capa).set({ status: "closed", closedAt: new Date() }).where(eq(capa.id, id)).returning();
   await recordAuditTrail(req.db!, { entityType: "CAPA", entityId: id, action: "status_change", changes: { action: "close" }, performedBy: req.user?.id });

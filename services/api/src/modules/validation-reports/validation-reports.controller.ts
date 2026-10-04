@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import type { Request, Response } from "express";
 import { validationReports } from "../../drizzle/schema/validationReport.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
@@ -7,6 +7,8 @@ import { crudFactory } from "../../utils/crudFactory.js";
 import { validationFormKeyFor, validationKind } from "../document-folders/editableForms.js";
 import { snapshotFormNumber } from "../document-folders/formRecordFiling.js";
 import { answersWithTemplateStamp } from "../forms/templateRevision.js";
+import { copyValidationCells, validationPartNumber } from "../records/copyPrevious.js";
+import { renderValidationReportPdf } from "./validationReportPdf.js";
 import { retainSignatureValues } from "../signatures/signaturePin.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 
@@ -34,6 +36,55 @@ export const baseHandlers = crudFactory(validationReports, {
     const id = typeof created.id === "number" ? created.id : 0;
     await snapshotFormNumber(req.db, validationFormKeyFor(created.data), id);
   },
+});
+
+export const listPreviousValidation = asyncHandler(async (req: Request, res: Response) => {
+  const part = String(req.query.partNumber ?? "").trim().toLowerCase();
+  const formType = typeof req.query.formType === "string" ? req.query.formType : "";
+  if (!part) {
+    res.json([]);
+    return;
+  }
+  const rows = await req.db!.select().from(validationReports).orderBy(desc(validationReports.id)).limit(200);
+  res.json(
+    rows
+      .filter((row) => {
+        const data = asRecord(row.data);
+        const kind = validationKind(data);
+        if (formType && kind !== formType) return false;
+        return validationPartNumber(asRecord(data.cells)).toLowerCase() === part;
+      })
+      .slice(0, 40)
+      .map((row) => {
+        const data = asRecord(row.data);
+        return { id: row.id, number: validationPartNumber(asRecord(data.cells)) || validationKind(data), status: validationKind(data), partNumber: validationPartNumber(asRecord(data.cells)) };
+      }),
+  );
+});
+
+export const copyValidationHandler = asyncHandler(async (req: Request, res: Response) => {
+  const sourceId = Number(req.body?.sourceId);
+  if (!Number.isInteger(sourceId) || sourceId < 1) throw AppError.badRequest("Choose a record to copy.");
+  const [source] = await req.db!.select().from(validationReports).where(eq(validationReports.id, sourceId));
+  if (!source) throw AppError.notFound("Validation Report");
+  const data = asRecord(source.data);
+  const kind = validationKind(data);
+  const cells = copyValidationCells(kind, asRecord(data.cells));
+  const next = answersWithTemplateStamp(`validation:${kind}`, undefined, { formType: kind, cells }, true);
+  const [created] = await req.db!.insert(validationReports).values({ data: next as typeof validationReports.$inferInsert.data }).returning();
+  if (!created) throw new AppError("The validation report could not be copied.", 500);
+  await snapshotFormNumber(req.db!, validationFormKeyFor(created.data), created.id);
+  res.status(201).json(created);
+});
+
+export const validationPdfHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const [row] = await req.db!.select().from(validationReports).where(eq(validationReports.id, id));
+  if (!row) throw AppError.notFound("Validation Report");
+  const bytes = await renderValidationReportPdf(asRecord(row.data), "AccuQual");
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="validation-${id}.pdf"`);
+  res.send(Buffer.from(bytes));
 });
 
 const SIGNATURE_COPY: Record<string, Record<string, string>> = {

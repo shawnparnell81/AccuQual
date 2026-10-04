@@ -7,6 +7,7 @@ import { users } from "../../src/drizzle/schema/users.js";
 import { sites } from "../../src/drizzle/schema/sites.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
+import { pdfVisibleText } from "../../src/modules/forms/controlledPdf.js";
 
 const app = createApp();
 const suffix = Date.now();
@@ -61,9 +62,27 @@ describe("quality reports", () => {
     expect(csv.text).toContain("# Plant: Dayton");
     expect(csv.text).toContain("ncr,NCR,ok,opened");
 
-    const pdf = await request(app).get("/reports/export").query({ type: "weekly", format: "pdf", plantId: String(siteId) }).set("Authorization", `Bearer ${adminToken}`);
+    const deniedPdf = await request(app).get("/reports/export").query({ type: "weekly", format: "pdf", plantId: "all" }).set("Authorization", `Bearer ${operatorToken}`);
+    expect(deniedPdf.status).toBe(403);
+
+    const pdf = await request(app)
+      .get("/reports/export")
+      .query({ type: "weekly", format: "pdf", plantId: String(siteId) })
+      .set("Authorization", `Bearer ${adminToken}`)
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+        res.on("end", () => callback(null, Buffer.concat(chunks)));
+      });
     expect(pdf.status).toBe(200);
-    expect(pdf.body.status).toBe("stub");
+    expect(String(pdf.headers["content-type"])).toContain("application/pdf");
+    const bytes = pdf.body as Buffer;
+    expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
+    const text = await pdfVisibleText(bytes);
+    expect(text).toContain("Weekly quality report");
+    expect(text).toContain("NCR");
+    expect(text).toContain("opened");
 
     const json = await request(app).get("/reports/export").query({ type: "weekly", format: "json", plantId: String(siteId) }).set("Authorization", `Bearer ${adminToken}`);
     expect(json.status).toBe(200);

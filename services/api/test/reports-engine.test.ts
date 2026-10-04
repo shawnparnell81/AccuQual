@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { AppError } from "../src/utils/appError.js";
 import { ReportExportService } from "../src/modules/reports/ReportExportService.js";
+import { renderQualityReportPdf } from "../src/modules/reports/reportPdf.js";
+import { pdfVisibleText } from "../src/modules/forms/controlledPdf.js";
 import { ReportTemplateService } from "../src/modules/reports/ReportTemplateService.js";
 import { reportScheduleStub } from "../src/modules/reports/reports.scheduler.js";
 import {
@@ -116,7 +118,7 @@ describe("report export", () => {
     },
   };
 
-  it("writes a CSV with the header and a skipped section, and leaves PDF as a stub", () => {
+  it("writes a CSV with the header and a skipped section, and a PDF of the same report", async () => {
     const csv = reportToCsv(report);
     expect(csv).toContain("# Weekly quality report");
     expect(csv).toContain("# Plant: Dayton, OH");
@@ -125,7 +127,11 @@ describe("report export", () => {
     expect(csv).toContain('capa,CAPA,skipped,reason,missing table');
     expect(ReportExportService.csv(report).fileName).toMatch(/^accuqual-weekly-report-/);
     expect(ReportExportService.json(report).body).toContain('"templateVersion": 1');
-    expect(ReportExportService.pdfStub().status).toBe("stub");
+    const pdf = await renderQualityReportPdf(report);
+    const text = await pdfVisibleText(pdf);
+    expect(text).toContain("Weekly quality report");
+    expect(text).toContain("Opened");
+    expect(text).toContain("missing table");
     expect(reportScheduleStub().enabled).toBe(false);
   });
 });

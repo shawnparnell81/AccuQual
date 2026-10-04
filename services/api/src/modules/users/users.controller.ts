@@ -463,7 +463,7 @@ export const setTemporaryPassword = asyncHandler(async (req: Request, res: Respo
 });
 
 const WORKSPACE_IDS = {
-  home: ["hero", "kpis", "next", "whos-late", "waiting", "audits", "documents", "training", "onboarding", "attention", "inbox", "calendar"],
+  home: ["hero", "waiting-on-me", "kpis", "next", "whos-late", "waiting", "audits", "documents", "training", "onboarding", "attention", "inbox", "calendar"],
   dashboard: ["hero", "open-work", "kpis", "engineering", "trend", "aging", "stuck", "activity"],
 } as const;
 
@@ -482,12 +482,17 @@ export const getMyWorkspaceLayout = asyncHandler(async (req: Request, res: Respo
 });
 
 export const updateMyWorkspaceLayout = asyncHandler(async (req: Request, res: Response) => {
-  const body = req.body as { home?: { order?: string[]; hidden?: string[] }; dashboard?: { order?: string[]; hidden?: string[] } };
+  const body = req.body as {
+    home?: { order?: string[]; hidden?: string[] };
+    dashboard?: { order?: string[]; hidden?: string[] };
+    waitingOnMe?: { sort: "due" | "module" | "status"; group: "none" | "module" | "status"; module: string; timing: "all" | "late" | "due" };
+  };
   const [existing] = await req.db!.select({ workspaceLayout: users.workspaceLayout }).from(users).where(eq(users.id, req.user!.id));
   const previous = existing?.workspaceLayout ?? {};
   const next = {
     home: body.home ? cleanLayout("home", body.home) : previous.home,
     dashboard: body.dashboard ? cleanLayout("dashboard", body.dashboard) : previous.dashboard,
+    waitingOnMe: body.waitingOnMe ?? previous.waitingOnMe,
   };
   const [updated] = await req.db!.update(users).set({ workspaceLayout: next, updatedAt: new Date() }).where(eq(users.id, req.user!.id)).returning({ workspaceLayout: users.workspaceLayout });
   res.json(updated?.workspaceLayout ?? next);
@@ -505,8 +510,9 @@ export const resetMyWorkspaceLayout = asyncHandler(async (req: Request, res: Res
   const next = {
     home: surface === "home" ? undefined : previous.home,
     dashboard: surface === "dashboard" ? undefined : previous.dashboard,
+    waitingOnMe: previous.waitingOnMe,
   };
-  const stored = next.home || next.dashboard ? next : null;
+  const stored = next.home || next.dashboard || next.waitingOnMe ? next : null;
   await req.db!.update(users).set({ workspaceLayout: stored, updatedAt: new Date() }).where(eq(users.id, req.user!.id));
   res.json(stored);
 });

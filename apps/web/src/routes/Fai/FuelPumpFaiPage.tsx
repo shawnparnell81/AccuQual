@@ -9,6 +9,7 @@ import { SignatureStamp, DEFAULT_CERTIFY } from "../../components/forms/Signatur
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { uploadAttachmentFor } from "../../lib/attachments";
 import { faiFill } from "../../lib/qualitySheetLogic";
+import { CopyFromPrevious } from "../../components/records/CopyFromPrevious";
 import "../IsoForms/isoForm.css";
 
 interface FuelPumpListRow {
@@ -169,6 +170,12 @@ export function FuelPumpFaiListPage() {
         }}
       >
         <h2 className="sm:col-span-2 text-sm font-medium">Submit a fuel pump FAI</h2>
+        <CopyFromPrevious
+          partNumber={form.partNumber}
+          previousPath="/fai/fuel-pump/previous"
+          copyPath="/fai/fuel-pump/copy"
+          onCopied={(created) => navigate(`/fai/fuel-pump/${created.id}`)}
+        />
         {fields.map(([key, label, required]) => (
           <label key={key} className="flex flex-col gap-1 text-sm">
             <span>{label}{required ? " *" : ""}</span>

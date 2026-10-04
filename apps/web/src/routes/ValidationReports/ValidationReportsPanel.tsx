@@ -11,6 +11,7 @@ import { cellsFromData as fuelCellsFromData, overallResult as fuelOverall } from
 import { blankBrakeCells, blankInjectorCells, cellsFromData as inspectionCells, overallBrake, overallInjector } from "../../lib/partInspection";
 import { cellsFromData, formTypeOf, overallResult, VALIDATION_FORMS, type CellValue, type ValidationFormType } from "../../lib/validationReport";
 import { useCurrentUser } from "../../hooks/useAuth";
+import { CopyFromPrevious } from "../../components/records/CopyFromPrevious";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 
 interface ValidationReport {
@@ -51,6 +52,8 @@ export function ValidationReportsPanel() {
   const filing = useFormTemplates();
   const createReport = hooks.useCreate();
   const [pendingKind, setPendingKind] = useState<ValidationFormType | null>(null);
+  const [copyPart, setCopyPart] = useState("");
+  const [copyKind, setCopyKind] = useState<ValidationFormType>("csa");
 
   function start(formType: ValidationFormType) {
     setPendingKind(formType);
@@ -74,6 +77,29 @@ export function ValidationReportsPanel() {
             ))}
           </div>
         </div>
+        {canEdit && (
+          <div className="mt-3 flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-1 text-sm">
+              <span>Part number</span>
+              <input className="rounded-md border border-border bg-background p-2" value={copyPart} onChange={(event) => setCopyPart(event.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span>Form</span>
+              <select className="rounded-md border border-border bg-background p-2" value={copyKind} onChange={(event) => setCopyKind(event.target.value as ValidationFormType)}>
+                {(Object.keys(VALIDATION_FORMS) as ValidationFormType[]).map((kind) => (
+                  <option key={kind} value={kind}>{VALIDATION_FORMS[kind].title}</option>
+                ))}
+              </select>
+            </label>
+            <CopyFromPrevious
+              partNumber={copyPart}
+              previousPath="/validation-reports/previous"
+              copyPath="/validation-reports/copy"
+              extraParams={{ formType: copyKind }}
+              onCopied={(created) => navigate(`/validation-reports/${created.id}`)}
+            />
+          </div>
+        )}
         {canEdit && (
           <div className="flex flex-wrap gap-2">
             {(Object.keys(VALIDATION_FORMS) as ValidationFormType[]).map((kind) => (

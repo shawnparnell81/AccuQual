@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validate } from "../../middleware/validate.js";
 import { z } from "zod";
-import { csaPdfHandler, getCsaHandler, listCsaHandler, saveCsaResultsHandler, submitCsaHandler } from "./csaFai.controller.js";
+import { copyCsaHandler, csaPdfHandler, getCsaHandler, listCsaHandler, listPreviousCsaHandler, saveCsaResultsHandler, submitCsaHandler } from "./csaFai.controller.js";
 
 const submitSchema = z.object({
   partNumber: z.string().min(1),
@@ -37,6 +37,8 @@ const resultsSchema = z.object({
 
 export const csaFaiRouter = Router();
 csaFaiRouter.get("/", listCsaHandler);
+csaFaiRouter.get("/previous", listPreviousCsaHandler);
+csaFaiRouter.post("/copy", copyCsaHandler);
 csaFaiRouter.post("/", validate(submitSchema), submitCsaHandler);
 csaFaiRouter.get("/:id/pdf", csaPdfHandler);
 csaFaiRouter.get("/:id", getCsaHandler);
