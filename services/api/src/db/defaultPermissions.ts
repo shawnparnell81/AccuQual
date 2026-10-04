@@ -333,4 +333,6 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // Quality-only in the handler, same narrower-than-matrix pattern used elsewhere.
   // This does not grant receiving, inventory, or purchase-order access.
   fai: { quality: "edit", engineering: "edit" },
+  // Nobody receives this until an administrator assigns it on Roles & Permissions.
+  legal_hold: {},
 };

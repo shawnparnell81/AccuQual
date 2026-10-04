@@ -1,10 +1,11 @@
 import type { FormLayout } from "../forms/layouts/types.js";
 import { renderFormLayoutAsPdf } from "../forms/schema-pdf-renderer.js";
 import { emptyFrame, type ApprovalLine } from "../forms/controlledPdf.js";
+import { applyChrome, type PdfChrome } from "../pdf-exports/pdfExportStore.js";
 import { vehicleApplication, type CsaState } from "./csaFai.logic.js";
 
 /** Final CSA first-article report. Generated at release and kept in the archive. */
-export async function renderCsaPdf(state: CsaState): Promise<Uint8Array> {
+export async function renderCsaPdf(state: CsaState, chrome?: PdfChrome | null): Promise<Uint8Array> {
   const attempts = [...state.history, state.attempt];
   const data: Record<string, unknown> = {
     number: state.number,
@@ -99,7 +100,7 @@ export async function renderCsaPdf(state: CsaState): Promise<Uint8Array> {
   if (state.signatureStamp) {
     approvals.push({ name: state.signatureStamp, role: "", action: "Signed", at: state.approvalDate ?? "", status: state.status });
   }
-  const frame = emptyFrame({
+  const built = emptyFrame({
     sourceModule: "CSA First Article",
     recordNumber: state.number,
     revision: "",
@@ -107,6 +108,7 @@ export async function renderCsaPdf(state: CsaState): Promise<Uint8Array> {
     status: state.status,
     approvals,
   });
+  const frame = chrome ? applyChrome(built, chrome) : built;
   const layout: FormLayout = { formType: "csa_fai", title: "Complete Strut Assembly — First Article Inspection", sections };
   return renderFormLayoutAsPdf(layout, data, frame);
 }

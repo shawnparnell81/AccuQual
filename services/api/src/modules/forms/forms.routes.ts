@@ -11,6 +11,7 @@ import { saveFormSchema, signFormSchema, FORM_TYPES } from "./forms.validation.j
 import { getTemplate, getForm, saveForm, signForm, createVersion, getHistory, exportForm } from "./forms.controller.js";
 import { listTemplatesHandler, uploadTemplateHandler, downloadTemplateHandler, deleteTemplateHandler } from "./formTemplates.controller.js";
 import type { ResourceKey } from "../../middleware/departmentAccess.js";
+import { FORM_TYPE_TO_RESOURCE } from "./formResource.js";
 import { canEditFormStructure } from "../roles/roleHierarchy.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 
@@ -42,44 +43,6 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
  * edit). Saves and new versions still require edit. A type with no module
  * is refused.
  */
-const FORM_TYPE_TO_RESOURCE: Partial<Record<(typeof FORM_TYPES)[number], ResourceKey>> = {
-  ncr: "ncr",
-  five_why: "ncr",
-  capa: "capa",
-  eight_d: "eight_d",
-  audit_checklist: "audit",
-  audit_plan: "audit",
-  lpa: "audit",
-  discrepancy_inspection: "di",
-  supplier: "suppliers",
-  approved_vendor_list: "suppliers",
-  training: "training",
-  competency_matrix: "training",
-  change: "change",
-  pcn: "change",
-  calibration: "calibration",
-  gage_rr: "calibration",
-  maintenance_work_order: "calibration",
-  complaint: "complaints",
-  fmea: "risk",
-  document_control_index: "documents",
-  production_log: "production_log",
-  daily_production_log: "production_log",
-  production_output_log: "production_log",
-  appearance_approval: "ppap",
-  apqp_summary: "ppap",
-  control_plan: "ppap",
-  dimensional_report: "ppap",
-  process_flow_diagram: "ppap",
-  dvpr: "ppap",
-  final_inspection_release_checklist: "ppap",
-  management_review: "management_review",
-  management_review_minutes: "management_review",
-  staff_meeting_minutes: "management_review",
-  context_of_organization: "context_of_org",
-  pareto_chart: "ncr",
-};
-
 function resourceFor(req: Request): ResourceKey | undefined {
   const type = req.params.type as (typeof FORM_TYPES)[number] | undefined;
   if (!type) return undefined;

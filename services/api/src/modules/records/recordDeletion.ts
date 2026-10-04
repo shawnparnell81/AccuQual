@@ -56,6 +56,7 @@ import { calibrations, equipment } from "../../drizzle/schema/calibration.js";
 import { isoQualityForms } from "../../drizzle/schema/isoQualityForms.js";
 import { customers } from "../../drizzle/schema/customers.js";
 import { salesQuotes } from "../../drizzle/schema/sales.js";
+import { assertNotOnLegalHold } from "../pdf-exports/legalHold.js";
 
 const OWNER_FIELDS = ["createdBy", "createdByUserId", "ownerId", "requestedBy", "auditorId"] as const;
 
@@ -745,6 +746,7 @@ export async function deleteRecord(req: Request, kind: RecordKind): Promise<void
   const spec = specs[kind];
   const row = await spec.load(req.db, id);
   if (!row) throw AppError.notFound(spec.label);
+  await assertNotOnLegalHold(req.db, kind, id);
 
   const assignedEdit =
     kind === "document"

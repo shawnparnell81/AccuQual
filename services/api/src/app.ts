@@ -51,6 +51,7 @@ export function createApp() {
       // credentialed request, and only for an origin this allowlist above
       // already accepts.
       credentials: true,
+      exposedHeaders: ["Content-Disposition", "X-Export-Id"],
     })
   );
   app.use(cookieParser());

@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCreateFormVersion, exportFormPdf, useFormTemplate } from "../../api/formHooks";
+import { useCreateFormVersion, exportFormPdf, exportFormPdfResult, useFormTemplate } from "../../api/formHooks";
+import { PdfExportActions } from "../records/PdfExportActions";
 import { useToast } from "../shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { FORM_FIELD_SPECS } from "./formFieldSpecs";
@@ -47,6 +48,7 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [previewBytes, setPreviewBytes] = useState<Uint8Array | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [exportId, setExportId] = useState<string | null>(null);
 
   // Both used to have no (or no complete) catch — exportFormPdf 404s until
   // the form has been saved at least once (nothing to export yet), and
@@ -65,8 +67,9 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
 
   async function handleDownload() {
     try {
-      const bytes = await exportFormPdf(formType, entityId);
-      const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
+      const result = await exportFormPdfResult(formType, entityId);
+      setExportId(result.exportId);
+      const blob = new Blob([result.bytes as BlobPart], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       const title = layout?.title?.replace(/[\\/:*?"<>|]+/g, "").trim();
@@ -167,6 +170,7 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
           Export PDF
         </button>
       </div>
+      <PdfExportActions exportId={exportId} entityType={formType} entityId={entityId} />
 
       {showHistory && <FormVersionHistory formType={formType} entityId={entityId} />}
       {(previewBytes || previewLoading) && <PdfViewer data={previewBytes} isLoading={previewLoading} />}

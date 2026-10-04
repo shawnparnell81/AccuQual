@@ -1,10 +1,12 @@
 import type { FormLayout } from "../forms/layouts/types.js";
 import { renderFormLayoutAsPdf } from "../forms/schema-pdf-renderer.js";
-import { emptyFrame } from "../forms/controlledPdf.js";
+import { emptyFrame, type ControlledPdfFrame } from "../forms/controlledPdf.js";
+import type { PdfChrome } from "../pdf-exports/pdfExportStore.js";
+import { applyChrome } from "../pdf-exports/pdfExportStore.js";
 import type { QualityReport } from "./reports.model.js";
 
 /** PDF of a quality report that has already been built. Sections are not added or dropped here. */
-export async function renderQualityReportPdf(report: QualityReport): Promise<Uint8Array> {
+export async function renderQualityReportPdf(report: QualityReport, chrome?: PdfChrome | null): Promise<Uint8Array> {
   const data: Record<string, unknown> = {
     plant: report.header.plant.name,
     range: `${report.header.dateRange.from.slice(0, 10)} to ${report.header.dateRange.to.slice(0, 10)}`,
@@ -61,13 +63,15 @@ export async function renderQualityReportPdf(report: QualityReport): Promise<Uin
       }),
     ],
   };
-  const frame = emptyFrame({
+  const built = emptyFrame({
     sourceModule: report.header.title,
     recordNumber: report.header.title,
     revision: String(report.header.templateVersion),
     generatedBy: report.header.generatedBy.name,
     generatedAt: new Date(report.header.generatedAt),
     formNumber: report.header.templateKey,
+    status: null,
   });
+  const frame: ControlledPdfFrame = chrome ? applyChrome(built, chrome) : built;
   return renderFormLayoutAsPdf(layout, data, frame);
 }

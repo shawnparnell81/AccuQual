@@ -67,6 +67,13 @@ export function useFormHistory(formType: string, entityId: number) {
 
 /** Fetches the exported PDF as bytes — used for both the inline preview and the download button. */
 export async function exportFormPdf(formType: string, entityId: number): Promise<Uint8Array> {
+  const { bytes } = await exportFormPdfResult(formType, entityId);
+  return bytes;
+}
+
+export async function exportFormPdfResult(formType: string, entityId: number): Promise<{ bytes: Uint8Array; exportId: string | null }> {
   const response = await apiClient.post(`/forms/${formType}/${entityId}/export`, null, { responseType: "arraybuffer" });
-  return new Uint8Array(response.data as ArrayBuffer);
+  const header = response.headers["x-export-id"];
+  const exportId = typeof header === "string" && header.startsWith("exp_") ? header : null;
+  return { bytes: new Uint8Array(response.data as ArrayBuffer), exportId };
 }

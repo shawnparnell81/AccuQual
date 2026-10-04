@@ -1,6 +1,7 @@
 import type { FormLayout, TableColumn } from "../forms/layouts/types.js";
 import { renderFormLayoutAsPdf } from "../forms/schema-pdf-renderer.js";
 import { emptyFrame, type ApprovalLine } from "../forms/controlledPdf.js";
+import { applyChrome, type PdfChrome } from "../pdf-exports/pdfExportStore.js";
 
 /** Titles and revisions already used by the validation sheets in the app. */
 const TITLES: Record<string, { title: string; revision: string }> = {
@@ -23,8 +24,15 @@ function cellText(value: unknown): string {
   return "";
 }
 
+export function validationExportIdentity(data: Record<string, unknown>, generatedBy: string) {
+  const kind = typeof data.formType === "string" && TITLES[data.formType] ? data.formType : "csa";
+  const meta = TITLES[kind]!;
+  const cells = data.cells && typeof data.cells === "object" && !Array.isArray(data.cells) ? (data.cells as Record<string, unknown>) : {};
+  return { sourceModule: meta.title, recordNumber: cellText(cells.B6), revision: meta.revision, generatedBy, formNumber: meta.title };
+}
+
 /** Sheet order: header cells, then one row per filled sheet row. */
-export async function renderValidationReportPdf(data: Record<string, unknown>, generatedBy: string): Promise<Uint8Array> {
+export async function renderValidationReportPdf(data: Record<string, unknown>, generatedBy: string, chrome?: PdfChrome | null): Promise<Uint8Array> {
   const kind = typeof data.formType === "string" && TITLES[data.formType] ? data.formType : "csa";
   const meta = TITLES[kind]!;
   const cells = data.cells && typeof data.cells === "object" && !Array.isArray(data.cells) ? (data.cells as Record<string, unknown>) : {};
@@ -77,7 +85,7 @@ export async function renderValidationReportPdf(data: Record<string, unknown>, g
       },
     ],
   };
-  const frame = emptyFrame({
+  const built = emptyFrame({
     sourceModule: meta.title,
     recordNumber: cellText(cells.B6),
     revision: meta.revision,
@@ -85,6 +93,7 @@ export async function renderValidationReportPdf(data: Record<string, unknown>, g
     formNumber: meta.title,
     approvals,
   });
+  const frame = chrome ? applyChrome(built, chrome) : built;
   return renderFormLayoutAsPdf(
     layout,
     {

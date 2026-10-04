@@ -14,6 +14,7 @@ import {
   restoreArchivedDocumentHandler,
   rejectArchivedDocumentWrites,
   historyHandler,
+  rejectHeldDestruction,
   listExpiringHandler,
   applyRetentionHandler,
   archiveHandler,
@@ -49,7 +50,7 @@ documentsRouter.post("/", validate(createDocumentSchema), createDocumentHandler)
 documentsRouter.get("/:id/comments", listDocumentCommentsHandler);
 documentsRouter.post("/:id/comments", createDocumentCommentHandler);
 documentsRouter.get("/:id", baseHandlers.getOne);
-documentsRouter.patch("/:id", validate(updateDocumentSchema), baseHandlers.update);
+documentsRouter.patch("/:id", validate(updateDocumentSchema), rejectHeldDestruction, baseHandlers.update);
 documentsRouter.delete("/:id", deleteRecordHandler("document"));
 
 // Replaced by the draft -> review -> publish flow; they answer 410 with the new route instead of bypassing review.

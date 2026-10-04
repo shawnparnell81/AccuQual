@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import { inflateSync } from "node:zlib";
 import { PDFDocument, PDFName, PDFRawStream, rgb, degrees, type PDFFont, type PDFPage } from "pdf-lib";
+import { verifyUrlFor } from "./verifyLink.js";
+import { canonicalMarking } from "../pdf-exports/recordMarking.js";
 
 /**
  * Chrome shared by every controlled PDF: logo stays with the form renderer,
@@ -40,6 +42,9 @@ export interface ControlledPdfFrame {
   exportId: string;
   status?: string | null;
   formNumber?: string | null;
+  legalHold?: boolean;
+  marking?: string | null;
+  verifyUrl?: string | null;
   approvals?: ApprovalLine[];
   audit?: AuditLine[];
   attachments?: AttachmentLine[];
@@ -58,6 +63,17 @@ export function watermarkForStatus(status: string | null | undefined): string | 
   return WATERMARKS[key] ?? null;
 }
 
+/** Status watermark, plus legal hold and an existing confidentiality marking. Those words are not added on their own. */
+export function watermarkLines(frame: Pick<ControlledPdfFrame, "status" | "legalHold" | "marking">): string[] {
+  const lines: string[] = [];
+  const status = watermarkForStatus(frame.status);
+  if (status) lines.push(status);
+  if (frame.legalHold) lines.push("RECORD UNDER LEGAL HOLD");
+  const marking = canonicalMarking(frame.marking);
+  if (marking) lines.push(marking);
+  return lines;
+}
+
 export function classificationForStatus(status: string | null | undefined): string {
   return watermarkForStatus(status) ?? "";
 }
@@ -67,15 +83,19 @@ export function newExportId(): string {
 }
 
 export function emptyFrame(partial: Partial<ControlledPdfFrame> & Pick<ControlledPdfFrame, "sourceModule" | "generatedBy">): ControlledPdfFrame {
+  const exportId = partial.exportId ?? newExportId();
   return {
     sourceModule: partial.sourceModule,
     recordNumber: partial.recordNumber ?? "",
     revision: partial.revision ?? "",
     generatedAt: partial.generatedAt ?? new Date(),
     generatedBy: partial.generatedBy,
-    exportId: partial.exportId ?? newExportId(),
+    exportId,
     status: partial.status ?? null,
     formNumber: partial.formNumber ?? null,
+    legalHold: partial.legalHold ?? false,
+    marking: canonicalMarking(partial.marking),
+    verifyUrl: partial.verifyUrl === null ? null : (partial.verifyUrl ?? verifyUrlFor(exportId)),
     approvals: partial.approvals ?? [],
     audit: partial.audit ?? [],
     attachments: partial.attachments ?? [],
@@ -119,15 +139,22 @@ const FOOTER = 36;
 
 export function drawWatermark(page: PDFPage, font: PDFFont, text: string | null) {
   if (!text) return;
+  drawWatermarkStack(page, font, [text]);
+}
+
+export function drawWatermarkStack(page: PDFPage, font: PDFFont, lines: string[]) {
   const width = page.getWidth();
   const height = page.getHeight();
-  page.drawText(text, {
-    x: width * 0.18,
-    y: height * 0.42,
-    size: Math.min(42, width / (text.length * 0.55)),
-    font,
-    color: rgb(0.78, 0.78, 0.78),
-    rotate: degrees(32),
+  lines.forEach((text, index) => {
+    if (!text) return;
+    page.drawText(text, {
+      x: width * 0.12,
+      y: height * (0.5 - index * 0.08),
+      size: Math.min(28, width / (text.length * 0.62)),
+      font,
+      color: rgb(0.78, 0.78, 0.78),
+      rotate: degrees(32),
+    });
   });
 }
 
@@ -144,7 +171,7 @@ export function drawRunningHeader(page: PDFPage, font: PDFFont, bold: PDFFont, f
 export function stampFooters(doc: PDFDocument, font: PDFFont, frame: ControlledPdfFrame) {
   const pages = doc.getPages();
   const total = pages.length;
-  const classification = classificationForStatus(frame.status);
+  const classification = watermarkLines(frame).join(" · ");
   const when = frame.generatedAt.toISOString().replace("T", " ").slice(0, 19) + " UTC";
   pages.forEach((page, index) => {
     const width = page.getWidth();

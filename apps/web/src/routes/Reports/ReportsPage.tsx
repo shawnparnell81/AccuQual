@@ -5,6 +5,7 @@ import { SelectField, TextField } from "../../components/forms/Field";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage, extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { useSites } from "../../hooks/useSites";
+import { PdfExportActions } from "../../components/records/PdfExportActions";
 
 type ReportKind = "weekly" | "monthly" | "adhoc";
 
@@ -71,6 +72,7 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
   const [plantTouched, setPlantTouched] = useState(false);
   const [report, setReport] = useState<QualityReport | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [exportId, setExportId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!plantTouched && sites.currentSiteId != null) setPlantId(String(sites.currentSiteId));
@@ -110,7 +112,11 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
       const header = String(res.headers["content-disposition"] ?? "");
       const match = /filename="([^"]+)"/.exec(header);
       downloadBlob(res.data as Blob, match?.[1] ?? `accuqual-${kind}-report.${format}`);
-      if (format === "pdf") setNotice("PDF ready.");
+      if (format === "pdf") {
+        const header = res.headers["x-export-id"];
+        setExportId(typeof header === "string" && header.startsWith("exp_") ? header : null);
+        setNotice("PDF ready.");
+      }
     } catch (err) {
       toast.error(await extractErrorMessageAsync(err, "The download didn't start."));
     } finally {
@@ -197,6 +203,7 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
           </button>
         </div>
         {notice && <p className="text-sm text-muted-foreground">{notice}</p>}
+        <PdfExportActions exportId={exportId} entityType="quality_report" />
       </form>
 
       {report && (
