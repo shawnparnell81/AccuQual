@@ -8,6 +8,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { PictureBoundText } from "../../components/forms/PictureText";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
+import { choiceOf, withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
 import { usePictureRecord } from "../../components/forms/pictureRecord";
 import { FEASIBILITY_AREAS, FEASIBILITY_AREA_LABELS } from "../../api/types";
 import type { FeasibilityReview, FeasibleValue, FeasibilityRiskLevel, FeasibilityDetermination, FeasibilitySettings } from "../../api/types";
@@ -273,6 +274,11 @@ export function FeasibilityReviewForm({ review }: { review: FeasibilityReview })
                       certify="I certify that this feasibility sign-off is mine and the assessment is accurate."
                       disabled={!editable}
                       variant="sheet"
+                      requirement={{
+                        value: choiceOf(review, sigKey),
+                        disabled: !editable,
+                        onChange: (choice: SignatureChoice) => patchSignoff.mutate({ signatureRequired: withChoice(review, sigKey, choice) }),
+                      }}
                       onSign={async (pin) => {
                         await patchSignoff.mutateAsync({ [sigKey]: "sign", pin, certified: true });
                       }}

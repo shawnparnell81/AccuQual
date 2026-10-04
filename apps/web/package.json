@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint src",
-    "test": "tsx --test src/lib/*.test.ts src/api/*.test.ts src/components/forms/layouts/apqpSummary.test.ts src/components/forms/fmeaPriority.test.ts src/components/forms/pictureText.test.ts src/components/forms/inlinePictures.test.ts"
+    "test": "tsx --test src/lib/*.test.ts src/api/*.test.ts src/components/forms/layouts/apqpSummary.test.ts src/components/forms/fmeaPriority.test.ts src/components/forms/pictureText.test.ts src/components/forms/inlinePictures.test.ts src/components/forms/signatureRequired.test.ts"
   },
   "dependencies": {
     "@sentry/react": "^10.75.3",

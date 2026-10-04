@@ -7,6 +7,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
+import { choiceOf, withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
 import { DmaLogo } from "../../components/brand/DmaLogo";
 import type { WorkOrder, WorkOrderOperation } from "../../api/types";
 
@@ -251,6 +252,7 @@ export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrde
                   canEdit={canEditTraveler}
                   onPatch={(body) => patchOperation.mutate({ opId: op.id, body })}
                   onSignOff={(pin) => patchOperation.mutateAsync({ opId: op.id, body: { signOff: "sign", pin, certified: true } })}
+                  requirement={{ value: choiceOf(workOrder, `op:${op.id}`), disabled: !canEditTraveler, onChange: (choice: SignatureChoice) => patchQualityGates.mutate({ signatureRequired: withChoice(workOrder, `op:${op.id}`, choice) }) }}
                   onDelete={() => deleteOperation.mutate(op.id)}
                   canDrag={canEditTraveler && operations.length > 1}
                   isDragging={dragOpId === op.id}
@@ -309,6 +311,7 @@ export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrde
               certify="I certify that I performed this work as recorded."
               disabled={!canEditTraveler}
               variant="sheet"
+              requirement={{ value: choiceOf(workOrder, "operatorSignature"), disabled: !canEditTraveler, onChange: (choice: SignatureChoice) => patchQualityGates.mutate({ signatureRequired: withChoice(workOrder, "operatorSignature", choice) }) }}
               onSign={(pin) => signOperator.mutateAsync(pin)}
             />
           </div>
@@ -319,6 +322,7 @@ export function ProductionWorkOrderTraveler({ workOrder }: { workOrder: WorkOrde
               certify="I certify that I inspected this work and the record is accurate."
               disabled={!canEditTraveler}
               variant="sheet"
+              requirement={{ value: choiceOf(workOrder, "inspectorSignature"), disabled: !canEditTraveler, onChange: (choice: SignatureChoice) => patchQualityGates.mutate({ signatureRequired: withChoice(workOrder, "inspectorSignature", choice) }) }}
               onSign={(pin) => signInspector.mutateAsync(pin)}
             />
           </div>
@@ -333,6 +337,7 @@ function OperationRow({
   canEdit,
   onPatch,
   onSignOff,
+  requirement,
   onDelete,
   canDrag,
   isDragging,
@@ -346,6 +351,7 @@ function OperationRow({
   canEdit: boolean;
   onPatch: (body: Record<string, unknown>) => void;
   onSignOff: (pin: string) => Promise<unknown>;
+  requirement?: { value: SignatureChoice; disabled?: boolean; onChange: (next: SignatureChoice) => void };
   onDelete: () => void;
   canDrag: boolean;
   isDragging: boolean;
@@ -398,6 +404,7 @@ function OperationRow({
           certify="I certify that this operation was completed as recorded."
           disabled={!canEdit}
           variant="sheet"
+          requirement={requirement}
           onSign={onSignOff}
         />
       </td>

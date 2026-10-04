@@ -11,6 +11,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail, recordAuditTrailStandalone } from "../audit-trail/audit-trail.service.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
+import { assignSignatureRequired, signatureBlocksFor } from "../signatures/signatureRequired.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { pool } from "../../db/index.js";
@@ -224,6 +225,14 @@ export const updateCrarHandler = asyncHandler(async (req: Request, res: Response
   const patch: Record<string, unknown> = { ...req.body };
   delete patch.preparedSignature;
   delete patch.approvedSignature;
+  await assignSignatureRequired(req.db!, {
+    entityType: "Crar",
+    entityId: record.id,
+    performedBy: req.user?.id,
+    previous: record,
+    body: patch,
+    blocks: signatureBlocksFor("crar"),
+  });
   if (patch.warrantyId !== undefined && patch.warrantyId !== null) {
     const [w] = await req.db!.select({ id: warrantyClaims.id, customerId: warrantyClaims.customerId }).from(warrantyClaims).where(and(eq(warrantyClaims.id, patch.warrantyId as number)));
     if (!w) throw AppError.badRequest(`Warranty claim #${patch.warrantyId} not found`);

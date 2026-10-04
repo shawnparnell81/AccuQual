@@ -3,6 +3,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { logger } from "../../utils/logger.js";
 import * as formsService from "./forms.service.js";
+import { FORM_AUDIT_ENTITY } from "./forms.service.js";
 import { createCalibrationEvent } from "../calibration/calibration.controller.js";
 import { assertGageUsable, assertInspectionGagesUsable } from "../calibration/calibration.service.js";
 import { completeTrainingAssignment } from "../training/training.controller.js";
@@ -62,30 +63,6 @@ export const saveForm = asyncHandler(async (req: Request, res: Response) => {
 
   res.json(saved);
 });
-
-const FORM_AUDIT_ENTITY: Record<string, string> = {
-  ncr: "NCR",
-  five_why: "NCR",
-  pareto_chart: "NCR",
-  capa: "CAPA",
-  eight_d: "8D Report",
-  change: "Change request",
-  pcn: "Change request",
-  calibration: "Equipment",
-  gage_rr: "Equipment",
-  maintenance_work_order: "Equipment",
-  complaint: "Complaint",
-  fmea: "RiskAssessment",
-  training: "TrainingAssignment",
-  competency_matrix: "TrainingAssignment",
-  audit_checklist: "Audit",
-  audit_plan: "Audit",
-  lpa: "Audit",
-  discrepancy_inspection: "Discrepancy investigation",
-  supplier: "Supplier",
-  approved_vendor_list: "Supplier",
-  document_control_index: "Document",
-};
 
 /** PIN plus the certification checkbox. The stamp is the signer's display name and the time in the company timezone. */
 export const signForm = asyncHandler(async (req: Request, res: Response) => {

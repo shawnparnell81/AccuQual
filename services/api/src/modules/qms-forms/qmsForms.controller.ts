@@ -6,6 +6,7 @@ import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { retainSignatureValues } from "../signatures/signaturePin.js";
+import { showsRequiredControl, writeSignatureRequiredAudit } from "../signatures/signatureRequired.js";
 import { deleteRecord } from "../records/recordDeletion.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { keptRevision, templateRevisionFor } from "../forms/templateRevision.js";
@@ -86,11 +87,35 @@ export const createQmsFormRowHandler = asyncHandler(async (req: Request, res: Re
   res.status(201).json(created);
 });
 
+function choiceText(value: unknown): "yes" | "no" {
+  return value === "no" ? "no" : "yes";
+}
+
 export const updateQmsFormRowHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadForm(req, Number(req.params.id));
   const row = await loadRow(req, record.id, Number(req.params.rowId));
   const incoming = req.body.data as Record<string, string>;
   const data = retainSignatureValues((row.data ?? {}) as Record<string, string>, incoming) as Record<string, string>;
+  const definition = getQmsFormDefinition(record.formType);
+  const section = definition?.sections.find((item) => item.key === row.sectionKey);
+  const signatureColumn = section?.columns.some((column) => column.key === "signature") === true;
+  const siblings = signatureColumn
+    ? await req.db!.select({ id: qmsFormRows.id }).from(qmsFormRows).where(and(eq(qmsFormRows.formId, record.id), eq(qmsFormRows.sectionKey, row.sectionKey)))
+    : [];
+  const multi = signatureColumn && showsRequiredControl(siblings.length);
+  const previous = choiceText((row.data ?? {}).signatureRequired);
+  if (!multi) delete data.signatureRequired;
+  else if (data.signatureRequired !== "yes" && data.signatureRequired !== "no") delete data.signatureRequired;
+  const next = choiceText(data.signatureRequired);
+  if (multi && previous !== next) {
+    const label = `${section?.label ?? "Signature"} signature`;
+    await writeSignatureRequiredAudit(req.db!, {
+      entityType: "QmsForm",
+      entityId: record.id,
+      performedBy: req.user?.id,
+      changes: [{ path: `row:${row.id}:signature`, label, from: previous, to: next }],
+    });
+  }
   const [updated] = await req.db!.update(qmsFormRows).set({ data, updatedAt: new Date() }).where(eq(qmsFormRows.id, row.id)).returning();
   await recordAuditTrail(req.db!, { entityType: "QmsForm", entityId: record.id, action: "update", changes: { subAction: "row_updated", rowId: row.id }, performedBy: req.user?.id });
   res.json(updated);

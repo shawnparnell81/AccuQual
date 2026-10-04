@@ -855,6 +855,7 @@ export interface WorkOrder {
   operatorSignedAt: string | null;
   inspectorSignature: string | null;
   inspectorSignedAt: string | null;
+  signatureRequired?: Record<string, "yes" | "no"> | null;
   createdBy: number | null;
   createdAt: string;
   updatedAt: string | null;
@@ -922,6 +923,7 @@ export interface DocumentChangeRequest {
   requesterApprovalDate: string | null;
   vpApprovalSignature: string | null;
   vpApprovalDate: string | null;
+  signatureRequired?: Record<string, "yes" | "no"> | null;
   requestExecutedBy: string | null;
   requestExecutedTitle: string | null;
   requestExecutedDate: string | null;
@@ -1000,6 +1002,7 @@ export interface ScarForm {
   supplierRepDate: string | null;
   qualityEngineerSignature: string | null;
   qualityEngineerDate: string | null;
+  signatureRequired?: Record<string, "yes" | "no"> | null;
   status: ScarStatus;
   createdBy: number | null;
   createdAt: string;
@@ -1054,6 +1057,7 @@ export interface QualityInspectionReport {
   inspectorSignatureDate: string | null;
   qaLeadSignature: string | null;
   qaLeadSignatureDate: string | null;
+  signatureRequired?: Record<string, "yes" | "no"> | null;
   createdBy: number | null;
   createdAt: string;
   updatedAt: string | null;
@@ -1219,6 +1223,7 @@ export interface FeasibilityReview {
   salesSignoffName: string | null;
   salesSignoffSignature: string | null;
   salesSignoffDate: string | null;
+  signatureRequired?: Record<string, "yes" | "no"> | null;
 
   status: FeasibilityStatus;
   finalizedAt: string | null;
@@ -1851,6 +1856,7 @@ export interface CrarClaim {
   approvedByFinal: string | null;
   approvedSignature: string | null;
   approvedDate: string | null;
+  signatureRequired?: Record<string, "yes" | "no"> | null;
 
   recordLocation: string | null;
   retentionClass: string | null;

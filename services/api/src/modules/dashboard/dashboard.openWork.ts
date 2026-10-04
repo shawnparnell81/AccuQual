@@ -11,6 +11,7 @@
  */
 
 import { canonicalNcrStep } from "../ncr/ncr.workflow.js";
+import { signatureBlocksFor, signatureRequired } from "../signatures/signatureRequired.js";
 
 const DAY_MS = 86_400_000;
 const RECORD_LIMIT = 300;
@@ -250,6 +251,8 @@ function validationKind(data: unknown): string {
 function validationOpen(data: unknown): boolean {
   const kind = validationKind(data);
   if (!SIGNED_VALIDATION.has(kind)) return true;
+  const blocks = signatureBlocksFor(`validation:${kind}`);
+  if (!signatureRequired(data, "authorizedSignature", blocks)) return false;
   return field(data, "authorizedSignature") === "";
 }
 
@@ -412,6 +415,7 @@ function buildRecords(input: OpenWorkInput): Built {
       if (row.formType === "salt_spray" || row.formType === "prototype_strut") {
         const approved = row.formType === "salt_spray" ? field(row.data, "approvedSignature") : field(row.data, "engineeringSignoffSignature");
         if (approved) continue;
+        if (row.formType === "salt_spray" && !signatureRequired(row.data, "approvedSignature", signatureBlocksFor("iso:salt_spray"))) continue;
         const tested = row.formType === "salt_spray" && field(row.data, "testedSignature") !== "";
         const title = row.formType === "salt_spray" ? cell(row.data, "B6") || cell(row.data, "B5") || "Salt spray test report" : cell(row.data, "B8") || cell(row.data, "D8") || "Prototype evaluation";
         pushRecord(records, {

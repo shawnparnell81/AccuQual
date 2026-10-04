@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { reasonableDate } from "../../utils/validation.js";
+import { signatureRequiredField } from "../signatures/signatureRequired.js";
 
 export const WORK_ORDER_STATUSES = ["planned", "in_progress", "completed", "cancelled"] as const;
 
@@ -29,6 +30,7 @@ export const completeWorkOrderSchema = z.object({
 export const updateQualityGatesSchema = z.object({
   firstPieceInspectionPassed: z.boolean().optional(),
   finalQcInspectionPassed: z.boolean().optional(),
+  signatureRequired: signatureRequiredField,
 });
 
 export const signTravelerSchema = z.object({

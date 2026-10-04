@@ -5,6 +5,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
+import { assignSignatureRequired, signatureBlocksFor } from "../signatures/signatureRequired.js";
 import { deleteRecord } from "../records/recordDeletion.js";
 import { applyMeasuredResult } from "../../utils/passFail.js";
 
@@ -50,7 +51,16 @@ export const updateReportHandler = asyncHandler(async (req: Request, res: Respon
     throw AppError.badRequest(`This report's disposition is already "${record.finalStatus}" and cannot be changed once set.`);
   }
 
-  const [updated] = await req.db!.update(qualityInspectionReports).set({ ...req.body, updatedAt: new Date() }).where(eq(qualityInspectionReports.id, record.id)).returning();
+  const body = { ...(req.body as Record<string, unknown>) };
+  await assignSignatureRequired(req.db!, {
+    entityType: "QualityInspectionReport",
+    entityId: record.id,
+    performedBy: req.user?.id,
+    previous: record,
+    body,
+    blocks: signatureBlocksFor("quality_inspection"),
+  });
+  const [updated] = await req.db!.update(qualityInspectionReports).set({ ...body, updatedAt: new Date() }).where(eq(qualityInspectionReports.id, record.id)).returning();
   await recordAuditTrail(req.db!, { entityType: "QualityInspectionReport", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
   res.json(updated);
 });

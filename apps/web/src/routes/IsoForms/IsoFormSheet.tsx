@@ -1,5 +1,6 @@
 import { useMemo, type CSSProperties } from "react";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
+import { choiceOf, showsRequiredControl, type SignatureChoice } from "../../components/forms/signatureRequired";
 import type { FormCell, FormLayout } from "../../lib/isoFormLayouts";
 import { resultFill, showCell, type CellValue } from "../../lib/isoFormLogic";
 import { documentIdText, sheetRevision } from "../../lib/formDocument";
@@ -16,6 +17,8 @@ interface IsoFormSheetProps {
   revision?: string;
   signatures?: Record<string, string>;
   onSign?: (field: string, pin: string) => Promise<unknown>;
+  signatureRequired?: Record<string, SignatureChoice>;
+  onSignatureRequired?: (path: string, choice: SignatureChoice) => void;
 }
 
 type Slot = FormCell | "covered" | "empty";
@@ -28,7 +31,17 @@ function occupy(grid: Slot[][], row: number, spec: FormCell) {
   }
 }
 
-export function IsoFormSheet({ layout, cells, calculated = {}, readOnly = false, onChange, label, documentNumber = "", revision = "A", signatures = {}, onSign }: IsoFormSheetProps) {
+function signatureCount(layout: FormLayout): number {
+  let count = 0;
+  for (const row of layout.rows) {
+    if (!row) continue;
+    for (const cell of row) if (cell.kind === "signature" && cell.signatureKey) count += 1;
+  }
+  return count;
+}
+
+export function IsoFormSheet({ layout, cells, calculated = {}, readOnly = false, onChange, label, documentNumber = "", revision = "A", signatures = {}, onSign, signatureRequired, onSignatureRequired }: IsoFormSheetProps) {
+  const multi = showsRequiredControl(signatureCount(layout));
   const rowCount = layout.rows.length - 1;
   const grid = useMemo(() => {
     const next: Slot[][] = Array.from({ length: rowCount }, () => Array.from({ length: layout.columns }, () => "empty" as Slot));
@@ -58,7 +71,7 @@ export function IsoFormSheet({ layout, cells, calculated = {}, readOnly = false,
                   : row.map((slot, colIndex) => {
                       if (slot === "covered") return null;
                       if (slot === "empty") return <td key={colIndex} />;
-                      return <Cell key={slot.addr} spec={slot} cells={cells} calculated={calculated} readOnly={readOnly} onChange={onChange} documentNumber={documentNumber} revision={revision} signatures={signatures} onSign={onSign} />;
+                      return <Cell key={slot.addr} spec={slot} cells={cells} calculated={calculated} readOnly={readOnly} onChange={onChange} documentNumber={documentNumber} revision={revision} signatures={signatures} onSign={onSign} multi={multi} signatureRequired={signatureRequired} onSignatureRequired={onSignatureRequired} />;
                     })}
               </tr>
             );
@@ -79,6 +92,9 @@ function Cell({
   revision,
   signatures,
   onSign,
+  multi,
+  signatureRequired,
+  onSignatureRequired,
 }: {
   spec: FormCell;
   cells: Record<string, CellValue>;
@@ -89,6 +105,9 @@ function Cell({
   revision: string;
   signatures: Record<string, string>;
   onSign?: (field: string, pin: string) => Promise<unknown>;
+  multi: boolean;
+  signatureRequired?: Record<string, SignatureChoice>;
+  onSignatureRequired?: (path: string, choice: SignatureChoice) => void;
 }) {
   const stored = cells[spec.addr];
   const raw = spec.kind === "label" ? spec.text ?? "" : spec.kind === "calc" ? showCell(calculated[spec.addr]) : showCell(stored);
@@ -147,6 +166,15 @@ function Cell({
           certify={spec.certify ?? ""}
           disabled={readOnly || !onSign}
           variant="sheet"
+          requirement={
+            multi && spec.signatureKey
+              ? {
+                  value: choiceOf({ signatureRequired }, spec.signatureKey),
+                  disabled: readOnly || !onSignatureRequired,
+                  onChange: (next) => onSignatureRequired?.(spec.signatureKey!, next),
+                }
+              : undefined
+          }
           onSign={async (pin) => {
             if (onSign && spec.signatureKey) await onSign(spec.signatureKey, pin);
           }}

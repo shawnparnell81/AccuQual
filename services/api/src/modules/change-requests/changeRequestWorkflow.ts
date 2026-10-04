@@ -1,4 +1,5 @@
 import { AppError } from "../../utils/appError.js";
+import { signatureBlocksFor, signatureRequired } from "../signatures/signatureRequired.js";
 import { isFullAccessRole } from "../roles/roleAccess.js";
 import { nameStartsWithVicePresident, roleTokens } from "../roles/roleHierarchy.js";
 import { ENGINEERING_CHANGE, type ChangeRequestKindDef } from "./changeRequestKinds.js";
@@ -152,6 +153,8 @@ export function assertEcrAnswerEdit(previousData: unknown, incomingData: unknown
 }
 
 export function ecrHasManagerSignature(data: unknown): boolean {
+  const blocks = signatureBlocksFor("iso:engineering_change");
+  if (!signatureRequired(data, "managerSignature", blocks)) return true;
   if (!data || typeof data !== "object") return false;
   const value = (data as { managerSignature?: unknown }).managerSignature;
   return typeof value === "string" && value.trim() !== "";

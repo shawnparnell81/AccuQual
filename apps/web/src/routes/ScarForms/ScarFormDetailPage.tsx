@@ -10,6 +10,7 @@ import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import { PictureText } from "../../components/forms/PictureText";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
+import { choiceOf, withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
 import { usePictureRecord } from "../../components/forms/pictureRecord";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import type { ScarForm, Supplier } from "../../api/types";
@@ -183,8 +184,8 @@ export function ScarFormDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                <SignRow label="Supplier Representative" signature={scar.supplierRepSignature} date={scar.supplierRepDate} certify="I certify that this supplier response is accurate." onSign={(pin) => sign.mutateAsync({ field: "supplierRep", pin })} />
-                <SignRow label="Quality Engineer" signature={scar.qualityEngineerSignature} date={scar.qualityEngineerDate} certify="I certify that this supplier corrective action has been reviewed." onSign={(pin) => sign.mutateAsync({ field: "qualityEngineer", pin })} />
+                <SignRow label="Supplier Representative" signature={scar.supplierRepSignature} date={scar.supplierRepDate} certify="I certify that this supplier response is accurate." onSign={(pin) => sign.mutateAsync({ field: "supplierRep", pin })} requirement={{ value: choiceOf(scar, "supplierRepSignature"), onChange: (choice: SignatureChoice) => patch.mutate({ signatureRequired: withChoice(scar, "supplierRepSignature", choice) }) }} />
+                <SignRow label="Quality Engineer" signature={scar.qualityEngineerSignature} date={scar.qualityEngineerDate} certify="I certify that this supplier corrective action has been reviewed." onSign={(pin) => sign.mutateAsync({ field: "qualityEngineer", pin })} requirement={{ value: choiceOf(scar, "qualityEngineerSignature"), onChange: (choice: SignatureChoice) => patch.mutate({ signatureRequired: withChoice(scar, "qualityEngineerSignature", choice) }) }} />
               </tbody>
             </table>
           </div>
@@ -265,13 +266,13 @@ function CapaRow({ label, owner, date, onOwner, onDate }: { label: string; owner
   );
 }
 
-function SignRow({ label, signature, date, certify, onSign }: { label: string; signature: string | null; date: string | null; certify: string; onSign: (pin: string) => Promise<unknown> }) {
+function SignRow({ label, signature, date, certify, onSign, requirement }: { label: string; signature: string | null; date: string | null; certify: string; onSign: (pin: string) => Promise<unknown>; requirement?: { value: SignatureChoice; disabled?: boolean; onChange: (next: SignatureChoice) => void } }) {
   const shown = date ? new Date(date).toLocaleString() : "—";
   return (
     <tr>
       <td className="border border-border px-2 py-1.5 print:border-black">{label}</td>
       <td className="border border-border p-1 print:border-black">
-        <SignatureStamp value={signature} certify={certify} variant="sheet" onSign={onSign} />
+        <SignatureStamp value={signature} certify={certify} variant="sheet" requirement={requirement} onSign={onSign} />
       </td>
       <td className="border border-border px-2 py-1.5 text-xs print:border-black">{shown}</td>
     </tr>

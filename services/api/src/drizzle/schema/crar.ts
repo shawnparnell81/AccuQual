@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 import { warrantyClaims } from "./warranty.js";
 import { ncr } from "./ncr.js";
@@ -144,6 +144,7 @@ export const crarClaims = pgTable("crar", {
   approvedByFinal: text("approved_by_final"),
   approvedSignature: text("approved_signature"),
   approvedDate: timestamp("approved_date"),
+  signatureRequired: jsonb("signature_required").$type<Record<string, "yes" | "no">>(),
 
   // ---- 13. Record Retention / Closeout ----
   recordLocation: text("record_location"),

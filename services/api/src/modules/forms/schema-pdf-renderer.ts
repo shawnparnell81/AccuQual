@@ -16,6 +16,7 @@ import {
   type ControlledPdfFrame,
 } from "./controlledPdf.js";
 import { drawVerifyQr } from "./verifyQr.js";
+import { layoutSignatureBlocks, signaturePdfValue, type SignatureBlock } from "../signatures/signatureRequired.js";
 
 // Colors sampled from the reference templates (dark navy header bars, pale
 // blue-gray field boxes, thin blue-gray borders) — kept as named constants so
@@ -60,6 +61,7 @@ export interface RenderContext {
   /** Bottom keep-out. Omitted callers, including the diagram renderer, keep the original 40pt margin. */
   bottom?: number;
   frame?: ControlledPdfFrame | null;
+  signatureBlocks?: SignatureBlock[];
 }
 
 function stampPageChrome(ctx: RenderContext) {
@@ -86,6 +88,7 @@ export async function renderFormLayoutAsPdf(layout: FormLayout, data: Record<str
     italic,
     bottom: frame ? footerClearance(frame) : MARGIN,
     frame,
+    signatureBlocks: layoutSignatureBlocks(layout),
   };
   stampPageChrome(ctx);
 
@@ -162,7 +165,7 @@ export function drawBlock(ctx: RenderContext, block: Block, data: Record<string,
   }
 }
 
-function drawRow(ctx: RenderContext, fields: { name: string; label: string; hint?: string }[], data: Record<string, unknown>) {
+function drawRow(ctx: RenderContext, fields: { name: string; label: string; hint?: string; kind?: string }[], data: Record<string, unknown>) {
   const height = fields.some((f) => f.hint) ? 34 : 26;
   ensureSpace(ctx, height);
   const span = contentWidth(ctx);
@@ -178,7 +181,7 @@ function drawRow(ctx: RenderContext, fields: { name: string; label: string; hint
     if (field.hint) {
       ctx.page.drawText(truncate(field.hint, ctx.italic, 6.5, labelWidth - 8), { x: x + 4, y: ctx.y - height + 5, size: 6.5, font: ctx.italic, color: TEXT_HINT });
     }
-    const value = data[field.name];
+    const value = field.kind === "signature" ? signaturePdfValue(data, field.name, data[field.name], ctx.signatureBlocks) : data[field.name];
     if (value != null && value !== "") {
       ctx.page.drawText(truncate(String(value), ctx.font, 8.5, valueWidth - 8), { x: x + labelWidth + 4, y: ctx.y - 12, size: 8.5, font: ctx.font, color: TEXT_DARK });
     }
@@ -300,7 +303,8 @@ function drawTable(
       : [];
     const valueLines = columns.map((col) => {
       if (col.kind === "checkboxGroup") return [] as string[];
-      const value = measuredCellValue(col.formula, row, fmeaCellValue(col.formula, row, row[col.key]));
+      const raw = measuredCellValue(col.formula, row, fmeaCellValue(col.formula, row, row[col.key]));
+      const value = col.kind === "signature" ? signaturePdfValue(data, `${name}.${r}.${col.key}`, raw, ctx.signatureBlocks) : raw;
       if (value == null || value === "") return [] as string[];
       return fitTextLines(pictureTextToPlain(pdfSafe(String(value))), ctx.font, 8, Math.max(8, colWidth - 8)).slice(0, 8);
     });
@@ -321,7 +325,8 @@ function drawTable(
     }
 
     for (const col of columns) {
-      const value = measuredCellValue(col.formula, row, fmeaCellValue(col.formula, row, row[col.key]));
+      const rawValue = measuredCellValue(col.formula, row, fmeaCellValue(col.formula, row, row[col.key]));
+      const value = col.kind === "signature" ? signaturePdfValue(data, `${name}.${r}.${col.key}`, rawValue, ctx.signatureBlocks) : rawValue;
       const tone = fmeaComputedTone(col.formula, value);
       const palette = tone ? FMEA_PDF_TONE[tone] : col.kind === "computed" ? passFailPdfPalette(value) : null;
       ctx.page.drawRectangle({

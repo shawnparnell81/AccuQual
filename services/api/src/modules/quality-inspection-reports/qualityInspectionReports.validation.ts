@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { reasonableDate } from "../../utils/validation.js";
+import { signatureRequiredField } from "../signatures/signatureRequired.js";
 
 export const INSPECTION_TYPES = ["incoming", "in_process", "final"] as const;
 export const INSPECTION_FINAL_STATUSES = ["accepted", "rejected", "rework_required", "accepted_via_deviation"] as const;
@@ -29,6 +30,7 @@ export const updateQualityInspectionReportSchema = z.object({
   sampleSize: z.string().nullable().optional(),
   finalStatus: z.enum(INSPECTION_FINAL_STATUSES).nullable().optional(),
   notesRemarks: z.string().nullable().optional(),
+  signatureRequired: signatureRequiredField,
 });
 
 export const signQualityInspectionReportSchema = z.object({

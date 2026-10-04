@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { reasonableDate } from "../../utils/validation.js";
+import { signatureRequiredField } from "../signatures/signatureRequired.js";
 
 export const SCAR_STATUSES = ["open", "closed"] as const;
 
@@ -38,6 +39,7 @@ export const updateScarFormSchema = z.object({
   processUpdateOwner: z.string().nullable().optional(),
   processUpdateTargetDate: reasonableDate.nullable().optional(),
   status: z.enum(SCAR_STATUSES).optional(),
+  signatureRequired: signatureRequiredField,
 });
 
 export const signScarFormSchema = z.object({

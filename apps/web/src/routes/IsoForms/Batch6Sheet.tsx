@@ -1,5 +1,6 @@
 import { Fragment, useMemo } from "react";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
+import { choiceOf, type SignatureChoice } from "../../components/forms/signatureRequired";
 import { BATCH6_PURPOSE, BATCH6_SHEET_TITLE, evaluateBatch6, showBatch6, type Batch6Kind } from "../../lib/batch6Reports";
 import { isChangeRequestForm } from "../../lib/changeRequestKinds";
 import type { CellValue } from "../../lib/isoFormLogic";
@@ -22,6 +23,8 @@ interface Batch6SheetProps {
   supplierLocked?: boolean;
   managerCertify?: string;
   supplierCertify?: string;
+  signatureRequired?: Record<string, SignatureChoice>;
+  onSignatureRequired?: (path: string, choice: SignatureChoice) => void;
 }
 
 function text(value: CellValue | undefined): string {
@@ -674,6 +677,7 @@ function ChangeRequest(props: SheetProps) {
             certify={props.managerCertify ?? "I certify that I approve this engineering change request."}
             disabled={(props.managerLocked ?? props.readOnly) || !props.onSign}
             variant="sheet"
+            requirement={props.signatureRequired ? { value: choiceOf({ signatureRequired: props.signatureRequired }, "managerSignature"), disabled: (props.managerLocked ?? props.readOnly) || !props.onSignatureRequired, onChange: (next) => props.onSignatureRequired?.("managerSignature", next) } : undefined}
             onSign={async (pin) => props.onSign?.("managerSignature", pin)}
           />
         </td>
@@ -690,6 +694,7 @@ function ChangeRequest(props: SheetProps) {
             certify={props.supplierCertify ?? "I certify that I represent the supplier on this engineering change request."}
             disabled={(props.supplierLocked ?? props.readOnly) || !props.onSign}
             variant="sheet"
+            requirement={props.signatureRequired ? { value: choiceOf({ signatureRequired: props.signatureRequired }, "supplierRepSignature"), disabled: (props.supplierLocked ?? props.readOnly) || !props.onSignatureRequired, onChange: (next) => props.onSignatureRequired?.("supplierRepSignature", next) } : undefined}
             onSign={async (pin) => props.onSign?.("supplierRepSignature", pin)}
           />
         </td>

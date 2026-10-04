@@ -2,6 +2,7 @@ import type { FormLayout, TableColumn } from "../forms/layouts/types.js";
 import { renderFormLayoutAsPdf } from "../forms/schema-pdf-renderer.js";
 import { emptyFrame, type ApprovalLine } from "../forms/controlledPdf.js";
 import { applyChrome, type PdfChrome } from "../pdf-exports/pdfExportStore.js";
+import { NOT_REQUIRED_LABEL, signatureBlocksFor, signaturePdfValue } from "../signatures/signatureRequired.js";
 
 /** Titles and revisions already used by the validation sheets in the app. */
 const TITLES: Record<string, { title: string; revision: string }> = {
@@ -56,9 +57,13 @@ export async function renderValidationReportPdf(data: Record<string, unknown>, g
   ];
   const rows = [...byRow.entries()].sort((a, b) => a[0] - b[0]).map(([, line]) => line);
   const approvals: ApprovalLine[] = [];
+  const blocks = signatureBlocksFor(`validation:${kind}`);
   for (const key of ["authorizedSignature", "furtherSignature"] as const) {
-    const value = data[key];
-    if (typeof value === "string" && value.trim()) approvals.push({ name: value.trim(), role: "", action: "Signed", at: "", status: "Approved" });
+    if (!blocks.some((block) => block.path === key)) continue;
+    const printed = signaturePdfValue(data, key, data[key], blocks);
+    if (!printed) continue;
+    const waived = printed === NOT_REQUIRED_LABEL;
+    approvals.push({ name: printed, role: "", action: waived ? NOT_REQUIRED_LABEL : "Signed", at: "", status: waived ? NOT_REQUIRED_LABEL : "Approved" });
   }
   const layout: FormLayout = {
     formType: `validation_${kind}`,

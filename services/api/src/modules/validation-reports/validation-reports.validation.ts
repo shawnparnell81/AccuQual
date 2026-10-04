@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SIGNATURE_REQUIRED_KEY, signatureRequiredField } from "../signatures/signatureRequired.js";
 
 const cellValue = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 
@@ -9,6 +10,7 @@ const formType = z
 const reportData = {
   formType,
   cells: z.record(z.string(), cellValue).optional(),
+  [SIGNATURE_REQUIRED_KEY]: signatureRequiredField,
 };
 
 export const createValidationReportSchema = z.object({
@@ -19,6 +21,7 @@ export const updateValidationReportSchema = z.object({
   data: z.object({
     formType,
     cells: z.record(z.string(), cellValue),
+    [SIGNATURE_REQUIRED_KEY]: signatureRequiredField,
   }),
 });
 

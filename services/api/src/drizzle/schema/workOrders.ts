@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, numeric, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, numeric, boolean, jsonb } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 import { inventoryItems } from "./inventory.js";
 import { ncr } from "./ncr.js";
@@ -47,6 +47,7 @@ export const workOrders = pgTable("work_orders", {
   operatorSignedAt: timestamp("operator_signed_at"),
   inspectorSignature: text("inspector_signature"),
   inspectorSignedAt: timestamp("inspector_signed_at"),
+  signatureRequired: jsonb("signature_required").$type<Record<string, "yes" | "no">>(),
   createdBy: integer("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),

@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
 
@@ -62,6 +62,7 @@ export const scarForms = pgTable("scar_forms", {
   supplierRepDate: timestamp("supplier_rep_date"),
   qualityEngineerSignature: text("quality_engineer_signature"),
   qualityEngineerDate: timestamp("quality_engineer_date"),
+  signatureRequired: jsonb("signature_required").$type<Record<string, "yes" | "no">>(),
   status: text("status").notNull().default("open"), // open | closed — see schema comment
   createdBy: integer("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),

@@ -1,5 +1,6 @@
 import { TextField, TextAreaField, SelectField } from "../../components/forms/Field";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
+import { choiceOf, withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
 import { CRAR_FORM_SCHEMA, type CrarRow } from "./crarFormSchema";
 import type { CrarClaim } from "../../api/types";
 
@@ -50,7 +51,17 @@ export function CrarFormRenderer({
               return (
                 <div key={f.name} style={{ gridColumn: `span ${f.span} / span ${f.span}` }}>
                   <p className="mb-1 text-xs font-semibold text-muted-foreground">{f.label}</p>
-                  <SignatureStamp value={(raw as string) ?? ""} certify={certify} disabled={disabled || !onSign} onSign={async (pin) => onSign?.(which, pin)} />
+                  <SignatureStamp
+                    value={(raw as string) ?? ""}
+                    certify={certify}
+                    disabled={disabled || !onSign}
+                    requirement={{
+                      value: choiceOf(value, f.name),
+                      disabled,
+                      onChange: (next: SignatureChoice) => onChange({ signatureRequired: withChoice(value, f.name, next) } as Partial<CrarClaim>),
+                    }}
+                    onSign={async (pin) => onSign?.(which, pin)}
+                  />
                 </div>
               );
             }
