@@ -6,6 +6,7 @@ import type { DocumentChangeRequest } from "../../api/types";
 import { PictureBoundText } from "../../components/forms/PictureText";
 import { CompanyLogo } from "../../components/brand/DmaLogo";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
+import { choiceOf, withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
 
 /** Printed identity of paper form DCR-F-001. These are not record answers. */
 const DOCUMENT_ID = "DCR-F-001";
@@ -175,6 +176,7 @@ export function DocumentChangeRequestForm({ dcr }: { dcr: DocumentChangeRequest 
             date={dcr.requesterApprovalDate}
             certify={REQUESTER_CERTIFY}
             onSign={(pin) => sign.mutateAsync({ field: "requester", pin })}
+            requirement={{ value: choiceOf(dcr, "requesterApprovalSignature"), onChange: (choice: SignatureChoice) => save({ signatureRequired: withChoice(dcr, "requesterApprovalSignature", choice) }) }}
           />
           <SignRow
             label="VP of Engineering and Quality Assurance Approval"
@@ -182,6 +184,7 @@ export function DocumentChangeRequestForm({ dcr }: { dcr: DocumentChangeRequest 
             date={dcr.vpApprovalDate}
             certify={VP_CERTIFY}
             onSign={(pin) => sign.mutateAsync({ field: "vpEngineering", pin })}
+            requirement={{ value: choiceOf(dcr, "vpApprovalSignature"), onChange: (choice: SignatureChoice) => save({ signatureRequired: withChoice(dcr, "vpApprovalSignature", choice) }) }}
           />
 
           <tr>
@@ -250,12 +253,14 @@ function SignRow({
   date,
   certify,
   onSign,
+  requirement,
 }: {
   label: string;
   signature: string | null;
   date: string | null;
   certify: string;
   onSign: (pin: string) => Promise<unknown>;
+  requirement?: { value: SignatureChoice; onChange: (next: SignatureChoice) => void };
 }) {
   const shown = date ? new Date(date).toLocaleDateString() : "";
   return (
@@ -267,7 +272,7 @@ function SignRow({
         <div className="flex items-start gap-2">
           <span className="pt-1 text-[10px] font-semibold text-muted-foreground print:text-black">SIGN</span>
           <div className="min-w-0 flex-1">
-            <SignatureStamp value={signature} certify={certify} variant="sheet" onSign={onSign} />
+            <SignatureStamp value={signature} certify={certify} variant="sheet" requirement={requirement} onSign={onSign} />
           </div>
         </div>
       </td>

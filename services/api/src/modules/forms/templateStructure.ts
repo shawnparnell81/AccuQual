@@ -141,7 +141,8 @@ function eightDStructure() {
 }
 
 function sortedKeys(schema: { shape: Record<string, unknown> }): string[] {
-  return Object.keys(schema.shape).sort();
+  // Required Yes/No is a filled-record choice, not a new form field.
+  return Object.keys(schema.shape).filter((key) => key !== "signatureRequired").sort();
 }
 
 function feasibilityStructure() {

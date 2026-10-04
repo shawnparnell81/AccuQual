@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { createContext, useContext, useEffect, useMemo } from "react";
 import type { Block, FormLayout, RowBlock, TableBlock, TextareaBlock, YesNoBlock } from "./layouts/types";
 import { passFailPaint } from "../../lib/passFail";
 import { materializeRow, STATUS_COLORS } from "./formulas";
@@ -9,6 +9,14 @@ import { formAllowsInlinePictures } from "./inlinePictures";
 import { PictureText } from "./PictureText";
 import { usePictureRecord } from "./pictureRecord";
 import { DEFAULT_CERTIFY, SIGNATURE_DATE_FIELD, SignatureStamp } from "./SignatureStamp";
+import { SIGNATURE_REQUIRED_KEY, choiceOf, layoutSignatureBlocks, showsRequiredControl, withChoice, type SignatureChoice } from "./signatureRequired";
+
+const SignatureRequiredContext = createContext<{
+  enabled: boolean;
+  readOnly: boolean;
+  choice: (path: string) => SignatureChoice;
+  setChoice: (path: string, choice: SignatureChoice) => void;
+} | null>(null);
 import { useFormSign } from "./formSign";
 import { FormHeader } from "../brand/DmaLogo";
 
@@ -75,7 +83,18 @@ export function GenericFormRenderer({ layout, data, onChange, readOnly = false, 
   const primary = layout.sections.filter((section) => !parked.has(section.number));
   const details = layout.sections.filter((section) => parked.has(section.number));
   const pictures = formAllowsInlinePictures(layout.formType);
+  const blocks = useMemo(() => layoutSignatureBlocks(layout), [layout]);
+  const required = useMemo(
+    () => ({
+      enabled: showsRequiredControl(blocks.length),
+      readOnly,
+      choice: (path: string) => choiceOf(data, path),
+      setChoice: (path: string, next: SignatureChoice) => onChange(SIGNATURE_REQUIRED_KEY, withChoice(data, path, next)),
+    }),
+    [blocks.length, data, onChange, readOnly],
+  );
   return (
+    <SignatureRequiredContext.Provider value={required}>
     <div className={`flex flex-col gap-5${readOnly ? " aq-form-copy min-w-0" : ""}`}>
       <FormHeader title={layout.title} />
       {primary.map((section) => (
@@ -89,6 +108,7 @@ export function GenericFormRenderer({ layout, data, onChange, readOnly = false, 
         </DetailsDisclosure>
       )}
     </div>
+    </SignatureRequiredContext.Provider>
   );
 }
 
@@ -492,16 +512,26 @@ function SignatureField({
   onStamp: (stamp: string, signedOn?: string) => void;
 }) {
   const sign = useFormSign();
+  const required = useContext(SignatureRequiredContext);
   const text = typeof value === "string" ? value : "";
   const sentence = certify?.trim() || DEFAULT_CERTIFY;
-  if (readOnly || text.trim() || !sign) {
+  const requirement = required?.enabled
+    ? { value: required.choice(path), disabled: readOnly || required.readOnly, onChange: (next: SignatureChoice) => required.setChoice(path, next) }
+    : undefined;
+  if ((readOnly || text.trim() || !sign) && !requirement) {
+    return <StaticValue value={text} />;
+  }
+  if (!sign && !text.trim() && !requirement) {
     return <StaticValue value={text} />;
   }
   return (
     <SignatureStamp
       value={text}
       certify={sentence}
+      disabled={readOnly || !sign}
+      requirement={requirement}
       onSign={async (pin) => {
+        if (!sign) return;
         const result = await sign({ path, description: sentence, pin });
         onStamp(result.stamp, dateEmpty ? result.signedOn : undefined);
       }}

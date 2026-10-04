@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 
 /**
@@ -55,6 +55,7 @@ export const documentChangeRequests = pgTable("document_change_requests", {
   requesterApprovalDate: timestamp("requester_approval_date"),
   vpApprovalSignature: text("vp_approval_signature"),
   vpApprovalDate: timestamp("vp_approval_date"),
+  signatureRequired: jsonb("signature_required").$type<Record<string, "yes" | "no">>(),
   requestExecutedBy: text("request_executed_by"),
   requestExecutedTitle: text("request_executed_title"),
   requestExecutedDate: timestamp("request_executed_date"),

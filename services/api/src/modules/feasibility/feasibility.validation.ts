@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { reasonableDate } from "../../utils/validation.js";
+import { signatureRequiredField } from "../signatures/signatureRequired.js";
 
 export const FEASIBLE_VALUES = ["yes", "no", "partial"] as const;
 export const RISK_LEVELS = ["low", "medium", "high"] as const;
@@ -55,6 +56,7 @@ export const updateFeasibilitySchema = z.object({
   determinationNotes: z.string().optional(),
   providedDocuments: z.array(z.string().min(1)).optional(),
   ownerId: z.coerce.number().int().nullable().optional(),
+  signatureRequired: signatureRequiredField,
 });
 
 /**
@@ -74,6 +76,7 @@ export const updateSignoffSchema = z.object({
   manufacturingSignoffSignature: z.string().nullable().optional(),
   purchasingSignoffName: z.string().optional(),
   purchasingSignoffSignature: z.string().nullable().optional(),
+  signatureRequired: signatureRequiredField,
 });
 
 /** Document fields plus the signature PIN. The PIN is not part of the form structure. */

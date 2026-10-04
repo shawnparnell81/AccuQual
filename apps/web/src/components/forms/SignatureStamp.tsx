@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { NOT_REQUIRED_LABEL, type SignatureChoice } from "./signatureRequired";
 
 /** Sibling date field the server fills the first time a signature is stamped. */
 export const SIGNATURE_DATE_FIELD: Record<string, string> = {
@@ -16,18 +17,50 @@ export const DEFAULT_CERTIFY = "I certify that this record is accurate and that 
  * after every attempt. A successful stamp replaces this control with the
  * server's name and timestamp. The PIN is never shown again.
  */
+function RequiredChoice({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: SignatureChoice;
+  disabled?: boolean;
+  onChange: (next: SignatureChoice) => void;
+}) {
+  const name = useId();
+  return (
+    <fieldset className="m-0 flex flex-wrap items-center gap-2 border-0 p-0 text-[11px] text-foreground">
+      <legend className="p-0 text-[11px] font-semibold">Required</legend>
+      <label className="inline-flex items-center gap-1">
+        <input type="radio" name={name} checked={value !== "no"} disabled={disabled} onChange={() => onChange("yes")} />
+        Yes
+      </label>
+      <label className="inline-flex items-center gap-1">
+        <input type="radio" name={name} checked={value === "no"} disabled={disabled} onChange={() => onChange("no")} />
+        No
+      </label>
+    </fieldset>
+  );
+}
+
 export function SignatureStamp({
   value,
   certify,
   disabled,
   onSign,
   variant = "app",
+  requirement,
 }: {
   value?: string | null;
   certify: string;
   disabled?: boolean;
   onSign: (pin: string) => Promise<unknown>;
   variant?: "app" | "sheet";
+  /** Present only when this form has more than one signature block. */
+  requirement?: {
+    value: SignatureChoice;
+    disabled?: boolean;
+    onChange: (next: SignatureChoice) => void;
+  };
 }) {
   const [pin, setPin] = useState("");
   const [certified, setCertified] = useState(false);
@@ -35,12 +68,34 @@ export function SignatureStamp({
   const [busy, setBusy] = useState(false);
   const stamped = (value ?? "").trim();
   const sheet = variant === "sheet";
+  const waived = requirement?.value === "no";
+  const choice = requirement ? (
+    <RequiredChoice value={requirement.value} disabled={requirement.disabled || disabled} onChange={requirement.onChange} />
+  ) : null;
 
   if (stamped) {
-    return <p className={sheet ? "whitespace-pre-wrap px-2 py-1.5 text-xs text-foreground" : "whitespace-pre-wrap text-xs text-foreground"}>{stamped}</p>;
+    return (
+      <div className={sheet ? "px-2 py-1.5" : undefined}>
+        {choice}
+        <p className={sheet ? "whitespace-pre-wrap text-xs text-foreground" : "whitespace-pre-wrap text-xs text-foreground"}>{stamped}</p>
+      </div>
+    );
+  }
+  if (waived) {
+    return (
+      <div className={sheet ? "px-2 py-1.5" : undefined}>
+        {choice}
+        <p className="text-xs text-muted-foreground">{NOT_REQUIRED_LABEL}</p>
+      </div>
+    );
   }
   if (disabled) {
-    return <p className={sheet ? "px-2 py-1.5 text-xs text-muted-foreground" : "text-xs text-muted-foreground"}>—</p>;
+    return (
+      <div className={sheet ? "px-2 py-1.5" : undefined}>
+        {choice}
+        <p className="text-xs text-muted-foreground">—</p>
+      </div>
+    );
   }
 
   async function submit(event: FormEvent) {
@@ -68,7 +123,8 @@ export function SignatureStamp({
   }
 
   return (
-    <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-1.5 py-1">
+    <form onSubmit={(event) => void submit(event)} className={sheet ? "flex flex-col gap-1.5 px-2 py-1.5" : "flex flex-col gap-1.5 py-1"}>
+      {choice}
       <label className="flex items-start gap-2 text-[11px] leading-snug text-foreground">
         <input type="checkbox" checked={certified} onChange={(event) => setCertified(event.target.checked)} className="mt-0.5" />
         <span>{certify}</span>

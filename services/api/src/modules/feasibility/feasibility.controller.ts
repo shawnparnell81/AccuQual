@@ -5,6 +5,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
+import { assignSignatureRequired, normalizeRequiredMap, signatureBlocksFor } from "../signatures/signatureRequired.js";
 import { deleteRecord } from "../records/recordDeletion.js";
 import { notifyDepartment } from "../notifications/notification.service.js";
 import { loadCompanyForSettings, getFeasibilitySettings, requiredDocumentDisplayNames } from "../settings/settings.service.js";
@@ -45,7 +46,16 @@ function assertSignoffFieldsAllowed(req: Request, body: Record<string, unknown>)
   const ownedPrefix = department ? SIGNOFF_OWNER[department] : undefined;
   if (!ownedPrefix) throw AppError.forbidden("Your department has no sign-off row on this form.");
 
-  const disallowed = Object.keys(body).filter((k) => !k.startsWith(ownedPrefix) && k !== "pin" && k !== "certified");
+  const fields = { ...body };
+  const required = fields.signatureRequired;
+  delete fields.signatureRequired;
+  if (required !== undefined) {
+    const own = `${ownedPrefix}SignoffSignature`;
+    const extra = Object.keys(normalizeRequiredMap(required)).filter((key) => key !== own);
+    if (extra.length > 0) throw AppError.forbidden(`Your department may only set Required on its own sign-off (${own}).`);
+  }
+
+  const disallowed = Object.keys(fields).filter((k) => !k.startsWith(ownedPrefix) && k !== "pin" && k !== "certified");
   if (disallowed.length > 0) {
     throw AppError.forbidden(`Your department may only edit its own sign-off row (${ownedPrefix}Signoff*) — not: ${disallowed.join(", ")}`);
   }
@@ -111,6 +121,14 @@ export const updateFeasibilityHandler = asyncHandler(async (req: Request, res: R
 
   const body = { ...(req.body as Record<string, unknown>) };
   delete body.revision;
+  await assignSignatureRequired(req.db!, {
+    entityType: "FeasibilityReview",
+    entityId: record.id,
+    performedBy: req.user?.id,
+    previous: record,
+    body,
+    blocks: signatureBlocksFor("feasibility"),
+  });
   const revision = keptRevision(record.revision, templateRevisionFor("feasibility").revision);
   const [updated] = await req
     .db!.update(feasibilityReviews)
@@ -138,6 +156,14 @@ export const updateSignoffHandler = asyncHandler(async (req: Request, res: Respo
   const { pin, certified, ...withoutPin } = req.body as { pin?: string; certified?: boolean } & Record<string, unknown>;
   const rest = { ...withoutPin };
   delete rest.revision;
+  await assignSignatureRequired(req.db!, {
+    entityType: "FeasibilityReview",
+    entityId: record.id,
+    performedBy: req.user?.id,
+    previous: record,
+    body: rest,
+    blocks: signatureBlocksFor("feasibility"),
+  });
   const patch: Record<string, unknown> = { ...rest, revision: keptRevision(record.revision, templateRevisionFor("feasibility").revision), updatedAt: new Date() };
   const signatureKeys = Object.keys(rest).filter((key) => key.endsWith("SignoffSignature") && rest[key]);
   const stamp = signatureKeys.length

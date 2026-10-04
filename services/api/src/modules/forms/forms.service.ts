@@ -10,6 +10,31 @@ import { mergePdfFields } from "./pdf-merger.js";
 import { snapshotFormDataNumber } from "../document-folders/formRecordFiling.js";
 import { answersWithTemplateStamp, readTemplateStamp, templateRevisionFor } from "./templateRevision.js";
 import { retainSignatureValues } from "../signatures/signaturePin.js";
+import { diffSignatureRequired, signatureBlocksFor, withSanitizedRequired, writeSignatureRequiredAudit } from "../signatures/signatureRequired.js";
+
+export const FORM_AUDIT_ENTITY: Record<string, string> = {
+  ncr: "NCR",
+  five_why: "NCR",
+  pareto_chart: "NCR",
+  capa: "CAPA",
+  eight_d: "8D Report",
+  change: "Change request",
+  pcn: "Change request",
+  calibration: "Equipment",
+  gage_rr: "Equipment",
+  maintenance_work_order: "Equipment",
+  complaint: "Complaint",
+  fmea: "RiskAssessment",
+  training: "TrainingAssignment",
+  competency_matrix: "TrainingAssignment",
+  audit_checklist: "Audit",
+  audit_plan: "Audit",
+  lpa: "Audit",
+  discrepancy_inspection: "Discrepancy investigation",
+  supplier: "Supplier",
+  approved_vendor_list: "Supplier",
+  document_control_index: "Document",
+};
 import { auditTrail } from "../../drizzle/schema/auditTrail.js";
 import { attachments } from "../../drizzle/schema/attachments.js";
 import { users } from "../../drizzle/schema/users.js";
@@ -68,8 +93,23 @@ interface SaveInput {
 export async function saveData(db: Db, input: SaveInput) {
   const existing = await loadData(db, input.formType, input.entityId);
   const previous = (existing?.data ?? {}) as Record<string, unknown>;
-  const signed = input.trustSignatures ? input.data : (retainSignatureValues(previous, input.data) as Record<string, unknown>);
+  const blocks = signatureBlocksFor(`form:${input.formType}`);
+  const signed = withSanitizedRequired(
+    input.trustSignatures ? input.data : (retainSignatureValues(previous, input.data) as Record<string, unknown>),
+    blocks,
+  );
   const data = answersWithTemplateStamp(`form:${input.formType}`, existing?.data, signed, !existing);
+  if (input.entityId != null) {
+    const changes = diffSignatureRequired(previous, data, blocks);
+    if (changes.length > 0) {
+      await writeSignatureRequiredAudit(db, {
+        entityType: FORM_AUDIT_ENTITY[input.formType] ?? input.formType,
+        entityId: input.entityId,
+        performedBy: input.userId,
+        changes,
+      });
+    }
+  }
 
   if (existing) {
     // Answer saves keep the template revision this instance was filled against.

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
+import { choiceOf, type SignatureChoice } from "../../components/forms/signatureRequired";
 import {
   BATCH3_SHEET_TITLE,
   COIL_CERTIFY,
@@ -26,6 +27,8 @@ interface Batch3SheetProps {
   furtherSignature?: string;
   onSign?: (pin: string) => Promise<unknown>;
   onFurtherSign?: (pin: string) => Promise<unknown>;
+  signatureRequired?: Record<string, SignatureChoice>;
+  onSignatureRequired?: (path: string, choice: SignatureChoice) => void;
 }
 
 function text(value: CellValue | undefined): string {
@@ -104,12 +107,12 @@ function Check(props: SheetProps & { addr: string; label: string }) {
   );
 }
 
-function Sign(props: { label: string; value: string; certify: string; disabled?: boolean; onSign?: (pin: string) => Promise<unknown>; span: number }) {
+function Sign(props: { label: string; value: string; certify: string; disabled?: boolean; onSign?: (pin: string) => Promise<unknown>; span: number; requirement?: { value: SignatureChoice; disabled?: boolean; onChange: (next: SignatureChoice) => void } }) {
   return (
     <tr>
       <td>{props.label}</td>
       <td colSpan={props.span}>
-        <SignatureStamp value={props.value} certify={props.certify} disabled={props.disabled || !props.onSign} variant="sheet" onSign={async (pin) => props.onSign?.(pin)} />
+        <SignatureStamp value={props.value} certify={props.certify} disabled={props.disabled || !props.onSign} variant="sheet" requirement={props.requirement} onSign={async (pin) => props.onSign?.(pin)} />
       </td>
     </tr>
   );
@@ -983,7 +986,7 @@ function GasSheet(props: SheetProps) {
               <Check {...props} addr="C41" label="APPROVED" /> <Check {...props} addr="E41" label="REJECTED" /> <Check {...props} addr="H41" label="APPROVED WITH DEVIATION" />
             </td>
           </tr>
-          <Sign label="Authorized By (Signature):" value={props.signature ?? ""} certify={GAS_CERTIFY} disabled={props.readOnly} onSign={props.onSign} span={7} />
+          <Sign label="Authorized By (Signature):" value={props.signature ?? ""} certify={GAS_CERTIFY} disabled={props.readOnly} onSign={props.onSign} span={7} requirement={props.signatureRequired ? { value: choiceOf({ signatureRequired: props.signatureRequired }, "authorizedSignature"), disabled: props.readOnly || !props.onSignatureRequired, onChange: (next) => props.onSignatureRequired?.("authorizedSignature", next) } : undefined} />
           <tr>
             <td>Deviation/Rejection Notes:</td>
             <td colSpan={7}>
@@ -1012,7 +1015,7 @@ function GasSheet(props: SheetProps) {
               <Check {...props} addr="C48" label="APPROVED" /> <Check {...props} addr="E48" label="REJECTED" /> <Check {...props} addr="H48" label="APPROVED WITH DEVIATION" />
             </td>
           </tr>
-          <Sign label="Authorized By (Signature):" value={props.furtherSignature ?? ""} certify={GAS_FURTHER_CERTIFY} disabled={props.readOnly} onSign={props.onFurtherSign} span={7} />
+          <Sign label="Authorized By (Signature):" value={props.furtherSignature ?? ""} certify={GAS_FURTHER_CERTIFY} disabled={props.readOnly} onSign={props.onFurtherSign} span={7} requirement={props.signatureRequired ? { value: choiceOf({ signatureRequired: props.signatureRequired }, "furtherSignature"), disabled: props.readOnly || !props.onSignatureRequired, onChange: (next) => props.onSignatureRequired?.("furtherSignature", next) } : undefined} />
           <tr>
             <td>Approval Notes:</td>
             <td colSpan={7}>

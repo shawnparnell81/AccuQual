@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { reasonableDate } from "../../utils/validation.js";
+import { signatureRequiredField } from "../signatures/signatureRequired.js";
 
 export const CRAR_STATUSES = ["new", "quality_review", "warranty_review", "completed"] as const;
 
@@ -109,7 +110,7 @@ const crarLinkFields = {
 };
 
 export const createCrarSchema = z.object({ ...crarContentFields, ...crarLinkFields });
-export const updateCrarSchema = z.object({ ...crarContentFields, ...crarLinkFields });
+export const updateCrarSchema = z.object({ ...crarContentFields, ...crarLinkFields, signatureRequired: signatureRequiredField });
 
 export const transitionCrarSchema = z.object({
   status: z.enum(CRAR_STATUSES),

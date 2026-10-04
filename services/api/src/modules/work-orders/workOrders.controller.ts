@@ -7,6 +7,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
+import { assignSignatureRequired, signatureBlocksFor, workOrderSignaturePath } from "../signatures/signatureRequired.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { applyMovement } from "../inventory/inventory.service.js";
 import { parseLimitOffset } from "../../utils/listQuery.js";
@@ -191,7 +192,17 @@ export const updateQualityGatesHandler = asyncHandler(async (req: Request, res: 
   assertDepartment(req, ["customer_service"]);
   const record = await loadWorkOrder(req, Number(req.params.id));
   assertTravelerEditable(record.status);
-  const [updated] = await req.db!.update(workOrders).set({ ...req.body, updatedAt: new Date() }).where(eq(workOrders.id, record.id)).returning();
+  const body = { ...(req.body as Record<string, unknown>) };
+  await assignSignatureRequired(req.db!, {
+    entityType: "WorkOrder",
+    entityId: record.id,
+    performedBy: req.user?.id,
+    previous: record,
+    body,
+    blocks: signatureBlocksFor("work_order"),
+    allowPath: workOrderSignaturePath,
+  });
+  const [updated] = await req.db!.update(workOrders).set({ ...body, updatedAt: new Date() }).where(eq(workOrders.id, record.id)).returning();
   await recordAuditTrail(req.db!, { entityType: "WorkOrder", entityId: record.id, action: "update", changes: { subAction: "quality_gate_updated", ...req.body }, performedBy: req.user?.id });
   res.json(updated);
 });

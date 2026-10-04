@@ -13,6 +13,7 @@ import { applyChrome, loadPdfChrome, persistPdfExport } from "../pdf-exports/pdf
 import { emptyFrame } from "../forms/controlledPdf.js";
 import { retainSignatureValues } from "../signatures/signaturePin.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
+import { diffSignatureRequired, flushSignatureRequiredAudit, rememberSignatureRequiredAudit, signatureBlocksFor, withSanitizedRequired, writeSignatureRequiredAudit } from "../signatures/signatureRequired.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -24,19 +25,35 @@ export const baseHandlers = crudFactory(validationReports, {
   prepareCreate: (body) => {
     const incoming = asRecord(body.data);
     const kind = validationKind(incoming);
-    return { ...body, data: answersWithTemplateStamp(`validation:${kind}`, undefined, { ...incoming, formType: kind }, true) };
+    const data = withSanitizedRequired(
+      answersWithTemplateStamp(`validation:${kind}`, undefined, { ...incoming, formType: kind }, true),
+      signatureBlocksFor(`validation:${kind}`),
+    );
+    return { ...body, data };
   },
-  mergeUpdate: (existing, patch) => {
+  mergeUpdate: (existing, patch, req) => {
     if (!patch.data || typeof patch.data !== "object" || Array.isArray(patch.data)) return patch;
     const previous = asRecord(existing.data);
     const kind = validationKind(previous);
+    const blocks = signatureBlocksFor(`validation:${kind}`);
     const stamped = answersWithTemplateStamp(`validation:${kind}`, previous, { ...(patch.data as Record<string, unknown>), formType: kind }, false);
-    return { ...patch, data: retainSignatureValues(previous, stamped) };
+    const data = withSanitizedRequired(retainSignatureValues(previous, stamped) as Record<string, unknown>, blocks);
+    rememberSignatureRequiredAudit(req, diffSignatureRequired(previous, data, blocks));
+    return { ...patch, data };
   },
   afterCreate: async (created, req) => {
     if (!req.db) return;
     const id = typeof created.id === "number" ? created.id : 0;
     await snapshotFormNumber(req.db, validationFormKeyFor(created.data), id);
+    const kind = validationKind(created.data);
+    const changes = diffSignatureRequired({}, created.data, signatureBlocksFor(`validation:${kind}`));
+    if (changes.length > 0) {
+      await writeSignatureRequiredAudit(req.db, { entityType: "Validation Report", entityId: id, performedBy: req.user?.id, changes });
+    }
+  },
+  afterUpdate: async (updated, req) => {
+    const id = typeof updated.id === "number" ? updated.id : 0;
+    await flushSignatureRequiredAudit(req, "Validation Report", id);
   },
 });
 

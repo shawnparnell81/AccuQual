@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ISO_FORM_TYPES } from "../../drizzle/schema/isoQualityForms.js";
+import { SIGNATURE_REQUIRED_KEY, signatureRequiredField } from "../signatures/signatureRequired.js";
 
 const cellValue = z.union([z.string().max(20_000), z.number(), z.boolean(), z.null()]);
 
@@ -58,6 +59,7 @@ const formData = z.object({
   customers: z.array(scorecardRow).max(24).optional(),
   problems: z.array(failureRow).max(40).optional(),
   months: z.array(z.string().max(40)).max(18).optional(),
+  [SIGNATURE_REQUIRED_KEY]: signatureRequiredField,
 });
 
 export const createIsoQualityFormSchema = z.object({

@@ -7,6 +7,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { deleteRecord } from "../records/recordDeletion.js";
 import { publishEvent, WORKFLOW_STREAM } from "../../lib/eventBus.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
+import { assignSignatureRequired, signatureBlocksFor } from "../signatures/signatureRequired.js";
 
 async function loadScar(req: Request, id: number) {
   const [row] = await req.db!.select().from(scarForms).where(and(eq(scarForms.id, id)));
@@ -40,7 +41,16 @@ export const getScarFormHandler = asyncHandler(async (req: Request, res: Respons
 
 export const updateScarFormHandler = asyncHandler(async (req: Request, res: Response) => {
   const record = await loadScar(req, Number(req.params.id));
-  const [updated] = await req.db!.update(scarForms).set({ ...req.body, updatedAt: new Date() }).where(eq(scarForms.id, record.id)).returning();
+  const body = { ...(req.body as Record<string, unknown>) };
+  await assignSignatureRequired(req.db!, {
+    entityType: "ScarForm",
+    entityId: record.id,
+    performedBy: req.user?.id,
+    previous: record,
+    body,
+    blocks: signatureBlocksFor("scar"),
+  });
+  const [updated] = await req.db!.update(scarForms).set({ ...body, updatedAt: new Date() }).where(eq(scarForms.id, record.id)).returning();
   await recordAuditTrail(req.db!, { entityType: "ScarForm", entityId: record.id, action: "update", changes: req.body, performedBy: req.user?.id });
   // SCAR has no dedicated /close endpoint (unlike CAPA/CRAR/RMA) — closing
   // one is just a PATCH that sets status:"closed" among its other fields.

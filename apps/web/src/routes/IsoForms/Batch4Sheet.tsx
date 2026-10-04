@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
+import { choiceOf, type SignatureChoice } from "../../components/forms/signatureRequired";
 import {
   BATCH4_SHEET_TITLE,
   batch4Fill,
@@ -20,6 +21,8 @@ interface Batch4SheetProps {
   testedSignature?: string;
   approvedSignature?: string;
   onSign?: (field: string, pin: string) => Promise<unknown>;
+  signatureRequired?: Record<string, SignatureChoice>;
+  onSignatureRequired?: (path: string, choice: SignatureChoice) => void;
 }
 
 function text(value: CellValue | undefined): string {
@@ -89,12 +92,12 @@ function Check(props: SheetProps & { addr: string; label: string }) {
   );
 }
 
-function Sign(props: { label: string; value: string; certify: string; field: string; disabled?: boolean; onSign?: (field: string, pin: string) => Promise<unknown>; span: number }) {
+function Sign(props: { label: string; value: string; certify: string; field: string; disabled?: boolean; onSign?: (field: string, pin: string) => Promise<unknown>; span: number; requirement?: { value: SignatureChoice; onChange: (next: SignatureChoice) => void; disabled?: boolean } }) {
   return (
     <tr>
       <td>{props.label}</td>
       <td colSpan={props.span}>
-        <SignatureStamp value={props.value} certify={props.certify} disabled={props.disabled || !props.onSign} variant="sheet" onSign={async (pin) => props.onSign?.(props.field, pin)} />
+        <SignatureStamp value={props.value} certify={props.certify} disabled={props.disabled || !props.onSign} variant="sheet" requirement={props.requirement} onSign={async (pin) => props.onSign?.(props.field, pin)} />
       </td>
     </tr>
   );
@@ -320,7 +323,7 @@ function SaltSheet(props: SheetProps) {
               <Field {...props} addr="F41" kind="date" />
             </td>
           </tr>
-          <Sign label="Signature:" value={props.testedSignature ?? ""} certify="I certify that I performed this salt spray test and the record is accurate." field="testedSignature" disabled={props.readOnly} onSign={props.onSign} span={6} />
+          <Sign label="Signature:" value={props.testedSignature ?? ""} certify="I certify that I performed this salt spray test and the record is accurate." field="testedSignature" disabled={props.readOnly} onSign={props.onSign} span={6} requirement={props.signatureRequired ? { value: choiceOf({ signatureRequired: props.signatureRequired }, "testedSignature"), disabled: props.readOnly || !props.onSignatureRequired, onChange: (next) => props.onSignatureRequired?.("testedSignature", next) } : undefined} />
           <tr>
             <td>Approved By:</td>
             <td>
@@ -331,7 +334,7 @@ function SaltSheet(props: SheetProps) {
               <Field {...props} addr="F42" kind="date" />
             </td>
           </tr>
-          <Sign label="Signature:" value={props.approvedSignature ?? ""} certify="I certify that I approve this salt spray test report." field="approvedSignature" disabled={props.readOnly} onSign={props.onSign} span={6} />
+          <Sign label="Signature:" value={props.approvedSignature ?? ""} certify="I certify that I approve this salt spray test report." field="approvedSignature" disabled={props.readOnly} onSign={props.onSign} span={6} requirement={props.signatureRequired ? { value: choiceOf({ signatureRequired: props.signatureRequired }, "approvedSignature"), disabled: props.readOnly || !props.onSignatureRequired, onChange: (next) => props.onSignatureRequired?.("approvedSignature", next) } : undefined} />
         </tbody>
       </table>
     </div>

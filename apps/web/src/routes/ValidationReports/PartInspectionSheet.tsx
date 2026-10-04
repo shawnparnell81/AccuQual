@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
+import { choiceOf, type SignatureChoice } from "../../components/forms/signatureRequired";
 import {
   BRAKE_WEAR_CERTIFY,
   BRAKE_WEAR_FURTHER_CERTIFY,
@@ -24,6 +25,8 @@ interface PartInspectionSheetProps {
   furtherSignature?: string;
   onSign?: (pin: string) => Promise<unknown>;
   onFurtherSign?: (pin: string) => Promise<unknown>;
+  signatureRequired?: Record<string, SignatureChoice>;
+  onSignatureRequired?: (path: string, choice: SignatureChoice) => void;
 }
 
 function parseNumber(raw: string): CellValue {
@@ -269,21 +272,32 @@ function SignRow({
   certify,
   disabled,
   onSign,
+  requirement,
 }: {
   label: string;
   value: string;
   certify: string;
   disabled?: boolean;
   onSign?: (pin: string) => Promise<unknown>;
+  requirement?: { value: SignatureChoice; disabled?: boolean; onChange: (next: SignatureChoice) => void };
 }) {
   return (
     <tr>
       <td>{label}</td>
       <td colSpan={9}>
-        <SignatureStamp value={value} certify={certify} disabled={disabled || !onSign} variant="sheet" onSign={async (pin) => onSign?.(pin)} />
+        <SignatureStamp value={value} certify={certify} disabled={disabled || !onSign} variant="sheet" requirement={requirement} onSign={async (pin) => onSign?.(pin)} />
       </td>
     </tr>
   );
+}
+
+function requiredFor(props: PartInspectionSheetProps, path: string) {
+  if (!props.signatureRequired) return undefined;
+  return {
+    value: choiceOf({ signatureRequired: props.signatureRequired }, path),
+    disabled: props.readOnly || !props.onSignatureRequired,
+    onChange: (next: SignatureChoice) => props.onSignatureRequired?.(path, next),
+  };
 }
 
 function Notes({ addr, label, cells, readOnly, onChange }: { addr: string; label: string; cells: Record<string, CellValue>; readOnly?: boolean; onChange: (addr: string, value: CellValue) => void }) {
@@ -297,7 +311,7 @@ function Notes({ addr, label, cells, readOnly, onChange }: { addr: string; label
   );
 }
 
-function BrakeRest({ cells, calculated, readOnly, onChange, signature, furtherSignature, onSign, onFurtherSign }: PartInspectionSheetProps & { calculated: Record<string, CellValue> }) {
+function BrakeRest({ cells, calculated, readOnly, onChange, signature, furtherSignature, onSign, onFurtherSign, signatureRequired, onSignatureRequired }: PartInspectionSheetProps & { calculated: Record<string, CellValue> }) {
   return (
     <>
       <tr>
@@ -322,7 +336,7 @@ function BrakeRest({ cells, calculated, readOnly, onChange, signature, furtherSi
       </tr>
       <ResultLine addr="B27" calculated={calculated} />
       <Disposition approved="C28" rejected="E28" deviation="H28" cells={cells} readOnly={readOnly} onChange={onChange} />
-      <SignRow label="Authorized By (Signature):" value={signature ?? ""} certify={BRAKE_WEAR_CERTIFY} disabled={readOnly} onSign={onSign} />
+      <SignRow label="Authorized By (Signature):" value={signature ?? ""} certify={BRAKE_WEAR_CERTIFY} disabled={readOnly} onSign={onSign} requirement={requiredFor({ signatureRequired, onSignatureRequired, readOnly } as PartInspectionSheetProps, "authorizedSignature")} />
       <Notes addr="B30" label="Deviation/Rejection Notes:" cells={cells} readOnly={readOnly} onChange={onChange} />
       <tr>
         <td className="section" colSpan={10}>
@@ -341,13 +355,13 @@ function BrakeRest({ cells, calculated, readOnly, onChange, signature, furtherSi
         </td>
       </tr>
       <Disposition approved="C35" rejected="E35" deviation="H35" cells={cells} readOnly={readOnly} onChange={onChange} />
-      <SignRow label="Authorized By (Signature):" value={furtherSignature ?? ""} certify={BRAKE_WEAR_FURTHER_CERTIFY} disabled={readOnly} onSign={onFurtherSign} />
+      <SignRow label="Authorized By (Signature):" value={furtherSignature ?? ""} certify={BRAKE_WEAR_FURTHER_CERTIFY} disabled={readOnly} onSign={onFurtherSign} requirement={requiredFor({ signatureRequired, onSignatureRequired, readOnly } as PartInspectionSheetProps, "furtherSignature")} />
       <Notes addr="B37" label="Approval Notes:" cells={cells} readOnly={readOnly} onChange={onChange} />
     </>
   );
 }
 
-function InjectorRest({ cells, calculated, readOnly, onChange, signature, furtherSignature, onSign, onFurtherSign }: PartInspectionSheetProps & { calculated: Record<string, CellValue> }) {
+function InjectorRest({ cells, calculated, readOnly, onChange, signature, furtherSignature, onSign, onFurtherSign, signatureRequired, onSignatureRequired }: PartInspectionSheetProps & { calculated: Record<string, CellValue> }) {
   const side = cells.H34 === true;
   const pack = (row: number, name: string) => {
     const result = showInspection(calculated[`H${row}`]);
@@ -532,7 +546,7 @@ function InjectorRest({ cells, calculated, readOnly, onChange, signature, furthe
       </tr>
       <ResultLine addr="B56" calculated={calculated} />
       <Disposition approved="C57" rejected="E57" deviation="H57" cells={cells} readOnly={readOnly} onChange={onChange} />
-      <SignRow label="Authorized By (Signature):" value={signature ?? ""} certify={FUEL_INJECTOR_CERTIFY} disabled={readOnly} onSign={onSign} />
+      <SignRow label="Authorized By (Signature):" value={signature ?? ""} certify={FUEL_INJECTOR_CERTIFY} disabled={readOnly} onSign={onSign} requirement={requiredFor({ signatureRequired, onSignatureRequired, readOnly } as PartInspectionSheetProps, "authorizedSignature")} />
       <Notes addr="B59" label="Deviation/Rejection Notes:" cells={cells} readOnly={readOnly} onChange={onChange} />
       <tr>
         <td className="section" colSpan={10}>
@@ -551,7 +565,7 @@ function InjectorRest({ cells, calculated, readOnly, onChange, signature, furthe
         </td>
       </tr>
       <Disposition approved="C64" rejected="E64" deviation="H64" cells={cells} readOnly={readOnly} onChange={onChange} />
-      <SignRow label="Authorized By (Signature):" value={furtherSignature ?? ""} certify={FUEL_INJECTOR_FURTHER_CERTIFY} disabled={readOnly} onSign={onFurtherSign} />
+      <SignRow label="Authorized By (Signature):" value={furtherSignature ?? ""} certify={FUEL_INJECTOR_FURTHER_CERTIFY} disabled={readOnly} onSign={onFurtherSign} requirement={requiredFor({ signatureRequired, onSignatureRequired, readOnly } as PartInspectionSheetProps, "furtherSignature")} />
       <Notes addr="B66" label="Approval Notes:" cells={cells} readOnly={readOnly} onChange={onChange} />
     </>
   );

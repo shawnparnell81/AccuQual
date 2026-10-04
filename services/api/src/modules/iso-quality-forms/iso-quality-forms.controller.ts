@@ -7,6 +7,7 @@ import { snapshotIsoFormNumber } from "../document-folders/formRecordFiling.js";
 import { answersWithTemplateStamp } from "../forms/templateRevision.js";
 import { retainSignatureValues } from "../signatures/signaturePin.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
+import { diffSignatureRequired, flushSignatureRequiredAudit, rememberSignatureRequiredAudit, signatureBlocksFor, withSanitizedRequired, writeSignatureRequiredAudit } from "../signatures/signatureRequired.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import { assertEcrAnswerEdit, blankEcrWorkflow, canApproveChangeRequest, readEcrWorkflow } from "../change-requests/changeRequestWorkflow.js";
 import { CHANGE_REQUEST_KINDS, changeRequestByFormType } from "../change-requests/changeRequestKinds.js";
@@ -30,27 +31,41 @@ export const baseHandlers = crudFactory(isoQualityForms, {
   entityName: "ISO form",
   idColumn: "id",
   prepareCreate: (body) => {
-    const data = answersWithTemplateStamp(`iso:${String(body.formType ?? "")}`, undefined, asRecord(body.data), true);
-    if (changeRequestByFormType(String(body.formType ?? ""))) return { ...body, data: { ...data, workflow: blankEcrWorkflow() } };
+    const formType = String(body.formType ?? "");
+    const data = withSanitizedRequired(
+      answersWithTemplateStamp(`iso:${formType}`, undefined, asRecord(body.data), true),
+      signatureBlocksFor(`iso:${formType}`),
+    );
+    if (changeRequestByFormType(formType)) return { ...body, data: { ...data, workflow: blankEcrWorkflow() } };
     return { ...body, data };
   },
-  mergeUpdate: (existing, patch) => {
+  mergeUpdate: (existing, patch, req) => {
     if (!patch.data || typeof patch.data !== "object" || Array.isArray(patch.data)) return patch;
     const changeKind = changeRequestByFormType(typeof existing.formType === "string" ? existing.formType : undefined);
     if (changeKind) assertEcrAnswerEdit(existing.data, patch.data, changeKind.noun);
     const previous = asRecord(existing.data);
-    const stamped = answersWithTemplateStamp(`iso:${String(existing.formType ?? "")}`, existing.data, patch.data as Record<string, unknown>, false);
-    return { ...patch, data: retainSignatureValues(previous, stamped) };
+    const formType = String(existing.formType ?? "");
+    const blocks = signatureBlocksFor(`iso:${formType}`);
+    const stamped = answersWithTemplateStamp(`iso:${formType}`, existing.data, patch.data as Record<string, unknown>, false);
+    const data = withSanitizedRequired(retainSignatureValues(previous, stamped) as Record<string, unknown>, blocks);
+    rememberSignatureRequiredAudit(req, diffSignatureRequired(previous, data, blocks));
+    return { ...patch, data };
   },
   afterCreate: async (created, req) => {
     if (!req.db) return;
     await snapshotIsoFormNumber(req.db, created);
     await stampNewEcr(req.db, created);
+    const blocks = signatureBlocksFor(`iso:${String(created.formType ?? "")}`);
+    const changes = diffSignatureRequired({}, created.data, blocks);
+    if (changes.length > 0) {
+      await writeSignatureRequiredAudit(req.db, { entityType: "ISO form", entityId: Number(created.id), performedBy: req.user?.id, changes });
+    }
     if (created.formType === "quarantine_notice") {
       await syncQuarantineNotice(req.db, Number(created.id), created.data, req.user?.id);
     }
   },
   afterUpdate: async (updated, req) => {
+    await flushSignatureRequiredAudit(req, "ISO form", Number(updated.id));
     if (!req.db || updated.formType !== "quarantine_notice") return;
     await syncQuarantineNotice(req.db, Number(updated.id), updated.data, req.user?.id);
   },

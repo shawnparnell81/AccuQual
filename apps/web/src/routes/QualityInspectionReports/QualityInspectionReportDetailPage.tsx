@@ -15,6 +15,7 @@ import type { QualityInspectionReport, QualityInspectionItem, InspectionType, In
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { PictureBoundText } from "../../components/forms/PictureText";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
+import { choiceOf, withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
 import { inspectionItemResult, passFailPaint } from "../../lib/passFail";
 import { BrandMark } from "../../components/brand/DmaLogo";
 
@@ -282,8 +283,8 @@ export function QualityInspectionReportDetailPage() {
               </tr>
             </thead>
             <tbody>
-              <SignRow label="Inspector" signature={report.inspectorSignature} date={report.inspectorSignatureDate} certify="I certify that this inspection record is accurate." onSign={(pin) => sign.mutateAsync({ field: "inspector", pin })} />
-              <SignRow label="QA Lead" signature={report.qaLeadSignature} date={report.qaLeadSignatureDate} certify="I certify that I have reviewed this inspection and approve the result." onSign={(pin) => sign.mutateAsync({ field: "qaLead", pin })} />
+              <SignRow label="Inspector" signature={report.inspectorSignature} date={report.inspectorSignatureDate} certify="I certify that this inspection record is accurate." onSign={(pin) => sign.mutateAsync({ field: "inspector", pin })} requirement={{ value: choiceOf(report, "inspectorSignature"), onChange: (choice: SignatureChoice) => patch.mutate({ signatureRequired: withChoice(report, "inspectorSignature", choice) }) }} />
+              <SignRow label="QA Lead" signature={report.qaLeadSignature} date={report.qaLeadSignatureDate} certify="I certify that I have reviewed this inspection and approve the result." onSign={(pin) => sign.mutateAsync({ field: "qaLead", pin })} requirement={{ value: choiceOf(report, "qaLeadSignature"), onChange: (choice: SignatureChoice) => patch.mutate({ signatureRequired: withChoice(report, "qaLeadSignature", choice) }) }} />
             </tbody>
           </table>
         </div>
@@ -377,13 +378,13 @@ function ItemRow({ item, onPatch, onDelete }: { item: QualityInspectionItem; onP
   );
 }
 
-function SignRow({ label, signature, date, certify, onSign }: { label: string; signature: string | null; date: string | null; certify: string; onSign: (pin: string) => Promise<unknown> }) {
+function SignRow({ label, signature, date, certify, onSign, requirement }: { label: string; signature: string | null; date: string | null; certify: string; onSign: (pin: string) => Promise<unknown>; requirement?: { value: SignatureChoice; onChange: (next: SignatureChoice) => void } }) {
   const shown = date ? new Date(date).toLocaleString() : "—";
   return (
     <tr>
       <td className="border border-border px-2 py-1.5 print:border-black">{label}</td>
       <td className="border border-border p-1 print:border-black">
-        <SignatureStamp value={signature} certify={certify} variant="sheet" onSign={onSign} />
+        <SignatureStamp value={signature} certify={certify} variant="sheet" requirement={requirement} onSign={onSign} />
       </td>
       <td className="border border-border px-2 py-1.5 text-xs print:border-black">{shown}</td>
     </tr>

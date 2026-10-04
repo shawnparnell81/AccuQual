@@ -102,6 +102,7 @@ export const feasibilityReviews = pgTable("feasibility_reviews", {
   salesSignoffName: text("sales_signoff_name"),
   salesSignoffSignature: text("sales_signoff_signature"),
   salesSignoffDate: timestamp("sales_signoff_date"),
+  signatureRequired: jsonb("signature_required").$type<Record<string, "yes" | "no">>(),
 
   // Simple draft/final status, not the old multi-stage workflow — this
   // document's real approvals ARE the 5 sign-off rows above, not a separate

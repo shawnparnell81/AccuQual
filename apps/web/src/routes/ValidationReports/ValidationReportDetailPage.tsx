@@ -25,10 +25,11 @@ import { Batch3Sheet } from "./Batch3Sheet";
 import { PartInspectionSheet } from "./PartInspectionSheet";
 import { ValidationReportSheet } from "./ValidationReportSheet";
 import { FormHeader } from "../../components/brand/DmaLogo";
+import { withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
 
 interface ValidationReport {
   id: number;
-  data: { formType?: ValidationFormType; cells?: Record<string, CellValue> };
+  data: { formType?: ValidationFormType; cells?: Record<string, CellValue>; _signatureRequired?: Record<string, SignatureChoice> };
   createdAt?: string | null;
   updatedAt?: string | null;
 }
@@ -96,6 +97,12 @@ export function ValidationReportDetailPage() {
   const rev = instanceRevision(report.data, meta.revision);
   const doc = documentNumber.trim() ? `${documentNumber.trim()} Rev ${rev}` : `Rev ${rev}`;
   const title = `${meta.title} #${report.id}`;
+
+  const multiSignature = formType === "fuel_injector" || formType === "brake_wear" || formType === "gas_lift";
+  const savedReport = report;
+  async function setSignatureRequired(path: string, choice: SignatureChoice) {
+    await updateReport.mutateAsync({ id: reportId, data: { formType, cells: filled, _signatureRequired: withChoice(savedReport.data, path, choice) } });
+  }
 
   async function saveRecord() {
     setPending(true);
@@ -219,6 +226,8 @@ export function ValidationReportDetailPage() {
             onFurtherSign={async (pin) => {
               await signReport.mutateAsync({ id: reportId, field: "furtherSignature", pin, certified: true });
             }}
+            signatureRequired={multiSignature ? (report.data._signatureRequired ?? {}) : undefined}
+            onSignatureRequired={canEdit ? setSignatureRequired : undefined}
             onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
           />
         ) : isBatch3(formType) ? (
@@ -244,6 +253,8 @@ export function ValidationReportDetailPage() {
                   }
                 : undefined
             }
+            signatureRequired={formType === "gas_lift" ? (report.data._signatureRequired ?? {}) : undefined}
+            onSignatureRequired={formType === "gas_lift" && canEdit ? setSignatureRequired : undefined}
             onChange={(addr, value) => setCells((current) => (current ? { ...current, [addr]: value } : current))}
           />
         ) : (

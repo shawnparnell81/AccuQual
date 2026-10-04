@@ -12,6 +12,7 @@ import type { QmsForm, QmsFormRow, QmsFormStatus } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 import { PictureBoundText } from "../../components/forms/PictureText";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
+import type { SignatureChoice } from "../../components/forms/signatureRequired";
 import { BrandMark } from "../../components/brand/DmaLogo";
 
 const qmsFormHooks = createResourceHooks<QmsForm>("qms-forms");
@@ -148,7 +149,7 @@ export function QmsFormRecordPage() {
                     </tr>
                   )}
                   {rowsBySection(section.key).map((row) => (
-                    <QmsRow key={row.id} row={row} columns={section.columns} onPatch={(data) => patchRow.mutate({ rowId: row.id, data })} onDelete={() => deleteRow.mutate(row.id)} onSign={(pin) => signRow.mutateAsync({ rowId: row.id, pin })} />
+                    <QmsRow key={row.id} row={row} columns={section.columns} showRequired={section.columns.some((column) => column.key === "signature") && rowsBySection(section.key).length > 1} onPatch={(data) => patchRow.mutate({ rowId: row.id, data })} onDelete={() => deleteRow.mutate(row.id)} onSign={(pin) => signRow.mutateAsync({ rowId: row.id, pin })} />
                   ))}
                 </tbody>
               </table>
@@ -200,12 +201,14 @@ function HeaderField({ label, value, onSave, type = "text", readOnly = false }: 
 function QmsRow({
   row,
   columns,
+  showRequired,
   onPatch,
   onDelete,
   onSign,
 }: {
   row: QmsFormRow;
   columns: { key: string; label: string }[];
+  showRequired: boolean;
   onPatch: (data: Record<string, string>) => void;
   onDelete: () => void;
   onSign: (pin: string) => Promise<unknown>;
@@ -215,7 +218,20 @@ function QmsRow({
       {columns.map((col) => (
         <td key={col.key} className="border border-border p-0 print:border-black">
           {col.key === "signature" ? (
-            <SignatureStamp value={row.data.signature ?? ""} certify="I certify that this entry is accurate and complete." variant="sheet" onSign={onSign} />
+            <SignatureStamp
+              value={row.data.signature ?? ""}
+              certify="I certify that this entry is accurate and complete."
+              variant="sheet"
+              requirement={
+                showRequired
+                  ? {
+                      value: row.data.signatureRequired === "no" ? "no" : "yes",
+                      onChange: (next: SignatureChoice) => onPatch({ ...row.data, signatureRequired: next }),
+                    }
+                  : undefined
+              }
+              onSign={onSign}
+            />
           ) : (
             <input
               defaultValue={row.data[col.key] ?? ""}

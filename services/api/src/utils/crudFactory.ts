@@ -30,7 +30,7 @@ interface CrudOptions {
   /** A status query matches every stored word that means that step. Other modules keep an exact match. */
   expandStatusFilter?: (status: string) => string[];
   /** Rewrites an update patch using the row already stored. Answer saves keep the template revision. */
-  mergeUpdate?: (existing: Record<string, unknown>, patch: Record<string, unknown>) => Record<string, unknown>;
+  mergeUpdate?: (existing: Record<string, unknown>, patch: Record<string, unknown>, req: Request) => Record<string, unknown>;
   /**
    * Plant-scoped tables (issues, fixes, audits). Lists and creates use the
    * current plant (`req.siteId`). Get/update/delete allow any plant the
@@ -202,7 +202,7 @@ export function crudFactory(table: PgTable, options: CrudOptions) {
       const rows = await db.select().from(table).where(where);
       const existing = rows[0] as Record<string, unknown> | undefined;
       if (!existing) throw AppError.notFound(options.entityName);
-      patch = options.mergeUpdate(existing, patch);
+      patch = options.mergeUpdate(existing, patch, req);
     }
     const [updated] = await db
       .update(table)

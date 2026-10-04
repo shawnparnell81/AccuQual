@@ -42,6 +42,7 @@ import { FaiSheet } from "./FaiSheet";
 import { IsoFormSheet } from "./IsoFormSheet";
 import { ScorecardSheet } from "./ScorecardSheet";
 import { FormHeader } from "../../components/brand/DmaLogo";
+import { withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
 
 interface IsoFormData {
   cells?: Record<string, CellValue>;
@@ -50,6 +51,7 @@ interface IsoFormData {
   customers?: ScorecardRow[];
   problems?: FailureRow[];
   months?: string[];
+  _signatureRequired?: Record<string, SignatureChoice>;
 }
 
 interface IsoQualityForm {
@@ -178,6 +180,11 @@ export function IsoFormDetailPage() {
     await updateRecord.mutateAsync({ id: recordId, data: payload() });
   }
 
+  const savedRecord = record;
+  async function setSignatureRequired(path: string, choice: SignatureChoice) {
+    await updateRecord.mutateAsync({ id: recordId, data: { ...payload(), _signatureRequired: withChoice(savedRecord.data, path, choice) } });
+  }
+
   const summary = isBatch4(formType) ? summaryBatch4(formType, cells) : isBatch5(formType) ? summaryBatch5(formType, cells) : isBatch6(formType) ? summaryBatch6(formType, cells) : showCell(cells.D5) || showCell(cells.B6) || showCell(cells.B3) || showCell(cells.B5) || showCell(cells.D2) || showCell(cells.F3) || showCell(cells.D4);
   const formKey = FORM_KEY_BY_TYPE[formType] ?? null;
   const signatures = formType === "audit_summary" ? auditSignatures(record.data) : {};
@@ -218,6 +225,8 @@ export function IsoFormDetailPage() {
       recordId={recordId}
       signatures={signatures}
       onSign={formType === "audit_summary" || isBatch4(formType) || changeRequestByFormType(formType) ? signField : undefined}
+      signatureRequired={record.data._signatureRequired}
+      onSignatureRequired={canEdit ? setSignatureRequired : undefined}
       ecrView={changeRequestByFormType(formType) ? ecrView.data : undefined}
       ecrBusy={ecrTransition.isPending}
       canEditStructure={canEditFormStructure(user)}
@@ -262,6 +271,8 @@ function IsoFormDetailBody({
   recordId,
   signatures,
   onSign,
+  signatureRequired,
+  onSignatureRequired,
   ecrView,
   ecrBusy,
   canEditStructure,
@@ -293,6 +304,8 @@ function IsoFormDetailBody({
   recordId: number;
   signatures: Record<string, string>;
   onSign?: (field: string, pin: string) => Promise<unknown>;
+  signatureRequired?: Record<string, SignatureChoice>;
+  onSignatureRequired?: (path: string, choice: SignatureChoice) => Promise<void> | void;
   ecrView?: EcrWorkflowView;
   ecrBusy?: boolean;
   canEditStructure?: boolean;
@@ -411,6 +424,8 @@ function IsoFormDetailBody({
             testedSignature={signatureText(record.data, "testedSignature")}
             approvedSignature={signatureText(record.data, formType === "prototype_strut" ? "engineeringSignoffSignature" : formType === "scar_request" ? "managerSignature" : "approvedSignature")}
             onSign={onSign}
+            signatureRequired={formType === "salt_spray" ? (signatureRequired ?? {}) : undefined}
+            onSignatureRequired={formType === "salt_spray" ? onSignatureRequired : undefined}
           />
         ) : isBatch5(formType) ? (
           <Batch5Sheet variant={formType} cells={cells} readOnly={!canEdit} onChange={changeCell} documentNumber={documentNumber} />
@@ -432,6 +447,8 @@ function IsoFormDetailBody({
             supplierLocked={requestKind ? !canEdit || ecrView?.workflow.status === "closed" : undefined}
             managerCertify={requestKind?.managerCertify}
             supplierCertify={requestKind?.supplierCertify}
+            signatureRequired={requestKind ? (signatureRequired ?? {}) : undefined}
+            onSignatureRequired={requestKind ? onSignatureRequired : undefined}
           />
         ) : formType === "first_article" ? (
           <FaiSheet cells={cells} lines={lines} readOnly={!canEdit} onCell={changeCell} onLines={setLines} documentNumber={documentNumber} revision={revision} />
@@ -443,7 +460,7 @@ function IsoFormDetailBody({
           <>
             {meta.layout && (
               <div className={sheet === "photos" ? "iso-offscreen" : undefined}>
-                <IsoFormSheet layout={meta.layout} cells={cells} calculated={calculated} readOnly={!canEdit} onChange={changeCell} label={meta.title} documentNumber={formKey ? documentNumber : ""} revision={revision} signatures={signatures} onSign={onSign} />
+                <IsoFormSheet layout={meta.layout} cells={cells} calculated={calculated} readOnly={!canEdit} onChange={changeCell} label={meta.title} documentNumber={formKey ? documentNumber : ""} revision={revision} signatures={signatures} onSign={onSign} signatureRequired={signatureRequired} onSignatureRequired={onSignatureRequired} />
               </div>
             )}
             {meta.photos && (

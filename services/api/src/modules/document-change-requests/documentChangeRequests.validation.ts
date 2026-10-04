@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { reasonableDate } from "../../utils/validation.js";
+import { signatureRequiredField } from "../signatures/signatureRequired.js";
 
 export const DOCUMENT_CHANGE_STATUSES = ["draft", "active", "obsolete"] as const;
 
@@ -40,6 +41,7 @@ export const updateDocumentChangeRequestSchema = z.object({
   requestExecutedBy: z.string().nullable().optional(),
   requestExecutedTitle: z.string().nullable().optional(),
   requestExecutedDate: reasonableDate.nullable().optional(),
+  signatureRequired: signatureRequiredField,
 });
 
 /** SIGN cells only. Dates are server-stamped. Typed names cannot become a signature. */

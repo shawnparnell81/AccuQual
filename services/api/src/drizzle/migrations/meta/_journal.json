@@ -750,6 +750,13 @@
       "when": 1793228400000,
       "tag": "0106_pdf_exports",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1793314800000,
+      "tag": "0107_signature_required",
+      "breakpoints": true
     }
   ]
 }

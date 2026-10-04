@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, numeric } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, numeric, jsonb } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
 import { erpReceivingLineItems } from "./erp.js";
@@ -42,6 +42,7 @@ export const qualityInspectionReports = pgTable("quality_inspection_reports", {
   inspectorSignatureDate: timestamp("inspector_signature_date"),
   qaLeadSignature: text("qa_lead_signature"),
   qaLeadSignatureDate: timestamp("qa_lead_signature_date"),
+  signatureRequired: jsonb("signature_required").$type<Record<string, "yes" | "no">>(),
   createdBy: integer("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
