@@ -15,6 +15,9 @@ import { permissionRoles, userPermissionRoles } from "../../drizzle/schema/permi
 import { CSA_WORKFLOW_KEY, prepareCsaDecision, readCsa, userMatchesAssignees, writeCsa } from "../csa-fai/csaFai.logic.js";
 import { persistCsa } from "../csa-fai/csaFai.persist.js";
 import { rememberCsaSla } from "../csa-fai/csaFai.service.js";
+import { FPM_WORKFLOW_KEY, prepareFpmDecision, readFpm, writeFpm } from "../fuel-pump-fai/fuelPumpFai.logic.js";
+import { persistFpm } from "../fuel-pump-fai/fuelPumpFai.persist.js";
+import { rememberFuelPumpSla } from "../fuel-pump-fai/fuelPumpFai.service.js";
 import { nextApprovalState, roleTitleMatches, titlesFromConfig } from "./assignees.js";
 
 const EXECUTIVE_APPROVER_STEPS = new Set(["quality_manager", "president", "vice_president"]);
@@ -183,12 +186,31 @@ workflowRunsRouter.post(
         throw AppError.badRequest((err as Error).message);
       }
     }
+    if (pending.workflowKey === FPM_WORKFLOW_KEY) {
+      if (readFpm(context).locked === "Yes") throw AppError.badRequest("This fuel pump FAI is locked.");
+      try {
+        const patch = prepareFpmDecision(
+          { ...pending, routes: (pending.routes ?? []).map((route) => ({ ...route, branch: route.branch ?? route.decision, label: route.label ?? route.decision })) },
+          decision,
+          notes,
+          details,
+          context,
+        );
+        writeFpm(context, { ...readFpm(context), ...patch });
+      } catch (err) {
+        throw AppError.badRequest((err as Error).message);
+      }
+    }
 
     try {
       const execution = await resumeWorkflow(graph, run.runState as WorkflowRunState, context, decision);
       if (pending.workflowKey === CSA_WORKFLOW_KEY) {
         await rememberCsaSla(req.db as Db, execution.context, execution.currentNodeId);
         await persistCsa(req.db as Db, readCsa(execution.context));
+      }
+      if (pending.workflowKey === FPM_WORKFLOW_KEY) {
+        await rememberFuelPumpSla(req.db as Db, execution.context, execution.currentNodeId);
+        await persistFpm(req.db as Db, readFpm(execution.context));
       }
       const { __db: _db, __performedBy: _performedBy, ...persistable } = execution.context;
       const waiting = execution.status === "waiting_approval";
