@@ -10,6 +10,22 @@ import "../src/modules/workflow/workflowActions.js";
 
 const def = ncrProcessDefinition;
 const steps = (context: Record<string, unknown>) => ((context.steps as { node: string }[]) ?? []).map((step) => step.node);
+const FILLED = {
+  severity: "Minor",
+  disposition: "Use as is",
+  review_notes: "Reviewed",
+  containment_required: "No",
+  root_cause_method: "5 Why",
+  root_cause: "Seal worn",
+  escape_point: "Final inspection",
+  contributing_factors: "Tool wear",
+  approval_comments: "Approved",
+  approved_by: "Quality",
+  approval_date: "2026-10-01",
+  effective: "Yes",
+  recurrence_detected: "No",
+  days_open: 1,
+};
 
 describe("NCR process workflow", () => {
   it("is one workflow, allows return loops, and keeps the 18-step path", () => {
@@ -28,7 +44,7 @@ describe("NCR process workflow", () => {
   });
 
   it("closes a minor NCR that does not need containment", async () => {
-    const result = await executeWorkflow(def, { severity: "Minor", containment_required: "No", effective: "Yes", recurrence_detected: "No", days_open: 1 }, { triggerKind: "submitted", dryRun: true });
+    const result = await executeWorkflow(def, { ...FILLED, containment_required: "No", effective: "Yes", recurrence_detected: "No", days_open: 1 }, { triggerKind: "submitted", dryRun: true });
     expect(result.status).toBe("completed");
     const visited = steps(result.context);
     expect(visited).toContain("e18");
@@ -42,7 +58,7 @@ describe("NCR process workflow", () => {
     expect(paused.status).toBe("waiting_approval");
     expect(paused.currentNodeId).toBe("ap_exec");
     expect(paused.state.visited).not.toContain("ap3");
-    const simulated = await executeWorkflow(def, { severity: "Critical", containment_required: "Yes", effective: "Yes", recurrence_detected: "No" }, { triggerKind: "submitted", dryRun: true });
+    const simulated = await executeWorkflow(def, { ...FILLED, severity: "Critical", containment_required: "Yes", effective: "Yes", recurrence_detected: "No" }, { triggerKind: "submitted", dryRun: true });
     const visited = steps(simulated.context);
     expect(visited.indexOf("ap_exec")).toBeGreaterThan(-1);
     expect(visited.indexOf("ap_exec")).toBeLessThan(visited.indexOf("ap3"));
@@ -57,7 +73,7 @@ describe("NCR process workflow", () => {
   });
 
   it("returns management rejection to planning and does not verify effectiveness", async () => {
-    const context = { severity: "Minor", containment_required: "No", effective: "Yes", recurrence_detected: "No" };
+    const context = { ...FILLED, severity: "Minor", containment_required: "No", effective: "Yes", recurrence_detected: "No" };
     const review = await executeWorkflow(def, context, { triggerKind: "submitted" });
     expect(review.currentNodeId).toBe("ap3");
     const implementation = await resumeWorkflow(def, review.state, review.context, "approved");
@@ -68,9 +84,15 @@ describe("NCR process workflow", () => {
   });
 
   it("does not close an ineffective NCR", async () => {
-    const result = await executeWorkflow(def, { severity: "Minor", containment_required: "No", effective: "No", recurrence_detected: "Yes" }, { triggerKind: "submitted", dryRun: true });
+    const result = await executeWorkflow(def, { ...FILLED, containment_required: "No", effective: "No", recurrence_detected: "Yes" }, { triggerKind: "submitted", dryRun: true });
     expect(steps(result.context)).not.toContain("e18");
     expect(steps(result.context)).toContain("a8");
+  });
+
+  it("names the required fields when a simulated approval is missing them", async () => {
+    await expect(executeWorkflow(def, { severity: "Minor", containment_required: "No" }, { triggerKind: "submitted", dryRun: true })).rejects.toThrow(
+      /Cannot move to the next step\. Required fields missing: Disposition, Review Notes\./,
+    );
   });
 
   it("stores the same graph in the migration", () => {

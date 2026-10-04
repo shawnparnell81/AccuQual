@@ -8,6 +8,7 @@ import type { Db } from "../../lib/requestDb.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 import { ncrQuarantineIsOnHold, onHoldBlockMessage } from "../quarantine/quarantine.service.js";
 import { canonicalNcrStep, ncrStepLabel } from "./ncr.workflow.js";
+import { missingRequiredLabels, requiredMoveError } from "../workflow/requiredFields.js";
 
 /**
  * `expectedFrom`, when given, enforces the sequence the Transitions/Rules
@@ -112,7 +113,8 @@ export const setRootCause = async (db: Db, id: number, rootCause: string, perfor
 
 /** Workflow Disposition step. Quarantine material disposition stays on POST /ncr/:id/disposition and does not move this step. */
 export const setDispositionStep = async (db: Db, id: number, note: string | undefined, performedBy?: number, allowedSiteIds?: number[]) => {
-  return patchNcr(db, id, { status: "disposition" }, "disposition", performedBy, ["contain"], allowedSiteIds, note ? { note } : undefined);
+  if (!note || !note.trim()) throw requiredMoveError(["Disposition"]);
+  return patchNcr(db, id, { status: "disposition" }, "disposition", performedBy, ["contain"], allowedSiteIds, { note });
 };
 
 export const setCorrectiveAction = async (db: Db, id: number, correctiveAction: string, performedBy?: number, allowedSiteIds?: number[]) => {
@@ -140,6 +142,17 @@ export const setVerify = async (db: Db, id: number, verification: string, perfor
 
 export const close = async (db: Db, id: number, performedBy?: number, allowedSiteIds?: number[]) => {
   if (await ncrQuarantineIsOnHold(db, id)) throw AppError.badRequest(onHoldBlockMessage(id));
+  const [current] = await db.select().from(ncr).where(eq(ncr.id, id));
+  if (!current) throw AppError.notFound("NCR");
+  assertRecordOnAllowedSite(current.siteId, allowedSiteIds, "NCR");
+  if (canonicalNcrStep(current.status) === "verify") {
+    const missing = missingRequiredLabels(["containment", "root_cause", "corrective_action"], {
+      containment: current.containment,
+      root_cause: current.rootCause,
+      corrective_action: current.correctiveAction,
+    });
+    if (missing.length > 0) throw requiredMoveError(missing);
+  }
   const updated = await patchNcr(db, id, { status: "closed", closedAt: new Date() }, "closed", performedBy, ["verify"], allowedSiteIds);
   await syncNcrFormData(db, id, { documentStatus: "Closed", ncrClosureDate: ncrIsoDate(updated.closedAt ?? new Date()), finalDispositionConfirmed: "Yes" }, performedBy);
   return updated;

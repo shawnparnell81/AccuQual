@@ -17,7 +17,7 @@ import {
 /**
  * Quality reports read the module tables that already exist. Each section
  * uses the same department access as that module. Runs are logged as
- * report_access. PDF and email stay stubs.
+ * report_access. PDF is the same report. Scheduled email stays a stub.
  */
 export const reportsRouter = Router();
 reportsRouter.use(requireAuth, withDb, withSiteContext);

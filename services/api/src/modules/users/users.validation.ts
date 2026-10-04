@@ -75,6 +75,14 @@ const layoutIds = z.array(z.string().trim().min(1).max(40)).max(30);
 export const updateMyWorkspaceLayoutSchema = z.object({
   home: z.object({ order: layoutIds, hidden: layoutIds }).optional(),
   dashboard: z.object({ order: layoutIds, hidden: layoutIds }).optional(),
+  waitingOnMe: z
+    .object({
+      sort: z.enum(["due", "module", "status"]),
+      group: z.enum(["none", "module", "status"]),
+      module: z.string().trim().min(1).max(40),
+      timing: z.enum(["all", "late", "due"]),
+    })
+    .optional(),
 });
 
 /** Saved list-view search filters — a body of `{ [pageKey]: view[] }`, merge-patched one page key at a time (see updateMySavedViews). Each page key is capped at 20 saved views; a page id itself is just a short caller-chosen slug like "ncr-list". */

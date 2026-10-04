@@ -2,12 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { useCurrentUser } from "./useAuth";
 
-export const HOME_SECTION_IDS = ["hero", "kpis", "next", "whos-late", "waiting", "audits", "documents", "training", "onboarding", "attention", "inbox", "calendar"] as const;
+export const HOME_SECTION_IDS = ["hero", "waiting-on-me", "kpis", "next", "whos-late", "waiting", "audits", "documents", "training", "onboarding", "attention", "inbox", "calendar"] as const;
 export const DASHBOARD_SECTION_IDS = ["hero", "open-work", "kpis", "engineering", "trend", "aging", "stuck", "activity"] as const;
 
 type Surface = "home" | "dashboard";
 type SurfaceLayout = { order?: string[]; hidden?: string[] };
-type WorkspaceLayout = { home?: SurfaceLayout; dashboard?: SurfaceLayout } | null;
+type WorkspaceLayout = { home?: SurfaceLayout; dashboard?: SurfaceLayout; waitingOnMe?: { sort?: string; group?: string; module?: string; timing?: string } } | null;
 
 const DEFAULTS: Record<Surface, readonly string[]> = {
   home: HOME_SECTION_IDS,

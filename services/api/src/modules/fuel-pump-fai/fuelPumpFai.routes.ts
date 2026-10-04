@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { validate } from "../../middleware/validate.js";
-import { fuelPumpPdfHandler, getFuelPumpHandler, listFuelPumpHandler, saveFuelPumpResultsHandler, submitFuelPumpHandler } from "./fuelPumpFai.controller.js";
+import { copyFuelPumpHandler, fuelPumpPdfHandler, getFuelPumpHandler, listFuelPumpHandler, listPreviousFuelPumpHandler, saveFuelPumpResultsHandler, submitFuelPumpHandler } from "./fuelPumpFai.controller.js";
 
 const submitSchema = z.object({
   partNumber: z.string().min(1),
@@ -43,6 +43,8 @@ const resultsSchema = z.object({
 
 export const fuelPumpFaiRouter = Router();
 fuelPumpFaiRouter.get("/", listFuelPumpHandler);
+fuelPumpFaiRouter.get("/previous", listPreviousFuelPumpHandler);
+fuelPumpFaiRouter.post("/copy", copyFuelPumpHandler);
 fuelPumpFaiRouter.post("/", validate(submitSchema), submitFuelPumpHandler);
 fuelPumpFaiRouter.get("/:id/pdf", fuelPumpPdfHandler);
 fuelPumpFaiRouter.get("/:id", getFuelPumpHandler);

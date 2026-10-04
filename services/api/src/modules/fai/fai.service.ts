@@ -30,6 +30,7 @@ import { noteRepeatNcr } from "../quality-automation/qualityAutomation.service.j
 import { requirePlantId } from "../sites/siteAccess.js";
 import { calendarDay, safeTimeZone } from "../quality-automation/logic.js";
 import { renderFaiPdf } from "./fai.pdf.js";
+import { copyCharacteristicLine } from "../records/copyPrevious.js";
 import type { savePlanSchema, openFaiSchema, saveResultsSchema, assignPullSchema, completePullSchema } from "./fai.validation.js";
 import type { z } from "zod";
 import {
@@ -39,6 +40,7 @@ import {
   canRecordAnnualPull,
   characteristicError,
   cleanText,
+  DEFAULT_CADENCE_MONTHS,
   freezeCharacteristic,
   formalDate,
   formatFaiNumber,
@@ -481,6 +483,49 @@ export async function getRecord(db: Db, id: number) {
   return presentRecord(db, await loadRecord(db, id));
 }
 
+export async function listPreviousRecords(db: Db, partNumber: string) {
+  const part = partNumber.trim();
+  if (!part) return [];
+  return db
+    .select({ id: faiRecords.id, number: faiRecords.number, partNumber: faiRecords.partNumber, status: faiRecords.status, supplierName: faiRecords.supplierName, createdAt: faiRecords.createdAt })
+    .from(faiRecords)
+    .where(eq(faiRecords.partNumber, part))
+    .orderBy(desc(faiRecords.createdAt))
+    .limit(40);
+}
+
+/** New open first article. Characteristic setup is copied. Results, signatures, and the outcome are not. */
+export async function copyRecord(db: Db, userId: number, sourceId: number) {
+  const source = await loadRecord(db, sourceId);
+  const lines = await recordLines(db, sourceId);
+  if (lines.length === 0) throw AppError.badRequest("That record has no characteristics to copy.");
+  const [revision] = await db.select({ cadenceMonths: faiPlanRevisions.cadenceMonths }).from(faiPlanRevisions).where(eq(faiPlanRevisions.id, source.revisionId));
+  const today = await companyToday(db);
+  const number = await allocateNumber(db, today);
+  const [created] = await db
+    .insert(faiRecords)
+    .values({
+      number,
+      planId: source.planId,
+      revisionId: source.revisionId,
+      planRevision: source.planRevision,
+      partNumber: source.partNumber,
+      partName: source.partName,
+      supplierId: source.supplierId,
+      supplierName: source.supplierName,
+      status: "open",
+      openedBy: userId,
+      updatedAt: new Date(),
+    })
+    .returning();
+  const copied = lines.map((line) => copyCharacteristicLine(line));
+  await db.insert(faiResultLines).values(copied.map((line) => ({ faiId: created!.id, ...line })));
+  await ensureSource(db, source.partNumber, source.supplierId, source.supplierName, revision?.cadenceMonths ?? DEFAULT_CADENCE_MONTHS, userId);
+  const who = await actorLabel(db, userId);
+  await writeAudit(db, "FaiRecord", created!.id, "create", who, "Copied first article setup", `Opened ${number} from ${source.number}. Results, signatures, and history were not copied.`, userId);
+  return presentRecord(db, created!);
+}
+
 export async function openRecord(db: Db, userId: number, body: OpenBody) {
   const plan = await loadPlan(db, body.planId);
   if (plan.retiredAt) throw AppError.badRequest("This plan is retired. Choose a current plan.");
@@ -609,6 +654,11 @@ export async function submitRecord(db: Db, userId: number, id: number) {
   const record = await loadRecord(db, id);
   if (record.status !== "open") throw AppError.badRequest("This first article has already been submitted.");
   const lines = await recordLines(db, id);
+  for (const line of lines) {
+    if (line.mode !== "attribute" && !line.limitLow && !line.limitHigh) {
+      throw AppError.badRequest(`FAI characteristic ${line.sortOrder} is missing a required tolerance.`);
+    }
+  }
   const results = lines.map((line) => (line.result === "Pass" || line.result === "Fail" ? line.result : ""));
   if (!readyToSubmit(results)) throw AppError.badRequest("Enter a result on every characteristic before submitting for Quality review.");
   const [updated] = await db

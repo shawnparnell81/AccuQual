@@ -4,6 +4,17 @@ import { hydrateDimensionalRow, measuredCellValue, passFailPdfPalette } from "..
 import { FMEA_PDF_TONE, fmeaCellValue, fmeaComputedTone } from "./fmeaPriority.js";
 import { pictureTextToPlain } from "../attachments/inlinePicture.js";
 import { drawDmaLogo, embedDmaLogo } from "../branding/dmaLogo.js";
+import {
+  applyPdfIdentity,
+  approvalPhrase,
+  drawRunningHeader,
+  drawWatermark,
+  footerClearance,
+  headerClearance,
+  stampFooters,
+  watermarkForStatus,
+  type ControlledPdfFrame,
+} from "./controlledPdf.js";
 
 // Colors sampled from the reference templates (dark navy header bars, pale
 // blue-gray field boxes, thin blue-gray borders) — kept as named constants so
@@ -45,22 +56,43 @@ export interface RenderContext {
   font: PDFFont;
   bold: PDFFont;
   italic: PDFFont;
+  /** Bottom keep-out. Omitted callers, including the diagram renderer, keep the original 40pt margin. */
+  bottom?: number;
+  frame?: ControlledPdfFrame | null;
+}
+
+function stampPageChrome(ctx: RenderContext) {
+  if (!ctx.frame) return;
+  drawWatermark(ctx.page, ctx.font, watermarkForStatus(ctx.frame.status));
+  drawRunningHeader(ctx.page, ctx.font, ctx.bold, ctx.frame);
 }
 
 /** Renders a FormLayout + its current data as a PDF matching the reference document's look. */
-export async function renderFormLayoutAsPdf(layout: FormLayout, data: Record<string, unknown>): Promise<Uint8Array> {
+export async function renderFormLayoutAsPdf(layout: FormLayout, data: Record<string, unknown>, frame: ControlledPdfFrame | null = null): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const italic = await doc.embedFont(StandardFonts.HelveticaOblique);
 
   const [pageWidth, pageHeight] = pageSizeFor(layout);
-  const ctx: RenderContext = { doc, page: doc.addPage([pageWidth, pageHeight]), y: pageHeight - MARGIN, font, bold, italic };
+  const top = frame ? headerClearance(frame) : MARGIN;
+  const ctx: RenderContext = {
+    doc,
+    page: doc.addPage([pageWidth, pageHeight]),
+    y: pageHeight - top,
+    font,
+    bold,
+    italic,
+    bottom: frame ? footerClearance(frame) : MARGIN,
+    frame,
+  };
+  stampPageChrome(ctx);
 
   await drawTitle(ctx, layout.title);
 
   for (const section of layout.sections) {
-    ensureSpace(ctx, 26);
+    const signature = /sign|approv/i.test(section.title);
+    ensureSpace(ctx, signature ? 140 : 72);
     drawSectionHeader(ctx, `${section.number}. ${section.title}`);
     for (const block of section.blocks) {
       drawBlock(ctx, block, data);
@@ -68,15 +100,23 @@ export async function renderFormLayoutAsPdf(layout: FormLayout, data: Record<str
     ctx.y -= 10; // gap between sections
   }
 
+  if (frame) drawFrameEvidence(ctx, frame, layout.sections.length + 1);
+  if (frame) {
+    stampFooters(doc, font, frame);
+    applyPdfIdentity(doc, frame);
+  }
+
   return doc.save();
 }
 
 export function ensureSpace(ctx: RenderContext, needed: number) {
-  if (ctx.y - needed < MARGIN) {
+  const bottom = ctx.bottom ?? MARGIN;
+  if (ctx.y - needed < bottom) {
     const width = ctx.page.getWidth();
     const height = ctx.page.getHeight();
     ctx.page = ctx.doc.addPage([width, height]);
-    ctx.y = height - MARGIN;
+    stampPageChrome(ctx);
+    ctx.y = height - (ctx.frame ? headerClearance(ctx.frame) : MARGIN);
   }
 }
 
@@ -223,27 +263,31 @@ function drawTable(
     : [];
   const headerLineCount = Math.max(1, headerLabel.length, ...headerLines.map((lines) => lines.length));
   const headerHeight = Math.max(18, headerLineCount * 10 + 6);
-  ensureSpace(ctx, headerHeight);
   let x = MARGIN;
-  if (hasLabelColumn) {
-    ctx.page.drawRectangle({ x, y: ctx.y - headerHeight, width: labelColWidth, height: headerHeight, color: LABEL_BG, borderColor: BORDER, borderWidth: 0.5 });
-    headerLabel.forEach((line, lineIndex) => {
-      ctx.page.drawText(line, { x: x + 4, y: ctx.y - 13 - lineIndex * 10, size: 8, font: ctx.bold, color: TEXT_DARK });
-    });
-    x += labelColWidth;
-  }
-  headerLines.forEach((lines, i) => {
-    ctx.page.drawRectangle({ x, y: ctx.y - headerHeight, width: colWidth, height: headerHeight, color: LABEL_BG, borderColor: BORDER, borderWidth: 0.5 });
-    if (lines.length === 1) {
-      ctx.page.drawText(lines[0]!, { x: x + 4, y: ctx.y - 13, size: 8, font: ctx.bold, color: TEXT_DARK });
-    } else {
-      lines.forEach((line, lineIndex) => {
-        ctx.page.drawText(line, { x: x + 4, y: ctx.y - 11 - lineIndex * 10, size: 8, font: ctx.bold, color: TEXT_DARK });
+  const paintHeader = () => {
+    ensureSpace(ctx, headerHeight);
+    x = MARGIN;
+    if (hasLabelColumn) {
+      ctx.page.drawRectangle({ x, y: ctx.y - headerHeight, width: labelColWidth, height: headerHeight, color: LABEL_BG, borderColor: BORDER, borderWidth: 0.5 });
+      headerLabel.forEach((line, lineIndex) => {
+        ctx.page.drawText(line, { x: x + 4, y: ctx.y - 13 - lineIndex * 10, size: 8, font: ctx.bold, color: TEXT_DARK });
       });
+      x += labelColWidth;
     }
-    x += colWidth;
-  });
-  ctx.y -= headerHeight;
+    headerLines.forEach((lines) => {
+      ctx.page.drawRectangle({ x, y: ctx.y - headerHeight, width: colWidth, height: headerHeight, color: LABEL_BG, borderColor: BORDER, borderWidth: 0.5 });
+      if (lines.length === 1) {
+        ctx.page.drawText(lines[0]!, { x: x + 4, y: ctx.y - 13, size: 8, font: ctx.bold, color: TEXT_DARK });
+      } else {
+        lines.forEach((line, lineIndex) => {
+          ctx.page.drawText(line, { x: x + 4, y: ctx.y - 11 - lineIndex * 10, size: 8, font: ctx.bold, color: TEXT_DARK });
+        });
+      }
+      x += colWidth;
+    });
+    ctx.y -= headerHeight;
+  };
+  paintHeader();
 
   for (let r = 0; r < rowCount; r++) {
     const row = rows[r] ?? {};
@@ -261,7 +305,9 @@ function drawTable(
     const textLineCount = Math.max(1, labelLines.length, ...valueLines.map((lines) => lines.length));
     const textHeight = textLineCount <= 2 ? 32 : textLineCount * 10 + 8;
     const rowHeight = besideLines > 0 ? Math.max(32, textHeight, (optionLines + besideLines) * 11 + 6) : textHeight;
+    const pageBefore = ctx.page;
     ensureSpace(ctx, rowHeight);
+    if (ctx.page !== pageBefore) paintHeader();
 
     x = MARGIN;
     if (hasLabelColumn) {
@@ -322,6 +368,57 @@ function drawTable(
     });
     ctx.y -= lines.length * 11;
   }
+}
+
+function drawFrameEvidence(ctx: RenderContext, frame: ControlledPdfFrame, start: number) {
+  const blocks: { title: string; name: string; columns: TableColumn[]; rows: Record<string, string>[] }[] = [];
+  if (frame.approvals && frame.approvals.length > 0) {
+    blocks.push({
+      title: "Approvals",
+      name: "__approvals",
+      columns: [
+        { key: "name", label: "Name", kind: "text" },
+        { key: "role", label: "Role", kind: "text" },
+        { key: "action", label: "Action", kind: "text" },
+        { key: "at", label: "When", kind: "text" },
+        { key: "status", label: "Status", kind: "text" },
+      ],
+      rows: frame.approvals.map((row) => ({ name: row.name, role: row.role, action: row.action, at: row.at, status: approvalPhrase(row.status) })),
+    });
+  }
+  if (frame.audit && frame.audit.length > 0) {
+    blocks.push({
+      title: "Audit history",
+      name: "__audit",
+      columns: [
+        { key: "who", label: "Who", kind: "text" },
+        { key: "action", label: "Action", kind: "text" },
+        { key: "at", label: "When", kind: "text" },
+        { key: "reason", label: "Reason", kind: "text" },
+      ],
+      rows: frame.audit.map((row) => ({ who: row.who, action: row.action, at: row.at, reason: row.reason })),
+    });
+  }
+  if (frame.attachments && frame.attachments.length > 0) {
+    blocks.push({
+      title: "Attachments",
+      name: "__attachments",
+      columns: [
+        { key: "name", label: "Name", kind: "text" },
+        { key: "type", label: "Type", kind: "text" },
+        { key: "size", label: "Size", kind: "text" },
+        { key: "uploadedBy", label: "Uploaded by", kind: "text" },
+        { key: "uploadedAt", label: "Date", kind: "text" },
+      ],
+      rows: frame.attachments.map((row) => ({ ...row })),
+    });
+  }
+  blocks.forEach((block, index) => {
+    ensureSpace(ctx, /approv|sign/i.test(block.title) ? 140 : 72);
+    drawSectionHeader(ctx, `${start + index}. ${block.title}`);
+    drawTable(ctx, block.name, block.columns, { [block.name]: block.rows }, undefined, undefined, undefined, undefined);
+    ctx.y -= 10;
+  });
 }
 
 /** Helvetica is WinAnsi. An em dash in a column label must not abort the export. */

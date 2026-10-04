@@ -7,6 +7,8 @@ import { MonthlyReportService } from "./MonthlyReportService.js";
 import { AdHocReportService } from "./AdHocReportService.js";
 import { ReportTemplateService } from "./ReportTemplateService.js";
 import { ReportExportService } from "./ReportExportService.js";
+import { renderQualityReportPdf } from "./reportPdf.js";
+import { reportFileName } from "./reports.model.js";
 import { reportScheduleStub } from "./reports.scheduler.js";
 import type { RunReportInput } from "./reports.run.js";
 
@@ -51,12 +53,6 @@ export const scheduleReportHandler = asyncHandler(async (req: Request, res: Resp
 
 export const exportReportHandler = asyncHandler(async (req: Request, res: Response) => {
   const query = req.query as { type: "weekly" | "monthly" | "adhoc"; format: "csv" | "json" | "pdf"; from?: string; to?: string; plantId?: number | "all" };
-  if (query.format === "pdf") {
-    logger.info("report_access", { userId: req.user!.id, kind: query.type, format: "pdf", outcome: "stub" });
-    res.json(ReportExportService.pdfStub());
-    return;
-  }
-
   const input: Omit<RunReportInput, "kind"> = {
     from: query.from,
     to: query.to,
@@ -71,6 +67,14 @@ export const exportReportHandler = asyncHandler(async (req: Request, res: Respon
       : query.type === "monthly"
         ? await MonthlyReportService.run(req.db!, input)
         : await AdHocReportService.run(req.db!, input);
+  if (query.format === "pdf") {
+    const bytes = await renderQualityReportPdf(report);
+    logger.info("report_access", { userId: req.user!.id, kind: query.type, format: "pdf", outcome: "pdf" });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${reportFileName(query.type, "pdf")}"`);
+    res.send(Buffer.from(bytes));
+    return;
+  }
   const file = query.format === "csv" ? ReportExportService.csv(report) : ReportExportService.json(report);
   res.setHeader("Content-Type", file.contentType);
   res.setHeader("Content-Disposition", `attachment; filename="${file.fileName}"`);

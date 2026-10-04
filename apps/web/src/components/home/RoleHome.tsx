@@ -20,6 +20,7 @@ import { departmentPhrase, homeKind, isPastDue, lateItems, ncrNextAction, rolePh
 import { useSites } from "../../hooks/useSites";
 import { useSiteStore } from "../../store/siteStore";
 import { WorkflowInbox } from "./WorkflowInbox";
+import { WaitingOnMe } from "./WaitingOnMe";
 
 function useModuleList<T>(resource: string, enabled: boolean, siteKey: number | null | "shared", params?: Record<string, string>) {
   return useQuery({
@@ -112,7 +113,7 @@ export function RoleHome() {
   const lateCount = kind === "floor" ? summary.overdueCount : late.length;
 
   const allowed = (id: string) => {
-    if (id === "hero" || id === "kpis" || id === "onboarding" || id === "inbox" || id === "calendar") return true;
+    if (id === "hero" || id === "waiting-on-me" || id === "kpis" || id === "onboarding" || id === "inbox" || id === "calendar") return true;
     if (id === "next") return kind !== "floor" && (can("ncr") || can("capa") || can("audit") || can("documents"));
     if (id === "whos-late" || id === "waiting") return kind === "lead" && (can("ncr") || can("capa") || can("documents"));
     if (id === "audits") return kind === "auditor" && can("audit");
@@ -123,6 +124,7 @@ export function RoleHome() {
   };
   const { shown } = useWorkspaceSurface("home", allowed);
   const sections: Record<string, ReactNode> = {
+    "waiting-on-me": <WaitingOnMe />,
     hero: (
       <Reveal>
         <div className="hero-surface rounded-2xl p-6 md:p-8">
@@ -197,6 +199,7 @@ export function RoleHome() {
   };
   const homeLabels: Record<string, string> = {
     hero: "Greeting",
+    "waiting-on-me": "WAITING ON ME",
     kpis: "Counts",
     next: "Next step",
     "whos-late": "Who's late",

@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
-import { getCsa, listCsa, saveCsaResults, submitCsa } from "./csaFai.service.js";
+import { AppError } from "../../utils/appError.js";
+import { copyCsa, getCsa, listCsa, listPreviousCsa, saveCsaResults, submitCsa } from "./csaFai.service.js";
 import { renderCsaPdf } from "./csaFai.pdf.js";
 import { readCsa } from "./csaFai.logic.js";
 import { csaFaiRecords } from "../../drizzle/schema/csaFai.js";
@@ -8,6 +9,17 @@ import { eq } from "drizzle-orm";
 
 export const listCsaHandler = asyncHandler(async (req: Request, res: Response) => {
   res.json(await listCsa(req.db!));
+});
+
+export const listPreviousCsaHandler = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await listPreviousCsa(req.db!, String(req.query.partNumber ?? "")));
+});
+
+export const copyCsaHandler = asyncHandler(async (req: Request, res: Response) => {
+  const sourceId = Number(req.body?.sourceId);
+  if (!Number.isInteger(sourceId) || sourceId < 1) throw AppError.badRequest("Choose a record to copy.");
+  const created = await copyCsa(req.db!, { id: req.user!.id, roleName: req.user?.roleName ?? null }, sourceId, req.siteId ?? null);
+  res.status(201).json(created);
 });
 
 export const submitCsaHandler = asyncHandler(async (req: Request, res: Response) => {

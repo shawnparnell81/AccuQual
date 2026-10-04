@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
 import { AppError } from "../../utils/appError.js";
+import { cleanLimitOverrides } from "../records/copyPrevious.js";
 import { fuelPumpFaiRecords } from "../../drizzle/schema/fuelPumpFai.js";
 import { workflowDefinitions, workflowRuns } from "../../drizzle/schema/workflow.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -139,6 +140,47 @@ export async function listFuelPump(db: Db) {
   });
 }
 
+export async function listPreviousFuelPump(db: Db, partNumber: string) {
+  const part = partNumber.trim();
+  if (!part) return [];
+  return db
+    .select({ id: fuelPumpFaiRecords.id, number: fuelPumpFaiRecords.faiNumber, partNumber: fuelPumpFaiRecords.partNumber, status: fuelPumpFaiRecords.status, supplierName: fuelPumpFaiRecords.supplier })
+    .from(fuelPumpFaiRecords)
+    .where(eq(fuelPumpFaiRecords.partNumber, part))
+    .orderBy(desc(fuelPumpFaiRecords.id))
+    .limit(40);
+}
+
+/** New fuel-pump record with the previous header and limits. Results, signatures, and history stay on the source. */
+export async function copyFuelPump(db: Db, actor: { id: number; roleName: string | null }, sourceId: number, siteId: number | null) {
+  const [row] = await db.select().from(fuelPumpFaiRecords).where(eq(fuelPumpFaiRecords.id, sourceId));
+  if (!row) throw AppError.notFound("Fuel pump first article");
+  const state = readFpm((row.packet ?? {}) as Record<string, unknown>);
+  return submitFuelPump(
+    db,
+    actor,
+    {
+      partNumber: row.partNumber,
+      partDescription: row.partDescription,
+      supplier: row.supplier,
+      supplierId: row.supplierId,
+      supplierPartNumber: row.supplierPartNumber,
+      sampleLotNumber: row.sampleLotNumber,
+      vehicleYear: row.vehicleYear,
+      vehicleMake: row.vehicleMake,
+      vehicleModel: row.vehicleModel,
+      vehicleEngine: row.vehicleEngine,
+      application: row.application,
+      inspector: row.inspector,
+      inspectorUserId: row.inspectorUserId,
+      validationOwner: row.validationOwner,
+      qualityManager: row.qualityManager,
+      limitOverrides: state.limitOverrides,
+    },
+    siteId,
+  );
+}
+
 export async function rememberFuelPumpSla(db: Db, context: Record<string, unknown>, nodeId: string | null) {
   const clock = clockNode(nodeId);
   let state = readFpm(context);
@@ -190,6 +232,8 @@ export async function submitFuelPump(db: Db, actor: { id: number; roleName: stri
   state.stage = "Document Review";
   state.productFamily = FPM_PRODUCT_FAMILY;
   state.productionRelease = "No";
+  const overrides = cleanLimitOverrides(input.limitOverrides);
+  if (Object.keys(overrides).length > 0) state.limitOverrides = overrides;
 
   const [row] = await db
     .insert(fuelPumpFaiRecords)

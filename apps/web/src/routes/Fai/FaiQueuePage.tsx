@@ -7,6 +7,7 @@ import { DataTable, type Column } from "../../components/tables/DataTable";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { personLabel } from "../../lib/opsLanguage";
+import { CopyFromPrevious } from "../../components/records/CopyFromPrevious";
 
 export function FaiQueuePage() {
   const navigate = useNavigate();
@@ -111,6 +112,12 @@ export function FaiQueuePage() {
             Part number
             <input className="rounded-md border border-border bg-background px-2 py-1.5 text-sm" value={plan?.scope === "part" ? plan.partNumber ?? "" : partNumber} disabled={plan?.scope === "part"} onChange={(event) => setPartNumber(event.target.value)} required={plan?.scope === "family"} />
           </label>
+          <CopyFromPrevious
+            partNumber={plan?.scope === "part" ? plan.partNumber ?? "" : partNumber}
+            previousPath="/fai/records/previous"
+            copyPath="/fai/records/copy"
+            onCopied={(created) => navigate(`/fai/records/${created.id}`)}
+          />
           <label className="flex flex-col gap-1 text-xs">
             Part name
             <input className="rounded-md border border-border bg-background px-2 py-1.5 text-sm" value={partName} onChange={(event) => setPartName(event.target.value)} />

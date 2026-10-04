@@ -174,7 +174,7 @@ export interface QualityReport {
   };
 }
 
-export const PDF_STUB_MESSAGE = "PDF export is not available yet. Download CSV or JSON.";
+export const PDF_STUB_MESSAGE = "Download the PDF from the export route. This run does not attach the file.";
 export const EMAIL_STUB_MESSAGE = "Scheduled email is not turned on. Run a report here and download CSV or JSON.";
 
 export function deliveryStubs(): QualityReport["delivery"] {
@@ -318,7 +318,7 @@ export function reportToCsv(report: QualityReport): string {
   return [...comments, ...lines].join("\n");
 }
 
-export function reportFileName(kind: ReportKind, format: "csv" | "json"): string {
+export function reportFileName(kind: ReportKind, format: "csv" | "json" | "pdf"): string {
   const day = new Date().toISOString().slice(0, 10);
   return `accuqual-${kind}-report-${day}.${format}`;
 }

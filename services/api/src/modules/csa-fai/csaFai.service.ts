@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
 import { AppError } from "../../utils/appError.js";
+import { cleanLimitOverrides } from "../records/copyPrevious.js";
 import { csaFaiRecords } from "../../drizzle/schema/csaFai.js";
 import { workflowDefinitions, workflowRuns } from "../../drizzle/schema/workflow.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -127,6 +128,46 @@ export async function listCsa(db: Db) {
   });
 }
 
+export async function listPreviousCsa(db: Db, partNumber: string) {
+  const part = partNumber.trim();
+  if (!part) return [];
+  return db
+    .select({ id: csaFaiRecords.id, number: csaFaiRecords.number, partNumber: csaFaiRecords.partNumber, status: csaFaiRecords.status, supplierName: csaFaiRecords.supplierName })
+    .from(csaFaiRecords)
+    .where(eq(csaFaiRecords.partNumber, part))
+    .orderBy(desc(csaFaiRecords.id))
+    .limit(40);
+}
+
+/** New CSA record with the previous header and limits. Results, signatures, and history stay on the source. */
+export async function copyCsa(db: Db, actor: { id: number; roleName: string | null }, sourceId: number, siteId: number | null) {
+  const [row] = await db.select().from(csaFaiRecords).where(eq(csaFaiRecords.id, sourceId));
+  if (!row) throw AppError.notFound("CSA first article");
+  const state = readCsa((row.packet ?? {}) as Record<string, unknown>);
+  return submitCsa(
+    db,
+    actor,
+    {
+      partNumber: row.partNumber,
+      partDescription: row.partDescription,
+      supplierName: row.supplierName,
+      supplierId: row.supplierId,
+      supplierPartNumber: row.supplierPartNumber,
+      sampleLotNumber: row.sampleLotNumber,
+      vehicleYear: row.vehicleYear,
+      vehicleMake: row.vehicleMake,
+      vehicleModel: row.vehicleModel,
+      position: row.position,
+      inspectorName: row.inspectorName,
+      inspectorUserId: row.inspectorUserId,
+      dampingTestRequired: state.dampingTestRequired,
+      vehicleFitmentPerformed: state.vehicleFitmentPerformed,
+      limitOverrides: state.limitOverrides,
+    },
+    siteId,
+  );
+}
+
 export async function rememberCsaSla(db: Db, context: Record<string, unknown>, nodeId: string | null) {
   const clock = clockNode(nodeId);
   if (!clock) return;
@@ -168,6 +209,8 @@ export async function submitCsa(db: Db, actor: { id: number; roleName: string | 
   state.siteId = plantId;
   state.dampingTestRequired = input.dampingTestRequired === true;
   state.vehicleFitmentPerformed = input.vehicleFitmentPerformed === true;
+  const overrides = cleanLimitOverrides(input.limitOverrides);
+  if (Object.keys(overrides).length > 0) state.limitOverrides = overrides;
   state.status = "Submitted";
   state.stage = "Document Review";
   state.productFamily = CSA_PRODUCT_FAMILY;

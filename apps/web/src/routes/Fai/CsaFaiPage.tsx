@@ -9,6 +9,7 @@ import { SignatureStamp, DEFAULT_CERTIFY } from "../../components/forms/Signatur
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { uploadAttachmentFor } from "../../lib/attachments";
 import { faiFill } from "../../lib/qualitySheetLogic";
+import { CopyFromPrevious } from "../../components/records/CopyFromPrevious";
 import "../IsoForms/isoForm.css";
 
 interface CsaListRow {
@@ -160,6 +161,12 @@ export function CsaFaiListPage() {
         }}
       >
         <h2 className="sm:col-span-2 text-sm font-medium">Submit a CSA FAI</h2>
+        <CopyFromPrevious
+          partNumber={form.partNumber}
+          previousPath="/fai/csa/previous"
+          copyPath="/fai/csa/copy"
+          onCopied={(created) => navigate(`/fai/csa/${created.id}`)}
+        />
         {fields.map(([key, label]) => (
           <label key={key} className="flex flex-col gap-1 text-sm">
             <span>{label}</span>

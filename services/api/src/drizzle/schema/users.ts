@@ -95,6 +95,7 @@ export const users = pgTable("users", {
   workspaceLayout: jsonb("workspace_layout").$type<{
     home?: { order?: string[]; hidden?: string[] };
     dashboard?: { order?: string[]; hidden?: string[] };
+    waitingOnMe?: { sort?: string; group?: string; module?: string; timing?: string };
   } | null>(),
   // Who to escalate this person's overdue or stuck records to. Null means a quality manager.
   managerId: integer("manager_id"),

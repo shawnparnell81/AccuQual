@@ -1,13 +1,25 @@
 import type { Request, Response } from "express";
 import { eq } from "drizzle-orm";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import { AppError } from "../../utils/appError.js";
 import { fuelPumpFaiRecords } from "../../drizzle/schema/fuelPumpFai.js";
-import { getFuelPump, listFuelPump, saveFuelPumpResults, submitFuelPump } from "./fuelPumpFai.service.js";
+import { copyFuelPump, getFuelPump, listFuelPump, listPreviousFuelPump, saveFuelPumpResults, submitFuelPump } from "./fuelPumpFai.service.js";
 import { renderFuelPumpPdf } from "./fuelPumpFai.pdf.js";
 import { readFpm } from "./fuelPumpFai.logic.js";
 
 export const listFuelPumpHandler = asyncHandler(async (req: Request, res: Response) => {
   res.json(await listFuelPump(req.db!));
+});
+
+export const listPreviousFuelPumpHandler = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await listPreviousFuelPump(req.db!, String(req.query.partNumber ?? "")));
+});
+
+export const copyFuelPumpHandler = asyncHandler(async (req: Request, res: Response) => {
+  const sourceId = Number(req.body?.sourceId);
+  if (!Number.isInteger(sourceId) || sourceId < 1) throw AppError.badRequest("Choose a record to copy.");
+  const created = await copyFuelPump(req.db!, { id: req.user!.id, roleName: req.user?.roleName ?? null }, sourceId, req.siteId ?? null);
+  res.status(201).json(created);
 });
 
 export const submitFuelPumpHandler = asyncHandler(async (req: Request, res: Response) => {

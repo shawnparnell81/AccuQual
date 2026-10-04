@@ -3,7 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { SelectField, TextField } from "../../components/forms/Field";
 import { useToast } from "../../components/shared/ToastProvider";
-import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { extractErrorMessage, extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { useSites } from "../../hooks/useSites";
 
 type ReportKind = "weekly" | "monthly" | "adhoc";
@@ -95,11 +95,13 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
     onError: (err) => toast.error(extractErrorMessage(err, "The report didn't run.")),
   });
 
-  async function download(format: "csv" | "json") {
+  const [downloading, setDownloading] = useState<string | null>(null);
+  async function download(format: "csv" | "json" | "pdf") {
     if (kind === "adhoc" && (!from || !to)) {
       toast.error("Choose a start date and an end date.");
       return;
     }
+    setDownloading(format);
     try {
       const res = await apiClient.get("/reports/export", {
         params: { type: kind, format, ...body() },
@@ -108,8 +110,11 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
       const header = String(res.headers["content-disposition"] ?? "");
       const match = /filename="([^"]+)"/.exec(header);
       downloadBlob(res.data as Blob, match?.[1] ?? `accuqual-${kind}-report.${format}`);
+      if (format === "pdf") setNotice("PDF ready.");
     } catch (err) {
-      toast.error(extractErrorMessage(err, "The download didn't start."));
+      toast.error(await extractErrorMessageAsync(err, "The download didn't start."));
+    } finally {
+      setDownloading(null);
     }
   }
 
@@ -175,12 +180,8 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
           <button type="button" className="rounded-md border border-border px-3 py-1.5 text-sm" onClick={() => void download("json")}>
             Download JSON
           </button>
-          <button
-            type="button"
-            className="rounded-md border border-border px-3 py-1.5 text-sm"
-            onClick={() => setNotice(report?.delivery.pdf.message ?? "PDF export is not available yet. Download CSV or JSON.")}
-          >
-            PDF
+          <button type="button" className="rounded-md border border-border px-3 py-1.5 text-sm disabled:opacity-60" disabled={downloading === "pdf"} onClick={() => void download("pdf")}>
+            {downloading === "pdf" ? "Preparing PDF…" : "PDF"}
           </button>
           <button
             type="button"

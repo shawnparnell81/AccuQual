@@ -25,6 +25,8 @@
  * this same executor — see /workers/workflow-worker.
  */
 
+import { assertRequiredMove, missingRequiredLabels, moveNeedsRequiredFields } from "./requiredFields.js";
+
 export type WorkflowNodeType = "trigger" | "condition" | "action" | "integration" | "approval" | "parallel" | "end";
 export const WORKFLOW_NODE_TYPES: readonly WorkflowNodeType[] = ["trigger", "condition", "action", "integration", "approval", "parallel", "end"];
 
@@ -336,6 +338,7 @@ async function drive(
         }
         case "action":
         case "integration": {
+          assertRequiredMove(missingRequiredLabels(node.config.requiredFields, context));
           const handler = actionRegistry[node.kind];
           if (handler) {
             await handler(node, context, dryRun);
@@ -365,6 +368,7 @@ async function drive(
           if (dryRun) {
             // A simulation never waits on a person; it takes the path named in the context (default: approved).
             const decision = simulatedDecision(node, context);
+            if (moveNeedsRequiredFields(decision)) assertRequiredMove(missingRequiredLabels(node.config.requiredFields, context));
             recordStep(context, node, `simulated: ${decision}`);
             push(followable(outgoing, decision));
             break;
@@ -440,6 +444,7 @@ export async function resumeWorkflow(
   if (!state.waitingNodeId) throw new Error("This run is not waiting for an approval");
   const waiting = definition.nodes.find((node) => node.id === state.waitingNodeId);
   if (!waiting) throw new Error("This run is not waiting for an approval");
+  if (moveNeedsRequiredFields(decision)) assertRequiredMove(missingRequiredLabels(waiting.config.requiredFields, context));
   const visited = new Set(state.visited);
   const stack = [...state.stack];
   const pauseUntil = typeof waiting.config.pauseUntil === "string" ? waiting.config.pauseUntil : null;
