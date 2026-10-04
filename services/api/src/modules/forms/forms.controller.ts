@@ -200,8 +200,9 @@ export const getHistory = asyncHandler(async (req: Request, res: Response) => {
 
 export const exportForm = asyncHandler(async (req: Request, res: Response) => {
   const entityId = req.params.id ? Number(req.params.id) : undefined;
-  const pdfBytes = await formsService.exportPdf(req.db!, req.params.type!, entityId, req.user?.id);
+  const pdf = await formsService.exportPdf(req.db!, req.params.type!, entityId, req.user?.id);
   res.setHeader("Content-Type", "application/pdf");
+  if (pdf.exportId) res.setHeader("X-Export-Id", pdf.exportId);
   res.setHeader("Content-Disposition", `attachment; filename="${req.params.type}-${entityId ?? "form"}.pdf"`);
-  res.send(Buffer.from(pdfBytes));
+  res.send(Buffer.from(pdf.bytes));
 });

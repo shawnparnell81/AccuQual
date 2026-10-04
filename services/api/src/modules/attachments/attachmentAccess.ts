@@ -43,7 +43,46 @@ const PARENTS: Record<string, { resource: ResourceKey; table: string; site: bool
   CustomerCommunication: { resource: "customer_communications", table: "customer_communications", site: false },
   csa_fai: { resource: "fai", table: "csa_fai_records", site: false },
   fuel_pump_fai: { resource: "fai", table: "fuel_pump_fai_records", site: false },
+  fai: { resource: "fai", table: "fai_records", site: false },
+  validation_report: { resource: "documents", table: "validation_reports", site: false },
+  document: { resource: "documents", table: "documents", site: false },
 };
+
+/**
+ * Form windows file files on the parent the attachment routes already accept.
+ * Keep this aligned with apps/web/src/components/forms/pictureRecord.tsx.
+ */
+const FORM_ATTACHMENT_TYPE: Record<string, string> = {
+  ncr: "ncr",
+  capa: "capa",
+  eight_d: "eight_d",
+  fmea: "risk",
+  calibration: "calibration",
+  gage_rr: "calibration",
+  maintenance_work_order: "calibration",
+  audit_plan: "audit",
+  audit_checklist: "audit",
+  lpa: "audit",
+  complaint: "complaint",
+  pcn: "change",
+  change: "change",
+  supplier: "suppliers",
+  training: "training",
+  apqp_summary: "ppap",
+  control_plan: "ppap",
+  dimensional_report: "ppap",
+  process_flow_diagram: "ppap",
+  appearance_approval: "ppap",
+  dvpr: "ppap",
+  final_inspection_release_checklist: "ppap",
+};
+
+/** The attachment entity type for this export, or null when that record cannot take attachments. */
+export function attachmentTarget(entityType: string | null | undefined): string | null {
+  if (!entityType) return null;
+  const mapped = FORM_ATTACHMENT_TYPE[entityType] ?? entityType;
+  return PARENTS[mapped] ? mapped : null;
+}
 
 function ident(name: string): string {
   if (!/^[a-z_][a-z0-9_]*$/.test(name)) throw new Error(`Unexpected table name "${name}"`);

@@ -74,7 +74,8 @@ export type ResourceKey =
   | "scar"
   | "quarantine"
   | "worker_profile"
-  | "fai";
+  | "fai"
+  | "legal_hold";
 
 export const DEPARTMENTS: Department[] = ["quality", "engineering", "production", "customer_service", "purchasing", "material_management", "sales_and_marketing"];
 
@@ -132,6 +133,7 @@ export const MODULE_LABELS: Record<ResourceKey, string> = {
   quarantine: "Quarantine",
   worker_profile: "Worker Profiles",
   fai: "First Article",
+  legal_hold: "Legal Hold",
 };
 export const RESOURCE_KEYS: ResourceKey[] = Object.keys(MODULE_LABELS) as ResourceKey[];
 

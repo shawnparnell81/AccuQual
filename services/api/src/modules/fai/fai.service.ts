@@ -30,6 +30,8 @@ import { noteRepeatNcr } from "../quality-automation/qualityAutomation.service.j
 import { requirePlantId } from "../sites/siteAccess.js";
 import { calendarDay, safeTimeZone } from "../quality-automation/logic.js";
 import { renderFaiPdf } from "./fai.pdf.js";
+import { applyChrome, loadPdfChrome, persistPdfExport } from "../pdf-exports/pdfExportStore.js";
+import { emptyFrame } from "../forms/controlledPdf.js";
 import { copyCharacteristicLine } from "../records/copyPrevious.js";
 import type { savePlanSchema, openFaiSchema, saveResultsSchema, assignPullSchema, completePullSchema } from "./fai.validation.js";
 import type { z } from "zod";
@@ -805,10 +807,12 @@ export async function rejectRecord(req: Request, id: number) {
   return presentRecord(db, updated!);
 }
 
-export async function recordPdf(db: Db, id: number) {
+export async function recordPdf(db: Db, id: number, actorId?: number) {
   const record = await loadRecord(db, id);
   if (record.status !== "approved" && record.status !== "rejected") throw AppError.badRequest("The PDF is available after Quality approves or rejects the first article.");
   const presented = await presentRecord(db, record);
+  const outcome = record.status === "approved" ? "Approved" : "Not approved";
+  const chrome = await loadPdfChrome(db, "fai", id, {});
   const bytes = await renderFaiPdf({
     number: record.number,
     partNumber: record.partNumber,
@@ -816,7 +820,7 @@ export async function recordPdf(db: Db, id: number) {
     supplierName: record.supplierName,
     planName: presented.planName,
     planRevision: record.planRevision,
-    outcome: record.status === "approved" ? "Approved" : "Not approved",
+    outcome,
     comments: record.comments,
     qualitySignature: record.qualitySignature,
     decidedOn: record.decidedAt ? record.decidedAt.toISOString().slice(0, 10) : null,
@@ -835,8 +839,16 @@ export async function recordPdf(db: Db, id: number) {
       attributeResult: line.attributeResult,
       result: line.result,
     })),
-  });
-  return { filename: `${record.number}.pdf`, bytes };
+  }, chrome);
+  const frame = applyChrome(emptyFrame({
+    sourceModule: "FAI",
+    recordNumber: record.number,
+    revision: String(record.planRevision),
+    generatedBy: "AccuQual",
+    status: outcome,
+  }), chrome);
+  await persistPdfExport(db, bytes, frame, { entityType: "fai", entityId: id, actorId });
+  return { filename: `${record.number}.pdf`, bytes, exportId: chrome.exportId };
 }
 
 export async function listSources(db: Db) {

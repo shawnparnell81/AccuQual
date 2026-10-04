@@ -79,6 +79,7 @@ import { contactRouter } from "../modules/contact/contact.routes.js";
 import { docsRouter } from "../docs/docs.routes.js";
 import { dashboardRouter } from "../modules/dashboard/dashboard.routes.js";
 import { faiRouter } from "../modules/fai/fai.routes.js";
+import { legalHoldsRouter, pdfExportsRouter } from "../modules/pdf-exports/pdfExport.routes.js";
 
 export const apiRouter = Router();
 
@@ -132,6 +133,8 @@ apiRouter.use("/audit-trail", auditTrailRouter);
 apiRouter.use("/notifications", notificationsMeRouter);
 apiRouter.use("/notifications", notificationsRouter);
 apiRouter.use("/forms", formsRouter);
+apiRouter.use("/pdf-exports", pdfExportsRouter);
+apiRouter.use("/legal-holds", legalHoldsRouter);
 apiRouter.use("/nav", navRouter);
 apiRouter.use("/calendar", calendarRouter);
 apiRouter.use("/workers", workerRouter);

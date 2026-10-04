@@ -1,6 +1,7 @@
 import type { FormLayout } from "../forms/layouts/types.js";
 import { renderFormLayoutAsPdf } from "../forms/schema-pdf-renderer.js";
 import { emptyFrame } from "../forms/controlledPdf.js";
+import { applyChrome, type PdfChrome } from "../pdf-exports/pdfExportStore.js";
 import { limitsLabel, type CharacteristicMode } from "./fai.logic.js";
 
 export interface FaiPdfLine {
@@ -34,7 +35,7 @@ export interface FaiPdfModel {
 }
 
 /** One PDF for a finished first article: characteristics, limits, actuals, signer, and outcome. */
-export async function renderFaiPdf(model: FaiPdfModel): Promise<Uint8Array> {
+export async function renderFaiPdf(model: FaiPdfModel, chrome?: PdfChrome | null): Promise<Uint8Array> {
   const sections: FormLayout["sections"] = [
     {
       number: "1",
@@ -106,7 +107,7 @@ export async function renderFaiPdf(model: FaiPdfModel): Promise<Uint8Array> {
     });
   }
   const layout: FormLayout = { formType: "fai", title: "First Article Inspection", sections };
-  const frame = emptyFrame({
+  const built = emptyFrame({
     sourceModule: "FAI",
     recordNumber: model.number,
     revision: String(model.planRevision),
@@ -116,6 +117,7 @@ export async function renderFaiPdf(model: FaiPdfModel): Promise<Uint8Array> {
       ? [{ name: model.qualitySignature, role: "", action: "Signed", at: model.decidedOn ?? "", status: /^approv/i.test(model.outcome) ? "Approved" : model.outcome }]
       : [],
   });
+  const frame = chrome ? applyChrome(built, chrome) : built;
   return renderFormLayoutAsPdf(
     layout,
     {

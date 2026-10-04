@@ -8,6 +8,8 @@ import { AdHocReportService } from "./AdHocReportService.js";
 import { ReportTemplateService } from "./ReportTemplateService.js";
 import { ReportExportService } from "./ReportExportService.js";
 import { renderQualityReportPdf } from "./reportPdf.js";
+import { loadPdfChrome, persistPdfExport, applyChrome } from "../pdf-exports/pdfExportStore.js";
+import { emptyFrame } from "../forms/controlledPdf.js";
 import { reportFileName } from "./reports.model.js";
 import { reportScheduleStub } from "./reports.scheduler.js";
 import type { RunReportInput } from "./reports.run.js";
@@ -68,9 +70,20 @@ export const exportReportHandler = asyncHandler(async (req: Request, res: Respon
         ? await MonthlyReportService.run(req.db!, input)
         : await AdHocReportService.run(req.db!, input);
   if (query.format === "pdf") {
-    const bytes = await renderQualityReportPdf(report);
+    const chrome = await loadPdfChrome(req.db!, "quality_report", null, {});
+    const bytes = await renderQualityReportPdf(report, chrome);
+    const frame = applyChrome(emptyFrame({
+      sourceModule: report.header.title,
+      recordNumber: report.header.title,
+      revision: String(report.header.templateVersion),
+      generatedBy: report.header.generatedBy.name,
+      generatedAt: new Date(report.header.generatedAt),
+      formNumber: report.header.templateKey,
+    }), chrome);
+    await persistPdfExport(req.db!, bytes, frame, { entityType: "quality_report", entityId: null, actorId: req.user!.id });
     logger.info("report_access", { userId: req.user!.id, kind: query.type, format: "pdf", outcome: "pdf" });
     res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("X-Export-Id", chrome.exportId);
     res.setHeader("Content-Disposition", `attachment; filename="${reportFileName(query.type, "pdf")}"`);
     res.send(Buffer.from(bytes));
     return;

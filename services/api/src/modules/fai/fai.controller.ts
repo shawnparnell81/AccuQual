@@ -81,8 +81,9 @@ export const rejectRecordHandler = asyncHandler(async (req: Request, res: Respon
 });
 
 export const pdfHandler = asyncHandler(async (req: Request, res: Response) => {
-  const file = await fai.recordPdf(req.db!, idOf(req.params.id, "first article"));
+  const file = await fai.recordPdf(req.db!, idOf(req.params.id, "first article"), req.user?.id);
   res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("X-Export-Id", file.exportId);
   res.setHeader("Content-Disposition", `attachment; filename="${file.filename}"`);
   res.send(Buffer.from(file.bytes));
 });

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
-import { exportFormPdf } from "../../api/formHooks";
+import { exportFormPdfResult } from "../../api/formHooks";
+import { PdfExportActions } from "../../components/records/PdfExportActions";
 import type { Ncr, Capa, Rma, WorkOrder } from "../../api/types";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { TextAreaField } from "../../components/forms/Field";
@@ -80,13 +81,15 @@ export function NcrWorkspacePage() {
   const layout = getFormLayout(FORM_TYPE);
   const { isLoading: formLoading, values, updateField, saveNow, isSaving } = useFormEditorState(FORM_TYPE, ncrId);
   const [formSaveNote, setFormSaveNote] = useState<string | null>(null);
+  const [exportId, setExportId] = useState<string | null>(null);
   const { data: linkedCapaRows = [] } = capaHooks.useList({ ncrId });
   const hasFix = linkedCapaRows.some((capa) => capa.ncrId === ncrId);
 
   async function handleDownload() {
     try {
-      const bytes = await exportFormPdf(FORM_TYPE, ncrId);
-      const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
+      const result = await exportFormPdfResult(FORM_TYPE, ncrId);
+      setExportId(result.exportId);
+      const blob = new Blob([result.bytes as BlobPart], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -182,6 +185,7 @@ export function NcrWorkspacePage() {
             <button onClick={handleDownload} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
               Download PDF
             </button>
+            <PdfExportActions exportId={exportId} entityType={FORM_TYPE} entityId={ncrId} />
             {quarantineOnHold && step === "verify" && (
               <p className="max-w-sm text-xs text-destructive">{ON_HOLD_BLOCK_MESSAGE}</p>
             )}

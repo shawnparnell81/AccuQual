@@ -427,7 +427,7 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
  * stayed for backward compatibility rather than a column rename. Replacing
  * an existing attachment deletes the old file first.
  */
-async function attachFileToFolder(db: Db, folderId: number, file: Express.Multer.File, performedBy: number | undefined) {
+export async function attachUploadedFile(db: Db, folderId: number, file: { originalname: string; buffer: Buffer }, performedBy: number | undefined) {
   const [folder] = await db.select().from(documentFolders).where(and(eq(documentFolders.id, folderId)));
   if (!folder) throw AppError.notFound("Document folder");
   const sniffed = sniffUpload(file.buffer, file.originalname);
@@ -462,7 +462,7 @@ async function attachFileToFolder(db: Db, folderId: number, file: Express.Multer
 export const uploadTemplate = asyncHandler(async (req: Request, res: Response) => {
   const file = req.file;
   if (!file) throw AppError.badRequest("No file uploaded");
-  const updated = await attachFileToFolder(req.db!, Number(req.params.id), file, req.user?.id);
+  const updated = await attachUploadedFile(req.db!, Number(req.params.id), file, req.user?.id);
   res.status(201).json(updated);
 });
 
@@ -492,7 +492,7 @@ export const uploadDocument = asyncHandler(async (req: Request, res: Response) =
   const [created] = await db.insert(documentFolders).values({ name, parentId }).returning();
   await recordAuditTrail(db, { entityType: AUDIT_ENTITY_TYPE, entityId: created!.id, action: "create", changes: { name, parentId }, performedBy: req.user?.id });
 
-  const updated = await attachFileToFolder(db, created!.id, file, req.user?.id);
+  const updated = await attachUploadedFile(db, created!.id, file, req.user?.id);
   res.status(201).json(updated);
 });
 

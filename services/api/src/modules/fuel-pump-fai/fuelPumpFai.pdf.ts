@@ -1,10 +1,11 @@
 import type { FormLayout } from "../forms/layouts/types.js";
 import { renderFormLayoutAsPdf } from "../forms/schema-pdf-renderer.js";
 import { emptyFrame, type ApprovalLine } from "../forms/controlledPdf.js";
+import { applyChrome, type PdfChrome } from "../pdf-exports/pdfExportStore.js";
 import { vehicleApplication, type FpmState } from "./fuelPumpFai.logic.js";
 
 /** Final fuel-pump first-article report. Generated at release and kept in the archive. */
-export async function renderFuelPumpPdf(state: FpmState): Promise<Uint8Array> {
+export async function renderFuelPumpPdf(state: FpmState, chrome?: PdfChrome | null): Promise<Uint8Array> {
   const attempts = [...state.history, state.attempt];
   const data: Record<string, unknown> = {
     number: state.number,
@@ -111,7 +112,7 @@ export async function renderFuelPumpPdf(state: FpmState): Promise<Uint8Array> {
   });
   const approvals: ApprovalLine[] = [];
   if (state.signatureStamp) approvals.push({ name: state.signatureStamp, role: "", action: "Signed", at: state.approvalDate ?? "", status: state.status });
-  const frame = emptyFrame({
+  const built = emptyFrame({
     sourceModule: "Fuel Pump First Article",
     recordNumber: state.number,
     revision: "",
@@ -119,6 +120,7 @@ export async function renderFuelPumpPdf(state: FpmState): Promise<Uint8Array> {
     status: state.status,
     approvals,
   });
+  const frame = chrome ? applyChrome(built, chrome) : built;
   const layout: FormLayout = { formType: "fuel_pump_fai", title: "Fuel Pump Module — First Article Inspection", sections };
   return renderFormLayoutAsPdf(layout, data, frame);
 }

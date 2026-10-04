@@ -15,6 +15,7 @@ import { attachments } from "../../drizzle/schema/attachments.js";
 import { users } from "../../drizzle/schema/users.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { auditReason, emptyFrame, exportTrace, type AttachmentLine, type AuditLine, type ControlledPdfFrame } from "./controlledPdf.js";
+import { applyChrome, loadPdfChrome, persistPdfExport } from "../pdf-exports/pdfExportStore.js";
 
 /**
  * Self-healing (same pattern as document-folders.controller.ts's
@@ -224,7 +225,8 @@ export async function exportPdf(db: Db, formType: string, entityId?: number, act
     if (entityId == null) throw AppError.notFound("8D Report");
     const [row] = await db.select().from(eightD).where(eq(eightD.id, entityId));
     if (!row) throw AppError.notFound("8D Report");
-    return renderBlank8DPdf({ id: row.id, values: blank8dFromData((row.data ?? {}) as Record<string, unknown>) });
+    const bytes = await renderBlank8DPdf({ id: row.id, values: blank8dFromData((row.data ?? {}) as Record<string, unknown>) });
+    return { bytes, exportId: "" };
   }
 
   const template = await loadTemplate(db, formType);
@@ -232,8 +234,11 @@ export async function exportPdf(db: Db, formType: string, entityId?: number, act
   // A record can be printed before the form has been saved. A blank sheet
   // is still the form; refusing with "not found" left the Print button dead.
   const data = (current?.data ?? {}) as Record<string, unknown>;
-  const frame = await frameForForm(db, formType, data, entityId, actorId);
+  const built = await frameForForm(db, formType, data, entityId, actorId);
+  const chrome = await loadPdfChrome(db, formType, entityId ?? null, data);
+  const frame = applyChrome(built, chrome);
   const bytes = await mergePdfFields(template, data, frame);
+  await persistPdfExport(db, bytes, frame, { entityType: formType, entityId: entityId ?? null, actorId });
   const known = entityId != null ? PDF_AUDIT[formType] : undefined;
   if (known && entityId != null) {
     try {
@@ -248,5 +253,5 @@ export async function exportPdf(db: Db, formType: string, entityId?: number, act
       logger.warn("pdf export audit failed", err);
     }
   }
-  return bytes;
+  return { bytes, exportId: frame.exportId };
 }

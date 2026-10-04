@@ -8,7 +8,9 @@ import { validationFormKeyFor, validationKind } from "../document-folders/editab
 import { snapshotFormNumber } from "../document-folders/formRecordFiling.js";
 import { answersWithTemplateStamp } from "../forms/templateRevision.js";
 import { copyValidationCells, validationPartNumber } from "../records/copyPrevious.js";
-import { renderValidationReportPdf } from "./validationReportPdf.js";
+import { renderValidationReportPdf, validationExportIdentity } from "./validationReportPdf.js";
+import { applyChrome, loadPdfChrome, persistPdfExport } from "../pdf-exports/pdfExportStore.js";
+import { emptyFrame } from "../forms/controlledPdf.js";
 import { retainSignatureValues } from "../signatures/signaturePin.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 
@@ -81,8 +83,14 @@ export const validationPdfHandler = asyncHandler(async (req: Request, res: Respo
   const id = Number(req.params.id);
   const [row] = await req.db!.select().from(validationReports).where(eq(validationReports.id, id));
   if (!row) throw AppError.notFound("Validation Report");
-  const bytes = await renderValidationReportPdf(asRecord(row.data), "AccuQual");
+  const data = asRecord(row.data);
+  const chrome = await loadPdfChrome(req.db!, "validation_report", id, data);
+  const bytes = await renderValidationReportPdf(data, "AccuQual", chrome);
+  const identity = validationExportIdentity(data, "AccuQual");
+  const frame = applyChrome(emptyFrame(identity), chrome);
+  await persistPdfExport(req.db!, bytes, frame, { entityType: "validation_report", entityId: id, actorId: req.user?.id });
   res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("X-Export-Id", chrome.exportId);
   res.setHeader("Content-Disposition", `attachment; filename="validation-${id}.pdf"`);
   res.send(Buffer.from(bytes));
 });

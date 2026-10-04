@@ -3,6 +3,8 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { copyCsa, getCsa, listCsa, listPreviousCsa, saveCsaResults, submitCsa } from "./csaFai.service.js";
 import { renderCsaPdf } from "./csaFai.pdf.js";
+import { applyChrome, loadPdfChrome, persistPdfExport } from "../pdf-exports/pdfExportStore.js";
+import { emptyFrame } from "../forms/controlledPdf.js";
 import { readCsa } from "./csaFai.logic.js";
 import { csaFaiRecords } from "../../drizzle/schema/csaFai.js";
 import { eq } from "drizzle-orm";
@@ -47,8 +49,19 @@ export const csaPdfHandler = asyncHandler(async (req: Request, res: Response) =>
     res.status(409).json({ error: "The final CSA FAI report is generated when the assembly is released." });
     return;
   }
-  const pdf = await renderCsaPdf(state);
+  const id = Number(req.params.id);
+  const chrome = await loadPdfChrome(req.db!, "csa_fai", id, state);
+  const pdf = await renderCsaPdf(state, chrome);
+  const frame = applyChrome(emptyFrame({
+    sourceModule: "CSA First Article",
+    recordNumber: state.number,
+    revision: "",
+    generatedBy: state.inspectorName || "AccuQual",
+    status: state.status,
+  }), chrome);
+  await persistPdfExport(req.db!, pdf, frame, { entityType: "csa_fai", entityId: id, actorId: req.user?.id });
   res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("X-Export-Id", chrome.exportId);
   res.setHeader("Content-Disposition", `attachment; filename="${state.number}.pdf"`);
   res.send(Buffer.from(pdf));
 });

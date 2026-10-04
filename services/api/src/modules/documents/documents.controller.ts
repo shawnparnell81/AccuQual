@@ -16,6 +16,7 @@ import { documentAdapter, isInsideStorage } from "./documentVersioning.js";
 import { ARCHIVED_READ_ONLY, folderBeforeArchive, isInObsoleteArchive, OBSOLETE_ARCHIVE_CATEGORY, retiredDocumentWrite } from "./obsoleteArchive.js";
 import { roleCanRestoreArchivedDocuments } from "../roles/roleAccess.js";
 import { sendStoredFile } from "../../utils/storedFile.js";
+import { assertNotDestroyEligible, isOnLegalHold } from "../pdf-exports/legalHold.js";
 
 export const baseHandlers = crudFactory(documents, { entityName: "Document", idColumn: "id", softDelete: true });
 
@@ -190,6 +191,15 @@ export const restoreArchivedDocumentHandler = asyncHandler(async (req: Request, 
   res.json(updated);
 });
 
+/** A held document cannot be flagged so retention will delete it. */
+export const rejectHeldDestruction = asyncHandler(async (req: Request, _res: Response, next) => {
+  const action = (req.body as { retentionAction?: string } | undefined)?.retentionAction;
+  if (action !== "delete") return next();
+  const id = Number(req.params.id);
+  if (Number.isInteger(id) && id > 0) await assertNotDestroyEligible(req.db!, id);
+  next();
+});
+
 /** Writes against an archived document are refused for every role, including Owner and Administrator, until it is restored. */
 export const rejectArchivedDocumentWrites = asyncHandler(async (req: Request, _res: Response, next) => {
   if (req.method === "GET" || req.method === "HEAD") return next();
@@ -296,6 +306,7 @@ export const applyRetentionHandler = asyncHandler(async (req: Request, res: Resp
 
     const decision = decideRetention(doc, currentVersion);
     if (!decision.eligible) continue;
+    if (decision.action === "deleted" && (await isOnLegalHold(db, "document", doc.id))) continue;
 
     // M3: same guard as approve/obsolete above.
     if (decision.action === "deleted") {
@@ -335,6 +346,7 @@ export const archiveHandler = asyncHandler(async (req: Request, res: Response) =
 
   const decision = decideRetention(doc, currentVersion);
   if (!decision.eligible) throw AppError.badRequest(`Cannot archive this document: ${decision.reason}`);
+  if (decision.action === "deleted") await assertNotDestroyEligible(req.db!, documentId);
 
   // Same M3 defense-in-depth fix as applyRetentionHandler above.
   const [updated] =

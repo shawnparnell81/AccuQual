@@ -8,13 +8,14 @@ import {
   applyPdfIdentity,
   approvalPhrase,
   drawRunningHeader,
-  drawWatermark,
+  drawWatermarkStack,
+  watermarkLines,
   footerClearance,
   headerClearance,
   stampFooters,
-  watermarkForStatus,
   type ControlledPdfFrame,
 } from "./controlledPdf.js";
+import { drawVerifyQr } from "./verifyQr.js";
 
 // Colors sampled from the reference templates (dark navy header bars, pale
 // blue-gray field boxes, thin blue-gray borders) — kept as named constants so
@@ -63,7 +64,7 @@ export interface RenderContext {
 
 function stampPageChrome(ctx: RenderContext) {
   if (!ctx.frame) return;
-  drawWatermark(ctx.page, ctx.font, watermarkForStatus(ctx.frame.status));
+  drawWatermarkStack(ctx.page, ctx.font, watermarkLines(ctx.frame));
   drawRunningHeader(ctx.page, ctx.font, ctx.bold, ctx.frame);
 }
 
@@ -104,6 +105,7 @@ export async function renderFormLayoutAsPdf(layout: FormLayout, data: Record<str
   if (frame) {
     stampFooters(doc, font, frame);
     applyPdfIdentity(doc, frame);
+    if (frame.verifyUrl) await drawVerifyQr(doc, frame.verifyUrl);
   }
 
   return doc.save();
