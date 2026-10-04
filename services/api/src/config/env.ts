@@ -8,16 +8,15 @@ const envSchema = z.object({
 
   DATABASE_URL: z.string().min(1),
   // PEM CA (or server certificate) used to verify the hosted Postgres TLS
-  // certificate. Optional. Unset keeps rejectUnauthorized: false and, in
-  // production, logs where to get the certificate. Empty string counts as unset.
-  // See db/ssl.ts and DEPLOY.md.
+  // certificate. Production refuses to boot when this is missing on a remote
+  // database. Development and test still start without it. Empty string counts
+  // as unset. See db/ssl.ts and DEPLOY.md.
   DATABASE_SSL_CA: z
     .string()
     .optional()
     .transform((value) => (value && value.trim().length > 0 ? value : undefined)),
-  // "true" refuses to boot in production when the database is not local and
-  // DATABASE_SSL_CA is missing. Leave unset until the CA is pasted and a
-  // deploy with it stays healthy — setting this first takes the API down.
+  // Kept so existing environment files still load. Production now refuses to
+  // boot without DATABASE_SSL_CA whether or not this flag is set.
   ACCUQUAL_REQUIRE_DB_SSL_CA: z.enum(["true", "false"]).optional().or(z.literal("").transform(() => undefined)),
 
   JWT_ACCESS_SECRET: z.string().min(1),
@@ -173,10 +172,9 @@ if (env.AI_CONFIG_ENCRYPTION_KEY === DEFAULT_ENCRYPTION_KEY) {
   console.warn(`⚠️  ${message}`);
 }
 
-// Audit finding (Database, high): without DATABASE_SSL_CA, a non-local
-// Postgres connection accepts any TLS certificate. Warn in production.
-// Refuse to boot only when ACCUQUAL_REQUIRE_DB_SSL_CA=true, so merging this
-// does not take a live deploy down before the certificate is pasted.
+// Production verifies the hosted Postgres certificate. A remote production
+// database without DATABASE_SSL_CA refuses to boot. Development and test
+// still start, and local hosts never use TLS.
 const sslProblem = databaseSslBootProblem({
   nodeEnv: env.NODE_ENV,
   databaseUrl: env.DATABASE_URL,

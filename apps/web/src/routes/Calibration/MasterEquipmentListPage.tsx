@@ -4,14 +4,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { FormHeader } from "../../components/brand/DmaLogo";
 import { Modal } from "../../components/modals/Modal";
-import { useMayEditEquipment } from "../../components/calibration/EquipmentPanels";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { useCanEditSurface, useRecordEdit } from "../../components/shared/RecordEditBar";
 import { RecordEditButton } from "../../components/shared/RecordEditButton";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
-import { useCurrentUser } from "../../hooks/useAuth";
-import { canMaintainMasterList } from "../../lib/masterListAccess";
 import { downloadXlsx, TONE_ARGB } from "../../lib/downloadTable";
 import { daysForMonths, EQUIPMENT_LIST_ID, EQUIPMENT_STATUSES, equipmentListRow, type EquipmentListStatus, type EquipmentSource } from "../../lib/equipmentMasterList";
 import { normalizePastedCell } from "../../lib/gridPaste";
@@ -94,12 +91,8 @@ function operationalTarget(status: EquipmentListStatus): EquipmentSource["status
 export function MasterEquipmentListPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
-  const user = useCurrentUser();
-  const maintain = canMaintainMasterList(user);
-  const { mayEdit } = useMayEditEquipment();
   const { editing, setEditing } = useRecordEdit();
-  const canEditList = useCanEditSurface(recordSurface("/calibration/master-list"));
-  const canChange = (mayEdit && canEditList) || maintain;
+  const canChange = useCanEditSurface(recordSurface("/calibration/master-list"));
   const inline = canChange && editing;
   const [draft, setDraft] = useState<Draft | null>(null);
   const [cellEdits, setCellEdits] = useState<Record<number, Record<string, string>>>({});
@@ -294,7 +287,7 @@ export function MasterEquipmentListPage() {
                         Edit
                       </button>
                     )}
-                    {maintain && (
+                    {canChange && (
                       <DeleteRecordButton
                         resource="equipment"
                         id={row.id}

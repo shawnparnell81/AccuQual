@@ -1,6 +1,5 @@
 import { useSyncExternalStore } from "react";
 import { useLocation } from "react-router-dom";
-import { useMayEditEquipment } from "../calibration/EquipmentPanels";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { recordSurface, type RecordSurface } from "../../lib/recordSurface";
@@ -43,9 +42,7 @@ export function useRecordEdit() {
 export function useCanEditSurface(surface: RecordSurface | null): boolean {
   const user = useCurrentUser();
   const { effective, isLoading } = useEffectivePermissions();
-  const equipment = useMayEditEquipment();
   if (!surface || !user) return false;
-  if (surface.access === "equipment-list") return equipment.mayEdit;
   if (surface.access === "any") return true;
   if (user.roleName === "admin" || user.roleName === "owner") return true;
   if (isLoading || !effective) return false;

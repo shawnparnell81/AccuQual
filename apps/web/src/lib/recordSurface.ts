@@ -2,7 +2,7 @@ export type RecordSurfaceKind = "list" | "form";
 
 export interface RecordSurface {
   kind: RecordSurfaceKind;
-  /** Permission module. "any" means every signed-in user can already edit this page. "equipment-list" uses the calibration list rule. */
+  /** Permission module. "any" means every signed-in user can already edit this page. */
   access: string;
 }
 
@@ -14,7 +14,7 @@ interface SurfaceRule {
 
 const RULES: SurfaceRule[] = [
   { test: /^\/documents\/master-list$/, kind: "list", access: "documents" },
-  { test: /^\/calibration\/master-list$/, kind: "list", access: "equipment-list" },
+  { test: /^\/calibration\/master-list$/, kind: "list", access: "calibration" },
   { test: /^\/iso-forms\/record\/\d+$/, kind: "form", access: "documents" },
   { test: /^\/qms-forms\/[^/]+\/\d+$/, kind: "form", access: "qms_forms" },
   { test: /^\/ncr\/\d+$/, kind: "form", access: "ncr" },

@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { useFaiLookups, useFaiRecord, useInvalidateFai, type FaiRecordDetail } from "../../api/fai";
 import { SignatureStamp } from "../../components/forms/SignatureStamp";
+import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { canApproveFai, judgeFrozen, type PassFailWord } from "../../lib/faiLogic";
@@ -209,6 +210,7 @@ export function FaiRecordPage() {
         </div>
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}
+      {Number.isInteger(id) && <WorkflowHistoryPanel moduleName="fai" recordId={id} />}
     </div>
   );
 }

@@ -27,6 +27,7 @@ import { notifyRecipients } from "../notifications/notification.service.js";
 import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 import { mapSeverityToClassification, ncrIsoDate, syncNcrFormData } from "../ncr/ncr.formSync.js";
 import { noteRepeatNcr } from "../quality-automation/qualityAutomation.service.js";
+import { requirePlantId } from "../sites/siteAccess.js";
 import { calendarDay, safeTimeZone } from "../quality-automation/logic.js";
 import { renderFaiPdf } from "./fai.pdf.js";
 import type { savePlanSchema, openFaiSchema, saveResultsSchema, assignPullSchema, completePullSchema } from "./fai.validation.js";
@@ -704,6 +705,7 @@ export async function rejectRecord(req: Request, id: number) {
   ]
     .filter(Boolean)
     .join(" ");
+  const siteId = requirePlantId(req.siteId);
   const [createdNcr] = await db
     .insert(ncr)
     .values({
@@ -713,7 +715,7 @@ export async function rejectRecord(req: Request, id: number) {
       status: "ncr_created",
       supplierId: record.supplierId,
       createdBy: actor.id,
-      ...(req.siteId ? { siteId: req.siteId } : {}),
+      siteId,
     })
     .returning();
   await recordAuditTrail(db, { entityType: "NCR", entityId: createdNcr!.id, action: "create", changes: { fromFaiId: id, faiNumber: record.number }, performedBy: actor.id });

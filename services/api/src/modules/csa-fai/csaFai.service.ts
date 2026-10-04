@@ -27,6 +27,7 @@ import {
   type CsaState,
 } from "./csaFai.logic.js";
 import { nextCsaNumber, persistCsa } from "./csaFai.persist.js";
+import { requirePlantId } from "../sites/siteAccess.js";
 import { loadNcrStatus, notifySla } from "./csaFai.actions.js";
 
 /**
@@ -81,6 +82,8 @@ function present(row: typeof csaFaiRecords.$inferSelect, state: CsaState) {
     ncrRequired: state.ncrRequired,
     failureDetected: state.failureDetected,
     ncrId: state.ncrId,
+    siteId: state.siteId,
+    signatureStamp: state.signatureStamp,
     workflowId: row.workflowId,
     workflowRunId: row.workflowRunId,
     attemptNumber: state.attempt.number,
@@ -140,7 +143,8 @@ export async function rememberCsaSla(db: Db, context: Record<string, unknown>, n
   writeCsa(context, readCsa(context));
 }
 
-export async function submitCsa(db: Db, actor: { id: number; roleName: string | null }, input: Record<string, unknown>) {
+export async function submitCsa(db: Db, actor: { id: number; roleName: string | null }, input: Record<string, unknown>, siteId: number | null) {
+  const plantId = requirePlantId(siteId);
   const errors = submissionErrors(input);
   if (errors.length > 0) throw AppError.badRequest(errors.join(" "));
   const workflow = await ensureCsaDraft(db, actor);
@@ -161,6 +165,7 @@ export async function submitCsa(db: Db, actor: { id: number; roleName: string | 
   state.inspectorName = String(input.inspectorName).trim();
   state.inspectorUserId = typeof input.inspectorUserId === "number" ? input.inspectorUserId : actor.id;
   state.openedBy = actor.id;
+  state.siteId = plantId;
   state.dampingTestRequired = input.dampingTestRequired === true;
   state.vehicleFitmentPerformed = input.vehicleFitmentPerformed === true;
   state.status = "Submitted";
@@ -194,6 +199,7 @@ export async function submitCsa(db: Db, actor: { id: number; roleName: string | 
       ncrRequired: "No",
       failureDetected: "No",
       workflowId: workflow.id,
+      siteId: plantId,
       packet: { ...state },
     })
     .returning();

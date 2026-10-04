@@ -58,7 +58,7 @@ export interface FieldChange {
 }
 
 /** Friendly moduleName values the history endpoint accepts — kept in sync with services/api's workflow.controller.ts MODULE_ENTITY_TYPES. */
-export type WorkflowModuleName = "calibration" | "quarantine" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp" | "rma" | "work_orders" | "risk" | "feasibility" | "document_change_requests" | "qms_forms" | "scar_forms" | "quality_inspection_reports" | "crar" | "rma_log" | "complaints" | "eight_d" | "iso_forms";
+export type WorkflowModuleName = "calibration" | "quarantine" | "documents" | "training" | "audit" | "ncr" | "capa" | "di" | "suppliers" | "inventory" | "erp" | "rma" | "work_orders" | "risk" | "feasibility" | "document_change_requests" | "qms_forms" | "scar_forms" | "quality_inspection_reports" | "crar" | "rma_log" | "complaints" | "eight_d" | "iso_forms" | "fai" | "csa_fai" | "fuel_pump_fai";
 
 export type NcrStep = "ncr_created" | "contain" | "disposition" | "fix" | "verify" | "closed";
 

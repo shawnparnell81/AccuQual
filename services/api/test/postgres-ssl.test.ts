@@ -15,7 +15,8 @@ describe("database TLS CA", () => {
     expect(postgresSsl("localhost", PEM)).toBeUndefined();
     expect(postgresSsl("127.0.0.1", undefined)).toBeUndefined();
     expect(postgresSsl("postgres", undefined)).toBeUndefined();
-    expect(postgresSsl("dpg-example.oregon-postgres.render.com", undefined)).toEqual({ rejectUnauthorized: false });
+    expect(postgresSsl("dpg-example.oregon-postgres.render.com", undefined, "development")).toEqual({ rejectUnauthorized: false });
+    expect(postgresSsl("dpg-example.oregon-postgres.render.com", undefined, "production")).toEqual({ rejectUnauthorized: true });
     expect(postgresSsl("aws-0-us-east-1.pooler.supabase.com", `"${PEM.replace(/\n/g, "\\n")}"`)).toEqual({
       ca: PEM,
       rejectUnauthorized: true,
@@ -28,14 +29,16 @@ describe("database TLS CA", () => {
       "postgres://u:p@host/db?application_name=accuqual",
     );
     const url = "postgres://u:p@dpg-example.oregon-postgres.render.com/db?sslmode=require";
-    expect(postgresConnectionConfig(url, undefined).connectionString).toBe(url);
-    expect(postgresConnectionConfig(url, PEM).connectionString).toBe("postgres://u:p@dpg-example.oregon-postgres.render.com/db");
-    expect(postgresConnectionConfig(url, PEM).ssl).toEqual({ ca: PEM, rejectUnauthorized: true });
+    expect(postgresConnectionConfig(url, undefined, "development").connectionString).toBe(url);
+    expect(postgresConnectionConfig(url, undefined, "production").connectionString).toBe("postgres://u:p@dpg-example.oregon-postgres.render.com/db");
+    expect(postgresConnectionConfig(url, undefined, "production").ssl).toEqual({ rejectUnauthorized: true });
+    expect(postgresConnectionConfig(url, PEM, "development").connectionString).toBe("postgres://u:p@dpg-example.oregon-postgres.render.com/db");
+    expect(postgresConnectionConfig(url, PEM, "development").ssl).toEqual({ ca: PEM, rejectUnauthorized: true });
   });
 
-  it("refuses production boot only when the explicit flag is on and the CA is missing", () => {
+  it("refuses production boot when the CA is missing", () => {
     const remote = "postgres://u:p@dpg-example.oregon-postgres.render.com/db";
-    expect(databaseSslBootProblem({ nodeEnv: "production", databaseUrl: remote, caRaw: undefined, requireCa: false })?.fatal).toBe(false);
+    expect(databaseSslBootProblem({ nodeEnv: "production", databaseUrl: remote, caRaw: undefined, requireCa: false })?.fatal).toBe(true);
     expect(databaseSslBootProblem({ nodeEnv: "production", databaseUrl: remote, caRaw: undefined, requireCa: true })?.fatal).toBe(true);
     expect(databaseSslBootProblem({ nodeEnv: "production", databaseUrl: remote, caRaw: PEM, requireCa: true })).toBeNull();
     expect(databaseSslBootProblem({ nodeEnv: "test", databaseUrl: remote, caRaw: undefined, requireCa: true })).toBeNull();

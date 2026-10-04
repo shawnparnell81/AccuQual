@@ -11,8 +11,8 @@ import { DOCUMENT_FOLDER_PAGES, OBSOLETE_ARCHIVE_CATEGORY } from "../../componen
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
 import { useToast } from "../../components/shared/ToastProvider";
-import { canMaintainMasterList } from "../../lib/masterListAccess";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 import { onlyOfficeFile, previewKind, saveBytes } from "../../lib/filePreview";
 import { formatDate } from "../../lib/dates";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
@@ -33,8 +33,10 @@ export function DocumentCategoryPage() {
   const page = DOCUMENT_FOLDER_PAGES[category];
   const toast = useToast();
   const user = useCurrentUser();
+  const { effective } = useEffectivePermissions();
   const canRestore = user?.roleName === "admin" || user?.roleName === "owner";
-  const maintainToolList = category === "master-tool-list" && canMaintainMasterList(user);
+  const documentsEdit = user?.roleName === "admin" || user?.roleName === "owner" || effective?.documents === "edit";
+  const maintainToolList = category === "master-tool-list" && documentsEdit;
   const queryClient = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);

@@ -7,10 +7,9 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { validate } from "../../middleware/validate.js";
 import { requirePermission } from "../../middleware/requirePermission.js";
-import { canMaintainMasterList } from "../roles/masterListAccess.js";
 import type { Db } from "../../lib/requestDb.js";
 import { db as ownerDb, pool } from "../../db/index.js";
-import { documentFiles, documents } from "../../drizzle/schema/documents.js";
+import { documentFiles } from "../../drizzle/schema/documents.js";
 import { users } from "../../drizzle/schema/users.js";
 import { roles } from "../../drizzle/schema/roles.js";
 import { REVIEWER_ROLES } from "../../middleware/requirePermission.js";
@@ -38,18 +37,6 @@ const linkType = (raw: unknown): LinkType => {
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE_BYTES, files: 1 } });
 
-/** Master Tool List editors may change that file even when Documents is read-only for their department. */
-function masterToolListEdit(gate: ReturnType<typeof requirePermission>) {
-  return asyncHandler(async (req: Request, res: Response, next) => {
-    const id = Number(req.params.id);
-    if (canMaintainMasterList(req.user) && req.db && Number.isInteger(id) && id > 0) {
-      const [row] = await req.db.select({ category: documents.category }).from(documents).where(eq(documents.id, id));
-      if (row?.category === "master-tool-list") return next();
-    }
-    return gate(req, res, next);
-  });
-}
-
 /**
  * Everything version-related for controlled documents, added to the documents router (which already applies
  * requireAuth + withDb + the Document Control department gate). The lifecycle rules themselves live once, in the
@@ -58,7 +45,7 @@ function masterToolListEdit(gate: ReturnType<typeof requirePermission>) {
  */
 export function registerDocumentVersionRoutes(router: Router) {
   const view = requirePermission("document.view");
-  const edit = masterToolListEdit(requirePermission("document.edit"));
+  const edit = requirePermission("document.edit");
   const review = requirePermission("document.review");
   const publish = requirePermission("document.publish");
 

@@ -6,7 +6,6 @@ import type { Db } from "../lib/requestDb.js";
 import { recordAuditTrailStandalone } from "../modules/audit-trail/audit-trail.service.js";
 import { getUserAccessLevel, type AccessLevel, type ResourceKey } from "./departmentAccess.js";
 import { REVIEWER_ROLES } from "../modules/roles/roleAccess.js";
-import { canMaintainMasterList } from "../modules/roles/masterListAccess.js";
 
 /**
  * `requirePermission("workflow.edit")` — a "<subject>.<action>" permission
@@ -60,7 +59,6 @@ export async function hasPermission(
 ): Promise<{ allowed: boolean; reason?: string }> {
   const { subject, action } = parsePermission(name);
   if (user.roleName && EXTERNAL_ROLES.has(user.roleName)) return { allowed: false, reason: "External accounts cannot use this feature" };
-  if ((name === "equipment.manage" || name === "equipment.calibrate") && canMaintainMasterList(user)) return { allowed: true };
 
   const level = await getUserAccessLevel(db, user, PERMISSION_SUBJECTS[subject].resource);
   if (RANK[level] < RANK[NEEDED_LEVEL[action]]) return { allowed: false, reason: `Requires ${NEEDED_LEVEL[action]} access to ${PERMISSION_SUBJECTS[subject].resource}` };

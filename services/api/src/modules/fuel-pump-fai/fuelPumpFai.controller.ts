@@ -11,7 +11,7 @@ export const listFuelPumpHandler = asyncHandler(async (req: Request, res: Respon
 });
 
 export const submitFuelPumpHandler = asyncHandler(async (req: Request, res: Response) => {
-  const created = await submitFuelPump(req.db!, { id: req.user!.id, roleName: req.user?.roleName ?? null }, req.body as Record<string, unknown>);
+  const created = await submitFuelPump(req.db!, { id: req.user!.id, roleName: req.user?.roleName ?? null }, req.body as Record<string, unknown>, req.siteId ?? null);
   res.status(201).json(created);
 });
 

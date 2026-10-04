@@ -3,6 +3,7 @@ import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
 import { ncr } from "./ncr.js";
 import { workflowDefinitions, workflowRuns } from "./workflow.js";
+import { sites } from "./sites.js";
 
 /**
  * Fuel Pump Module first articles. New tables only.
@@ -57,6 +58,7 @@ export const fuelPumpFaiRecords = pgTable("fuel_pump_fai_records", {
   rejectionDate: timestamp("rejection_date"),
   approvalDate: timestamp("approval_date"),
   approvedBy: integer("approved_by").references(() => users.id),
+  siteId: integer("site_id").references(() => sites.id),
   packet: jsonb("packet").$type<Record<string, unknown>>().notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),

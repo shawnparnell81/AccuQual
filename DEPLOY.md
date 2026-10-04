@@ -188,8 +188,8 @@ Security headers on `/*`: `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options
 |---|---|
 | `NODE_ENV` | `production` |
 | `DATABASE_URL` | Supabase **Session Pooler** string, or a Render Postgres URL (dashboard only) |
-| `DATABASE_SSL_CA` | Optional PEM. Unset verifies nothing (production logs a warning and still boots). See [Database TLS certificate](#database-tls-certificate) |
-| `ACCUQUAL_REQUIRE_DB_SSL_CA` | Leave unset. Set to `true` only after `DATABASE_SSL_CA` is in place and a deploy stayed healthy. `true` with no PEM refuses to boot |
+| `DATABASE_SSL_CA` | Required in production for a remote database. PEM that verifies the Postgres certificate. The API refuses to boot without it. See [Database TLS certificate](#database-tls-certificate) |
+| `ACCUQUAL_REQUIRE_DB_SSL_CA` | Unused for the boot decision. Production already refuses to start when `DATABASE_SSL_CA` is missing. Existing environment files may still set it |
 | `JWT_ACCESS_SECRET` | Render `generateValue: true` |
 | `JWT_REFRESH_SECRET` | Render `generateValue: true` |
 | `AI_CONFIG_ENCRYPTION_KEY` | `openssl rand -hex 32`. Paste once. **Never rotate** — stored company AI keys were encrypted with it |
@@ -216,7 +216,7 @@ Both `CF_ACCESS_*` values must be set or the API does not check Access at all (t
 
 Signed-in requests do not need a new migration for this. `DATABASE_SSL_CA` is an environment variable on `accuqual-api`.
 
-The API connects with TLS to any database that is not `localhost`. Until `DATABASE_SSL_CA` is set it accepts any certificate and, in production, logs a warning. It does **not** refuse to boot. Set `ACCUQUAL_REQUIRE_DB_SSL_CA=true` only after a deploy with the PEM stays healthy (`/health` returns `{"status":"ok"}`). Setting the flag first takes the service down.
+The API connects with TLS to any database that is not `localhost`. In production that connection verifies the server certificate. Set `DATABASE_SSL_CA` on `accuqual-api` before the next production start. Without that PEM the process refuses to boot. Local development and tests still start when no CA is configured. This value is not already set on the live service.
 
 **Render Postgres.** Render does not offer a CA file to download ([Create and Connect to Render Postgres](https://render.com/docs/postgresql-creating-connecting)).
 
@@ -228,8 +228,8 @@ openssl s_client -starttls postgres -connect HOST:5432 -showcerts </dev/null
 ```
 
 3. Copy one block from `-----BEGIN CERTIFICATE-----` through `-----END CERTIFICATE-----` into `DATABASE_SSL_CA` on `accuqual-api`. A multi-line value or a single line with `\n` between the lines both work. Do not commit the PEM.
-4. Redeploy, or let the env change restart the service. Confirm `/health` is ok and a signed-in save still works. Then, if you want a missing PEM to stop the process, set `ACCUQUAL_REQUIRE_DB_SSL_CA` to `true` and restart again.
-5. Internal URL (same region, private network): the certificate is self-signed, and Render does not support `verify-full` on internal connections. Run the same `openssl` command from the **accuqual-api Shell** (the internal host is not reachable from your laptop). If the service then fails its health check, clear `DATABASE_SSL_CA` and leave `ACCUQUAL_REQUIRE_DB_SSL_CA` unset. Encrypted-but-unverified TLS and the warning are the supported mode for that URL.
+4. Redeploy, or let the env change restart the service. Confirm `/health` is ok and a signed-in save still works.
+5. Internal URL (same region, private network): the certificate is self-signed, and Render does not support `verify-full` on internal connections. Run the same `openssl` command from the **accuqual-api Shell** (the internal host is not reachable from your laptop) and paste that PEM into `DATABASE_SSL_CA`. Production still verifies it. Do not leave the variable empty.
 
 **Supabase.** Project Settings → Database → SSL configuration → download the CA certificate. Paste that PEM into `DATABASE_SSL_CA`. Use the Session Pooler URL (see the gotcha at the top of this file).
 

@@ -44,6 +44,8 @@ export const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   ErpSyncError: "erp",
   ErpSyncSettings: "erp",
   FaiRecord: "fai",
+  CsaFai: "fai",
+  FuelPumpFai: "fai",
   FaiInspectionPlan: "fai",
   FaiSourceApproval: "fai",
   FaiAnnualPull: "fai",

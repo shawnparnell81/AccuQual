@@ -14,6 +14,7 @@ import {
   businessDaysAfter,
   emptyState,
   evaluateSla,
+  judgeCriterion,
   prepareCsaDecision,
   readCsa,
   seedResults,
@@ -114,6 +115,11 @@ describe("CSA first article workflow", () => {
     const state = readCsa(execution.context);
     expect(state.overallResult).toBe("Pending Engineering Review");
     expect(state.attempt.results.find((row) => row.key === "overall_extended_length")?.result).toBe("Engineering Review Required");
+    const length = CSA_CRITERIA.find((row) => row.key === "overall_extended_length");
+    const flags = { dampingTestRequired: false, vehicleFitmentPerformed: false, limitOverrides: {} };
+    expect(length && judgeCriterion(length, { actual: "10", units: "mm", specifiedLimits: "9-11", equipment: "caliper", result: "Fail" }, flags).result).toBe("Pass");
+    expect(length && judgeCriterion(length, { actual: "12", units: "mm", specifiedLimits: "9-11", equipment: "caliper", comments: "Long", result: "Pass" }, flags).result).toBe("Fail");
+    expect(length && judgeCriterion(length, { actual: "10", units: "mm", specifiedLimits: "see drawing", equipment: "caliper", result: "Pass" }, flags).result).toBe("");
     expect(state.productionRelease).toBe("No");
     expect((execution.context.steps as { kind: string }[]).map((step) => step.kind)).not.toContain("csa_release");
     expect(() => assertCanRelease(state, { finalApprovalRecorded: true })).toThrow(/Engineering review is still required/);

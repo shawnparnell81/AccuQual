@@ -35,23 +35,6 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     definition: ncrProcessDefinition,
   },
   {
-    key: "ncr_closure_notification",
-    name: "NCR Closure Notification",
-    module: "ncr",
-    description: "When an NCR is closed, notify Quality and draft an AI summary note.",
-    definition: {
-      nodes: [
-        { id: "t1", type: "trigger", kind: "closed", config: {} },
-        { id: "a1", type: "action", kind: "notify_department", config: { department: "quality", subject: "NCR #{{entityId}} moved to Closed", body: "NCR #{{entityId}} is now at Closed." } },
-        { id: "a2", type: "action", kind: "ai_suggestion", config: {} },
-      ],
-      edges: [
-        { from: "t1", to: "a1" },
-        { from: "t1", to: "a2" },
-      ],
-    },
-  },
-  {
     key: "capa_effectiveness_close",
     name: "CAPA Closure Notification",
     module: "capa",

@@ -29,6 +29,7 @@ import {
   type FpmState,
 } from "./fuelPumpFai.logic.js";
 import { nextFuelPumpNumber, persistFpm } from "./fuelPumpFai.persist.js";
+import { requirePlantId } from "../sites/siteAccess.js";
 import { loadNcrStatus, notifySla } from "./fuelPumpFai.actions.js";
 
 /**
@@ -89,6 +90,8 @@ function present(row: typeof fuelPumpFaiRecords.$inferSelect, state: FpmState) {
     ncrRequired: state.ncrRequired,
     failureDetected: state.failureDetected,
     ncrId: state.ncrId,
+    siteId: state.siteId,
+    signatureStamp: state.signatureStamp,
     workflowId: row.workflowId,
     workflowRunId: row.workflowRunId,
     attemptNumber: state.attempt.number,
@@ -153,7 +156,8 @@ export async function rememberFuelPumpSla(db: Db, context: Record<string, unknow
   writeFpm(context, readFpm(context));
 }
 
-export async function submitFuelPump(db: Db, actor: { id: number; roleName: string | null }, input: Record<string, unknown>) {
+export async function submitFuelPump(db: Db, actor: { id: number; roleName: string | null }, input: Record<string, unknown>, siteId: number | null) {
+  const plantId = requirePlantId(siteId);
   const application = text(input.application) || text(input.vehicleApplication);
   const supplier = text(input.supplier) || text(input.supplierName);
   const inspector = text(input.inspector) || text(input.inspectorName);
@@ -181,6 +185,7 @@ export async function submitFuelPump(db: Db, actor: { id: number; roleName: stri
   state.validationOwner = text(input.validationOwner);
   state.qualityManager = text(input.qualityManager);
   state.openedBy = actor.id;
+  state.siteId = plantId;
   state.status = "Submitted";
   state.stage = "Document Review";
   state.productFamily = FPM_PRODUCT_FAMILY;
@@ -213,6 +218,7 @@ export async function submitFuelPump(db: Db, actor: { id: number; roleName: stri
       ncrRequired: "No",
       failureDetected: "No",
       workflowId: workflow.id,
+      siteId: plantId,
       packet: { ...state },
     })
     .returning();
