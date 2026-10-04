@@ -2,16 +2,14 @@
  * TLS settings for a hosted Postgres connection.
  *
  * Local and CI hosts speak plaintext. Everywhere else the socket is TLS.
- * `DATABASE_SSL_CA` (a PEM) turns on certificate verification. Without it the
- * connection still encrypts but accepts any certificate — the historical
- * behavior — and production logs a warning. Boot refuses that fallback only
- * when `ACCUQUAL_REQUIRE_DB_SSL_CA=true`, so a deploy is not stranded before
- * the CA is pasted in.
+ * Production verifies the server certificate and refuses to boot unless
+ * `DATABASE_SSL_CA` is a PEM. Development and test still connect to a remote
+ * host without a CA, accepting any certificate, so a local checkout is not
+ * stranded. A PEM always turns verification on.
  *
- * When a PEM is set, `sslmode` and the other ssl* query params are stripped
- * from the URL. node-postgres copies the parsed URL over the `ssl` object,
- * which would drop the CA. URLs without a PEM are left unchanged so an
- * existing `sslmode` keeps today's connection behavior.
+ * When verification is on, `sslmode` and the other ssl* query params are
+ * stripped from the URL. node-postgres copies the parsed URL over the `ssl`
+ * object, which would drop the CA or `rejectUnauthorized`.
  */
 
 export const LOCAL_DB_HOSTS = new Set(["localhost", "127.0.0.1", "postgres"]);
@@ -47,23 +45,26 @@ export interface PostgresSslOptions {
 }
 
 /** `undefined` means do not use TLS (local/CI). */
-export function postgresSsl(hostname: string, caRaw: string | undefined): PostgresSslOptions | undefined {
+export function postgresSsl(hostname: string, caRaw: string | undefined, nodeEnv = process.env.NODE_ENV): PostgresSslOptions | undefined {
   if (LOCAL_DB_HOSTS.has(hostname)) return undefined;
   const ca = normalizeDatabaseSslCa(caRaw);
   if (ca && isPemCertificate(ca)) return { ca, rejectUnauthorized: true };
+  if (nodeEnv === "production") return { rejectUnauthorized: true };
   return { rejectUnauthorized: false };
 }
 
-/** Pool settings. The connection string is rewritten only when a PEM will actually be verified. */
-export function postgresConnectionConfig(connectionString: string, caRaw: string | undefined): {
+/** Pool settings. The connection string is rewritten when the certificate will be verified. */
+export function postgresConnectionConfig(connectionString: string, caRaw: string | undefined, nodeEnv = process.env.NODE_ENV): {
   connectionString: string;
   ssl: PostgresSslOptions | undefined;
 } {
+  const hostname = new URL(connectionString).hostname;
   const ca = normalizeDatabaseSslCa(caRaw);
   const verified = Boolean(ca && isPemCertificate(ca));
+  const productionRemote = nodeEnv === "production" && !LOCAL_DB_HOSTS.has(hostname);
   return {
-    connectionString: verified ? stripSslModeParams(connectionString) : connectionString,
-    ssl: postgresSsl(new URL(connectionString).hostname, caRaw),
+    connectionString: verified || productionRemote ? stripSslModeParams(connectionString) : connectionString,
+    ssl: postgresSsl(hostname, caRaw, nodeEnv),
   };
 }
 
@@ -73,6 +74,8 @@ export function databaseSslBootProblem(input: {
   caRaw: string | undefined;
   requireCa: boolean;
 }): { fatal: boolean; message: string } | null {
+  // Production always requires the CA. The flag stays so older environment files still load.
+  void input.requireCa;
   let hostname: string;
   try {
     hostname = new URL(input.databaseUrl).hostname;
@@ -97,17 +100,10 @@ export function databaseSslBootProblem(input: {
     "`openssl s_client -starttls postgres -connect HOST:5432 -showcerts </dev/null` and paste one PEM block (BEGIN CERTIFICATE through END CERTIFICATE) into DATABASE_SSL_CA on accuqual-api. " +
     "Internal Render connections use a self-signed certificate and Render does not support verify-full on them (https://render.com/docs/postgresql-creating-connecting); capture that certificate the same way from the accuqual-api Shell if you use the internal URL. " +
     "Supabase: Project Settings → Database → SSL configuration, download the CA. " +
-    "Leave ACCUQUAL_REQUIRE_DB_SSL_CA unset until a deploy with DATABASE_SSL_CA stays healthy. Set it to true only after that — production then refuses to boot when the CA is missing.";
-
-  if (input.requireCa) {
-    return {
-      fatal: true,
-      message: `Refusing to start: NODE_ENV=production, ACCUQUAL_REQUIRE_DB_SSL_CA=true, and DATABASE_SSL_CA is not set. ${how}`,
-    };
-  }
+    "Set DATABASE_SSL_CA on accuqual-api before the next production start. The API will not boot until that value is a PEM.";
 
   return {
-    fatal: false,
-    message: `DATABASE_SSL_CA is not set — the Postgres connection accepts any TLS certificate (rejectUnauthorized: false). ${how}`,
+    fatal: true,
+    message: `Refusing to start: NODE_ENV=production and DATABASE_SSL_CA is not set. ${how}`,
   };
 }

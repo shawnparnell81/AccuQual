@@ -1,8 +1,10 @@
+import { limitPassFail } from "../../utils/passFail.js";
+
 /**
  * Complete Strut Assembly first-article rules.
  * Limits are never invented here. A measured characteristic with no
  * acceptance limit from the drawing, specification, or inspection plan
- * is Engineering Review Required.
+ * is Engineering Review Required. A readable numeric limit or band sets Pass or Fail.
  */
 
 export const CSA_WORKFLOW_NAME = "CSA First Article Inspection";
@@ -122,6 +124,8 @@ export interface CsaState {
   inspectorName: string;
   inspectorUserId: number | null;
   openedBy: number | null;
+  siteId: number | null;
+  signatureStamp: string | null;
   dateOpened: string;
   status: string;
   stage: string;
@@ -302,6 +306,8 @@ export function emptyState(now: string): CsaState {
     inspectorName: "",
     inspectorUserId: null,
     openedBy: null,
+    siteId: null,
+    signatureStamp: null,
     dateOpened: now,
     status: "Submitted",
     stage: "Document Review",
@@ -452,12 +458,11 @@ export function judgeCriterion(criterion: CsaCriterion, entry: Partial<CsaCriter
     if (!units) return { result: "", error: `${criterion.label} needs units.` };
     if (!limits) return { result: "Engineering Review Required", error: null };
     if (!equipment) return { result: "", error: `${criterion.label} needs the equipment used.` };
-    if (stated !== "Pass" && stated !== "Fail") return { result: "", error: `${criterion.label} needs Pass or Fail against the approved limits.` };
-    if (stated === "Fail" && !comments) return { result: "", error: `${criterion.label} needs inspector comments for a failure.` };
-    if (stated === "Pass" || stated === "Fail") {
-      if (criterion.when === "damping" && photos.length === 0 && !comments) return { result: "", error: `${criterion.label} needs actual results and evidence.` };
-    }
-    return { result: stated, error: null };
+    const judged = limitPassFail(limits, actual);
+    if (!judged) return { result: "", error: `${criterion.label} needs a readable numeric limit or band.` };
+    if (judged === "Fail" && !comments) return { result: "", error: `${criterion.label} needs inspector comments for a failure.` };
+    if (criterion.when === "damping" && photos.length === 0 && !comments) return { result: "", error: `${criterion.label} needs actual results and evidence.` };
+    return { result: judged, error: null };
   }
 
   if (stated !== "Pass" && stated !== "Fail") return { result: "", error: `${criterion.label} needs Pass, Fail, or Not Applicable.` };
@@ -851,7 +856,7 @@ export function passingEntry(criterion: CsaCriterion): Partial<CsaCriterionResul
   if (criterion.kind === "evidence") return { key: criterion.key, photos: [{ fileName: "package.jpg" }] };
   if (criterion.kind === "measurement" && criterion.when) return { key: criterion.key, result: "Not Applicable" };
   if (criterion.kind === "measurement") {
-    return { key: criterion.key, result: "Pass", actual: "1", units: "mm", specifiedLimits: "1 mm from the approved drawing", equipment: "caliper" };
+    return { key: criterion.key, result: "Pass", actual: "1", units: "mm", specifiedLimits: "0.5-1.5", equipment: "caliper" };
   }
   return { key: criterion.key, result: "Pass" };
 }

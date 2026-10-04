@@ -1,3 +1,5 @@
+import { limitPassFail } from "../../utils/passFail.js";
+
 /**
  * Fuel Pump Module first-article rules.
  * Limits are never invented here. A measured characteristic with no
@@ -120,6 +122,8 @@ export interface FpmState {
   validationOwner: string;
   qualityManager: string;
   openedBy: number | null;
+  siteId: number | null;
+  signatureStamp: string | null;
   dateOpened: string;
   status: string;
   stage: string;
@@ -301,6 +305,8 @@ export function emptyState(now: string): FpmState {
     validationOwner: "",
     qualityManager: "",
     openedBy: null,
+    siteId: null,
+    signatureStamp: null,
     dateOpened: now,
     status: "Submitted",
     stage: "Document Review",
@@ -432,9 +438,10 @@ export function judgeCriterion(
     if (!actual) return { result: "", error: `${criterion.label} needs the actual measurement.` };
     if (!units) return { result: "", error: `${criterion.label} needs units.` };
     if (!limits) return { result: "Engineering Review Required", error: null };
-    if (stated !== "Pass" && stated !== "Fail") return { result: "", error: `${criterion.label} needs Pass or Fail against the approved limits.` };
-    if (stated === "Fail" && !comments) return { result: "", error: `${criterion.label} needs inspector comments for a failure.` };
-    return { result: stated, error: null };
+    const judged = limitPassFail(limits, actual);
+    if (!judged) return { result: "", error: `${criterion.label} needs a readable numeric limit or band.` };
+    if (judged === "Fail" && !comments) return { result: "", error: `${criterion.label} needs inspector comments for a failure.` };
+    return { result: judged, error: null };
   }
 
   if (stated !== "Pass" && stated !== "Fail") return { result: "", error: `${criterion.label} needs Pass or Fail.` };
@@ -852,7 +859,7 @@ function readCorrective(details: Record<string, unknown> | undefined): FpmCorrec
 
 export function passingEntry(criterion: FpmCriterion): Partial<FpmCriterionResult> {
   if (criterion.kind === "measurement") {
-    return { key: criterion.key, result: "Pass", actual: "recorded", units: "as recorded", specifiedLimits: "approved drawing" };
+    return { key: criterion.key, result: "Pass", actual: "1", units: "mm", specifiedLimits: "0.5-1.5" };
   }
   return { key: criterion.key, result: "Pass" };
 }

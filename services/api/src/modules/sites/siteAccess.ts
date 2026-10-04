@@ -45,6 +45,14 @@ export function pickCurrentSiteId(input: {
   return (active.find((site) => site.isDefault) ?? active[0])?.id ?? null;
 }
 
+/** Same refusal a plant-scoped create already uses when the signer has no current plant. */
+export const PLANT_REQUIRED = "You aren't assigned to a plant, so you can't add records here.";
+
+export function requirePlantId(siteId: number | null | undefined): number {
+  if (siteId == null || !Number.isInteger(siteId) || siteId < 1) throw AppError.forbidden(PLANT_REQUIRED);
+  return siteId;
+}
+
 /** Hide a record that lives at a plant this caller cannot open. `allowed` omitted means the caller didn't go through plant resolution (seeds, workers). */
 export function assertRecordOnAllowedSite(siteId: number | null | undefined, allowedSiteIds: number[] | undefined, entity: string) {
   if (!allowedSiteIds) return;

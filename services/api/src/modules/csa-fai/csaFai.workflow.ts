@@ -115,7 +115,7 @@ export const CSA_FAI_DEFINITION: WorkflowDefinition = {
       assignees: [{ label: "Inspector" }],
       assigneeField: "inspectorUserId",
       branch: "dimensional",
-      message: "Record actual, units, specified limits from the approved drawing, specification, or inspection plan, and equipment. A missing limit is Engineering Review Required.",
+      message: "Record actual, units, specified limits from the approved drawing, specification, or inspection plan, and equipment. A readable numeric limit sets Pass or Fail. A missing limit is Engineering Review Required.",
       routes: routes([{ decision: "approved", label: "Branch complete", branch: "approved" }]),
     }),
     approval(CSA_NODE.functional, "Functional", {

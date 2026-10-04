@@ -94,6 +94,7 @@ export async function persistFpm(db: Db, state: FpmState): Promise<void> {
       approvalDate: state.approvalDate ? new Date(state.approvalDate) : null,
       approvedBy: state.approvedBy,
       dateClosed: state.dateClosed ? new Date(state.dateClosed) : null,
+      siteId: state.siteId,
       packet: { ...state },
       updatedAt: new Date(),
     })

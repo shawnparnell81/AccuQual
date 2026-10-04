@@ -109,7 +109,7 @@ Escalation diagram:  Receiving quarantined/rejected --(if enabled)--> NCR(open) 
 }
 ```
 Real trigger kinds available: `containment`, `root_cause`, `corrective_action`, `closed`, `assigned`, `auto_created_from_receiving`.
-**10. Templates** — `ncr_closure_notification` (real, ships in `workflow.templates.ts`).
+**10. Templates** — `ncr_process` (NCR Process, ships in `workflow.templates.ts`). The older NCR Closure Notification template was removed.
 **11. UI** — `WorkflowActionButton` + `WorkflowHistoryPanel`; `AiStructuredSuggestion` (triage), `AiFieldAssistant` (root cause/containment drafting).
 **12. Endpoints** — `GET/POST /ncr`, `GET/PATCH /ncr/:id`, `POST /ncr/:id/{containment,root-cause,corrective-action,close,assign}`.
 **13. Simulation** — Layer 2 only (a workflow definition targeting `module:"ncr"` can be dry-run via `POST /workflow/:id/run {simulate:true}`); the NCR state machine itself has no simulate mode — every call is a real transition.
@@ -476,7 +476,7 @@ PATCH {name/isActive only, definition unchanged} --> version unchanged, versionH
 
 | Key | Target module | Trigger kind |
 |---|---|---|
-| `ncr_closure_notification` | ncr | closed |
+| `ncr_process` | ncr | submitted |
 | `capa_effectiveness_close` | capa | close |
 | `eight_d_closure` | eight_d | closed |
 | `receiving_rejection_escalation` | receiving | rejected |

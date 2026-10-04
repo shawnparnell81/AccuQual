@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { executeWorkflow, resumeWorkflow } from "../src/modules/workflow/workflow-engine.js";
 import { validateWorkflow } from "../src/modules/workflow/workflow-graph.js";
 import { NCR_PROCESS_NAME, ncrProcessDefinition } from "../src/modules/workflow/ncrProcess.workflow.js";
+import { WORKFLOW_TEMPLATES } from "../src/modules/workflow/workflow.templates.js";
 import { NCR_SLA_RULES } from "../src/modules/ncr/ncrSla.js";
 import { nextApprovalState } from "../src/modules/workflow/assignees.js";
 import "../src/modules/workflow/workflowActions.js";
@@ -90,7 +91,10 @@ describe("NCR process workflow", () => {
     expect(tags).not.toContain("0101_ncr_process_workflow");
     expect(journal.entries.find((entry) => entry.tag === "0102_ncr_process_workflow")).toMatchObject({ idx: 102, tag: "0102_ncr_process_workflow" });
     expect(journal.entries.find((entry) => entry.tag === "0103_csa_first_article")).toMatchObject({ idx: 103, tag: "0103_csa_first_article" });
-    expect(journal.entries.at(-1)).toMatchObject({ idx: 104, tag: "0104_fuel_pump_fai" });
+    expect(journal.entries.find((entry) => entry.tag === "0104_fuel_pump_fai")).toMatchObject({ idx: 104, tag: "0104_fuel_pump_fai" });
+    expect(journal.entries.at(-1)).toMatchObject({ idx: 105, tag: "0105_fai_record_plant" });
+    expect(WORKFLOW_TEMPLATES.some((item) => item.key === "ncr_closure_notification")).toBe(false);
+    expect(WORKFLOW_TEMPLATES.find((item) => item.key === "ncr_process")?.name).toBe(NCR_PROCESS_NAME);
   });
 });
 

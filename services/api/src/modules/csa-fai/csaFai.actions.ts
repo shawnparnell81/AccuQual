@@ -20,6 +20,7 @@ import {
   type CsaState,
 } from "./csaFai.logic.js";
 import { emailForUser, emailsForAssigneeLabel, emailsForDepartment, notifyInApp, persistCsa } from "./csaFai.persist.js";
+import { requirePlantId } from "../sites/siteAccess.js";
 
 function dbOf(context: Record<string, unknown>): Db | undefined {
   return context.__db as Db | undefined;
@@ -121,6 +122,7 @@ registerActionHandler("csa_create_ncr", async (node, context, dryRun) => {
         status: "ncr_created",
         supplierId: state.supplierId,
         createdBy: actorId(context),
+        siteId: requirePlantId(state.siteId),
       })
       .returning();
     ncrId = created!.id;

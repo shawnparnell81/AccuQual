@@ -25,6 +25,7 @@ import {
   type SlaEvaluation,
 } from "./fuelPumpFai.logic.js";
 import { emailForUser, emailsForAssigneeLabel, emailsForDepartment, notifyInApp, persistFpm } from "./fuelPumpFai.persist.js";
+import { requirePlantId } from "../sites/siteAccess.js";
 
 function dbOf(context: Record<string, unknown>): Db | undefined {
   return context.__db as Db | undefined;
@@ -100,6 +101,7 @@ async function ensureNcr(node: WorkflowNode, context: Record<string, unknown>, s
         severity: critical ? "critical" : null,
         supplierId: state.supplierId,
         createdBy: actorId(context),
+        siteId: requirePlantId(state.siteId),
       })
       .returning();
     next = { ...next, ncrId: created!.id, ncrStatus: "ncr_created" };

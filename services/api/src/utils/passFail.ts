@@ -168,6 +168,12 @@ export function rowPassFail(row: Record<string, unknown>, keys: MeasuredKeys = {
   return faiResult(asMeasure(nominal), asMeasure(tolerance), asMeasure(actual));
 }
 
+/** Pass or Fail from a free-text numeric limit or band and the measured actual. Blank when that text is not a readable number or band. */
+export function limitPassFail(limitsRaw: string | null | undefined, actualRaw: string | number | null | undefined): PassFailWord {
+  if (limitsRaw == null || String(limitsRaw).trim() === "") return "";
+  return rowPassFail({ specificationLimits: limitsRaw, actual: actualRaw ?? "" });
+}
+
 /**
  * Older dimensional rows stored Specification / Limits and Measurement Results
  * and a manual OK / Not OK checkbox. Copy those into Nominal, Tolerance, and

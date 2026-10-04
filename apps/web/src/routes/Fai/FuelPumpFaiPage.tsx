@@ -4,7 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { StatusBadge } from "../../components/tables/StatusBadge";
-import { criteriaForBranch, type FpmCriterion } from "../../../../../services/api/src/modules/fuel-pump-fai/fuelPumpFai.logic";
+import { criteriaForBranch, judgeCriterion, type FpmCriterion } from "../../../../../services/api/src/modules/fuel-pump-fai/fuelPumpFai.logic";
+import { SignatureStamp, DEFAULT_CERTIFY } from "../../components/forms/SignatureStamp";
+import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
+import { uploadAttachmentFor } from "../../lib/attachments";
+import { faiFill } from "../../lib/qualitySheetLogic";
+import "../IsoForms/isoForm.css";
 
 interface FuelPumpListRow {
   id: number;
@@ -77,6 +82,7 @@ interface FuelPumpRecord {
   attempt: { number: number; results: FuelPumpResultRow[]; totals: { criteria: number; passed: number; failed: number; engineeringReviewRequired: number } | null; overall: string | null };
   history: { number: number; overall: string | null; results: FuelPumpResultRow[] }[];
   correctiveAction: { rootCause: string; correctiveAction: string; responsiblePerson: string; dueDate: string } | null;
+  signatureStamp?: string | null;
   pendingApproval?: {
     nodeId: string;
     label?: string;
@@ -278,7 +284,7 @@ export function FuelPumpFaiRecordPage() {
     onError: (err) => setError(extractErrorMessage(err, "The inspection results could not be saved.")),
   });
   const decide = useMutation({
-    mutationFn: async (decision: string) => {
+    mutationFn: async ({ decision, pin }: { decision: string; pin: string }) => {
       const details: Record<string, unknown> = {};
       if (decision === "rejected") {
         details.rejectionReason = notes;
@@ -295,7 +301,7 @@ export function FuelPumpFaiRecordPage() {
           .filter((row) => row.result === "Engineering Review Required")
           .map((row) => ({ key: row.key, specifiedLimits: limits.trim(), units: row.units }));
       }
-      return (await apiClient.post(`/workflow/runs/${data?.workflowRunId}/decision`, { decision, notes: notes || undefined, details })).data;
+      return (await apiClient.post(`/workflow/runs/${data?.workflowRunId}/decision`, { decision, notes: notes || undefined, details, pin, certified: true })).data;
     },
     onSuccess: async () => {
       setError(null);
@@ -344,37 +350,55 @@ export function FuelPumpFaiRecordPage() {
           {pending.message && <p className="text-sm">{pending.message}</p>}
           {branch && (
             <div className="flex flex-col gap-3">
-              {criteria.map((criterion) => {
-                const draft = drafts[criterion.key] ?? draftFrom(criterion, undefined);
-                const set = (patch: Partial<typeof draft>) => setDrafts({ ...drafts, [criterion.key]: { ...draft, ...patch } });
-                return (
-                  <div key={criterion.key} className="rounded-md border border-border bg-card p-3 text-sm">
-                    <p className="font-medium">{criterion.label}</p>
-                    <label className="mt-2 flex flex-col gap-1">
-                      Result
-                      <select className="rounded-md border border-border bg-background p-2" value={draft.result} onChange={(event) => set({ result: event.target.value })}>
-                        <option value="Pass">Pass</option>
-                        <option value="Fail">Fail</option>
-                      </select>
-                    </label>
-                    {criterion.kind === "measurement" && (
-                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                        <input placeholder="Actual" className="rounded-md border border-border bg-background p-2" value={draft.actual} onChange={(event) => set({ actual: event.target.value })} />
-                        <input placeholder="Units" className="rounded-md border border-border bg-background p-2" value={draft.units} onChange={(event) => set({ units: event.target.value })} />
-                        <input placeholder="Specified limits from the approved drawing" className="rounded-md border border-border bg-background p-2 sm:col-span-2" value={draft.specifiedLimits} onChange={(event) => set({ specifiedLimits: event.target.value })} />
-                      </div>
-                    )}
-                    <input placeholder="Photo file name" className="mt-2 w-full rounded-md border border-border bg-background p-2" value={draft.photo} onChange={(event) => set({ photo: event.target.value })} />
-                    <textarea placeholder="Inspector comments" className="mt-2 min-h-16 w-full rounded-md border border-border bg-background p-2" value={draft.comments} onChange={(event) => set({ comments: event.target.value })} />
-                    {draft.result === "Fail" && (
-                      <label className="mt-2 flex items-center gap-2">
-                        <input type="checkbox" checked={draft.critical} onChange={(event) => set({ critical: event.target.checked })} />
-                        Critical failure
-                      </label>
-                    )}
-                  </div>
-                );
-              })}
+              <div className="iso-wrap">
+                <table className="iso" data-testid="fuel-pump-fai-grid" aria-label="Fuel pump inspection criteria">
+                  <thead>
+                    <tr>
+                      {["Characteristic", "Result", "Actual", "Units", "Limits", "Comments", "Photo", "Critical"].map((heading) => (
+                        <th key={heading} className="header">{heading}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {criteria.map((criterion) => {
+                      const draft = drafts[criterion.key] ?? draftFrom(criterion, undefined);
+                      const set = (patch: Partial<typeof draft>) => setDrafts({ ...drafts, [criterion.key]: { ...draft, ...patch } });
+                      const measured = criterion.kind === "measurement";
+                      const outcome = measured
+                        ? judgeCriterion(criterion, { actual: draft.actual || null, units: draft.units || null, specifiedLimits: draft.specifiedLimits || null, comments: draft.comments || null, photos: draft.photo ? [{ fileName: draft.photo }] : [] }, null)
+                        : null;
+                      const result = outcome ? outcome.result : draft.result;
+                      return (
+                        <tr key={criterion.key}>
+                          <td className="left">{criterion.label}</td>
+                          <td className={faiFill(result)}>{measured ? result : (
+                            <select className="iso-in" aria-label={`Result for ${criterion.label}`} value={draft.result} onChange={(event) => set({ result: event.target.value })}>
+                              <option value="Pass">Pass</option>
+                              <option value="Fail">Fail</option>
+                            </select>
+                          )}</td>
+                          <td>{measured ? <input className="iso-in" aria-label={`Actual for ${criterion.label}`} value={draft.actual} onChange={(event) => set({ actual: event.target.value })} /> : ""}</td>
+                          <td>{measured ? <input className="iso-in" aria-label={`Units for ${criterion.label}`} value={draft.units} onChange={(event) => set({ units: event.target.value })} /> : ""}</td>
+                          <td>{measured ? <input className="iso-in" aria-label={`Limits for ${criterion.label}`} placeholder="From the drawing" value={draft.specifiedLimits} onChange={(event) => set({ specifiedLimits: event.target.value })} /> : ""}</td>
+                          <td><input className="iso-in" aria-label={`Comments for ${criterion.label}`} value={draft.comments} onChange={(event) => set({ comments: event.target.value })} /></td>
+                          <td>
+                            <input className="iso-in" aria-label={`Photo for ${criterion.label}`} type="file" onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              if (!file || !data) return;
+                              void uploadAttachmentFor("fuel_pump_fai", data.id, file).then((uploaded) => {
+                                const name = typeof uploaded === "object" && uploaded && "fileName" in uploaded && typeof uploaded.fileName === "string" ? uploaded.fileName : file.name;
+                                set({ photo: name });
+                              }).catch((err) => setError(extractErrorMessage(err, "Couldn't upload that photo.")));
+                            }} />
+                            {draft.photo ? <span className="block text-xs">{draft.photo}</span> : null}
+                          </td>
+                          <td className="center">{result === "Fail" ? <input type="checkbox" aria-label={`Critical failure for ${criterion.label}`} checked={draft.critical} onChange={(event) => set({ critical: event.target.checked })} /> : ""}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
               <button type="button" disabled={saveResults.isPending} onClick={() => saveResults.mutate()} className="w-fit rounded-md border border-border px-3 py-2 text-sm">Save this branch</button>
             </div>
           )}
@@ -414,16 +438,25 @@ export function FuelPumpFaiRecordPage() {
             <input placeholder="Rejected by" className="rounded-md border border-border bg-background p-2 text-sm" value={rejectedBy} onChange={(event) => setRejectedBy(event.target.value)} />
             <input type="date" className="rounded-md border border-border bg-background p-2 text-sm" value={rejectionDate} onChange={(event) => setRejectionDate(event.target.value)} />
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid gap-3 md:grid-cols-2">
             {(pending.routes ?? []).map((route) => (
-              <button key={route.decision} type="button" disabled={decide.isPending || !data.workflowRunId} onClick={() => decide.mutate(route.decision)} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
-                {route.label}
-              </button>
+              <div key={route.decision} className="rounded-md border border-border bg-card p-3">
+                <p className="mb-1 text-xs font-semibold">{route.label}</p>
+                <SignatureStamp
+                  value={null}
+                  certify={DEFAULT_CERTIFY}
+                  variant="sheet"
+                  disabled={decide.isPending || !data.workflowRunId}
+                  onSign={async (pin) => { await decide.mutateAsync({ decision: route.decision, pin }); }}
+                />
+              </div>
             ))}
           </div>
+          {data.signatureStamp && <p className="text-sm">Signed: {data.signatureStamp}</p>}
         </section>
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}
+      <WorkflowHistoryPanel moduleName="fuel_pump_fai" recordId={Number.isInteger(Number(id)) ? Number(id) : undefined} />
       {data.history.length > 0 && (
         <section>
           <h2 className="mb-2 text-sm font-medium">Earlier attempts</h2>

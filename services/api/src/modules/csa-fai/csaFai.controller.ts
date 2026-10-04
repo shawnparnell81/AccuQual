@@ -11,7 +11,7 @@ export const listCsaHandler = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const submitCsaHandler = asyncHandler(async (req: Request, res: Response) => {
-  const created = await submitCsa(req.db!, { id: req.user!.id, roleName: req.user?.roleName ?? null }, req.body as Record<string, unknown>);
+  const created = await submitCsa(req.db!, { id: req.user!.id, roleName: req.user?.roleName ?? null }, req.body as Record<string, unknown>, req.siteId ?? null);
   res.status(201).json(created);
 });
 

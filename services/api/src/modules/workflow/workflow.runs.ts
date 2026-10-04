@@ -19,6 +19,7 @@ import { FPM_WORKFLOW_KEY, prepareFpmDecision, readFpm, writeFpm } from "../fuel
 import { persistFpm } from "../fuel-pump-fai/fuelPumpFai.persist.js";
 import { rememberFuelPumpSla } from "../fuel-pump-fai/fuelPumpFai.service.js";
 import { nextApprovalState, roleTitleMatches, titlesFromConfig } from "./assignees.js";
+import { requireSignatureStamp } from "../signatures/signaturePin.service.js";
 
 const EXECUTIVE_APPROVER_STEPS = new Set(["quality_manager", "president", "vice_president"]);
 
@@ -115,6 +116,8 @@ export const decisionSchema = z.object({
   decision: z.string().min(1).max(80),
   notes: z.string().max(4000).optional(),
   details: z.record(z.string(), z.unknown()).optional(),
+  pin: z.string().optional(),
+  certified: z.boolean().optional(),
 });
 
 workflowRunsRouter.post(
@@ -147,6 +150,21 @@ workflowRunsRouter.post(
     const graph = (pinned?.payload ?? workflow.definition) as unknown as WorkflowDefinition;
 
     const previous = (run.context ?? {}) as Record<string, unknown>;
+    const firstArticleDecision = pending.workflowKey === CSA_WORKFLOW_KEY || pending.workflowKey === FPM_WORKFLOW_KEY;
+    let signatureStamp: string | null = null;
+    if (firstArticleDecision) {
+      const recordId = pending.workflowKey === CSA_WORKFLOW_KEY ? readCsa(previous).csaFaiId : readFpm(previous).fuelPumpFaiId;
+      if (recordId == null) throw AppError.badRequest("This first article has no record to sign.");
+      const stamp = await requireSignatureStamp(req, {
+        pin: req.body.pin,
+        certified: req.body.certified,
+        entityType: pending.workflowKey === CSA_WORKFLOW_KEY ? "CsaFai" : "FuelPumpFai",
+        entityId: recordId,
+        field: "signatureStamp",
+        description: `${pending.label ?? "Decision"} — ${decision}`,
+      });
+      signatureStamp = stamp.stamp;
+    }
     const approvals = [...((previous.approvals as unknown[]) ?? []), { node: pending.nodeId, decision, by: req.user!.id, notes: notes ?? null, at: new Date().toISOString() }];
     const approvedMap = (previous.approvedTitles as Record<string, string[]> | undefined) ?? {};
     const gate = nextApprovalState({
@@ -157,9 +175,13 @@ workflowRunsRouter.post(
       fullAccess: isFullAccessRole(req.user!.roleName),
       alreadyApproved: approvedMap[pending.nodeId] ?? [],
     });
+    const signed = { ...previous, approvals, approvedTitles: { ...approvedMap, [pending.nodeId]: gate.approvedTitles } };
+    if (signatureStamp && pending.workflowKey === CSA_WORKFLOW_KEY) writeCsa(signed, { ...readCsa(signed), signatureStamp });
+    if (signatureStamp && pending.workflowKey === FPM_WORKFLOW_KEY) writeFpm(signed, { ...readFpm(signed), signatureStamp });
     if (gate.waiting) {
-      const partial = { ...previous, approvals, approvedTitles: { ...approvedMap, [pending.nodeId]: gate.approvedTitles } };
-      const [updated] = await req.db!.update(workflowRuns).set({ context: partial, status: "waiting_approval" }).where(eq(workflowRuns.id, run.id)).returning();
+      if (pending.workflowKey === CSA_WORKFLOW_KEY) await persistCsa(req.db as Db, readCsa(signed));
+      if (pending.workflowKey === FPM_WORKFLOW_KEY) await persistFpm(req.db as Db, readFpm(signed));
+      const [updated] = await req.db!.update(workflowRuns).set({ context: signed, status: "waiting_approval" }).where(eq(workflowRuns.id, run.id)).returning();
       await recordAuditTrail(req.db as Db, {
         entityType: "WorkflowRun",
         entityId: run.id,
@@ -170,7 +192,7 @@ workflowRunsRouter.post(
       res.json(updated);
       return;
     }
-    const context = { ...previous, approvals, approvedTitles: { ...approvedMap, [pending.nodeId]: gate.approvedTitles }, __db: req.db, __performedBy: req.user!.id } as Record<string, unknown>;
+    const context = { ...signed, __db: req.db, __performedBy: req.user!.id } as Record<string, unknown>;
     if (pending.workflowKey === CSA_WORKFLOW_KEY) {
       if (readCsa(context).locked === "Yes") throw AppError.badRequest("This CSA FAI is locked.");
       try {

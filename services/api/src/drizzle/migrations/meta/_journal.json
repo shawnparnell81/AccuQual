@@ -736,6 +736,13 @@
       "when": 1793055600000,
       "tag": "0104_fuel_pump_fai",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1793142000000,
+      "tag": "0105_fai_record_plant",
+      "breakpoints": true
     }
   ]
 }

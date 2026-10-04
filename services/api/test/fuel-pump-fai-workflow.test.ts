@@ -15,6 +15,7 @@ import {
   assertCanRelease,
   businessDaysAfter,
   emptyState,
+  judgeCriterion,
   evaluateOverallSla,
   evaluateSla,
   prepareFpmDecision,
@@ -176,6 +177,10 @@ describe("Fuel Pump Module FAI workflow", () => {
     );
     const height = missing.attempt.results.find((row) => row.key === "overall_height");
     expect(height?.result).toBe("Engineering Review Required");
+    const heightCriterion = FPM_CRITERIA.find((row) => row.key === "overall_height");
+    expect(heightCriterion && judgeCriterion(heightCriterion, { actual: "10", units: "mm", specifiedLimits: "9-11", result: "Fail" }, null).result).toBe("Pass");
+    expect(heightCriterion && judgeCriterion(heightCriterion, { actual: "12", units: "mm", specifiedLimits: "9-11", comments: "Tall", result: "Pass" }, null).result).toBe("Fail");
+    expect(heightCriterion && judgeCriterion(heightCriterion, { actual: "10", units: "mm", specifiedLimits: "see drawing", result: "Pass" }, null).result).toBe("");
     expect(height?.result).not.toBe("Pass");
     expect(height?.specifiedLimits).toBeNull();
     const execution = await walk(missing, (pending) => (pending.nodeId === FPM_NODE.engineering ? "stop" : approve));

@@ -41,6 +41,8 @@ const PARENTS: Record<string, { resource: ResourceKey; table: string; site: bool
   qms_forms: { resource: "qms_forms", table: "qms_forms", site: false },
   iso_quality_form: { resource: "documents", table: "iso_quality_forms", site: false },
   CustomerCommunication: { resource: "customer_communications", table: "customer_communications", site: false },
+  csa_fai: { resource: "fai", table: "csa_fai_records", site: false },
+  fuel_pump_fai: { resource: "fai", table: "fuel_pump_fai_records", site: false },
 };
 
 function ident(name: string): string {

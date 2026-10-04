@@ -6,7 +6,7 @@ import { scheduleAfterCommit, type Db } from "../../lib/requestDb.js";
 import { AppError } from "../../utils/appError.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { canDeleteAnyRecord } from "../roles/roleAccess.js";
-import { canMaintainMasterList } from "../roles/masterListAccess.js";
+import { getUserAccessLevel } from "../../middleware/departmentAccess.js";
 import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { liftHold, type HoldTarget } from "../inventory/inventoryHolds.service.js";
@@ -746,8 +746,13 @@ export async function deleteRecord(req: Request, kind: RecordKind): Promise<void
   const row = await spec.load(req.db, id);
   if (!row) throw AppError.notFound(spec.label);
 
-  const listMaintainer = (kind === "document" || kind === "equipment") && canMaintainMasterList(req.user);
-  if (!listMaintainer && !userMayDeleteRecord(req.user.roleName, req.user.id, ownerIdsOf(row))) {
+  const assignedEdit =
+    kind === "document"
+      ? (await getUserAccessLevel(req.db, req.user, "documents")) === "edit"
+      : kind === "equipment"
+        ? (await getUserAccessLevel(req.db, req.user, "calibration")) === "edit"
+        : false;
+  if (!assignedEdit && !userMayDeleteRecord(req.user.roleName, req.user.id, ownerIdsOf(row))) {
     throw AppError.forbidden("You don't have permission to delete this record.");
   }
   if (spec.siteScoped) {
