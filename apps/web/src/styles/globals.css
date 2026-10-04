@@ -663,6 +663,35 @@ main table thead th {
   text-transform: uppercase;
 }
 
+/* Roles tables on Admin fill the page width. Cells wrap so a desktop
+   window does not grow a horizontal scrollbar. */
+.aq-fit-table {
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+}
+.aq-fit-table th,
+.aq-fit-table td {
+  min-width: 0;
+  vertical-align: top;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.aq-fit-table thead th {
+  letter-spacing: 0.01em;
+  text-transform: none;
+  white-space: normal;
+  line-height: 1.25;
+}
+.aq-fit-table select {
+  max-width: 100%;
+  min-width: 0;
+}
+.aq-fit-table button {
+  max-width: 100%;
+  white-space: normal;
+}
+
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
 select,
 textarea {

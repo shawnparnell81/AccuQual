@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -28,6 +28,11 @@ function personOptionLabel(person: AppUser): string {
 function managerLabel(people: AppUser[], managerId: number | null | undefined): string {
   const manager = people.find((person) => person.id === managerId);
   return manager ? personOptionLabel(manager) : "—";
+}
+
+function departmentLabel(key: string | null | undefined): string {
+  if (!key) return "—";
+  return DEPARTMENTS.find((department) => department.key === key)?.label ?? key;
 }
 
 function countPhrase(count: number, label: string): string {
@@ -154,28 +159,39 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <h3 className="mb-3 text-sm font-medium">Users</h3>
-      <table className="mb-4 w-full text-sm">
+      <table className="aq-fit-table mb-4 text-sm">
+        <colgroup>
+          <col style={{ width: isAdmin ? "10%" : "16%" }} />
+          <col style={{ width: isAdmin ? "11%" : "20%" }} />
+          <col style={{ width: isAdmin ? "19%" : "16%" }} />
+          <col style={{ width: isAdmin ? "15%" : "14%" }} />
+          <col style={{ width: isAdmin ? "23%" : "16%" }} />
+          <col style={{ width: isAdmin ? "15%" : "18%" }} />
+          {isAdmin && <col style={{ width: "7%" }} />}
+        </colgroup>
         <thead>
           <tr className="text-left text-xs text-muted-foreground">
-            <th className="pb-2">Name</th>
-            <th className="pb-2">Email</th>
-            <th className="pb-2">Role</th>
-            <th className="pb-2">Department</th>
-            <th className="pb-2">Manager</th>
-            <th className="pb-2">Status</th>
+            <th className="pb-2 pr-2">Name</th>
+            <th className="pb-2 pr-2">Email</th>
+            <th className="pb-2 pr-2">Role</th>
+            <th className="pb-2 pr-2">Department</th>
+            <th className="pb-2 pr-2">Manager</th>
+            <th className="pb-2 pr-2">Status</th>
             {isAdmin && <th className="pb-2">2-step</th>}
-            {isAdmin && <th className="pb-2" />}
           </tr>
         </thead>
         <tbody>
           {users.map((u) => (
-            <tr key={u.id} className="border-t border-border">
-              <td className="py-1.5">{personOptionLabel(u)}</td>
-              <td className="py-1.5 text-muted-foreground">{u.email}</td>
-              <td className="py-1.5">
+            <Fragment key={u.id}>
+            <tr className="border-t border-border">
+              <td className="py-1.5 pr-2">{personOptionLabel(u)}</td>
+              <td className="py-1.5 pr-2 text-muted-foreground">{u.email}</td>
+              <td className="py-1.5 pr-2">
                 {isAdmin ? (
                   <select
-                    className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                    aria-label={`Role for ${u.name ?? u.email}`}
+                    title={(u.roleId && roleNameById.get(u.roleId)) || "No role"}
+                    className="w-full min-w-0 max-w-full rounded-md border border-border bg-background px-1 py-1 text-xs"
                     value={u.roleId ?? ""}
                     onChange={(e) => updateUser.mutate({ id: u.id, roleId: e.target.value ? Number(e.target.value) : null } as Partial<AppUser> & { id: number })}
                   >
@@ -190,12 +206,13 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
                   (u.roleId && roleNameById.get(u.roleId)) ?? "—"
                 )}
               </td>
-              <td className="py-1.5 capitalize">{u.department ?? "—"}</td>
-              <td className="py-1.5">
+              <td className="py-1.5 pr-2">{departmentLabel(u.department)}</td>
+              <td className="py-1.5 pr-2">
                 {isAdmin ? (
                   <select
                     aria-label={`Manager for ${u.name ?? u.email}`}
-                    className="max-w-[10rem] rounded-md border border-border bg-background px-2 py-1 text-xs"
+                    title={managerLabel(users, u.managerId)}
+                    className="w-full min-w-0 max-w-full rounded-md border border-border bg-background px-1 py-1 text-xs"
                     value={u.managerId ?? ""}
                     onChange={(e) => updateUser.mutate({ id: u.id, managerId: e.target.value ? Number(e.target.value) : null } as Partial<AppUser> & { id: number })}
                   >
@@ -212,69 +229,76 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
                   managerLabel(users, u.managerId)
                 )}
               </td>
-              <td className="py-1.5">
-                <StatusBadge value={u.isActive ? "active" : "disqualified"} label={u.isActive ? "Active" : "Deactivated"} />
-                {isAdmin && u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && <span className="ml-2 text-xs text-destructive">Locked</span>}
+              <td className="py-1.5 pr-2">
+                <div className="flex flex-wrap items-center gap-1">
+                  <StatusBadge value={u.isActive ? "active" : "disqualified"} label={u.isActive ? "Active" : "Deactivated"} />
+                  {isAdmin && u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && <span className="text-xs text-destructive">Locked</span>}
+                </div>
               </td>
               {isAdmin && <td className="py-1.5 text-xs text-muted-foreground">{u.mfaEnabled ? "On" : "Off"}</td>}
-              {isAdmin && (
-                <td className="space-x-3 py-1.5 text-right">
-                  {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && (
-                    <button onClick={() => void adminAction(`/users/${u.id}/unlock`, "Account unlocked.")} className="text-xs text-primary hover:underline">
-                      Unlock
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setResetFor(u);
-                      setTempPassword("");
-                    }}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    Temporary password
-                  </button>
-                  {u.mfaEnabled && (
+            </tr>
+            {isAdmin && (
+              <tr>
+                <td colSpan={7} className="pb-2 pt-0">
+                  <div className="flex flex-wrap gap-x-3 gap-y-1">
+                    {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && (
+                      <button onClick={() => void adminAction(`/users/${u.id}/unlock`, "Account unlocked.")} className="text-left text-xs text-primary hover:underline">
+                        Unlock
+                      </button>
+                    )}
                     <button
+                      type="button"
                       onClick={() => {
-                        void confirm({
-                          title: "Reset two-step sign-in?",
-                          message: `${u.email} will be signed out and can set it up again.`,
-                          confirmLabel: "Reset",
-                        }).then((ok) => {
-                          if (ok) void adminAction(`/users/${u.id}/mfa/reset`, "Two-step sign-in reset.");
+                        setResetFor(u);
+                        setTempPassword("");
+                      }}
+                      className="text-left text-xs text-primary hover:underline"
+                    >
+                      Temporary password
+                    </button>
+                    {u.mfaEnabled && (
+                      <button
+                        onClick={() => {
+                          void confirm({
+                            title: "Reset two-step sign-in?",
+                            message: `${u.email} will be signed out and can set it up again.`,
+                            confirmLabel: "Reset",
+                          }).then((ok) => {
+                            if (ok) void adminAction(`/users/${u.id}/mfa/reset`, "Two-step sign-in reset.");
+                          });
+                        }}
+                        className="text-left text-xs text-muted-foreground hover:text-destructive"
+                      >
+                        Reset 2-step
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditing(u);
+                        setEditForm({
+                          name: u.name ?? "",
+                          email: u.email,
+                          roleId: u.roleId ? String(u.roleId) : "",
+                          department: u.department ?? "",
+                          managerId: u.managerId ? String(u.managerId) : "",
+                          isActive: u.isActive,
                         });
                       }}
-                      className="text-xs text-muted-foreground hover:text-destructive"
+                      className="text-left text-xs text-primary hover:underline"
                     >
-                      Reset 2-step
+                      Edit
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditing(u);
-                      setEditForm({
-                        name: u.name ?? "",
-                        email: u.email,
-                        roleId: u.roleId ? String(u.roleId) : "",
-                        department: u.department ?? "",
-                        managerId: u.managerId ? String(u.managerId) : "",
-                        isActive: u.isActive,
-                      });
-                    }}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    Edit
-                  </button>
-                  {u.id !== currentUserId && (
-                    <button type="button" onClick={() => void startRemove(u)} className="text-xs text-muted-foreground hover:text-destructive">
-                      Remove
-                    </button>
-                  )}
+                    {u.id !== currentUserId && (
+                      <button type="button" onClick={() => void startRemove(u)} className="text-left text-xs text-muted-foreground hover:text-destructive">
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </td>
-              )}
-            </tr>
+              </tr>
+            )}
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -282,7 +306,7 @@ function UsersPanel({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserI
       {isAdmin && (
         <form
           autoComplete="off"
-          className="relative grid gap-2 border-t border-border pt-3 md:grid-cols-5"
+          className="relative grid min-w-0 gap-2 border-t border-border pt-3 md:grid-cols-5 [&>*]:min-w-0 [&_input]:min-w-0 [&_select]:min-w-0"
           onSubmit={(e) => {
             e.preventDefault();
             // Read the fields from the form itself. A password manager can fill the boxes without updating React state, and submitting that empty state was refused as a validation error.
@@ -593,7 +617,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
       </ul>
       {isAdmin && (
         <form
-          className="grid gap-2 border-t border-border pt-3 md:grid-cols-3"
+          className="grid min-w-0 gap-2 border-t border-border pt-3 md:grid-cols-3 [&>*]:min-w-0 [&_input]:min-w-0"
           onSubmit={(e) => {
             e.preventDefault();
             createRole.mutate(
