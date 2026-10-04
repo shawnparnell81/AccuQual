@@ -46,7 +46,7 @@ describe("Calibration module (real DB + real HTTP path)", () => {
 
     qualityToken = await makeUser("quality");
     qualityManagerToken = await makeUser("quality", "quality_manager");
-    engineeringToken = await makeUser("engineering"); // Engineering maintains the Master Equipment List
+    engineeringToken = await makeUser("engineering"); // default calibration access is read
   });
 
   afterAll(async () => {
@@ -54,10 +54,9 @@ describe("Calibration module (real DB + real HTTP path)", () => {
     await pool.end();
   });
 
-  it("engineering can create equipment on the master list", async () => {
+  it("engineering cannot create equipment without assigned calibration edit", async () => {
     const res = await request(app).post("/equipment").set("Authorization", `Bearer ${engineeringToken}`).send({ name: "Engineering Gauge", calibrationIntervalDays: 90 });
-    expect(res.status).toBe(201);
-    expect(res.body.name).toBe("Engineering Gauge");
+    expect(res.status).toBe(403);
   });
 
   it("logging a calibration event computes nextDueAt as performedAt + calibrationIntervalDays", async () => {
@@ -93,11 +92,10 @@ describe("Calibration module (real DB + real HTTP path)", () => {
   });
 
   // H2: PATCH/DELETE were never mounted at all before this fix.
-  it("quality and engineering can edit equipment", async () => {
+  it("quality can edit equipment and engineering cannot without assigned calibration edit", async () => {
     const id = await createEquipment(qualityToken);
     const engineering = await request(app).patch(`/equipment/${id}`).set("Authorization", `Bearer ${engineeringToken}`).send({ name: "Engineering Rename" });
-    expect(engineering.status).toBe(200);
-    expect(engineering.body.name).toBe("Engineering Rename");
+    expect(engineering.status).toBe(403);
 
     const res = await request(app).patch(`/equipment/${id}`).set("Authorization", `Bearer ${qualityToken}`).send({ name: "Renamed Gauge", location: "Cal Lab B" });
     expect(res.status).toBe(200);
@@ -108,10 +106,13 @@ describe("Calibration module (real DB + real HTTP path)", () => {
     expect(trail.some((t) => t.entityType === "Equipment" && t.action === "update")).toBe(true);
   });
 
-  it("a quality operator cannot delete equipment", async () => {
+  it("a quality operator with calibration edit can delete equipment with no calibration history", async () => {
     const id = await createEquipment(qualityToken);
     const res = await request(app).delete(`/equipment/${id}`).set("Authorization", `Bearer ${qualityToken}`);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(204);
+
+    const getAfter = await request(app).get(`/equipment/${id}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(getAfter.status).toBe(404);
   });
 
   it("equipment with no calibration history can be deleted by a quality manager, and it is a real audited delete", async () => {
@@ -138,12 +139,12 @@ describe("Calibration module (real DB + real HTTP path)", () => {
     expect(getAfter.status).toBe(200);
   });
 
-  it("engineering can delete equipment with no calibration history", async () => {
+  it("engineering cannot delete equipment without assigned calibration edit", async () => {
     const id = await createEquipment(qualityToken);
     const res = await request(app).delete(`/equipment/${id}`).set("Authorization", `Bearer ${engineeringToken}`);
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(403);
 
     const getAfter = await request(app).get(`/equipment/${id}`).set("Authorization", `Bearer ${qualityToken}`);
-    expect(getAfter.status).toBe(404);
+    expect(getAfter.status).toBe(200);
   });
 });
