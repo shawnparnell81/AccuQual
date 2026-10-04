@@ -56,13 +56,19 @@ export function PermissionsDepartmentAccessTab() {
   if (isLoading) return <LoadingPlaceholder />;
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[900px] text-sm">
+    <div className="max-w-full rounded-lg border border-border">
+      <table className="aq-fit-table text-sm">
+        <colgroup>
+          <col style={{ width: "22%" }} />
+          {DEPARTMENTS.map((d) => (
+            <col key={d.key} />
+          ))}
+        </colgroup>
         <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
           <tr>
-            <th className="sticky left-0 z-10 bg-muted/50 px-3 py-2">Module</th>
+            <th className="px-1.5 py-2">Module</th>
             {DEPARTMENTS.map((d) => (
-              <th key={d.key} className="px-3 py-2">
+              <th key={d.key} className="px-1 py-2">
                 {d.label}
               </th>
             ))}
@@ -71,18 +77,19 @@ export function PermissionsDepartmentAccessTab() {
         <tbody>
           {modules.map((m) => (
             <tr key={m.key} className="border-t border-border">
-              <td className="sticky left-0 z-10 bg-card px-3 py-1.5 font-medium">{m.label}</td>
+              <td className="bg-card px-1.5 py-1.5 font-medium">{m.label}</td>
               {DEPARTMENTS.map((d) => {
                 const cell = cellByKey.get(`${d.key}:${m.key}`);
                 const level = cell?.accessLevel ?? "none";
                 const isOverride = cell?.isOverride ?? false;
                 return (
-                  <td key={d.key} className="px-3 py-1.5">
-                    <div className="flex items-center gap-1">
+                  <td key={d.key} className="px-1 py-1.5">
+                    <div className="flex min-w-0 flex-col items-stretch gap-0.5">
                       <select
+                        aria-label={`${m.label} for ${d.label}`}
                         value={level}
                         onChange={(e) => setLevel.mutate({ departmentName: d.key, moduleName: m.key, accessLevel: e.target.value as ModuleAccessLevel })}
-                        className={`rounded-md border px-1.5 py-1 text-xs ${
+                        className={`w-full min-w-0 max-w-full rounded-md border px-1 py-1 text-xs ${
                           isOverride ? "border-primary/40 bg-primary/5 font-medium text-foreground" : "border-border bg-transparent text-muted-foreground"
                         }`}
                       >
@@ -96,7 +103,7 @@ export function PermissionsDepartmentAccessTab() {
                         <button
                           onClick={() => resetToDefault.mutate({ departmentName: d.key, moduleName: m.key })}
                           title="Reset to default"
-                          className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          className="self-start rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                         >
                           ↺
                         </button>

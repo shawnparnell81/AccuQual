@@ -23,7 +23,7 @@ export function RolesPermissionsPage() {
 
   return (
     <AdminOnlyGuard>
-      <div className="flex flex-col gap-4">
+      <div className="flex min-w-0 max-w-full flex-col gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Roles &amp; Permissions</h1>
           <p className="text-sm text-muted-foreground">

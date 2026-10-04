@@ -147,7 +147,7 @@ function EffectivePermissionsPanel({ userId }: { userId: number }) {
       {nonNone.length === 0 ? (
         <p className="text-xs text-muted-foreground">No module access at all — assign a department or a role above.</p>
       ) : (
-        <table className="w-full text-xs">
+        <table className="aq-fit-table text-xs">
           <thead className="text-left text-muted-foreground">
             <tr>
               <th className="pb-1">Module</th>
