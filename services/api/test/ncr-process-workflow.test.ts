@@ -114,7 +114,8 @@ describe("NCR process workflow", () => {
     expect(journal.entries.find((entry) => entry.tag === "0102_ncr_process_workflow")).toMatchObject({ idx: 102, tag: "0102_ncr_process_workflow" });
     expect(journal.entries.find((entry) => entry.tag === "0103_csa_first_article")).toMatchObject({ idx: 103, tag: "0103_csa_first_article" });
     expect(journal.entries.find((entry) => entry.tag === "0104_fuel_pump_fai")).toMatchObject({ idx: 104, tag: "0104_fuel_pump_fai" });
-    expect(journal.entries.at(-1)).toMatchObject({ idx: 105, tag: "0105_fai_record_plant" });
+    expect(journal.entries.find((entry) => entry.tag === "0105_fai_record_plant")).toMatchObject({ idx: 105, tag: "0105_fai_record_plant" });
+    expect(journal.entries.at(-1)).toMatchObject({ idx: 106, tag: "0106_pdf_exports" });
     expect(WORKFLOW_TEMPLATES.some((item) => item.key === "ncr_closure_notification")).toBe(false);
     expect(WORKFLOW_TEMPLATES.find((item) => item.key === "ncr_process")?.name).toBe(NCR_PROCESS_NAME);
   });
