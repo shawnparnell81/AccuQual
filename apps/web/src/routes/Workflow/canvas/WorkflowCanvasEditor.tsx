@@ -21,6 +21,8 @@ import clsx from "clsx";
 import { Trash2 } from "lucide-react";
 import { SelectField, TextField } from "../../../components/forms/Field";
 import { ActionFields, ConditionFields, conditionSummary, DEPARTMENT_OPTIONS, TRIGGER_KINDS } from "../WorkflowConfigFields";
+import { LinkedDocumentsEditor } from "../../../components/records/LinkedDocumentsEditor";
+import { parseLinkedDocuments } from "../../../lib/stepDocuments";
 import { INTEGRATION_KINDS, NODE_META, NODE_ORDER, edgeId, fromPayload, newNodeId, nodeExits, toPayload, type CanvasEdge, type CanvasNode, type NodeData, type WfMetadata, type WfNodeType, type WfPayload } from "./graph";
 import type { ValidationIssue } from "../../../api/versioning";
 
@@ -227,6 +229,17 @@ function Inspector({ node, edge, nodes, editable, actionKinds, onNodeChange, onE
 
       {n.type === "parallel" && <p className="text-xs text-muted-foreground">Everything connected after this step runs, in the order the connections were drawn.</p>}
       {n.type === "end" && <p className="text-xs text-muted-foreground">Nothing runs after this step on this path.</p>}
+
+      {(n.type === "action" || n.type === "approval" || n.type === "parallel") && (
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-medium">Linked documents</p>
+          <LinkedDocumentsEditor
+            documents={parseLinkedDocuments((n.config as { linkedDocuments?: unknown }).linkedDocuments)}
+            canEdit={editable}
+            onChange={(linkedDocuments) => setConfig({ ...n.config, linkedDocuments })}
+          />
+        </div>
+      )}
 
       {editable && <DeleteButton onClick={onDelete} label="Delete step" />}
     </fieldset>

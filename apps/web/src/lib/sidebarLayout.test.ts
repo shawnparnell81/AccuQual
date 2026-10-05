@@ -16,14 +16,14 @@ describe("sidebar layout", () => {
 
   it("moves an item into another section and reorders it", () => {
     const start = defaultPlacements();
-    const moved = moveSidebarItem(start, "training", "engineering", 0);
+    const moved = moveSidebarItem(start, "calendar", "quality", 0);
     assert.ok(moved);
-    const engineering = moved.find((item) => item.key === "engineering");
-    assert.equal(engineering?.children?.[0]?.key, "training");
-    assert.equal(moved.find((item) => item.key === "quality")?.children?.some((child) => child.key === "training"), false);
+    const quality = moved.find((item) => item.key === "quality");
+    assert.equal(quality?.children?.[0]?.key, "calendar");
+    assert.equal(moved.find((item) => item.key === "home")?.children?.some((child) => child.key === "calendar"), false);
 
-    const nudged = nudgeSidebarItem(moved, "training", 1);
-    assert.equal(nudged?.find((item) => item.key === "engineering")?.children?.[1]?.key, "training");
+    const nudged = nudgeSidebarItem(moved, "calendar", 1);
+    assert.equal(nudged?.find((item) => item.key === "quality")?.children?.[1]?.key, "calendar");
   });
 
   it("refuses to put a section inside itself", () => {
@@ -47,14 +47,13 @@ describe("sidebar layout", () => {
 
   it("keeps a saved order and still shows a new catalog item", () => {
     const saved = defaultPlacements();
-    const workspace = saved.find((item) => item.key === "workspace");
-    assert.ok(workspace?.children);
-    workspace.children = workspace.children.filter((child) => child.key !== "calendar");
+    const home = saved.find((item) => item.key === "home");
+    assert.ok(home?.children);
+    home.children = home.children.filter((child) => child.key !== "calendar");
     const applied = applySidebarLayout(saved);
-    const home = applied.find((item) => item.key === "workspace");
-    assert.ok(home && isFolder(home));
-    assert.ok(home.children.some((child) => child.key === "calendar"));
-    assert.equal(home.children[0]?.key, "home");
+    const next = applied.find((item) => item.key === "home");
+    assert.ok(next && isFolder(next));
+    assert.ok(next.children.some((child) => child.key === "calendar"));
   });
 
   it("lifts a saved Document Control section above Quality and returns Quality folders to Quality", () => {
@@ -75,9 +74,11 @@ describe("sidebar layout", () => {
     const nextQuality = applied.find((item) => item.key === "quality");
     assert.ok(nextControl && isFolder(nextControl));
     assert.ok(nextQuality && isFolder(nextQuality));
+    const catalog = SIDEBAR_FOLDERS.find((item) => item.key === "document-control");
+    assert.ok(catalog && isFolder(catalog));
     assert.deepEqual(
       nextControl.children.map((child) => child.key),
-      ["folder-explorer", "dcr", "management-system"],
+      catalog.children.map((child) => child.key),
     );
     assert.equal(nextQuality.children.some((child) => child.key === "training"), true);
     assert.equal(nextQuality.children.some((child) => child.key === "product-alerts"), true);
@@ -87,15 +88,17 @@ describe("sidebar layout", () => {
 
   it("hides items the viewer cannot open after the admin rearranges them", () => {
     const start = placementsFromNodes(SIDEBAR_FOLDERS);
-    const moved = moveSidebarItem(start, "admin", "workspace", 0);
+    const moved = moveSidebarItem(start, "admin", "home", 0);
     assert.ok(moved);
     const arranged = applySidebarLayout(moved);
     const forStaff = visibleSidebar(arranged, false, { auditLog: false });
-    const workspace = forStaff.find((item) => item.key === "workspace");
-    assert.ok(workspace && isFolder(workspace));
-    assert.equal(workspace.children.some((child) => child.key === "admin"), false);
+    const home = forStaff.find((item) => item.key === "home");
+    assert.ok(home && isFolder(home));
+    assert.equal(home.children.some((child) => child.key === "admin"), false);
+    assert.equal(forStaff.some((item) => item.key === "admin"), false);
     const labels = sidebarDestinations(arranged, "training").map((item) => item.label);
-    assert.ok(labels.includes("Engineering"));
+    assert.ok(labels.includes("Quality"));
+    assert.ok(labels.includes("Documents"));
     assert.equal(labels.includes("Training"), false);
   });
 });

@@ -277,11 +277,16 @@ describe("DMA Industries palette", () => {
   const css = readFileSync(new URL("../styles/globals.css", import.meta.url), "utf8");
   const html = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
 
-  it("leaves the Classic primary triplets in place", () => {
-    assert.match(css, /--primary:\s*183 100% 50%/);
-    assert.match(css, /--primary:\s*192 91% 36%/);
-    assert.match(css, /--form-heading:\s*#1d3a5c/);
+  it("keeps DMA Blue as the Classic primary on a cool slate canvas", () => {
+    assert.match(css, /--primary:\s*213 85% 26%/);
+    assert.match(css, /--primary:\s*213 78% 62%/);
+    assert.match(css, /--button:\s*213 85% 26%/);
+    assert.match(css, /--background:\s*222 47% 8%/);
+    assert.match(css, /--background:\s*210 40% 98%/);
+    assert.match(css, /--form-heading:\s*#0a3c7b/);
+    assert.match(css, /--form-heading:\s*#f1f5f9/);
     assert.match(css, /--chart-critical:\s*#e11d48/);
+    assert.doesNotMatch(css, /--primary:\s*183 100% 50%/);
   });
 
   it("paints the scheme before the bundle loads", () => {

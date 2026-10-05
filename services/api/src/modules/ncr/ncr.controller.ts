@@ -1,8 +1,12 @@
 import type { NextFunction, Request, Response } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { ncr } from "../../drizzle/schema/ncr.js";
+import { documents } from "../../drizzle/schema/documents.js";
+import { assertRecordOnAllowedSite } from "../sites/siteAccess.js";
+import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { writeStepDocuments } from "./ncrStepDocuments.js";
 import { crudFactory } from "../../utils/crudFactory.js";
 import * as ncrService from "./ncr.service.js";
 import { syncNcrFormData, mapSeverityToClassification, ncrIsoDate } from "./ncr.formSync.js";
@@ -152,6 +156,32 @@ export const listNcrQuarantineItemsHandler = asyncHandler(async (req: Request, r
 export const addNcrQuarantineItemHandler = asyncHandler(async (req: Request, res: Response) => {
   const created = await quarantineService.addNcrQuarantineItem(req.db!, Number(req.params.id), req.body, req.user?.id);
   res.status(201).json(created);
+});
+
+/** PUT /ncr/:id/step-documents — published documents for one step. Other process fields stay. */
+export const setNcrStepDocumentsHandler = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const step = String(req.body.step);
+  const requested = req.body.documents as { id: number; title: string }[];
+  const [row] = await req.db!.select().from(ncr).where(eq(ncr.id, id));
+  if (!row || row.isDeleted) throw AppError.notFound("NCR");
+  assertRecordOnAllowedSite(row.siteId, req.allowedSiteIds, "NCR");
+  if (row.processData?.locked === true) throw AppError.badRequest("This NCR is closed and locked.");
+  const ids = [...new Set(requested.map((item) => item.id))];
+  const found = ids.length === 0 ? [] : await req.db!.select({ id: documents.id, title: documents.title, status: documents.status }).from(documents).where(and(inArray(documents.id, ids), eq(documents.isDeleted, false), eq(documents.status, "approved")));
+  if (found.length !== ids.length) throw AppError.badRequest("Link a published document. Drafts and missing files are not on this step.");
+  const byId = new Map(found.map((item) => [item.id, item.title]));
+  const linked = ids.map((documentId) => ({ id: documentId, title: byId.get(documentId) ?? requested.find((item) => item.id === documentId)?.title ?? "Document" }));
+  const processData = writeStepDocuments(row.processData, step, linked);
+  const [updated] = await req.db!.update(ncr).set({ processData, updatedAt: new Date() }).where(eq(ncr.id, id)).returning();
+  await recordAuditTrail(req.db!, {
+    entityType: "NCR",
+    entityId: id,
+    action: "update",
+    changes: { stepDocuments: { step, documents: linked } },
+    performedBy: req.user?.id,
+  });
+  res.json({ step, documents: linked, processData: updated?.processData ?? processData });
 });
 
 export const completeNcrDispositionHandler = asyncHandler(async (req: Request, res: Response) => {

@@ -10,6 +10,9 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import { canApproveFai, judgeFrozen, type PassFailWord } from "../../lib/faiLogic";
 import { faiFill } from "../../lib/qualitySheetLogic";
 import { personLabel } from "../../lib/opsLanguage";
+import { RecordFrame } from "../../components/records/RecordFrame";
+import { rememberRecord } from "../../lib/recentRecords";
+import { RecordReferences } from "../../components/records/WorkflowStepLinks";
 import "../IsoForms/isoForm.css";
 
 const CERTIFY = "I certify that I have reviewed this first article and that this decision is mine.";
@@ -43,6 +46,10 @@ export function FaiRecordPage() {
   }, [record.data, loaded, lines.length]);
 
   const data = record.data;
+  useEffect(() => {
+    if (!data) return;
+    rememberRecord({ path: `/fai/records/${data.id}`, title: data.number, type: "FAI" }, user?.id);
+  }, [data, user?.id]);
   const editable = data?.status === "open";
   const mayDecide = canApproveFai({ roleName: user?.roleName, department: user?.department }) && data?.status === "submitted";
 
@@ -88,7 +95,8 @@ export function FaiRecordPage() {
   if (record.isError || !data) return <p className="text-sm text-destructive">This first article could not be opened.</p>;
 
   return (
-    <div className="flex flex-col gap-3">
+    <RecordFrame
+      header={
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <Link to="/fai" className="text-xs text-primary hover:underline">First Article</Link>
@@ -100,6 +108,9 @@ export function FaiRecordPage() {
           </button>
         )}
       </div>
+      }
+      related={<RecordReferences modules={["fai", "csa_fai", "fuel_pump_fai"]} step={data.status} entityType="fai" entityId={data.id} />}
+    >
       <div className="iso-wrap">
         <table className="iso" data-testid="fai-record-sheet" aria-label="First article record">
           <tbody>
@@ -211,6 +222,6 @@ export function FaiRecordPage() {
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}
       {Number.isInteger(id) && <WorkflowHistoryPanel moduleName="fai" recordId={id} />}
-    </div>
+    </RecordFrame>
   );
 }

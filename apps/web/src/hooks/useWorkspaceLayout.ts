@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { useCurrentUser } from "./useAuth";
 
-export const HOME_SECTION_IDS = ["hero", "waiting-on-me", "kpis", "next", "whos-late", "waiting", "audits", "documents", "training", "onboarding", "attention", "inbox", "calendar"] as const;
+export const HOME_SECTION_IDS = ["waiting-on-me", "recent", "inbox", "onboarding", "hero", "kpis", "next", "whos-late", "waiting", "audits", "documents", "training", "attention", "calendar"] as const;
+/** Sections that stay off Home until someone turns them back on. Home is the work list, not a module catalog. */
+const DEFAULT_HOME_HIDDEN = ["hero", "kpis", "next", "whos-late", "waiting", "audits", "documents", "training", "attention", "calendar"];
 export const DASHBOARD_SECTION_IDS = ["hero", "open-work", "kpis", "engineering", "trend", "aging", "stuck", "activity"] as const;
 
 type Surface = "home" | "dashboard";
@@ -32,7 +34,7 @@ export function useWorkspaceSurface(surface: Surface, allowed: (id: string) => b
   });
 
   const saved = query.data?.[surface];
-  const hidden = new Set(saved?.hidden ?? []);
+  const hidden = new Set(saved ? (saved.hidden ?? []) : surface === "home" ? DEFAULT_HOME_HIDDEN : []);
   const order = mergeOrder(defaults, saved?.order);
   const shown = order.filter((id) => !hidden.has(id) && allowed(id));
   const arrangeIds = order.filter((id) => allowed(id));

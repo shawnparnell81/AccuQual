@@ -6,6 +6,8 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { fileChosenFolder, FormNumberEditor, RecordFolderField, SaveResult, type SaveResultState } from "../../components/forms/FormDocumentControls";
 import { validationReportsCrumb } from "../../lib/folderBrowse";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
+import { RecordFrame } from "../../components/records/RecordFrame";
+import { RecordReferences } from "../../components/records/WorkflowStepLinks";
 import { SaveStatus } from "../../components/shared/SaveStatus";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
@@ -26,6 +28,7 @@ import { PartInspectionSheet } from "./PartInspectionSheet";
 import { ValidationReportSheet } from "./ValidationReportSheet";
 import { FormHeader } from "../../components/brand/DmaLogo";
 import { withChoice, type SignatureChoice } from "../../components/forms/signatureRequired";
+import { rememberRecord } from "../../lib/recentRecords";
 
 interface ValidationReport {
   id: number;
@@ -78,6 +81,12 @@ export function ValidationReportDetailPage() {
   const documentNumber = templates.data?.find((item) => item.formKey === formKey)?.formId ?? "";
 
   useEffect(() => {
+    if (!report) return;
+    const formTitle = VALIDATION_FORMS[formTypeOf(report.data)].title;
+    rememberRecord({ path: `/validation-reports/${report.id}`, title: `${formTitle} #${report.id}`, type: "Validation" }, user?.id);
+  }, [report, user?.id]);
+
+  useEffect(() => {
     if (!report || loadedFor === report.id) return;
     const next = loadCells(formTypeOf(report.data), report.data);
     setCells(next);
@@ -125,7 +134,10 @@ export function ValidationReportDetailPage() {
   }
 
   return (
-    <div className="validation-report-print flex min-w-0 flex-col gap-4">
+    <RecordFrame
+      className="validation-report-print min-w-0"
+      relatedPlacement="below"
+      header={
       <div className="no-print flex flex-col gap-4">
         <RecordCrumbs
           items={[
@@ -155,7 +167,7 @@ export function ValidationReportDetailPage() {
               title={cells.B6 == null ? null : String(cells.B6)}
               navigateTo={validationReportsCrumb().to}
             />
-            <span className="rounded-md px-2 py-1 text-sm font-semibold" style={{ background: badge, color: "#111" }} data-testid="validation-overall">
+            <span className="rounded-md px-2 py-1 text-sm font-semibold" style={{ background: badge, color: passed || failed ? "#111" : undefined }} data-testid="validation-overall">
               {result}
             </span>
             <SaveStatus saving={updateReport.isPending || pending} unsaved={dirty && !updateReport.isPending && !pending} />
@@ -176,7 +188,9 @@ export function ValidationReportDetailPage() {
           </div>
         </div>
       </div>
-
+      }
+      related={<RecordReferences modules={["documents", "validation"]} step={meta.title} entityType="validation_report" entityId={reportId} />}
+    >
       <div className="aq-print-sheet min-w-0 rounded-lg border border-border bg-card p-4">
         <FormHeader />
         {formType === "fuel_pump" ? (
@@ -267,6 +281,6 @@ export function ValidationReportDetailPage() {
           />
         )}
       </div>
-    </div>
+    </RecordFrame>
   );
 }
