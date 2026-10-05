@@ -49,6 +49,8 @@ export const QuarantinePage = lazyNamed("/quarantine", () => import("./Quarantin
 export const QuarantineDetailPage = lazyNamed("/quarantine", () => import("./Quarantine/QuarantineDetailPage"), "QuarantineDetailPage");
 export const DocumentDetailPage = lazyNamed("/documents", () => import("./Documents/DocumentDetailPage"), "DocumentDetailPage");
 export const FolderExplorerPage = lazyNamed("/documents/folders", () => import("./Documents/FolderExplorerPage"), "FolderExplorerPage");
+export const FormFoldersPage = lazyNamed("/form-folders", () => import("./FormFolders/FormFoldersPage"), "FormFoldersPage");
+export const FormFolderDetailPage = lazyNamed("/form-folders", () => import("./FormFolders/FormFoldersPage"), "FormFolderDetailPage");
 export const GeneralUploadsPage = lazyNamed("/documents/uploads", () => import("./Documents/GeneralUploadsPage"), "GeneralUploadsPage");
 export const TrainingPage = lazyNamed("/training", () => import("./Training/TrainingPage"), "TrainingPage");
 export const TrainingDetailPage = lazyNamed("/training", () => import("./Training/TrainingDetailPage"), "TrainingDetailPage");

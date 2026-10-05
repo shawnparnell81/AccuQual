@@ -12,6 +12,7 @@ import {
   FileEdit,
   FileSearch,
   FileText,
+  Folder,
   FolderTree,
   Gauge,
   GitBranch,
@@ -111,6 +112,7 @@ const DOCUMENT_CONTROL_FOLDER: SidebarFolder = {
   path: "/documents",
   children: [
     { key: "folder-explorer", label: "Folder Explorer", path: "/documents/folders", icon: FolderTree },
+    { key: "form-folders", label: "Folders", path: "/form-folders", icon: Folder },
     { key: "dcr", label: "Document changes", path: "/document-change-requests", icon: FileEdit },
     { key: "management-system", label: "Management System", path: "/management-system", icon: Building2 },
   ],

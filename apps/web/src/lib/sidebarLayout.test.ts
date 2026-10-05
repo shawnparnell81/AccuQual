@@ -77,7 +77,7 @@ describe("sidebar layout", () => {
     assert.ok(nextQuality && isFolder(nextQuality));
     assert.deepEqual(
       nextControl.children.map((child) => child.key),
-      ["folder-explorer", "dcr", "management-system"],
+      ["folder-explorer", "form-folders", "dcr", "management-system"],
     );
     assert.equal(nextQuality.children.some((child) => child.key === "training"), true);
     assert.equal(nextQuality.children.some((child) => child.key === "product-alerts"), true);

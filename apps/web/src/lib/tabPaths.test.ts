@@ -37,6 +37,8 @@ describe("saved tabs for removed pages", () => {
     assert.equal(isLiveTabPath("/settings/erp/presets/new"), true);
     assert.equal(isLiveTabPath("/settings/erp/sync-errors"), true);
     assert.equal(isLiveTabPath("/ncr/9"), true);
+    assert.equal(isLiveTabPath("/form-folders"), true);
+    assert.equal(isLiveTabPath("/form-folders/frm-ncr-001"), true);
     assert.equal(isLiveTabPath("/inventory/lots/4/label"), false);
     assert.equal(isLiveTabPath("/work-orders/4"), true);
     assert.equal(isLiveTabPath("/notifications"), true);

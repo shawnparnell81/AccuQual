@@ -43,7 +43,7 @@ describe("sidebar hierarchy", () => {
     assert.equal(control.path, "/documents");
     assert.deepEqual(
       control.children.map((child) => child.label),
-      ["Folder Explorer", "Document changes", "Management System"],
+      ["Folder Explorer", "Folders", "Document changes", "Management System"],
     );
     assert.deepEqual(
       quality.children.map((child) => child.label),

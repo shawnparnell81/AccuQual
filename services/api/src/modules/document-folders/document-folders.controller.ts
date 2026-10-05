@@ -22,6 +22,7 @@ import { ensureCompanyDocumentFolders, FILING_DRAWER_NAMES } from "./companyDocu
 import { MASTER_DOCUMENT_LIST_PATH, retargetRetiredRegisterLink } from "./formFiling.js";
 import { ensureFormTemplates, listFormTemplates } from "./formTemplates.js";
 import { fileFormRecord, filingQuery, getFormFiling, updateFormNumber } from "./formRecordFiling.js";
+import { getFormFolder, listFormFolders } from "./formFolders.js";
 import { formFilings } from "../../drizzle/schema/formFilings.js";
 import { folderNameKey } from "./editableForms.js";
 import { ancestorNames, isRetiredFolderPlacement } from "./retiredFolderCleanup.js";
@@ -245,6 +246,16 @@ export const formFiling = asyncHandler(async (req: Request, res: Response) => {
 export const fileForm = asyncHandler(async (req: Request, res: Response) => {
   const body = req.body as { formKey: string; recordId: number; folderId: number; partNumber?: string };
   res.status(201).json(await fileFormRecord(req.db!, body, req.user?.id));
+});
+
+/** One folder per fillable form. Counts are saved copies, not blank templates. */
+export const formFolders = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await listFormFolders(req.db!));
+});
+
+/** Saved filled copies of one form, newest save date first. */
+export const formFolderDetail = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await getFormFolder(req.db!, String(req.params.formKey ?? "")));
 });
 
 /** Full flat folder list for the company, seeding the default department tree on first use. */
