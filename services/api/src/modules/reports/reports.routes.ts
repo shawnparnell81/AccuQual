@@ -13,6 +13,7 @@ import {
   scheduleReportHandler,
   weeklyReportHandler,
 } from "./reports.controller.js";
+import { engineeringReportRouter } from "../quality-engineering-report/routes.js";
 
 /**
  * Quality reports read the module tables that already exist. Each section
@@ -22,6 +23,7 @@ import {
 export const reportsRouter = Router();
 reportsRouter.use(requireAuth, withDb, withSiteContext);
 
+reportsRouter.use("/engineering", engineeringReportRouter);
 reportsRouter.get("/templates", listTemplatesHandler);
 reportsRouter.get("/templates/:key", getTemplateHandler);
 reportsRouter.get("/schedule", scheduleReportHandler);

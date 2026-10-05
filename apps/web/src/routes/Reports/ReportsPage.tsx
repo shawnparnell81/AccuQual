@@ -6,6 +6,7 @@ import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage, extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { useSites } from "../../hooks/useSites";
 import { PdfExportActions } from "../../components/records/PdfExportActions";
+import { EngineeringMonthlyReport } from "./EngineeringMonthlyReport";
 
 type ReportKind = "weekly" | "monthly" | "adhoc";
 
@@ -66,6 +67,7 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
   const toast = useToast();
   const sites = useSites();
   const [kind, setKind] = useState<ReportKind>("weekly");
+  const [engineering, setEngineering] = useState(false);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [plantId, setPlantId] = useState("all");
@@ -129,10 +131,36 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
       <div>
         {!embedded && <h1 className="text-2xl font-semibold">Reports</h1>}
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Weekly, monthly, and custom quality reports from the records already in NCR, CAPA, receiving, and the other modules. A section you can't read is left out. A section whose table isn't in this database is skipped.
+          Weekly, monthly, and custom quality reports from the records already in NCR, CAPA, receiving, and the other modules. A section you can't read is left out. A section whose table isn't in this database is skipped. Quality / Engineering is the monthly pack (TMP-ENG-001): supplier upload for claim charts, live NCR and quarantine for the month, and a PDF.
         </p>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        {KINDS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => {
+              setEngineering(false);
+              setKind(item.key);
+            }}
+            className={!engineering && item.key === kind ? "rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground" : "rounded-md border border-border px-3 py-1.5 text-sm"}
+          >
+            {item.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setEngineering(true)}
+          className={engineering ? "rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground" : "rounded-md border border-border px-3 py-1.5 text-sm"}
+        >
+          Quality / Engineering
+        </button>
+      </div>
+
+      {engineering ? (
+        <EngineeringMonthlyReport />
+      ) : (
       <form
         className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4"
         onSubmit={(event) => {
@@ -141,18 +169,6 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
           run.mutate();
         }}
       >
-        <div className="flex flex-wrap gap-2">
-          {KINDS.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setKind(item.key)}
-              className={item.key === kind ? "rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground" : "rounded-md border border-border px-3 py-1.5 text-sm"}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <SelectField
             label="Plant"
@@ -205,8 +221,9 @@ export function ReportsPage({ embedded = false }: { embedded?: boolean }) {
         {notice && <p className="text-sm text-muted-foreground">{notice}</p>}
         <PdfExportActions exportId={exportId} entityType="quality_report" />
       </form>
+      )}
 
-      {report && (
+      {!engineering && report && (
         <div className="flex flex-col gap-4">
           <div className="rounded-lg border border-border bg-card p-4">
             <h2 className="text-lg font-semibold">{report.header.title}</h2>

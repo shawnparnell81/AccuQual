@@ -168,7 +168,8 @@ BEGIN
       ('sso_connections',             ARRAY[]::text[]),
       ('sso_domains',                 ARRAY[]::text[]),
       ('user_identities',             ARRAY['last_login_at']),
-      ('controlled_versions',         ARRAY['payload'])
+      ('controlled_versions',         ARRAY['payload']),
+      ('quality_engineering_reports', ARRAY['supplier_data'])
     ) AS s(tbl, excluded)
   LOOP
     CONTINUE WHEN to_regclass('public.' || spec.tbl) IS NULL;

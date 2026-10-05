@@ -22,8 +22,8 @@ const DIRECT_RESOURCE: Record<string, Parameters<typeof getUserAccessLevel>[2]> 
 export async function assertCanReadExport(req: Request, row: PdfExport): Promise<void> {
   if (req.user?.roleName === "supplier") throw AppError.forbidden("You can't open this record.");
   if (!req.user || !req.db) throw AppError.forbidden("You can't open this record.");
-  if (row.entityType === "quality_report" || row.entityType == null) {
-    if (row.entityType === "quality_report") return;
+  if (row.entityType === "quality_report" || row.entityType === "quality_engineering_report" || row.entityType == null) {
+    if (row.entityType === "quality_report" || row.entityType === "quality_engineering_report") return;
   }
   const entityType = row.entityType;
   const entityId = row.entityId;
