@@ -11,7 +11,12 @@ import { attachments } from "../../src/drizzle/schema/attachments.js";
 import { auditTrail } from "../../src/drizzle/schema/auditTrail.js";
 import { eightD } from "../../src/drizzle/schema/eightD.js";
 import { ncr } from "../../src/drizzle/schema/ncr.js";
-import { quarantineRecords } from "../../src/drizzle/schema/quarantine.js";
+import { quarantineRecords, quarantineResolutions } from "../../src/drizzle/schema/quarantine.js";
+import { csaFaiRecords } from "../../src/drizzle/schema/csaFai.js";
+import { fuelPumpFaiRecords } from "../../src/drizzle/schema/fuelPumpFai.js";
+import { faiInspectionPlans, faiPlanRevisions, faiRecords } from "../../src/drizzle/schema/faiSourceControl.js";
+import { suppliers } from "../../src/drizzle/schema/supplier.js";
+import { pdfExports } from "../../src/drizzle/schema/pdfExports.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 
@@ -229,5 +234,162 @@ describe("record delete", () => {
     const still = await request(app).get(`/validation-reports/${csa.body.id}`).set("Authorization", `Bearer ${creator.token}`);
     expect(still.status).toBe(200);
     expect(still.body.data.formType).toBe("csa");
+  });
+
+  it("deletes an NCR after its quarantine items have a decision, and keeps that decision", async () => {
+    const created = await request(app).post("/ncr").set("Authorization", `Bearer ${creator.token}`).send({ title: `Dispositioned ${suffix}` });
+    expect(created.status).toBe(201);
+    const ncrId = created.body.id as number;
+
+    const held = await request(app)
+      .post(`/ncr/${ncrId}/quarantine-items`)
+      .set("Authorization", `Bearer ${creator.token}`)
+      .send({ partNumber: "PN-DECIDED", quantity: 1 });
+    expect(held.status).toBe(201);
+    const quarantineId = held.body.id as number;
+
+    const disposition = await request(app).post(`/ncr/${ncrId}/disposition`).set("Authorization", `Bearer ${creator.token}`).send({ disposition: "scrap" });
+    expect(disposition.status).toBe(200);
+
+    const [decisionBefore] = await db.select().from(quarantineResolutions).where(eq(quarantineResolutions.quarantineId, quarantineId));
+    expect(decisionBefore).toBeTruthy();
+
+    await db.insert(pdfExports).values({
+      exportId: `exp_${suffix}-ncr-${ncrId}`,
+      sourceModule: "ncr",
+      entityType: "ncr",
+      entityId: ncrId,
+      sha256: "abc",
+      fileSize: 4,
+      renderer: "test",
+      filePath: `/tmp/ncr-${ncrId}-export.pdf`,
+      generatedAt: new Date(),
+    });
+
+    const removed = await request(app).delete(`/ncr/${ncrId}`).set("Authorization", `Bearer ${qualityManager.token}`);
+    expect(removed.status).toBe(204);
+
+    const gone = await request(app).get(`/ncr/${ncrId}`).set("Authorization", `Bearer ${qualityManager.token}`);
+    expect(gone.status).toBe(404);
+
+    const [keptHold] = await db.select().from(quarantineRecords).where(eq(quarantineRecords.id, quarantineId));
+    expect(keptHold).toBeTruthy();
+    expect(keptHold!.ncrId).toBeNull();
+    const [decision] = await db.select().from(quarantineResolutions).where(eq(quarantineResolutions.quarantineId, quarantineId));
+    expect(decision).toBeTruthy();
+    expect(decision!.id).toBe(decisionBefore!.id);
+
+    const exportsLeft = await db.select().from(pdfExports).where(and(eq(pdfExports.entityType, "ncr"), eq(pdfExports.entityId, ncrId)));
+    expect(exportsLeft).toEqual([]);
+  });
+
+  it("clears first-article links and still deletes the NCR", async () => {
+    const created = await request(app).post("/ncr").set("Authorization", `Bearer ${creator.token}`).send({ title: `Linked FAI ${suffix}` });
+    expect(created.status).toBe(201);
+    const ncrId = created.body.id as number;
+    const opened = new Date();
+
+    const [csa] = await db
+      .insert(csaFaiRecords)
+      .values({
+        number: `CSA-${suffix}-${ncrId}`,
+        partNumber: "CSA-1",
+        partDescription: "Strut",
+        supplierName: "Titan",
+        supplierPartNumber: "T-1",
+        sampleLotNumber: "L1",
+        vehicleYear: "2026",
+        vehicleMake: "Acme",
+        vehicleModel: "Line",
+        position: "FL",
+        inspectorName: "Shawn",
+        dateOpened: opened,
+        status: "open",
+        stage: "open",
+        productFamily: "strut",
+        packet: {},
+        ncrId,
+      })
+      .returning();
+
+    const [pump] = await db
+      .insert(fuelPumpFaiRecords)
+      .values({
+        faiNumber: `FP-${suffix}-${ncrId}`,
+        partNumber: "FP-1",
+        supplier: "Titan",
+        sampleLotNumber: "L2",
+        application: "pump",
+        inspector: "Shawn",
+        dateOpened: opened,
+        status: "open",
+        workflowStage: "open",
+        packet: {},
+        linkedNcr: ncrId,
+      })
+      .returning();
+
+    const [supplier] = await db.insert(suppliers).values({ name: `FAI supplier ${suffix}-${ncrId}` }).returning();
+    const [plan] = await db.insert(faiInspectionPlans).values({ name: `Plan ${suffix}-${ncrId}`, scope: "part", partNumber: "FAI-1" }).returning();
+    const [revision] = await db
+      .insert(faiPlanRevisions)
+      .values({ planId: plan!.id, revision: 1, cadenceMonths: 6, scope: "part", partNumber: "FAI-1" })
+      .returning();
+    const [fai] = await db
+      .insert(faiRecords)
+      .values({
+        number: `FAI-${suffix}-${ncrId}`,
+        planId: plan!.id,
+        revisionId: revision!.id,
+        planRevision: 1,
+        partNumber: "FAI-1",
+        supplierId: supplier!.id,
+        supplierName: supplier!.name,
+        ncrId,
+      })
+      .returning();
+
+    const removed = await request(app).delete(`/ncr/${ncrId}`).set("Authorization", `Bearer ${qualityManager.token}`);
+    expect(removed.status).toBe(204);
+
+    const [csaRow] = await db.select().from(csaFaiRecords).where(eq(csaFaiRecords.id, csa!.id));
+    expect(csaRow!.ncrId).toBeNull();
+    const [pumpRow] = await db.select().from(fuelPumpFaiRecords).where(eq(fuelPumpFaiRecords.id, pump!.id));
+    expect(pumpRow!.linkedNcr).toBeNull();
+    const [faiRow] = await db.select().from(faiRecords).where(eq(faiRecords.id, fai!.id));
+    expect(faiRow!.ncrId).toBeNull();
+  });
+
+  it("refuses to delete a quarantine record that already has a decision", async () => {
+    const [hold] = await db
+      .insert(quarantineRecords)
+      .values({
+        itemType: "other",
+        itemLabel: "Decided hold",
+        quantity: "0",
+        originalQuantity: "1",
+        reason: "Already decided",
+        status: "released",
+        createdBy: creator.id,
+      })
+      .returning();
+    await db.insert(quarantineResolutions).values({
+      quarantineId: hold!.id,
+      action: "release",
+      disposition: "use_as_is",
+      quantity: "1",
+      notes: "Released after inspection",
+      resolvedBy: qualityManager.id,
+    });
+
+    const removed = await request(app).delete(`/quarantine/${hold!.id}`).set("Authorization", `Bearer ${qualityManager.token}`);
+    expect(removed.status).toBe(409);
+    expect(removed.body.message).toMatch(/decision on file/i);
+    expect(removed.body.message).not.toMatch(/unexpected error/i);
+
+    const [still] = await db.select().from(quarantineRecords).where(eq(quarantineRecords.id, hold!.id));
+    expect(still).toBeTruthy();
+    const [decision] = await db.select().from(quarantineResolutions).where(eq(quarantineResolutions.quarantineId, hold!.id));
+    expect(decision).toBeTruthy();
   });
 });

@@ -16,7 +16,7 @@ import { ncr, ncrAttachments } from "../../drizzle/schema/ncr.js";
 import { capa } from "../../drizzle/schema/capa.js";
 import { eightD } from "../../drizzle/schema/eightD.js";
 import { validationReports } from "../../drizzle/schema/validationReport.js";
-import { documents, documentFiles, documentVersions } from "../../drizzle/schema/documents.js";
+import { documents, documentComments, documentFiles, documentVersions } from "../../drizzle/schema/documents.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { controlledVersions } from "../../drizzle/schema/versioning.js";
 import { audits, auditItems } from "../../drizzle/schema/audits.js";
@@ -48,6 +48,10 @@ import { complaints } from "../../drizzle/schema/complaints.js";
 import { changeRequests } from "../../drizzle/schema/change.js";
 import { ppapPackages } from "../../drizzle/schema/ppap.js";
 import { trainingAssignments, trainingCompetencies, trainingCourses, trainingSessions } from "../../drizzle/schema/training.js";
+import { faiRecords } from "../../drizzle/schema/faiSourceControl.js";
+import { csaFaiRecords } from "../../drizzle/schema/csaFai.js";
+import { fuelPumpFaiRecords } from "../../drizzle/schema/fuelPumpFai.js";
+import { pdfExports } from "../../drizzle/schema/pdfExports.js";
 import { fmeaItems, riskAssessments, riskMitigations } from "../../drizzle/schema/risk.js";
 import { qmsFormRows, qmsForms } from "../../drizzle/schema/qmsForms.js";
 import { documentChangeItems, documentChangeRequests, documentChangeReviews } from "../../drizzle/schema/documentChangeRequests.js";
@@ -56,7 +60,7 @@ import { calibrations, equipment } from "../../drizzle/schema/calibration.js";
 import { isoQualityForms } from "../../drizzle/schema/isoQualityForms.js";
 import { customers } from "../../drizzle/schema/customers.js";
 import { salesQuotes } from "../../drizzle/schema/sales.js";
-import { assertNotOnLegalHold } from "../pdf-exports/legalHold.js";
+import { assertNotOnLegalHold, holdTypesFor } from "../pdf-exports/legalHold.js";
 
 const OWNER_FIELDS = ["createdBy", "createdByUserId", "ownerId", "requestedBy", "auditorId"] as const;
 
@@ -143,9 +147,52 @@ function jsonSnapshot(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value, (_key, item) => (item instanceof Date ? item.toISOString() : item)));
 }
 
-function fkCode(err: unknown): string | undefined {
-  const error = err as { code?: string; cause?: { code?: string } };
-  return error.code ?? error.cause?.code;
+interface PostgresFailure {
+  code?: string;
+  message: string;
+}
+
+/** Drizzle wraps the driver error. The SQLSTATE can sit on the error or any cause under it. */
+export function postgresFailure(err: unknown): PostgresFailure {
+  const messages: string[] = [];
+  let code: string | undefined;
+  let current: unknown = err;
+  const seen = new Set<unknown>();
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const row = current as { code?: unknown; message?: unknown; cause?: unknown };
+    if (!code && typeof row.code === "string") code = row.code;
+    if (typeof row.message === "string" && row.message.trim()) messages.push(row.message);
+    current = row.cause;
+  }
+  return { code, message: messages.join("\n") };
+}
+
+/**
+ * Turns a database refusal into a message a person can act on.
+ * A bare 500 is what the UI shows when this returns null.
+ */
+export function deletionFailure(err: unknown): AppError | null {
+  const { code, message } = postgresFailure(err);
+  if (/quarantine decision cannot be edited or deleted/i.test(message)) {
+    return new AppError("This quarantine record has a decision on file and can't be deleted.", 409);
+  }
+  if (/published version cannot be deleted/i.test(message)) {
+    return new AppError("This document has a published revision and can't be deleted.", 409);
+  }
+  if (/decided competency evaluation cannot be edited or deleted/i.test(message)) {
+    return new AppError("This course has a recorded competency evaluation and can't be deleted.", 409);
+  }
+  if (/archived document/i.test(message)) {
+    return new AppError("This document is in Obsolete / Archive and is read-only. An administrator has to restore it before it can be changed.", 409);
+  }
+  if (code === "23503" || /violates foreign key constraint/i.test(message)) {
+    return new AppError("This record is still linked to other records and cannot be deleted.", 409);
+  }
+  if (code === "23000") {
+    return new AppError("This record is still linked to other records and cannot be deleted.", 409);
+  }
+  return null;
 }
 
 async function unlinkQuiet(path: string) {
@@ -209,7 +256,20 @@ function holdTarget(record: QuarantineRecord): HoldTarget | null {
   return target ?? null;
 }
 
+async function quarantineHasDecision(db: Db, quarantineId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: quarantineResolutions.id })
+    .from(quarantineResolutions)
+    .where(eq(quarantineResolutions.quarantineId, quarantineId))
+    .limit(1);
+  return Boolean(row);
+}
+
 async function deleteQuarantineRow(db: Db, record: QuarantineRecord, actor?: number) {
+  // The decision log is append-only. Deleting it raises SQLSTATE 23000, which used to escape as a generic 500.
+  if (await quarantineHasDecision(db, record.id)) {
+    throw new AppError("This quarantine record has a decision on file and can't be deleted.", 409);
+  }
   if (record.status === "quarantined") {
     const target = holdTarget(record);
     if (target) {
@@ -227,11 +287,24 @@ async function deleteNcrQuarantineChildren(db: Db, ncrId: number, files: string[
     .from(quarantineRecords)
     .where(and(eq(quarantineRecords.sourceType, "ncr"), eq(quarantineRecords.sourceId, ncrId)));
   for (const record of sourced) {
+    // A finished disposition writes a quarantine decision. That history stays; the NCR link is cleared below.
+    if (await quarantineHasDecision(db, record.id)) continue;
     const attached = await detachAttachments(db, ["quarantine"], record.id);
     files.push(...attached.paths);
     await deleteQuarantineRow(db, record, actor);
   }
   await clearLink(db, quarantineRecords, quarantineRecords.ncrId, ncrId);
+}
+
+async function removeStoredExports(db: Db, kind: RecordKind, entityId: number, files: string[]) {
+  const types = holdTypesFor(kind);
+  const rows = await db
+    .select()
+    .from(pdfExports)
+    .where(and(inArray(pdfExports.entityType, types), eq(pdfExports.entityId, entityId)));
+  if (rows.length === 0) return;
+  for (const row of rows) files.push(row.filePath);
+  await db.delete(pdfExports).where(inArray(pdfExports.id, rows.map((row) => row.id)));
 }
 
 function collectStoredPaths(value: unknown, out: string[]) {
@@ -294,9 +367,24 @@ async function deleteSupplierOwned(db: Db, supplierId: number, files: string[]) 
 }
 
 async function deleteDocumentOwned(db: Db, documentId: number, files: string[]) {
+  const [frozen] = await db
+    .select({ id: controlledVersions.id })
+    .from(controlledVersions)
+    .where(
+      and(
+        eq(controlledVersions.subjectType, "document"),
+        eq(controlledVersions.subjectId, documentId),
+        inArray(controlledVersions.status, ["published", "archived"]),
+      ),
+    )
+    .limit(1);
+  if (frozen) {
+    throw new AppError("This document has a published revision and can't be deleted.", 409);
+  }
   await db.update(documents).set({ currentVersionId: null }).where(eq(documents.id, documentId));
   const filesOnDisk = await db.select().from(documentFiles).where(eq(documentFiles.documentId, documentId));
   for (const file of filesOnDisk) files.push(file.filePath);
+  await removeWhere(db, documentComments, documentComments.documentId, documentId);
   await removeWhere(db, documentFiles, documentFiles.documentId, documentId);
   await removeWhere(db, documentVersions, documentVersions.documentId, documentId);
   await db.delete(controlledVersions).where(and(eq(controlledVersions.subjectType, "document"), eq(controlledVersions.subjectId, documentId)));
@@ -362,6 +450,9 @@ const specs: Record<RecordKind, KindSpec> = {
       await clearLink(db, erpPurchaseRequisitions, erpPurchaseRequisitions.linkedNcrId, id);
       await clearLink(db, crarClaims, crarClaims.qualityId, id);
       await clearLink(db, rmaLogRecords, rmaLogRecords.qualityId, id);
+      await clearLink(db, faiRecords, faiRecords.ncrId, id);
+      await clearLink(db, csaFaiRecords, csaFaiRecords.ncrId, id);
+      await clearLink(db, fuelPumpFaiRecords, fuelPumpFaiRecords.linkedNcr, id);
     },
     remove: (db, id) => removeWhere(db, ncr, ncr.id, id),
   },
@@ -506,6 +597,14 @@ const specs: Record<RecordKind, KindSpec> = {
     load: (db, id) => loadOne(db, trainingCourses, trainingCourses.id, id),
     cleanup: async (db, row, files) => {
       const id = row.id as number;
+      const [decided] = await db
+        .select({ id: trainingCompetencies.id })
+        .from(trainingCompetencies)
+        .where(and(eq(trainingCompetencies.courseId, id), inArray(trainingCompetencies.status, ["pass", "fail"])))
+        .limit(1);
+      if (decided) {
+        throw new AppError("This course has a recorded competency evaluation and can't be deleted.", 409);
+      }
       const assignments = await db.select().from(trainingAssignments).where(eq(trainingAssignments.courseId, id));
       for (const assignment of assignments) if (assignment.certificatePath) files.push(assignment.certificatePath);
       await removeWhere(db, trainingCompetencies, trainingCompetencies.courseId, id);
@@ -766,6 +865,7 @@ export async function deleteRecord(req: Request, kind: RecordKind): Promise<void
   try {
     const attached = await detachAttachments(req.db, spec.attachmentTypes, id);
     files.push(...attached.paths);
+    await removeStoredExports(req.db, kind, id, files);
     const linkedForms = await removeLinkedForms(req.db, id, [...new Set([...spec.formKeys, ...spec.attachmentTypes])]);
     await spec.cleanup(req.db, row, files, req.user.id);
     await spec.remove(req.db, id);
@@ -789,7 +889,8 @@ export async function deleteRecord(req: Request, kind: RecordKind): Promise<void
     });
   } catch (err) {
     if (err instanceof AppError) throw err;
-    if (fkCode(err) === "23503") throw new AppError("This record is still linked to other records and cannot be deleted.", 409);
+    const blocked = deletionFailure(err);
+    if (blocked) throw blocked;
     throw err;
   }
 
