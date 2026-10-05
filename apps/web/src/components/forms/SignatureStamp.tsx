@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { NOT_REQUIRED_LABEL, type SignatureChoice } from "./signatureRequired";
 
@@ -26,19 +26,49 @@ function RequiredChoice({
   disabled?: boolean;
   onChange: (next: SignatureChoice) => void;
 }) {
-  const name = useId();
+  function choose(next: SignatureChoice) {
+    if (disabled || next === value) return;
+    onChange(next);
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLSpanElement>, option: SignatureChoice) {
+    if (disabled) return;
+    if (event.key === " " || event.key === "Enter") {
+      event.preventDefault();
+      choose(option);
+      return;
+    }
+    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+    event.preventDefault();
+    const next = option === "yes" ? "no" : "yes";
+    choose(next);
+    const group = event.currentTarget.parentElement;
+    group?.querySelector<HTMLElement>(`[data-choice="${next}"]`)?.focus();
+  }
+
   return (
-    <fieldset className="m-0 flex flex-wrap items-center gap-2 border-0 p-0 text-[11px] text-foreground">
-      <legend className="p-0 text-[11px] font-semibold">Required</legend>
-      <label className="inline-flex items-center gap-1">
-        <input type="radio" name={name} checked={value !== "no"} disabled={disabled} onChange={() => onChange("yes")} />
-        Yes
-      </label>
-      <label className="inline-flex items-center gap-1">
-        <input type="radio" name={name} checked={value === "no"} disabled={disabled} onChange={() => onChange("no")} />
-        No
-      </label>
-    </fieldset>
+    <div role="radiogroup" aria-label="Required" className="aq-required-choice">
+      <span className="aq-required-label">Required</span>
+      {(["yes", "no"] as const).map((option) => {
+        const selected = value === option;
+        const label = option === "yes" ? "Yes" : "No";
+        return (
+          <span
+            key={option}
+            role="radio"
+            data-choice={option}
+            aria-checked={selected}
+            aria-disabled={disabled || undefined}
+            tabIndex={disabled ? -1 : 0}
+            onClick={() => choose(option)}
+            onKeyDown={(event) => onKeyDown(event, option)}
+          >
+            <span className="aq-required-mark" aria-hidden="true" />
+            {label}
+          </span>
+        );
+      })}
+    </div>
   );
 }
 
@@ -68,9 +98,24 @@ export function SignatureStamp({
   const [busy, setBusy] = useState(false);
   const stamped = (value ?? "").trim();
   const sheet = variant === "sheet";
-  const waived = requirement?.value === "no";
+  // The record often keeps the previous choice until a save returns. Hold the
+  // click here so Yes/No, and the PIN block, move immediately.
+  const savedChoice = requirement?.value ?? "yes";
+  const [choiceDraft, setChoiceDraft] = useState<SignatureChoice | null>(null);
+  useEffect(() => {
+    setChoiceDraft(null);
+  }, [savedChoice]);
+  const choiceValue = choiceDraft ?? savedChoice;
+  const waived = requirement != null && choiceValue === "no";
   const choice = requirement ? (
-    <RequiredChoice value={requirement.value} disabled={requirement.disabled || disabled} onChange={requirement.onChange} />
+    <RequiredChoice
+      value={choiceValue}
+      disabled={requirement.disabled}
+      onChange={(next) => {
+        setChoiceDraft(next);
+        requirement.onChange(next);
+      }}
+    />
   ) : null;
 
   if (stamped) {
