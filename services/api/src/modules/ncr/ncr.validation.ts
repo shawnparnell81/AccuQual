@@ -41,6 +41,14 @@ export const verifyNcrSchema = z.object({
   verification: z.string().trim().min(1).max(4000),
 });
 
+/** Published documents linked on one NCR step. Replaces that step's list only. */
+export const ncrStepDocumentsSchema = z.object({
+  step: z.string().trim().min(1).max(80),
+  documents: z
+    .array(z.object({ id: z.number().int().positive(), title: z.string().trim().min(1).max(300) }))
+    .max(30),
+});
+
 export const addNcrQuarantineItemSchema = z.object({
   partNumber: z.string().trim().min(1).max(200),
   quantity: z.coerce.number().positive(),

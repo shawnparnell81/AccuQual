@@ -1,11 +1,15 @@
+import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
+import { useCurrentUser } from "../../hooks/useAuth";
+import { rememberRecord } from "../../lib/recentRecords";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { PrintFormButton } from "../../components/forms/PrintFormButton";
-import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
+import { RecordFrame } from "../../components/records/RecordFrame";
+import { RecordReferences } from "../../components/records/WorkflowStepLinks";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 
 interface ChangeRequest {
@@ -27,12 +31,18 @@ export function ChangeDetailPage() {
   const { data: change, isLoading, isError } = changeHooks.useOne(changeId);
   const approveAction = changeHooks.useAction("approve");
   const canEdit = useCanEditWorkflow("change");
+  const user = useCurrentUser();
+  useEffect(() => {
+    if (!change) return;
+    rememberRecord({ path: `/change/${change.id}`, title: change.title, type: "Change" }, user?.id);
+  }, [change, user?.id]);
 
   if (isError) return <p className="text-sm text-destructive">Couldn't load this record — try refreshing the page.</p>;
   if (isLoading || !change) return <LoadingPlaceholder />;
 
   return (
-    <div className="flex flex-col gap-4">
+    <RecordFrame
+      header={
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Change #{change.id} — {change.title}</h1>
@@ -49,7 +59,9 @@ export function ChangeDetailPage() {
           )}
         </div>
       </div>
-
+      }
+      related={<RecordReferences modules={["change", "ecr"]} step={change.status} entityType="change" entityId={change.id} />}
+    >
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-border bg-card p-4">
           <h2 className="mb-2 text-sm font-medium">Description</h2>
@@ -61,8 +73,6 @@ export function ChangeDetailPage() {
           <p className="text-sm text-muted-foreground">{change.impactAssessment || "Not yet documented."}</p>
         </div>
       </div>
-
-      <AttachmentsPanel entityType="change" entityId={change.id} />
-    </div>
+    </RecordFrame>
   );
 }

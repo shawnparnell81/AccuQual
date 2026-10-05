@@ -13,6 +13,7 @@ import {
   correctiveActionNcrSchema,
   dispositionStepNcrSchema,
   verifyNcrSchema,
+  ncrStepDocumentsSchema,
   bulkUpdateNcrSchema,
   addNcrQuarantineItemSchema,
   completeNcrDispositionSchema,
@@ -36,6 +37,7 @@ import {
   listNcrQuarantineItemsHandler,
   addNcrQuarantineItemHandler,
   completeNcrDispositionHandler,
+  setNcrStepDocumentsHandler,
 } from "./ncr.controller.js";
 
 export const ncrRouter = Router();
@@ -59,6 +61,7 @@ ncrRouter.post("/:id/root-cause", rejectLockedNcr, validate(rootCauseNcrSchema),
 ncrRouter.post("/:id/corrective-action", rejectLockedNcr, validate(correctiveActionNcrSchema), correctiveActionHandler);
 ncrRouter.post("/:id/disposition-step", rejectLockedNcr, validate(dispositionStepNcrSchema), dispositionStepHandler);
 ncrRouter.post("/:id/verify", rejectLockedNcr, validate(verifyNcrSchema), verifyHandler);
+ncrRouter.put("/:id/step-documents", rejectLockedNcr, validate(ncrStepDocumentsSchema), setNcrStepDocumentsHandler);
 ncrRouter.post("/:id/close", rejectLockedNcr, closeHandler);
 ncrRouter.get("/:id/quarantine-items", listNcrQuarantineItemsHandler);
 ncrRouter.post("/:id/quarantine-items", rejectLockedNcr, validate(addNcrQuarantineItemSchema), addNcrQuarantineItemHandler);

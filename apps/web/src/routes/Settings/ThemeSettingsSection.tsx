@@ -17,8 +17,8 @@ const MODES: Array<{ value: NonNullable<UserThemePreferences["mode"]>; label: st
 
 /** Fixed chips so each card still shows its own palette while the other scheme is active. */
 const SCHEME_CARDS: Array<{ id: ColorScheme; blurb: string; chips: [string, string, string] }> = [
-  { id: "classic", blurb: "Cyan on the original deep canvas", chips: ["#0B0F14", "#00F3FF", "#A855F7"] },
-  { id: "dma", blurb: "Navy, steel blue, and logo indigo", chips: ["#0A3C7B", "#507099", "#293170"] },
+  { id: "classic", blurb: "DMA Blue on a cool slate canvas", chips: ["#0B1220", "#0A3C7B", "#F8FAFC"] },
+  { id: "dma", blurb: "DMA Blue, steel, and logo indigo", chips: ["#0A3C7B", "#507099", "#293170"] },
 ];
 
 function useMyTheme() {
@@ -171,7 +171,7 @@ export function ThemeSettingsSection() {
             <div className="flex items-center gap-2">
               <input
                 type="color"
-                value={primaryColor || "#00f3ff"}
+                value={primaryColor || "#0A3C7B"}
                 onChange={(e) => setPrimaryColor(e.target.value)}
                 className="h-9 w-14 rounded border border-border bg-background"
               />
@@ -183,7 +183,7 @@ export function ThemeSettingsSection() {
             <div className="flex items-center gap-2">
               <input
                 type="color"
-                value={accentColor || "#a855f7"}
+                value={accentColor || "#507099"}
                 onChange={(e) => setAccentColor(e.target.value)}
                 className="h-9 w-14 rounded border border-border bg-background"
               />
