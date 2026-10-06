@@ -318,11 +318,11 @@ export function EngineeringMonthlyReport() {
   const status = narrative?.departmentStatus ?? "";
   const statusClass =
     status === "green"
-      ? "bg-emerald-500/20 text-emerald-900 dark:text-emerald-100"
+      ? "border border-success/40 bg-success/15 text-success"
       : status === "yellow"
-        ? "bg-amber-400/30 text-amber-950 dark:text-amber-50"
+        ? "border border-warning/40 bg-warning/15 text-warning"
         : status === "red"
-          ? "bg-rose-500/20 text-rose-900 dark:text-rose-100"
+          ? "border border-destructive/40 bg-destructive/15 text-destructive"
           : "bg-muted text-foreground";
 
   const quarantineRows = view?.live.quarantine.status === "ok" ? view.live.quarantine.data?.rows ?? [] : [];
