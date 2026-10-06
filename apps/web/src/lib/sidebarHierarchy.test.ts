@@ -21,21 +21,26 @@ const QUALITY_LABELS = [
 ];
 
 describe("sidebar hierarchy", () => {
-  it("puts Document Control above Quality and drops the Validation tab", () => {
+  it("keeps five doors, with Documents above Quality, and drops the Validation tab", () => {
     const labels = SIDEBAR_FOLDERS.map((folder) => folder.label);
-    const control = labels.indexOf("Document Control");
+    assert.deepEqual(labels, ["Home", "Documents", "Quality", "Folders", "Reports", "Admin"]);
+    const control = labels.indexOf("Documents");
     const quality = labels.indexOf("Quality");
     assert.ok(control >= 0 && quality === control + 1);
     assert.equal(labels.includes("Validation"), false);
     assert.equal(labels.includes("Validation Reports"), false);
+    assert.equal(labels.filter((label) => label === "Reports").length, 1);
 
     const links = flattenSidebarLinks();
     assert.equal(links.some((link) => link.path === "/folders/validation-reports" || link.label === "Validation Reports"), false);
     assert.equal(links.filter((link) => link.key === "document-control").length, 1);
+    assert.equal(links.filter((link) => link.label === "Reports").length, 1);
     assert.equal(links.filter((link) => link.key === "quality").length, 0);
+    const folders = links.find((link) => link.key === "form-folders");
+    assert.deepEqual(folders && { label: folders.label, path: folders.path }, { label: "Folders", path: "/form-folders" });
   });
 
-  it("keeps Document Control's own pages and Quality's own folders", () => {
+  it("keeps Documents on templates and the explorer, and Quality on its own folders", () => {
     const control = SIDEBAR_FOLDERS.find((folder) => folder.key === "document-control");
     const quality = SIDEBAR_FOLDERS.find((folder) => folder.key === "quality");
     assert.ok(control && isFolder(control));
@@ -43,11 +48,11 @@ describe("sidebar hierarchy", () => {
     assert.equal(control.path, "/documents");
     assert.deepEqual(
       control.children.map((child) => child.label),
-      ["Folder Explorer", "Document changes", "Management System"],
+      ["Blank Forms", "Folder Explorer", "Document changes", "Management System", "Drawings", "APQP"],
     );
     assert.deepEqual(
       quality.children.map((child) => child.label),
-      QUALITY_LABELS,
+      [...QUALITY_LABELS, "PPAP Packet", "Risk dashboard", "Process Change", "Engineering Planner", "Workflow Builder", "AI Insights"],
     );
     for (const label of QUALITY_LABELS) {
       assert.equal(control.children.some((child) => child.label === label), false, label);
@@ -58,7 +63,8 @@ describe("sidebar hierarchy", () => {
     for (const isAdmin of [false, true]) {
       const visible = visibleSidebar(SIDEBAR_FOLDERS, isAdmin, { auditLog: isAdmin });
       const labels = visible.map((folder) => ("label" in folder ? folder.label : ""));
-      assert.equal(labels.indexOf("Quality"), labels.indexOf("Document Control") + 1);
+      assert.equal(labels.indexOf("Quality"), labels.indexOf("Documents") + 1);
+      assert.equal(labels.includes("Admin"), isAdmin);
       assert.equal(flattenSidebarLinks(visible).some((link) => link.label === "Validation Reports"), false);
       const quality = visible.find((folder) => isFolder(folder) && folder.key === "quality");
       assert.ok(quality && isFolder(quality));

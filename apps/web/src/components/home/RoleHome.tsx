@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { WorkspaceArrange } from "./WorkspaceArrange";
 import { useWorkspaceSurface } from "../../hooks/useWorkspaceLayout";
@@ -21,6 +21,8 @@ import { useSites } from "../../hooks/useSites";
 import { useSiteStore } from "../../store/siteStore";
 import { WorkflowInbox } from "./WorkflowInbox";
 import { WaitingOnMe } from "./WaitingOnMe";
+import { readRecentRecords, type RecentRecord } from "../../lib/recentRecords";
+import { FRM_NCR_PATH } from "../../lib/qualityEntry";
 
 function useModuleList<T>(resource: string, enabled: boolean, siteKey: number | null | "shared", params?: Record<string, string>) {
   return useQuery({
@@ -113,7 +115,7 @@ export function RoleHome() {
   const lateCount = kind === "floor" ? summary.overdueCount : late.length;
 
   const allowed = (id: string) => {
-    if (id === "hero" || id === "waiting-on-me" || id === "kpis" || id === "onboarding" || id === "inbox" || id === "calendar") return true;
+    if (id === "hero" || id === "waiting-on-me" || id === "recent" || id === "kpis" || id === "onboarding" || id === "inbox" || id === "calendar") return true;
     if (id === "next") return kind !== "floor" && (can("ncr") || can("capa") || can("audit") || can("documents"));
     if (id === "whos-late" || id === "waiting") return kind === "lead" && (can("ncr") || can("capa") || can("documents"));
     if (id === "audits") return kind === "auditor" && can("audit");
@@ -125,6 +127,7 @@ export function RoleHome() {
   const { shown } = useWorkspaceSurface("home", allowed);
   const sections: Record<string, ReactNode> = {
     "waiting-on-me": <WaitingOnMe />,
+    recent: <RecentWork canStartNcr={can("ncr")} />,
     hero: (
       <Reveal>
         <div className="hero-surface rounded-2xl p-6 md:p-8">
@@ -200,6 +203,7 @@ export function RoleHome() {
   const homeLabels: Record<string, string> = {
     hero: "Greeting",
     "waiting-on-me": "WAITING ON ME",
+    recent: "Recent and new",
     kpis: "Counts",
     next: "Next step",
     "whos-late": "Who's late",
@@ -214,9 +218,65 @@ export function RoleHome() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
+      <p className="text-sm text-muted-foreground">
+        {hello}
+        {firstName ? `, ${firstName}` : ""}. Open work assigned to you is first.
+        {sub ? ` ${sub}` : ""}
+      </p>
       <WorkspaceArrange surface="home" labels={homeLabels} allowed={allowed} />
       {pairSections(shown, sections)}
+    </div>
+  );
+}
+
+function RecentWork({ canStartNcr }: { canStartNcr: boolean }) {
+  const user = useCurrentUser();
+  const [rows, setRows] = useState<RecentRecord[]>([]);
+  useEffect(() => {
+    setRows(readRecentRecords(user?.id));
+  }, [user?.id]);
+
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
+      <section className="rounded-lg border border-border bg-card p-4">
+        <h2 className="text-sm font-semibold tracking-wide">RECENT</h2>
+        {rows.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">Records you open show up here.</p>
+        ) : (
+          <table className="mt-2 w-full text-sm">
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.path} className="border-t border-border">
+                  <td className="w-28 py-1.5 text-muted-foreground">{row.type}</td>
+                  <td className="py-1.5">
+                    <Link to={row.path} className="font-medium text-primary hover:underline">
+                      {row.title}
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+      <section className="rounded-lg border border-border bg-card p-4">
+        <h2 className="text-sm font-semibold tracking-wide">NEW</h2>
+        <ul className="mt-2 flex flex-col gap-1 text-sm">
+          <li>
+            <Link to="/blank-forms" className="text-primary hover:underline">
+              Blank form
+            </Link>
+          </li>
+          {canStartNcr && (
+            <li>
+              <Link to={FRM_NCR_PATH} className="text-primary hover:underline">
+                FRM NCR
+              </Link>
+            </li>
+          )}
+        </ul>
+      </section>
     </div>
   );
 }
