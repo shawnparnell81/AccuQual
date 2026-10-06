@@ -66,28 +66,40 @@ export function BlankFormsPage() {
 
       <div className="flex flex-col gap-6" data-testid="blank-forms-list">
         {groups.map(([topic, forms]) => (
-          <section key={topic}>
-            <h2 className="mb-2 text-sm font-semibold">{topic}</h2>
-            <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card">
-              {forms
-                .slice()
-                .sort((a, b) => a.title.localeCompare(b.title) || a.formKey.localeCompare(b.formKey))
-                .map((form) => (
-                  <li key={form.formKey}>
-                    <button
-                      type="button"
-                      data-testid="blank-form"
-                      data-form-key={form.formKey}
-                      onClick={() => void openForm(form)}
-                      disabled={pendingKey !== null}
-                      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-60"
-                    >
-                      <span className="font-medium">{form.title}</span>
-                      {form.formId ? <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{form.formId}</span> : null}
-                    </button>
-                  </li>
-                ))}
-            </ul>
+          <section key={topic} className="rounded-lg border border-border bg-card p-4">
+            <h2 className="mb-3 text-sm font-semibold">{topic}</h2>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                  <th className="py-1.5 pr-3 font-medium">Number</th>
+                  <th className="py-1.5 pr-3 font-medium">Blank</th>
+                  <th className="py-1.5 font-medium">
+                    <span className="sr-only">Start</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {forms
+                  .slice()
+                  .sort((a, b) => a.title.localeCompare(b.title) || a.formKey.localeCompare(b.formKey))
+                  .map((form) => (
+                    <tr key={form.formKey} className="border-b border-border" data-testid="blank-form" data-form-key={form.formKey}>
+                      <td className="py-1.5 pr-3 text-muted-foreground">{form.formId || "—"}</td>
+                      <td className="py-1.5 pr-3 font-medium">{form.title}</td>
+                      <td className="py-1.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => void openForm(form)}
+                          disabled={pendingKey !== null}
+                          className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-60"
+                        >
+                          {pendingKey === form.formKey ? "Starting…" : "Start"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
           </section>
         ))}
       </div>

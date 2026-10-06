@@ -8,7 +8,6 @@ import {
   CalendarRange,
   ClipboardCheck,
   ClipboardList,
-  Cog,
   FileEdit,
   FileSearch,
   FileText,
@@ -107,42 +106,32 @@ function doc(key: keyof typeof DOCUMENT_FOLDER_PAGES, icon: LucideIcon): Sidebar
 
 const DOCUMENT_CONTROL_FOLDER: SidebarFolder = {
   key: "document-control",
-  label: "Document Control",
+  label: "Documents",
   icon: FileText,
   path: "/documents",
   children: [
+    { key: "blank-forms", label: "Blank Forms", path: "/blank-forms", icon: Library },
     { key: "folder-explorer", label: "Folder Explorer", path: "/documents/folders", icon: FolderTree },
-    { key: "form-folders", label: "Folders", path: "/form-folders", icon: Folder },
+    { key: "saved-form-folders", label: "Folders", path: "/form-folders", icon: Folder },
     { key: "dcr", label: "Document changes", path: "/document-change-requests", icon: FileEdit },
     { key: "management-system", label: "Management System", path: "/management-system", icon: Building2 },
+    doc("drawings", FileText),
+    doc("apqp", ClipboardList),
   ],
 };
 
-export const SIDEBAR_FOLDERS: SidebarFolder[] = [
+/**
+ * Five doors, plus Admin for people who already pass the admin check.
+ * The Folders door and Documents → Folders both open /form-folders.
+ * That page lists saved fills. Blank templates stay on Blank Forms.
+ */
+export const SIDEBAR_FOLDERS: SidebarNode[] = [
   {
-    key: "workspace",
-    label: "Workspace",
+    key: "home",
+    label: "Home",
     icon: LayoutDashboard,
-    children: [
-      { key: "home", label: "Home", path: "/home", icon: LayoutDashboard },
-      { key: "blank-forms", label: "Blank Forms", path: "/blank-forms", icon: Library },
-      { key: "calendar", label: "Calendar", path: "/calendar", icon: CalendarDays },
-      { key: "reporting", label: "Reports", path: "/reporting", icon: BarChart3 },
-      { key: "pareto", label: "Pareto", path: "/pareto", icon: PieChart },
-    ],
-  },
-  {
-    key: "engineering",
-    label: "Engineering",
-    icon: Cog,
-    children: [
-      doc("drawings", FileText),
-      doc("apqp", ClipboardList),
-      { key: "ppap", label: "PPAP Packet", path: "/ppap", icon: ClipboardList },
-      { key: "risk-dashboard", label: "Risk dashboard", path: "/risk/dashboard", icon: BarChart3 },
-      { key: "process-change", label: "Process Change", path: "/change", icon: GitBranch },
-      { key: "engineering-planner", label: "Engineering Planner", path: ENGINEERING_PLANNER_URL, icon: CalendarRange, external: true },
-    ],
+    path: "/home",
+    children: [{ key: "calendar", label: "Calendar", path: "/calendar", icon: CalendarDays }],
   },
   DOCUMENT_CONTROL_FOLDER,
   {
@@ -207,19 +196,27 @@ export const SIDEBAR_FOLDERS: SidebarFolder[] = [
       },
       { key: "quarantine", label: "Quarantined items", path: "/quarantine", icon: ShieldAlert },
       { key: "fai", label: "First Article", path: "/fai", icon: ClipboardList },
-    ],
-  },
-  {
-    key: "admin-tools",
-    label: "Admin & tools",
-    icon: Shield,
-    children: [
+      { key: "ppap", label: "PPAP Packet", path: "/ppap", icon: ClipboardList },
+      { key: "risk-dashboard", label: "Risk dashboard", path: "/risk/dashboard", icon: BarChart3 },
+      { key: "process-change", label: "Process Change", path: "/change", icon: GitBranch },
+      { key: "engineering-planner", label: "Engineering Planner", path: ENGINEERING_PLANNER_URL, icon: CalendarRange, external: true },
       { key: "workflow", label: "Workflow Builder", path: "/workflow", icon: Workflow },
       { key: "ai", label: "AI Insights", path: "/ai", icon: Sparkles },
-      { key: "audit-log", label: "Audit log", path: "/audit-log", icon: ScrollText, auditLog: true },
-      { key: "admin", label: "Admin", path: "/admin", icon: Shield, adminOnly: true },
     ],
   },
+  { key: "form-folders", label: "Folders", path: "/form-folders", icon: Folder },
+  {
+    key: "reporting",
+    label: "Reports",
+    icon: BarChart3,
+    path: "/reporting",
+    children: [
+      { key: "pareto", label: "Pareto", path: "/pareto", icon: PieChart },
+      { key: "dashboard", label: "Overview", path: "/", icon: LayoutDashboard },
+      { key: "audit-log", label: "Audit log", path: "/audit-log", icon: ScrollText, auditLog: true },
+    ],
+  },
+  { key: "admin", label: "Admin", path: "/admin", icon: Shield, adminOnly: true },
 ];
 
 /** Drops admin-only entries for everyone else, and folders that would be empty. */

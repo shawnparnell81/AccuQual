@@ -1,4 +1,5 @@
 import { Route, Navigate } from "react-router-dom";
+import { NotFoundPage } from "./NotFoundPage";
 import { homeKind } from "../lib/opsLanguage";
 import { FRM_NCR_PATH } from "../lib/qualityEntry";
 import { useCurrentUser } from "../hooks/useAuth";
@@ -256,10 +257,12 @@ export function workspaceRouteElements() {
       <Route path="company-branding" element={<AdminCompanyBrandingPage />} />
       <Route path="company-templates" element={<AdminCompanyTemplatesPage />} />
       <Route path="digital-twin" element={<AdminDigitalTwinSetupPage />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Route>,
     <Route key="/reporting" path="/reporting" element={<ReportingHubPage />} />,
     <Route key="/verify/:exportId" path="/verify/:exportId" element={<VerifyExportPage />} />,
     <Route key="/reports" path="/reports" element={<Navigate to="/reporting" replace />} />,
     <Route key="/notifications" path="/notifications" element={<NotificationsPage />} />,
+    <Route key="*" path="*" element={<NotFoundPage />} />,
   ];
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { createResourceHooks } from "../../api/resourceHooks";
 import { exportFormPdfResult } from "../../api/formHooks";
@@ -21,8 +21,12 @@ import { useFormEditorState } from "../../components/forms/useFormEditorState";
 import { CreateRiskButton } from "../../components/shared/CreateRiskButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { LoopTrail, RecordGlance } from "../../components/records/RecordStatus";
+import { RecordFrame } from "../../components/records/RecordFrame";
+import { NcrStepDocuments } from "../../components/records/NcrStepDocuments";
 import { NCR_STEPS, READ_ONLY_REASON, duePhrase, formatPerson, isPastDue, ncrLoopIndex, ncrNextAction, ncrStepKey, ncrStepLabel, statusPhrase } from "../../lib/opsLanguage";
 import { useCanEditWorkflow } from "../../hooks/useWorkflowAccess";
+import { useCurrentUser } from "../../hooks/useAuth";
+import { rememberRecord } from "../../lib/recentRecords";
 import { usePersonDirectory } from "../../hooks/usePersonDirectory";
 import { NcrQuarantineSection, ON_HOLD_BLOCK_MESSAGE } from "./NcrQuarantineSection";
 import { RepeatNcrBanner } from "./RepeatNcrBanner";
@@ -62,6 +66,11 @@ export function NcrWorkspacePage() {
   const [quarantineOnHold, setQuarantineOnHold] = useState(false);
 
   const { data: ncr, isLoading, isError } = ncrHooks.useOne(ncrId);
+  const user = useCurrentUser();
+  useEffect(() => {
+    if (!ncr) return;
+    rememberRecord({ path: `/ncr/${ncr.id}`, title: ncr.title || `NCR #${ncr.id}`, type: "NCR" }, user?.id);
+  }, [ncr, user?.id]);
   const updateNcr = ncrHooks.useUpdate();
   useSetAssistantContext("ncr", ncrId, ncr ? `NCR #${ncr.id}` : `NCR #${ncrId}`);
 
@@ -112,8 +121,8 @@ export function NcrWorkspacePage() {
   return (
     <FormSignProvider formType={FORM_TYPE} entityId={ncrId}>
     <PictureRecordProvider entityType="ncr" entityId={ncrId}>
-    <div className="flex flex-col gap-4">
-      <RecordGlance
+    <RecordFrame
+      header={<RecordGlance
         crumbs={[
           { label: "NCR", to: "/ncr" },
           { label: `NCR #${ncr.id}` },
@@ -208,8 +217,15 @@ export function NcrWorkspacePage() {
           </>
         }
         trail={<LoopTrail steps={NCR_STEPS} current={ncrLoopIndex(step)} />}
-      />
-
+      />}
+      related={
+        <>
+          <NcrStepDocuments ncrId={ncrId} step={step} stepLabel={stepLabel} processData={ncr.processData} canEdit={canEdit && ncr.processData?.locked !== true} />
+          <LinkedRecordsPanel ncrId={ncrId} ncrTitle={ncr.title} canEdit={canEdit} />
+          <AttachmentsPanel entityType="ncr" entityId={ncrId} title="Attachments" />
+        </>
+      }
+    >
       <RepeatNcrBanner ncrId={ncrId} canEdit={canEdit} />
 
       <NcrQuarantineSection ncrId={ncrId} canEdit={canEdit} onHoldChange={setQuarantineOnHold} />
@@ -278,10 +294,6 @@ export function NcrWorkspacePage() {
             )}
           </div>
 
-          <LinkedRecordsPanel ncrId={ncrId} ncrTitle={ncr.title} canEdit={canEdit} />
-
-          <AttachmentsPanel entityType="ncr" entityId={ncrId} />
-
           <div className="rounded-lg border border-border bg-card p-4">
             {formLoading || !layout ? (
               <p className="text-sm text-muted-foreground">Loading form…</p>
@@ -304,7 +316,7 @@ export function NcrWorkspacePage() {
       <Modal title="History" isOpen={showHistory} onClose={() => setShowHistory(false)}>
         <WorkflowHistoryPanel moduleName="ncr" recordId={ncrId} bare />
       </Modal>
-    </div>
+    </RecordFrame>
     </PictureRecordProvider>
     </FormSignProvider>
   );
@@ -423,7 +435,7 @@ function LinkedRecordsPanel({ ncrId, ncrTitle, canEdit }: { ncrId: number; ncrTi
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">What this connects to</h3>
+        <h3 className="text-sm font-medium">Related records</h3>
         <div className="flex flex-wrap items-center gap-2">
           {canEdit && (
           <button

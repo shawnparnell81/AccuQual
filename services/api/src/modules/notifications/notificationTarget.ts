@@ -13,15 +13,15 @@ interface TargetRule {
 }
 
 const RULES: Record<string, TargetRule> = {
-  ncr: { resource: "ncr", table: "ncr", path: (id) => `/ncr/${id}` },
-  NCR: { resource: "ncr", table: "ncr", path: (id) => `/ncr/${id}` },
-  capa: { resource: "capa", table: "capa", path: (id) => `/capa/${id}` },
-  CAPA: { resource: "capa", table: "capa", path: (id) => `/capa/${id}` },
-  "8D": { resource: "eight_d", table: "eight_d", path: (id) => `/8d/${id}` },
-  EightD: { resource: "eight_d", table: "eight_d", path: (id) => `/8d/${id}` },
-  document: { resource: "documents", table: "documents", path: (id) => `/documents/${id}` },
-  Document: { resource: "documents", table: "documents", path: (id) => `/documents/${id}` },
-  DocumentVersion: { resource: "documents", table: "documents", path: (id) => `/documents/${id}` },
+  ncr: { resource: "ncr", table: "ncr", path: (id) => `/ncr/${id}#record-current-step` },
+  NCR: { resource: "ncr", table: "ncr", path: (id) => `/ncr/${id}#record-current-step` },
+  capa: { resource: "capa", table: "capa", path: (id) => `/capa/${id}#record-current-step` },
+  CAPA: { resource: "capa", table: "capa", path: (id) => `/capa/${id}#record-current-step` },
+  "8D": { resource: "eight_d", table: "eight_d", path: (id) => `/8d/${id}#record-current-step` },
+  EightD: { resource: "eight_d", table: "eight_d", path: (id) => `/8d/${id}#record-current-step` },
+  document: { resource: "documents", table: "documents", path: (id) => `/documents/${id}#record-current-step` },
+  Document: { resource: "documents", table: "documents", path: (id) => `/documents/${id}#record-current-step` },
+  DocumentVersion: { resource: "documents", table: "documents", path: (id) => `/documents/${id}#record-current-step` },
   training: { resource: "training", table: "training_courses", path: (id) => `/training/${id}` },
   TrainingCourse: { resource: "training", table: "training_courses", path: (id) => `/training/${id}` },
   audit: { resource: "audit", table: "audits", path: (id) => `/audits/${id}` },
@@ -31,9 +31,10 @@ const RULES: Record<string, TargetRule> = {
   Rma: { resource: "rma", table: "rma", path: (id) => `/rma/${id}` },
   Supplier: { resource: "suppliers", table: "suppliers", path: (id) => `/suppliers/${id}` },
   InventoryItem: { resource: "inventory", table: "inventory_items", path: (id) => `/inventory/${id}` },
-  FaiRecord: { resource: "fai", table: "fai_records", path: (id) => `/fai/records/${id}` },
+  FaiRecord: { resource: "fai", table: "fai_records", path: (id) => `/fai/records/${id}#record-current-step` },
   FaiSource: { resource: "fai", table: "fai_source_approvals", path: () => "/fai/sources" },
-  Validation: { resource: "documents", table: "validation_reports", path: (id) => `/validation-reports/${id}` },
+  Validation: { resource: "documents", table: "validation_reports", path: (id) => `/validation-reports/${id}#record-current-step` },
+  ChangeRequest: { resource: "change", table: "change_requests", path: (id) => `/change/${id}#record-current-step` },
   FeasibilityReview: { resource: "feasibility", table: "feasibility_reviews", path: (id) => `/feasibility/${id}` },
   SupplierNcrRequest: { resource: "supplier_portal", table: "supplier_rma_requests", path: () => "/supplier-portal?tab=ncr_request" },
   WorkflowVersion: { resource: "workflow", table: "workflow_definitions", path: (id) => `/workflow/${id}` },
@@ -56,6 +57,13 @@ async function rowExists(db: Db, table: string, id: number): Promise<boolean> {
 
 export type NotificationOpenResult = { status: "open"; path: string } | { status: "none" } | { status: "unavailable" };
 
+/** Path for a known record, including the step anchor. Null when this type has no page. */
+export function notificationOpenPath(entityType: string, entityId: number): string | null {
+  const found = RULES[entityType];
+  if (!found) return null;
+  return found.path(entityId);
+}
+
 export async function resolveNotificationTarget(
   db: Db,
   user: { id: number; roleName: string | null; department: string | null },
@@ -68,5 +76,5 @@ export async function resolveNotificationTarget(
   const level = await getUserAccessLevel(db, user, found.resource);
   if (level === "none") return { status: "unavailable" };
   if (found.table && !(await rowExists(db, found.table, entityId))) return { status: "unavailable" };
-  return { status: "open", path: found.path(entityId) };
+  return { status: "open", path: notificationOpenPath(entityType, entityId)! };
 }

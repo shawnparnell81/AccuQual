@@ -17,6 +17,7 @@ import { deriveTabMeta } from "../../lib/tabMeta";
 import { StandardsDisclaimer } from "../shared/StandardsDisclaimer";
 import { MfaGraceBanner } from "../auth/MfaGraceBanner";
 import { LoadingPlaceholder } from "../shared/LoadingPlaceholder";
+import { RouteErrorBoundary } from "../shared/ErrorBoundary";
 import { DmaLogo, ProductLine } from "../brand/DmaLogo";
 import { GridClipboard } from "../shared/GridClipboard";
 
@@ -32,6 +33,7 @@ import { GridClipboard } from "../shared/GridClipboard";
  */
 function SupplierPortalShell() {
   const logout = useLogout();
+  const location = useLocation();
   return (
     <div className="flex h-screen w-full flex-col">
       <header className="aq-brand-bar flex h-[62px] items-center justify-between border-b border-border bg-[hsl(var(--brand-header))] px-4 text-white">
@@ -45,9 +47,11 @@ function SupplierPortalShell() {
       </header>
       <GridClipboard />
       <main className="flex-1 overflow-y-auto p-6">
-        <Suspense fallback={<LoadingPlaceholder />}>
-          <Outlet />
-        </Suspense>
+        <RouteErrorBoundary key={location.pathname}>
+          <Suspense fallback={<LoadingPlaceholder />}>
+            <Outlet />
+          </Suspense>
+        </RouteErrorBoundary>
       </main>
       <div className="border-t border-border bg-card px-4 py-1 text-center print:hidden">
         <StandardsDisclaimer />

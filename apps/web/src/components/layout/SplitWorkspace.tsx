@@ -9,6 +9,7 @@ import { deriveTabMeta } from "../../lib/tabMeta";
 import { isLiveTabPath } from "../../lib/tabPaths";
 import { locationPath, paneLocation, readSplit, resolvePaneTarget, writeSplit } from "../../lib/splitView";
 import { RecordEditBar } from "../shared/RecordEditBar";
+import { RouteErrorBoundary } from "../shared/ErrorBoundary";
 
 /**
  * Main workspace under the tab bar. One pane is the real router outlet.
@@ -89,9 +90,11 @@ export function SplitWorkspace() {
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-7">
             <div key={location.pathname + location.search} className={`page-enter mx-auto h-full ${open ? "max-w-none" : "max-w-[1500px]"}`}>
               <RecordEditBar />
-              <Suspense fallback={<LoadingPlaceholder />}>
-                <Outlet />
-              </Suspense>
+              <RouteErrorBoundary key={location.pathname}>
+                <Suspense fallback={<LoadingPlaceholder />}>
+                  <Outlet />
+                </Suspense>
+              </RouteErrorBoundary>
             </div>
           </div>
         </section>
@@ -243,9 +246,11 @@ function RightPaneRouter({ path }: { path: string }) {
   return (
     <Router location={location} navigator={navigator}>
       <RecordEditBar />
-      <Suspense fallback={<LoadingPlaceholder />}>
-        <Routes key={path}>{workspaceRouteElements()}</Routes>
-      </Suspense>
+      <RouteErrorBoundary key={path}>
+        <Suspense fallback={<LoadingPlaceholder />}>
+          <Routes key={path}>{workspaceRouteElements()}</Routes>
+        </Suspense>
+      </RouteErrorBoundary>
     </Router>
   );
 }

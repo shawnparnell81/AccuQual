@@ -73,24 +73,34 @@ export function FormFoldersPage() {
       {!folders.isLoading && !folders.isError && visible.length === 0 && <p className="text-sm text-muted-foreground">No forms match.</p>}
 
       {visible.length > 0 && (
-        <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card" data-testid="form-folders-list">
-          {visible.map((folder) => (
-            <li key={folder.formKey}>
-              <Link
-                to={`/form-folders/${encodeURIComponent(folder.formKey)}`}
-                data-testid="form-folder"
-                data-form-key={folder.formKey}
-                className="flex items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-muted"
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <Folder size={16} className="shrink-0 text-muted-foreground" />
-                  <span className="truncate font-medium">{folder.name}</span>
-                </span>
-                <span className="shrink-0 text-xs text-muted-foreground">{savedLabel(folder.savedCount)}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <div className="overflow-hidden rounded-lg border border-border bg-card" data-testid="form-folders-list">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                <th className="px-3 py-1.5 font-medium">Form</th>
+                <th className="px-3 py-1.5 text-right font-medium">Saved</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((folder) => (
+                <tr key={folder.formKey} className="border-b border-border last:border-b-0">
+                  <td className="px-3 py-1.5">
+                    <Link
+                      to={`/form-folders/${encodeURIComponent(folder.formKey)}`}
+                      data-testid="form-folder"
+                      data-form-key={folder.formKey}
+                      className="inline-flex min-w-0 items-center gap-2 font-medium text-primary hover:underline"
+                    >
+                      <Folder size={16} className="shrink-0 text-muted-foreground" />
+                      <span className="truncate">{folder.name}</span>
+                    </Link>
+                  </td>
+                  <td className="px-3 py-1.5 text-right text-muted-foreground">{savedLabel(folder.savedCount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -139,23 +149,40 @@ export function FormFolderDetailPage() {
       {!folder.isLoading && !folder.isError && fills.length === 0 && <p className="text-sm text-muted-foreground">No saved copies of this form yet.</p>}
 
       {fills.length > 0 && (
-        <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card" data-testid="saved-fills">
-          {fills.map((fill) => (
-            <li key={`${fill.recordId}-${fill.fileName}`} data-testid="saved-fill" data-file-name={fill.fileName} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 text-sm">
-              <Link to={fill.openPath} className="min-w-0 truncate font-medium text-primary hover:underline">
-                {fill.fileName}
-              </Link>
-              <span className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-                <time dateTime={fill.savedAt}>{formatDateTime(fill.savedAt)}</time>
-                {fill.documentsFolderId != null && (
-                  <Link to={documentsFolderHref(fill.documentsFolderId)} className="text-primary hover:underline">
-                    In Documents
-                  </Link>
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
+          <table className="w-full text-sm" data-testid="saved-fills">
+            <thead>
+              <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                <th className="px-3 py-1.5 font-medium">File name</th>
+                <th className="px-3 py-1.5 font-medium">Saved</th>
+                <th className="px-3 py-1.5 font-medium">Documents</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fills.map((fill) => (
+                <tr key={`${fill.recordId}-${fill.fileName}`} data-testid="saved-fill" data-file-name={fill.fileName} className="border-b border-border last:border-b-0">
+                  <td className="px-3 py-1.5">
+                    <Link to={fill.openPath} className="font-medium text-primary hover:underline">
+                      {fill.fileName}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-1.5 text-muted-foreground">
+                    <time dateTime={fill.savedAt}>{formatDateTime(fill.savedAt)}</time>
+                  </td>
+                  <td className="px-3 py-1.5">
+                    {fill.documentsFolderId != null ? (
+                      <Link to={documentsFolderHref(fill.documentsFolderId)} className="text-primary hover:underline">
+                        In Documents
+                      </Link>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

@@ -11,7 +11,6 @@ import { UserMenu } from "./UserMenu";
 import { ScanToFindDialog } from "./ScanToFindDialog";
 import { ThemeToggleButton } from "./ThemeToggleButton";
 import { BackButton } from "./BackButton";
-import { DASHBOARD_LEAF } from "./navConfig";
 import {
   flattenSidebarLinks,
   isFolder,
@@ -25,7 +24,6 @@ import {
 import { SidebarDragChrome, SidebarOrganizeProvider, SidebarResetButton, useArrangedSidebar, useSidebarOrganize, useSidebarRow } from "./sidebarOrganize";
 import { SidebarShortcutsButton } from "./sidebarShortcutsPanel";
 import { SHORTCUTS_FOLDER_KEY, isPersonalShortcutKey } from "../../lib/sidebarShortcuts";
-import { LayoutDashboard } from "lucide-react";
 import { prefetchRoute } from "../../routes/pages";
 import { DmaLogo, PRODUCT_LINE, ProductLine } from "../brand/DmaLogo";
 import {
@@ -329,17 +327,13 @@ function SidebarNav({
         <div className="aq-side-brand">
           <DmaLogo height={32} />
         </div>
-        <div className="aq-nav-group">
-          <NavLink to={DASHBOARD_LEAF.path} end title="Dashboard" onClick={closeSide} onMouseEnter={() => prefetchRoute(DASHBOARD_LEAF.path)} onFocus={() => prefetchRoute(DASHBOARD_LEAF.path)} className={({ isActive }) => clsx("aq-nav-link", isActive && "active")}>
-            <LayoutDashboard size={18} />
-            <span className="aq-nav-label">{DASHBOARD_LEAF.label}</span>
-          </NavLink>
-        </div>
         {folders.map((node) =>
           isFolder(node) ? (
             <FolderBlock key={node.key} node={node} open={folderOpen(node)} onToggle={() => toggleFolder(node.key, folderOpen(node))} isOpen={folderOpen} onToggleKey={toggleFolder} onNavigate={closeSide} pathname={pathname} />
           ) : (
-            <LeafLink key={node.key} node={node} onNavigate={closeSide} pathname={pathname} />
+            <div key={node.key} className="aq-nav-group">
+              <LeafLink node={node} onNavigate={closeSide} pathname={pathname} top />
+            </div>
           ),
         )}
       </div>
@@ -548,13 +542,14 @@ function SidebarDestination({ node, className, iconSize, onNavigate }: { node: S
   );
 }
 
-function LeafLink({ node, onNavigate, pathname }: { node: SidebarNode & { path: string }; onNavigate: () => void; pathname: string }) {
+function LeafLink({ node, onNavigate, pathname, top = false }: { node: SidebarNode & { path: string }; onNavigate: () => void; pathname: string; top?: boolean }) {
   const row = useSidebarRow(node.key, false);
   const organize = useSidebarOrganize();
   if (isFolder(node) || !node.path) return null;
   const active = pathMatches(pathname, node.path);
+  const linkClass = clsx("aq-nav-link", !top && "aq-nav-child", active && "active");
   if (!organize) {
-    return <SidebarDestination node={node} iconSize={16} onNavigate={onNavigate} className={clsx("aq-nav-link aq-nav-child", active && "active")} />;
+    return <SidebarDestination node={node} iconSize={top ? 18 : 16} onNavigate={onNavigate} className={linkClass} />;
   }
   return (
     <div className={clsx("aq-nav-link aq-nav-folder aq-nav-child", active && "active", row.dropClass)} onDragOver={row.onDragOver} onDragLeave={row.onDragLeave} onDrop={row.onDrop}>
