@@ -18,13 +18,26 @@ import {
 import { parseSupplierFile } from "./supplierParse.js";
 
 const SAMPLE_NAME = "quality-engineering-supplier-august-2026.csv";
+const MISSING_SAMPLE = "The sample supplier CSV is not included in this server build.";
 
 function samplePath(): string {
+  // Next to this module. `tsc` does not copy the CSV, so the API build script
+  // places it under dist/ beside the compiled service. Render runs that dist.
   return join(dirname(fileURLToPath(import.meta.url)), "sample", SAMPLE_NAME);
 }
 
+export function readSupplierTemplate(path: string): { fileName: string; body: Buffer } {
+  try {
+    return { fileName: SAMPLE_NAME, body: readFileSync(path) };
+  } catch (err) {
+    const code = typeof err === "object" && err && "code" in err ? String((err as { code: unknown }).code) : "";
+    if (code === "ENOENT") throw new AppError(MISSING_SAMPLE, 500);
+    throw err;
+  }
+}
+
 export function supplierTemplateFile(): { fileName: string; body: Buffer } {
-  return { fileName: SAMPLE_NAME, body: readFileSync(samplePath()) };
+  return readSupplierTemplate(samplePath());
 }
 
 function asSupplier(value: unknown): SupplierData {
