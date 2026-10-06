@@ -48,8 +48,10 @@ describe("sidebar hierarchy", () => {
     assert.equal(control.path, "/documents");
     assert.deepEqual(
       control.children.map((child) => child.label),
-      ["Blank Forms", "Folder Explorer", "Document changes", "Management System", "Drawings", "APQP"],
+      ["Blank Forms", "Folder Explorer", "Folders", "Document changes", "Management System", "Drawings", "APQP"],
     );
+    const folderLinks = flattenSidebarLinks().filter((link) => link.label === "Folders" && link.path === "/form-folders");
+    assert.equal(folderLinks.length, 2);
     assert.deepEqual(
       quality.children.map((child) => child.label),
       [...QUALITY_LABELS, "PPAP Packet", "Risk dashboard", "Process Change", "Engineering Planner", "Workflow Builder", "AI Insights"],

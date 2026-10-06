@@ -64,7 +64,7 @@ export function BlankFormsPage() {
       {startError && <p className="text-sm text-destructive">{startError}</p>}
       {!templates.isLoading && !templates.isError && groups.length === 0 && <p className="text-sm text-muted-foreground">No blanks match.</p>}
 
-      <div className="flex flex-col gap-4" data-testid="blank-forms-list">
+      <div className="flex flex-col gap-6" data-testid="blank-forms-list">
         {groups.map(([topic, forms]) => (
           <section key={topic} className="rounded-lg border border-border bg-card p-4">
             <h2 className="mb-3 text-sm font-semibold">{topic}</h2>

@@ -5,7 +5,7 @@ import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createDocumentFolderSchema, fileFormRecordSchema, updateDocumentFolderSchema, updateFormNumberSchema } from "./document-folders.validation.js";
-import { list, create, update, remove, uploadTemplate, uploadDocument, downloadTemplate, folderOfficeSessionHandler, removeTemplate, formTemplates, setFormNumber, formFiling, fileForm } from "./document-folders.controller.js";
+import { list, create, update, remove, uploadTemplate, uploadDocument, downloadTemplate, folderOfficeSessionHandler, removeTemplate, formTemplates, setFormNumber, formFiling, fileForm, formFolders, formFolderDetail } from "./document-folders.controller.js";
 import { createFolderCommentHandler, listFolderCommentsHandler } from "../documents/documentComments.js";
 
 export const documentFoldersRouter = Router();
@@ -27,6 +27,8 @@ documentFoldersRouter.get("/form-templates", formTemplates);
 documentFoldersRouter.patch("/form-templates/:formKey", validate(updateFormNumberSchema), setFormNumber);
 documentFoldersRouter.get("/form-filings", formFiling);
 documentFoldersRouter.post("/form-filings", validate(fileFormRecordSchema), fileForm);
+documentFoldersRouter.get("/form-folders", formFolders);
+documentFoldersRouter.get("/form-folders/:formKey", formFolderDetail);
 documentFoldersRouter.post("/", validate(createDocumentFolderSchema), create);
 // Fixed literal path before ":id"-shaped ones — the one-step "create a
 // leaf + attach a file" upload, not scoped to an existing node.

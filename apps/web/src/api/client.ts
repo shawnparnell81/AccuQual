@@ -13,7 +13,7 @@ import {
 } from "./sessionRefresh";
 
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? "/api",
+  baseURL: import.meta.env?.VITE_API_BASE_URL ?? "/api",
   // The refresh token now lives in an httpOnly cookie (see
   // auth.controller.ts) instead of somewhere JS can read it — this is what
   // makes the browser actually attach it to /auth/refresh and /auth/logout.

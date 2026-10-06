@@ -1,4 +1,5 @@
 import { Route, Navigate } from "react-router-dom";
+import { NotFoundPage } from "./NotFoundPage";
 import { homeKind } from "../lib/opsLanguage";
 import { FRM_NCR_PATH } from "../lib/qualityEntry";
 import { useCurrentUser } from "../hooks/useAuth";
@@ -58,6 +59,8 @@ import {
   FeasibilityDetailPage,
   FeasibilityPage,
   FolderExplorerPage,
+  FormFolderDetailPage,
+  FormFoldersPage,
   GeneralUploadsPage,
   HomePage,
   ManagementSystemPage,
@@ -122,6 +125,8 @@ export function workspaceRouteElements() {
     <Route key="/" path="/" element={<HomeRoute />} />,
     <Route key="/home" path="/home" element={<HomePage />} />,
     <Route key="/blank-forms" path="/blank-forms" element={<BlankFormsPage />} />,
+    <Route key="/form-folders" path="/form-folders" element={<FormFoldersPage />} />,
+    <Route key="/form-folders/:formKey" path="/form-folders/:formKey" element={<FormFolderDetailPage />} />,
     <Route key="/calendar" path="/calendar" element={<CalendarPage />} />,
     <Route key="/audit-log" path="/audit-log" element={<AuditLogPage />} />,
     <Route key="/ncr" path="/ncr" element={<NcrListPage />} />,
@@ -252,10 +257,12 @@ export function workspaceRouteElements() {
       <Route path="company-branding" element={<AdminCompanyBrandingPage />} />
       <Route path="company-templates" element={<AdminCompanyTemplatesPage />} />
       <Route path="digital-twin" element={<AdminDigitalTwinSetupPage />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Route>,
     <Route key="/reporting" path="/reporting" element={<ReportingHubPage />} />,
     <Route key="/verify/:exportId" path="/verify/:exportId" element={<VerifyExportPage />} />,
     <Route key="/reports" path="/reports" element={<Navigate to="/reporting" replace />} />,
     <Route key="/notifications" path="/notifications" element={<NotificationsPage />} />,
+    <Route key="*" path="*" element={<NotFoundPage />} />,
   ];
 }

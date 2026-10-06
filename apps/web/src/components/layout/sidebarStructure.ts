@@ -112,6 +112,7 @@ const DOCUMENT_CONTROL_FOLDER: SidebarFolder = {
   children: [
     { key: "blank-forms", label: "Blank Forms", path: "/blank-forms", icon: Library },
     { key: "folder-explorer", label: "Folder Explorer", path: "/documents/folders", icon: FolderTree },
+    { key: "saved-form-folders", label: "Folders", path: "/form-folders", icon: Folder },
     { key: "dcr", label: "Document changes", path: "/document-change-requests", icon: FileEdit },
     { key: "management-system", label: "Management System", path: "/management-system", icon: Building2 },
     doc("drawings", FileText),
@@ -121,8 +122,8 @@ const DOCUMENT_CONTROL_FOLDER: SidebarFolder = {
 
 /**
  * Five doors, plus Admin for people who already pass the admin check.
- * Folders points at /form-folders. The saved-fill list itself is the open
- * Folders work; this menu does not build that page.
+ * The Folders door and Documents → Folders both open /form-folders.
+ * That page lists saved fills. Blank templates stay on Blank Forms.
  */
 export const SIDEBAR_FOLDERS: SidebarNode[] = [
   {
