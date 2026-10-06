@@ -743,6 +743,67 @@ label:has(> input[type="radio"]) > input[type="radio"],
   flex: 0 0 auto;
 }
 
+/* Signature Required Yes/No. Inherits the sheet's text color so the words
+   stay readable on a dark form well and on a light paper form in dark mode.
+   A filled mark is the selected choice. */
+.aq-required-choice {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.aq-required-choice .aq-required-label {
+  color: inherit;
+  font-weight: 700;
+}
+.aq-required-choice [role="radio"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.aq-required-choice [role="radio"][aria-checked="true"] {
+  font-weight: 700;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+}
+.aq-required-choice .aq-required-mark {
+  width: 0.7rem;
+  height: 0.7rem;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.aq-required-choice [aria-checked="true"] .aq-required-mark {
+  background: currentColor;
+}
+.aq-required-choice [role="radio"]:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.aq-required-choice [role="radio"][aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.6;
+}
+
 /* ---------- app shell (sidebar + top bar) ---------- */
 .aq-skip {
   position: absolute;
