@@ -66,10 +66,10 @@ describe("Quality document folders", () => {
     assert.deepEqual(link && { label: link.label, path: link.path }, { label: "Obsolete / Archive", path: "/folders/obsolete-archive" });
   });
 
-  it("lists Blank Forms under Workspace and keeps the sidebar to FRM NCR plus modules", () => {
-    const workspace = SIDEBAR_FOLDERS.find((folder) => folder.key === "workspace");
-    assert.ok(workspace);
-    const blank = workspace.children.find((child) => child.key === "blank-forms");
+  it("lists Blank Forms under Documents and keeps the sidebar to FRM NCR plus modules", () => {
+    const documents = SIDEBAR_FOLDERS.find((folder) => folder.key === "document-control");
+    assert.ok(documents && isFolder(documents));
+    const blank = documents.children.find((child) => child.key === "blank-forms");
     assert.ok(blank && !isFolder(blank));
     assert.deepEqual({ label: blank.label, path: blank.path }, { label: "Blank Forms", path: "/blank-forms" });
 
@@ -79,9 +79,8 @@ describe("Quality document folders", () => {
       [["FRM NCR", "/iso-forms/frm-ncr-001"]],
     );
     assert.equal(links.filter((link) => link.label === "Blank Forms").length, 1);
-    const engineering = SIDEBAR_FOLDERS.find((folder) => folder.key === "engineering");
-    assert.ok(engineering);
-    assert.equal(engineering.children.some((child) => child.key.startsWith("frm-")), false);
+    assert.equal(SIDEBAR_FOLDERS.some((folder) => folder.key === "engineering"), false);
+    assert.equal(documents.children.some((child) => child.key.startsWith("frm-")), false);
   });
 
   it("keeps the shared menu free of form dumps and duplicate lists", () => {
@@ -105,14 +104,21 @@ describe("Quality document folders", () => {
       ["FRM NCR", "CAPA", "8D"],
     );
 
-    const engineering = SIDEBAR_FOLDERS.find((folder) => folder.key === "engineering");
-    assert.ok(engineering);
-    const engineeringLabels = engineering.children.map((child) => child.label);
+    const documents = SIDEBAR_FOLDERS.find((folder) => folder.key === "document-control");
+    const qualityDoor = SIDEBAR_FOLDERS.find((folder) => folder.key === "quality");
+    assert.ok(documents && isFolder(documents));
+    assert.ok(qualityDoor && isFolder(qualityDoor));
+    const documentLabels = documents.children.map((child) => child.label);
+    const qualityLabels = qualityDoor.children.map((child) => child.label);
     for (const removed of ["FMEA", "ECN", "ECR", "Work Instructions", "Master Document List", "Master Equipment List", "Turtle Diagrams", "Cross-training evaluation"]) {
-      assert.equal(engineeringLabels.includes(removed), false, removed);
+      assert.equal(documentLabels.includes(removed), false, removed);
+      assert.equal(qualityLabels.includes(removed), false, removed);
     }
-    assert.deepEqual(engineeringLabels, ["Drawings", "APQP", "PPAP Packet", "Risk dashboard", "Process Change", "Engineering Planner"]);
-    const planner = engineering.children.find((child) => child.key === "engineering-planner");
+    assert.equal(documentLabels.includes("Drawings"), true);
+    assert.equal(documentLabels.includes("APQP"), true);
+    assert.equal(qualityLabels.includes("PPAP Packet"), true);
+    assert.equal(qualityLabels.includes("Engineering Planner"), true);
+    const planner = qualityDoor.children.find((child) => child.key === "engineering-planner");
     assert.ok(planner && !isFolder(planner));
     assert.equal(planner.external, true);
     assert.equal(planner.path, ENGINEERING_PLANNER_URL);

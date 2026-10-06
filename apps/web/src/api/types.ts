@@ -87,6 +87,8 @@ export interface Ncr {
   dueDate: string | null;
   /** Real column (ncr.ts), just never surfaced on the frontend until the dashboard needed it for a closure trend. */
   closedAt: string | null;
+  /** Process fields, including published documents linked on a step. */
+  processData?: Record<string, unknown> | null;
   /** Phase 8 — real, direct supplier link (previously derived only indirectly via RMA/warranty/supplier-portal links). */
   supplierId: number | null;
   /** Phase 8 — set when auto-created from a rejected/quarantined receiving inspection; not a real FK (see ncr.ts's own schema comment). */
