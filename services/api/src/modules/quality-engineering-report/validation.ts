@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zodRecipients } from "../../lib/reportRecipients.js";
 
 const qaItem = z.object({
   problem: z.string().max(4000),
@@ -25,4 +26,10 @@ export const saveEngineeringReportSchema = z.object({
     fitment: z.array(qaItem).max(40),
     productInfo: z.array(qaItem).max(40),
   }),
+  recipients: zodRecipients(0).optional(),
+});
+
+export const emailEngineeringReportSchema = saveEngineeringReportSchema.extend({
+  recipients: zodRecipients(1),
+  narrative: saveEngineeringReportSchema.shape.narrative.optional(),
 });

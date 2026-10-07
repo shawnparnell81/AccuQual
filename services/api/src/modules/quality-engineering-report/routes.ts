@@ -1,11 +1,13 @@
 import { Router } from "express";
 import multer from "multer";
 import { validate } from "../../middleware/validate.js";
-import { saveEngineeringReportSchema } from "./validation.js";
+import { emailEngineeringReportSchema, saveEngineeringReportSchema } from "./validation.js";
 import {
+  engineeringEmailHandler,
   engineeringGetHandler,
   engineeringHelpHandler,
   engineeringPdfHandler,
+  engineeringPeopleHandler,
   engineeringSaveHandler,
   engineeringTemplateHandler,
   engineeringUploadHandler,
@@ -17,8 +19,10 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 *
 export const engineeringReportRouter = Router();
 
 engineeringReportRouter.get("/help", engineeringHelpHandler);
+engineeringReportRouter.get("/people", engineeringPeopleHandler);
 engineeringReportRouter.get("/template.csv", engineeringTemplateHandler);
 engineeringReportRouter.get("/pdf", engineeringPdfHandler);
 engineeringReportRouter.get("/", engineeringGetHandler);
 engineeringReportRouter.put("/", validate(saveEngineeringReportSchema), engineeringSaveHandler);
+engineeringReportRouter.post("/email", validate(emailEngineeringReportSchema), engineeringEmailHandler);
 engineeringReportRouter.post("/upload", upload.single("file"), engineeringUploadHandler);

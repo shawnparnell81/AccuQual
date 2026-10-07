@@ -2,11 +2,9 @@ import { and, eq, lte } from "drizzle-orm";
 import { db, pool } from "../../db/index.js";
 import { reportSchedules } from "../../drizzle/schema/reporting.js";
 import { company } from "../../drizzle/schema/company.js";
-import { notificationLog } from "../../drizzle/schema/notifications.js";
-import { sendEmail } from "../notifications/notification.service.js";
-import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { logger } from "../../utils/logger.js";
-import { buildReportEmail, type ReportType } from "./reporting.templates.js";
+import { deliverReportToEach, overallDeliveryStatus } from "./reportDelivery.js";
+import { buildReportEmail, REPORT_TYPE_LABELS, type ReportType } from "./reporting.templates.js";
 
 /**
  * Phase 6 scheduled reports — this app has no background job/cron
@@ -40,8 +38,8 @@ export function computeNextRunAt(frequency: "daily" | "weekly" | "monthly", from
   return next;
 }
 
-/** Runs one schedule immediately regardless of nextRunAt — shared by the poll loop and the "Send Now" endpoint, so both paths update the same lastRunAt/lastRunStatus fields the health-indicators UI reads. */
-export async function runReportSchedule(scheduleId: number): Promise<void> {
+/** Runs one schedule immediately regardless of nextRunAt — shared by the poll loop and the "Send Now" endpoint, so both paths update the same lastRunAt/lastRunStatus fields the health-indicators UI reads. `actorId` is the person who clicked Send Now; a poll uses the schedule's creator. */
+export async function runReportSchedule(scheduleId: number, actorId?: number): Promise<void> {
   const [schedule] = await db.select().from(reportSchedules).where(eq(reportSchedules.id, scheduleId));
   if (!schedule) return;
 
@@ -50,35 +48,24 @@ export async function runReportSchedule(scheduleId: number): Promise<void> {
 
   try {
     const { subject, body } = await buildReportEmail(db, schedule.reportType as ReportType, companyName);
-
-    const statuses = await Promise.all(schedule.recipients.map((to) => sendEmail({ to, subject, body })));
-    for (const [i, status] of statuses.entries()) {
-      await db.insert(notificationLog).values({
-        channel: "email",
-        recipient: schedule.recipients[i]!,
-        subject,
-        body,
-        status,
-        relatedEntityType: "ReportSchedule",
-        relatedEntityId: schedule.id,
-      });
-    }
+    const reportName = REPORT_TYPE_LABELS[schedule.reportType as ReportType] ?? schedule.reportType;
+    const deliveries = await deliverReportToEach(db, {
+      recipients: schedule.recipients,
+      subject,
+      body,
+      entityType: "ReportSchedule",
+      entityId: schedule.id,
+      reportName,
+      performedBy: actorId ?? schedule.createdBy ?? undefined,
+    });
     // "sent" only if every recipient actually delivered — a mixed batch is
     // reported as the least-successful outcome, not glossed over as "sent".
-    const overallStatus = statuses.every((s) => s === "sent") ? "sent" : statuses.some((s) => s === "failed") ? "failed" : "logged_only";
+    const overallStatus = overallDeliveryStatus(deliveries);
 
     await db
       .update(reportSchedules)
-      .set({ lastRunAt: new Date(), lastRunStatus: overallStatus, lastError: null, nextRunAt: computeNextRunAt(schedule.frequency as "daily" | "weekly" | "monthly") })
+      .set({ lastRunAt: new Date(), lastRunStatus: overallStatus, lastError: deliveries.length === 0 ? "No recipients." : null, nextRunAt: computeNextRunAt(schedule.frequency as "daily" | "weekly" | "monthly") })
       .where(eq(reportSchedules.id, schedule.id));
-
-    await recordAuditTrail(db, {
-      entityType: "ReportSchedule",
-      entityId: schedule.id,
-      action: "update",
-      changes: { action: "run", reportType: schedule.reportType, recipients: schedule.recipients, status: overallStatus },
-      performedBy: schedule.createdBy ?? undefined,
-    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Report generation failed.";
     logger.error("Scheduled report failed", { scheduleId, err });

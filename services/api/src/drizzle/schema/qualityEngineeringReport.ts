@@ -15,6 +15,8 @@ export const qualityEngineeringReports = pgTable(
     month: integer("month").notNull(),
     narrative: jsonb("narrative").$type<Record<string, unknown>>().notNull().default({}),
     supplierData: jsonb("supplier_data").$type<Record<string, unknown>>().notNull().default({}),
+    /** Email addresses that receive this saved report. Empty until someone adds them. */
+    recipients: jsonb("recipients").$type<string[]>().notNull().default([]),
     uploadFileName: text("upload_file_name"),
     createdBy: integer("created_by").references(() => users.id),
     updatedBy: integer("updated_by").references(() => users.id),

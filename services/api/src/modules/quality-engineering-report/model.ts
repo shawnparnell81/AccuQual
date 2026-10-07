@@ -157,6 +157,8 @@ export interface EngineeringReportView {
   saved: boolean;
   uploadFileName: string | null;
   canEdit: boolean;
+  /** Inboxes that receive this saved report. */
+  recipients: string[];
   narrative: EngineeringNarrative;
   executive: {
     departmentStatus: DepartmentStatus;
@@ -405,6 +407,7 @@ export function assembleReport(input: {
   saved: boolean;
   uploadFileName: string | null;
   canEdit: boolean;
+  recipients?: string[];
 }): EngineeringReportView {
   const { year, month, narrative, supplier, live } = input;
   const selected = monthKey(year, month);
@@ -453,6 +456,7 @@ export function assembleReport(input: {
     saved: input.saved,
     uploadFileName: input.uploadFileName,
     canEdit: input.canEdit,
+    recipients: input.recipients ?? [],
     narrative,
     executive: {
       departmentStatus: narrative.departmentStatus,
