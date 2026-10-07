@@ -256,3 +256,21 @@ test("a moved hold names the locations instead of calling them a status", () => 
   assert.match(line.description, /Moved from Receiving to "Cage A"/);
   assert.match(line.description, /Quantity set to 4/);
 });
+
+test("a folder move names who moved it and the path it left and joined", () => {
+  const line = formatAuditLine({
+    action: "update",
+    performedByName: "Shawn Parnell",
+    changes: {
+      event: "moved",
+      summary: 'Moved the folder "Quality" from ISO Compliance Documents → ISO Compliance Documents / Quality Logs.',
+      fromParentId: 1,
+      toParentId: 8,
+    },
+  });
+
+  assert.equal(line.who, "Shawn Parnell");
+  assert.equal(line.what, "Moved");
+  assert.equal(line.description, 'Moved the folder "Quality" from ISO Compliance Documents → ISO Compliance Documents / Quality Logs.');
+  assert.doesNotMatch(line.description, /fromParentId|toParentId/);
+});

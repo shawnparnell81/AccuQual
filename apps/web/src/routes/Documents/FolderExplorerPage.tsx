@@ -18,6 +18,8 @@ import { folderMoveIsBlocked, planNest, planSiblingGap, planSiblingReorder, type
 import { dropPosition, reorderDropClass, type DropPosition } from "../../lib/listReorder";
 import { Modal } from "../../components/modals/Modal";
 import { DocumentCommentThread } from "../../components/documents/DocumentCommentThread";
+import { MoveToFolderDialog } from "../../components/documents/MoveToFolderDialog";
+import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
 
 const DRAG_FOLDER = "application/x-accuqual-folder";
 const DRAG_DOC = "application/x-accuqual-doc";
@@ -103,6 +105,7 @@ function FolderTreeBranch({
   onGapOver,
   onGapLeave,
   onGapDrop,
+  onMove,
 }: {
   folder: DocumentFolder;
   depth: number;
@@ -127,6 +130,7 @@ function FolderTreeBranch({
   onGapOver: (event: DragEvent, parentId: number | null, beforeId: number | null, kind: DragKind) => void;
   onGapLeave: (key: string) => void;
   onGapDrop: (event: DragEvent, parentId: number | null, beforeId: number | null, kind: DragKind) => void;
+  onMove?: (folder: DocumentFolder) => void;
 }) {
   const children = listFolder(folders, folder.id).folders;
   const open = treeOpen[folder.id] ?? isoRoot;
@@ -180,6 +184,21 @@ function FolderTreeBranch({
           <Icon size={16} className={selected ? "shrink-0 text-primary" : "shrink-0 text-muted-foreground"} />
           <span className="min-w-0 flex-1 whitespace-normal break-words text-left leading-snug">{folder.name}</span>
         </button>
+        {onMove && (
+          <button
+            type="button"
+            data-testid="move-to"
+            className="mr-1 shrink-0 rounded px-1.5 py-0.5 text-[11px] text-primary hover:bg-primary/10"
+            aria-label={`Move ${folder.name} to another folder`}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onMove(folder);
+            }}
+          >
+            Move to…
+          </button>
+        )}
         {draggable && <GripVertical size={12} className="mr-1 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-70" />}
       </div>
       {open && busy && expandingId === folder.id && (
@@ -198,7 +217,7 @@ function FolderTreeBranch({
               folders={folders}
               selectedId={selectedId}
               treeOpen={treeOpen}
-              draggable
+              draggable={draggable}
               isoRoot={false}
               trailingGap={index === children.length - 1}
               dragKind={dragKind}
@@ -216,6 +235,7 @@ function FolderTreeBranch({
               onGapOver={onGapOver}
               onGapLeave={onGapLeave}
               onGapDrop={onGapDrop}
+              onMove={onMove}
             />
           ))}
         </ul>
@@ -357,6 +377,8 @@ function useUploadDocument() {
  */
 export function FolderExplorerPage() {
   const { data: folders = [], isLoading, isFetching } = useDocumentFolders();
+  const { effective, isLoading: permissionsLoading } = useEffectivePermissions();
+  const canManageFolders = !permissionsLoading && effective?.documents === "edit";
   const visibleFolders = useMemo(() => visibleExplorerFolders(folders), [folders]);
   const updateFolder = useUpdateFolder();
   const createFolder = useCreateFolder();
@@ -398,6 +420,7 @@ export function FolderExplorerPage() {
   const [poolHover, setPoolHover] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [newDepartmentName, setNewDepartmentName] = useState("");
+  const [movingId, setMovingId] = useState<number | null>(null);
   const [history, setHistory] = useState<ExplorerHistory>(initialExplorerHistory);
   const [expandingId, setExpandingId] = useState<number | null>(null);
   const applyingHistory = useRef(false);
@@ -476,6 +499,10 @@ export function FolderExplorerPage() {
   }, [isFetching]);
 
   function beginDrag(event: DragEvent, id: number, kind: DragKind) {
+    if (!canManageFolders) {
+      event.preventDefault();
+      return;
+    }
     dragRef.current = { id, kind };
     dragKindRef.current = kind;
     event.dataTransfer.setData(kind === "folder" ? DRAG_FOLDER : DRAG_DOC, String(id));
@@ -537,13 +564,13 @@ export function FolderExplorerPage() {
     setDropHint((current) => (current?.id === id ? null : current));
     setDropHoverId((current) => (current === id ? null : current));
   }
-  async function commitPlacements(placements: NodePlacement[] | null) {
-    if (!placements || placements.length === 0) return;
+  async function commitPlacements(placements: NodePlacement[] | null): Promise<boolean> {
+    if (!canManageFolders || !placements || placements.length === 0) return false;
     const changed = placements.filter((placement) => {
       const current = folders.find((folder) => folder.id === placement.id);
       return !current || current.parentId !== placement.parentId || current.sortOrder !== placement.sortOrder;
     });
-    if (changed.length === 0) return;
+    if (changed.length === 0) return false;
     try {
       await Promise.all(
         changed.map((placement) => {
@@ -553,11 +580,30 @@ export function FolderExplorerPage() {
           return apiClient.patch(`/document-folders/${placement.id}`, body);
         }),
       );
+      return true;
     } catch (err) {
       toast.error(await extractErrorMessageAsync(err, "Couldn't rearrange that"));
+      return false;
     } finally {
       await qc.invalidateQueries({ queryKey: ["document-folders"] });
     }
+  }
+  async function moveInto(parentId: number) {
+    if (!canManageFolders || movingId == null) return;
+    const placements = planNest(folders, movingId, parentId);
+    if (placements === null) {
+      toast.error("A folder cannot be moved into itself.");
+      return;
+    }
+    if (placements.length === 0) {
+      toast.error("That item is already in this folder.");
+      return;
+    }
+    const moved = folders.find((folder) => folder.id === movingId);
+    const saved = await commitPlacements(placements);
+    if (!saved) return;
+    setMovingId(null);
+    if (moved) toast.success(`Moved ${moved.name}.`);
   }
   function applyDrop(target: DocumentFolder, position: DropPosition) {
     const drag = dragRef.current;
@@ -757,6 +803,7 @@ export function FolderExplorerPage() {
     );
   }
   if (!activeDept) return <p className="text-sm text-muted-foreground">No departments found.</p>;
+  const movingFolder = movingId == null ? undefined : folders.find((folder) => folder.id === movingId);
 
   const query = search.trim().toLowerCase();
   const treeRoots = (isoRoot ? [isoRoot, ...departments.filter((dept) => dept.parentId !== isoRoot.id)] : departments)
@@ -795,7 +842,7 @@ export function FolderExplorerPage() {
         <div>
           <h1 className="text-2xl font-semibold">Document Folders</h1>
           <p className="text-sm text-muted-foreground">
-            Expand a folder to see what is saved in it. While dragging, drop on the line between rows to place an item beside its neighbors. Drop on a folder to put something inside. Blank forms stay under Blank Forms. The Library Pool is where a document goes when you take it out of a folder.
+            Expand a folder to see what is saved in it. Move to… files a folder or saved item somewhere else, and the folder takes everything inside it with it. You can also drag a row onto a folder, or drop on the line between rows to change the order. Blank forms stay under Blank Forms.
           </p>
         </div>
         <div className="w-56">
@@ -815,7 +862,7 @@ export function FolderExplorerPage() {
                 folders={visibleFolders}
                 selectedId={selectedTreeId}
                 treeOpen={treeOpen}
-                draggable
+                draggable={canManageFolders}
                 isoRoot={folder.id === isoRoot?.id}
                 trailingGap={false}
                 dragKind={dragKind}
@@ -833,6 +880,7 @@ export function FolderExplorerPage() {
                 onGapOver={hoverGap}
                 onGapLeave={leaveGap}
                 onGapDrop={dropGap}
+                onMove={canManageFolders ? (row) => setMovingId(row.id) : undefined}
               />
             ))}
           </ul>
@@ -849,6 +897,7 @@ export function FolderExplorerPage() {
             Top level
           </div>
 
+          {canManageFolders && (
           <form
             className="mt-1 flex flex-col gap-1 border-t border-border pt-2"
             onSubmit={(e) => {
@@ -863,6 +912,7 @@ export function FolderExplorerPage() {
               + Add department
             </button>
           </form>
+          )}
         </nav>
 
         <div ref={listPaneRef} className="flex min-w-0 flex-col gap-3 md:min-h-0 md:overflow-y-auto">
@@ -903,6 +953,8 @@ export function FolderExplorerPage() {
               onUploadClick={requestDocumentUpload}
               onCreateFolder={(name, parentId) => createFolder.mutate({ name, parentId })}
               onRename={(id, name) => updateFolder.mutate({ id, name })}
+              onMove={(id) => setMovingId(id)}
+              canManage={canManageFolders}
               onSendToLibrary={sendToLibrary}
               onAttach={requestUpload}
               onRemoveAttachment={(id) => removeTemplate.mutate(id)}
@@ -930,6 +982,11 @@ export function FolderExplorerPage() {
             <button type="button" onClick={() => showFolder(activeDept.id)} className="text-xs text-primary hover:underline">
               Open
             </button>
+            {canManageFolders && activeDept.name !== LIBRARY_POOL_NAME && (
+              <button type="button" data-testid="move-to" className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted" onClick={() => setMovingId(activeDept.id)}>
+                Move to…
+              </button>
+            )}
             <button
               onClick={() => requestDocumentUpload(activeDept.id)}
               className="ml-1 flex items-center gap-1 rounded-md border border-primary px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
@@ -985,7 +1042,7 @@ export function FolderExplorerPage() {
               >
                 <div
                   className={`flex cursor-grab items-center gap-2 border-b border-border bg-muted/40 px-2 py-1.5 active:cursor-grabbing ${hintClass(sub.id)}`}
-                  draggable
+                  draggable={canManageFolders}
                   data-folder-id={sub.id}
                   onDragStart={(e) => {
                     e.stopPropagation();
@@ -1013,6 +1070,19 @@ export function FolderExplorerPage() {
                   >
                     Open
                   </button>
+                  {canManageFolders && (
+                    <button
+                      type="button"
+                      data-testid="move-to"
+                      className="text-xs text-primary hover:underline"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setMovingId(sub.id);
+                      }}
+                    >
+                      Move to…
+                    </button>
+                  )}
                   <span className="font-mono text-[10px] text-muted-foreground">{subfolders.length + docs.length}</span>
                   <button
                     onClick={(e) => {
@@ -1065,7 +1135,7 @@ export function FolderExplorerPage() {
                       <div
                         data-testid="folder-row"
                         data-folder-id={row.id}
-                        draggable
+                        draggable={canManageFolders}
                         onDragStart={(event) => {
                           event.stopPropagation();
                           beginDrag(event, row.id, "folder");
@@ -1122,7 +1192,7 @@ export function FolderExplorerPage() {
                             <Link
                               to={target}
                               data-testid="saved-file"
-                              draggable
+                              draggable={canManageFolders}
                               onDragStart={(event) => {
                                 event.stopPropagation();
                                 beginDrag(event, doc.id, "doc");
@@ -1141,7 +1211,13 @@ export function FolderExplorerPage() {
                               onSendToLibrary={() => sendToLibrary(doc.id)}
                               onAttach={() => requestUpload(doc.id)}
                               onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
+                              onMove={canManageFolders ? () => setMovingId(doc.id) : undefined}
                             />
+                          )}
+                          {canManageFolders && target && (
+                            <button type="button" data-testid="move-to" className="px-1 text-[11px] text-primary hover:underline" aria-label={`Move ${doc.name} to another folder`} onClick={() => setMovingId(doc.id)}>
+                              Move to…
+                            </button>
                           )}
                         </div>
                         {dragKind === "doc" && docIndex === docs.length - 1 && (
@@ -1206,7 +1282,7 @@ export function FolderExplorerPage() {
                           <Link
                             to={target}
                             data-testid="saved-file"
-                            draggable
+                            draggable={canManageFolders}
                             onDragStart={(event) => {
                               event.stopPropagation();
                               beginDrag(event, doc.id, "doc");
@@ -1225,7 +1301,13 @@ export function FolderExplorerPage() {
                             onSendToLibrary={() => sendToLibrary(doc.id)}
                             onAttach={() => requestUpload(doc.id)}
                             onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
+                            onMove={canManageFolders ? () => setMovingId(doc.id) : undefined}
                           />
+                        )}
+                        {canManageFolders && target && (
+                          <button type="button" data-testid="move-to" className="px-1 text-[11px] text-primary hover:underline" aria-label={`Move ${doc.name} to another folder`} onClick={() => setMovingId(doc.id)}>
+                            Move to…
+                          </button>
                         )}
                       </div>
                       {dragKind === "doc" && index === list.length - 1 && (
@@ -1245,6 +1327,7 @@ export function FolderExplorerPage() {
             </div>
           )}
 
+          {canManageFolders && (
           <form
             className="flex shrink-0 items-center gap-2 pt-1"
             onSubmit={(e) => {
@@ -1261,6 +1344,7 @@ export function FolderExplorerPage() {
               + Add folder to {activeDept.name}
             </button>
           </form>
+          )}
           </>
           )}
         </div>
@@ -1304,12 +1388,16 @@ export function FolderExplorerPage() {
                     onDragEnd={endDrag}
                     onAttach={() => requestUpload(doc.id)}
                     onRemoveAttachment={() => removeTemplate.mutate(doc.id)}
+                    onMove={canManageFolders ? () => setMovingId(doc.id) : undefined}
                   />
                 </div>
               ))}
             </div>
           </div>
         </div>
+      )}
+      {movingFolder && (
+        <MoveToFolderDialog folders={visibleFolders} moving={movingFolder} pending={updateFolder.isPending} onClose={() => setMovingId(null)} onMove={(parentId) => void moveInto(parentId)} />
       )}
     </div>
   );
@@ -1322,6 +1410,7 @@ function DocPill({
   onSendToLibrary,
   onAttach,
   onRemoveAttachment,
+  onMove,
 }: {
   doc: DocumentFolder;
   onDragStart: (event: DragEvent) => void;
@@ -1329,6 +1418,7 @@ function DocPill({
   onSendToLibrary?: () => void;
   onAttach: () => void;
   onRemoveAttachment: () => void;
+  onMove?: () => void;
 }) {
   const [preview, setPreview] = useState<PreviewRequest | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -1413,6 +1503,11 @@ function DocPill({
           <DocumentCommentThread folderId={doc.id} canComment />
         )}
       </Modal>
+      {onMove && (
+        <button type="button" data-testid="move-to" onClick={onMove} className="text-primary hover:underline" aria-label={`Move ${doc.name} to another folder`}>
+          Move to…
+        </button>
+      )}
       {onSendToLibrary && (
         <button onClick={onSendToLibrary} className="text-muted-foreground hover:text-destructive" aria-label={`Send ${doc.name} to the library pool`}>
           <Inbox size={12} />
@@ -1535,6 +1630,8 @@ function FolderBrowser({
   onUploadClick,
   onCreateFolder,
   onRename,
+  onMove,
+  canManage,
   onSendToLibrary,
   onAttach,
   onRemoveAttachment,
@@ -1565,6 +1662,8 @@ function FolderBrowser({
   onUploadClick: (parentId: number) => void;
   onCreateFolder: (name: string, parentId: number) => void;
   onRename: (id: number, name: string) => void;
+  onMove: (id: number) => void;
+  canManage: boolean;
   onSendToLibrary: (id: number) => void;
   onAttach: (id: number) => void;
   onRemoveAttachment: (id: number) => void;
@@ -1587,7 +1686,7 @@ function FolderBrowser({
   const subfolders = listing.folders.filter((row) => !query || row.name.toLowerCase().includes(query));
   const files = listing.files.filter((row) => !query || row.name.toLowerCase().includes(query));
   const empty = subfolders.length === 0 && files.length === 0;
-  const canRename = folder.name !== LIBRARY_POOL_NAME;
+  const canRename = canManage && folder.name !== LIBRARY_POOL_NAME;
 
   return (
     <div className="flex flex-col gap-3" data-testid="folder-browser">
@@ -1635,6 +1734,11 @@ function FolderBrowser({
             className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
           >
             Rename
+          </button>
+        )}
+        {canManage && folder.name !== LIBRARY_POOL_NAME && (
+          <button type="button" data-testid="move-to" className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted" onClick={() => onMove(folder.id)}>
+            Move to…
           </button>
         )}
       </div>
@@ -1705,7 +1809,7 @@ function FolderBrowser({
           <div
             data-testid="folder-row"
             data-folder-id={row.id}
-            draggable
+            draggable={canManage}
             onDragStart={(event) => {
               event.stopPropagation();
               onBeginDrag(event, row.id, "folder");
@@ -1721,6 +1825,19 @@ function FolderBrowser({
             <button type="button" onClick={() => onOpenFolder(row.id)} className="flex-1 text-left text-sm font-medium" data-testid="folder-title">
               {row.name}
             </button>
+            {canManage && (
+              <button
+                type="button"
+                data-testid="move-to"
+                className="text-xs text-primary hover:underline"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onMove(row.id);
+                }}
+              >
+                Move to…
+              </button>
+            )}
             <ChevronRight size={14} className="text-muted-foreground" />
           </div>
           {dragKind === "folder" && index === subfolders.length - 1 && (
@@ -1760,21 +1877,28 @@ function FolderBrowser({
               onDrop={(event) => onDropRow(event, file)}
             >
               {target ? (
+                <div className="flex items-center gap-2">
                 <Link
                   to={target}
                   data-testid={`open-file-${file.id}`}
-                  draggable
+                  draggable={canManage}
                   onDragStart={(event) => {
                     event.stopPropagation();
                     onBeginDrag(event, file.id, "doc");
                   }}
                   onDragEnd={onEndDrag}
-                  className="flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
+                  className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
                 >
                   <FileText size={14} className="text-primary" />
                   <span className="flex-1 text-primary">{file.name}</span>
                   <span className="text-xs text-muted-foreground">Open</span>
                 </Link>
+                {canManage && (
+                  <button type="button" data-testid="move-to" className="shrink-0 px-2 text-xs text-primary hover:underline" aria-label={`Move ${file.name} to another folder`} onClick={() => onMove(file.id)}>
+                    Move to…
+                  </button>
+                )}
+                </div>
               ) : (
                 <div data-testid="file-row" className="px-2 py-1">
                   <DocPill
@@ -1784,6 +1908,7 @@ function FolderBrowser({
                     onSendToLibrary={() => onSendToLibrary(file.id)}
                     onAttach={() => onAttach(file.id)}
                     onRemoveAttachment={() => onRemoveAttachment(file.id)}
+                    onMove={canManage ? () => onMove(file.id) : undefined}
                   />
                 </div>
               )}
@@ -1803,6 +1928,7 @@ function FolderBrowser({
         />
       </div>
 
+      {canManage && (
       <form
         className="flex shrink-0 items-center gap-2"
         onSubmit={(event) => {
@@ -1819,6 +1945,7 @@ function FolderBrowser({
           + Add folder to {folder.name}
         </button>
       </form>
+      )}
     </div>
   );
 }

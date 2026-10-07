@@ -22,6 +22,7 @@ import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { formFilings } from "../../drizzle/schema/formFilings.js";
 import type { DefaultFolderSeed } from "./defaultDocumentFolders.js";
+import { ensureMainIsoFolders } from "./mainIsoFolders.js";
 import { retireNamedDocumentFolders } from "./retiredFolderCleanup.js";
 
 const TEMPLATE_LIBRARY_NAMES = new Set(["Blank Form Templates", "ISO Compliance Documents"]);
@@ -417,5 +418,6 @@ export async function ensureCompanyDocumentFolders(db: Db, all: FolderRow[]): Pr
 
   await ensureLevel(COMPANY_DOCUMENT_FOLDERS, null);
   list = await repairQualityTraining(db, list);
-  return retireNamedDocumentFolders(db, list);
+  list = await retireNamedDocumentFolders(db, list);
+  return ensureMainIsoFolders(db, list);
 }
