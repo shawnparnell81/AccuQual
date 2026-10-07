@@ -91,9 +91,6 @@ export function WarrantyClaimDetail() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-            Print
-          </button>
           <DeleteRecordButton resource="warranty/claims" id={claim.id} kind="Warranty claim" title={claim.failureDescription} ownerIds={[claim.createdByUserId]} navigateTo="/warranty" />
         </div>
       </div>

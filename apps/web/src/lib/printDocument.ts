@@ -51,9 +51,14 @@ export function canPrintAccess(level: string | null | undefined): boolean {
   return level === "read" || level === "edit";
 }
 
-/** Saved forms, blank copies (an empty record is still that form), and the grids that use the same routes. */
+/**
+ * Saved forms, blank copies (an empty record is still that form), the grids
+ * that use the same routes, and the controlled lists (Master Document List,
+ * Master Equipment List). One shared control covers each of these.
+ */
 export function offersScreenPrint(pathname: string): boolean {
-  if (recordSurface(pathname)?.kind === "form") return true;
+  const kind = recordSurface(pathname)?.kind;
+  if (kind === "form" || kind === "list") return true;
   return /^\/fai\/(?:records|plans|csa|fuel-pump)\/\d+$/.test(pathname);
 }
 

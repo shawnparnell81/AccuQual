@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
@@ -17,6 +17,16 @@ import {
 } from "./printDocument.ts";
 
 const srcRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+function walkTsx(dir: string): string[] {
+  const found: string[] = [];
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) found.push(...walkTsx(path));
+    else if (name.endsWith(".tsx")) found.push(path);
+  }
+  return found;
+}
 
 describe("print document", () => {
   it("treats a PDF header as a document and rejects an error page", () => {
@@ -51,6 +61,8 @@ describe("print document", () => {
     assert.equal(offersScreenPrint("/iso-forms/record/4"), true);
     assert.equal(offersScreenPrint("/qms-forms/incoming_inspection_record/2"), true);
     assert.equal(offersScreenPrint("/fai/records/3"), true);
+    assert.equal(offersScreenPrint("/documents/master-list"), true);
+    assert.equal(offersScreenPrint("/calibration/master-list"), true);
     assert.equal(offersScreenPrint("/blank-forms"), false);
     assert.equal(offersScreenPrint("/documents/folders"), false);
   });
@@ -100,6 +112,42 @@ describe("print document", () => {
     assert.match(editor, /PrintRecordButton/);
     assert.match(preview, /data-testid="print-file"/);
     assert.match(preview, /uploadedPrintChoice/);
+    assert.equal(preview.match(/data-testid="print-file"/g)?.length, 1);
+    assert.equal(editor.match(/<PrintRecordButton\b/g)?.length, 1);
+  });
+
+  it("keeps a single Print control on each record view", () => {
+    // These pages are not record views. A label, the monthly report, and routes the app no longer mounts.
+    const outside = new Set([
+      "LotLabelPrint.tsx",
+      "EngineeringMonthlyReport.tsx",
+      "ErpPurchaseOrderDetailPage.tsx",
+      "ErpRequisitionDetailPage.tsx",
+      "RmaLogDetailPage.tsx",
+    ]);
+    const files = walkTsx(join(srcRoot, "routes"));
+    for (const file of files) {
+      const name = basename(file);
+      if (outside.has(name)) continue;
+      const source = readFileSync(file, "utf8");
+      assert.equal(source.match(/<PrintFormButton\b/g)?.length ?? 0, 0, name);
+      assert.equal(source.match(/window\.print\s*\(/g)?.length ?? 0, 0, name);
+      assert.equal(source.match(/<PrintRecordButton\b/g)?.length ?? 0, 0, name);
+    }
+    for (const host of ["components/records/RecordFrame.tsx", "components/records/PrintChrome.tsx", "components/forms/FormEditor.tsx"]) {
+      const source = readFileSync(join(srcRoot, host), "utf8");
+      assert.equal(source.match(/<PrintRecordButton\b/g)?.length, 1, host);
+      assert.equal(source.match(/window\.print\s*\(/g)?.length ?? 0, 0, host);
+    }
+    const validation = readFileSync(join(srcRoot, "routes/ValidationReports/ValidationReportDetailPage.tsx"), "utf8");
+    const iso = readFileSync(join(srcRoot, "routes/IsoForms/IsoFormDetailPage.tsx"), "utf8");
+    assert.match(validation, /validation-report-print/);
+    assert.match(iso, /aq-print-wide/);
+    const preview = readFileSync(join(srcRoot, "components/shared/InAppFilePreview.tsx"), "utf8");
+    const office = readFileSync(join(srcRoot, "components/documents/OnlyOfficeEditor.tsx"), "utf8");
+    assert.ok(preview.indexOf("<OnlyOfficeEditor") < preview.indexOf('data-testid="print-file"'));
+    assert.equal(preview.match(/data-testid="print-file"/g)?.length, 1);
+    assert.equal(office.match(/data-testid="print-file"/g)?.length, 1);
   });
 
   it("hides app chrome, forces light paper, and landscapes wide grids", () => {

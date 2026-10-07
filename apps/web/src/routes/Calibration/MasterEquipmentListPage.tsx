@@ -232,9 +232,6 @@ export function MasterEquipmentListPage() {
           <button type="button" onClick={() => void exportExcel()} disabled={exporting} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-60">
             {exporting ? "Exporting…" : "Export to Excel"}
           </button>
-          <button type="button" onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-            Print
-          </button>
         </div>
       </div>
 

@@ -92,9 +92,6 @@ export function CrarDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-            Print
-          </button>
           {!isReadOnly && (
             <button onClick={save} disabled={!hasUnsavedChanges || updateCrar.isPending} className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">
               {updateCrar.isPending ? "Saving…" : hasUnsavedChanges ? "Save Changes" : "Saved"}

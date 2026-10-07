@@ -52,9 +52,6 @@ export function ParetoAnalysisPage() {
             {pending ? "Saving…" : "Save"}
           </button>
           <SaveResult result={saveNote} />
-          <button type="button" onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-            Print
-          </button>
         </div>
       </div>
       {isLoading ? (

@@ -24,9 +24,6 @@ export function DocumentChangeRequestDetailPage() {
           ← Back to list
         </button>
         <div className="flex gap-2">
-          <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-            Print
-          </button>
           <DeleteRecordButton resource="document-change-requests" id={dcrId} kind="Document change request" title={dcr.documentProcessName || dcr.currentDocNumber || dcr.formNo} ownerIds={[dcr.createdBy]} navigateTo="/document-change-requests" />
         </div>
       </div>

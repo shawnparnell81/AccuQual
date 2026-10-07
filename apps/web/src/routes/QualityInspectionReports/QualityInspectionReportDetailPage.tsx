@@ -88,9 +88,6 @@ export function QualityInspectionReportDetailPage() {
           ← Back to list
         </button>
         <div className="flex gap-2">
-          <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-            Print
-          </button>
           <DeleteRecordButton resource="quality-inspection-reports" id={reportId} kind="Quality inspection" title={report.partMaterialNo} ownerIds={[report.createdBy]} navigateTo="/quality-inspection-reports" />
         </div>
       </div>

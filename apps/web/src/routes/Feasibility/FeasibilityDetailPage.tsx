@@ -40,9 +40,6 @@ export function FeasibilityDetailPage() {
         </button>
         <div className="flex items-center gap-2">
           <StatusBadge value={review.status} />
-          <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-            Print
-          </button>
           {canEditRecord && review.status === "draft" && (
             <button
               onClick={() =>
