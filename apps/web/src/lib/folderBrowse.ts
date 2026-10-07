@@ -102,6 +102,17 @@ export function folderChain<T extends BrowseFolder>(folders: T[], folderId: numb
   return chain;
 }
 
+/**
+ * Folders to open so a deep-linked folder is visible in the tree.
+ * The folder itself stays closed. A plain visit has no target, so nothing opens.
+ */
+export function treeOpenForTarget<T extends BrowseFolder>(folders: T[], targetId: number | null): Record<number, boolean> {
+  if (targetId == null) return {};
+  const open: Record<number, boolean> = {};
+  for (const folder of folderChain(folders, targetId).slice(0, -1)) open[folder.id] = true;
+  return open;
+}
+
 function childrenOf<T extends BrowseFolder>(folders: T[], parentId: number | null): T[] {
   return folders
     .filter((folder) => folder.parentId === parentId)
