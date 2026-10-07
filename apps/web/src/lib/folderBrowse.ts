@@ -108,12 +108,27 @@ function childrenOf<T extends BrowseFolder>(folders: T[], parentId: number | nul
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 }
 
-/** Blank masters live here. Save as does not offer this folder, so a filled copy is not filed as another blank. */
+/** Older blank drawer. Folder Explorer still hides it. Living lists stay here until they are removed. */
 export const BLANK_FORM_TEMPLATES_FOLDER = "Blank Form Templates";
+
+/** Fillable blanks live here, under ISO Compliance Documents. */
+export const BLANK_FORMS_TEMPLATES_FOLDER = "Blank Forms Templates";
+
+/** Explorer shortcut that starts a fresh copy of one blank. */
+export const BLANK_TEMPLATE_START_PREFIX = "/blank-forms/start/";
+
+export function isBlankTemplateLink(linkedPath: string | null | undefined): boolean {
+  return typeof linkedPath === "string" && linkedPath.startsWith(BLANK_TEMPLATE_START_PREFIX);
+}
+
+/** Folder Explorer opened on Blank Forms Templates. */
+export function blankFormsFolderHref(): string {
+  return `/documents/folders?name=${encodeURIComponent(BLANK_FORMS_TEMPLATES_FOLDER)}`;
+}
 
 /**
  * Original layout drawer whose children are empty form names (NCR Form, 8D Form, and the rest).
- * Those blanks belong on Blank Forms / QMS Forms. Folder Explorer does not list the empty shells.
+ * Folder Explorer does not list those empty shells. Fillable blanks live in Blank Forms Templates.
  */
 export const SEEDED_FORMS_DRAWER = "Forms & Templates";
 
@@ -124,9 +139,9 @@ export function isFiledRecordPath(linkedPath: string | null | undefined): boolea
   return /\/\d+(?:\/|$)/.test(linkedPath);
 }
 
-/** Uploaded file, controlled document, or a form someone Saved into this folder. A shortcut to a blank module is not saved work. */
+/** Uploaded file, controlled document, a saved form, or a blank-template shortcut. A shortcut to a blank module is not saved work. */
 export function isSavedDocument<T extends BrowseFolder>(node: T): boolean {
-  return Boolean(node.pdfPath || node.documentId != null || isFiledRecordPath(node.linkedPath));
+  return Boolean(node.pdfPath || node.documentId != null || isFiledRecordPath(node.linkedPath) || isBlankTemplateLink(node.linkedPath));
 }
 
 function childrenByParent<T extends BrowseFolder>(folders: T[]): Map<number, T[]> {
@@ -187,10 +202,12 @@ export function visibleExplorerFolders<T extends BrowseFolder>(folders: T[]): T[
   return folders.filter((folder) => !hidden.has(folder.id));
 }
 
-/** This folder and everything nested under a blank-template library. */
+/** This folder and everything nested under a blank-template library. Filled copies are not saved here. */
 export function templateLibraryIds<T extends BrowseFolder>(folders: T[]): Set<number> {
   const hidden = new Set<number>();
-  const stack = folders.filter((folder) => folder.name === BLANK_FORM_TEMPLATES_FOLDER).map((folder) => folder.id);
+  const stack = folders
+    .filter((folder) => folder.name === BLANK_FORM_TEMPLATES_FOLDER || folder.name === BLANK_FORMS_TEMPLATES_FOLDER)
+    .map((folder) => folder.id);
   for (let index = 0; index < stack.length; index += 1) {
     const parentId = stack[index]!;
     if (hidden.has(parentId)) continue;
@@ -205,7 +222,8 @@ export function templateLibraryIds<T extends BrowseFolder>(folders: T[]): Set<nu
 /** Real Documents folders a filled copy can be saved into. Blank drawers are not in the list. */
 export function saveAsFolders<T extends BrowseFolder>(folders: T[]): T[] {
   const hidden = explorerHiddenIds(folders);
-  return folders.filter((folder) => !hidden.has(folder.id) && isFolderEntry(folders, folder));
+  const library = templateLibraryIds(folders);
+  return folders.filter((folder) => !hidden.has(folder.id) && !library.has(folder.id) && isFolderEntry(folders, folder));
 }
 
 /** A row you can open as a folder. A saved form, upload, or controlled document is a file. A shortcut to a blank module stays a folder. */
@@ -222,9 +240,9 @@ export function listFolder<T extends BrowseFolder>(folders: T[], folderId: numbe
   };
 }
 
-/** Where a click on a saved row goes. A blank-module shortcut is not an openable file. */
+/** Where a click on a saved row goes. A blank template opens a fresh copy. A blank-module shortcut is not an openable file. */
 export function openTarget(node: BrowseFolder): string | null {
-  if (node.linkedPath && isFiledRecordPath(node.linkedPath)) return node.linkedPath;
+  if (node.linkedPath && (isFiledRecordPath(node.linkedPath) || isBlankTemplateLink(node.linkedPath))) return node.linkedPath;
   if (node.documentId != null) return `/documents/${node.documentId}`;
   return null;
 }

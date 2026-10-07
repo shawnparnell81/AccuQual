@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderIdByName, isFolderEntry, leftHandFolders, listFolder, openTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
+import { blankFormsFolderHref, contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderIdByName, isBlankTemplateLink, isFolderEntry, leftHandFolders, listFolder, openTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
 import { ValidationReportsPanel } from "../ValidationReports/ValidationReportsPanel";
 import { ChevronDown, ChevronLeft, ChevronRight, Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical, Folder, FolderOpen, MessageSquare } from "lucide-react";
 import { canGoBack, canGoForward, explorerCrumbs, initialExplorerHistory, pushExplorerPlace, stepExplorerHistory, virtualRange, type ExplorerHistory, type ExplorerPlace } from "../../lib/explorerNav";
@@ -372,8 +372,8 @@ function useUploadDocument() {
  * land in instead of disappearing, and per-document PDF attach/view/remove.
  * The default 7-department taxonomy seeds itself the first time this loads
  * for a company with no folders yet; the Library Pool self-heals every load.
- * Blank templates are not listed here. They stay on Blank Forms and QMS Forms.
- * This page lists the folder and the forms or files that were saved into it.
+ * Fillable blanks live in Blank Forms Templates. This page lists that folder
+ * and the forms or files that were saved into a folder.
  */
 export function FolderExplorerPage() {
   const { data: folders = [], isLoading, isFetching } = useDocumentFolders();
@@ -842,7 +842,7 @@ export function FolderExplorerPage() {
         <div>
           <h1 className="text-2xl font-semibold">Document Folders</h1>
           <p className="text-sm text-muted-foreground">
-            Expand a folder to see what is saved in it. Move to… files a folder or saved item somewhere else, and the folder takes everything inside it with it. You can also drag a row onto a folder, or drop on the line between rows to change the order. Blank forms stay under Blank Forms.
+            Expand a folder to see what is saved in it. Move to… files a folder or saved item somewhere else, and the folder takes everything inside it with it. You can also drag a row onto a folder, or drop on the line between rows to change the order. Blank templates are in Blank Forms Templates.
           </p>
         </div>
         <div className="w-56">
@@ -919,11 +919,11 @@ export function FolderExplorerPage() {
           {requestedFolderId != null && !openFolder ? (
             <div className="flex flex-col gap-2">
               <p className="text-sm text-muted-foreground">
-                {hiddenBlank ? "Blank templates are listed under Blank Forms. This folder shows saved work only." : "That folder is not in Documents."}
+                {hiddenBlank ? "Those blank templates are in Blank Forms Templates." : "That folder is not in Documents."}
               </p>
               {hiddenBlank && (
-                <Link to="/blank-forms" className="w-fit text-sm text-primary hover:underline">
-                  Open Blank Forms
+                <Link to={blankFormsFolderHref()} className="w-fit text-sm text-primary hover:underline">
+                  Open Blank Forms Templates
                 </Link>
               )}
               <button type="button" onClick={showDepartmentList} className="w-fit text-sm text-primary hover:underline">
@@ -954,6 +954,7 @@ export function FolderExplorerPage() {
               onCreateFolder={(name, parentId) => createFolder.mutate({ name, parentId })}
               onRename={(id, name) => updateFolder.mutate({ id, name })}
               onMove={(id) => setMovingId(id)}
+              onDelete={canManageFolders ? (id) => deleteFolder.mutate(id) : undefined}
               canManage={canManageFolders}
               onSendToLibrary={sendToLibrary}
               onAttach={requestUpload}
@@ -1219,6 +1220,18 @@ export function FolderExplorerPage() {
                               Move to…
                             </button>
                           )}
+                          {canManageFolders && isBlankTemplateLink(doc.linkedPath) && (
+                            <button
+                              type="button"
+                              className="px-1 text-[11px] text-muted-foreground hover:text-destructive"
+                              aria-label={`Delete ${doc.name}`}
+                              onClick={() => {
+                                if (confirm(`Remove "${doc.name}" from this folder? It will not be put back.`)) deleteFolder.mutate(doc.id);
+                              }}
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                         {dragKind === "doc" && docIndex === docs.length - 1 && (
                           <SiblingGap
@@ -1307,6 +1320,18 @@ export function FolderExplorerPage() {
                         {canManageFolders && target && (
                           <button type="button" data-testid="move-to" className="px-1 text-[11px] text-primary hover:underline" aria-label={`Move ${doc.name} to another folder`} onClick={() => setMovingId(doc.id)}>
                             Move to…
+                          </button>
+                        )}
+                        {canManageFolders && isBlankTemplateLink(doc.linkedPath) && (
+                          <button
+                            type="button"
+                            className="px-1 text-[11px] text-muted-foreground hover:text-destructive"
+                            aria-label={`Delete ${doc.name}`}
+                            onClick={() => {
+                              if (confirm(`Remove "${doc.name}" from this folder? It will not be put back.`)) deleteFolder.mutate(doc.id);
+                            }}
+                          >
+                            Delete
                           </button>
                         )}
                       </div>
@@ -1522,7 +1547,7 @@ function EmptyFolder({ filtered }: { filtered: boolean }) {
     <div className="flex flex-col items-center gap-1 rounded-md border border-dashed border-border px-3 py-6 text-center" data-testid="folder-empty">
       <Folder size={18} className="text-muted-foreground" />
       <p className="text-sm text-muted-foreground">{filtered ? "Nothing in this folder matches." : "Nothing saved in this folder yet."}</p>
-      {!filtered && <p className="text-xs text-muted-foreground">Blank templates stay on Blank Forms. A form shows up here after it is saved into this folder.</p>}
+      {!filtered && <p className="text-xs text-muted-foreground">Blank templates are in Blank Forms Templates. A form shows up here after it is saved into this folder.</p>}
     </div>
   );
 }
@@ -1631,6 +1656,7 @@ function FolderBrowser({
   onCreateFolder,
   onRename,
   onMove,
+  onDelete,
   canManage,
   onSendToLibrary,
   onAttach,
@@ -1663,6 +1689,7 @@ function FolderBrowser({
   onCreateFolder: (name: string, parentId: number) => void;
   onRename: (id: number, name: string) => void;
   onMove: (id: number) => void;
+  onDelete?: (id: number) => void;
   canManage: boolean;
   onSendToLibrary: (id: number) => void;
   onAttach: (id: number) => void;
@@ -1896,6 +1923,18 @@ function FolderBrowser({
                 {canManage && (
                   <button type="button" data-testid="move-to" className="shrink-0 px-2 text-xs text-primary hover:underline" aria-label={`Move ${file.name} to another folder`} onClick={() => onMove(file.id)}>
                     Move to…
+                  </button>
+                )}
+                {canManage && onDelete && isBlankTemplateLink(file.linkedPath) && (
+                  <button
+                    type="button"
+                    className="shrink-0 px-2 text-xs text-muted-foreground hover:text-destructive"
+                    aria-label={`Delete ${file.name}`}
+                    onClick={() => {
+                      if (confirm(`Remove "${file.name}" from this folder? It will not be put back.`)) onDelete(file.id);
+                    }}
+                  >
+                    Delete
                   </button>
                 )}
                 </div>

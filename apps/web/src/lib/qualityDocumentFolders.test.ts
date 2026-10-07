@@ -66,19 +66,22 @@ describe("Quality document folders", () => {
     assert.deepEqual(link && { label: link.label, path: link.path }, { label: "Obsolete / Archive", path: "/folders/obsolete-archive" });
   });
 
-  it("lists Blank Forms under Documents and keeps the sidebar to FRM NCR plus modules", () => {
+  it("keeps Blank Forms off the sidebar and leaves FRM NCR plus the other Documents links", () => {
     const documents = SIDEBAR_FOLDERS.find((folder) => folder.key === "document-control");
     assert.ok(documents && isFolder(documents));
-    const blank = documents.children.find((child) => child.key === "blank-forms");
-    assert.ok(blank && !isFolder(blank));
-    assert.deepEqual({ label: blank.label, path: blank.path }, { label: "Blank Forms", path: "/blank-forms" });
+    assert.equal(documents.children.some((child) => child.key === "blank-forms"), false);
+    assert.deepEqual(
+      documents.children.map((child) => child.label),
+      ["Folder Explorer", "Folders", "Document changes", "Management System", "Drawings", "APQP"],
+    );
 
     const links = flattenSidebarLinks();
     assert.deepEqual(
       links.filter((link) => link.path.startsWith("/iso-forms/")).map((link) => [link.label, link.path]),
       [["FRM NCR", "/iso-forms/frm-ncr-001"]],
     );
-    assert.equal(links.filter((link) => link.label === "Blank Forms").length, 1);
+    assert.equal(links.filter((link) => link.label === "Blank Forms").length, 0);
+    assert.equal(links.some((link) => link.path === "/blank-forms"), false);
     assert.equal(SIDEBAR_FOLDERS.some((folder) => folder.key === "engineering"), false);
     assert.equal(documents.children.some((child) => child.key.startsWith("frm-")), false);
   });

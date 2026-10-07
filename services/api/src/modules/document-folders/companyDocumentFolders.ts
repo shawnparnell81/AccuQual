@@ -25,7 +25,7 @@ import type { DefaultFolderSeed } from "./defaultDocumentFolders.js";
 import { ensureMainIsoFolders } from "./mainIsoFolders.js";
 import { retireNamedDocumentFolders } from "./retiredFolderCleanup.js";
 
-const TEMPLATE_LIBRARY_NAMES = new Set(["Blank Form Templates", "ISO Compliance Documents"]);
+const TEMPLATE_LIBRARY_NAMES = new Set(["Blank Form Templates", "Blank Forms Templates", "ISO Compliance Documents"]);
 
 export const COMPANY_DOCUMENT_FOLDERS: DefaultFolderSeed[] = [
   {
@@ -220,7 +220,7 @@ function inBlankTemplates(folder: FolderIdentity, folders: FolderIdentity[]): bo
   const seen = new Set<number>();
   while (current && !seen.has(current.id)) {
     seen.add(current.id);
-    if (current.name === "Blank Form Templates") return true;
+    if (current.name === "Blank Form Templates" || current.name === "Blank Forms Templates") return true;
     current = current.parentId == null ? undefined : byId.get(current.parentId);
   }
   return false;

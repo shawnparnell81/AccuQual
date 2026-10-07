@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { departmentForFolder, documentsFolderHref, FAI_VALIDATION_FOLDER_NAME, faiValidationDocumentsHref, filingLocation, folderChain, folderIdByName, LEGACY_VALIDATION_REPORTS_PATH, leftHandFolders, listFolder, openTarget, saveAsFolders, validationReportsCrumb, visibleExplorerFolders, type BrowseFolder } from "./folderBrowse.ts";
+import { blankFormsFolderHref, departmentForFolder, documentsFolderHref, FAI_VALIDATION_FOLDER_NAME, faiValidationDocumentsHref, filingLocation, folderChain, folderIdByName, isBlankTemplateLink, LEGACY_VALIDATION_REPORTS_PATH, leftHandFolders, listFolder, openTarget, saveAsFolders, validationReportsCrumb, visibleExplorerFolders, type BrowseFolder } from "./folderBrowse.ts";
 
 const tree: BrowseFolder[] = [
   { id: 1, name: "Quality", parentId: null, sortOrder: 0 },
@@ -207,5 +207,36 @@ describe("folder browse", () => {
     assert.equal(departmentForFolder(rows, 15)?.name, "Engineering");
     assert.equal(departmentForFolder(rows, 12)?.name, "SOP");
     assert.equal(departmentForFolder(rows, 1)?.name, "ISO Compliance Documents");
+  });
+
+  it("shows Blank Forms Templates and treats a blank shortcut as a file that Save as will not use", () => {
+    const rows: BrowseFolder[] = [
+      { id: 1, name: "ISO Compliance Documents", parentId: null, sortOrder: 0 },
+      { id: 2, name: "Blank Forms Templates", parentId: 1, sortOrder: 3 },
+      { id: 3, name: "Validation", parentId: 2, sortOrder: 0 },
+      { id: 4, name: "FRM-VAL-001 CSA VALIDATION REPORT", parentId: 3, sortOrder: 0, linkedPath: "/blank-forms/start/frm-val-001" },
+      { id: 5, name: "FRM-VAL-007 FUEL PUMP VALIDATION DOCUMENT", parentId: 3, sortOrder: 1, linkedPath: "/blank-forms/start/frm-val-007" },
+      { id: 6, name: "Blank Form Templates", parentId: 1, sortOrder: 20 },
+      { id: 7, name: "Calibration", parentId: 6, sortOrder: 0 },
+      { id: 8, name: "Quality", parentId: 1, sortOrder: 4 },
+    ];
+    const names = visibleExplorerFolders(rows).map((folder) => folder.name);
+    assert.equal(names.includes("Blank Forms Templates"), true);
+    assert.equal(names.includes("Validation"), true);
+    assert.equal(names.includes("FRM-VAL-001 CSA VALIDATION REPORT"), true);
+    assert.equal(names.includes("Blank Form Templates"), false);
+    assert.equal(names.includes("Calibration"), false);
+    const validation = listFolder(visibleExplorerFolders(rows), 3);
+    assert.deepEqual(
+      validation.files.map((file) => file.name),
+      ["FRM-VAL-001 CSA VALIDATION REPORT", "FRM-VAL-007 FUEL PUMP VALIDATION DOCUMENT"],
+    );
+    assert.equal(validation.folders.length, 0);
+    assert.equal(isBlankTemplateLink(validation.files[0]?.linkedPath), true);
+    assert.equal(openTarget(validation.files[0]!), "/blank-forms/start/frm-val-001");
+    const offered = saveAsFolders(rows);
+    assert.equal(offered.some((folder) => folder.name === "Blank Forms Templates" || folder.name === "Validation" || folder.name === "Blank Form Templates"), false);
+    assert.equal(offered.some((folder) => folder.name === "Quality"), true);
+    assert.equal(blankFormsFolderHref(), "/documents/folders?name=Blank%20Forms%20Templates");
   });
 });

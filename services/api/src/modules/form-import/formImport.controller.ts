@@ -53,7 +53,7 @@ function presentRow(template: FormImportTemplate, row: PlannedRow) {
 
 export const listFormImportTemplates = asyncHandler(async (req, res) => {
   await assertDocuments(req, false);
-  await ensureFormTemplates(req.db!);
+  await ensureFormTemplates(req.db!, req.user?.id);
   const rows = await req.db!.select().from(controlledFormTemplates);
   res.json({
     accept: ".csv,.xls,.xlsx,.json",

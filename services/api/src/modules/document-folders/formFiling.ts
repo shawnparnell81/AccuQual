@@ -4,18 +4,75 @@
  * Tokens: {formId} {recordNumber} {date}
  *
  * Folder names:
- * ISO Compliance Documents / Blank Form Templates
- * Topic folders (Validation, Problem Solving, and so on) sit inside the blank-forms folder.
- * A filled record stays in `subjectRoute`. The Forms Library lists these same rows
- * and starts a new record with `start`.
+ * ISO Compliance Documents / Blank Forms Templates / topic / blank
+ * Topic folders (Validation, Problem Solving, and so on) sit inside that folder.
+ * A filled record stays in `subjectRoute`. Opening a blank starts a new record
+ * with `start` and does not change the template.
+ *
+ * Master Document List (LST-GEN-001), Master Equipment List (LST-EQP-001), and
+ * Scope of Laboratory Activities (LST-GEN-003) are living documents. They stay
+ * out of Blank Forms Templates. A separate change removes those blanks.
  */
 export const FILE_NAME_PATTERN = "{formId}_{recordNumber}_{date}";
 
 /** Top Documents folder. */
 export const ISO_DOCUMENTS_FOLDER = "ISO Compliance Documents";
 
-/** Every blank template lives under this folder. No number prefix. */
-export const BLANK_FORMS_FOLDER = "Blank Form Templates";
+/** Fillable blanks live under this folder. No number prefix. */
+export const BLANK_FORMS_FOLDER = "Blank Forms Templates";
+
+/**
+ * Older drawer name. Folder Explorer still hides it.
+ * The three living lists stay on this drawer until they are removed.
+ * They are not filed under BLANK_FORMS_FOLDER.
+ */
+export const PREVIOUS_BLANK_FORMS_FOLDER = "Blank Form Templates";
+
+/** Explorer shortcut that starts a fresh copy of one blank. */
+export const BLANK_TEMPLATE_START_PREFIX = "/blank-forms/start/";
+
+export function blankTemplateStartPath(formKey: string): string {
+  return `${BLANK_TEMPLATE_START_PREFIX}${formKey}`;
+}
+
+export function isBlankTemplateStartPath(linkedPath: string | null | undefined): boolean {
+  return typeof linkedPath === "string" && linkedPath.startsWith(BLANK_TEMPLATE_START_PREFIX);
+}
+
+/** Folder label: form number and title when the blank has a number, otherwise the title. */
+export function blankTemplateLabel(formId: string, title: string): string {
+  const id = formId.trim();
+  return id ? `${id} ${title}` : title;
+}
+
+const LIVING_DOCUMENT_KEYS = new Set(["lst-eqp-001", "lst-gen-001", "lst-gen-003"]);
+const LIVING_DOCUMENT_IDS = new Set(["LST-EQP-001", "LST-GEN-001", "LST-GEN-003"]);
+const LIVING_DOCUMENT_TITLES = new Set(["master equipment list", "master document list", "scope of laboratory activities"]);
+
+/**
+ * Living in-app documents, not blank templates.
+ * Matched by form key, document number, or title so a later catalog row is
+ * still left out of Blank Forms Templates.
+ */
+export function keptOutOfBlankFormsTemplates(form: { formKey?: string; formId?: string; title?: string }): boolean {
+  const key = form.formKey?.trim().toLowerCase() ?? "";
+  const id = form.formId?.trim().toUpperCase() ?? "";
+  const title = form.title?.trim().toLowerCase() ?? "";
+  return LIVING_DOCUMENT_KEYS.has(key) || (id !== "" && LIVING_DOCUMENT_IDS.has(id)) || LIVING_DOCUMENT_TITLES.has(title);
+}
+
+/** True when this folder is the blank shelf or sits inside it. Filled copies are not filed here. */
+export function folderIsBlankLibrary(folders: { id: number; name: string; parentId: number | null }[], folderId: number): boolean {
+  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  let current = byId.get(folderId);
+  const seen = new Set<number>();
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    if (current.name === BLANK_FORMS_FOLDER || current.name === PREVIOUS_BLANK_FORMS_FOLDER) return true;
+    current = current.parentId == null ? undefined : byId.get(current.parentId);
+  }
+  return false;
+}
 
 /** How the Forms Library opens a blank copy of this template. `{id}` is the new record. */
 export interface FormStart {
@@ -270,7 +327,7 @@ export const PRINTED_FORM_REVISION: Record<string, string> = {
   "lst-eqp-001": "Rev A",
 };
 
-/** Folders under the ISO documents root for one template: blank-forms folder, then its topic. */
+/** Folders under the ISO documents root for one fillable template: Blank Forms Templates, then its topic. */
 export function templateFolderPath(topic: string): string[] {
   return [BLANK_FORMS_FOLDER, topic];
 }

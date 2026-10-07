@@ -18,7 +18,6 @@ import {
   GraduationCap,
   Hammer,
   LayoutDashboard,
-  Library,
   PieChart,
   ScrollText,
   Shield,
@@ -110,7 +109,6 @@ const DOCUMENT_CONTROL_FOLDER: SidebarFolder = {
   icon: FileText,
   path: "/documents",
   children: [
-    { key: "blank-forms", label: "Blank Forms", path: "/blank-forms", icon: Library },
     { key: "folder-explorer", label: "Folder Explorer", path: "/documents/folders", icon: FolderTree },
     { key: "saved-form-folders", label: "Folders", path: "/form-folders", icon: Folder },
     { key: "dcr", label: "Document changes", path: "/document-change-requests", icon: FileEdit },
@@ -123,7 +121,7 @@ const DOCUMENT_CONTROL_FOLDER: SidebarFolder = {
 /**
  * Five doors, plus Admin for people who already pass the admin check.
  * The Folders door and Documents → Folders both open /form-folders.
- * That page lists saved fills. Blank templates stay on Blank Forms.
+ * That page lists saved fills. Blank templates live in Folder Explorer under Blank Forms Templates.
  */
 export const SIDEBAR_FOLDERS: SidebarNode[] = [
   {

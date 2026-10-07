@@ -7,7 +7,7 @@ import { validationReports } from "../../drizzle/schema/validationReport.js";
 import type { Db } from "../../lib/requestDb.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { AppError } from "../../utils/appError.js";
-import { filedRecordName, fileNamePatternFor, FORM_TEMPLATES } from "./formFiling.js";
+import { filedRecordName, fileNamePatternFor, folderIsBlankLibrary, FORM_TEMPLATES } from "./formFiling.js";
 import { ensureFormTemplates } from "./formTemplates.js";
 import { folderLocationLabel, folderMoveAudit } from "./mainIsoFolders.js";
 import { ancestorNames, isRetiredFolderPlacement } from "./retiredFolderCleanup.js";
@@ -41,8 +41,9 @@ async function loadFolders(db: Db): Promise<FolderNode[]> {
 
 function suggestedFolderId(folders: FolderNode[], formKey: string, templateFolderId: number | null): number | null {
   const fromSubject = resolveFolderPath(folders, SUGGESTED_SUBJECT_PATH[formKey] ?? []);
-  if (fromSubject != null) return fromSubject;
-  return templateFolderId;
+  if (fromSubject != null && !folderIsBlankLibrary(folders, fromSubject)) return fromSubject;
+  if (templateFolderId != null && !folderIsBlankLibrary(folders, templateFolderId)) return templateFolderId;
+  return null;
 }
 
 async function wouldCreateCycle(db: Db, folderId: number, candidateParentId: number): Promise<boolean> {
@@ -126,7 +127,7 @@ export async function updateFormNumber(
   if (!seedFor(formKey)) throw AppError.badRequest("Unknown form");
   const next = formId.trim();
   if (next.length > 40) throw AppError.badRequest("Form number must be 40 characters or fewer");
-  await ensureFormTemplates(db);
+  await ensureFormTemplates(db, performedBy);
   const [current] = await db.select().from(controlledFormTemplates).where(eq(controlledFormTemplates.formKey, formKey));
   if (!current) throw AppError.notFound("Form template");
   if (current.formId === next) return current;
@@ -172,7 +173,7 @@ export async function fileFormRecord(db: Db, input: { formKey: string; recordId:
   const { formKey, recordId } = input;
   let folderId = input.folderId;
   if (!FILEABLE_FORM_KEYS.has(formKey)) throw AppError.badRequest("This form cannot be filed from here");
-  await ensureFormTemplates(db);
+  await ensureFormTemplates(db, performedBy);
   const createdOn = await assertRecord(db, formKey, recordId);
   const partNumber = input.partNumber?.trim().replace(/\s+/g, " ") ?? "";
   if (partNumber) {
@@ -196,6 +197,9 @@ export async function fileFormRecord(db: Db, input: { formKey: string; recordId:
 
   const [parent] = await db.select().from(documentFolders).where(eq(documentFolders.id, folderId));
   if (!parent) throw AppError.notFound("Folder");
+  if (folderIsBlankLibrary(await loadFolders(db), folderId)) {
+    throw AppError.badRequest("Blank Forms Templates holds empty blanks. Pick another Documents folder for this filled copy.");
+  }
 
   const [existing] = await db.select().from(formFilings).where(and(eq(formFilings.formKey, formKey), eq(formFilings.recordId, recordId)));
   let filing = existing;

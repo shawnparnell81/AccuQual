@@ -234,7 +234,7 @@ export function withRegisteredForms(documentRows: MasterDocumentRow[], templates
 }
 
 export const masterDocumentListHandler = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await listMasterDocuments(req.db!));
+  res.json(await listMasterDocuments(req.db!, req.user?.id));
 });
 
 /** Saves Approval Date and Approved By typed on the Master Document List. Does not invent either value. */
@@ -266,12 +266,12 @@ export const patchMasterListRowHandler = asyncHandler(async (req: Request, res: 
     if (!updated) throw AppError.notFound("Form");
   }
 
-  const rows = await listMasterDocuments(req.db!);
+  const rows = await listMasterDocuments(req.db!, req.user?.id);
   res.json(rows.find((item) => item.id === body.id) ?? { id: body.id });
 });
 
-export async function listMasterDocuments(db: Db): Promise<MasterDocumentRow[]> {
-  await ensureFormTemplates(db);
+export async function listMasterDocuments(db: Db, performedBy?: number): Promise<MasterDocumentRow[]> {
+  await ensureFormTemplates(db, performedBy);
   const docs = await db.select().from(documents);
   const versions = await db.select().from(documentVersions);
   const published = await db.select().from(controlledVersions).where(eq(controlledVersions.subjectType, "document"));

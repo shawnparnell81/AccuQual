@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { SIDEBAR_FOLDERS, flattenSidebarLinks, isFolder } from "../components/layout/sidebarStructure.ts";
-import { faiValidationDocumentsHref, LEGACY_VALIDATION_REPORTS_PATH } from "./folderBrowse.ts";
+import { blankFormsFolderHref, faiValidationDocumentsHref, LEGACY_VALIDATION_REPORTS_PATH } from "./folderBrowse.ts";
 import { applyUserShortcuts, PINNABLE_SHORTCUTS } from "./sidebarShortcuts.ts";
 
 describe("per-user sidebar shortcuts", () => {
@@ -51,8 +51,19 @@ describe("per-user sidebar shortcuts", () => {
     assert.equal(links.some((link) => link.key === "drawings"), true);
     assert.equal(links.some((link) => link.key === "frm-ncr-001"), true);
     assert.equal(links.some((link) => link.key === "capa"), true);
-    assert.equal(links.some((link) => link.key === "blank-forms"), true);
+    assert.equal(links.some((link) => link.key === "blank-forms"), false);
     assert.equal(links.some((link) => link.path === "/ncr"), false);
+  });
+
+  it("sends a saved Blank Forms shortcut to Blank Forms Templates", () => {
+    const next = applyUserShortcuts(SIDEBAR_FOLDERS, {
+      hidden: [],
+      pinned: [{ key: "pin-blanks", label: "Blank Forms", path: "/blank-forms" }],
+    });
+    const shortcuts = next.find((node) => node.key === "my-shortcuts");
+    assert.ok(shortcuts && isFolder(shortcuts));
+    assert.equal(shortcuts.children[0] && "path" in shortcuts.children[0] ? shortcuts.children[0].path : "", blankFormsFolderHref());
+    assert.equal(flattenSidebarLinks(next).some((link) => link.path === "/blank-forms"), false);
   });
 
   it("sends a saved Validation Reports shortcut to FAI / Validation", () => {

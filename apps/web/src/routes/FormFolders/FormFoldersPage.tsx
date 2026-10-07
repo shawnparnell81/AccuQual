@@ -56,7 +56,7 @@ export function FormFoldersPage() {
         <div>
           <h1 className="text-2xl font-semibold">Folders</h1>
           <p className="text-sm text-muted-foreground">
-            One folder for each form you can fill in. Open a folder to see the saved copies of that form. Blank templates stay on Blank Forms.
+            One folder for each form you can fill in. Open a folder to see the saved copies of that form. Blank templates are in Blank Forms Templates in Folder Explorer.
           </p>
         </div>
         <input

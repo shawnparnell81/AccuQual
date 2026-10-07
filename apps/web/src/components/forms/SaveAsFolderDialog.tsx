@@ -99,7 +99,7 @@ function FolderBranch({
   );
 }
 
-/** Pick a Documents folder for this filled copy. Blank Form Templates is not in the tree. */
+/** Pick a Documents folder for this filled copy. Blank Forms Templates is not in the tree. */
 export function SaveAsFolderDialog({
   folders,
   selectedId,
@@ -154,7 +154,7 @@ export function SaveAsFolderDialog({
         <h2 id="save-as-title" className="text-sm font-medium">
           Save as
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">Choose a Documents folder for this filled copy. The blank template stays in Blank Forms.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Choose a Documents folder for this filled copy. The blank template stays in Blank Forms Templates.</p>
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}

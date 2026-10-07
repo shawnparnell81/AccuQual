@@ -216,6 +216,18 @@ export const company = pgTable("company", {
      * so a profile save keeps the flag. No new column.
      */
     isoMainFoldersReady?: boolean;
+    /**
+     * Set once fillable blank templates have been filed under Blank Forms
+     * Templates. Documents reads it so a template Shawn moves or deletes is
+     * not put back on the next load. Master Document List, Master Equipment
+     * List, and Scope of Laboratory Activities are not in this set. Company
+     * Settings spreads this object, so a profile save keeps it. No new column.
+     */
+    blankFormsTemplatesReady?: boolean;
+    /** Form keys already given a Blank Forms Templates shortcut. A missing shortcut stays missing. */
+    blankFormKeysPlaced?: string[];
+    /** document_folders id of Blank Forms Templates, so a rename or move of that folder is kept. */
+    blankFormsTemplatesFolderId?: number;
   }>().default({}),
   // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for the company's first admin.
   // `dismissed: true` for every company that existed before this shipped (backfillOnboardingChecklist.ts) — an
