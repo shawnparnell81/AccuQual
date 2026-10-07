@@ -84,11 +84,13 @@ export const users = pgTable("users", {
   savedViews: jsonb("saved_views").$type<Record<string, { label: string; searchText: string }[]>>().default({}),
   // Per-user bell, email, and daily-digest switches. Missing values mean on.
   notificationPreferences: jsonb("notification_preferences").$type<{ inApp?: boolean; email?: boolean; dailyDigest?: boolean }>().default({ inApp: true, email: true, dailyDigest: true }),
-  // Which shared sidebar items this person hides, and the extra shortcuts they pin.
-  // Null means the shared menu with nothing extra. Company admins still rearrange the shared structure.
+  // This person's sidebar: hidden rows, pinned destinations, and an optional arrangement.
+  // Null, or a null layout, means the built-in menu. Another user's row is never read for this.
   sidebarShortcuts: jsonb("sidebar_shortcuts").$type<{
     hidden?: string[];
     pinned?: { key: string; label: string; path: string }[];
+    layout?: { key: string; children?: { key: string; children?: unknown[] }[] }[] | null;
+    groups?: { key: string; label: string }[];
   } | null>(),
   // Which home and dashboard sections this person shows, and in what order.
   // Null means the built-in arrangement. Another user's row is never read for this.

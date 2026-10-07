@@ -2,16 +2,15 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type D
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GripVertical, MoreHorizontal } from "lucide-react";
 import { apiClient } from "../../api/client";
-import { useCurrentUser } from "../../hooks/useAuth";
-import { isFullAccessRole } from "../../lib/fullAccess";
-import { canViewAuditLog } from "../../lib/recordDelete";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
+import { useSidebarPrefs } from "../../hooks/useSidebarPrefs";
 import { useToast } from "../shared/ToastProvider";
-import { SIDEBAR_FOLDERS, visibleSidebar, type SidebarNode } from "./sidebarStructure";
-import { applyUserShortcuts, EMPTY_SIDEBAR_SHORTCUTS, isPersonalShortcutKey, SHORTCUTS_FOLDER_KEY, type PinnedShortcut, type SidebarShortcutPrefs } from "../../lib/sidebarShortcuts";
+import { SIDEBAR_FOLDERS, type SidebarNode } from "./sidebarStructure";
+import { EMPTY_SIDEBAR_SHORTCUTS, isPersonalShortcutKey, SHORTCUTS_FOLDER_KEY, type PinnedShortcut, type SidebarShortcutPrefs } from "../../lib/sidebarShortcuts";
+import { filterSidebarByAccess } from "../../lib/sidebarAccess";
+import { resolveUserSidebar } from "../../lib/sidebarUserLayout";
 import { dropPosition, reorderIds } from "../../lib/listReorder";
 import {
-  applySidebarLayout,
   moveSidebarItem,
   nudgeSidebarItem,
   placementParent,
@@ -26,23 +25,12 @@ function hasNavDrag(event: DragEvent) {
   return Array.from(event.dataTransfer.types).includes(NAV_DRAG);
 }
 
+/** The signed-in person's menu. People who never customize see the built-in order. */
 export function useArrangedSidebar() {
-  const user = useCurrentUser();
-  const isAdmin = isFullAccessRole(user?.roleName);
-  const showAuditLog = canViewAuditLog(user?.roleName);
-  const layout = useQuery({
-    queryKey: ["sidebar-layout"],
-    queryFn: async () => (await apiClient.get<{ layout: SidebarPlacement[] | null }>("/company/sidebar-layout")).data.layout,
-  });
-  const shortcuts = useQuery({
-    queryKey: ["sidebar-shortcuts"],
-    enabled: Boolean(user?.id),
-    queryFn: async () => (await apiClient.get<SidebarShortcutPrefs>("/users/me/sidebar-shortcuts")).data,
-  });
-  const arranged = useMemo(() => applySidebarLayout(layout.data, SIDEBAR_FOLDERS), [layout.data]);
-  const catalog = useMemo(() => visibleSidebar(arranged, isAdmin, { auditLog: showAuditLog }), [arranged, isAdmin, showAuditLog]);
-  const folders = useMemo(() => applyUserShortcuts(catalog, shortcuts.data ?? EMPTY_SIDEBAR_SHORTCUTS), [catalog, shortcuts.data]);
-  return { arranged, folders, catalog, isAdmin };
+  const { prefs, access } = useSidebarPrefs();
+  const catalog = useMemo(() => filterSidebarByAccess(SIDEBAR_FOLDERS, access), [access]);
+  const folders = useMemo(() => resolveUserSidebar(SIDEBAR_FOLDERS, prefs, access), [prefs, access]);
+  return { folders, catalog };
 }
 
 interface OrganizeApi {

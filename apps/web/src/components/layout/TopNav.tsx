@@ -21,7 +21,7 @@ import {
   type SidebarLink,
   type SidebarNode,
 } from "./sidebarStructure";
-import { SidebarDragChrome, SidebarOrganizeProvider, SidebarResetButton, useArrangedSidebar, useSidebarOrganize, useSidebarRow } from "./sidebarOrganize";
+import { SidebarDragChrome, useArrangedSidebar, useSidebarOrganize, useSidebarRow } from "./sidebarOrganize";
 import { SidebarShortcutsButton } from "./sidebarShortcutsPanel";
 import { SHORTCUTS_FOLDER_KEY, isPersonalShortcutKey } from "../../lib/sidebarShortcuts";
 import { prefetchRoute } from "../../routes/pages";
@@ -85,7 +85,7 @@ export function TopNav() {
   const [query, setQuery] = useState("");
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>(() => readOpenFolders(user?.id));
 
-  const { arranged, folders, catalog, isAdmin } = useArrangedSidebar();
+  const { folders, catalog } = useArrangedSidebar();
   const links = flattenSidebarLinks(folders);
   const needle = query.trim().toLowerCase();
   const searchResults = needle ? links.filter((leaf) => `${leaf.label} ${leaf.key}`.toLowerCase().includes(needle)) : [];
@@ -274,13 +274,7 @@ export function TopNav() {
       </header>
 
       <div className="aq-scrim" onClick={closeSide} />
-      {isAdmin ? (
-        <SidebarOrganizeProvider arranged={arranged}>
-          <SidebarNav folders={folders} catalog={catalog} folderOpen={folderOpen} toggleFolder={toggleFolder} closeSide={closeSide} pathname={location.pathname} companyName={company?.name} sideCollapsed={sideCollapsed} toggleCollapsed={toggleCollapsed} sideWidth={sideWidth} viewportWidth={viewportWidth} onPanelWidth={setPanelWidth} onFitWidth={fitPanelWidth} />
-        </SidebarOrganizeProvider>
-      ) : (
-        <SidebarNav folders={folders} catalog={catalog} folderOpen={folderOpen} toggleFolder={toggleFolder} closeSide={closeSide} pathname={location.pathname} companyName={company?.name} sideCollapsed={sideCollapsed} toggleCollapsed={toggleCollapsed} sideWidth={sideWidth} viewportWidth={viewportWidth} onPanelWidth={setPanelWidth} onFitWidth={fitPanelWidth} />
-      )}
+      <SidebarNav folders={folders} catalog={catalog} folderOpen={folderOpen} toggleFolder={toggleFolder} closeSide={closeSide} pathname={location.pathname} companyName={company?.name} sideCollapsed={sideCollapsed} toggleCollapsed={toggleCollapsed} sideWidth={sideWidth} viewportWidth={viewportWidth} onPanelWidth={setPanelWidth} onFitWidth={fitPanelWidth} />
     </>
   );
 }
@@ -344,7 +338,6 @@ function SidebarNav({
         </NavLink>
         {companyName && <p className="mt-2 truncate">{companyName}</p>}
         <SidebarShortcutsButton catalog={catalog} />
-        <SidebarResetButton />
         <button type="button" className="aq-collapse" onClick={toggleCollapsed} aria-label={sideCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
           {sideCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
           <span>{sideCollapsed ? "Expand" : "Collapse"}</span>

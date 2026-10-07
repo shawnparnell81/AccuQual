@@ -19,6 +19,7 @@ import {
   type ResourceKey,
 } from "../../middleware/departmentAccess.js";
 import { hierarchyLevelForRoleName, moveRank } from "../roles/roleHierarchy.js";
+import { isFullAccessRole } from "../roles/roleAccess.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -39,7 +40,10 @@ export const getMyEffectivePermissionsHandler = asyncHandler(async (req: Request
   const user = { id: req.user!.id, roleName: req.user!.roleName, department: req.user!.department };
 
   const entries = await Promise.all(VISIBLE_RESOURCE_KEYS.map(async (key) => [key, await getUserAccessLevel(db, user, key)] as const));
-  res.json(Object.fromEntries(entries));
+  // Not a grantable module. The Admin menu row reads this so it does not keep its own role list.
+  // Roles & Permissions still lists only VISIBLE_RESOURCE_KEYS.
+  const adminConsole = isFullAccessRole(user.roleName) ? "edit" : "none";
+  res.json({ ...Object.fromEntries(entries), admin_console: adminConsole });
 });
 
 // ---------------------------------------------------------------------------
