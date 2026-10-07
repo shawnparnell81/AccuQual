@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { blankFormsFolderHref, contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderIdByName, isBlankTemplateLink, isFolderEntry, leftHandFolders, listFolder, openTarget, treeOpenForTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
+import { blankFormsFolderHref, contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderDepth, folderIdByName, folderTreeOpen, isBlankTemplateLink, isFolderEntry, leftHandFolders, listFolder, openTarget, treeOpenForTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
 import { ValidationReportsPanel } from "../ValidationReports/ValidationReportsPanel";
 import { ChevronDown, ChevronLeft, ChevronRight, Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical, Folder, FolderOpen, MessageSquare } from "lucide-react";
 import { canGoBack, canGoForward, explorerCrumbs, initialExplorerHistory, pushExplorerPlace, stepExplorerHistory, virtualRange, type ExplorerHistory, type ExplorerPlace } from "../../lib/explorerNav";
@@ -133,7 +133,7 @@ function FolderTreeBranch({
   onMove?: (folder: DocumentFolder) => void;
 }) {
   const children = listFolder(folders, folder.id).folders;
-  const open = treeOpen[folder.id] === true;
+  const open = folderTreeOpen(treeOpen[folder.id], depth);
   const selected = selectedId === folder.id;
   const Icon = open && children.length > 0 ? FolderOpen : Folder;
   const showGaps = dragKind === "folder";
@@ -799,7 +799,7 @@ export function FolderExplorerPage() {
   function toggleTree(id: number) {
     setExpandingId(id);
     setTreeOpen((current) => {
-      const wasOpen = current[id] === true;
+      const wasOpen = folderTreeOpen(current[id], folderDepth(visibleFolders, id));
       return { ...current, [id]: !wasOpen };
     });
   }

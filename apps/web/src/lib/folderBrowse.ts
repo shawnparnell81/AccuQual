@@ -102,9 +102,24 @@ export function folderChain<T extends BrowseFolder>(folders: T[], folderId: numb
   return chain;
 }
 
+/** How many parents sit above a folder. A root is depth 0. */
+export function folderDepth<T extends BrowseFolder>(folders: T[], folderId: number): number {
+  const chain = folderChain(folders, folderId);
+  return chain.length === 0 ? 0 : chain.length - 1;
+}
+
 /**
- * Folders to open so a deep-linked folder is visible in the tree.
- * The folder itself stays closed. A plain visit has no target, so nothing opens.
+ * Left tree: each top-level folder starts open, so its children are visible.
+ * Those children, and everything deeper, start closed. An explicit value
+ * (a click, or a deep link) wins.
+ */
+export function folderTreeOpen(explicit: boolean | undefined, depth: number): boolean {
+  return explicit ?? depth === 0;
+}
+
+/**
+ * Ancestors to open so a deep-linked folder is visible.
+ * The folder itself stays closed. A plain visit adds nothing; the top level is already open.
  */
 export function treeOpenForTarget<T extends BrowseFolder>(folders: T[], targetId: number | null): Record<number, boolean> {
   if (targetId == null) return {};
