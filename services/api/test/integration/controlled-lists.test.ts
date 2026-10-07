@@ -86,7 +86,7 @@ describe("living controlled lists API", () => {
     const folders = tree.body as { id: number; name: string; parentId: number | null; linkedPath?: string | null }[];
     const iso = folders.find((folder) => folder.parentId === null && folder.name === "ISO Compliance Documents");
     const manual = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Quality Manual");
-    const blanks = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Blank Form Templates");
+    const blanks = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Blank Forms Templates");
     expect(manual?.id).toBeTruthy();
     expect(folders.find((folder) => folder.parentId === manual?.id && folder.linkedPath === "/documents/master-list")?.name).toBe("Master Document List");
     expect(folders.find((folder) => folder.parentId === manual?.id && folder.linkedPath === "/calibration/master-list")?.name).toBe("Master Equipment List");
