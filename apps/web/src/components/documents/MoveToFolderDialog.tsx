@@ -15,6 +15,7 @@ function branchMatches(folders: BrowseFolder[], folder: BrowseFolder, query: str
 function MoveBranch({
   folder,
   folders,
+  allFolders,
   depth,
   query,
   movingId,
@@ -23,6 +24,7 @@ function MoveBranch({
 }: {
   folder: BrowseFolder;
   folders: BrowseFolder[];
+  allFolders: BrowseFolder[];
   depth: number;
   query: string;
   movingId: number;
@@ -30,8 +32,11 @@ function MoveBranch({
   onSelect: (id: number) => void;
 }) {
   const children = childrenOf(folders, folder.id).filter((child) => !query || branchMatches(folders, child, query));
-  const blocked = folderMoveIsBlocked(folders, movingId, folder.id);
+  const blocked = folderMoveIsBlocked(allFolders, movingId, folder.id);
   const selected = selectedId === folder.id;
+  const path = folderChain(allFolders, folder.id)
+    .map((crumb) => crumb.name)
+    .join(" / ");
   return (
     <li>
       <div className="flex items-center" style={{ paddingLeft: depth * 14 }}>
@@ -41,13 +46,15 @@ function MoveBranch({
           aria-pressed={selected}
           data-testid="move-target"
           data-folder-name={folder.name}
+          data-folder-path={path}
           onClick={() => onSelect(folder.id)}
-          className={`min-w-0 flex-1 truncate rounded px-1.5 py-1 text-left text-sm ${
+          className={`min-w-0 flex-1 rounded px-1.5 py-1 text-left text-sm ${
             blocked ? "cursor-not-allowed text-muted-foreground" : selected ? "bg-primary/15 font-medium text-foreground" : "text-foreground hover:bg-muted"
           }`}
-          title={blocked ? "A folder cannot be moved into itself." : folder.name}
+          title={blocked ? "A folder cannot be moved into itself." : path}
         >
-          {folder.name}
+          <span className="block truncate">{folder.name}</span>
+          <span className="block truncate text-xs text-muted-foreground">{path}</span>
         </button>
       </div>
       {children.length > 0 && (
@@ -57,6 +64,7 @@ function MoveBranch({
               key={child.id}
               folder={child}
               folders={folders}
+              allFolders={allFolders}
               depth={depth + 1}
               query={query}
               movingId={movingId}
@@ -84,12 +92,24 @@ export function MoveToFolderDialog({
   onClose: () => void;
   onMove: (parentId: number) => void;
 }) {
-  const destinations = useMemo(() => saveAsFolders(folders).filter((folder) => isFolderEntry(folders, folder)), [folders]);
+  const destinations = useMemo(() => {
+    const seen = new Set<number>();
+    return saveAsFolders(folders).filter((folder) => {
+      if (!isFolderEntry(folders, folder) || seen.has(folder.id)) return false;
+      seen.add(folder.id);
+      return true;
+    });
+  }, [folders]);
   const [query, setQuery] = useState("");
   const [chosen, setChosen] = useState<number | null>(null);
   const needle = query.trim().toLowerCase();
   const roots = childrenOf(destinations, null).filter((folder) => !needle || branchMatches(destinations, folder, needle));
   const chosenFolder = destinations.find((folder) => folder.id === chosen);
+  const chosenPath = chosenFolder
+    ? folderChain(folders, chosenFolder.id)
+        .map((crumb) => crumb.name)
+        .join(" / ")
+    : "";
   const blocked = chosen != null && folderMoveIsBlocked(folders, moving.id, chosen);
   const samePlace = chosen != null && chosen === moving.parentId;
   const from = folderChain(folders, moving.id)
@@ -117,13 +137,13 @@ export function MoveToFolderDialog({
           ) : (
             <ul>
               {roots.map((folder) => (
-                <MoveBranch key={folder.id} folder={folder} folders={destinations} depth={0} query={needle} movingId={moving.id} selectedId={chosen} onSelect={setChosen} />
+                <MoveBranch key={folder.id} folder={folder} folders={destinations} allFolders={folders} depth={0} query={needle} movingId={moving.id} selectedId={chosen} onSelect={setChosen} />
               ))}
             </ul>
           )}
         </div>
         <p className="text-xs text-muted-foreground">
-          {blocked ? "A folder cannot be moved into itself." : samePlace ? "Already in this folder." : chosenFolder ? `Selected: ${chosenFolder.name}` : "Select a folder."}
+          {blocked ? "A folder cannot be moved into itself." : samePlace ? "Already in this folder." : chosenPath ? `Selected: ${chosenPath}` : "Select a folder."}
         </p>
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:bg-muted">

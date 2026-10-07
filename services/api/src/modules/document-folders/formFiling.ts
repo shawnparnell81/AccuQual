@@ -6,6 +6,8 @@
  * Folder names:
  * ISO Compliance Documents / Blank Forms Templates / topic / blank
  * Topic folders (Validation, Problem Solving, and so on) sit inside that folder.
+ * A topic that uses a company folder's name is filed as that name plus " Forms"
+ * (Engineering Forms, Training Forms). The blank is not moved out.
  * A filled record stays in `subjectRoute`. Opening a blank starts a new record
  * with `start` and does not change the template.
  *

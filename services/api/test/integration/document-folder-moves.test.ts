@@ -61,8 +61,9 @@ describe("ISO main folders and moving what is already filed", () => {
     for (const name of MAIN_ISO_FOLDER_NAMES) {
       expect(folders.filter((folder) => folder.parentId === iso!.id && folder.name === name)).toHaveLength(1);
     }
-    const nestedStandards = folders.filter((folder) => folder.name === "Engineering Standards" && folder.parentId !== iso!.id);
-    expect(nestedStandards.length).toBeGreaterThan(0);
+    expect(folders.filter((folder) => folder.name === "Engineering Standards")).toHaveLength(1);
+    expect(folders.filter((folder) => folder.name === "Quality Manual")).toHaveLength(1);
+    expect(folders.filter((folder) => folder.name === "Procedures")).toHaveLength(1);
     expect(children.some((folder) => folder.name === "Quality")).toBe(true);
     expect(children.some((folder) => folder.name === "Blank Forms Templates")).toBe(true);
     expect(children.some((folder) => folder.name === "Blank Form Templates")).toBe(false);

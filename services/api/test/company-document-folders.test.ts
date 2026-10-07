@@ -34,7 +34,7 @@ describe("company document folders", () => {
       expect(byPath(paths, ["ISO Compliance Documents", name])).toBe(true);
     }
     expect(byPath(paths, ["ISO Compliance Documents", "SOP", "Policies"])).toBe(true);
-    expect(byPath(paths, ["ISO Compliance Documents", "SOP", "Procedures"])).toBe(true);
+    expect(byPath(paths, ["ISO Compliance Documents", "SOP", "Procedures"])).toBe(false);
     expect(byPath(paths, ["ISO Compliance Documents", "Audits", "Safety Audits"])).toBe(true);
     expect(byPath(paths, ["ISO Compliance Documents", "Training", "Operator Training Records"])).toBe(true);
     expect(paths.some((path) => path.some((name) => name === "PCB" || name === "PCB Layouts"))).toBe(false);
@@ -57,6 +57,13 @@ describe("company document folders", () => {
     expect(locateSeedFolder(folders, "Training", 2)).toBeUndefined();
     expect(locateSeedFolder(folders, "NCR", null)?.id).toBe(8);
     expect(locateSeedFolder(folders, "Validation", 1)).toBeUndefined();
+    const moved = [
+      { id: 1, name: "ISO Compliance Documents", parentId: null },
+      { id: 2, name: "Master Source Files", parentId: 1 },
+      { id: 3, name: "Quality", parentId: 2 },
+    ];
+    expect(inTemplateLibrary(moved[2]!, moved)).toBe(false);
+    expect(locateSeedFolder(moved, "Quality", 1)?.id).toBe(3);
     expect(locateSeedFolder(folders, "CSA", 1)).toBeUndefined();
   });
 
@@ -143,7 +150,7 @@ describe("default document folder seed", () => {
       expect(byPath(paths, ["ISO Compliance Documents", name])).toBe(true);
     }
     expect(byPath(paths, ["ISO Compliance Documents", "SOP", "Policies"])).toBe(true);
-    expect(byPath(paths, ["ISO Compliance Documents", "SOP", "Procedures"])).toBe(true);
+    expect(byPath(paths, ["ISO Compliance Documents", "SOP", "Procedures"])).toBe(false);
     expect(byPath(paths, ["ISO Compliance Documents", "Quality", "Audits"])).toBe(false);
     expect(byPath(paths, ["ISO Compliance Documents", "Quality", "CAPA"])).toBe(false);
     expect(byPath(paths, ["ISO Compliance Documents", "Quality", "NCR"])).toBe(false);

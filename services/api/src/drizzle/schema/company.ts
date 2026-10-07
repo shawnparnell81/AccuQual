@@ -228,6 +228,21 @@ export const company = pgTable("company", {
     blankFormKeysPlaced?: string[];
     /** document_folders id of Blank Forms Templates, so a rename or move of that folder is kept. */
     blankFormsTemplatesFolderId?: number;
+    /**
+     * Set once duplicate folders from old seeds have been folded together.
+     * A later pair Shawn creates on purpose is left alone. Company Settings
+     * spreads this object, so a profile save keeps the flag. No new column.
+     */
+    duplicateFoldersMerged?: boolean;
+    /**
+     * Set once every company folder name has been folded into one home,
+     * including Quality Manual, Engineering Standards, and Procedures, and
+     * blank topics that shared a company folder name have been renamed with
+     * " Forms". Blanks stay under Blank Forms Templates. A folder Shawn
+     * creates or renames after this stays. Company Settings spreads this
+     * object. No new column.
+     */
+    folderNamesUnified?: boolean;
   }>().default({}),
   // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for the company's first admin.
   // `dismissed: true` for every company that existed before this shipped (backfillOnboardingChecklist.ts) — an
