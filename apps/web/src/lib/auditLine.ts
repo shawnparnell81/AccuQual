@@ -187,6 +187,8 @@ function auditWhat(action: string, changes?: Record<string, unknown> | null): st
   if (action === "permission_denied") return "Change blocked";
   if (action === "decision") return "Decision recorded";
   const code = specificCode(record);
+  if (code === "moved") return "Moved";
+  if (code === "renamed") return "Renamed";
   if (code === "login") return "Signed in";
   if (code === "logout") return "Signed out";
   if (code && /publish/.test(code)) return "Published";

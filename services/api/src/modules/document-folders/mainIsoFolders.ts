@@ -1,0 +1,154 @@
+/**
+ * Shawn's main filing drawers, direct children of ISO Compliance Documents.
+ * Number prefixes from the Windows folder list are dropped. The order is the
+ * order he files in: Master Source Files first, Obsolete Archive last.
+ *
+ * A name is reused only when it is already a direct child of ISO. A folder
+ * with the same name deeper in the tree (Engineering Standards under
+ * Specifications, Quality Manual under Quality) is a different folder and
+ * stays where it is. Nothing here renames, moves, or deletes an existing row.
+ * Sort order is written once, on the run that creates a missing drawer.
+ * A later load leaves the order alone so a reorder survives a restart.
+ */
+import { eq } from "drizzle-orm";
+import type { Db } from "../../lib/requestDb.js";
+import { documentFolders } from "../../drizzle/schema/documentFolders.js";
+
+export const ISO_ROOT_NAME = "ISO Compliance Documents";
+
+export const MAIN_ISO_FOLDER_NAMES = [
+  "Master Source Files",
+  "Quality Manual",
+  "Procedures",
+  "Blank Forms Templates",
+  "Engineering Standards",
+  "Equipment Records",
+  "Test Data Projects",
+  "Quality Logs",
+  "Personnel Files",
+  "Management System",
+  "Supplier Evaluation",
+  "Facility Records",
+  "Engineering Logs",
+  "Obsolete Archive",
+] as const;
+
+export interface NamedFolder {
+  id: number;
+  name: string;
+  parentId: number | null;
+}
+
+export interface SortableFolder extends NamedFolder {
+  sortOrder: number;
+}
+
+/** Names that still need a row directly under ISO. Empty when the set is already there. */
+export function planMainIsoFolderCreates(folders: NamedFolder[]): { isoId: number; names: string[] } | null {
+  const iso = folders.find((folder) => folder.parentId == null && folder.name === ISO_ROOT_NAME);
+  if (!iso) return null;
+  const direct = new Set(folders.filter((folder) => folder.parentId === iso.id).map((folder) => folder.name));
+  return { isoId: iso.id, names: MAIN_ISO_FOLDER_NAMES.filter((name) => !direct.has(name)) };
+}
+
+/** The 14 drawers first, in filing order, then every other child in its current order. */
+export function mainIsoChildOrder<T extends SortableFolder>(children: T[]): T[] {
+  const sorted = [...children].sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+  const used = new Set<number>();
+  const main: T[] = [];
+  for (const name of MAIN_ISO_FOLDER_NAMES) {
+    const row = sorted.find((child) => child.name === name && !used.has(child.id));
+    if (!row) continue;
+    used.add(row.id);
+    main.push(row);
+  }
+  return [...main, ...sorted.filter((child) => !used.has(child.id))];
+}
+
+const FILED_RECORD = /\/\d+(?:\/|$)/;
+
+/** A saved file or filled form is an item. A container, including one that only links to a blank module, is a folder. */
+export function documentNodeKind(
+  node: { id: number; pdfPath?: string | null; documentId?: number | null; linkedPath?: string | null },
+  folders: { parentId: number | null }[],
+): "folder" | "saved item" {
+  if (folders.some((folder) => folder.parentId === node.id)) return "folder";
+  const filed = node.linkedPath != null && FILED_RECORD.test(node.linkedPath);
+  if (node.pdfPath || node.documentId != null || filed) return "saved item";
+  return "folder";
+}
+
+/** Path of a folder, or "the top level" when it has no parent. Does not follow the row being moved. */
+export function folderLocationLabel(folders: NamedFolder[], folderId: number | null): string {
+  if (folderId == null) return "the top level";
+  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const names: string[] = [];
+  let current = byId.get(folderId);
+  const seen = new Set<number>();
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    names.unshift(current.name);
+    current = current.parentId == null ? undefined : byId.get(current.parentId);
+  }
+  return names.length > 0 ? names.join(" / ") : "the top level";
+}
+
+export function folderMoveAudit(input: {
+  name: string;
+  kind: "folder" | "saved item";
+  fromParentId: number | null;
+  toParentId: number | null;
+  fromLabel: string;
+  toLabel: string;
+  renamedTo?: string;
+}): Record<string, unknown> {
+  const rename = input.renamedTo && input.renamedTo !== input.name ? ` and renamed it to "${input.renamedTo}"` : "";
+  return {
+    event: "moved",
+    summary: `Moved the ${input.kind} "${input.name}" from ${input.fromLabel} → ${input.toLabel}${rename}.`,
+    name: input.name,
+    from: input.fromLabel,
+    to: input.toLabel,
+    fromParentId: input.fromParentId,
+    toParentId: input.toParentId,
+    ...(input.renamedTo && input.renamedTo !== input.name ? { renamedTo: input.renamedTo } : {}),
+  };
+}
+
+export function folderRenameAudit(fromName: string, toName: string): Record<string, unknown> {
+  return {
+    event: "renamed",
+    summary: `Renamed the folder from "${fromName}" to "${toName}".`,
+    from: fromName,
+    to: toName,
+  };
+}
+
+type FolderRow = typeof documentFolders.$inferSelect;
+
+/**
+ * Creates any missing main drawer under ISO. A second call inserts nothing
+ * and does not change sort order. Existing folders, including a same-named
+ * folder that is not a direct child, are left in place.
+ */
+export async function ensureMainIsoFolders(db: Db, all: FolderRow[]): Promise<FolderRow[]> {
+  const plan = planMainIsoFolderCreates(all);
+  if (!plan || plan.names.length === 0) return all;
+
+  let list = all;
+  for (const name of plan.names) {
+    if (list.some((folder) => folder.parentId === plan.isoId && folder.name === name)) continue;
+    const [created] = await db.insert(documentFolders).values({ name, parentId: plan.isoId, sortOrder: 0 }).returning();
+    if (!created) throw new Error(`Could not create the ${name} folder`);
+    list = [...list, created];
+  }
+
+  const ordered = mainIsoChildOrder(list.filter((folder) => folder.parentId === plan.isoId));
+  for (let sortOrder = 0; sortOrder < ordered.length; sortOrder += 1) {
+    const row = ordered[sortOrder]!;
+    if (row.sortOrder === sortOrder) continue;
+    await db.update(documentFolders).set({ sortOrder, updatedAt: new Date() }).where(eq(documentFolders.id, row.id));
+    list = list.map((folder) => (folder.id === row.id ? { ...folder, sortOrder } : folder));
+  }
+  return list;
+}

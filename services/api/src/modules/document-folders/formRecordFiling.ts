@@ -9,6 +9,7 @@ import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { AppError } from "../../utils/appError.js";
 import { filedRecordName, fileNamePatternFor, FORM_TEMPLATES } from "./formFiling.js";
 import { ensureFormTemplates } from "./formTemplates.js";
+import { folderLocationLabel, folderMoveAudit } from "./mainIsoFolders.js";
 import { ancestorNames, isRetiredFolderPlacement } from "./retiredFolderCleanup.js";
 import {
   canEditFormNumber,
@@ -212,11 +213,23 @@ export async function fileFormRecord(db: Db, input: { formKey: string; recordId:
       if (node.parentId !== folderId) {
         if (await wouldCreateCycle(db, node.id, folderId)) throw AppError.badRequest("That move would nest a folder inside itself");
         await db.update(documentFolders).set({ parentId: folderId, updatedAt: new Date() }).where(eq(documentFolders.id, node.id));
+        const placed = await loadFolders(db);
         await recordAuditTrail(db, {
           entityType: FOLDER_AUDIT,
           entityId: node.id,
           action: "update",
-          changes: { event: "moved", name: node.name, fromParentId: node.parentId, toParentId: folderId, formKey, recordId },
+          changes: {
+            ...folderMoveAudit({
+              name: node.name,
+              kind: "saved item",
+              fromParentId: node.parentId,
+              toParentId: folderId,
+              fromLabel: folderLocationLabel(placed, node.parentId),
+              toLabel: folderLocationLabel(placed, folderId),
+            }),
+            formKey,
+            recordId,
+          },
           performedBy,
         });
       }

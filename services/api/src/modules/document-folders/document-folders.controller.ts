@@ -19,6 +19,7 @@ import { onlyOfficeSettings } from "../onlyoffice/settings.js";
 import { signOfficeToken } from "../onlyoffice/token.js";
 import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
 import { ensureCompanyDocumentFolders, FILING_DRAWER_NAMES } from "./companyDocumentFolders.js";
+import { documentNodeKind, folderLocationLabel, folderMoveAudit, folderRenameAudit } from "./mainIsoFolders.js";
 import { MASTER_DOCUMENT_LIST_PATH, retargetRetiredRegisterLink } from "./formFiling.js";
 import { ensureFormTemplates, listFormTemplates } from "./formTemplates.js";
 import { fileFormRecord, filingQuery, getFormFiling, updateFormNumber } from "./formRecordFiling.js";
@@ -378,14 +379,30 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
     .returning();
   if (!updated) throw AppError.notFound("Document folder");
 
-  const moved = parentId !== undefined && parentId !== current.parentId;
+  const parentChanged = parentId !== undefined && parentId !== current.parentId;
+  const nameChanged = name !== undefined && name !== current.name;
+  let changes: Record<string, unknown>;
+  if (parentChanged) {
+    const all = await db.select({ id: documentFolders.id, name: documentFolders.name, parentId: documentFolders.parentId }).from(documentFolders);
+    changes = folderMoveAudit({
+      name: current.name,
+      kind: documentNodeKind(current, all),
+      fromParentId: current.parentId,
+      toParentId: parentId ?? null,
+      fromLabel: folderLocationLabel(all, current.parentId),
+      toLabel: folderLocationLabel(all, parentId ?? null),
+      renamedTo: nameChanged ? name : undefined,
+    });
+  } else if (nameChanged && name) {
+    changes = folderRenameAudit(current.name, name);
+  } else {
+    changes = { name, parentId, sortOrder, documentId };
+  }
   await recordAuditTrail(db, {
     entityType: AUDIT_ENTITY_TYPE,
     entityId: id,
     action: "update",
-    changes: moved
-      ? { event: "moved", name: current.name, fromParentId: current.parentId, toParentId: parentId, ...(name !== undefined && name !== current.name ? { renamedTo: name } : {}) }
-      : { name, parentId, sortOrder, documentId },
+    changes,
     performedBy: req.user?.id,
   });
 

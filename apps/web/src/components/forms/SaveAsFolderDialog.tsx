@@ -6,8 +6,10 @@ const ISO_DOCUMENTS_FOLDER = "ISO Compliance Documents";
 
 const ROOT_ORDER = [ISO_DOCUMENTS_FOLDER, "Engineering", "Quality", "Audits", "Training", "Safety", "Production", "CAPA", "NCR", "8D", "Work Instruction", "Procedures", "SOP"];
 
+// ISO's children follow the sort order stored on the folders. The main drawers
+// (Master Source Files through Obsolete Archive) are written first, so the
+// picker shows that structure without a second hardcoded list.
 const CHILD_ORDER: Record<string, string[]> = {
-  [ISO_DOCUMENTS_FOLDER]: ["Engineering", "Quality", "Audits", "Training", "Safety", "Production", "CAPA", "NCR", "8D", "Work Instruction", "Procedures", "SOP"],
   Engineering: [],
   Quality: [FAI_VALIDATION_FOLDER_NAME, "Product Alerts", "Recalls", "Warranty", "Training", "Repair", "Inspections"],
   [FAI_VALIDATION_FOLDER_NAME]: ["CSA", "Shocks", "Fuel", "Brake Wear sensors", "Gas/Electric Lifts", "Air Suspension"],
