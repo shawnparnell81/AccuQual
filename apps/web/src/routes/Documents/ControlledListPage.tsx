@@ -14,6 +14,7 @@ import {
   parseAddr,
   listOptions,
   parseEdited,
+  toneFill,
   serialToIso,
   shownCell,
   type StoredCell,
@@ -21,13 +22,14 @@ import {
 } from "../../lib/controlledListMath";
 import "./controlledList.css";
 
-export type ControlledListKey = "lst-eqp-001" | "lst-gen-001" | "lst-gen-003" | "lst-dev-001";
+export type ControlledListKey = "lst-eqp-001" | "lst-gen-001" | "lst-gen-003" | "lst-dev-001" | "lst-ncr-001";
 
 const LIST_ROUTES: Record<ControlledListKey, string> = {
   "lst-eqp-001": "/calibration/master-list",
   "lst-gen-001": "/documents/master-list",
   "lst-gen-003": "/documents/laboratory-scope",
   "lst-dev-001": "/documents/development-log",
+  "lst-ncr-001": "/documents/nonconformance-log",
 };
 
 interface ControlledListView {
@@ -52,6 +54,7 @@ const DATA_START: Record<ControlledListKey, Record<string, number>> = {
   "lst-gen-001": { "Internal Documents": 4, "External Documents": 3 },
   "lst-gen-003": { "LST-GEN-003 - Scope of Laborato": 6 },
   "lst-dev-001": { "Test Reports": 5, "Validation Report": 5 },
+  "lst-ncr-001": { "LST-NCR-001 - NCR": 5, "LST-NCR-001 - QTN": 5, "LST-NCR-001 - CAR": 5, "LST-NCR-001 - RPN": 5 },
 };
 
 function errorMessage(err: unknown): string {
@@ -130,6 +133,7 @@ function SheetGrid({
       const cell = sheet.cells[addr];
       const span = origins.get(addr);
       const shown = shownCell(sheet, addr);
+      const fill = toneFill(sheet, addr, shown.text);
       const editable = canEdit && (cell?.kind === "input" || (!cell && row >= start));
       const choices = editable ? (listKey === "lst-eqp-001" && columnLetter(col) === "J" && row >= start ? statuses : listOptions(sheet, addr)) : null;
       const date = Boolean(editable && cell?.nf && (cell.nf.includes("yy") || cell.nf.includes("mmm")) && !choices);
@@ -138,6 +142,7 @@ function SheetGrid({
           key={addr}
           className={shown.tone ? `controlled-list-cell tone-${shown.tone}` : "controlled-list-cell"}
           data-addr={addr}
+          data-fill={fill === "FFFF0000" ? "open" : fill ? "closed" : undefined}
           data-size={cell?.size ?? undefined}
           title={cell?.comment}
           style={{

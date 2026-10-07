@@ -133,7 +133,7 @@ export function blankFormsFolderHref(): string {
 export const SEEDED_FORMS_DRAWER = "Forms & Templates";
 
 /** Living controlled lists. Opening one edits the grid in the app. */
-const LIVING_LIST_PATHS = new Set(["/documents/master-list", "/calibration/master-list", "/documents/laboratory-scope", "/documents/development-log"]);
+const LIVING_LIST_PATHS = new Set(["/documents/master-list", "/calibration/master-list", "/documents/laboratory-scope", "/documents/development-log", "/documents/nonconformance-log"]);
 
 export function isLivingListPath(linkedPath: string | null | undefined): boolean {
   if (!linkedPath) return false;
@@ -241,6 +241,11 @@ export function isFolderEntry<T extends BrowseFolder>(folders: T[], node: T): bo
   return !isSavedDocument(node);
 }
 
+/**
+ * Children of one folder, split the way Windows Explorer lists them:
+ * folders first, then files and forms. A file saved earlier still sits below
+ * a folder added later, because the two groups are separate.
+ */
 export function listFolder<T extends BrowseFolder>(folders: T[], folderId: number | null): { folders: T[]; files: T[] } {
   const children = childrenOf(folders, folderId);
   return {

@@ -30,6 +30,16 @@ export interface SheetList {
   options: string[];
 }
 
+/** Status color from the workbook's conditional formatting. */
+export interface SheetTone {
+  c1: string;
+  c2: string;
+  r1: number;
+  r2: number;
+  text: string;
+  argb: string;
+}
+
 export interface StoredSheet {
   name: string;
   maxRow: number;
@@ -40,6 +50,8 @@ export interface StoredSheet {
   cells: Record<string, StoredCell>;
   /** Dropdowns. Later lists win when two cover the same cell. */
   lists?: SheetList[];
+  /** Conditional fills. Later rules win when two match the same cell. */
+  tones?: SheetTone[];
   /** Per-cell border codes, LRTB, each t (thin), m (medium), or - (none). */
   boxes?: Record<string, string>;
 }
@@ -142,6 +154,10 @@ export function formatValue(value: string | number | null | undefined, nf?: stri
   if (value == null || value === "") return "";
   if (typeof value === "number") {
     if (nf && (nf.includes("yy") || nf.includes("mmm") || nf.includes("mm-dd"))) return formatIso(serialToIso(value), nf);
+    if (nf?.includes("$")) {
+      const amount = Math.abs(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return value < 0 ? `($${amount})` : `$${amount}`;
+    }
     if (Number.isInteger(value)) return String(value);
     return String(value);
   }
@@ -172,6 +188,21 @@ export function listOptions(sheet: StoredSheet, addr: string): string[] | null {
     found = list.options;
   }
   return found;
+}
+
+/** Fill color when a status word matches a conditional format, otherwise null. */
+export function toneFill(sheet: StoredSheet, addr: string, text: string): string | null {
+  if (!sheet.tones?.length || !text) return null;
+  const { col, row } = parseAddr(addr);
+  const index = columnIndex(col);
+  const lower = text.toLowerCase();
+  let color: string | null = null;
+  for (const tone of sheet.tones) {
+    if (row < tone.r1 || row > tone.r2) continue;
+    if (index < columnIndex(tone.c1) || index > columnIndex(tone.c2)) continue;
+    if (lower.includes(tone.text.toLowerCase())) color = tone.argb;
+  }
+  return color;
 }
 
 export function textOf(value: string | number | null | undefined): string {
@@ -230,6 +261,17 @@ export function deleteSheetRow(sheet: StoredSheet, deletedRow: number): StoredSh
       return { ...list, c1: a.col, r1: a.row, c2: b.col, r2: b.row };
     })
     .filter((list): list is SheetList => Boolean(list));
+  const tones = sheet.tones
+    ?.map((tone) => {
+      const span = shiftMerge(`${tone.c1}${tone.r1}:${tone.c2}${tone.r2}`, deletedRow);
+      if (!span) return null;
+      const [start, end] = span.split(":");
+      if (!start || !end) return null;
+      const a = parseAddr(start);
+      const b = parseAddr(end);
+      return { ...tone, c1: a.col, r1: a.row, c2: b.col, r2: b.row };
+    })
+    .filter((tone): tone is SheetTone => Boolean(tone));
   const boxes: Record<string, string> = {};
   for (const [addr, box] of Object.entries(sheet.boxes ?? {})) {
     const { col, row } = parseAddr(addr);
@@ -243,6 +285,7 @@ export function deleteSheetRow(sheet: StoredSheet, deletedRow: number): StoredSh
     rowHeights,
     merges,
     lists,
+    tones,
     boxes: sheet.boxes ? boxes : undefined,
   };
 }

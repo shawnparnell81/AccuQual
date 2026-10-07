@@ -257,4 +257,16 @@ describe("folder browse", () => {
     assert.equal(openTarget(rows[3]!), "/calibration/master-list");
     assert.equal(openTarget(rows[4]!), "/documents/laboratory-scope");
   });
+
+  it("lists folders before files, including a folder added after a living register", () => {
+    const rows: BrowseFolder[] = [
+      { id: 1, name: "Quality Logs", parentId: null, sortOrder: 0 },
+      { id: 2, name: "LST-NCR-001", parentId: 1, sortOrder: 0, linkedPath: "/documents/nonconformance-log" },
+      { id: 3, name: "2026 Hold", parentId: 1, sortOrder: 5 },
+    ];
+    const listing = listFolder(rows, 1);
+    assert.deepEqual(listing.folders.map((folder) => folder.name), ["2026 Hold"]);
+    assert.deepEqual(listing.files.map((file) => file.name), ["LST-NCR-001"]);
+    assert.equal(openTarget(rows[1]!), "/documents/nonconformance-log");
+  });
 });
