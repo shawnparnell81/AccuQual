@@ -1,7 +1,9 @@
 import rawLists from "./seeds/lists.json" with { type: "json" };
+import devLog from "./seeds/lst-dev-001.json" with { type: "json" };
 import {
   appendSheetRow,
   cellAddr,
+  coverNewRow,
   deleteSheetRow,
   nextDataRow,
   parseAddr,
@@ -12,7 +14,7 @@ import {
 
 export type { StoredCell, StoredSheet } from "./math.js";
 
-export const LIST_KEYS = ["lst-eqp-001", "lst-gen-001", "lst-gen-003"] as const;
+export const LIST_KEYS = ["lst-eqp-001", "lst-gen-001", "lst-gen-003", "lst-dev-001"] as const;
 export type ListKey = (typeof LIST_KEYS)[number];
 
 export const OMITTED_DOCUMENT_IDS = new Set(["FRM-TST-001", "FRM-TST-002"]);
@@ -21,6 +23,7 @@ export const LIVING_LIST_PATHS = [
   "/documents/master-list",
   "/calibration/master-list",
   "/documents/laboratory-scope",
+  "/documents/development-log",
 ] as const;
 
 export interface ListCatalog {
@@ -31,7 +34,17 @@ export interface ListCatalog {
   route: (typeof LIVING_LIST_PATHS)[number];
   resource: "documents" | "calibration";
   landscape: boolean;
+  /** Cells whose text is the revision. A data edit does not change them. */
   rev: { sheet: string; addr: string };
+  revs?: { sheet: string; addr: string }[];
+  /** Direct child of ISO Compliance Documents. Defaults to the Quality Manual. */
+  folder?: string;
+  /** Folder item name. Defaults to the title. */
+  nodeName?: string;
+  /** Download file name. Defaults to the document number plus the title. */
+  fileName?: string;
+  /** Center data cells the way the source workbook does. */
+  centered?: boolean;
   dataStart: Record<string, number>;
   idColumn?: string;
   formula?: { sheet: string; column: string; nf: string; build: (row: number) => string };
@@ -77,6 +90,26 @@ export const LISTS: Record<ListKey, ListCatalog> = {
     rev: { sheet: LAB_SHEET, addr: "D2" },
     dataStart: { [LAB_SHEET]: 6 },
   },
+  "lst-dev-001": {
+    key: "lst-dev-001",
+    title: "LST-DEV-001",
+    docId: "LST-DEV-001",
+    revision: "B",
+    route: "/documents/development-log",
+    resource: "documents",
+    landscape: true,
+    rev: { sheet: "Test Reports", addr: "B2" },
+    revs: [
+      { sheet: "Test Reports", addr: "B2" },
+      { sheet: "Validation Report", addr: "B2" },
+    ],
+    folder: "Test Data Projects",
+    nodeName: "LST-DEV-001",
+    fileName: "LST-DEV-001.xlsx",
+    centered: true,
+    dataStart: { "Test Reports": 5, "Validation Report": 5 },
+    idColumn: "A",
+  },
 };
 
 export function isListKey(value: string): value is ListKey {
@@ -90,17 +123,21 @@ export function isLivingListPath(linkedPath: string | null | undefined): boolean
 }
 
 function seedBook(): Record<ListKey, { sheets: StoredSheet[] }> {
-  return structuredClone(rawLists) as unknown as Record<ListKey, { sheets: StoredSheet[] }>;
+  const book = structuredClone(rawLists) as unknown as Record<ListKey, { sheets: StoredSheet[] }>;
+  book["lst-dev-001"] = structuredClone(devLog) as unknown as { sheets: StoredSheet[] };
+  return book;
 }
 
 export function lockRevision(key: ListKey, sheets: StoredSheet[]): StoredSheet[] {
   const spec = LISTS[key];
+  const locks = spec.revs ?? [spec.rev];
   return sheets.map((sheet) => {
-    if (sheet.name !== spec.rev.sheet) return sheet;
-    const current = sheet.cells[spec.rev.addr];
+    const lock = locks.find((item) => item.sheet === sheet.name);
+    if (!lock) return sheet;
+    const current = sheet.cells[lock.addr];
     if (!current) return sheet;
-    const seed = seedBook()[key].sheets.find((item) => item.name === sheet.name)?.cells[spec.rev.addr];
-    return { ...sheet, cells: { ...sheet.cells, [spec.rev.addr]: { ...current, v: seed?.v, kind: "rev" } } };
+    const seed = seedBook()[key].sheets.find((item) => item.name === sheet.name)?.cells[lock.addr];
+    return { ...sheet, cells: { ...sheet.cells, [lock.addr]: { ...current, v: seed?.v, kind: "rev" } } };
   });
 }
 
@@ -282,14 +319,19 @@ export function addDataRow(key: ListKey, sheets: StoredSheet[], sheetName: strin
   const spec = LISTS[key];
   const start = spec.dataStart[sheetName];
   if (start == null) return null;
-  const next = sheets.map((sheet) => ({ ...sheet, cells: { ...sheet.cells }, merges: [...sheet.merges] }));
+  const next: StoredSheet[] = sheets.map((sheet) => ({
+    ...sheet,
+    cells: { ...sheet.cells },
+    merges: [...sheet.merges],
+    lists: sheet.lists?.map((list) => ({ ...list, options: [...list.options] })),
+  }));
   const sheet = next.find((item) => item.name === sheetName);
   if (!sheet) return null;
   const formula = spec.formula && spec.formula.sheet === sheetName ? spec.formula : undefined;
   const columns = formula ? ["A", "B", formula.column] : ["A", "B", "C", "D", "E", "F", "G", "H"];
   let row = nextDataRow(sheet, start, columns);
   if (row > sheet.maxRow) {
-    const grown = appendSheetRow(sheet, formula);
+    const grown = coverNewRow(appendSheetRow(sheet, formula));
     const index = next.findIndex((item) => item.name === sheetName);
     next[index] = grown;
     row = grown.maxRow;
@@ -327,6 +369,8 @@ export function rowSummary(who: string, action: "added" | "deleted", sheet: stri
 export const RETIRED_LIST_TITLES = new Set(["master equipment list", "master document list", "scope of laboratory activities"]);
 export const RETIRED_LIST_NUMBERS = new Set(["LST-EQP-001", "LST-GEN-001", "LST-GEN-003"]);
 export const RETIRED_LIST_KEYS = new Set(["lst-eqp-001", "lst-gen-001", "lst-gen-003"]);
+const DEV_LOG_TITLES = new Set(["lst-dev-001", "development log", "development log (register)"]);
+const DEV_LOG_NUMBERS = new Set(["LST-DEV-001"]);
 
 export function normalizeListTitle(name: string): string {
   return name.replace(/\.(xlsx|xls|xlsm|pdf|docx)$/i, "").trim().toLowerCase();
@@ -334,6 +378,10 @@ export function normalizeListTitle(name: string): string {
 
 export function titleMatchesList(name: string): boolean {
   return RETIRED_LIST_TITLES.has(normalizeListTitle(name));
+}
+
+export function titleMatchesDevLog(name: string): boolean {
+  return DEV_LOG_TITLES.has(normalizeListTitle(name));
 }
 
 export interface CleanupFolder {
@@ -379,10 +427,14 @@ function ancestorNames(folders: CleanupFolder[], id: number | null): string[] {
   return names;
 }
 
-function underQualityManual(names: string[]): boolean {
+function underIsoChild(names: string[], child: string): boolean {
   const iso = names.indexOf("ISO Compliance Documents");
   if (iso < 0) return false;
-  return names[iso + 1] === "Quality Manual";
+  return names[iso + 1] === child;
+}
+
+function underQualityManual(names: string[]): boolean {
+  return underIsoChild(names, "Quality Manual");
 }
 
 function underBlankForms(names: string[]): boolean {
@@ -395,8 +447,9 @@ function filedRecord(linkedPath: string | null | undefined): boolean {
 }
 
 /**
- * Old Quality Manual uploads of these three lists, and blank templates with the same title or number.
- * Living list links and filled records are left alone.
+ * Old Quality Manual uploads of the three lists, Development Log copies under Test Data Projects,
+ * and blank templates with those titles. A Non-Conformance Log blank is not one of these and stays
+ * in Blank Forms Templates. Living list links and filled records stay.
  */
 export function planListCleanup(folders: CleanupFolder[], documents: CleanupDocument[], templates: CleanupTemplate[]): CleanupPlan {
   const docs = new Map(documents.filter((doc) => !doc.isDeleted).map((doc) => [doc.id, doc]));
@@ -406,7 +459,7 @@ export function planListCleanup(folders: CleanupFolder[], documents: CleanupDocu
 
   for (const template of templates) {
     const number = template.formId.trim().toUpperCase();
-    if (RETIRED_LIST_KEYS.has(template.formKey) || titleMatchesList(template.title) || RETIRED_LIST_NUMBERS.has(number)) {
+    if (RETIRED_LIST_KEYS.has(template.formKey) || titleMatchesList(template.title) || RETIRED_LIST_NUMBERS.has(number) || titleMatchesDevLog(template.title) || DEV_LOG_NUMBERS.has(number)) {
       templateIds.add(template.id);
     }
   }
@@ -417,8 +470,12 @@ export function planListCleanup(folders: CleanupFolder[], documents: CleanupDocu
     const names = ancestorNames(folders, folder.id);
     const linked = folder.documentId == null ? undefined : docs.get(folder.documentId);
     const nameHit = titleMatchesList(folder.name) || (linked ? titleMatchesList(linked.title) : false);
-    if (!nameHit) continue;
-    if (underQualityManual(names) && (folder.pdfPath || folder.documentId != null)) {
+    const devHit = titleMatchesDevLog(folder.name) || (linked ? titleMatchesDevLog(linked.title) : false);
+    if (!nameHit && !devHit) continue;
+    const filedHere = Boolean(folder.pdfPath || folder.documentId != null);
+    const inManual = nameHit && underQualityManual(names) && filedHere;
+    const inProjects = devHit && underIsoChild(names, "Test Data Projects") && filedHere;
+    if (inManual || inProjects) {
       if (folder.documentId != null && docs.has(folder.documentId)) documentIds.add(folder.documentId);
       folderNodeIds.add(folder.id);
       continue;

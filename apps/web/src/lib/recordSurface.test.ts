@@ -6,6 +6,7 @@ describe("record surfaces", () => {
   it("treats both master lists as lists", () => {
     assert.deepEqual(recordSurface("/documents/master-list"), { kind: "list", access: "documents" });
     assert.deepEqual(recordSurface("/documents/laboratory-scope"), { kind: "list", access: "documents" });
+    assert.deepEqual(recordSurface("/documents/development-log"), { kind: "list", access: "documents" });
     assert.deepEqual(recordSurface("/calibration/master-list"), { kind: "list", access: "calibration" });
   });
 

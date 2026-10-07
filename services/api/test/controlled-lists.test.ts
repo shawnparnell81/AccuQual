@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
-import { formulaSerial, shownCell } from "../src/modules/controlled-lists/math.js";
+import { formulaSerial, listOptions, shownCell } from "../src/modules/controlled-lists/math.js";
 import {
   addDataRow,
   appendDocuments,
@@ -11,6 +11,7 @@ import {
   planListCleanup,
   removeDataRow,
 } from "../src/modules/controlled-lists/logic.js";
+import { workbookFileName } from "../src/modules/controlled-lists/workbook.js";
 import parity from "../src/modules/controlled-lists/seeds/formula-parity.json" with { type: "json" };
 import { buildListWorkbook } from "../src/modules/controlled-lists/workbook.js";
 
@@ -133,11 +134,110 @@ describe("living controlled lists", () => {
     expect(plan.documentIds).toEqual([9]);
     expect(plan.templateIds).toEqual([1]);
     expect(plan.folderNodeIds.sort((a, b) => a - b)).toEqual([4, 6, 8]);
+    const devLog = planListCleanup(
+      [
+        ...folders,
+        { id: 11, name: "Test Data Projects", parentId: 1 },
+        { id: 12, name: "LST-DEV-001", parentId: 11, linkedPath: "/documents/development-log" },
+        { id: 13, name: "Development Log.xlsx", parentId: 11, documentId: 20, pdfPath: "files/dev.xlsx" },
+        { id: 14, name: "Development Log", parentId: 5 },
+      ],
+      [
+        { id: 9, title: "Master Equipment List" },
+        { id: 12, title: "Torque procedure" },
+        { id: 15, title: "Master Document List" },
+        { id: 20, title: "Development Log" },
+      ],
+      [
+        { id: 1, formKey: "lst-eqp-001", formId: "LST-EQP-001", title: "Master Equipment List" },
+        { id: 2, formKey: "frm-val-001", formId: "FRM-VAL-001", title: "CSA VALIDATION REPORT" },
+        { id: 3, formKey: "custom-dev", formId: "LST-DEV-001", title: "Development Log (Register)" },
+      ],
+    );
+    expect(devLog.documentIds).toEqual(expect.arrayContaining([9, 20]));
+    expect(devLog.templateIds).toEqual(expect.arrayContaining([1, 3]));
+    expect(devLog.folderNodeIds).toEqual(expect.arrayContaining([4, 6, 8, 13, 14]));
+    expect(devLog.folderNodeIds).not.toContain(12);
+    const keptBlank = planListCleanup(
+      [
+        { id: 1, name: "ISO Compliance Documents", parentId: null },
+        { id: 5, name: "Blank Form Templates", parentId: 1 },
+        { id: 30, name: "Non-Conformance Log", parentId: 5 },
+      ],
+      [],
+      [{ id: 9, formKey: "lst-ncr-001", formId: "LST-NCR-001", title: "Non-Conformance Log" }],
+    );
+    expect(keptBlank).toEqual({ documentIds: [], templateIds: [], folderNodeIds: [] });
     const again = planListCleanup(
       folders.filter((folder) => !plan.folderNodeIds.includes(folder.id)),
       [{ id: 12, title: "Torque procedure" }],
       [{ id: 2, formKey: "frm-val-001", formId: "FRM-VAL-001", title: "CSA VALIDATION REPORT" }],
     );
     expect(again).toEqual({ documentIds: [], templateIds: [], folderNodeIds: [] });
+  });
+
+  it("keeps the development log title, location, dropdowns, and revision", async () => {
+    const sheets = freshSheets("lst-dev-001");
+    expect(sheets.map((sheet) => sheet.name)).toEqual(["Test Reports", "Validation Report"]);
+    const reports = sheets[0]!;
+    const validation = sheets[1]!;
+    const location = "Location: X:\\ISO Compliance Documents\\06_Test_Data_Projects";
+    expect(reports.cells.A1).toMatchObject({ v: "DEVELOPMENT LOG (REGISTER)", bold: true, size: 22 });
+    expect(reports.cells.B2).toMatchObject({ v: "Rev: B", kind: "rev" });
+    expect(reports.cells.C2?.v).toBe(location);
+    expect(reports.cells.F2?.v).toBe("Maxwell Tollefson");
+    expect(reports.cells.H2?.v).toBe("Date: 7/27/26");
+    expect(reports.cells.A3?.v).toContain("TRP - [Year]");
+    expect(reports.cells.A5?.v).toBe("TRP-2026-001");
+    expect(reports.cells.B5).toMatchObject({ v: "2026-02-12", nf: "mm-dd-yy" });
+    expect(reports.cells.A471?.v).toBe("TRP-2026-467");
+    expect(reports.cells.C9).toMatchObject({ font: "Arial", size: 10 });
+    expect(reports.merges).toEqual(expect.arrayContaining(["A1:H1", "A3:H3", "C2:D2", "F2:G2"]));
+    expect(validation.cells.A1?.v).toBe("DEVELOPMENT LOG (REGISTER)");
+    expect(validation.cells.B2?.v).toBe("Rev: B");
+    expect(validation.cells.C2?.v).toBe(location);
+    expect(validation.cells.A3?.v).toContain("VAL - [Year]");
+    expect(validation.cells.A5?.v).toBe("VAL-2026-001");
+    expect(validation.cells.A1989?.v).toBe("VAL-2026-2000");
+    expect(validation.merges).toEqual(expect.arrayContaining(["A1:I1", "A3:I3", "H2:I2"]));
+    expect(listOptions(reports, "F5")).toEqual(["Development Document", "Salt Spray", "Final Test Report"]);
+    expect(listOptions(reports, "G8")).toContain("SENSEN");
+    expect(listOptions(validation, "H5")).toEqual(["Active", "Cancelled"]);
+    expect(listOptions(validation, "F5")).toContain("Benchmark Analysis");
+    expect(workbookFileName("lst-dev-001")).toBe("LST-DEV-001.xlsx");
+
+    const edited = applyInputPatch("lst-dev-001", sheets, [
+      { name: "Test Reports", cells: { C5: { v: "FCS Shock" }, B2: { v: "Rev: Z" }, C2: { v: "somewhere else" } } },
+    ]);
+    expect(edited.sheets[0]?.cells.C5?.v).toBe("FCS Shock");
+    expect(edited.sheets[0]?.cells.B2?.v).toBe("Rev: B");
+    expect(edited.sheets[0]?.cells.C2?.v).toBe(location);
+    expect(edited.sheets[1]?.cells.B2?.v).toBe("Rev: B");
+    expect(edited.changes.map((change) => change.addr)).toEqual(["C5"]);
+
+    const added = addDataRow("lst-dev-001", sheets, "Test Reports");
+    expect(added?.row).toBe(472);
+    expect(listOptions(added!.sheets[0]!, "F472")).toContain("Calibration Document");
+    expect(listOptions(added!.sheets[0]!, "F457")).toEqual(["Development Document", "Salt Spray", "Final Test Report", "Calibration Document"]);
+
+    const body = await buildListWorkbook("lst-dev-001", sheets);
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(body);
+    expect(book.worksheets.map((sheet) => sheet.name)).toEqual(["Test Reports", "Validation Report"]);
+    const ws = book.getWorksheet("Test Reports");
+    expect(ws?.getCell("A1").value).toBe("DEVELOPMENT LOG (REGISTER)");
+    expect(ws?.getCell("C2").value).toBe(location);
+    expect(ws?.getCell("B5").value).toBeInstanceOf(Date);
+    expect((ws?.getCell("B5").value as Date).toISOString().slice(0, 10)).toBe("2026-02-12");
+    expect(ws?.getCell("B5").numFmt).toBe("mm-dd-yy");
+    expect(ws?.getColumn(1).width).toBeCloseTo(41.85, 1);
+    expect(ws?.pageSetup.orientation).toBe("landscape");
+    expect(ws?.model.merges ?? []).toEqual(expect.arrayContaining(["A1:H1"]));
+    const validationSheet = book.getWorksheet("Validation Report");
+    expect(validationSheet?.getCell("A1989").value).toBe("VAL-2026-2000");
+    expect(validationSheet?.getCell("A1").border?.top?.style).toBe("medium");
+    const dropdown = ws?.dataValidations.model["F5:F284"] ?? ws?.dataValidations.model.F5;
+    const formula = JSON.stringify(dropdown ?? ws?.dataValidations.model);
+    expect(formula).toContain("Salt Spray");
   });
 });
