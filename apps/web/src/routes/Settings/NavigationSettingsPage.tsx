@@ -11,7 +11,7 @@ export function NavigationSettingsPage() {
     <div className="max-w-3xl rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
       <h2 className="mb-2 text-base font-medium text-foreground">Menu</h2>
       <p>
-        Dashboard stays at the top and Settings stays at the bottom. Blank forms are listed under Workspace. Filled forms open from Documents.
+        Dashboard stays at the top and Settings stays at the bottom. Blank templates are in Folder Explorer, under Blank Forms Templates. Filled forms open from Documents.
         Folders remember whether you left them open.
       </p>
       <p className="mt-3">

@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
 import { formatDate } from "../../lib/dates";
-import { BLANK_FORMS_PATH, QUARANTINE_NOTICE_PATH } from "../../lib/qualityEntry";
+import { blankFormsFolderHref } from "../../lib/folderBrowse";
+import { QUARANTINE_NOTICE_PATH } from "../../lib/qualityEntry";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
 export interface QuarantineItemRow {
@@ -25,7 +26,7 @@ function qty(value: string) {
 }
 
 /**
- * Holds already on the list. A new notice starts from Blank Forms (FRM-NCR-002).
+ * Holds already on the list. A new notice starts from Blank Forms Templates (FRM-NCR-002).
  * Rows open the hold. Items opened from an NCR leave Active when that disposition
  * is completed and stay under Released.
  */
@@ -45,8 +46,8 @@ export function QuarantinePage() {
         <h1 className="text-2xl font-semibold">Quarantined items</h1>
         <p className="text-sm text-muted-foreground">
           Open a row to see the hold. Start a notice from{" "}
-          <Link to={BLANK_FORMS_PATH} className="text-primary hover:underline">
-            Blank Forms
+          <Link to={blankFormsFolderHref()} className="text-primary hover:underline">
+            Blank Forms Templates
           </Link>{" "}
           or{" "}
           <Link to={QUARANTINE_NOTICE_PATH} className="text-primary hover:underline">
@@ -81,8 +82,8 @@ export function QuarantinePage() {
           {view === "active" ? (
             <p>
               No quarantined items yet. Write a notice from{" "}
-              <Link to={BLANK_FORMS_PATH} className="text-primary hover:underline">
-                Blank Forms
+              <Link to={blankFormsFolderHref()} className="text-primary hover:underline">
+                Blank Forms Templates
               </Link>{" "}
               or{" "}
               <Link to={QUARANTINE_NOTICE_PATH} className="text-primary hover:underline">

@@ -42,7 +42,7 @@ export const MasterEquipmentListPage = lazyNamed("/calibration/master-list", () 
 export const MasterDocumentListPage = lazyNamed("/documents/master-list", () => import("./Documents/MasterDocumentListPage"), "MasterDocumentListPage");
 export const FormImportPage = lazyNamed("/documents/import", () => import("./Documents/FormImportPage"), "FormImportPage");
 export const AuditsPage = lazyNamed("/audits", () => import("./Audits/AuditsPage"), "AuditsPage");
-export const BlankFormsPage = lazyNamed("/blank-forms", () => import("./BlankForms/BlankFormsPage"), "BlankFormsPage");
+export const StartBlankFormPage = lazyNamed("/blank-forms/start", () => import("./BlankForms/BlankFormsPage"), "StartBlankFormPage");
 export const AuditDetailPage = lazyNamed("/audits", () => import("./Audits/AuditDetailPage"), "AuditDetailPage");
 export const DocumentsPage = lazyNamed("/documents", () => import("./Documents/DocumentsPage"), "DocumentsPage");
 export const QuarantinePage = lazyNamed("/quarantine", () => import("./Quarantine/QuarantinePage"), "QuarantinePage");

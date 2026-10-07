@@ -72,6 +72,7 @@ const ONE_SEGMENT: RegExp[] = [
   /^\/audits\/\d+$/,
   /^\/folders\/[^/]+$/,
   /^\/form-folders\/[^/]+$/,
+  /^\/blank-forms\/start\/[^/]+$/,
   /^\/documents\/\d+$/,
   /^\/training\/employee\/\d+$/,
   /^\/training\/\d+$/,

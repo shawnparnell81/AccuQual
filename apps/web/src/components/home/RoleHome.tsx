@@ -22,6 +22,7 @@ import { useSiteStore } from "../../store/siteStore";
 import { WorkflowInbox } from "./WorkflowInbox";
 import { WaitingOnMe } from "./WaitingOnMe";
 import { readRecentRecords, type RecentRecord } from "../../lib/recentRecords";
+import { blankFormsFolderHref } from "../../lib/folderBrowse";
 import { FRM_NCR_PATH } from "../../lib/qualityEntry";
 
 function useModuleList<T>(resource: string, enabled: boolean, siteKey: number | null | "shared", params?: Record<string, string>) {
@@ -264,7 +265,7 @@ function RecentWork({ canStartNcr }: { canStartNcr: boolean }) {
         <h2 className="text-sm font-semibold tracking-wide">NEW</h2>
         <ul className="mt-2 flex flex-col gap-1 text-sm">
           <li>
-            <Link to="/blank-forms" className="text-primary hover:underline">
+            <Link to={blankFormsFolderHref()} className="text-primary hover:underline">
               Blank form
             </Link>
           </li>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiClient } from "../../api/client";
 import { recordFileNamePattern, useFormTemplates } from "../../api/formTemplatesQuery";
 import { createResourceHooks } from "../../api/resourceHooks";
@@ -18,6 +18,7 @@ import type { FailureRow, ScorecardRow } from "../../lib/qualitySheetLogic";
 import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
 import { useCurrentUser } from "../../hooks/useAuth";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
+import { blankFormsFolderHref } from "../../lib/folderBrowse";
 import { filledCopyFolderSentence, revisionLabel } from "../../lib/formDocument";
 
 interface IsoQualityForm {
@@ -100,7 +101,11 @@ export function IsoFormListPage() {
         <div>
           <h1 className="text-2xl font-semibold">{meta.title}</h1>
           <p className="text-sm text-muted-foreground">
-            {revisionLabel(liveFormId, ecrMaster.data?.revision || meta.rev)}. Start this blank from Blank Forms. {filledCopyFolderSentence(form.formKey)}
+            {revisionLabel(liveFormId, ecrMaster.data?.revision || meta.rev)}. Start this blank from{" "}
+            <Link to={blankFormsFolderHref()} className="text-primary hover:underline">
+              Blank Forms Templates
+            </Link>
+            . {filledCopyFolderSentence(form.formKey)}
           </p>
           <FormNumberEditor formKey={form.formKey} />
           {form.retired && <p className="mt-2 text-sm text-muted-foreground">This blank is no longer used. Start a nonconformance from NCR.</p>}

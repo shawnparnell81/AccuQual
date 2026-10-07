@@ -9,7 +9,7 @@ import {
   Workflow,
 } from "lucide-react";
 import { flattenSidebarLinks, isFolder, type SidebarLink, type SidebarNode } from "../components/layout/sidebarStructure";
-import { faiValidationDocumentsHref, LEGACY_VALIDATION_REPORTS_PATH } from "./folderBrowse";
+import { blankFormsFolderHref, faiValidationDocumentsHref, LEGACY_VALIDATION_REPORTS_PATH } from "./folderBrowse";
 
 export interface PinnedShortcut {
   key: string;
@@ -28,7 +28,7 @@ export const SHORTCUTS_FOLDER_KEY = "my-shortcuts";
 
 /**
  * Pages taken off the shared menu that a person can pin back.
- * Blank forms are added in the picker; they are not pinned until someone chooses them.
+ * Individual blanks are added in the picker; they are not pinned until someone chooses them.
  */
 export const PINNABLE_SHORTCUTS: PinnedShortcut[] = [
   { key: "pin-master-document-list", label: "Master Document List", path: "/documents/master-list" },
@@ -96,7 +96,8 @@ export function applyUserShortcuts(nodes: SidebarNode[], prefs: SidebarShortcutP
   const pins: SidebarLink[] = [];
   for (const pin of prefs?.pinned ?? []) {
     if (!pin?.key || hidden.has(pin.key) || isRetiredShortcut(pin)) continue;
-    const path = pin.path === LEGACY_VALIDATION_REPORTS_PATH ? faiValidationDocumentsHref() : pin.path;
+    const path =
+      pin.path === LEGACY_VALIDATION_REPORTS_PATH ? faiValidationDocumentsHref() : pin.path === "/blank-forms" ? blankFormsFolderHref() : pin.path;
     if (seen.has(pin.key) || seen.has(path) || visiblePaths.has(path)) continue;
     seen.add(pin.key);
     seen.add(path);

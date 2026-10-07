@@ -20,6 +20,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
 import { company } from "../../drizzle/schema/company.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
+import { isBlankTemplateStartPath } from "./formFiling.js";
 
 export const ISO_ROOT_NAME = "ISO Compliance Documents";
 
@@ -105,7 +106,7 @@ export function documentNodeKind(
   folders: { parentId: number | null }[],
 ): "folder" | "saved item" {
   if (folders.some((folder) => folder.parentId === node.id)) return "folder";
-  const filed = node.linkedPath != null && FILED_RECORD.test(node.linkedPath);
+  const filed = node.linkedPath != null && (FILED_RECORD.test(node.linkedPath) || isBlankTemplateStartPath(node.linkedPath));
   if (node.pdfPath || node.documentId != null || filed) return "saved item";
   return "folder";
 }

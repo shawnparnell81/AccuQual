@@ -5,8 +5,7 @@ import { useFormTemplates, type FormTemplateCacheRow } from "../../api/formTempl
 import { FormNumberEditor } from "../../components/forms/FormDocumentControls";
 
 /**
- * Lists the master blank templates. The same rows are on Blank Forms.
- * Folder Explorer does not keep an empty copy of each blank.
+ * Lists the master blank templates. The same blanks are in Folder Explorer under Blank Forms Templates.
  */
 export function QmsFormsLibraryPage() {
   const navigate = useNavigate();
@@ -41,7 +40,7 @@ export function QmsFormsLibraryPage() {
       <div>
         <h1 className="text-2xl font-semibold">QMS Forms</h1>
         <p className="text-sm text-muted-foreground">
-          These are the blank templates. Start one here, or from Blank Forms. When you save a filled copy, choose a Documents folder. Open folder on the save line takes you there. The blank stays in this list.
+          These are the blank templates. Start one here, or from Blank Forms Templates in Folder Explorer. When you save a filled copy, choose a Documents folder. Open folder on the save line takes you there. The blank stays in Blank Forms Templates.
         </p>
       </div>
 

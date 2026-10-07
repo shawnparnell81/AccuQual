@@ -1,6 +1,7 @@
 import { Route, Navigate } from "react-router-dom";
 import { NotFoundPage } from "./NotFoundPage";
 import { homeKind } from "../lib/opsLanguage";
+import { blankFormsFolderHref } from "../lib/folderBrowse";
 import { FRM_NCR_PATH } from "../lib/qualityEntry";
 import { useCurrentUser } from "../hooks/useAuth";
 import {
@@ -27,7 +28,7 @@ import {
   AiInsightsPage,
   AuditDetailPage,
   AuditsPage,
-  BlankFormsPage,
+  StartBlankFormPage,
   CalendarPage,
   CapaDetailPage,
   CapaListPage,
@@ -124,7 +125,8 @@ export function workspaceRouteElements() {
   return [
     <Route key="/" path="/" element={<HomeRoute />} />,
     <Route key="/home" path="/home" element={<HomePage />} />,
-    <Route key="/blank-forms" path="/blank-forms" element={<BlankFormsPage />} />,
+    <Route key="/blank-forms" path="/blank-forms" element={<Navigate to={blankFormsFolderHref()} replace />} />,
+    <Route key="/blank-forms/start" path="/blank-forms/start/:formKey" element={<StartBlankFormPage />} />,
     <Route key="/form-folders" path="/form-folders" element={<FormFoldersPage />} />,
     <Route key="/form-folders/:formKey" path="/form-folders/:formKey" element={<FormFolderDetailPage />} />,
     <Route key="/calendar" path="/calendar" element={<CalendarPage />} />,

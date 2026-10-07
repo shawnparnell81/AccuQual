@@ -3,6 +3,7 @@ import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { documentFolders, LIBRARY_POOL_NAME } from "../../drizzle/schema/documentFolders.js";
+import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { documents } from "../../drizzle/schema/documents.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
@@ -20,7 +21,7 @@ import { signOfficeToken } from "../onlyoffice/token.js";
 import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
 import { ensureCompanyDocumentFolders, FILING_DRAWER_NAMES } from "./companyDocumentFolders.js";
 import { documentNodeKind, folderLocationLabel, folderMoveAudit, folderRenameAudit } from "./mainIsoFolders.js";
-import { MASTER_DOCUMENT_LIST_PATH, retargetRetiredRegisterLink } from "./formFiling.js";
+import { MASTER_DOCUMENT_LIST_PATH, isBlankTemplateStartPath, retargetRetiredRegisterLink } from "./formFiling.js";
 import { ensureFormTemplates, listFormTemplates } from "./formTemplates.js";
 import { fileFormRecord, filingQuery, getFormFiling, updateFormNumber } from "./formRecordFiling.js";
 import { getFormFolder, listFormFolders } from "./formFolders.js";
@@ -226,7 +227,7 @@ async function withLinkedDocumentInfo(db: Db, all: (typeof documentFolders.$infe
 
 /** Blank templates. The Forms Library and ISO Compliance Documents read this same list. */
 export const formTemplates = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await listFormTemplates(req.db!));
+  res.json(await listFormTemplates(req.db!, req.user?.id));
 });
 
 /** Sets the document number on one of the eight quality forms. Filled copies keep the number they already stored. */
@@ -271,7 +272,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     const added = await ensureAdditionalSubfolders(db, [...seeded, pool]);
     const all = await ensureCompanyDocumentFolders(db, added);
     await linkKnownForms(db, all);
-    await ensureFormTemplates(db);
+    await ensureFormTemplates(db, req.user?.id);
     const fresh = await db.select().from(documentFolders);
     return res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(fresh)));
   }
@@ -282,7 +283,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
   const added = await ensureAdditionalSubfolders(db, withPool);
   const all = await ensureCompanyDocumentFolders(db, added);
   await linkKnownForms(db, all);
-  await ensureFormTemplates(db);
+  await ensureFormTemplates(db, req.user?.id);
   const fresh = await db.select().from(documentFolders);
   res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(fresh)));
 });
@@ -419,11 +420,13 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
   }
   const [current] = await db.select().from(documentFolders).where(eq(documentFolders.id, id));
   if (!current) throw AppError.notFound("Document folder");
-  if (current.pdfPath != null || current.documentId != null || current.linkedPath != null) {
+  const linkedRecord = current.linkedPath != null && !isBlankTemplateStartPath(current.linkedPath);
+  if (current.pdfPath != null || current.documentId != null || linkedRecord) {
     throw AppError.badRequest("Move the records out of this folder before removing it");
   }
   const [filing] = await db.select({ id: formFilings.id }).from(formFilings).where(eq(formFilings.folderNodeId, id)).limit(1);
   if (filing) throw AppError.badRequest("Move the records out of this folder before removing it");
+  await db.update(controlledFormTemplates).set({ folderId: null }).where(eq(controlledFormTemplates.folderId, id));
 
   const [deleted] = await db
     .delete(documentFolders)

@@ -1,7 +1,6 @@
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { eq } from "drizzle-orm";
 import type { Request } from "express";
-import type { Db } from "../../lib/requestDb.js";
 import { env } from "../../config/env.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { documents } from "../../drizzle/schema/documents.js";
@@ -15,9 +14,8 @@ import { addAttachment, documentAdapter } from "../documents/documentVersioning.
 import { attachUploadedFile } from "../document-folders/document-folders.controller.js";
 import * as engine from "../versioning/versioning.service.js";
 import { checksumMatchesFile, markExportFiled, sha256Of } from "./pdfExportStore.js";
+import { folderIsBlankLibrary } from "../document-folders/formFiling.js";
 import { assertCanReadExport } from "./pdfExportAccess.js";
-
-const BLANK_LIBRARY = "Blank Form Templates";
 
 function cleanTitle(value: string): string {
   const trimmed = value.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
@@ -30,19 +28,6 @@ async function readExactPdf(row: PdfExport): Promise<Buffer> {
   return readFile(row.filePath);
 }
 
-async function folderIsBlankLibrary(db: Db, folderId: number): Promise<boolean> {
-  const folders = await db.select({ id: documentFolders.id, name: documentFolders.name, parentId: documentFolders.parentId }).from(documentFolders);
-  const byId = new Map(folders.map((folder) => [folder.id, folder]));
-  let current = byId.get(folderId);
-  const seen = new Set<number>();
-  while (current && !seen.has(current.id)) {
-    seen.add(current.id);
-    if (current.name === BLANK_LIBRARY) return true;
-    current = current.parentId == null ? undefined : byId.get(current.parentId);
-  }
-  return false;
-}
-
 /** Files the exact stored bytes into Document Control: a draft document plus a folder file. */
 export async function fileExportIntoFolder(req: Request, row: PdfExport, folderId: number, name?: string) {
   const db = req.db!;
@@ -50,7 +35,8 @@ export async function fileExportIntoFolder(req: Request, row: PdfExport, folderI
   if (!Number.isInteger(folderId) || folderId < 1) throw AppError.badRequest("Pick a folder.");
   const [parent] = await db.select().from(documentFolders).where(eq(documentFolders.id, folderId));
   if (!parent) throw AppError.notFound("Document folder");
-  if (await folderIsBlankLibrary(db, folderId)) throw AppError.badRequest("Blank Form Templates is for empty layouts. Pick a Documents folder.");
+  const shelf = await db.select({ id: documentFolders.id, name: documentFolders.name, parentId: documentFolders.parentId }).from(documentFolders);
+  if (folderIsBlankLibrary(shelf, folderId)) throw AppError.badRequest("Blank Forms Templates holds empty blanks. Pick another Documents folder for this filled copy.");
 
   const bytes = await readExactPdf(row);
   const title = cleanTitle(name || row.recordNumber || row.sourceModule);
