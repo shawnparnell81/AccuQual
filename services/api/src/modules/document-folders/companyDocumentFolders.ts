@@ -18,14 +18,18 @@
  */
 import { eq } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
+import { company } from "../../drizzle/schema/company.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { formFilings } from "../../drizzle/schema/formFilings.js";
-import type { DefaultFolderSeed } from "./defaultDocumentFolders.js";
-import { ensureMainIsoFolders } from "./mainIsoFolders.js";
+import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
+import { DEFAULT_DOCUMENT_FOLDERS, type DefaultFolderSeed } from "./defaultDocumentFolders.js";
+import { planDuplicateFolderMerges, singleHomeSeedNames } from "./duplicateFolders.js";
+import { ensureMainIsoFolders, folderLocationLabel, MAIN_ISO_FOLDER_NAMES } from "./mainIsoFolders.js";
 import { retireNamedDocumentFolders } from "./retiredFolderCleanup.js";
 
-const TEMPLATE_LIBRARY_NAMES = new Set(["Blank Form Templates", "Blank Forms Templates", "ISO Compliance Documents"]);
+/** Blank shelves only. ISO itself is not a shelf: every real folder sits under it. */
+const TEMPLATE_LIBRARY_NAMES = new Set(["Blank Form Templates", "Blank Forms Templates"]);
 
 export const COMPANY_DOCUMENT_FOLDERS: DefaultFolderSeed[] = [
   {
@@ -213,7 +217,7 @@ function parentName(folders: FolderIdentity[], folder: FolderIdentity): string |
   return folders.find((row) => row.id === folder.parentId)?.name;
 }
 
-/** Blank Form Templates only. inTemplateLibrary also matches ISO, which is where this drawer lives. */
+/** Blank Form Templates only. A company folder under ISO is not in that shelf. */
 function inBlankTemplates(folder: FolderIdentity, folders: FolderIdentity[]): boolean {
   const byId = new Map(folders.map((row) => [row.id, row]));
   let current: FolderIdentity | undefined = folder;
@@ -420,4 +424,69 @@ export async function ensureCompanyDocumentFolders(db: Db, all: FolderRow[]): Pr
   list = await repairQualityTraining(db, list);
   list = await retireNamedDocumentFolders(db, list);
   return ensureMainIsoFolders(db, list);
+}
+
+function folderDepth(folders: FolderRow[], id: number): number {
+  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  let depth = 0;
+  let current = byId.get(id);
+  const seen = new Set<number>();
+  while (current?.parentId != null && !seen.has(current.id)) {
+    seen.add(current.id);
+    depth += 1;
+    current = byId.get(current.parentId);
+  }
+  return depth;
+}
+
+/**
+ * Folds leftover duplicate folders once per company. A folder Shawn deleted
+ * is not recreated here. Opening Documents again does not run the fold a
+ * second time, so a pair created later stays.
+ */
+export async function mergeDuplicateFoldersOnce(db: Db, list: FolderRow[], performedBy?: number): Promise<FolderRow[]> {
+  const [row] = await db.select({ id: company.id, profile: company.profile }).from(company).limit(1);
+  if (!row || row.profile?.duplicateFoldersMerged === true) return list;
+
+  const singleHomeNames = singleHomeSeedNames(
+    [...DEFAULT_DOCUMENT_FOLDERS, ...COMPANY_DOCUMENT_FOLDERS],
+    MAIN_ISO_FOLDER_NAMES.map((name) => [ISO_FOLDER_NAME, name]),
+  );
+  const plan = planDuplicateFolderMerges(list, {
+    singleHomeNames,
+    isoName: ISO_FOLDER_NAME,
+    blankLibraryNames: ["Blank Form Templates", "Blank Forms Templates"],
+    mainIsoNames: MAIN_ISO_FOLDER_NAMES,
+  }).sort((a, b) => folderDepth(list, b.sourceId) - folderDepth(list, a.sourceId) || a.sourceId - b.sourceId);
+
+  let current = list;
+  for (const move of plan) {
+    const source = current.find((folder) => folder.id === move.sourceId);
+    const dest = current.find((folder) => folder.id === move.destId);
+    if (!source || !dest || descendsFrom(current, dest.id, source.id)) continue;
+    const fromLabel = `${folderLocationLabel(current, source.parentId)} / ${source.name}`;
+    const toLabel = `${folderLocationLabel(current, dest.parentId)} / ${dest.name}`;
+    current = await mergeDocumentFolder(db, current, source.id, dest.id);
+    await recordAuditTrail(db, {
+      entityType: "DocumentFolder",
+      entityId: dest.id,
+      action: "update",
+      performedBy,
+      changes: {
+        event: "merged",
+        summary: `Merged the duplicate folder "${source.name}" from ${fromLabel} → ${toLabel}. Subfolders and saved items moved with it.`,
+        name: source.name,
+        from: fromLabel,
+        to: toLabel,
+        sourceId: source.id,
+        destId: dest.id,
+      },
+    });
+  }
+
+  const [fresh] = await db.select({ id: company.id, profile: company.profile }).from(company).limit(1);
+  if (fresh) {
+    await db.update(company).set({ profile: { ...(fresh.profile ?? {}), duplicateFoldersMerged: true } }).where(eq(company.id, fresh.id));
+  }
+  return current;
 }

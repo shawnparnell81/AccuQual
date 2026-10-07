@@ -5,7 +5,7 @@ import { withDb } from "../../lib/requestDb.js";
 import { requireDepartmentAccess } from "../../middleware/departmentAccess.js";
 import { validate } from "../../middleware/validate.js";
 import { createDocumentFolderSchema, fileFormRecordSchema, updateDocumentFolderSchema, updateFormNumberSchema } from "./document-folders.validation.js";
-import { list, create, update, remove, uploadTemplate, uploadDocument, downloadTemplate, folderOfficeSessionHandler, removeTemplate, formTemplates, setFormNumber, formFiling, fileForm, formFolders, formFolderDetail } from "./document-folders.controller.js";
+import { list, create, update, remove, removeFromLibraryPool, uploadTemplate, uploadDocument, downloadTemplate, folderOfficeSessionHandler, removeTemplate, formTemplates, setFormNumber, formFiling, fileForm, formFolders, formFolderDetail } from "./document-folders.controller.js";
 import { createFolderCommentHandler, listFolderCommentsHandler } from "../documents/documentComments.js";
 
 export const documentFoldersRouter = Router();
@@ -34,6 +34,7 @@ documentFoldersRouter.post("/", validate(createDocumentFolderSchema), create);
 // leaf + attach a file" upload, not scoped to an existing node.
 documentFoldersRouter.post("/upload", upload.single("file"), uploadDocument);
 documentFoldersRouter.patch("/:id", validate(updateDocumentFolderSchema), update);
+documentFoldersRouter.delete("/:id/pool", removeFromLibraryPool);
 documentFoldersRouter.delete("/:id", remove);
 
 documentFoldersRouter.get("/:id/comments", listFolderCommentsHandler);

@@ -228,6 +228,12 @@ export const company = pgTable("company", {
     blankFormKeysPlaced?: string[];
     /** document_folders id of Blank Forms Templates, so a rename or move of that folder is kept. */
     blankFormsTemplatesFolderId?: number;
+    /**
+     * Set once duplicate folders from old seeds have been folded together.
+     * A later pair Shawn creates on purpose is left alone. Company Settings
+     * spreads this object, so a profile save keeps the flag. No new column.
+     */
+    duplicateFoldersMerged?: boolean;
   }>().default({}),
   // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for the company's first admin.
   // `dismissed: true` for every company that existed before this shipped (backfillOnboardingChecklist.ts) — an

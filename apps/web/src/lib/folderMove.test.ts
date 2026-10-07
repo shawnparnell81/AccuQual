@@ -22,6 +22,19 @@ describe("folder moves", () => {
     assert.equal(folderMoveIsBlocked(tree, 2, 3), true);
   });
 
+  it("lets a saved file move into a folder even when the file is left out of the destination list", () => {
+    const iso = { id: 1, parentId: null, sortOrder: 0 };
+    const manual = { id: 2, parentId: 1, sortOrder: 0 };
+    const pool = { id: 3, parentId: null, sortOrder: 1 };
+    const file = { id: 4, parentId: 3, sortOrder: 0 };
+    const nodes = [iso, manual, pool, file];
+    const destinations = nodes.filter((node) => node.id !== file.id);
+    assert.equal(folderMoveIsBlocked(destinations, file.id, manual.id), false);
+    assert.deepEqual(planNest(nodes, file.id, manual.id), [{ id: 4, parentId: 2, sortOrder: 0 }]);
+    assert.equal(folderMoveIsBlocked(nodes, manual.id, iso.id), false);
+    assert.equal(planNest(nodes, iso.id, manual.id), null);
+  });
+
   it("places a moved folder after its new siblings", () => {
     assert.equal(nextSortOrder(tree, null, 2), 2);
     assert.equal(nextSortOrder(tree, 4, 3), 0);

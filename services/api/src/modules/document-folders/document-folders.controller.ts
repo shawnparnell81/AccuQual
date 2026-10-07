@@ -19,7 +19,7 @@ import { loadOfficeActor } from "../onlyoffice/access.js";
 import { onlyOfficeSettings } from "../onlyoffice/settings.js";
 import { signOfficeToken } from "../onlyoffice/token.js";
 import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
-import { ensureCompanyDocumentFolders, FILING_DRAWER_NAMES } from "./companyDocumentFolders.js";
+import { ensureCompanyDocumentFolders, FILING_DRAWER_NAMES, mergeDuplicateFoldersOnce } from "./companyDocumentFolders.js";
 import { documentNodeKind, folderLocationLabel, folderMoveAudit, folderRenameAudit } from "./mainIsoFolders.js";
 import { MASTER_DOCUMENT_LIST_PATH, isBlankTemplateStartPath, retargetRetiredRegisterLink } from "./formFiling.js";
 import { ensureLivingControlledLists } from "../controlled-lists/service.js";
@@ -276,7 +276,8 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     await ensureFormTemplates(db, req.user?.id);
     await ensureLivingControlledLists(req);
     const fresh = await db.select().from(documentFolders);
-    return res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(fresh)));
+    const merged = await mergeDuplicateFoldersOnce(db, fresh, req.user?.id);
+    return res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(merged)));
   }
 
   const pool = await ensureLibraryPool(db, existing);
@@ -288,7 +289,8 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
   await ensureFormTemplates(db, req.user?.id);
   await ensureLivingControlledLists(req);
   const fresh = await db.select().from(documentFolders);
-  res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(fresh)));
+  const merged = await mergeDuplicateFoldersOnce(db, fresh, req.user?.id);
+  res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(merged)));
 });
 
 export const create = asyncHandler(async (req: Request, res: Response) => {
@@ -411,6 +413,46 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
   });
 
   res.json(updated);
+});
+
+/**
+ * Takes one row out of the Library Pool.
+ * A controlled document, filled form, or module link lives somewhere else:
+ * the pool row goes away and that record stays.
+ * An uploaded file with no other link is deleted, file and row, the same
+ * way an empty folder is removed. A pool row that still has children stays.
+ */
+export const removeFromLibraryPool = asyncHandler(async (req: Request, res: Response) => {
+  const db = req.db!;
+  const id = Number(req.params.id);
+  const [current] = await db.select().from(documentFolders).where(eq(documentFolders.id, id));
+  if (!current) throw AppError.notFound("Document folder");
+  const [parent] = current.parentId == null ? [] : await db.select().from(documentFolders).where(eq(documentFolders.id, current.parentId));
+  if (!parent || parent.name !== LIBRARY_POOL_NAME) throw AppError.badRequest("That item is not in the Library Pool.");
+  const children = await db.select({ id: documentFolders.id }).from(documentFolders).where(eq(documentFolders.parentId, id));
+  if (children.length > 0) throw AppError.badRequest("Move or delete this folder's contents before removing it from the Library Pool.");
+
+  const [filing] = await db.select({ id: formFilings.id }).from(formFilings).where(eq(formFilings.folderNodeId, id)).limit(1);
+  const livesElsewhere = current.documentId != null || (current.linkedPath != null && current.linkedPath !== "") || filing != null;
+  if (current.pdfPath && existsSync(current.pdfPath)) {
+    await unlink(current.pdfPath).catch((err) => logger.warn(`Could not remove library pool file ${current.pdfPath}`, err));
+  }
+  const [deleted] = await db.delete(documentFolders).where(eq(documentFolders.id, id)).returning();
+  if (!deleted) throw AppError.notFound("Document folder");
+
+  const summary = livesElsewhere
+    ? `Removed "${deleted.name}" from the Library Pool. The record was left in place.`
+    : deleted.pdfPath
+      ? `Removed the uploaded file "${deleted.name}" from the Library Pool.`
+      : `Removed "${deleted.name}" from the Library Pool.`;
+  await recordAuditTrail(db, {
+    entityType: AUDIT_ENTITY_TYPE,
+    entityId: id,
+    action: "delete",
+    changes: { summary, name: deleted.name, libraryPool: true, keptRecord: livesElsewhere },
+    performedBy: req.user?.id,
+  });
+  res.status(204).send();
 });
 
 export const remove = asyncHandler(async (req: Request, res: Response) => {
