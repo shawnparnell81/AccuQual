@@ -41,7 +41,7 @@ export function DocxPreviewPane({ data }: { data: ArrayBuffer }) {
   return (
     <div>
       {error && <p className="text-sm text-destructive">{error}</p>}
-      <div ref={host} className="office-docx" />
+      <div ref={host} className="office-docx aq-paper" />
     </div>
   );
 }

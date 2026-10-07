@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Download, X } from "lucide-react";
+import { Download, Printer, X } from "lucide-react";
 import { onlyOfficeEditorConfigured, peekOnlyOfficeEditorConfigured, type OfficeSource } from "../../api/onlyoffice";
 import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { OFFICE_PREVIEW_BYTE_LIMIT, officePreviewRoute, officePreviewTooLarge, onlyOfficeFile, previewKind, type OfficePreviewRoute } from "../../lib/filePreview";
 import { PdfViewer } from "../forms/PdfViewer";
+import { presentImage, presentPdf, PRINT_NOT_DOCUMENT, PRINT_PREPARE_FAILED, PRINT_SAVE_FAILED, printShouldToast, uploadedPrintChoice } from "../../lib/printDocument";
 import { OnlyOfficeEditor } from "../documents/OnlyOfficeEditor";
 
 const DocxPreviewPane = lazy(() => import("./DocxPreviewPane").then((mod) => ({ default: mod.DocxPreviewPane })));
@@ -18,6 +19,8 @@ export interface PreviewRequest {
   loadBytes: () => Promise<ArrayBuffer>;
   officeSource?: OfficeSource;
   download: () => Promise<void>;
+  /** PDF copy of an Office file, when one has already been made. */
+  loadPdfRendition?: () => Promise<Uint8Array | null>;
 }
 
 /**
@@ -27,12 +30,14 @@ export interface PreviewRequest {
  */
 export function InAppFilePreview({ request, onClose }: { request: PreviewRequest | null; onClose: () => void }) {
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
+  const [imageBytes, setImageBytes] = useState<Uint8Array | null>(null);
   const [officeBytes, setOfficeBytes] = useState<ArrayBuffer | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [tooLarge, setTooLarge] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [onlyOfficeOn, setOnlyOfficeOn] = useState<boolean | null>(null);
 
   const askOnlyOffice = Boolean(request && request.officeSource && onlyOfficeFile(request.fileName, request.mimeType));
@@ -58,6 +63,7 @@ export function InAppFilePreview({ request, onClose }: { request: PreviewRequest
 
   useEffect(() => {
     setBytes(null);
+    setImageBytes(null);
     setOfficeBytes(null);
     setImageUrl(null);
     setError(null);
@@ -82,6 +88,7 @@ export function InAppFilePreview({ request, onClose }: { request: PreviewRequest
     setError(null);
     setTooLarge(false);
     setBytes(null);
+    setImageBytes(null);
     setOfficeBytes(null);
     setImageUrl(null);
     void request
@@ -102,6 +109,7 @@ export function InAppFilePreview({ request, onClose }: { request: PreviewRequest
           setBytes(new Uint8Array(buf));
           return;
         }
+        setImageBytes(new Uint8Array(buf));
         objectUrl = URL.createObjectURL(new Blob([buf], { type: request.mimeType || "image/*" }));
         setImageUrl(objectUrl);
       })
@@ -128,8 +136,34 @@ export function InAppFilePreview({ request, onClose }: { request: PreviewRequest
 
   if (!request) return null;
 
-  if (editorOn && request.officeSource) {
-    return <OnlyOfficeEditor fileName={request.fileName} source={request.officeSource} onClose={onClose} onDownload={() => void request.download()} />;
+  const fileChoice = uploadedPrintChoice(previewKind(request.fileName, request.mimeType), Boolean(request.loadPdfRendition));
+  const canPrintFile = fileChoice === "pdf" || fileChoice === "image";
+
+  async function printFile() {
+    if (!request || !canPrintFile) return;
+    setPrinting(true);
+    setError(null);
+    try {
+      if (fileChoice === "pdf") {
+        const pdfBytes = request.loadPdfRendition ? await request.loadPdfRendition() : bytes;
+        if (!pdfBytes) {
+          setError(PRINT_NOT_DOCUMENT);
+          return;
+        }
+        const outcome = await presentPdf(pdfBytes, request.fileName.endsWith(".pdf") ? request.fileName : `${request.fileName}.pdf`);
+        if (printShouldToast(outcome)) setError(PRINT_SAVE_FAILED);
+      } else if (imageBytes) {
+        const outcome = await presentImage(imageBytes, request.fileName, request.mimeType || "image/png");
+        if (printShouldToast(outcome)) setError(PRINT_SAVE_FAILED);
+      } else {
+        setError(PRINT_PREPARE_FAILED);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      setError(message === PRINT_NOT_DOCUMENT || message === PRINT_SAVE_FAILED ? message : PRINT_PREPARE_FAILED);
+    } finally {
+      setPrinting(false);
+    }
   }
 
   async function download() {
@@ -144,6 +178,18 @@ export function InAppFilePreview({ request, onClose }: { request: PreviewRequest
     }
   }
 
+  if (editorOn && request.officeSource) {
+    return (
+      <OnlyOfficeEditor
+        fileName={request.fileName}
+        source={request.officeSource}
+        onClose={onClose}
+        onDownload={() => void request.download()}
+        onPrint={request.loadPdfRendition ? () => void printFile() : undefined}
+      />
+    );
+  }
+
   const showPptx = route === "pptx";
 
   return createPortal(
@@ -151,6 +197,11 @@ export function InAppFilePreview({ request, onClose }: { request: PreviewRequest
       <div className="flex h-[100dvh] w-full flex-col bg-background text-foreground sm:h-auto sm:max-h-[90vh] sm:max-w-5xl sm:rounded-xl sm:border sm:border-border sm:shadow-2xl">
         <div className="flex items-center gap-2 border-b border-border px-3 py-2">
           <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{request.fileName}</h2>
+          {canPrintFile && (
+            <button type="button" data-testid="print-file" onClick={() => void printFile()} disabled={printing || loading} className="no-print inline-flex min-h-11 items-center gap-1 rounded-md border border-border px-3 text-sm hover:bg-muted disabled:opacity-60">
+              <Printer size={16} /> {printing ? "Preparing…" : "Print"}
+            </button>
+          )}
           <button type="button" onClick={() => void download()} disabled={downloading} className="inline-flex min-h-11 items-center gap-1 rounded-md border border-border px-3 text-sm hover:bg-muted disabled:opacity-60">
             <Download size={16} /> {downloading ? "Downloading…" : "Download"}
           </button>
@@ -177,7 +228,11 @@ export function InAppFilePreview({ request, onClose }: { request: PreviewRequest
               </button>
             </div>
           )}
-          {!loading && imageUrl && <img src={imageUrl} alt={request.fileName} className="mx-auto max-h-[75dvh] max-w-full rounded-md border border-border bg-background object-contain" />}
+          {!loading && imageUrl && (
+            <div className="aq-paper mx-auto w-fit p-2">
+              <img src={imageUrl} alt={request.fileName} className="mx-auto max-h-[75dvh] max-w-full object-contain" />
+            </div>
+          )}
           {!loading && bytes && <PdfViewer data={bytes} isLoading={false} />}
           {!loading && !tooLarge && officeBytes && route === "docx" && (
             <Suspense fallback={<p className="text-sm text-muted-foreground">Opening preview…</p>}>

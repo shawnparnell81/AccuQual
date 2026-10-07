@@ -21,6 +21,7 @@ import { FormSignProvider } from "./formSign";
 import { FormHeader } from "../brand/DmaLogo";
 import { focusFirstEditable } from "../shared/GridClipboard";
 import { RecordEditButton } from "../shared/RecordEditButton";
+import { PrintRecordButton } from "../records/PrintRecordButton";
 
 interface FormEditorProps {
   formType: string;
@@ -169,6 +170,7 @@ export function FormEditor({ formType, entityId, windowId }: FormEditorProps) {
         <button onClick={handleDownload} className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground">
           Export PDF
         </button>
+        <PrintRecordButton />
       </div>
       <PdfExportActions exportId={exportId} entityType={formType} entityId={entityId} />
 

@@ -1862,17 +1862,60 @@ body.side-collapsed .aq-nav-folder-link {
   .aq-toast-stack {
     display: none !important;
   }
+  .aq-print-footer {
+    display: block !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 1.5in;
+    z-index: 1;
+    font-size: 8pt;
+    line-height: 1.2;
+    color: #333 !important;
+    background: transparent !important;
+  }
   @page {
-    margin: 0.5in;
+    margin: 0.5in 0.5in 0.65in;
+    @bottom-right {
+      content: counter(page);
+      font-size: 9pt;
+      color: #333;
+    }
   }
   @page wide-sheet {
     size: letter landscape;
-    margin: 0.4in;
+    margin: 0.4in 0.4in 0.55in;
+    @bottom-right {
+      content: counter(page);
+      font-size: 9pt;
+      color: #333;
+    }
   }
   .validation-report-print,
   .aq-print-wide {
     page: wide-sheet;
   }
+  html.aq-print-landscape {
+    page: wide-sheet;
+  }
+}
+
+.aq-print-footer {
+  display: none;
+}
+
+/* Uploaded files stay on white paper in either theme. The dialog around them uses the app colors. */
+.aq-paper {
+  background: #fff !important;
+  color: #1a1a1a;
+  color-scheme: light;
+}
+.aq-paper :where(h1, h2, h3, h4) {
+  color: inherit;
+}
+.aq-paper canvas,
+.aq-paper img {
+  background: #fff;
 }
 
 @media (prefers-reduced-motion: reduce) {

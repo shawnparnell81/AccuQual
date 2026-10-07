@@ -28,7 +28,7 @@ function SheetTable({ sheet }: { sheet: SheetGrid }) {
     return <p className="text-sm text-muted-foreground">This sheet is empty.</p>;
   }
   return (
-    <div className="sheet-scroll">
+    <div className="sheet-scroll aq-paper">
       <table className="sheet-grid">
         <colgroup>
           <col style={{ width: 42 }} />

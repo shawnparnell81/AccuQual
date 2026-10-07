@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { RECORD_STEP_ANCHOR } from "../../lib/stepDocuments";
+import { PrintRecordButton } from "./PrintRecordButton";
 
 /**
  * Outer skeleton for a record: header, the existing body, and a References
@@ -27,7 +28,12 @@ export function RecordFrame({
   const side = relatedPlacement === "side";
   return (
     <div className={className ? `record-frame flex flex-col gap-4 ${className}` : "record-frame flex flex-col gap-4"}>
-      <div className="record-frame-header">{header}</div>
+      <div className="record-frame-header">
+        <div className="no-print mb-2 flex justify-end">
+          <PrintRecordButton />
+        </div>
+        {header}
+      </div>
       <div className={side ? "grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]" : "flex flex-col gap-4"}>
         <div id={RECORD_STEP_ANCHOR} className="flex min-w-0 flex-col gap-4">
           {children}

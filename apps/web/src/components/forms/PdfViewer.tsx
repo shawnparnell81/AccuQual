@@ -48,7 +48,7 @@ export function PdfViewer({ data, isLoading }: PdfViewerProps) {
           const canvas = document.createElement("canvas");
           canvas.width = viewport.width;
           canvas.height = viewport.height;
-          canvas.className = "max-w-full rounded border border-border shadow-sm";
+          canvas.className = "max-w-full rounded border border-border bg-white shadow-sm";
           const context = canvas.getContext("2d");
           if (!context) continue;
           await page.render({ canvasContext: context, viewport, canvas }).promise;
@@ -79,7 +79,7 @@ export function PdfViewer({ data, isLoading }: PdfViewerProps) {
   if (!data) return <p className="text-sm text-muted-foreground">No preview yet — export the form to generate one.</p>;
 
   return (
-    <div className="flex max-h-[80vh] flex-col gap-4 overflow-y-auto">
+    <div className="aq-paper flex max-h-[80vh] flex-col gap-4 overflow-y-auto p-3">
       {pageCount === null && <p className="text-sm text-muted-foreground">Rendering preview…</p>}
       <div ref={containerRef} className="flex flex-col items-center gap-4" />
     </div>
