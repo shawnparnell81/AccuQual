@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { flattenSidebarLinks, isFolder, type SidebarLink, type SidebarNode } from "../components/layout/sidebarStructure";
 import { blankFormsFolderHref, faiValidationDocumentsHref, LEGACY_VALIDATION_REPORTS_PATH } from "./folderBrowse";
+import type { SidebarPlacement } from "./sidebarLayout";
 
 export interface PinnedShortcut {
   key: string;
@@ -20,9 +21,13 @@ export interface PinnedShortcut {
 export interface SidebarShortcutPrefs {
   hidden: string[];
   pinned: PinnedShortcut[];
+  /** Absent or null means the built-in order. A tree is this person's own arrangement. */
+  layout?: SidebarPlacement[] | null;
+  /** Sections this person added. Keys look like `group:shop-floor`. */
+  groups?: { key: string; label: string }[];
 }
 
-export const EMPTY_SIDEBAR_SHORTCUTS: SidebarShortcutPrefs = { hidden: [], pinned: [] };
+export const EMPTY_SIDEBAR_SHORTCUTS: SidebarShortcutPrefs = { hidden: [], pinned: [], layout: null, groups: [] };
 
 export const SHORTCUTS_FOLDER_KEY = "my-shortcuts";
 

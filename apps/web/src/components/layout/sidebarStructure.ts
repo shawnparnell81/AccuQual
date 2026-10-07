@@ -121,7 +121,7 @@ const DOCUMENT_CONTROL_FOLDER: SidebarFolder = {
 /**
  * Five doors, plus Admin for people who already pass the admin check.
  * The Folders door and Documents → Folders both open /form-folders.
- * That page lists saved fills. Blank templates live in Folder Explorer under Blank Forms Templates.
+ * That page lists saved fills. Blank templates live in Folder Explorer under Blank Forms Templates, not on this menu.
  */
 export const SIDEBAR_FOLDERS: SidebarNode[] = [
   {

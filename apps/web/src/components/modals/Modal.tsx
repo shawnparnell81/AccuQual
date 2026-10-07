@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { GripHorizontal, X } from "lucide-react";
 import clsx from "clsx";
 
@@ -66,7 +67,9 @@ export function Modal({ title, isOpen, onClose, children, wide = false }: ModalP
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   }
 
-  return (
+  // Portal to body. The sidebar uses backdrop-filter, which would otherwise
+  // trap this fixed layer inside the narrow nav instead of the viewport.
+  return createPortal(
     <div
       className={clsx("modal-in fixed inset-0 z-50 flex items-center justify-center p-3", moved ? "bg-transparent" : "bg-black/50 backdrop-blur-[2px]")}
       onPointerDown={(e) => {
@@ -106,6 +109,7 @@ export function Modal({ title, isOpen, onClose, children, wide = false }: ModalP
             height limit at all. */}
         <div className="overflow-y-auto p-6 pt-4">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
