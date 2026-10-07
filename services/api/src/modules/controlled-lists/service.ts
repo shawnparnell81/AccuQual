@@ -30,6 +30,7 @@ import {
   planListCleanup,
   removeDataRow,
   rowSummary,
+  titleMatchesDevLog,
   titleMatchesList,
   type CellPatch,
   type ListKey,
@@ -164,12 +165,15 @@ async function fileLivingNodes(db: Db, userId: number) {
   let folders = await db.select().from(documentFolders);
   folders = await ensureCompanyDocumentFolders(db, folders);
   const iso = folders.find((folder) => folder.parentId == null && folder.name === ISO_ROOT);
-  const manual = iso ? folders.find((folder) => folder.parentId === iso.id && folder.name === QUALITY_MANUAL) : undefined;
-  if (!manual) return;
+  if (!iso) return;
   for (const spec of Object.values(LISTS)) {
-    const linked = folders.find((folder) => folder.parentId === manual.id && folder.linkedPath === spec.route);
+    const parentName = spec.folder ?? QUALITY_MANUAL;
+    const parent = folders.find((folder) => folder.parentId === iso.id && folder.name === parentName);
+    if (!parent) continue;
+    const nodeName = spec.nodeName ?? spec.title;
+    const linked = folders.find((folder) => folder.parentId === parent.id && folder.linkedPath === spec.route);
     if (linked) continue;
-    const named = folders.find((folder) => folder.parentId === manual.id && folder.name === spec.title && !folder.pdfPath && folder.documentId == null && !folder.linkedPath);
+    const named = folders.find((folder) => folder.parentId === parent.id && folder.name === nodeName && !folder.pdfPath && folder.documentId == null && !folder.linkedPath);
     if (named) {
       await db.update(documentFolders).set({ linkedPath: spec.route, updatedAt: new Date() }).where(eq(documentFolders.id, named.id));
       await recordAuditTrail(db, {
@@ -177,14 +181,14 @@ async function fileLivingNodes(db: Db, userId: number) {
         entityId: named.id,
         action: "update",
         performedBy: userId,
-        changes: { summary: `Opened ${spec.title} from the Quality Manual into the in-app list.`, linkedPath: spec.route },
+        changes: { summary: `Opened ${nodeName} from ${parentName} into the in-app list.`, linkedPath: spec.route },
       });
       continue;
     }
-    const siblings = folders.filter((folder) => folder.parentId === manual.id);
+    const siblings = folders.filter((folder) => folder.parentId === parent.id);
     const [created] = await db
       .insert(documentFolders)
-      .values({ name: spec.title, parentId: manual.id, sortOrder: siblings.length, linkedPath: spec.route })
+      .values({ name: nodeName, parentId: parent.id, sortOrder: siblings.length, linkedPath: spec.route })
       .returning();
     if (!created) continue;
     folders = [...folders, created];
@@ -193,7 +197,7 @@ async function fileLivingNodes(db: Db, userId: number) {
       entityId: created.id,
       action: "create",
       performedBy: userId,
-      changes: { summary: `Filed ${spec.title} in the Quality Manual. Opening it edits the list in the app.`, name: spec.title, linkedPath: spec.route },
+      changes: { summary: `Filed ${nodeName} in ${parentName}. Opening it edits the list in the app.`, name: nodeName, linkedPath: spec.route },
     });
   }
 }
@@ -287,7 +291,7 @@ export async function retireSupersededLists(req: Request): Promise<void> {
 
   for (const id of plan.documentIds) {
     const [doc] = await db.select({ id: documents.id, title: documents.title }).from(documents).where(eq(documents.id, id));
-    if (!doc || !titleMatchesList(doc.title)) continue;
+    if (!doc || !(titleMatchesList(doc.title) || titleMatchesDevLog(doc.title))) continue;
     try {
       await purgeExistingRecord(req, "document", id);
     } catch (err) {

@@ -249,6 +249,7 @@ describe("folder browse", () => {
       { id: 5, name: "Scope of Laboratory Activities", parentId: 2, sortOrder: 2, linkedPath: "/documents/laboratory-scope" },
     ];
     assert.equal(isLivingListPath("/documents/master-list"), true);
+    assert.equal(isLivingListPath("/documents/development-log"), true);
     assert.equal(isLivingListPath("/ncr"), false);
     const listing = listFolder(rows, 2);
     assert.deepEqual(listing.files.map((file) => file.name), ["Master Document List", "Master Equipment List", "Scope of Laboratory Activities"]);

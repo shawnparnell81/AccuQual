@@ -58,6 +58,24 @@
   color: #111;
 }
 
+.controlled-list-pick {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  padding: 0;
+  cursor: text;
+}
+
+.controlled-list-long .controlled-list-cell {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 20px;
+}
+
 .controlled-list-print-value {
   display: none;
 }
@@ -126,6 +144,9 @@
 }
 
 @media print {
+  .controlled-list-long .controlled-list-cell {
+    content-visibility: visible;
+  }
   .controlled-list-print .overflow-x-auto {
     overflow: visible !important;
   }

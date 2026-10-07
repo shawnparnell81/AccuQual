@@ -12,6 +12,7 @@ import {
   columnIndex,
   columnLetter,
   parseAddr,
+  listOptions,
   parseEdited,
   serialToIso,
   shownCell,
@@ -20,7 +21,14 @@ import {
 } from "../../lib/controlledListMath";
 import "./controlledList.css";
 
-export type ControlledListKey = "lst-eqp-001" | "lst-gen-001" | "lst-gen-003";
+export type ControlledListKey = "lst-eqp-001" | "lst-gen-001" | "lst-gen-003" | "lst-dev-001";
+
+const LIST_ROUTES: Record<ControlledListKey, string> = {
+  "lst-eqp-001": "/calibration/master-list",
+  "lst-gen-001": "/documents/master-list",
+  "lst-gen-003": "/documents/laboratory-scope",
+  "lst-dev-001": "/documents/development-log",
+};
 
 interface ControlledListView {
   id: number;
@@ -43,6 +51,7 @@ const DATA_START: Record<ControlledListKey, Record<string, number>> = {
   "lst-eqp-001": { "LST-EQP-001 - Master Equipment ": 6 },
   "lst-gen-001": { "Internal Documents": 4, "External Documents": 3 },
   "lst-gen-003": { "LST-GEN-003 - Scope of Laborato": 6 },
+  "lst-dev-001": { "Test Reports": 5, "Validation Report": 5 },
 };
 
 function errorMessage(err: unknown): string {
@@ -111,6 +120,8 @@ function SheetGrid({
   const start = DATA_START[listKey][sheet.name] ?? sheet.maxRow + 1;
   const origins = mergeOrigin(sheet.merges);
   const covered = coveredCells(sheet.merges);
+  const long = sheet.maxRow > 200;
+  const [editing, setEditing] = useState<string | null>(null);
   const cells = [];
   for (let row = 1; row <= sheet.maxRow; row += 1) {
     for (let col = 1; col <= sheet.maxCol; col += 1) {
@@ -120,8 +131,8 @@ function SheetGrid({
       const span = origins.get(addr);
       const shown = shownCell(sheet, addr);
       const editable = canEdit && (cell?.kind === "input" || (!cell && row >= start));
-      const status = listKey === "lst-eqp-001" && columnLetter(col) === "J" && row >= start && editable;
-      const date = Boolean(editable && cell?.nf && (cell.nf.includes("yy") || cell.nf.includes("mmm")));
+      const choices = editable ? (listKey === "lst-eqp-001" && columnLetter(col) === "J" && row >= start ? statuses : listOptions(sheet, addr)) : null;
+      const date = Boolean(editable && cell?.nf && (cell.nf.includes("yy") || cell.nf.includes("mmm")) && !choices);
       cells.push(
         <div
           key={addr}
@@ -132,8 +143,10 @@ function SheetGrid({
           style={{
             gridColumn: `${col} / span ${span?.cols ?? 1}`,
             gridRow: `${row} / span ${span?.rows ?? 1}`,
+            fontFamily: cell?.font,
             fontWeight: cell?.bold ? 700 : undefined,
             fontSize: cell?.size ? `${cell.size}px` : "11px",
+            color: cell?.color ? `#${cell.color.slice(-6)}` : undefined,
             justifyContent: cell?.align === "center" ? "center" : cell?.align === "right" ? "flex-end" : "flex-start",
             textAlign: cell?.align === "center" ? "center" : cell?.align === "right" ? "right" : "left",
             whiteSpace: cell?.wrap ? "pre-wrap" : "nowrap",
@@ -149,9 +162,10 @@ function SheetGrid({
             cell={cell}
             text={shown.text}
             editable={editable}
-            status={status}
+            choices={choices}
             date={date}
-            statuses={statuses}
+            quiet={long && editing !== addr}
+            onOpen={() => setEditing(addr)}
             onChange={onChange}
           />
         </div>,
@@ -160,7 +174,7 @@ function SheetGrid({
   }
   return (
     <div
-      className="controlled-list-sheet"
+      className={long ? "controlled-list-sheet controlled-list-long" : "controlled-list-sheet"}
       data-testid={`controlled-list-${sheet.name.trim()}`}
       role="grid"
       aria-label={sheet.name.trim()}
@@ -180,29 +194,36 @@ function CellBody({
   cell,
   text,
   editable,
-  status,
+  choices,
   date,
-  statuses,
+  quiet,
+  onOpen,
   onChange,
 }: {
   addr: string;
   cell: StoredCell | undefined;
   text: string;
   editable: boolean;
-  status: boolean;
+  choices: string[] | null;
   date: boolean;
-  statuses: string[];
+  quiet: boolean;
+  onOpen: () => void;
   onChange: (addr: string, value: string | number | null) => void;
 }) {
-  if (!editable) {
-    return <span className="controlled-list-screen-value">{text}</span>;
+  if (!editable || quiet) {
+    if (!editable) return <span className="controlled-list-screen-value">{text}</span>;
+    return (
+      <button type="button" className="controlled-list-screen-value controlled-list-pick" onClick={onOpen}>
+        {text || " "}
+      </button>
+    );
   }
   const current = typeof cell?.v === "string" || typeof cell?.v === "number" ? cell.v : "";
-  const options = status && current && !statuses.includes(String(current)) ? [String(current), ...statuses] : statuses;
+  const options = choices && current !== "" && !choices.includes(String(current)) ? [String(current), ...choices] : choices ?? [];
   return (
     <>
       <span className="controlled-list-print-value">{text}</span>
-      {status ? (
+      {choices ? (
         <select className="controlled-list-editor" aria-label={addr} value={current === "" ? "" : String(current)} onChange={(event) => onChange(addr, event.target.value || null)}>
           <option value="" />
           {options.map((option) => (
@@ -228,9 +249,7 @@ function CellBody({
 export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) {
   const toast = useToast();
   const queryClient = useQueryClient();
-  const surface = recordSurface(
-    listKey === "lst-eqp-001" ? "/calibration/master-list" : listKey === "lst-gen-003" ? "/documents/laboratory-scope" : "/documents/master-list",
-  );
+  const surface = recordSurface(LIST_ROUTES[listKey]);
   const canEdit = useCanEditSurface(surface);
   const list = useQuery({
     queryKey: ["controlled-list", listKey],

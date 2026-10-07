@@ -15,6 +15,19 @@ export interface StoredCell {
   align?: string;
   wrap?: boolean;
   comment?: string;
+  /** Face when it is not Aptos Narrow. */
+  font?: string;
+  /** ARGB font color when the cell is not the theme default. */
+  color?: string;
+}
+
+/** An Excel list dropdown covering a rectangle of cells. */
+export interface SheetList {
+  c1: string;
+  c2: string;
+  r1: number;
+  r2: number;
+  options: string[];
 }
 
 export interface StoredSheet {
@@ -25,6 +38,10 @@ export interface StoredSheet {
   rowHeights: Record<string, number>;
   merges: string[];
   cells: Record<string, StoredCell>;
+  /** Dropdowns. Later lists win when two cover the same cell. */
+  lists?: SheetList[];
+  /** Per-cell border codes, LRTB, each t (thin), m (medium), or - (none). */
+  boxes?: Record<string, string>;
 }
 
 export type DueTone = "overdue" | "soon";
@@ -143,6 +160,20 @@ export function shownCell(sheet: StoredSheet, addr: string, today = new Date()):
   return { text: formatValue(cell.v, cell.nf), tone: null };
 }
 
+/** Dropdown choices for one cell, or null when the cell is free text. */
+export function listOptions(sheet: StoredSheet, addr: string): string[] | null {
+  if (!sheet.lists?.length) return null;
+  const { col, row } = parseAddr(addr);
+  const index = columnIndex(col);
+  let found: string[] | null = null;
+  for (const list of sheet.lists) {
+    if (row < list.r1 || row > list.r2) continue;
+    if (index < columnIndex(list.c1) || index > columnIndex(list.c2)) continue;
+    found = list.options;
+  }
+  return found;
+}
+
 export function textOf(value: string | number | null | undefined): string {
   if (value == null) return "";
   return String(value).trim();
@@ -188,7 +219,53 @@ export function deleteSheetRow(sheet: StoredSheet, deletedRow: number): StoredSh
     rowHeights[String(row > deletedRow ? row - 1 : row)] = height;
   }
   const merges = sheet.merges.map((merge) => shiftMerge(merge, deletedRow)).filter((merge): merge is string => Boolean(merge));
-  return { ...sheet, maxRow: Math.max(1, sheet.maxRow - 1), cells, rowHeights, merges };
+  const lists = sheet.lists
+    ?.map((list) => {
+      const span = shiftMerge(`${list.c1}${list.r1}:${list.c2}${list.r2}`, deletedRow);
+      if (!span) return null;
+      const [start, end] = span.split(":");
+      if (!start || !end) return null;
+      const a = parseAddr(start);
+      const b = parseAddr(end);
+      return { ...list, c1: a.col, r1: a.row, c2: b.col, r2: b.row };
+    })
+    .filter((list): list is SheetList => Boolean(list));
+  const boxes: Record<string, string> = {};
+  for (const [addr, box] of Object.entries(sheet.boxes ?? {})) {
+    const { col, row } = parseAddr(addr);
+    if (row === deletedRow) continue;
+    boxes[cellAddr(col, row > deletedRow ? row - 1 : row)] = box;
+  }
+  return {
+    ...sheet,
+    maxRow: Math.max(1, sheet.maxRow - 1),
+    cells,
+    rowHeights,
+    merges,
+    lists,
+    boxes: sheet.boxes ? boxes : undefined,
+  };
+}
+
+/** Give a newly appended row the dropdowns used on the rows above it, without widening older ranges. */
+export function coverNewRow(sheet: StoredSheet): StoredSheet {
+  if (!sheet.lists?.length) return sheet;
+  const lists = sheet.lists.map((list) => ({ ...list, options: [...list.options] }));
+  const row = sheet.maxRow;
+  const added: SheetList[] = [];
+  for (let col = 1; col <= sheet.maxCol; col += 1) {
+    const letter = columnLetter(col);
+    const covered = lists.some((list) => row >= list.r1 && row <= list.r2 && col >= columnIndex(list.c1) && col <= columnIndex(list.c2));
+    if (covered) continue;
+    let best: SheetList | undefined;
+    for (const list of lists) {
+      if (col < columnIndex(list.c1) || col > columnIndex(list.c2)) continue;
+      if (!best || list.r2 > best.r2) best = list;
+    }
+    if (!best) continue;
+    added.push({ c1: letter, c2: letter, r1: row, r2: row, options: [...best.options] });
+  }
+  return added.length === 0 ? sheet : { ...sheet, lists: [...lists, ...added] };
 }
 
 function singleRowMerges(sheet: StoredSheet, row: number): string[] {

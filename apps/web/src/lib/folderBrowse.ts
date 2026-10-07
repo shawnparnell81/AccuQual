@@ -132,8 +132,8 @@ export function blankFormsFolderHref(): string {
  */
 export const SEEDED_FORMS_DRAWER = "Forms & Templates";
 
-/** Living controlled lists filed in the Quality Manual. Opening one edits the grid in the app. */
-const LIVING_LIST_PATHS = new Set(["/documents/master-list", "/calibration/master-list", "/documents/laboratory-scope"]);
+/** Living controlled lists. Opening one edits the grid in the app. */
+const LIVING_LIST_PATHS = new Set(["/documents/master-list", "/calibration/master-list", "/documents/laboratory-scope", "/documents/development-log"]);
 
 export function isLivingListPath(linkedPath: string | null | undefined): boolean {
   if (!linkedPath) return false;

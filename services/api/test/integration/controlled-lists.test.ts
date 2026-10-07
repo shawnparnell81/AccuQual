@@ -92,6 +92,9 @@ describe("living controlled lists API", () => {
     expect(folders.find((folder) => folder.parentId === manual?.id && folder.linkedPath === "/documents/master-list")?.name).toBe("Master Document List");
     expect(folders.find((folder) => folder.parentId === manual?.id && folder.linkedPath === "/calibration/master-list")?.name).toBe("Master Equipment List");
     expect(folders.find((folder) => folder.parentId === manual?.id && folder.linkedPath === "/documents/laboratory-scope")?.name).toBe("Scope of Laboratory Activities");
+    const projects = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Test Data Projects");
+    expect(folders.find((folder) => folder.parentId === projects?.id && folder.linkedPath === "/documents/development-log")?.name).toBe("LST-DEV-001");
+    expect(folders.some((folder) => folder.parentId != null && folder.parentId !== projects?.id && folder.linkedPath === "/documents/development-log")).toBe(false);
 
     const [oldCopy] = await db.insert(documents).values({ title: "Master Equipment List", status: "approved" }).returning();
     const [unrelated] = await db.insert(documents).values({ title: `Torque procedure ${suffix}`, status: "approved" }).returning();
@@ -108,6 +111,12 @@ describe("living controlled lists API", () => {
       subjectRoute: "/documents/laboratory-scope",
     });
     await db.insert(equipment).values({ name: `Bench ${suffix}`, serialNumber: "SN", location: "Lab", metadata: { assetId: `ASSET-${suffix}` } });
+    const [devCopy] = await db.insert(documents).values({ title: "Development Log", status: "approved" }).returning();
+    const [devUpload] = await db
+      .insert(documentFolders)
+      .values({ name: "Development Log.xlsx", parentId: projects!.id, documentId: devCopy!.id, pdfPath: null })
+      .returning();
+    const [devBlank] = await db.insert(documentFolders).values({ name: "LST-DEV-001", parentId: blanks!.id }).returning();
 
     const cleaned = await request(app).get("/controlled-lists/lst-eqp-001").set("Authorization", `Bearer ${token}`);
     expect(cleaned.status).toBe(200);
@@ -124,6 +133,19 @@ describe("living controlled lists API", () => {
     expect(await db.select().from(documentFolders).where(eq(documentFolders.id, blankNode!.id))).toEqual([]);
     expect(await db.select().from(documentFolders).where(eq(documentFolders.id, filled!.id))).toHaveLength(1);
     expect(await db.select().from(controlledFormTemplates).where(eq(controlledFormTemplates.formKey, `lst-blank-${suffix}`))).toEqual([]);
+    expect(await db.select().from(documents).where(eq(documents.id, devCopy!.id))).toEqual([]);
+    expect(await db.select().from(documentFolders).where(eq(documentFolders.id, devUpload!.id))).toEqual([]);
+    expect(await db.select().from(documentFolders).where(eq(documentFolders.id, devBlank!.id))).toEqual([]);
+    const log = await request(app).get("/controlled-lists/lst-dev-001").set("Authorization", `Bearer ${token}`);
+    expect(log.status).toBe(200);
+    expect(log.body.title).toBe("LST-DEV-001");
+    expect(log.body.revision).toBe("B");
+    expect(log.body.sheets[0].cells.A1.v).toBe("DEVELOPMENT LOG (REGISTER)");
+    expect(log.body.sheets[0].cells.C2.v).toBe("Location: X:\\ISO Compliance Documents\\06_Test_Data_Projects");
+    const filed = await request(app).get("/document-folders").set("Authorization", `Bearer ${token}`);
+    const filedFolders = filed.body as { name: string; parentId: number | null; linkedPath?: string | null }[];
+    const filedProjects = filedFolders.find((folder) => folder.parentId === iso?.id && folder.name === "Test Data Projects");
+    expect(filedFolders.find((folder) => folder.parentId === filedProjects?.id && folder.linkedPath === "/documents/development-log")?.name).toBe("LST-DEV-001");
     expect(await db.select().from(controlledLists).where(eq(controlledLists.listKey, "lst-eqp-001"))).toHaveLength(1);
 
     const second = await request(app).get("/document-folders").set("Authorization", `Bearer ${token}`);
