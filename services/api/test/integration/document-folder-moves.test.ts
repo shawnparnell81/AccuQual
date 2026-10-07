@@ -65,6 +65,7 @@ describe("ISO main folders and moving what is already filed", () => {
     expect(nestedStandards.length).toBeGreaterThan(0);
     expect(children.some((folder) => folder.name === "Quality")).toBe(true);
     expect(children.some((folder) => folder.name === "Blank Forms Templates")).toBe(true);
+    expect(children.some((folder) => folder.name === "Blank Form Templates")).toBe(false);
 
     const master = childNamed(folders, iso!.id, "Master Source Files");
     const reordered = await request(app).patch(`/document-folders/${master!.id}`).set("Authorization", `Bearer ${qualityToken}`).send({ sortOrder: 40 });
