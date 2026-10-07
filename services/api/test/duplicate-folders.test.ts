@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest";
 import { COMPANY_DOCUMENT_FOLDERS } from "../src/modules/document-folders/companyDocumentFolders.js";
 import { DEFAULT_DOCUMENT_FOLDERS } from "../src/modules/document-folders/defaultDocumentFolders.js";
 import { ISO_ROOT_NAME, MAIN_ISO_FOLDER_NAMES } from "../src/modules/document-folders/mainIsoFolders.js";
-import { CANONICAL_FOLDER_HOMES, planDuplicateFolderMerges, repeatedSeedFolderNames, type MergeFolder } from "../src/modules/document-folders/duplicateFolders.js";
+import {
+  CANONICAL_FOLDER_HOMES,
+  namesOutsideBlankDrawers,
+  planBlankShortcutReturns,
+  planBlankTopicRenames,
+  planDuplicateFolderMerges,
+  repeatedSeedFolderNames,
+  type MergeFolder,
+} from "../src/modules/document-folders/duplicateFolders.js";
 
 const options = {
   isoName: ISO_ROOT_NAME,
@@ -91,7 +99,7 @@ describe("duplicate folder merge plan", () => {
     expect(ids(planDuplicateFolderMerges(folders, options))).toEqual([[4, 2]]);
   });
 
-  it("folds a blank-template topic into the company folder and leaves the hidden living-list drawer alone", () => {
+  it("leaves a blank-template topic in place and does not fold the hidden living-list drawer", () => {
     const folders: MergeFolder[] = [
       { id: 1, name: "ISO Compliance Documents", parentId: null },
       { id: 2, name: "Quality", parentId: 1 },
@@ -103,7 +111,29 @@ describe("duplicate folder merge plan", () => {
       { id: 8, name: "Calibration", parentId: 3 },
       { id: 9, name: "Calibration", parentId: 6 },
     ];
-    expect(ids(planDuplicateFolderMerges(folders, options))).toEqual([[4, 5]]);
+    expect(ids(planDuplicateFolderMerges(folders, options))).toEqual([]);
+    const drawers = ["Blank Forms Templates", "Blank Form Templates"];
+    expect(planBlankTopicRenames(folders, 3, ["Document Control", "Calibration"], drawers)).toEqual([
+      { folderId: 4, fromName: "Document Control", toName: "Document Control Forms" },
+    ]);
+    const outside = namesOutsideBlankDrawers(folders, drawers);
+    expect(
+      planBlankShortcutReturns(
+        [
+          ...folders,
+          { id: 10, name: "Document Change Request", parentId: 5, linkedPath: "/blank-forms/start/dcr" },
+          { id: 11, name: "CSA VALIDATION REPORT", parentId: 8, linkedPath: "/blank-forms/start/frm-val-001" },
+          { id: 12, name: "Training record", parentId: 1, linkedPath: "/blank-forms/start/training-record" },
+        ],
+        3,
+        (folder) => (folder.linkedPath?.startsWith("/blank-forms/start/") ? folder.linkedPath.slice("/blank-forms/start/".length) : null),
+        (formKey) => (formKey === "dcr" ? "Document Control" : formKey === "training-record" ? "Training" : formKey === "frm-val-001" ? "Validation" : null),
+        outside,
+      ),
+    ).toEqual([
+      { shortcutId: 10, formKey: "dcr", topic: "Document Control", folderName: "Document Control Forms" },
+      { shortcutId: 12, formKey: "training-record", topic: "Training", folderName: "Training" },
+    ]);
   });
 
   it("folds Calibration Certificates into the Quality equipment drawer", () => {

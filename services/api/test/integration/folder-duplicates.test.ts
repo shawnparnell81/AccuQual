@@ -10,6 +10,7 @@ import { db } from "../../src/db/index.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { company } from "../../src/drizzle/schema/company.js";
 import { documentFolders } from "../../src/drizzle/schema/documentFolders.js";
+import { controlledFormTemplates } from "../../src/drizzle/schema/controlledForms.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 
@@ -219,5 +220,79 @@ describe("one folder in one place, and library pool moves", () => {
     expect(after.find((folder) => folder.id === drawing!.id)?.parentId).toBe(keptHome!.id);
     expect(after.some((folder) => folder.id === extraHome!.id || folder.id === standards.id)).toBe(false);
     expect(after.some((folder) => folder.parentId === iso.id && folder.name === "Engineering Standards")).toBe(false);
+  });
+
+  it("renames a clashing blank topic, puts blanks back after an earlier fold, and then leaves a later move or rename alone", async () => {
+    await clearMergeFlag();
+    const opened = await tree();
+    const iso = opened.find((folder) => folder.parentId === null && folder.name === "ISO Compliance Documents")!;
+    const shelf = childNamed(opened, iso.id, "Blank Forms Templates")!;
+    const engineering = childNamed(opened, iso.id, "Engineering")!;
+    const forms = childNamed(opened, shelf.id, "Engineering Forms");
+    expect(forms).toBeTruthy();
+    expect(childNamed(opened, shelf.id, "Engineering")).toBeUndefined();
+    expect(childNamed(opened, shelf.id, "Training Forms")).toBeTruthy();
+    expect(childNamed(opened, shelf.id, "Document Control Forms")).toBeTruthy();
+    expect(childNamed(opened, shelf.id, "Validation")?.name).toBe("Validation");
+    const shortcuts = opened.filter((folder) => folder.parentId === forms!.id && folder.linkedPath?.startsWith("/blank-forms/start/"));
+    expect(shortcuts.length).toBeGreaterThan(0);
+    expect(opened.filter((folder) => folder.linkedPath?.startsWith("/blank-forms/start/")).every((folder) => {
+      const byId = new Map(opened.map((row) => [row.id, row]));
+      let current: FolderRow | undefined = folder;
+      const seen = new Set<number>();
+      while (current && !seen.has(current.id)) {
+        seen.add(current.id);
+        if (current.id === shelf.id) return true;
+        current = current.parentId == null ? undefined : byId.get(current.parentId);
+      }
+      return false;
+    })).toBe(true);
+
+    await clearMergeFlag();
+    await db.update(documentFolders).set({ name: "Engineering" }).where(eq(documentFolders.id, forms!.id));
+    const renamed = await tree();
+    const shelfAfter = childNamed(renamed, iso.id, "Blank Forms Templates")!;
+    expect(childNamed(renamed, shelfAfter.id, "Engineering")).toBeUndefined();
+    expect(childNamed(renamed, shelfAfter.id, "Engineering Forms")?.id).toBe(forms!.id);
+    expect(childNamed(renamed, iso.id, "Engineering")?.id).toBe(engineering.id);
+    const history = await request(app).get(`/audit-trail/DocumentFolder/${forms!.id}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(history.status).toBe(200);
+    const line = (history.body as { changes?: { summary?: string; event?: string } }[]).find((row) => row.changes?.event === "renamed" && row.changes.summary?.includes("Engineering Forms"));
+    expect(line?.changes?.summary).toBe('Renamed the folder from "ISO Compliance Documents / Blank Forms Templates / Engineering" to "ISO Compliance Documents / Blank Forms Templates / Engineering Forms".');
+
+    const engineeringForms = childNamed(renamed, shelfAfter.id, "Engineering Forms")!;
+    const movedOut = renamed.filter((folder) => folder.parentId === engineeringForms.id && folder.linkedPath?.startsWith("/blank-forms/start/"));
+    expect(movedOut.length).toBeGreaterThan(0);
+    for (const shortcut of movedOut) {
+      await db.update(documentFolders).set({ parentId: engineering.id }).where(eq(documentFolders.id, shortcut.id));
+    }
+    await db.update(controlledFormTemplates).set({ folderId: engineering.id }).where(eq(controlledFormTemplates.folderId, engineeringForms.id));
+    await db.delete(documentFolders).where(eq(documentFolders.id, engineeringForms.id));
+    const [flagged] = await db.select({ profile: company.profile }).from(company);
+    expect(flagged?.profile?.folderNamesUnified).toBe(true);
+
+    const restored = await tree();
+    const shelfRestored = childNamed(restored, iso.id, "Blank Forms Templates")!;
+    const home = childNamed(restored, shelfRestored.id, "Engineering Forms");
+    expect(home).toBeTruthy();
+    expect(childNamed(restored, iso.id, "Engineering")?.id).toBe(engineering.id);
+    for (const shortcut of movedOut) {
+      expect(restored.find((folder) => folder.id === shortcut.id)?.parentId).toBe(home!.id);
+    }
+    const moveHistory = await request(app).get(`/audit-trail/DocumentFolder/${movedOut[0]!.id}`).set("Authorization", `Bearer ${qualityToken}`);
+    const moveLine = (moveHistory.body as { changes?: { summary?: string; event?: string } }[]).find((row) => row.changes?.event === "moved" && row.changes.summary?.includes("blank form template"));
+    expect(moveLine?.changes?.summary).toMatch(/Moved the blank form template ".+" from ISO Compliance Documents \/ Engineering → ISO Compliance Documents \/ Blank Forms Templates \/ Engineering Forms\./);
+
+    const logs = restored.find((folder) => folder.name === "Quality Logs")!;
+    await db.update(documentFolders).set({ parentId: logs.id }).where(eq(documentFolders.id, movedOut[0]!.id));
+    const stayed = await tree();
+    expect(stayed.find((folder) => folder.id === movedOut[0]!.id)?.parentId).toBe(logs.id);
+
+    const userRename = await request(app).patch(`/document-folders/${home!.id}`).set("Authorization", `Bearer ${qualityToken}`).send({ name: "Engineering" });
+    expect(userRename.status).toBe(200);
+    const stuck = await tree();
+    expect(stuck.find((folder) => folder.id === home!.id)?.name).toBe("Engineering");
+    expect(childNamed(stuck, shelfRestored.id, "Engineering Forms")).toBeUndefined();
+    expect(childNamed(stuck, iso.id, "Engineering")?.id).toBe(engineering.id);
   });
 });

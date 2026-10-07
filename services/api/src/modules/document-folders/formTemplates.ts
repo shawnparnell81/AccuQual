@@ -19,7 +19,9 @@ import {
   type FormStart,
   type FormTemplateSeed,
 } from "./formFiling.js";
-import { ensureMainIsoFolders, folderLocationLabel } from "./mainIsoFolders.js";
+import { ensureCompanyDocumentFolders } from "./companyDocumentFolders.js";
+import { blankTopicFolderName, namesOutsideBlankDrawers } from "./duplicateFolders.js";
+import { folderLocationLabel } from "./mainIsoFolders.js";
 
 const PREVIOUS_ISO_ROOT = "ISO Compliance";
 const PREVIOUS_NUMBERED_BLANK_FOLDER = "03_Blank_Forms_Templates";
@@ -62,6 +64,19 @@ function insideFolder(byId: Map<number, FolderRow>, folderId: number, ancestorId
   return false;
 }
 
+const BLANK_DRAWERS = [BLANK_FORMS_FOLDER, PREVIOUS_BLANK_FORMS_FOLDER];
+
+function topicFolderLabel(topic: string, folders: FolderRow[]): string {
+  return blankTopicFolderName(topic, namesOutsideBlankDrawers(folders, BLANK_DRAWERS));
+}
+
+/** The shelf folder for this topic, whether it still has the old name or the Forms name. */
+function reusableTopicFolder(folders: FolderRow[], homeId: number, topic: string): FolderRow | undefined {
+  const desired = topicFolderLabel(topic, folders);
+  const children = folders.filter((folder) => folder.parentId === homeId && !folder.linkedPath);
+  return children.find((folder) => folder.name === desired) ?? children.find((folder) => folder.name === topic);
+}
+
 function sameKeys(left: string[] | undefined, right: string[]): boolean {
   if (!left || left.length !== right.length) return false;
   const sorted = [...left].sort();
@@ -80,7 +95,7 @@ export async function ensureFormTemplates(db: Db, performedBy?: number): Promise
   if (RETIRED_FORM_KEYS.length > 0) {
     await db.delete(controlledFormTemplates).where(inArray(controlledFormTemplates.formKey, [...RETIRED_FORM_KEYS]));
   }
-  const all = await db.select().from(documentFolders);
+  let all = await db.select().from(documentFolders);
 
   const legacyIso = all.find((folder) => folder.parentId === null && folder.name === PREVIOUS_ISO_ROOT);
   const namedIso = all.find((folder) => folder.name === ISO_DOCUMENTS_FOLDER);
@@ -102,8 +117,7 @@ export async function ensureFormTemplates(db: Db, performedBy?: number): Promise
     numbered.name = PREVIOUS_BLANK_FORMS_FOLDER;
   }
 
-  const withMain = await ensureMainIsoFolders(db, all);
-  for (const folder of withMain) remember(all, folder);
+  all = await ensureCompanyDocumentFolders(db, all);
 
   const [profileRow] = await db.select({ id: company.id, profile: company.profile }).from(company).limit(1);
   const ready = profileRow?.profile?.blankFormsTemplatesReady === true;
@@ -156,16 +170,22 @@ export async function ensureFormTemplates(db: Db, performedBy?: number): Promise
     for (const topic of topics) {
       const needsTopic = fillableSeeds.some((seed) => seed.topic === topic && (!ready || !placed.has(seed.formKey) || topicFolder.get(topic) != null));
       if (!topicFolder.has(topic) && needsTopic && (!ready || fillableSeeds.some((seed) => seed.topic === topic && !placed.has(seed.formKey)))) {
-        const created = await findOrCreateChild(db, home.id, topic, topicOrder);
-        remember(all, created);
-        topicFolder.set(topic, created.id);
+        const existingTopic = reusableTopicFolder(all, home.id, topic);
+        if (existingTopic) {
+          topicFolder.set(topic, existingTopic.id);
+        } else {
+          const created = await findOrCreateChild(db, home.id, topicFolderLabel(topic, all), topicOrder);
+          remember(all, created);
+          topicFolder.set(topic, created.id);
+        }
       }
       topicOrder += 1;
     }
     if (!ready) {
       let order = 0;
       for (const topic of topics) {
-        const row = all.find((folder) => folder.parentId === home!.id && folder.name === topic && !folder.linkedPath);
+        const desired = topicFolderLabel(topic, all);
+        const row = all.find((folder) => folder.parentId === home!.id && !folder.linkedPath && (folder.name === desired || folder.name === topic));
         if (!row) continue;
         if (row.sortOrder !== order) {
           await db.update(documentFolders).set({ sortOrder: order, updatedAt: new Date() }).where(eq(documentFolders.id, row.id));
@@ -195,10 +215,16 @@ export async function ensureFormTemplates(db: Db, performedBy?: number): Promise
       existing?.folderId != null && byId().has(existing.folderId) && !excludedFolderIds.has(existing.folderId) && (!home || insideFolder(byId(), existing.folderId, home.id) || (ready && placed.has(seed.formKey)));
     let folderId = currentFolderOk ? existing!.folderId : (topicFolder.get(seed.topic) ?? null);
     if (folderId == null && home && (!ready || !placed.has(seed.formKey))) {
-      const created = await findOrCreateChild(db, home.id, seed.topic);
-      remember(all, created);
-      topicFolder.set(seed.topic, created.id);
-      folderId = created.id;
+      const existingTopic = reusableTopicFolder(all, home.id, seed.topic);
+      if (existingTopic) {
+        topicFolder.set(seed.topic, existingTopic.id);
+        folderId = existingTopic.id;
+      } else {
+        const created = await findOrCreateChild(db, home.id, topicFolderLabel(seed.topic, all));
+        remember(all, created);
+        topicFolder.set(seed.topic, created.id);
+        folderId = created.id;
+      }
     }
     if (!existing) {
       await db.insert(controlledFormTemplates).values({

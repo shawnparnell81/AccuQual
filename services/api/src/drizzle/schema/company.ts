@@ -235,10 +235,12 @@ export const company = pgTable("company", {
      */
     duplicateFoldersMerged?: boolean;
     /**
-     * Set once every folder name has been folded into one home, including
-     * Quality Manual, Engineering Standards, and Procedures. The earlier flag
-     * left those in two places. A folder Shawn creates after this stays.
-     * Company Settings spreads this object. No new column.
+     * Set once every company folder name has been folded into one home,
+     * including Quality Manual, Engineering Standards, and Procedures, and
+     * blank topics that shared a company folder name have been renamed with
+     * " Forms". Blanks stay under Blank Forms Templates. A folder Shawn
+     * creates or renames after this stays. Company Settings spreads this
+     * object. No new column.
      */
     folderNamesUnified?: boolean;
   }>().default({}),

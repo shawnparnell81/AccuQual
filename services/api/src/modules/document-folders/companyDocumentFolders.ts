@@ -4,7 +4,8 @@
  * name is still missing. No schema change: an existing folder under the same
  * parent is left where an admin put it. A name that appears once here is
  * reused if someone moved it, unless that copy sits in the blank-template
- * library. A repeated name there is folded into this drawer on the one-time pass.
+ * library. A blank topic keeps that name, or gains " Forms" when the name
+ * already belongs to a company folder. The blank stays on the shelf.
  * Moving an existing company onto this layout is the job of migration
  * 0094_iso_compliance_folder_tree.
  * Training is its own drawer under ISO, never a child of Quality. A company
@@ -24,8 +25,22 @@ import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js
 import { formFilings } from "../../drizzle/schema/formFilings.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
 import { type DefaultFolderSeed } from "./defaultDocumentFolders.js";
-import { CANONICAL_FOLDER_HOMES, planDuplicateFolderMerges } from "./duplicateFolders.js";
-import { ensureMainIsoFolders, folderLocationLabel, MAIN_ISO_FOLDER_NAMES } from "./mainIsoFolders.js";
+import {
+  BLANK_FORMS_FOLDER,
+  BLANK_TEMPLATE_START_PREFIX,
+  FORM_TEMPLATES,
+  PREVIOUS_BLANK_FORMS_FOLDER,
+  keptOutOfBlankFormsTemplates,
+} from "./formFiling.js";
+import {
+  CANONICAL_FOLDER_HOMES,
+  namesOutsideBlankDrawers,
+  planBlankShortcutReturns,
+  planBlankTopicRenames,
+  planDuplicateFolderMerges,
+  type BlankTopicRename,
+} from "./duplicateFolders.js";
+import { ensureMainIsoFolders, folderLocationLabel, folderRenameAudit, MAIN_ISO_FOLDER_NAMES } from "./mainIsoFolders.js";
 import { retireNamedDocumentFolders } from "./retiredFolderCleanup.js";
 
 /** Blank shelves only. ISO itself is not a shelf: every real folder sits under it. */
@@ -464,14 +479,157 @@ async function removeEmptyWrappers(db: Db, list: FolderRow[], startId: number | 
   return current;
 }
 
+const BLANK_DRAWER_NAMES = [BLANK_FORMS_FOLDER, PREVIOUS_BLANK_FORMS_FOLDER] as const;
+
+function fillableTopics(): string[] {
+  return [...new Set(FORM_TEMPLATES.filter((seed) => !keptOutOfBlankFormsTemplates(seed)).map((seed) => seed.topic))];
+}
+
+function topicForFormKey(formKey: string): string | null {
+  const seed = FORM_TEMPLATES.find((row) => row.formKey === formKey);
+  if (!seed || keptOutOfBlankFormsTemplates(seed) || !seed.start) return null;
+  return seed.topic;
+}
+
+function formKeyOfShortcut(folder: { linkedPath?: string | null }): string | null {
+  if (!folder.linkedPath?.startsWith(BLANK_TEMPLATE_START_PREFIX)) return null;
+  return folder.linkedPath.slice(BLANK_TEMPLATE_START_PREFIX.length);
+}
+
+function resolveBlankShelf(list: FolderRow[], profileShelfId: number | undefined): FolderRow | undefined {
+  const stored = profileShelfId != null ? list.find((folder) => folder.id === profileShelfId) : undefined;
+  if (stored) return stored;
+  const iso = list.find((folder) => folder.parentId == null && folder.name === ISO_FOLDER_NAME);
+  if (!iso) return list.find((folder) => folder.name === BLANK_FORMS_FOLDER);
+  return list.find((folder) => folder.parentId === iso.id && folder.name === BLANK_FORMS_FOLDER);
+}
+
+/** Renames a clashing topic in place. When the Forms name already exists, the old topic folds into it. */
+async function renameBlankTopic(db: Db, list: FolderRow[], rename: BlankTopicRename, performedBy?: number): Promise<FolderRow[]> {
+  const source = list.find((folder) => folder.id === rename.folderId);
+  if (!source || source.name === rename.toName) return list;
+  const sibling = list.find((folder) => folder.parentId === source.parentId && folder.id !== source.id && folder.name === rename.toName);
+  const parentLabel = folderLocationLabel(list, source.parentId);
+  if (!sibling) {
+    await db.update(documentFolders).set({ name: rename.toName, updatedAt: new Date() }).where(eq(documentFolders.id, source.id));
+    await recordAuditTrail(db, {
+      entityType: "DocumentFolder",
+      entityId: source.id,
+      action: "update",
+      performedBy,
+      changes: folderRenameAudit(`${parentLabel} / ${source.name}`, `${parentLabel} / ${rename.toName}`),
+    });
+    return list.map((folder) => (folder.id === source.id ? { ...folder, name: rename.toName } : folder));
+  }
+  const fromLabel = `${parentLabel} / ${source.name}`;
+  const toLabel = `${parentLabel} / ${sibling.name}`;
+  const merged = await mergeDocumentFolder(db, list, source.id, sibling.id);
+  await recordAuditTrail(db, {
+    entityType: "DocumentFolder",
+    entityId: sibling.id,
+    action: "update",
+    performedBy,
+    changes: {
+      event: "merged",
+      summary: `Merged the duplicate folder "${source.name}" from ${fromLabel} → ${toLabel}. Subfolders and saved items moved with it.`,
+      name: source.name,
+      from: fromLabel,
+      to: toLabel,
+      sourceId: source.id,
+      destId: sibling.id,
+    },
+  });
+  return merged;
+}
+
+async function applyBlankTopicRenames(db: Db, list: FolderRow[], shelfId: number, performedBy?: number): Promise<FolderRow[]> {
+  let current = list;
+  for (const rename of planBlankTopicRenames(current, shelfId, fillableTopics(), BLANK_DRAWER_NAMES)) {
+    current = await renameBlankTopic(db, current, rename, performedBy);
+  }
+  return current;
+}
+
 /**
- * Folds every repeated folder name into one home, once per company.
+ * Puts blank shortcuts back under Blank Forms Templates.
+ * When `onlyWhenTopicMissing` is set, a shortcut stays where someone moved it
+ * once the topic folder is already on the shelf. The earlier fold deleted that
+ * folder, so those blanks still come back.
+ */
+async function returnMisfiledBlanks(db: Db, list: FolderRow[], shelfId: number, performedBy: number | undefined, onlyWhenTopicMissing: boolean): Promise<FolderRow[]> {
+  const outside = namesOutsideBlankDrawers(list, BLANK_DRAWER_NAMES);
+  const planned = planBlankShortcutReturns(list, shelfId, formKeyOfShortcut, topicForFormKey, outside);
+  const byTopic = new Map<string, typeof planned>();
+  for (const item of planned) {
+    const group = byTopic.get(item.topic) ?? [];
+    group.push(item);
+    byTopic.set(item.topic, group);
+  }
+
+  let current = list;
+  for (const [topic, items] of byTopic) {
+    const folderName = items[0]?.folderName;
+    if (!folderName) continue;
+    let home = current.find((folder) => folder.parentId === shelfId && !folder.linkedPath && (folder.name === folderName || folder.name === topic));
+    if (onlyWhenTopicMissing && home) continue;
+    if (home && home.name !== folderName) {
+      current = await renameBlankTopic(db, current, { folderId: home.id, fromName: home.name, toName: folderName }, performedBy);
+      home = current.find((folder) => folder.id === home!.id && folder.name === folderName) ?? current.find((folder) => folder.parentId === shelfId && folder.name === folderName && !folder.linkedPath);
+    }
+    if (!home) {
+      const siblings = current.filter((folder) => folder.parentId === shelfId);
+      const [created] = await db.insert(documentFolders).values({ name: folderName, parentId: shelfId, sortOrder: siblings.length }).returning();
+      if (!created) continue;
+      current = [...current, created];
+      home = created;
+    }
+    if (!home) continue;
+    for (const item of items) {
+      const shortcut = current.find((folder) => folder.id === item.shortcutId);
+      if (!shortcut || shortcut.parentId === home.id) continue;
+      const fromLabel = folderLocationLabel(current, shortcut.parentId);
+      const toLabel = `${folderLocationLabel(current, shelfId)} / ${home.name}`;
+      await db.update(documentFolders).set({ parentId: home.id, updatedAt: new Date() }).where(eq(documentFolders.id, shortcut.id));
+      await db.update(controlledFormTemplates).set({ folderId: home.id }).where(eq(controlledFormTemplates.formKey, item.formKey));
+      current = current.map((folder) => (folder.id === shortcut.id ? { ...folder, parentId: home!.id } : folder));
+      await recordAuditTrail(db, {
+        entityType: "DocumentFolder",
+        entityId: shortcut.id,
+        action: "update",
+        performedBy,
+        changes: {
+          event: "moved",
+          summary: `Moved the blank form template "${shortcut.name}" from ${fromLabel} → ${toLabel}.`,
+          name: shortcut.name,
+          from: fromLabel,
+          to: toLabel,
+          fromParentId: shortcut.parentId,
+          toParentId: home.id,
+        },
+      });
+    }
+  }
+  return current;
+}
+
+/**
+ * Folds every repeated company folder name into one home, once per company.
+ * Blank topic folders stay under Blank Forms Templates. A topic whose name
+ * matches a company folder is renamed with " Forms" on that same pass.
  * A main drawer Shawn deleted is not recreated. Opening Documents again
  * does not run the fold a second time, so a pair created later stays.
+ * A company that already ran the fold and had blanks moved out gets those
+ * blanks back. A blank moved after that stays where it was put.
  */
 export async function mergeDuplicateFoldersOnce(db: Db, list: FolderRow[], performedBy?: number): Promise<FolderRow[]> {
   const [row] = await db.select({ id: company.id, profile: company.profile }).from(company).limit(1);
-  if (!row || row.profile?.folderNamesUnified === true) return list;
+  if (!row) return list;
+
+  if (row.profile?.folderNamesUnified === true) {
+    const shelf = resolveBlankShelf(list, row.profile.blankFormsTemplatesFolderId);
+    if (!shelf) return list;
+    return returnMisfiledBlanks(db, list, shelf.id, performedBy, true);
+  }
 
   const plan = planDuplicateFolderMerges(list, {
     isoName: ISO_FOLDER_NAME,
@@ -506,6 +664,12 @@ export async function mergeDuplicateFoldersOnce(db: Db, list: FolderRow[], perfo
         destId: dest.id,
       },
     });
+  }
+
+  const shelf = resolveBlankShelf(current, row.profile?.blankFormsTemplatesFolderId);
+  if (shelf) {
+    current = await applyBlankTopicRenames(db, current, shelf.id, performedBy);
+    current = await returnMisfiledBlanks(db, current, shelf.id, performedBy, false);
   }
 
   const [fresh] = await db.select({ id: company.id, profile: company.profile }).from(company).limit(1);

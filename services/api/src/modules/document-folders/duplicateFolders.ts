@@ -5,10 +5,10 @@
  * a main ISO drawer stays directly under ISO Compliance Documents,
  * and any other repeated seed name stays on the path listed in
  * CANONICAL_FOLDER_HOMES. A deleted main drawer is not recreated;
- * the remaining copy is the home. A Blank Forms Templates topic that
- * repeats a company folder folds into that folder, and the shortcut
- * moves with it. The older Blank Form Templates drawer is left alone:
- * the living Quality Manual lists stay there until their own change.
+ * the remaining copy is the home. Blank Forms Templates keeps every
+ * blank. A topic there is not folded into a company folder. The older
+ * Blank Form Templates drawer is left alone: the living Quality Manual
+ * lists stay there until their own change.
  */
 
 export interface MergeFolder {
@@ -32,7 +32,7 @@ export interface SeedNode {
 
 export interface DuplicateMergeOptions {
   isoName: string;
-  /** Topic shelf whose repeated names fold into the company folder. */
+  /** Topic shelf. Its folders stay put and are not folded into a company folder. */
   blankShelfNames: readonly string[];
   /** Hidden drawer that is not folded. Living lists stay on it. */
   legacyDrawerNames: readonly string[];
@@ -210,7 +210,10 @@ export function planDuplicateFolderMerges(folders: MergeFolder[], options: Dupli
   }
 
   const listed = containers.filter(
-    (folder) => !usedSources.has(folder.id) && !inBlankLibrary(folder, folders, options.legacyDrawerNames),
+    (folder) =>
+      !usedSources.has(folder.id) &&
+      !inBlankLibrary(folder, folders, options.legacyDrawerNames) &&
+      !inBlankLibrary(folder, folders, options.blankShelfNames),
   );
   const byName = new Map<string, MergeFolder[]>();
   for (const folder of listed) {
@@ -222,13 +225,11 @@ export function planDuplicateFolderMerges(folders: MergeFolder[], options: Dupli
   for (const [name, copies] of byName) {
     const eligible = copies.filter((folder) => !usedSources.has(folder.id));
     if (eligible.length < 2) continue;
-    const companyCopies = eligible.filter((folder) => !inBlankLibrary(folder, folders, options.blankShelfNames));
-    const pool = companyCopies.length > 0 ? companyCopies : eligible;
-    const underIso = iso ? pool.filter((folder) => folder.parentId === iso.id).sort(byId) : [];
+    const underIso = iso ? eligible.filter((folder) => folder.parentId === iso.id).sort(byId) : [];
     const home = options.canonicalHomes[name];
-    const atHome = home ? pool.filter((folder) => samePath(parentPath(folders, folder), home)).sort(byId) : [];
-    const withPayload = pool.filter((folder) => subtreeHasPayload(folder.id, folders, children)).sort(byId);
-    const oldest = [...pool].sort(byId);
+    const atHome = home ? eligible.filter((folder) => samePath(parentPath(folders, folder), home)).sort(byId) : [];
+    const withPayload = eligible.filter((folder) => subtreeHasPayload(folder.id, folders, children)).sort(byId);
+    const oldest = [...eligible].sort(byId);
     let dest: MergeFolder | undefined;
     if (mainIso.has(name)) {
       dest = underIso[0] ?? atHome[0] ?? withPayload[0] ?? oldest[0];
@@ -236,7 +237,6 @@ export function planDuplicateFolderMerges(folders: MergeFolder[], options: Dupli
       dest = atHome[0] ?? underIso[0] ?? withPayload[0] ?? oldest[0];
     }
     if (!dest) continue;
-    if (companyCopies.length === 0) continue;
     for (const source of eligible) {
       if (source.id === dest.id) continue;
       add(source.id, dest.id);
@@ -244,4 +244,91 @@ export function planDuplicateFolderMerges(folders: MergeFolder[], options: Dupli
   }
 
   return merges;
+}
+
+/** Appended when a blank-topic folder uses a name a company folder already has. */
+export const BLANK_TOPIC_FORMS_SUFFIX = " Forms";
+
+export interface BlankTopicRename {
+  folderId: number;
+  fromName: string;
+  toName: string;
+}
+
+export interface BlankShortcutReturn {
+  shortcutId: number;
+  formKey: string;
+  topic: string;
+  folderName: string;
+}
+
+/** Container names that are not inside a blank drawer. Those are the names a topic must not repeat. */
+export function namesOutsideBlankDrawers(folders: MergeFolder[], drawerNames: readonly string[]): Set<string> {
+  const names = new Set<string>();
+  for (const folder of folders) {
+    if (inBlankLibrary(folder, folders, drawerNames)) continue;
+    if (!isContainer(folder, folders)) continue;
+    names.add(folder.name);
+  }
+  return names;
+}
+
+/** Shelf folder name for one topic. A clash keeps the blank and changes the folder name. */
+export function blankTopicFolderName(topic: string, outsideNames: ReadonlySet<string>): string {
+  return outsideNames.has(topic) ? `${topic}${BLANK_TOPIC_FORMS_SUFFIX}` : topic;
+}
+
+/**
+ * Direct children of the blank shelf whose name is already a company folder.
+ * Topics that do not clash are left as they are. The hidden living-list drawer
+ * is not a shelf id, so its folders are not renamed.
+ */
+export function planBlankTopicRenames(
+  folders: MergeFolder[],
+  shelfId: number,
+  topics: readonly string[],
+  drawerNames: readonly string[],
+): BlankTopicRename[] {
+  const outside = namesOutsideBlankDrawers(folders, drawerNames);
+  const topicNames = new Set(topics);
+  const renames: BlankTopicRename[] = [];
+  for (const folder of folders) {
+    if (folder.parentId !== shelfId) continue;
+    if (!topicNames.has(folder.name)) continue;
+    if (!isContainer(folder, folders)) continue;
+    const toName = blankTopicFolderName(folder.name, outside);
+    if (toName === folder.name) continue;
+    renames.push({ folderId: folder.id, fromName: folder.name, toName });
+  }
+  return renames.sort((a, b) => a.folderId - b.folderId);
+}
+
+function insideFolder(folders: MergeFolder[], nodeId: number, ancestorId: number): boolean {
+  if (nodeId === ancestorId) return true;
+  return descendsFrom(folders, nodeId, ancestorId);
+}
+
+/** Blank shortcuts that sit outside Blank Forms Templates, with the shelf folder they go back to. */
+export function planBlankShortcutReturns(
+  folders: MergeFolder[],
+  shelfId: number,
+  formKeyOf: (folder: MergeFolder) => string | null,
+  topicOf: (formKey: string) => string | null,
+  outsideNames: ReadonlySet<string>,
+): BlankShortcutReturn[] {
+  const planned: BlankShortcutReturn[] = [];
+  for (const folder of folders) {
+    const formKey = formKeyOf(folder);
+    if (!formKey) continue;
+    if (insideFolder(folders, folder.id, shelfId)) continue;
+    const topic = topicOf(formKey);
+    if (!topic) continue;
+    planned.push({
+      shortcutId: folder.id,
+      formKey,
+      topic,
+      folderName: blankTopicFolderName(topic, outsideNames),
+    });
+  }
+  return planned.sort((a, b) => a.shortcutId - b.shortcutId);
 }
