@@ -132,6 +132,15 @@ export function blankFormsFolderHref(): string {
  */
 export const SEEDED_FORMS_DRAWER = "Forms & Templates";
 
+/** Living controlled lists filed in the Quality Manual. Opening one edits the grid in the app. */
+const LIVING_LIST_PATHS = new Set(["/documents/master-list", "/calibration/master-list", "/documents/laboratory-scope"]);
+
+export function isLivingListPath(linkedPath: string | null | undefined): boolean {
+  if (!linkedPath) return false;
+  const path = linkedPath.split("?")[0] ?? linkedPath;
+  return LIVING_LIST_PATHS.has(path);
+}
+
 /** A module home or blank route, such as `/ncr` or `/qms-forms/document_revision_record`. A saved copy has a record id, or is the single Pareto chart. */
 export function isFiledRecordPath(linkedPath: string | null | undefined): boolean {
   if (!linkedPath) return false;
@@ -139,9 +148,9 @@ export function isFiledRecordPath(linkedPath: string | null | undefined): boolea
   return /\/\d+(?:\/|$)/.test(linkedPath);
 }
 
-/** Uploaded file, controlled document, a saved form, or a blank-template shortcut. A shortcut to a blank module is not saved work. */
+/** Uploaded file, controlled document, a saved form, a blank-template shortcut, or a living list. A shortcut to a blank module is not saved work. */
 export function isSavedDocument<T extends BrowseFolder>(node: T): boolean {
-  return Boolean(node.pdfPath || node.documentId != null || isFiledRecordPath(node.linkedPath) || isBlankTemplateLink(node.linkedPath));
+  return Boolean(node.pdfPath || node.documentId != null || isFiledRecordPath(node.linkedPath) || isBlankTemplateLink(node.linkedPath) || isLivingListPath(node.linkedPath));
 }
 
 function childrenByParent<T extends BrowseFolder>(folders: T[]): Map<number, T[]> {
@@ -242,7 +251,9 @@ export function listFolder<T extends BrowseFolder>(folders: T[], folderId: numbe
 
 /** Where a click on a saved row goes. A blank template opens a fresh copy. A blank-module shortcut is not an openable file. */
 export function openTarget(node: BrowseFolder): string | null {
-  if (node.linkedPath && (isFiledRecordPath(node.linkedPath) || isBlankTemplateLink(node.linkedPath))) return node.linkedPath;
+  if (node.linkedPath && (isFiledRecordPath(node.linkedPath) || isBlankTemplateLink(node.linkedPath) || isLivingListPath(node.linkedPath))) {
+    return isBlankTemplateLink(node.linkedPath) ? node.linkedPath : (node.linkedPath.split("?")[0] ?? node.linkedPath);
+  }
   if (node.documentId != null) return `/documents/${node.documentId}`;
   return null;
 }

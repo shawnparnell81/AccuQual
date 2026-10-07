@@ -57,7 +57,7 @@ describe("ISO Compliance Documents form templates", () => {
     expect(eightD?.subjectRoute).toBe("/8d");
     expect(eightD?.start).toEqual({ createPath: "/8d", openPath: "/8d/{id}", body: {} });
     const linked = templates.filter((form) => form.start == null);
-    expect(linked.map((form) => form.formKey).sort()).toEqual(["frm-msa-001", "frm-par-001", "lst-eqp-001", "lst-gen-001"]);
+    expect(linked.map((form) => form.formKey).sort()).toEqual(["frm-msa-001", "frm-par-001"]);
     expect(templates.find((form) => form.formKey === "frm-psw-001")?.formId).toBe("");
     expect((templates.find((form) => form.formKey === "frm-psw-001") as { fileNamePattern?: string } | undefined)?.fileNamePattern).toBe("PSW_{recordNumber}_{date}");
     expect(templates.find((form) => form.formKey === "frm-msa-001")?.formId).toBe("");
@@ -66,14 +66,11 @@ describe("ISO Compliance Documents form templates", () => {
     expect(templates.find((form) => form.formKey === "frm-fae-001")?.subjectRoute).toBe("/iso-forms/frm-fae-001");
     expect(templates.filter((form) => form.formKey === "frm-psw-001")).toHaveLength(1);
     expect(templates.filter((form) => form.start).every((form) => form.start?.openPath.includes("{id}"))).toBe(true);
-    const equipmentList = templates.find((form) => form.formKey === "lst-eqp-001");
-    const documentList = templates.find((form) => form.formKey === "lst-gen-001");
+    expect(templates.find((form) => form.formKey === "lst-eqp-001" || form.formKey === "lst-gen-001" || form.title === "Scope of Laboratory Activities")).toBeUndefined();
     const auditForm = templates.find((form) => form.formKey === "frm-gen-001");
     const ncrForm = templates.find((form) => form.formKey === "frm-ncr-001");
-    expect(equipmentList?.subjectRoute).toBe("/calibration/master-list");
-    expect(equipmentList?.isoPath).toEqual(["Blank Form Templates", "Calibration"]);
-    expect(documentList?.subjectRoute).toBe("/documents/master-list");
-    expect(documentList?.isoPath).toEqual(["Blank Form Templates", "Document Control"]);
+    expect(keptOutOfBlankFormsTemplates({ formKey: "lst-eqp-001", formId: "LST-EQP-001", title: "Master Equipment List" })).toBe(true);
+    expect(keptOutOfBlankFormsTemplates({ formKey: "lst-gen-001", formId: "LST-GEN-001", title: "Master Document List" })).toBe(true);
     expect(keptOutOfBlankFormsTemplates({ formKey: "lst-gen-003", formId: "LST-GEN-003", title: "Scope of Laboratory Activities" })).toBe(true);
     expect(keptOutOfBlankFormsTemplates({ title: "Master Equipment List" })).toBe(true);
     expect(keptOutOfBlankFormsTemplates({ formKey: "frm-val-001", formId: "FRM-VAL-001", title: "CSA VALIDATION REPORT" })).toBe(false);
@@ -103,11 +100,13 @@ describe("ISO Compliance Documents form templates", () => {
     const blanks = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Blank Forms Templates");
     const legacy = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Blank Form Templates");
     const validation = folders.find((folder) => folder.parentId === blanks?.id && folder.name === "Validation");
+    const manual = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Quality Manual");
     expect(blanks).toBeTruthy();
-    expect(legacy).toBeTruthy();
     expect(validation?.id).toBe(csa?.folderId);
-    expect(folders.find((folder) => folder.parentId === legacy?.id && folder.name === "Calibration")?.id).toBe(equipmentList?.folderId);
-    expect(folders.find((folder) => folder.parentId === legacy?.id && folder.name === "Document Control")?.id).toBe(documentList?.folderId);
+    expect(folders.some((folder) => folder.parentId === manual?.id && folder.linkedPath === "/documents/master-list")).toBe(true);
+    expect(folders.some((folder) => folder.parentId === manual?.id && folder.linkedPath === "/calibration/master-list")).toBe(true);
+    expect(folders.some((folder) => folder.parentId === manual?.id && folder.linkedPath === "/documents/laboratory-scope")).toBe(true);
+    expect(folders.some((folder) => (folder.parentId === legacy?.id || folder.parentId === blanks?.id) && /Master (Document|Equipment) List|Scope of Laboratory Activities/.test(folder.name))).toBe(false);
 
     const topicNames = folders
       .filter((folder) => folder.parentId === blanks?.id)

@@ -14,6 +14,7 @@ interface SurfaceRule {
 
 const RULES: SurfaceRule[] = [
   { test: /^\/documents\/master-list$/, kind: "list", access: "documents" },
+  { test: /^\/documents\/laboratory-scope$/, kind: "list", access: "documents" },
   { test: /^\/calibration\/master-list$/, kind: "list", access: "calibration" },
   { test: /^\/iso-forms\/record\/\d+$/, kind: "form", access: "documents" },
   { test: /^\/qms-forms\/[^/]+\/\d+$/, kind: "form", access: "qms_forms" },

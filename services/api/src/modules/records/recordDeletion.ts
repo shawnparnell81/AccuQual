@@ -860,6 +860,16 @@ export async function deleteRecord(req: Request, kind: RecordKind): Promise<void
     assertRecordOnAllowedSite(row.siteId as number | null | undefined, req.allowedSiteIds, spec.label);
   }
   if (spec.beforeDelete) await spec.beforeDelete(req.db, row);
+  await purgeExistingRecord(req, kind, id);
+}
+
+/** The delete half of deleteRecord: remove the row, its files, and write the audit line. The caller already checked permission. */
+export async function purgeExistingRecord(req: Request, kind: RecordKind, id: number): Promise<void> {
+  if (!req.db || !req.user) throw AppError.unauthorized("Not signed in");
+  const spec = specs[kind];
+  const row = await spec.load(req.db, id);
+  if (!row) return;
+  await assertNotOnLegalHold(req.db, kind, id);
 
   const files: string[] = [];
   try {

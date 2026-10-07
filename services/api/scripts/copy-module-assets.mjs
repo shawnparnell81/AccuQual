@@ -18,3 +18,14 @@ const toDir = join(apiRoot, "dist/modules/quality-engineering-report/sample");
 rmSync(toDir, { recursive: true, force: true });
 mkdirSync(dirname(toDir), { recursive: true });
 cpSync(fromDir, toDir, { recursive: true });
+
+const seedDir = join(apiRoot, "src/modules/controlled-lists/seeds");
+const seedJson = join(seedDir, "lists.json");
+if (!existsSync(seedJson)) {
+  console.error(`Controlled list seed is missing: ${seedJson}`);
+  process.exit(1);
+}
+const seedOut = join(apiRoot, "dist/modules/controlled-lists/seeds");
+rmSync(seedOut, { recursive: true, force: true });
+mkdirSync(dirname(seedOut), { recursive: true });
+cpSync(seedDir, seedOut, { recursive: true });

@@ -200,8 +200,8 @@ describe("master document list", () => {
     expect(rows.find((row) => row.title === "ELECTRIC LIFT SUPPORT VALIDATION DOCUMENT")).toMatchObject({ documentId: "FRM-VAL-004" });
     expect(rows.find((row) => row.title === "GAS LIFT SUPPORT VALIDATION DOCUMENT")).toMatchObject({ documentId: "FRM-VAL-005" });
     expect(rows.filter((row) => row.documentId === "FRM-VAL-007").map((row) => row.title)).toEqual(["FUEL PUMP VALIDATION DOCUMENT"]);
-    expect(rows.find((row) => row.title === "Master Document List")).toMatchObject({ documentId: "LST-GEN-001", currentRev: "Rev B" });
-    expect(rows.find((row) => row.title === "Master Equipment List")).toMatchObject({ documentId: "LST-EQP-001", currentRev: "Rev A" });
+    expect(rows.find((row) => row.title === "Master Document List")).toBeUndefined();
+    expect(rows.find((row) => row.title === "Master Equipment List")).toBeUndefined();
     expect(rows.find((row) => row.title === "Part Submission Warrant")).toBeUndefined();
     expect(rows.find((row) => row.title === "CSA VALIDATION REPORT")).toMatchObject({ documentId: "FRM-VAL-001", status: "Template" });
     expect(rows.find((row) => row.title === "INTERNAL AUDIT SUMMARY REPORT")).toMatchObject({ documentId: "TMP-GEN-001" });

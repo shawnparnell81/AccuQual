@@ -22,6 +22,7 @@ import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewS
 import { ensureCompanyDocumentFolders, FILING_DRAWER_NAMES } from "./companyDocumentFolders.js";
 import { documentNodeKind, folderLocationLabel, folderMoveAudit, folderRenameAudit } from "./mainIsoFolders.js";
 import { MASTER_DOCUMENT_LIST_PATH, isBlankTemplateStartPath, retargetRetiredRegisterLink } from "./formFiling.js";
+import { ensureLivingControlledLists } from "../controlled-lists/service.js";
 import { ensureFormTemplates, listFormTemplates } from "./formTemplates.js";
 import { fileFormRecord, filingQuery, getFormFiling, updateFormNumber } from "./formRecordFiling.js";
 import { getFormFolder, listFormFolders } from "./formFolders.js";
@@ -273,6 +274,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     const all = await ensureCompanyDocumentFolders(db, added);
     await linkKnownForms(db, all);
     await ensureFormTemplates(db, req.user?.id);
+    await ensureLivingControlledLists(req);
     const fresh = await db.select().from(documentFolders);
     return res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(fresh)));
   }
@@ -284,6 +286,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
   const all = await ensureCompanyDocumentFolders(db, added);
   await linkKnownForms(db, all);
   await ensureFormTemplates(db, req.user?.id);
+  await ensureLivingControlledLists(req);
   const fresh = await db.select().from(documentFolders);
   res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(fresh)));
 });
