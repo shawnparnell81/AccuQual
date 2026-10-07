@@ -58,6 +58,22 @@
   color: #111;
 }
 
+.controlled-list-cell[data-fill="open"],
+.controlled-list-cell[data-fill="open"] input,
+.controlled-list-cell[data-fill="open"] select,
+.controlled-list-cell[data-fill="open"] button {
+  background: #ff0000;
+  color: #111;
+}
+
+.controlled-list-cell[data-fill="closed"],
+.controlled-list-cell[data-fill="closed"] input,
+.controlled-list-cell[data-fill="closed"] select,
+.controlled-list-cell[data-fill="closed"] button {
+  background: #b8dcab;
+  color: #111;
+}
+
 .controlled-list-pick {
   display: block;
   width: 100%;
@@ -118,6 +134,22 @@
 :root[data-theme="dark"] .controlled-list-cell.tone-overdue,
 :root[data-theme="dark"] .controlled-list-cell.tone-overdue input,
 :root[data-theme="dark"] .controlled-list-cell.tone-overdue select {
+  color: #111;
+}
+
+:root[data-theme="dark"] .controlled-list-cell[data-fill="open"],
+:root[data-theme="dark"] .controlled-list-cell[data-fill="open"] input,
+:root[data-theme="dark"] .controlled-list-cell[data-fill="open"] select,
+:root[data-theme="dark"] .controlled-list-cell[data-fill="open"] button {
+  background: #ff0000;
+  color: #111;
+}
+
+:root[data-theme="dark"] .controlled-list-cell[data-fill="closed"],
+:root[data-theme="dark"] .controlled-list-cell[data-fill="closed"] input,
+:root[data-theme="dark"] .controlled-list-cell[data-fill="closed"] select,
+:root[data-theme="dark"] .controlled-list-cell[data-fill="closed"] button {
+  background: #b8dcab;
   color: #111;
 }
 
@@ -205,6 +237,16 @@
   .controlled-list-cell.tone-overdue,
   .controlled-list-cell.tone-overdue input {
     background: #ff5050 !important;
+    color: #111 !important;
+  }
+  .controlled-list-cell[data-fill="open"],
+  .controlled-list-cell[data-fill="open"] button {
+    background: #ff0000 !important;
+    color: #111 !important;
+  }
+  .controlled-list-cell[data-fill="closed"],
+  .controlled-list-cell[data-fill="closed"] button {
+    background: #b8dcab !important;
     color: #111 !important;
   }
   .controlled-list-print-value {

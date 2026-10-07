@@ -1,5 +1,6 @@
 import rawLists from "./seeds/lists.json" with { type: "json" };
 import devLog from "./seeds/lst-dev-001.json" with { type: "json" };
+import ncrLog from "./seeds/lst-ncr-001.json" with { type: "json" };
 import {
   appendSheetRow,
   cellAddr,
@@ -14,7 +15,7 @@ import {
 
 export type { StoredCell, StoredSheet } from "./math.js";
 
-export const LIST_KEYS = ["lst-eqp-001", "lst-gen-001", "lst-gen-003", "lst-dev-001"] as const;
+export const LIST_KEYS = ["lst-eqp-001", "lst-gen-001", "lst-gen-003", "lst-dev-001", "lst-ncr-001"] as const;
 export type ListKey = (typeof LIST_KEYS)[number];
 
 export const OMITTED_DOCUMENT_IDS = new Set(["FRM-TST-001", "FRM-TST-002"]);
@@ -24,6 +25,7 @@ export const LIVING_LIST_PATHS = [
   "/calibration/master-list",
   "/documents/laboratory-scope",
   "/documents/development-log",
+  "/documents/nonconformance-log",
 ] as const;
 
 export interface ListCatalog {
@@ -110,6 +112,33 @@ export const LISTS: Record<ListKey, ListCatalog> = {
     dataStart: { "Test Reports": 5, "Validation Report": 5 },
     idColumn: "A",
   },
+  "lst-ncr-001": {
+    key: "lst-ncr-001",
+    title: "LST-NCR-001",
+    docId: "LST-NCR-001",
+    revision: "G",
+    route: "/documents/nonconformance-log",
+    resource: "documents",
+    landscape: true,
+    rev: { sheet: "LST-NCR-001 - NCR", addr: "B2" },
+    revs: [
+      { sheet: "LST-NCR-001 - NCR", addr: "B2" },
+      { sheet: "LST-NCR-001 - QTN", addr: "B2" },
+      { sheet: "LST-NCR-001 - CAR", addr: "B2" },
+      { sheet: "LST-NCR-001 - RPN", addr: "B2" },
+    ],
+    folder: "Quality Logs",
+    nodeName: "LST-NCR-001",
+    fileName: "LST-NCR-001.xlsx",
+    centered: true,
+    dataStart: {
+      "LST-NCR-001 - NCR": 5,
+      "LST-NCR-001 - QTN": 5,
+      "LST-NCR-001 - CAR": 5,
+      "LST-NCR-001 - RPN": 5,
+    },
+    idColumn: "A",
+  },
 };
 
 export function isListKey(value: string): value is ListKey {
@@ -125,6 +154,7 @@ export function isLivingListPath(linkedPath: string | null | undefined): boolean
 function seedBook(): Record<ListKey, { sheets: StoredSheet[] }> {
   const book = structuredClone(rawLists) as unknown as Record<ListKey, { sheets: StoredSheet[] }>;
   book["lst-dev-001"] = structuredClone(devLog) as unknown as { sheets: StoredSheet[] };
+  book["lst-ncr-001"] = structuredClone(ncrLog) as unknown as { sheets: StoredSheet[] };
   return book;
 }
 

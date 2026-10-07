@@ -1,7 +1,8 @@
 import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
-import { formulaSerial, listOptions, shownCell } from "../src/modules/controlled-lists/math.js";
+import { formulaSerial, listOptions, shownCell, toneFill } from "../src/modules/controlled-lists/math.js";
 import {
+  LISTS,
   addDataRow,
   appendDocuments,
   appendEquipment,
@@ -239,5 +240,56 @@ describe("living controlled lists", () => {
     const dropdown = ws?.dataValidations.model["F5:F284"] ?? ws?.dataValidations.model.F5;
     const formula = JSON.stringify(dropdown ?? ws?.dataValidations.model);
     expect(formula).toContain("Salt Spray");
+  });
+
+  it("keeps each nonconformance tab's own Rev and records the document as Rev G", async () => {
+    const sheets = freshSheets("lst-ncr-001");
+    expect(sheets.map((sheet) => sheet.name)).toEqual(["LST-NCR-001 - NCR", "LST-NCR-001 - QTN", "LST-NCR-001 - CAR", "LST-NCR-001 - RPN"]);
+    const ncr = sheets[0]!;
+    const qtn = sheets[1]!;
+    const car = sheets[2]!;
+    const rpn = sheets[3]!;
+    expect(LISTS["lst-ncr-001"].revision).toBe("G");
+    expect(workbookFileName("lst-ncr-001")).toBe("LST-NCR-001.xlsx");
+    expect(ncr.cells.A1?.v).toBe("NON-CONFORMANCE LOG (REGISTER)");
+    expect(ncr.cells.B2).toMatchObject({ v: "Rev: E", kind: "rev" });
+    expect(ncr.cells.C2?.v).toBe("Location: X:\\ISO Compliance Documents\\07_Quality_Logs");
+    expect(ncr.cells.E2?.v).toBe("Maxwell Tollefson");
+    expect(ncr.cells.G2).toMatchObject({ v: "2026-07-14", nf: "mm-dd-yy" });
+    expect(ncr.cells.A5?.v).toBe("NCR-2026-001");
+    expect(ncr.cells.A70?.v).toBe("NCR-2026-066");
+    expect(ncr.cells.K5?.v).toBe("Closed");
+    expect(shownCell(ncr, "G5").text).toBe("$0.00");
+    expect(toneFill(ncr, "K5", "Closed")).toBe("FFB8DCAB");
+    expect(qtn.cells.B2?.v).toBe("Rev: F");
+    expect(qtn.cells.C2?.v).toBe("Location: X:\\ISO Compliance Documents\\07_Non_Conformance_Records");
+    expect(qtn.cells.A5).toBeUndefined();
+    expect(car.cells.B2?.v).toBe("Rev: E");
+    expect(car.cells.A46?.v).toBe("CAR-2026-043");
+    expect(car.cells.H5?.v).toBe("Open");
+    expect(toneFill(car, "H5", "Open")).toBe("FFFF0000");
+    expect(rpn.cells.B2?.v).toBe("Rev: E");
+    expect(rpn.cells.A5?.v).toBe("WIN-RPN-001");
+    expect(rpn.cells.A6?.v).toBe("WIN-RPN-004");
+    expect(listOptions(ncr, "F5")).toEqual(["Use-As-Is", " Scrap", " Rework"]);
+
+    const edited = applyInputPatch("lst-ncr-001", sheets, [
+      { name: "LST-NCR-001 - NCR", cells: { K5: { v: "Open" }, B2: { v: "Rev: G" }, C2: { v: "moved" } } },
+    ]);
+    expect(edited.sheets[0]?.cells.K5?.v).toBe("Open");
+    expect(edited.sheets[0]?.cells.B2?.v).toBe("Rev: E");
+    expect(edited.sheets[0]?.cells.C2?.v).toBe("Location: X:\\ISO Compliance Documents\\07_Quality_Logs");
+    expect(edited.sheets[1]?.cells.B2?.v).toBe("Rev: F");
+    expect(edited.changes.map((change) => change.addr)).toEqual(["K5"]);
+
+    const body = await buildListWorkbook("lst-ncr-001", sheets);
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(body);
+    expect(book.worksheets.map((sheet) => sheet.name)).toEqual(["LST-NCR-001 - NCR", "LST-NCR-001 - QTN", "LST-NCR-001 - CAR", "LST-NCR-001 - RPN"]);
+    const ws = book.getWorksheet("LST-NCR-001 - NCR");
+    expect(ws?.getCell("B2").value).toBe("Rev: E");
+    expect(ws?.getCell("A1").value).toBe("NON-CONFORMANCE LOG (REGISTER)");
+    expect(ws?.pageSetup.orientation).toBe("landscape");
+    expect(JSON.stringify(ws?.conditionalFormattings ?? ws?.model?.conditionalFormattings ?? [])).toContain("Open");
   });
 });

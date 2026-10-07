@@ -73,6 +73,20 @@ function writeSheet(book: ExcelJS.Workbook, sheet: StoredSheet, listKey: ListKey
       formulae: [`"${list.options.join(",")}"`],
     });
   }
+  for (const [index, tone] of (sheet.tones ?? []).entries()) {
+    ws.addConditionalFormatting({
+      ref: `${tone.c1}${tone.r1}:${tone.c2}${tone.r2}`,
+      rules: [
+        {
+          type: "containsText",
+          operator: "containsText",
+          text: tone.text,
+          priority: index + 1,
+          style: { fill: { type: "pattern", pattern: "solid", bgColor: { argb: tone.argb } } },
+        },
+      ],
+    });
+  }
   for (const merge of sheet.merges) {
     if (!ws.getCell(merge.split(":")[0] ?? "A1")) continue;
     ws.mergeCells(merge);

@@ -94,6 +94,9 @@ describe("living controlled lists API", () => {
     expect(folders.find((folder) => folder.parentId === manual?.id && folder.linkedPath === "/documents/laboratory-scope")?.name).toBe("Scope of Laboratory Activities");
     const projects = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Test Data Projects");
     expect(folders.find((folder) => folder.parentId === projects?.id && folder.linkedPath === "/documents/development-log")?.name).toBe("LST-DEV-001");
+    const logs = folders.find((folder) => folder.parentId === iso?.id && folder.name === "Quality Logs");
+    expect(folders.find((folder) => folder.parentId === logs?.id && folder.linkedPath === "/documents/nonconformance-log")?.name).toBe("LST-NCR-001");
+    expect(folders.some((folder) => folder.name === "LST-NCR-001" && folder.parentId !== logs?.id)).toBe(false);
     expect(folders.some((folder) => folder.parentId != null && folder.parentId !== projects?.id && folder.linkedPath === "/documents/development-log")).toBe(false);
 
     const [oldCopy] = await db.insert(documents).values({ title: "Master Equipment List", status: "approved" }).returning();
@@ -142,6 +145,16 @@ describe("living controlled lists API", () => {
     expect(log.body.revision).toBe("B");
     expect(log.body.sheets[0].cells.A1.v).toBe("DEVELOPMENT LOG (REGISTER)");
     expect(log.body.sheets[0].cells.C2.v).toBe("Location: X:\\ISO Compliance Documents\\06_Test_Data_Projects");
+    const ncr = await request(app).get("/controlled-lists/lst-ncr-001").set("Authorization", `Bearer ${token}`);
+    expect(ncr.status).toBe(200);
+    expect(ncr.body.title).toBe("LST-NCR-001");
+    expect(ncr.body.revision).toBe("G");
+    expect(ncr.body.sheets.map((sheet: { name: string }) => sheet.name)).toEqual(["LST-NCR-001 - NCR", "LST-NCR-001 - QTN", "LST-NCR-001 - CAR", "LST-NCR-001 - RPN"]);
+    expect(ncr.body.sheets[0].cells.B2.v).toBe("Rev: E");
+    expect(ncr.body.sheets[1].cells.B2.v).toBe("Rev: F");
+    expect(ncr.body.sheets[2].cells.B2.v).toBe("Rev: E");
+    expect(ncr.body.sheets[3].cells.B2.v).toBe("Rev: E");
+    expect(ncr.body.sheets[0].cells.C2.v).toBe("Location: X:\\ISO Compliance Documents\\07_Quality_Logs");
     const filed = await request(app).get("/document-folders").set("Authorization", `Bearer ${token}`);
     const filedFolders = filed.body as { name: string; parentId: number | null; linkedPath?: string | null }[];
     const filedProjects = filedFolders.find((folder) => folder.parentId === iso?.id && folder.name === "Test Data Projects");
@@ -158,5 +171,8 @@ describe("living controlled lists API", () => {
     expect(titles).not.toContain("Master Equipment List");
     expect(titles).not.toContain("Master Document List");
     expect(titles).not.toContain("Scope of Laboratory Activities");
+    expect(titles).toContain("NON-CONFORMANCE REPORT (NCR)");
+    expect(titles).toContain("Nonconformance Report");
+    expect(titles).not.toContain("Non-Conformance Log");
   });
 });
