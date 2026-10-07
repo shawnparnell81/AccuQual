@@ -3,15 +3,22 @@
  * Number prefixes from the Windows folder list are dropped. The order is the
  * order he files in: Master Source Files first, Obsolete Archive last.
  *
- * A name is reused only when it is already a direct child of ISO. A folder
- * with the same name deeper in the tree (Engineering Standards under
- * Specifications, Quality Manual under Quality) is a different folder and
- * stays where it is. Nothing here renames, moves, or deletes an existing row.
- * Sort order is written once, on the run that creates a missing drawer.
- * A later load leaves the order alone so a reorder survives a restart.
+ * They are created once. company.profile.isoMainFoldersReady remembers that
+ * this company has already been set up, so a later load does not put a
+ * deleted folder back, does not add a second copy, and does not rewrite a
+ * rename or a reorder. A company that already has one of these drawers from
+ * the first release is marked ready without creating whatever is missing.
+ *
+ * A name is reused only on that first run, and only when it is already a
+ * direct child of ISO. A folder with the same name deeper in the tree
+ * (Engineering Standards under Specifications, Quality Manual under Quality)
+ * is a different folder and stays where it is. Nothing here renames, moves,
+ * or deletes an existing row. Sort order is written only on the run that
+ * creates the drawers.
  */
 import { eq } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";
+import { company } from "../../drizzle/schema/company.js";
 import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 
 export const ISO_ROOT_NAME = "ISO Compliance Documents";
@@ -49,6 +56,31 @@ export function planMainIsoFolderCreates(folders: NamedFolder[]): { isoId: numbe
   if (!iso) return null;
   const direct = new Set(folders.filter((folder) => folder.parentId === iso.id).map((folder) => folder.name));
   return { isoId: iso.id, names: MAIN_ISO_FOLDER_NAMES.filter((name) => !direct.has(name)) };
+}
+
+/**
+ * Names the first release added under ISO. "Procedures" is left out: the
+ * default tree already has that drawer, so it cannot by itself mean the
+ * company was set up.
+ */
+const SETUP_MARKER_NAMES = MAIN_ISO_FOLDER_NAMES.filter((name) => name !== "Procedures");
+
+export type MainIsoSetupPlan = { action: "skip" } | { action: "adopt" } | { action: "seed"; isoId: number; names: string[] };
+
+/**
+ * skip: already recorded as set up, or there is no ISO root yet.
+ * adopt: this company already has a main drawer, so missing ones were removed
+ * or renamed and must not be recreated.
+ * seed: first time. Create whatever is not already a direct child.
+ */
+export function planMainIsoSetup(folders: NamedFolder[], ready: boolean): MainIsoSetupPlan {
+  if (ready) return { action: "skip" };
+  const iso = folders.find((folder) => folder.parentId == null && folder.name === ISO_ROOT_NAME);
+  if (!iso) return { action: "skip" };
+  const direct = new Set(folders.filter((folder) => folder.parentId === iso.id).map((folder) => folder.name));
+  if (SETUP_MARKER_NAMES.some((name) => direct.has(name))) return { action: "adopt" };
+  const missing = planMainIsoFolderCreates(folders);
+  return { action: "seed", isoId: iso.id, names: missing?.names ?? [] };
 }
 
 /** The 14 drawers first, in filing order, then every other child in its current order. */
@@ -126,14 +158,33 @@ export function folderRenameAudit(fromName: string, toName: string): Record<stri
 
 type FolderRow = typeof documentFolders.$inferSelect;
 
+async function isoMainFoldersReady(db: Db): Promise<boolean> {
+  const [row] = await db.select({ profile: company.profile }).from(company).limit(1);
+  return row?.profile?.isoMainFoldersReady === true;
+}
+
+/** Records that the one-time setup has happened. A profile save keeps the rest of the object. */
+async function markIsoMainFoldersReady(db: Db): Promise<void> {
+  const [row] = await db.select({ id: company.id, profile: company.profile }).from(company).limit(1);
+  if (!row || row.profile?.isoMainFoldersReady === true) return;
+  await db.update(company).set({ profile: { ...(row.profile ?? {}), isoMainFoldersReady: true } }).where(eq(company.id, row.id));
+}
+
 /**
- * Creates any missing main drawer under ISO. A second call inserts nothing
- * and does not change sort order. Existing folders, including a same-named
- * folder that is not a direct child, are left in place.
+ * Creates the 14 drawers on the first run only. After that, and for a company
+ * that already has them, a missing name stays missing.
  */
 export async function ensureMainIsoFolders(db: Db, all: FolderRow[]): Promise<FolderRow[]> {
-  const plan = planMainIsoFolderCreates(all);
-  if (!plan || plan.names.length === 0) return all;
+  const plan = planMainIsoSetup(all, await isoMainFoldersReady(db));
+  if (plan.action === "skip") return all;
+  if (plan.action === "adopt") {
+    await markIsoMainFoldersReady(db);
+    return all;
+  }
+  if (plan.names.length === 0) {
+    await markIsoMainFoldersReady(db);
+    return all;
+  }
 
   let list = all;
   for (const name of plan.names) {
@@ -150,5 +201,6 @@ export async function ensureMainIsoFolders(db: Db, all: FolderRow[]): Promise<Fo
     await db.update(documentFolders).set({ sortOrder, updatedAt: new Date() }).where(eq(documentFolders.id, row.id));
     list = list.map((folder) => (folder.id === row.id ? { ...folder, sortOrder } : folder));
   }
+  await markIsoMainFoldersReady(db);
   return list;
 }

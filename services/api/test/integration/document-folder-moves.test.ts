@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { createApp } from "../../src/app.js";
 import { db } from "../../src/db/index.js";
 import { users } from "../../src/drizzle/schema/users.js";
+import { company } from "../../src/drizzle/schema/company.js";
 import { documentFolders } from "../../src/drizzle/schema/documentFolders.js";
 import { formFilings } from "../../src/drizzle/schema/formFilings.js";
 import { isoQualityForms } from "../../src/drizzle/schema/isoQualityForms.js";
@@ -167,5 +168,64 @@ describe("ISO main folders and moving what is already filed", () => {
     expect((still.body as FolderRow[]).find((folder) => folder.id === personnel.id)?.parentId).toBe(archive.id);
     expect((still.body as FolderRow[]).some((folder) => folder.name === "Should not exist")).toBe(false);
     expect((still.body as FolderRow[]).find((folder) => folder.id === personnel.id)?.name).toBe("Personnel Files");
+  });
+
+  it("keeps a deleted main folder deleted, and still refuses to delete one that is not empty", async () => {
+    const tree = await request(app).get("/document-folders").set("Authorization", `Bearer ${qualityToken}`);
+    const folders = tree.body as FolderRow[];
+    const iso = folders.find((folder) => folder.parentId === null && folder.name === "ISO Compliance Documents")!;
+    const facility = childNamed(folders, iso.id, "Facility Records");
+    const logs = childNamed(folders, iso.id, "Engineering Logs");
+    const qualityFolder = folders.find((folder) => folder.name === "Quality" && folders.some((child) => child.parentId === folder.id));
+    expect(facility).toBeTruthy();
+    expect(logs).toBeTruthy();
+    expect(qualityFolder).toBeTruthy();
+
+    const blocked = await request(app).delete(`/document-folders/${qualityFolder!.id}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(blocked.status).toBe(400);
+
+    const denied = await request(app).delete(`/document-folders/${facility!.id}`).set("Authorization", `Bearer ${productionToken}`);
+    expect(denied.status).toBe(403);
+
+    const removed = await request(app).delete(`/document-folders/${facility!.id}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(removed.status).toBe(204);
+    const history = await request(app).get(`/audit-trail/DocumentFolder/${facility!.id}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(history.status).toBe(200);
+    expect((history.body as { action?: string; changes?: { name?: string } }[]).some((row) => row.action === "delete" && row.changes?.name === "Facility Records")).toBe(true);
+
+    const renamed = await request(app).patch(`/document-folders/${logs!.id}`).set("Authorization", `Bearer ${qualityToken}`).send({ name: "Shop Log" });
+    expect(renamed.status).toBe(200);
+
+    const [co] = await db.select({ id: company.id, profile: company.profile }).from(company);
+    const profile = { ...(co!.profile ?? {}) };
+    delete profile.isoMainFoldersReady;
+    await db.update(company).set({ profile }).where(eq(company.id, co!.id));
+
+    const again = await request(app).get("/document-folders").set("Authorization", `Bearer ${qualityToken}`);
+    expect(again.status).toBe(200);
+    const next = again.body as FolderRow[];
+    expect(next.some((folder) => folder.name === "Facility Records")).toBe(false);
+    expect(next.some((folder) => folder.parentId === iso.id && folder.name === "Engineering Logs")).toBe(false);
+    expect(next.find((folder) => folder.id === logs!.id)?.name).toBe("Shop Log");
+    expect(next.find((folder) => folder.id === qualityFolder!.id)).toBeTruthy();
+    expect(next.filter((folder) => folder.parentId === iso.id && folder.name === "Master Source Files")).toHaveLength(1);
+    expect(next.find((folder) => folder.name === "Master Source Files")?.sortOrder).toBe(40);
+    for (const name of MAIN_ISO_FOLDER_NAMES) {
+      if (name === "Facility Records" || name === "Engineering Logs" || name === "Personnel Files") continue;
+      expect(next.filter((folder) => folder.parentId === iso.id && folder.name === name)).toHaveLength(1);
+    }
+
+    const recreated = await request(app).post("/document-folders").set("Authorization", `Bearer ${qualityToken}`).send({ name: "Facility Records", parentId: iso.id });
+    expect(recreated.status).toBe(201);
+    const withCopy = await request(app).get("/document-folders").set("Authorization", `Bearer ${qualityToken}`);
+    expect((withCopy.body as FolderRow[]).filter((folder) => folder.parentId === iso.id && folder.name === "Facility Records")).toHaveLength(1);
+
+    const removedAgain = await request(app).delete(`/document-folders/${recreated.body.id}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(removedAgain.status).toBe(204);
+    const gone = await request(app).get("/document-folders").set("Authorization", `Bearer ${qualityToken}`);
+    expect((gone.body as FolderRow[]).some((folder) => folder.name === "Facility Records")).toBe(false);
+
+    const [marked] = await db.select({ profile: company.profile }).from(company);
+    expect(marked?.profile?.isoMainFoldersReady).toBe(true);
   });
 });

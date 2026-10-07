@@ -209,6 +209,13 @@ export const company = pgTable("company", {
     drawingChangeTemplate?: ChangeRequestTemplateBlob;
     processChangeTemplate?: ChangeRequestTemplateBlob;
     documentChangeTemplate?: ChangeRequestTemplateBlob;
+    /**
+     * Set once the 14 main ISO filing folders have been created (or this
+     * company already had them). Documents reads it so a folder Shawn deletes
+     * is not put back on the next load. Company Settings spreads this object,
+     * so a profile save keeps the flag. No new column.
+     */
+    isoMainFoldersReady?: boolean;
   }>().default({}),
   // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for the company's first admin.
   // `dismissed: true` for every company that existed before this shipped (backfillOnboardingChecklist.ts) — an

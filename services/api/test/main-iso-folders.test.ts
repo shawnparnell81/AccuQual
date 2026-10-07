@@ -8,6 +8,7 @@ import {
   MAIN_ISO_FOLDER_NAMES,
   mainIsoChildOrder,
   planMainIsoFolderCreates,
+  planMainIsoSetup,
   type SortableFolder,
 } from "../src/modules/document-folders/mainIsoFolders.js";
 
@@ -56,6 +57,27 @@ describe("main ISO folders", () => {
     expect(ordered.slice(0, MAIN_ISO_FOLDER_NAMES.length).map((folder) => folder.name)).toEqual([...MAIN_ISO_FOLDER_NAMES]);
     expect(ordered[2]?.id).toBe(11);
     expect(ordered.slice(MAIN_ISO_FOLDER_NAMES.length).map((folder) => folder.id)).toEqual([10, 12]);
+  });
+
+  it("creates the drawers once, and does not put a deleted or renamed drawer back", () => {
+    const fresh = [row(1, ISO_ROOT_NAME, null), row(2, "Procedures", 1), row(3, "Quality", 1)];
+    const first = planMainIsoSetup(fresh, false);
+    expect(first.action).toBe("seed");
+    if (first.action !== "seed") return;
+    expect(first.names).toContain("Master Source Files");
+    expect(first.names).not.toContain("Procedures");
+    expect(first.names).toHaveLength(MAIN_ISO_FOLDER_NAMES.length - 1);
+
+    const already = [row(1, ISO_ROOT_NAME, null), ...MAIN_ISO_FOLDER_NAMES.map((name, index) => row(index + 2, name, 1))];
+    expect(planMainIsoSetup(already, true)).toEqual({ action: "skip" });
+
+    const deleted = already.filter((folder) => folder.name !== "Facility Records");
+    expect(planMainIsoSetup(deleted, true)).toEqual({ action: "skip" });
+    expect(planMainIsoSetup(deleted, false)).toEqual({ action: "adopt" });
+
+    const renamed = already.map((folder) => (folder.name === "Engineering Logs" ? { ...folder, name: "Shop Log" } : folder));
+    expect(planMainIsoSetup(renamed, false)).toEqual({ action: "adopt" });
+    expect(planMainIsoSetup([row(1, ISO_ROOT_NAME, null)], false).action).toBe("seed");
   });
 
   it("does not plan a delete or a rename", () => {
