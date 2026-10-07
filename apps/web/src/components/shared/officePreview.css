@@ -1,5 +1,5 @@
-/* Scoped to the in-browser Office preview. The dialog chrome uses the app's color tokens;
-   a Word page stays paper-white so the document's own text stays readable in either mode. */
+/* Scoped to the in-browser Office preview. The dialog chrome uses the app's color tokens.
+   The file itself stays on white paper with its own colors. Dark mode does not recolor it. */
 
 .office-docx .docx-wrapper {
   background: transparent;
@@ -9,6 +9,7 @@
 .office-docx .docx-wrapper > section.docx {
   background: #fff;
   color: #1a1a1a;
+  color-scheme: light;
   box-shadow: 0 1px 4px hsl(0 0% 0% / 0.28);
 }
 
@@ -20,19 +21,19 @@
 .sheet-grid {
   border-collapse: separate;
   border-spacing: 0;
-  background: hsl(var(--card));
-  color: hsl(var(--foreground));
+  background: #fff;
+  color: #1a1a1a;
   font-size: 13px;
 }
 
 .sheet-grid th,
 .sheet-grid td {
-  border-right: 1px solid hsl(var(--border));
-  border-bottom: 1px solid hsl(var(--border));
+  border-right: 1px solid #d0d0d0;
+  border-bottom: 1px solid #d0d0d0;
   padding: 3px 8px;
   vertical-align: middle;
-  background: transparent;
-  color: inherit;
+  background: #fff;
+  color: #1a1a1a;
   font-weight: 400;
   line-height: 1.35;
 }
@@ -41,8 +42,8 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  background: hsl(var(--muted));
-  color: hsl(var(--muted-foreground));
+  background: #f3f4f6;
+  color: #1a1a1a;
   font-size: 11px;
   font-weight: 600;
   text-align: center;
@@ -53,8 +54,8 @@
   position: sticky;
   left: 0;
   z-index: 1;
-  background: hsl(var(--muted));
-  color: hsl(var(--muted-foreground));
+  background: #f3f4f6;
+  color: #1a1a1a;
   text-align: right;
   font-size: 11px;
   font-variant-numeric: tabular-nums;

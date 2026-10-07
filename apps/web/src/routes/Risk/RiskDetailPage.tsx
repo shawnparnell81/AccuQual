@@ -13,7 +13,6 @@ import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPan
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
-import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { Modal } from "../../components/modals/Modal";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { RISK_CATEGORIES } from "../../components/shared/riskConstants";
@@ -76,7 +75,6 @@ export function RiskDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <OpenFormButton formType="fmea" entityId={risk.id} title={`FMEA #${risk.id} Document`} label="FMEA Document" />
-          <PrintFormButton formType="fmea" entityId={risk.id} />
           <button onClick={() => setAiOpen(true)} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
             AI Risk Analysis
           </button>

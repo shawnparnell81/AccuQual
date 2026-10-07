@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
-import { Download, X } from "lucide-react";
+import { Download, Printer, X } from "lucide-react";
 import { openOfficeSource, type OfficeSession, type OfficeSource } from "../../api/onlyoffice";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 
@@ -14,6 +14,7 @@ interface Props {
   viewOnly?: boolean;
   source?: OfficeSource;
   onDownload?: () => void;
+  onPrint?: () => void;
 }
 
 type DocEditorInstance = { destroyEditor?: () => void };
@@ -51,7 +52,7 @@ function loadEditorScript(documentServerUrl: string): Promise<void> {
  * Full-screen ONLYOFFICE editor. The session config is produced by the API; this component
  * only loads the document-server script and hosts the iframe the script creates.
  */
-export function OnlyOfficeEditor({ documentId, versionId, fileId, fileName, onClose, viewOnly, source, onDownload }: Props) {
+export function OnlyOfficeEditor({ documentId, versionId, fileId, fileName, onClose, viewOnly, source, onDownload, onPrint }: Props) {
   const placeholderId = useId().replace(/:/g, "");
   const [session, setSession] = useState<OfficeSession | null>(null);
   const [ready, setReady] = useState(false);
@@ -102,6 +103,11 @@ export function OnlyOfficeEditor({ documentId, versionId, fileId, fileName, onCl
     <div className="fixed inset-0 z-[70] flex flex-col bg-background">
       <div className="flex items-center gap-3 border-b border-border px-4 py-2">
         <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{title}</h2>
+        {onPrint && (
+          <button type="button" data-testid="print-file" onClick={onPrint} className="no-print inline-flex min-h-11 items-center gap-1 rounded-md border border-border px-3 text-sm hover:bg-muted">
+            <Printer size={14} /> Print
+          </button>
+        )}
         {onDownload && (
           <button type="button" onClick={onDownload} className="inline-flex min-h-11 items-center gap-1 rounded-md border border-border px-3 text-sm hover:bg-muted">
             <Download size={14} /> Download

@@ -4,7 +4,6 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { SelectField, TextAreaField, TextField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
-import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { AttachmentsPanel } from "../../components/shared/AttachmentsPanel";
 import { PictureRecordProvider } from "../../components/forms/pictureRecord";
 import { useToast } from "../../components/shared/ToastProvider";
@@ -90,7 +89,6 @@ export function ComplaintDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <OpenFormButton formType="complaint" entityId={complaint.id} title={`Complaint #${complaint.id} Form`} />
-          <PrintFormButton formType="complaint" entityId={complaint.id} />
           <WorkflowActionButton
             label="Escalate to NCR"
             navKey="complaints"

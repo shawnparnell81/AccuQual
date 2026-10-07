@@ -8,7 +8,6 @@ import type { Supplier, SupplierPerformance, CostingSummary, SupplierQualityFact
 import { TrendLineChart } from "../../components/charts/TrendLineChart";
 import { StatusBadge } from "../../components/tables/StatusBadge";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
-import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
 import { WorkflowHistoryPanel } from "../../components/shared/WorkflowHistoryPanel";
@@ -179,7 +178,6 @@ export function SupplierDetailPage() {
         <div className="flex flex-wrap gap-2">
           <DeleteRecordButton resource="suppliers" id={supplier.id} kind="Supplier" title={supplier.name} navigateTo="/suppliers" />
           <OpenFormButton formType="supplier" entityId={supplier.id} title={`Supplier #${supplier.id} Record`} label="Supplier Record" />
-          <PrintFormButton formType="supplier" entityId={supplier.id} />
           <OpenFormButton
             formType="approved_vendor_list"
             entityId={supplier.id}

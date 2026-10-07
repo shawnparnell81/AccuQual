@@ -264,9 +264,6 @@ export function EightDDetailPage() {
                 {updateReport.isPending ? "Saving…" : "Save"}
               </button>
             )}
-            <button type="button" onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-              Print
-            </button>
           </div>
         </div>
         {!canEdit && <p className="text-sm text-muted-foreground">{READ_ONLY_REASON}</p>}

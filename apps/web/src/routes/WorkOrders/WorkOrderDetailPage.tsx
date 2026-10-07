@@ -45,9 +45,6 @@ export function WorkOrderDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => window.print()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
-            Print
-          </button>
           <DeleteRecordButton resource="work-orders" id={record.id} kind="Work order" title={record.item?.sku} ownerIds={[record.createdBy]} navigateTo="/work-orders" />
         </div>
       </div>

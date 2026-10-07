@@ -9,6 +9,7 @@ import { deriveTabMeta } from "../../lib/tabMeta";
 import { isLiveTabPath } from "../../lib/tabPaths";
 import { locationPath, paneLocation, readSplit, resolvePaneTarget, writeSplit } from "../../lib/splitView";
 import { RecordEditBar } from "../shared/RecordEditBar";
+import { PrintChrome } from "../records/PrintChrome";
 import { RouteErrorBoundary } from "../shared/ErrorBoundary";
 
 /**
@@ -89,6 +90,7 @@ export function SplitWorkspace() {
           {open && <PaneBar title="Left pane" onExpand={expandLeft} onClose={expandRight} closeLabel="Close left pane" />}
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-7">
             <div key={location.pathname + location.search} className={`page-enter mx-auto h-full ${open ? "max-w-none" : "max-w-[1500px]"}`}>
+              <PrintChrome />
               <RecordEditBar />
               <RouteErrorBoundary key={location.pathname}>
                 <Suspense fallback={<LoadingPlaceholder />}>
@@ -245,6 +247,7 @@ function RightPaneRouter({ path }: { path: string }) {
 
   return (
     <Router location={location} navigator={navigator}>
+      <PrintChrome />
       <RecordEditBar />
       <RouteErrorBoundary key={path}>
         <Suspense fallback={<LoadingPlaceholder />}>

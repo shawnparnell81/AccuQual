@@ -6,7 +6,6 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import type { Capa } from "../../api/types";
 import { TextAreaField } from "../../components/forms/Field";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
-import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { useWorkflowAction } from "../../hooks/useWorkflowAction";
 import { WorkflowActionButton } from "../../components/shared/WorkflowActionButton";
 import { DeleteRecordButton } from "../../components/shared/DeleteRecordButton";
@@ -121,7 +120,6 @@ export function CapaDetailPage() {
           <>
             <DeleteRecordButton resource="capa" id={capaId} kind="CAPA" title={capa.actionPlan} ownerIds={[capa.ownerId]} navigateTo="/capa" />
             <OpenFormButton formType="capa" entityId={capa.id} title={`CAPA #${capa.id} Form`} />
-            <PrintFormButton formType="capa" entityId={capa.id} />
             <WorkflowActionButton
               label="Start the work"
               navKey="capa"

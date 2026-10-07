@@ -6,7 +6,6 @@ import { createResourceHooks } from "../../api/resourceHooks";
 import { apiClient } from "../../api/client";
 import { OpenFormButton } from "../../components/forms/OpenFormButton";
 import { gageUsageBlockReason } from "../../lib/gageUsage";
-import { PrintFormButton } from "../../components/forms/PrintFormButton";
 import { GenericCreateForm, type FieldSpec } from "../../components/forms/GenericCreateForm";
 import { Modal } from "../../components/modals/Modal";
 import { EquipmentStatusBadge, EquipmentStatusModal, LinkedDocumentsPanel, ScheduleCalibrationModal, useMayEditEquipment, type EquipmentState } from "../../components/calibration/EquipmentPanels";
@@ -163,9 +162,7 @@ export function EquipmentDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <OpenFormButton formType="calibration" entityId={equipment.id} title={`Equipment #${equipment.id} — Calibration Record`} label="Calibration Record" />
-          <PrintFormButton formType="calibration" entityId={equipment.id} label="Print Record" />
           <OpenFormButton formType="maintenance_work_order" entityId={equipment.id} title={`Equipment #${equipment.id} — Maintenance Work Order`} label="Maintenance Work Order" />
-          <PrintFormButton formType="maintenance_work_order" entityId={equipment.id} label="Print WO" />
           {useBlock ? (
             <button type="button" disabled title={useBlock} className="rounded-md border border-border px-3 py-2 text-sm opacity-50">
               Gage R&R Study
@@ -173,7 +170,6 @@ export function EquipmentDetailPage() {
           ) : (
             <OpenFormButton formType="gage_rr" entityId={equipment.id} title={`Equipment #${equipment.id} — Gage R&R Study`} label="Gage R&R Study" />
           )}
-          <PrintFormButton formType="gage_rr" entityId={equipment.id} label="Print R&R" />
           {mayEdit && (
             <>
               <button onClick={() => setScheduleOpen(true)} disabled={equipment.status === "inactive" || !!equipment.scheduledCalibrationId} title={equipment.status === "inactive" ? "This gage is inactive and cannot be used." : equipment.scheduledCalibrationId ? "A calibration is already scheduled" : undefined} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50">
