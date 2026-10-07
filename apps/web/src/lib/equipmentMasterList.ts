@@ -1,4 +1,4 @@
-/** Live Master Equipment List (LST-EQP-001). Dates and colors are worked out from the equipment record. Nothing is copied into a second list. */
+/** Calendar-month due dates from the earlier computed equipment view. The living LST-EQP-001 grid uses the Excel day formula H+(G*30) instead. */
 
 export const EQUIPMENT_LIST_ID = "LST-EQP-001";
 export const EQUIPMENT_STATUSES = ["Active", "Out of Service", "Scrapped", "CNR"] as const;

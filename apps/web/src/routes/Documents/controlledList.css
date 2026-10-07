@@ -1,0 +1,198 @@
+.controlled-list-sheet {
+  --print-cols: none;
+  display: grid;
+  width: max-content;
+  max-width: none;
+  background: #fff;
+  color: #111;
+  font-family: "Aptos Narrow", "Arial Narrow", Arial, sans-serif;
+  border-top: 1px solid #111;
+  border-left: 1px solid #111;
+}
+
+.controlled-list-cell {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid #111;
+  border-bottom: 1px solid #111;
+  padding: 1px 3px;
+  background: #fff;
+  color: #111;
+  line-height: 1.15;
+  display: flex;
+  align-items: center;
+}
+
+.controlled-list-cell input,
+.controlled-list-cell select {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  padding: 0;
+}
+
+.controlled-list-cell input:focus,
+.controlled-list-cell select:focus {
+  outline: 2px solid #0a3c7b;
+  outline-offset: -2px;
+}
+
+.controlled-list-cell.tone-soon,
+.controlled-list-cell.tone-soon input,
+.controlled-list-cell.tone-soon select {
+  background: #ffff00;
+  color: #111;
+}
+
+.controlled-list-cell.tone-overdue,
+.controlled-list-cell.tone-overdue input,
+.controlled-list-cell.tone-overdue select {
+  background: #ff5050;
+  color: #111;
+}
+
+.controlled-list-print-value {
+  display: none;
+}
+
+.controlled-list-print-banner,
+.controlled-list-sheet-title,
+.controlled-list-inactive {
+  display: none;
+}
+
+.controlled-list-row-delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+:root[data-theme="dark"] .controlled-list-sheet {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+}
+
+:root[data-theme="dark"] .controlled-list-cell {
+  background: transparent;
+  color: inherit;
+  border-color: hsl(var(--border));
+}
+
+:root[data-theme="dark"] .controlled-list-cell.tone-soon,
+:root[data-theme="dark"] .controlled-list-cell.tone-soon input,
+:root[data-theme="dark"] .controlled-list-cell.tone-soon select,
+:root[data-theme="dark"] .controlled-list-cell.tone-overdue,
+:root[data-theme="dark"] .controlled-list-cell.tone-overdue input,
+:root[data-theme="dark"] .controlled-list-cell.tone-overdue select {
+  color: #111;
+}
+
+@page controlled-landscape {
+  size: letter landscape;
+  margin: 0.55in 0.35in 0.5in 0.35in;
+  @bottom-center {
+    content: counter(page);
+    font-size: 9pt;
+    font-family: "Aptos Narrow", "Arial Narrow", Arial, sans-serif;
+    color: #111;
+  }
+}
+
+@page controlled-portrait {
+  size: letter portrait;
+  margin: 0.6in 0.5in 0.55in 0.5in;
+  @bottom-center {
+    content: counter(page);
+    font-size: 9pt;
+    font-family: "Aptos Narrow", "Arial Narrow", Arial, sans-serif;
+    color: #111;
+  }
+}
+
+@media print {
+  .controlled-list-print .overflow-x-auto {
+    overflow: visible !important;
+  }
+  .controlled-list-print.controlled-list-landscape {
+    page: controlled-landscape;
+  }
+  .controlled-list-print.controlled-list-portrait {
+    page: controlled-portrait;
+  }
+  .controlled-list-inactive {
+    display: block !important;
+    break-before: page;
+  }
+  .controlled-list-sheet-title {
+    display: block !important;
+    margin: 0 0 6px;
+    color: #111 !important;
+    font-size: 12pt;
+  }
+  .controlled-list-print-banner {
+    display: block !important;
+    position: fixed;
+    top: 0.12in;
+    left: 0;
+    right: 0;
+    color: #111 !important;
+    background: #fff !important;
+    font-family: "Aptos Narrow", "Arial Narrow", Arial, sans-serif;
+    font-size: 10pt;
+    font-weight: 700;
+  }
+  .controlled-list-sheet {
+    width: 100% !important;
+    max-width: 100% !important;
+    background: #fff !important;
+    color: #111 !important;
+    border-color: #111 !important;
+    grid-template-columns: var(--print-cols) !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .controlled-list-cell,
+  .controlled-list-cell input,
+  .controlled-list-cell select {
+    background: #fff !important;
+    color: #111 !important;
+    border-color: #111 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .controlled-list-cell.tone-soon,
+  .controlled-list-cell.tone-soon input {
+    background: #ffff00 !important;
+    color: #111 !important;
+  }
+  .controlled-list-cell.tone-overdue,
+  .controlled-list-cell.tone-overdue input {
+    background: #ff5050 !important;
+    color: #111 !important;
+  }
+  .controlled-list-print-value {
+    display: block !important;
+    white-space: pre-wrap;
+  }
+  .controlled-list-editor,
+  .controlled-list-row-delete,
+  .controlled-list-tools {
+    display: none !important;
+  }
+}

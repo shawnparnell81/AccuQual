@@ -69,3 +69,4 @@ export * from "./faiSourceControl.js";
 export * from "./csaFai.js";
 export * from "./fuelPumpFai.js";
 export * from "./qualityEngineeringReport.js";
+export * from "./controlledLists.js";

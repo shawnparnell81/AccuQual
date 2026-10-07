@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { blankFormsFolderHref, departmentForFolder, documentsFolderHref, FAI_VALIDATION_FOLDER_NAME, faiValidationDocumentsHref, filingLocation, folderChain, folderIdByName, isBlankTemplateLink, LEGACY_VALIDATION_REPORTS_PATH, leftHandFolders, listFolder, openTarget, saveAsFolders, validationReportsCrumb, visibleExplorerFolders, type BrowseFolder } from "./folderBrowse.ts";
+import { blankFormsFolderHref, departmentForFolder, documentsFolderHref, FAI_VALIDATION_FOLDER_NAME, faiValidationDocumentsHref, filingLocation, folderChain, folderIdByName, isBlankTemplateLink, isLivingListPath, LEGACY_VALIDATION_REPORTS_PATH, leftHandFolders, listFolder, openTarget, saveAsFolders, validationReportsCrumb, visibleExplorerFolders, type BrowseFolder } from "./folderBrowse.ts";
 
 const tree: BrowseFolder[] = [
   { id: 1, name: "Quality", parentId: null, sortOrder: 0 },
@@ -238,5 +238,22 @@ describe("folder browse", () => {
     assert.equal(offered.some((folder) => folder.name === "Blank Forms Templates" || folder.name === "Validation" || folder.name === "Blank Form Templates"), false);
     assert.equal(offered.some((folder) => folder.name === "Quality"), true);
     assert.equal(blankFormsFolderHref(), "/documents/folders?name=Blank%20Forms%20Templates");
+  });
+
+  it("opens a living Quality Manual list as a file", () => {
+    const rows: BrowseFolder[] = [
+      { id: 1, name: "ISO Compliance Documents", parentId: null, sortOrder: 0 },
+      { id: 2, name: "Quality Manual", parentId: 1, sortOrder: 0 },
+      { id: 3, name: "Master Document List", parentId: 2, sortOrder: 0, linkedPath: "/documents/master-list" },
+      { id: 4, name: "Master Equipment List", parentId: 2, sortOrder: 1, linkedPath: "/calibration/master-list" },
+      { id: 5, name: "Scope of Laboratory Activities", parentId: 2, sortOrder: 2, linkedPath: "/documents/laboratory-scope" },
+    ];
+    assert.equal(isLivingListPath("/documents/master-list"), true);
+    assert.equal(isLivingListPath("/ncr"), false);
+    const listing = listFolder(rows, 2);
+    assert.deepEqual(listing.files.map((file) => file.name), ["Master Document List", "Master Equipment List", "Scope of Laboratory Activities"]);
+    assert.equal(openTarget(rows[2]!), "/documents/master-list");
+    assert.equal(openTarget(rows[3]!), "/calibration/master-list");
+    assert.equal(openTarget(rows[4]!), "/documents/laboratory-scope");
   });
 });

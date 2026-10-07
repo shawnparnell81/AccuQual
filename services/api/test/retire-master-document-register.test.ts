@@ -11,13 +11,8 @@ import { createQmsFormSchema } from "../src/modules/qms-forms/qmsForms.validatio
 
 describe("retired Master Document Register", () => {
   it("keeps Master Document List and takes the Register blank out of the library", () => {
-    const list = FORM_TEMPLATES.find((form) => form.formKey === "lst-gen-001");
-    expect(list).toMatchObject({
-      title: "Master Document List",
-      topic: "Document Control",
-      subjectRoute: MASTER_DOCUMENT_LIST_PATH,
-      start: null,
-    });
+    expect(FORM_TEMPLATES.find((form) => form.formKey === "lst-gen-001" || form.formKey === "lst-eqp-001" || form.formKey === "lst-gen-003")).toBeUndefined();
+    expect(MASTER_DOCUMENT_LIST_PATH).toBe("/documents/master-list");
     expect(FORM_TEMPLATES.some((form) => form.formKey === "master_document_register" || form.title === "Master Document Register")).toBe(false);
     expect(RETIRED_FORM_KEYS).toEqual(["master_document_register"]);
     expect(FORM_TEMPLATES.filter((form) => form.formKey === "frm-tst-001" || form.formKey === "frm-tst-002").map((form) => form.formKey)).toEqual(["frm-tst-001", "frm-tst-002"]);
