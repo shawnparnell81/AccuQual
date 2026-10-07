@@ -4,7 +4,7 @@
  * name is still missing. No schema change: an existing folder under the same
  * parent is left where an admin put it. A name that appears once here is
  * reused if someone moved it, unless that copy sits in the blank-template
- * library (those names are reused on purpose, like "Training" and "Validation").
+ * library. A repeated name there is folded into this drawer on the one-time pass.
  * Moving an existing company onto this layout is the job of migration
  * 0094_iso_compliance_folder_tree.
  * Training is its own drawer under ISO, never a child of Quality. A company
@@ -23,8 +23,8 @@ import { documentFolders } from "../../drizzle/schema/documentFolders.js";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
 import { formFilings } from "../../drizzle/schema/formFilings.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
-import { DEFAULT_DOCUMENT_FOLDERS, type DefaultFolderSeed } from "./defaultDocumentFolders.js";
-import { planDuplicateFolderMerges, singleHomeSeedNames } from "./duplicateFolders.js";
+import { type DefaultFolderSeed } from "./defaultDocumentFolders.js";
+import { CANONICAL_FOLDER_HOMES, planDuplicateFolderMerges } from "./duplicateFolders.js";
 import { ensureMainIsoFolders, folderLocationLabel, MAIN_ISO_FOLDER_NAMES } from "./mainIsoFolders.js";
 import { retireNamedDocumentFolders } from "./retiredFolderCleanup.js";
 
@@ -100,10 +100,7 @@ export const COMPANY_DOCUMENT_FOLDERS: DefaultFolderSeed[] = [
       { name: "Procedures", children: [] },
       {
         name: "SOP",
-        children: [
-          { name: "Policies", children: [] },
-          { name: "Procedures", children: [] },
-        ],
+        children: [{ name: "Policies", children: [] }],
       },
     ],
   },
@@ -439,24 +436,49 @@ function folderDepth(folders: FolderRow[], id: number): number {
   return depth;
 }
 
+const WRAPPER_KEEP_NAMES = new Set<string>([ISO_FOLDER_NAME, "Library Pool", ...MAIN_ISO_FOLDER_NAMES]);
+
 /**
- * Folds leftover duplicate folders once per company. A folder Shawn deleted
- * is not recreated here. Opening Documents again does not run the fold a
- * second time, so a pair created later stays.
+ * Drops a parent that the fold just emptied. A drawer directly under ISO,
+ * a main folder, and anything that still holds a file or a child stays.
+ */
+async function removeEmptyWrappers(db: Db, list: FolderRow[], startId: number | null): Promise<FolderRow[]> {
+  let current = list;
+  let id = startId;
+  while (id != null) {
+    const folder = current.find((row) => row.id === id);
+    if (!folder) break;
+    const parentId = folder.parentId;
+    if (WRAPPER_KEEP_NAMES.has(folder.name) || folder.parentId == null || inTemplateLibrary(folder, current)) break;
+    const iso = current.find((row) => row.parentId == null && row.name === ISO_FOLDER_NAME);
+    if (iso && folder.parentId === iso.id) break;
+    if (current.some((row) => row.parentId === folder.id) || hasFolderPayload(folder)) break;
+    const [filing] = await db.select({ id: formFilings.id }).from(formFilings).where(eq(formFilings.folderNodeId, folder.id)).limit(1);
+    if (filing) break;
+    const [template] = await db.select({ id: controlledFormTemplates.id }).from(controlledFormTemplates).where(eq(controlledFormTemplates.folderId, folder.id)).limit(1);
+    if (template) break;
+    await db.delete(documentFolders).where(eq(documentFolders.id, folder.id));
+    current = current.filter((row) => row.id !== folder.id);
+    id = parentId;
+  }
+  return current;
+}
+
+/**
+ * Folds every repeated folder name into one home, once per company.
+ * A main drawer Shawn deleted is not recreated. Opening Documents again
+ * does not run the fold a second time, so a pair created later stays.
  */
 export async function mergeDuplicateFoldersOnce(db: Db, list: FolderRow[], performedBy?: number): Promise<FolderRow[]> {
   const [row] = await db.select({ id: company.id, profile: company.profile }).from(company).limit(1);
-  if (!row || row.profile?.duplicateFoldersMerged === true) return list;
+  if (!row || row.profile?.folderNamesUnified === true) return list;
 
-  const singleHomeNames = singleHomeSeedNames(
-    [...DEFAULT_DOCUMENT_FOLDERS, ...COMPANY_DOCUMENT_FOLDERS],
-    MAIN_ISO_FOLDER_NAMES.map((name) => [ISO_FOLDER_NAME, name]),
-  );
   const plan = planDuplicateFolderMerges(list, {
-    singleHomeNames,
     isoName: ISO_FOLDER_NAME,
-    blankLibraryNames: ["Blank Form Templates", "Blank Forms Templates"],
+    blankShelfNames: ["Blank Forms Templates"],
+    legacyDrawerNames: ["Blank Form Templates"],
     mainIsoNames: MAIN_ISO_FOLDER_NAMES,
+    canonicalHomes: CANONICAL_FOLDER_HOMES,
   }).sort((a, b) => folderDepth(list, b.sourceId) - folderDepth(list, a.sourceId) || a.sourceId - b.sourceId);
 
   let current = list;
@@ -464,9 +486,11 @@ export async function mergeDuplicateFoldersOnce(db: Db, list: FolderRow[], perfo
     const source = current.find((folder) => folder.id === move.sourceId);
     const dest = current.find((folder) => folder.id === move.destId);
     if (!source || !dest || descendsFrom(current, dest.id, source.id)) continue;
+    const fromParentId = source.parentId;
     const fromLabel = `${folderLocationLabel(current, source.parentId)} / ${source.name}`;
     const toLabel = `${folderLocationLabel(current, dest.parentId)} / ${dest.name}`;
     current = await mergeDocumentFolder(db, current, source.id, dest.id);
+    current = await removeEmptyWrappers(db, current, fromParentId);
     await recordAuditTrail(db, {
       entityType: "DocumentFolder",
       entityId: dest.id,
@@ -486,7 +510,10 @@ export async function mergeDuplicateFoldersOnce(db: Db, list: FolderRow[], perfo
 
   const [fresh] = await db.select({ id: company.id, profile: company.profile }).from(company).limit(1);
   if (fresh) {
-    await db.update(company).set({ profile: { ...(fresh.profile ?? {}), duplicateFoldersMerged: true } }).where(eq(company.id, fresh.id));
+    await db
+      .update(company)
+      .set({ profile: { ...(fresh.profile ?? {}), duplicateFoldersMerged: true, folderNamesUnified: true } })
+      .where(eq(company.id, fresh.id));
   }
   return current;
 }

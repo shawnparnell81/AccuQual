@@ -34,7 +34,7 @@ describe("company document folders", () => {
       expect(byPath(paths, ["ISO Compliance Documents", name])).toBe(true);
     }
     expect(byPath(paths, ["ISO Compliance Documents", "SOP", "Policies"])).toBe(true);
-    expect(byPath(paths, ["ISO Compliance Documents", "SOP", "Procedures"])).toBe(true);
+    expect(byPath(paths, ["ISO Compliance Documents", "SOP", "Procedures"])).toBe(false);
     expect(byPath(paths, ["ISO Compliance Documents", "Audits", "Safety Audits"])).toBe(true);
     expect(byPath(paths, ["ISO Compliance Documents", "Training", "Operator Training Records"])).toBe(true);
     expect(paths.some((path) => path.some((name) => name === "PCB" || name === "PCB Layouts"))).toBe(false);
@@ -150,7 +150,7 @@ describe("default document folder seed", () => {
       expect(byPath(paths, ["ISO Compliance Documents", name])).toBe(true);
     }
     expect(byPath(paths, ["ISO Compliance Documents", "SOP", "Policies"])).toBe(true);
-    expect(byPath(paths, ["ISO Compliance Documents", "SOP", "Procedures"])).toBe(true);
+    expect(byPath(paths, ["ISO Compliance Documents", "SOP", "Procedures"])).toBe(false);
     expect(byPath(paths, ["ISO Compliance Documents", "Quality", "Audits"])).toBe(false);
     expect(byPath(paths, ["ISO Compliance Documents", "Quality", "CAPA"])).toBe(false);
     expect(byPath(paths, ["ISO Compliance Documents", "Quality", "NCR"])).toBe(false);

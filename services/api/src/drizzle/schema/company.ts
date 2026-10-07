@@ -234,6 +234,13 @@ export const company = pgTable("company", {
      * spreads this object, so a profile save keeps the flag. No new column.
      */
     duplicateFoldersMerged?: boolean;
+    /**
+     * Set once every folder name has been folded into one home, including
+     * Quality Manual, Engineering Standards, and Procedures. The earlier flag
+     * left those in two places. A folder Shawn creates after this stays.
+     * Company Settings spreads this object. No new column.
+     */
+    folderNamesUnified?: boolean;
   }>().default({}),
   // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for the company's first admin.
   // `dismissed: true` for every company that existed before this shipped (backfillOnboardingChecklist.ts) — an

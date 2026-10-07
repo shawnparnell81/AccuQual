@@ -10,11 +10,10 @@
  * the first release is marked ready without creating whatever is missing.
  *
  * A name is reused only on that first run, and only when it is already a
- * direct child of ISO. A folder with the same name deeper in the tree
- * (Engineering Standards under Specifications, Quality Manual under Quality)
- * is a different folder and stays where it is. Nothing here renames, moves,
- * or deletes an existing row. Sort order is written only on the run that
- * creates the drawers.
+ * direct child of ISO. A deeper folder with the same name is not a second
+ * drawer: the one-time folder fold moves it here. This setup does not
+ * rename, move, or delete an existing row, and it does not put a deleted
+ * drawer back. Sort order is written only on the run that creates the drawers.
  */
 import { eq } from "drizzle-orm";
 import type { Db } from "../../lib/requestDb.js";

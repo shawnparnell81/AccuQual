@@ -43,7 +43,20 @@ async function clearMergeFlag() {
   const [row] = await db.select({ id: company.id, profile: company.profile }).from(company);
   const profile = { ...(row?.profile ?? {}) };
   delete profile.duplicateFoldersMerged;
+  delete profile.folderNamesUnified;
   await db.update(company).set({ profile }).where(eq(company.id, row!.id));
+}
+
+function inLegacyDrawer(folders: FolderRow[], folder: FolderRow): boolean {
+  const byId = new Map(folders.map((row) => [row.id, row]));
+  let current: FolderRow | undefined = folder;
+  const seen = new Set<number>();
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    if (current.name === "Blank Form Templates") return true;
+    current = current.parentId == null ? undefined : byId.get(current.parentId);
+  }
+  return false;
 }
 
 describe("one folder in one place, and library pool moves", () => {
@@ -56,15 +69,34 @@ describe("one folder in one place, and library pool moves", () => {
     productionToken = signAccessToken({ sub: String(production!.id), roleId: null, roleName: "operator", department: "production" });
   });
 
-  it("merges same-parent duplicates once, keeps Quality Manual in both of its homes, and does not bring back a deleted main folder", async () => {
+  it("gives each seeded folder one home, folds a nested Quality Manual into the main drawer, and does not bring back a deleted main folder", async () => {
+    await clearMergeFlag();
     const first = await tree();
     const iso = first.find((folder) => folder.parentId === null && folder.name === "ISO Compliance Documents")!;
     const quality = childNamed(first, iso.id, "Quality")!;
-    const manuals = first.filter((folder) => folder.name === "Quality Manual");
-    expect(manuals.length).toBeGreaterThan(1);
-    expect(new Set(manuals.map((folder) => folder.parentId)).size).toBe(manuals.length);
+    const manual = childNamed(first, iso.id, "Quality Manual")!;
+    const standards = childNamed(first, iso.id, "Engineering Standards")!;
+    const procedures = childNamed(first, iso.id, "Procedures")!;
+    expect(manual).toBeTruthy();
+    expect(standards).toBeTruthy();
+    expect(procedures).toBeTruthy();
 
+    const filingNames = new Map<string, number>();
+    for (const folder of first) {
+      if (inLegacyDrawer(first, folder)) continue;
+      if (folder.pdfPath || folder.documentId || folder.linkedPath) continue;
+      filingNames.set(folder.name, (filingNames.get(folder.name) ?? 0) + 1);
+    }
+    const repeated = [...filingNames.entries()].filter(([, count]) => count > 1).map(([name]) => name);
+    expect(repeated).toEqual([]);
+
+    const policies = first.find((folder) => folder.name === "Quality Manual & Policies" && folder.parentId === quality.id)!;
     await clearMergeFlag();
+    const [nestedManual] = await db.insert(documentFolders).values({ name: "Quality Manual", parentId: policies.id, sortOrder: 0 }).returning();
+    const [scopeNotes] = await db.insert(documentFolders).values({ name: "Scope notes", parentId: nestedManual!.id, sortOrder: 0, linkedPath: "/documents/master-list" }).returning();
+    const [onlyChild] = await db.insert(documentFolders).values({ name: "Empty shelf", parentId: quality.id, sortOrder: 90 }).returning();
+    const [nestedProcedures] = await db.insert(documentFolders).values({ name: "Procedures", parentId: onlyChild!.id, sortOrder: 0 }).returning();
+
     const [copy] = await db.insert(documentFolders).values({ name: "Quality", parentId: iso.id, sortOrder: 80 }).returning();
     const [kept] = await db.insert(documentFolders).values({ name: "Kept notes", parentId: copy!.id, sortOrder: 0 }).returning();
 
@@ -74,14 +106,22 @@ describe("one folder in one place, and library pool moves", () => {
     expect(qualities[0]?.id).toBe(quality.id);
     expect(merged.find((folder) => folder.id === kept!.id)?.parentId).toBe(quality.id);
     expect(merged.some((folder) => folder.id === copy!.id)).toBe(false);
-    const stillManuals = merged.filter((folder) => folder.name === "Quality Manual");
-    expect(stillManuals.map((folder) => folder.parentId).sort()).toEqual(manuals.map((folder) => folder.parentId).sort());
+    const manuals = merged.filter((folder) => folder.name === "Quality Manual" && !inLegacyDrawer(merged, folder));
+    expect(manuals).toHaveLength(1);
+    expect(manuals[0]?.id).toBe(manual.id);
+    expect(merged.find((folder) => folder.id === scopeNotes!.id)?.parentId).toBe(manual.id);
+    expect(merged.find((folder) => folder.id === scopeNotes!.id)?.linkedPath).toBe("/documents/master-list");
+    expect(merged.some((folder) => folder.id === nestedManual!.id)).toBe(false);
+    expect(merged.filter((folder) => folder.name === "Procedures" && !inLegacyDrawer(merged, folder))).toHaveLength(1);
+    expect(merged.find((folder) => folder.name === "Procedures")?.id).toBe(procedures.id);
+    expect(merged.some((folder) => folder.id === nestedProcedures!.id || folder.id === onlyChild!.id)).toBe(false);
+    expect(merged.some((folder) => folder.id === policies.id)).toBe(true);
 
-    const history = await request(app).get(`/audit-trail/DocumentFolder/${quality.id}`).set("Authorization", `Bearer ${qualityToken}`);
+    const history = await request(app).get(`/audit-trail/DocumentFolder/${manual.id}`).set("Authorization", `Bearer ${qualityToken}`);
     expect(history.status).toBe(200);
-    const line = (history.body as { performedByName?: string; changes?: { summary?: string; event?: string } }[]).find((row) => row.changes?.event === "merged");
+    const line = (history.body as { performedByName?: string; changes?: { summary?: string; event?: string } }[]).find((row) => row.changes?.event === "merged" && row.changes?.summary?.includes("Quality Manual"));
     expect(line?.performedByName).toContain("Shawn Parnell");
-    expect(line?.changes?.summary).toMatch(/Merged the duplicate folder "Quality" from .+ → .+/);
+    expect(line?.changes?.summary).toMatch(/Merged the duplicate folder "Quality Manual" from .+ → .+/);
 
     const [extra] = await db.insert(documentFolders).values({ name: "Notes", parentId: quality.id, sortOrder: 3 }).returning();
     const [extraAgain] = await db.insert(documentFolders).values({ name: "Notes", parentId: quality.id, sortOrder: 4 }).returning();
@@ -153,5 +193,31 @@ describe("one folder in one place, and library pool moves", () => {
     const orphanHistory = await request(app).get(`/audit-trail/DocumentFolder/${orphan!.id}`).set("Authorization", `Bearer ${qualityToken}`);
     const orphanLine = (orphanHistory.body as { changes?: { summary?: string; keptRecord?: boolean } }[]).find((row) => row.changes?.keptRecord === false);
     expect(orphanLine?.changes?.summary).toMatch(/uploaded file/);
+  });
+
+  it("does not recreate a deleted main folder, and folds a second nested copy into the one that is left", async () => {
+    const before = await tree();
+    const iso = before.find((folder) => folder.parentId === null && folder.name === "ISO Compliance Documents")!;
+    const standards = childNamed(before, iso.id, "Engineering Standards")!;
+    const removed = await request(app).delete(`/document-folders/${standards.id}`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(removed.status).toBe(204);
+
+    const quality = childNamed(before, iso.id, "Quality")!;
+    const engineering = childNamed(before, iso.id, "Engineering")!;
+    const specs = childNamed(before, engineering.id, "Specifications & Standards");
+    const parentId = specs?.id ?? engineering.id;
+    await clearMergeFlag();
+    const [keptHome] = await db.insert(documentFolders).values({ name: "Engineering Standards", parentId, sortOrder: 0 }).returning();
+    const [drawing] = await db.insert(documentFolders).values({ name: "GD&T note", parentId: keptHome!.id, sortOrder: 0 }).returning();
+    const [extraHome] = await db.insert(documentFolders).values({ name: "Engineering Standards", parentId: quality.id, sortOrder: 0 }).returning();
+
+    const after = await tree();
+    const homes = after.filter((folder) => folder.name === "Engineering Standards");
+    expect(homes).toHaveLength(1);
+    expect(homes[0]?.parentId).not.toBe(iso.id);
+    expect(homes[0]?.id).toBe(keptHome!.id);
+    expect(after.find((folder) => folder.id === drawing!.id)?.parentId).toBe(keptHome!.id);
+    expect(after.some((folder) => folder.id === extraHome!.id || folder.id === standards.id)).toBe(false);
+    expect(after.some((folder) => folder.parentId === iso.id && folder.name === "Engineering Standards")).toBe(false);
   });
 });

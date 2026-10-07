@@ -1,10 +1,14 @@
 /**
- * One-time fold of duplicate document folders.
- * Same name under the same parent always folds into the oldest row.
- * A department still sitting at the top level folds into the copy under ISO.
- * An empty leftover of a seed name that lives in only one place folds into
- * the older copy. Quality Manual under ISO and the older one under Quality
- * stay apart: the seed puts that name in two places on purpose.
+ * One-time fold so each folder name sits in one place.
+ * Same name under the same parent folds into the oldest row.
+ * A name that also lives somewhere else folds into its one home:
+ * a main ISO drawer stays directly under ISO Compliance Documents,
+ * and any other repeated seed name stays on the path listed in
+ * CANONICAL_FOLDER_HOMES. A deleted main drawer is not recreated;
+ * the remaining copy is the home. A Blank Forms Templates topic that
+ * repeats a company folder folds into that folder, and the shortcut
+ * moves with it. The older Blank Form Templates drawer is left alone:
+ * the living Quality Manual lists stay there until their own change.
  */
 
 export interface MergeFolder {
@@ -27,11 +31,33 @@ export interface SeedNode {
 }
 
 export interface DuplicateMergeOptions {
-  singleHomeNames: ReadonlySet<string>;
   isoName: string;
-  blankLibraryNames: readonly string[];
+  /** Topic shelf whose repeated names fold into the company folder. */
+  blankShelfNames: readonly string[];
+  /** Hidden drawer that is not folded. Living lists stay on it. */
+  legacyDrawerNames: readonly string[];
   mainIsoNames: readonly string[];
+  /** Parent path for a name that the seeds used to plant in more than one place. */
+  canonicalHomes: Readonly<Record<string, readonly string[]>>;
 }
+
+/**
+ * The one parent path each formerly repeated seed name keeps.
+ * Main drawers sit directly under ISO. The others keep the Quality
+ * drawer that already files that record, and the extra Engineering
+ * or Records copy is the one that folds in.
+ */
+export const CANONICAL_FOLDER_HOMES: Readonly<Record<string, readonly string[]>> = {
+  "Quality Manual": ["ISO Compliance Documents"],
+  Procedures: ["ISO Compliance Documents"],
+  "Engineering Standards": ["ISO Compliance Documents"],
+  "Calibration Certificates": ["ISO Compliance Documents", "Quality", "Calibration & Equipment"],
+  "Equipment Master List": ["ISO Compliance Documents", "Quality", "Calibration & Equipment"],
+  "Training Records": ["ISO Compliance Documents", "Quality", "Training & Competency"],
+  PFMEA: ["ISO Compliance Documents", "Quality", "Risk Management"],
+  "Control Plans": ["ISO Compliance Documents", "Quality", "Risk Management"],
+  "Process Flow Diagrams": ["ISO Compliance Documents", "Quality", "Risk Management"],
+};
 
 function savedItem(node: MergeFolder): boolean {
   return node.pdfPath != null || node.documentId != null || (node.linkedPath != null && node.linkedPath !== "");
@@ -93,8 +119,34 @@ function descendsFrom(folders: MergeFolder[], nodeId: number, ancestorId: number
   return false;
 }
 
-/** Names the seeds place on exactly one path. A second copy of those is a leftover. */
-export function singleHomeSeedNames(trees: SeedNode[], extraPaths: string[][]): Set<string> {
+function ancestorNames(folders: MergeFolder[], id: number): string[] {
+  const byId = new Map(folders.map((folder) => [folder.id, folder]));
+  const names: string[] = [];
+  let current = byId.get(id);
+  const seen = new Set<number>();
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    names.unshift(current.name);
+    current = current.parentId == null ? undefined : byId.get(current.parentId);
+  }
+  return names;
+}
+
+function parentPath(folders: MergeFolder[], folder: MergeFolder): string[] {
+  if (folder.parentId == null) return [];
+  return ancestorNames(folders, folder.parentId);
+}
+
+function samePath(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((name, index) => name === right[index]);
+}
+
+function byId(a: MergeFolder, b: MergeFolder): number {
+  return a.id - b.id;
+}
+
+/** Every path the seeds give a name, including the 14 main drawers under ISO. */
+export function seededFolderPaths(trees: SeedNode[], extraPaths: string[][]): Map<string, string[]> {
   const paths = new Map<string, Set<string>>();
   function walk(nodes: SeedNode[], prefix: string[]) {
     for (const node of nodes) {
@@ -113,11 +165,15 @@ export function singleHomeSeedNames(trees: SeedNode[], extraPaths: string[][]): 
     set.add(path.join(" / "));
     paths.set(name, set);
   }
-  const single = new Set<string>();
-  for (const [name, set] of paths) {
-    if (set.size === 1) single.add(name);
-  }
-  return single;
+  return new Map([...paths.entries()].map(([name, set]) => [name, [...set].sort()]));
+}
+
+/** Seed names that still appear on more than one path. Empty once each name has one home. */
+export function repeatedSeedFolderNames(trees: SeedNode[], extraPaths: string[][]): string[] {
+  return [...seededFolderPaths(trees, extraPaths).entries()]
+    .filter(([, paths]) => paths.length > 1)
+    .map(([name]) => name)
+    .sort((a, b) => a.localeCompare(b));
 }
 
 export function planDuplicateFolderMerges(folders: MergeFolder[], options: DuplicateMergeOptions): FolderMerge[] {
@@ -147,50 +203,43 @@ export function planDuplicateFolderMerges(folders: MergeFolder[], options: Dupli
   }
   for (const group of sameParent.values()) {
     if (group.length < 2) continue;
-    const sorted = [...group].sort((a, b) => a.id - b.id);
+    const sorted = [...group].sort(byId);
     const dest = sorted[0];
     if (!dest) continue;
     for (const source of sorted.slice(1)) add(source.id, dest.id);
   }
 
-  const outsideLibrary = containers.filter(
-    (folder) => !usedSources.has(folder.id) && !inBlankLibrary(folder, folders, options.blankLibraryNames),
+  const listed = containers.filter(
+    (folder) => !usedSources.has(folder.id) && !inBlankLibrary(folder, folders, options.legacyDrawerNames),
   );
   const byName = new Map<string, MergeFolder[]>();
-  for (const folder of outsideLibrary) {
+  for (const folder of listed) {
     const list = byName.get(folder.name) ?? [];
     list.push(folder);
     byName.set(folder.name, list);
   }
 
   for (const [name, copies] of byName) {
-    if (!options.singleHomeNames.has(name)) continue;
     const eligible = copies.filter((folder) => !usedSources.has(folder.id));
     if (eligible.length < 2) continue;
-    const withPayload = eligible.filter((folder) => subtreeHasPayload(folder.id, folders, children)).sort((a, b) => a.id - b.id);
-    const dest = withPayload[0] ?? [...eligible].sort((a, b) => a.id - b.id)[0];
-    if (!dest) continue;
-    for (const source of eligible) {
-      if (source.id === dest.id || usedSources.has(source.id)) continue;
-      if (mainIso.has(source.name) && iso && source.parentId === iso.id) continue;
-      if (subtreeHasPayload(source.id, folders, children)) continue;
-      add(source.id, dest.id);
+    const companyCopies = eligible.filter((folder) => !inBlankLibrary(folder, folders, options.blankShelfNames));
+    const pool = companyCopies.length > 0 ? companyCopies : eligible;
+    const underIso = iso ? pool.filter((folder) => folder.parentId === iso.id).sort(byId) : [];
+    const home = options.canonicalHomes[name];
+    const atHome = home ? pool.filter((folder) => samePath(parentPath(folders, folder), home)).sort(byId) : [];
+    const withPayload = pool.filter((folder) => subtreeHasPayload(folder.id, folders, children)).sort(byId);
+    const oldest = [...pool].sort(byId);
+    let dest: MergeFolder | undefined;
+    if (mainIso.has(name)) {
+      dest = underIso[0] ?? atHome[0] ?? withPayload[0] ?? oldest[0];
+    } else {
+      dest = atHome[0] ?? underIso[0] ?? withPayload[0] ?? oldest[0];
     }
-  }
-
-  if (iso) {
-    for (const [name, copies] of byName) {
-      if (name === options.isoName) continue;
-      const roots = copies.filter((folder) => folder.parentId == null && !usedSources.has(folder.id)).sort((a, b) => a.id - b.id);
-      if (roots.length === 0) continue;
-      const underIso = copies.filter((folder) => folder.parentId === iso.id).sort((a, b) => a.id - b.id);
-      const kept = underIso.find((folder) => !usedSources.has(folder.id));
-      const foldedInto = underIso
-        .map((folder) => merges.find((move) => move.sourceId === folder.id)?.destId)
-        .find((destId) => destId != null);
-      const dest = kept ?? (foldedInto == null ? undefined : folders.find((folder) => folder.id === foldedInto));
-      if (!dest) continue;
-      for (const source of roots) add(source.id, dest.id);
+    if (!dest) continue;
+    if (companyCopies.length === 0) continue;
+    for (const source of eligible) {
+      if (source.id === dest.id) continue;
+      add(source.id, dest.id);
     }
   }
 
