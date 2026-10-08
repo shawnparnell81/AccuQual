@@ -6,6 +6,7 @@ import { PdfExportActions } from "../../components/records/PdfExportActions";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage, extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { ClaimsReturnsChart, EmailIssuesChart, FuelPumpChart, VehicleChart } from "./engineeringReportCharts";
+import { ReportRecipientsField, type RecipientPerson } from "../../components/reports/ReportRecipientsField";
 
 type Status = "" | "green" | "yellow" | "red";
 
@@ -48,6 +49,7 @@ interface ReportView {
   saved: boolean;
   uploadFileName: string | null;
   canEdit: boolean;
+  recipients?: string[];
   narrative: Narrative;
   executive: {
     rawClaimCount: number | null;
@@ -226,7 +228,9 @@ export function EngineeringMonthlyReport() {
   const [year, setYear] = useState(initial.year);
   const [month, setMonth] = useState(initial.month);
   const [narrative, setNarrative] = useState<Narrative | null>(null);
+  const [recipients, setRecipients] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
+  const [recipientsDirty, setRecipientsDirty] = useState(false);
   const [replaceNotes, setReplaceNotes] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [exportId, setExportId] = useState<string | null>(null);
@@ -243,8 +247,15 @@ export function EngineeringMonthlyReport() {
     queryFn: async () => (await apiClient.get<HelpDoc>("/reports/engineering/help")).data,
   });
 
+  const people = useQuery({
+    queryKey: ["engineering-report-people"],
+    enabled: report.isSuccess,
+    queryFn: async () => (await apiClient.get<RecipientPerson[]>("/reports/engineering/people")).data,
+  });
+
   useEffect(() => {
     setDirty(false);
+    setRecipientsDirty(false);
     setWarnings([]);
     setExportId(null);
   }, [year, month]);
@@ -253,18 +264,42 @@ export function EngineeringMonthlyReport() {
     if (report.data && !dirty) setNarrative(report.data.narrative);
   }, [report.data, dirty]);
 
+  useEffect(() => {
+    if (report.data && !recipientsDirty) setRecipients(report.data.recipients ?? []);
+  }, [report.data, recipientsDirty]);
+
   const save = useMutation({
     mutationFn: async () => {
       if (!narrative) throw new Error("The report is still loading.");
-      return (await apiClient.put<ReportView>("/reports/engineering", { year, month, narrative })).data;
+      return (await apiClient.put<ReportView>("/reports/engineering", { year, month, narrative, recipients })).data;
     },
     onSuccess: async (next) => {
       setNarrative(next.narrative);
+      setRecipients(next.recipients ?? []);
       setDirty(false);
+      setRecipientsDirty(false);
       await queryClient.invalidateQueries({ queryKey: ["engineering-report", year, month] });
       toast.success("Narrative saved.");
     },
     onError: (err) => toast.error(extractErrorMessage(err, "The narrative didn't save.")),
+  });
+
+  const emailNow = useMutation({
+    mutationFn: async () => {
+      if (!narrative) throw new Error("The report is still loading.");
+      return (await apiClient.post<{ report: ReportView; deliveries: { to: string; status: string }[] }>("/reports/engineering/email", { year, month, narrative, recipients })).data;
+    },
+    onSuccess: async (result) => {
+      setNarrative(result.report.narrative);
+      setRecipients(result.report.recipients ?? []);
+      setDirty(false);
+      setRecipientsDirty(false);
+      await queryClient.invalidateQueries({ queryKey: ["engineering-report", year, month] });
+      const failed = result.deliveries.filter((row) => row.status === "failed");
+      if (failed.length === 0) toast.success(`Report sent to ${result.deliveries.length} recipient${result.deliveries.length === 1 ? "" : "s"}.`);
+      else toast.error(`Sent to ${result.deliveries.length - failed.length}. Failed: ${failed.map((row) => row.to).join(", ")}`);
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, "The report didn't send.")),
   });
 
   const upload = useMutation({
@@ -278,7 +313,9 @@ export function EngineeringMonthlyReport() {
     },
     onSuccess: async (result) => {
       setNarrative(result.report.narrative);
+      setRecipients(result.report.recipients ?? []);
       setDirty(false);
+      setRecipientsDirty(false);
       setWarnings(result.warnings);
       await queryClient.invalidateQueries({ queryKey: ["engineering-report", year, month] });
       toast.success("Supplier file loaded.");
@@ -372,9 +409,22 @@ export function EngineeringMonthlyReport() {
             </label>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-end gap-2">
+          <ReportRecipientsField
+            label="Email recipients"
+            value={recipients}
+            people={people.data ?? []}
+            disabled={locked}
+            onChange={(next) => {
+              setRecipients(next);
+              setRecipientsDirty(true);
+            }}
+          />
           <button type="button" className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60" disabled={locked || save.isPending || !narrative} onClick={() => save.mutate()}>
             {save.isPending ? "Saving…" : "Save narrative"}
+          </button>
+          <button type="button" className="rounded-md border border-border px-3 py-1.5 text-sm disabled:opacity-60" disabled={locked || emailNow.isPending || recipients.length === 0 || !narrative} onClick={() => emailNow.mutate()}>
+            {emailNow.isPending ? "Sending…" : "Email now"}
           </button>
           <button type="button" className="rounded-md border border-border px-3 py-1.5 text-sm" onClick={() => void downloadTemplate()}>
             Download sample CSV

@@ -5,9 +5,12 @@ import { fileURLToPath } from "node:url";
 import type { Db } from "../../lib/requestDb.js";
 import { AppError } from "../../utils/appError.js";
 import { qualityEngineeringReports } from "../../drizzle/schema/qualityEngineeringReport.js";
+import { readStoredRecipients } from "../../lib/reportRecipients.js";
+import { deliverReportToEach, type ReportDelivery } from "../reporting/reportDelivery.js";
 import { engineeringAccess, pullLive } from "./livePull.js";
 import {
   assembleReport,
+  emptyNarrative,
   emptySupplierData,
   mergeUploadNarrative,
   normalizeNarrative,
@@ -87,6 +90,7 @@ export async function buildEngineeringReport(
     saved: row != null,
     uploadFileName: row?.uploadFileName ?? null,
     canEdit: access.canEdit,
+    recipients: readStoredRecipients(row?.recipients),
   });
 }
 
@@ -96,6 +100,7 @@ export async function saveEngineeringNarrative(
     year: number;
     month: number;
     narrative: EngineeringNarrative;
+    recipients?: string[];
     user: { id: number; roleName: string | null; department: string | null };
     siteIds: number[];
   },
@@ -113,10 +118,16 @@ export async function saveEngineeringNarrative(
       createdBy: input.user.id,
       updatedBy: input.user.id,
       updatedAt: now,
+      ...(input.recipients !== undefined ? { recipients: input.recipients } : {}),
     })
     .onConflictDoUpdate({
       target: [qualityEngineeringReports.year, qualityEngineeringReports.month],
-      set: { narrative: input.narrative as unknown as Record<string, unknown>, updatedBy: input.user.id, updatedAt: now },
+      set: {
+        narrative: input.narrative as unknown as Record<string, unknown>,
+        updatedBy: input.user.id,
+        updatedAt: now,
+        ...(input.recipients !== undefined ? { recipients: input.recipients } : {}),
+      },
     });
   return buildEngineeringReport(db, input);
 }
@@ -163,4 +174,66 @@ export async function uploadEngineeringSupplier(
     });
   const report = await buildEngineeringReport(db, input);
   return { report, warnings: parsed.warnings };
+}
+
+function engineeringEmailCopy(report: EngineeringReportView): { subject: string; body: string } {
+  const status = report.executive.departmentStatus || "not set";
+  const lines = [report.title, `${report.documentId} Rev ${report.revision}`, `Department status: ${status}`];
+  if (report.narrative.primaryAchievement.trim()) lines.push("", `Primary achievement: ${report.narrative.primaryAchievement.trim()}`);
+  if (report.narrative.criticalRisk.trim()) lines.push("", `Critical risk: ${report.narrative.criticalRisk.trim()}`);
+  lines.push("", "The full monthly report is in AccuQual under Reports, Quality / Engineering.");
+  return { subject: `${report.title} (${report.documentId})`, body: lines.join("\n") };
+}
+
+/** Saves the recipient list (and narrative, when the editor sent one) and emails each address. */
+export async function emailEngineeringReport(
+  db: Db,
+  input: {
+    year: number;
+    month: number;
+    recipients: string[];
+    narrative?: EngineeringNarrative;
+    user: { id: number; roleName: string | null; department: string | null };
+    siteIds: number[];
+  },
+): Promise<{ report: EngineeringReportView; deliveries: ReportDelivery[] }> {
+  const access = await engineeringAccess(db, input.user);
+  if (!access.canEdit) throw AppError.forbidden("This report is read-only for your access.");
+  if (input.recipients.length === 0) throw AppError.badRequest("Add at least one email address.");
+  const now = new Date();
+  await db
+    .insert(qualityEngineeringReports)
+    .values({
+      year: input.year,
+      month: input.month,
+      narrative: (input.narrative ?? emptyNarrative()) as unknown as Record<string, unknown>,
+      supplierData: emptySupplierData() as unknown as Record<string, unknown>,
+      recipients: input.recipients,
+      createdBy: input.user.id,
+      updatedBy: input.user.id,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [qualityEngineeringReports.year, qualityEngineeringReports.month],
+      set: {
+        recipients: input.recipients,
+        updatedBy: input.user.id,
+        updatedAt: now,
+        ...(input.narrative ? { narrative: input.narrative as unknown as Record<string, unknown> } : {}),
+      },
+    });
+  const report = await buildEngineeringReport(db, input);
+  const row = await loadRow(db, input.year, input.month);
+  if (!row) throw new AppError("The report didn't save.", 500);
+  const message = engineeringEmailCopy(report);
+  const deliveries = await deliverReportToEach(db, {
+    recipients: input.recipients,
+    subject: message.subject,
+    body: message.body,
+    entityType: "QualityEngineeringReport",
+    entityId: row.id,
+    reportName: report.title,
+    performedBy: input.user.id,
+  });
+  return { report, deliveries };
 }

@@ -9,8 +9,10 @@ import { applyChrome, loadPdfChrome, persistPdfExport } from "../pdf-exports/pdf
 import { sniffSpreadsheet } from "../../utils/fileSniff.js";
 import { SUPPLIER_COLUMNS, SUPPLIER_UPLOAD_NOTE } from "./supplierHelp.js";
 import { renderEngineeringReportPdf } from "./pdf.js";
-import { buildEngineeringReport, saveEngineeringNarrative, supplierTemplateFile, uploadEngineeringSupplier } from "./service.js";
-import { DOCUMENT_ID, DOCUMENT_REVISION, DOCUMENT_TITLE } from "./model.js";
+import { buildEngineeringReport, emailEngineeringReport, saveEngineeringNarrative, supplierTemplateFile, uploadEngineeringSupplier } from "./service.js";
+import { engineeringAccess } from "./livePull.js";
+import { listRecipientPeople } from "../reporting/recipientPeople.js";
+import { DOCUMENT_ID, DOCUMENT_REVISION, DOCUMENT_TITLE, type EngineeringNarrative } from "./model.js";
 
 function periodFrom(source: { year?: unknown; month?: unknown }): { year: number; month: number } {
   const year = Number(source.year);
@@ -53,8 +55,40 @@ export const engineeringGetHandler = asyncHandler(async (req: Request, res: Resp
 });
 
 export const engineeringSaveHandler = asyncHandler(async (req: Request, res: Response) => {
-  const body = req.body as { year: number; month: number; narrative: Parameters<typeof saveEngineeringNarrative>[1]["narrative"] };
-  res.json(await saveEngineeringNarrative(req.db!, { ...actor(req), year: body.year, month: body.month, narrative: body.narrative }));
+  const body = req.body as {
+    year: number;
+    month: number;
+    narrative: Parameters<typeof saveEngineeringNarrative>[1]["narrative"];
+    recipients?: string[];
+  };
+  res.json(
+    await saveEngineeringNarrative(req.db!, {
+      ...actor(req),
+      year: body.year,
+      month: body.month,
+      narrative: body.narrative,
+      recipients: body.recipients,
+    }),
+  );
+});
+
+export const engineeringPeopleHandler = asyncHandler(async (req: Request, res: Response) => {
+  const access = await engineeringAccess(req.db!, { id: req.user!.id, roleName: req.user!.roleName, department: req.user!.department });
+  if (!access.canRead) throw AppError.forbidden("You don't have access to the modules in this report.");
+  res.json(await listRecipientPeople(req.db!));
+});
+
+export const engineeringEmailHandler = asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body as { year: number; month: number; recipients: string[]; narrative?: EngineeringNarrative };
+  res.json(
+    await emailEngineeringReport(req.db!, {
+      ...actor(req),
+      year: body.year,
+      month: body.month,
+      recipients: body.recipients,
+      narrative: body.narrative,
+    }),
+  );
 });
 
 export const engineeringUploadHandler = asyncHandler(async (req: Request, res: Response) => {

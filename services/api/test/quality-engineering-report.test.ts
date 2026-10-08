@@ -87,6 +87,7 @@ describe("quality engineering supplier upload", () => {
     expect(blank.executive.rawClaimCount).toBeNull();
     expect(blank.tables.metrics.totalClaims.every((value) => value == null)).toBe(true);
     expect(blank.charts.claimsSeriesScope).toBe("empty");
+    expect(blank.recipients).toEqual([]);
     expect(monthWindow(2026, 8)).toEqual(["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08"]);
 
     expect(saveEngineeringReportSchema.parse({ year: 2026, month: 8, narrative })).toMatchObject({

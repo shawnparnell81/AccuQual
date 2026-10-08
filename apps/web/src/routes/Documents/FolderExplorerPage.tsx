@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { blankFormsFolderHref, contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderIdByName, isBlankTemplateLink, isFolderEntry, leftHandFolders, listFolder, openTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
+import { blankFormsFolderHref, contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderDepth, folderIdByName, folderTreeOpen, isBlankTemplateLink, isFolderEntry, leftHandFolders, listFolder, openTarget, treeOpenForTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
 import { ValidationReportsPanel } from "../ValidationReports/ValidationReportsPanel";
 import { ChevronDown, ChevronLeft, ChevronRight, Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical, Folder, FolderOpen, MessageSquare } from "lucide-react";
 import { canGoBack, canGoForward, explorerCrumbs, initialExplorerHistory, pushExplorerPlace, stepExplorerHistory, virtualRange, type ExplorerHistory, type ExplorerPlace } from "../../lib/explorerNav";
@@ -134,7 +134,7 @@ function FolderTreeBranch({
   onMove?: (folder: DocumentFolder) => void;
 }) {
   const children = listFolder(folders, folder.id).folders;
-  const open = treeOpen[folder.id] ?? isoRoot;
+  const open = folderTreeOpen(treeOpen[folder.id], depth);
   const selected = selectedId === folder.id;
   const Icon = open && children.length > 0 ? FolderOpen : Folder;
   const showGaps = dragKind === "folder";
@@ -490,22 +490,19 @@ export function FolderExplorerPage() {
   const requestedFolderId = folderParam != null && /^\d+$/.test(folderParam) ? Number(folderParam) : namedFolderId;
   const openFolder = requestedFolderId == null ? undefined : visibleFolders.find((folder) => folder.id === requestedFolderId);
   const selectedTreeId = openFolder?.id ?? activeDept?.id ?? null;
+  const deptParam = searchParams.get("dept");
+  const linkedDeptId = deptParam != null && /^\d+$/.test(deptParam) ? Number(deptParam) : null;
+  const expandTargetId = requestedFolderId ?? linkedDeptId;
+  const appliedExpand = useRef<number | null>(null);
 
   useEffect(() => {
-    if (selectedTreeId == null) return;
-    const chain = folderChain(visibleFolders, selectedTreeId);
-    setTreeOpen((current) => {
-      let changed = false;
-      const next = { ...current };
-      for (const crumb of chain.slice(0, -1)) {
-        if (next[crumb.id] !== true) {
-          next[crumb.id] = true;
-          changed = true;
-        }
-      }
-      return changed ? next : current;
-    });
-  }, [selectedTreeId, visibleFolders]);
+    if (expandTargetId == null) return;
+    if (appliedExpand.current === expandTargetId) return;
+    if (!visibleFolders.some((folder) => folder.id === expandTargetId)) return;
+    appliedExpand.current = expandTargetId;
+    const required = treeOpenForTarget(visibleFolders, expandTargetId);
+    setTreeOpen((current) => ({ ...current, ...required }));
+  }, [expandTargetId, visibleFolders]);
 
   useEffect(() => {
     if (!isFetching) setExpandingId(null);
@@ -827,7 +824,7 @@ export function FolderExplorerPage() {
   function toggleTree(id: number) {
     setExpandingId(id);
     setTreeOpen((current) => {
-      const wasOpen = current[id] ?? id === isoRoot?.id;
+      const wasOpen = folderTreeOpen(current[id], folderDepth(visibleFolders, id));
       return { ...current, [id]: !wasOpen };
     });
   }
@@ -1087,7 +1084,7 @@ export function FolderExplorerPage() {
             const listing = listFolder(visibleFolders, sub.id);
             const subfolders = listing.folders.filter((row) => !query || row.name.toLowerCase().includes(query));
             const docs = listing.files.filter((row) => !query || row.name.toLowerCase().includes(query));
-            const isCollapsed = collapsed[sub.id];
+            const isCollapsed = query.length > 0 ? false : collapsed[sub.id] !== false;
             const isDropTarget = dropHoverId === sub.id;
             const beforeCard = gapKey(activeDept.id, sub.id, "folder");
             const afterCards = gapKey(activeDept.id, null, "folder");
@@ -1116,7 +1113,7 @@ export function FolderExplorerPage() {
                     beginDrag(e, sub.id, "folder");
                   }}
                   onDragEnd={endDrag}
-                  onClick={() => setCollapsed((c) => ({ ...c, [sub.id]: !c[sub.id] }))}
+                  onClick={() => setCollapsed((c) => ({ ...c, [sub.id]: c[sub.id] === false }))}
                   onDragOver={(e) => hoverRow(e, sub)}
                   onDragLeave={() => leaveRow(sub.id)}
                   onDrop={(e) => dropRow(e, sub)}
