@@ -181,6 +181,24 @@ describe("living controlled lists", () => {
       [{ id: 9, formKey: "lst-ncr-001", formId: "LST-NCR-001", title: "Non-Conformance Log" }],
     );
     expect(keptBlank).toEqual({ documentIds: [], templateIds: [], folderNodeIds: [] });
+    const audit = planListCleanup(
+      [
+        { id: 1, name: "ISO Compliance Documents", parentId: null },
+        { id: 2, name: "Management System", parentId: 1 },
+        { id: 3, name: "LST-GEN-002", parentId: 2, linkedPath: "/documents/internal-audit-schedule" },
+        { id: 4, name: "Internal Audit Schedule.xlsx", parentId: 2, documentId: 40, pdfPath: "files/audit.xlsx" },
+        { id: 5, name: "Blank Forms Templates", parentId: 1 },
+        { id: 6, name: "LST-GEN-002", parentId: 5 },
+        { id: 7, name: "Audits", parentId: 1 },
+        { id: 8, name: "Internal Audit Schedule", parentId: 7 },
+        { id: 9, name: "Internal Audit Schedule", parentId: 2, linkedPath: "/documents/88001" },
+      ],
+      [{ id: 40, title: "Internal Audit Schedule" }],
+      [{ id: 8, formKey: "custom-audit", formId: "LST-GEN-002", title: "Internal Audit Schedule" }],
+    );
+    expect(audit.documentIds).toEqual([40]);
+    expect(audit.templateIds).toEqual([8]);
+    expect(audit.folderNodeIds.sort((a, b) => a - b)).toEqual([4, 6]);
     const again = planListCleanup(
       folders.filter((folder) => !plan.folderNodeIds.includes(folder.id)),
       [{ id: 12, title: "Torque procedure" }],
@@ -379,7 +397,118 @@ describe("living controlled lists", () => {
     expect(restoreHeaderBlock("lst-dev-001", freshSheets("lst-dev-001")).changed).toBe(false);
     expect(restoreHeaderBlock("lst-eqp-001", freshSheets("lst-eqp-001")).changed).toBe(false);
     expect(restoreHeaderBlock("lst-gen-001", freshSheets("lst-gen-001")).changed).toBe(false);
+    expect(restoreHeaderBlock("lst-gen-002", freshSheets("lst-gen-002")).changed).toBe(false);
     expect(restoreHeaderBlock("lst-gen-003", freshSheets("lst-gen-003")).changed).toBe(false);
+  });
+
+  it("keeps the internal audit schedule header, rows, and Rev A", async () => {
+    const sheetName = "LST-GEN-002 - Internal Audit Sc";
+    const sheets = freshSheets("lst-gen-002");
+    expect(sheets.map((sheet) => sheet.name)).toEqual([sheetName]);
+    const sheet = sheets[0]!;
+    expect(LISTS["lst-gen-002"].revision).toBe("A");
+    expect(LISTS["lst-gen-002"].folder).toBe("Management System");
+    expect(LISTS["lst-gen-002"].nodeName).toBe("LST-GEN-002");
+    expect(workbookFileName("lst-gen-002")).toBe("LST-GEN-002.xlsx");
+    expect(sheet.maxRow).toBe(36);
+    expect(sheet.maxCol).toBe(8);
+    expect(sheet.cells.A1).toMatchObject({ v: "INTERNAL AUDIT SCHEDULE", bold: true, size: 26, align: "center", kind: "label" });
+    expect(sheet.cells.A2?.v).toBe("Doc ID:");
+    expect(sheet.cells.B2).toMatchObject({ v: "LST-GEN-002", kind: "label" });
+    expect(sheet.cells.C2?.v).toBe("Rev:");
+    expect(sheet.cells.D2).toMatchObject({ v: "A", kind: "rev" });
+    expect(sheet.cells.E2?.v).toBe("Title:");
+    expect(sheet.cells.F2).toMatchObject({ v: "Internal Audit Schedule", kind: "label", align: "left" });
+    expect(sheet.cells.A3?.v).toBe("Date:");
+    expect(sheet.cells.B3).toMatchObject({ v: "2026-07-14", nf: "mm-dd-yy", kind: "input" });
+    expect(sheet.cells.E3?.v).toBe("Owner:");
+    expect(sheet.cells.F3).toMatchObject({ v: "Ron Wertz & Maxwell Tollefson", kind: "input" });
+    expect(sheet.merges).toEqual(["A1:H1", "F2:H2", "B3:D3", "F3:H3", "A4:H4"]);
+    expect(sheet.colWidths[0]).toBeCloseTo(11.7109375, 5);
+    expect(sheet.colWidths[7]).toBeCloseTo(66.7109375, 5);
+    expect(sheet.rowHeights["1"]).toBe(34.5);
+    expect(sheet.boxes?.A1).toBe("mtmt");
+    expect(sheet.boxes?.H1).toBe("tmmt");
+    expect(sheet.cells.A5?.v).toBe("Audit Period");
+    expect(sheet.cells.H5?.v).toBe("Brief Description of Findings");
+    expect(sheet.cells.A6?.v).toBe("H1 - 2027");
+    expect(sheet.cells.B7?.v).toBe("Quality Department");
+    expect(sheet.cells.C8?.v).toBe("Design / Dev (8.3) / Change Mgmt");
+    expect(sheet.cells.E9?.v).toBe("Scheduled");
+    expect(sheet.cells.A10).toBeUndefined();
+    expect(sheet.cells.A36).toBeUndefined();
+    expect(Object.values(sheet.cells).some((cell) => cell.f)).toBe(false);
+    expect(sheet.lists ?? []).toEqual([]);
+    expect(listOptions(sheet, "E6")).toBeNull();
+
+    const edited = applyInputPatch("lst-gen-002", sheets, [
+      { name: sheetName, cells: { E6: { v: "Complete" }, D2: { v: "B" }, A1: { v: "CHANGED" }, F3: { v: "Shawn Parnell" }, B3: { v: "2026-08-01" } } },
+    ]);
+    expect(edited.sheets[0]?.cells.E6?.v).toBe("Complete");
+    expect(edited.sheets[0]?.cells.F3?.v).toBe("Shawn Parnell");
+    expect(edited.sheets[0]?.cells.B3?.v).toBe("2026-08-01");
+    expect(edited.sheets[0]?.cells.D2?.v).toBe("A");
+    expect(edited.sheets[0]?.cells.A1?.v).toBe("INTERNAL AUDIT SCHEDULE");
+    expect(edited.sheets[0]?.cells.A6?.v).toBe("H1 - 2027");
+    expect(LISTS["lst-gen-002"].revision).toBe("A");
+    expect(edited.changes.map((change) => change.addr).sort()).toEqual(["B3", "E6", "F3"]);
+
+    const added = addDataRow("lst-gen-002", sheets, sheetName);
+    expect(added?.row).toBe(10);
+    expect(added?.sheets[0]?.cells.A10).toBeUndefined();
+    expect(added?.sheets[0]?.maxRow).toBe(36);
+    const removed = removeDataRow("lst-gen-002", sheets, sheetName, 6);
+    expect(removed?.[0]?.cells.B6?.v).toBe("Quality Department");
+    expect(removed?.[0]?.cells.D2?.v).toBe("A");
+    expect(removed?.[0]?.maxRow).toBe(35);
+
+    const stripped = sheets.map((item) => {
+      const next = { ...item, cells: { ...item.cells }, merges: item.merges.filter((merge) => merge !== "F3:H3") };
+      delete next.cells.F3;
+      delete next.cells.B3;
+      return next;
+    });
+    const restored = restoreHeaderBlock("lst-gen-002", stripped);
+    expect(restored.changed).toBe(true);
+    expect(restored.sheets[0]?.cells.F3).toMatchObject({ v: "Ron Wertz & Maxwell Tollefson", kind: "input" });
+    expect(restored.sheets[0]?.cells.B3).toMatchObject({ v: "2026-07-14", kind: "input" });
+    expect(restored.sheets[0]?.merges).toContain("F3:H3");
+    expect(restored.sheets[0]?.cells.A6?.v).toBe("H1 - 2027");
+    const named = restored.sheets.map((item) => ({
+      ...item,
+      cells: { ...item.cells, F3: { ...item.cells.F3!, v: "Ada Lovelace" }, B3: { ...item.cells.B3!, v: "2026-09-01" } },
+    }));
+    const kept = restoreHeaderBlock("lst-gen-002", named);
+    expect(kept.sheets[0]?.cells.F3?.v).toBe("Ada Lovelace");
+    expect(kept.sheets[0]?.cells.B3?.v).toBe("2026-09-01");
+    expect(kept.sheets[0]?.cells.D2?.v).toBe("A");
+
+    const body = await buildListWorkbook("lst-gen-002", sheets);
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(body);
+    expect(book.worksheets.map((item) => item.name)).toEqual([sheetName]);
+    const ws = book.getWorksheet(sheetName);
+    expect(ws?.getCell("A1").value).toBe("INTERNAL AUDIT SCHEDULE");
+    expect(ws?.getCell("A1").font?.bold).toBe(true);
+    expect(ws?.getCell("A1").font?.size).toBe(26);
+    expect(ws?.getCell("A1").alignment?.horizontal).toBe("center");
+    expect(ws?.getCell("D2").value).toBe("A");
+    expect(ws?.getCell("F2").value).toBe("Internal Audit Schedule");
+    expect(ws?.getCell("B3").value).toBeInstanceOf(Date);
+    expect((ws?.getCell("B3").value as Date).toISOString().slice(0, 10)).toBe("2026-07-14");
+    expect(ws?.getCell("B3").numFmt).toBe("mm-dd-yy");
+    expect(ws?.getCell("F3").value).toBe("Ron Wertz & Maxwell Tollefson");
+    expect(ws?.getCell("A6").value).toBe("H1 - 2027");
+    expect(ws?.getCell("E9").value).toBe("Scheduled");
+    expect(ws?.getCell("H5").value).toBe("Brief Description of Findings");
+    expect(ws?.getColumn(8).width).toBeCloseTo(66.7109375, 5);
+    expect(ws?.getRow(1).height).toBe(34.5);
+    expect(ws?.model.merges ?? []).toEqual(expect.arrayContaining(["A1:H1", "F2:H2", "B3:D3", "F3:H3", "A4:H4"]));
+    expect(ws?.getCell("A1").border?.top?.style).toBe("medium");
+    expect(ws?.getCell("A1").border?.left?.style).toBe("medium");
+    expect(ws?.pageSetup.orientation).toBe("portrait");
+    expect(Object.keys(ws?.dataValidations.model ?? {})).toEqual([]);
+    expect(ws?.getCell("A6").value).not.toMatch(/^=/);
   });
 
   it("inserts the current folder path into a Location cell only when asked, and keeps it", () => {

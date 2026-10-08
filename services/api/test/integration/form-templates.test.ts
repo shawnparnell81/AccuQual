@@ -66,12 +66,13 @@ describe("ISO Compliance Documents form templates", () => {
     expect(templates.find((form) => form.formKey === "frm-fae-001")?.subjectRoute).toBe("/iso-forms/frm-fae-001");
     expect(templates.filter((form) => form.formKey === "frm-psw-001")).toHaveLength(1);
     expect(templates.filter((form) => form.start).every((form) => form.start?.openPath.includes("{id}"))).toBe(true);
-    expect(templates.find((form) => form.formKey === "lst-eqp-001" || form.formKey === "lst-gen-001" || form.title === "Scope of Laboratory Activities")).toBeUndefined();
+    expect(templates.find((form) => form.formKey === "lst-eqp-001" || form.formKey === "lst-gen-001" || form.formKey === "lst-gen-002" || form.title === "Scope of Laboratory Activities" || form.title === "Internal Audit Schedule")).toBeUndefined();
     const auditForm = templates.find((form) => form.formKey === "frm-gen-001");
     const ncrForm = templates.find((form) => form.formKey === "frm-ncr-001");
     expect(keptOutOfBlankFormsTemplates({ formKey: "lst-eqp-001", formId: "LST-EQP-001", title: "Master Equipment List" })).toBe(true);
     expect(keptOutOfBlankFormsTemplates({ formKey: "lst-gen-001", formId: "LST-GEN-001", title: "Master Document List" })).toBe(true);
     expect(keptOutOfBlankFormsTemplates({ formKey: "lst-gen-003", formId: "LST-GEN-003", title: "Scope of Laboratory Activities" })).toBe(true);
+    expect(keptOutOfBlankFormsTemplates({ formKey: "lst-gen-002", formId: "LST-GEN-002", title: "Internal Audit Schedule" })).toBe(true);
     expect(keptOutOfBlankFormsTemplates({ title: "Master Equipment List" })).toBe(true);
     expect(keptOutOfBlankFormsTemplates({ formKey: "frm-val-001", formId: "FRM-VAL-001", title: "CSA VALIDATION REPORT" })).toBe(false);
     expect(auditForm?.formId).toBe("FRM-GEN-001");

@@ -254,6 +254,7 @@ describe("folder browse", () => {
     ];
     assert.equal(isLivingListPath("/documents/master-list"), true);
     assert.equal(isLivingListPath("/documents/development-log"), true);
+    assert.equal(isLivingListPath("/documents/internal-audit-schedule"), true);
     assert.equal(isLivingListPath("/ncr"), false);
     const listing = listFolder(rows, 2);
     assert.deepEqual(listing.files.map((file) => file.name), ["Master Document List", "Master Equipment List", "Scope of Laboratory Activities"]);

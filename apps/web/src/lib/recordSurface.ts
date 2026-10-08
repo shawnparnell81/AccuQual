@@ -18,6 +18,7 @@ interface SurfaceRule {
 const RULES: SurfaceRule[] = [
   { test: /^\/documents\/master-list$/, kind: "list", access: "documents" },
   { test: /^\/documents\/laboratory-scope$/, kind: "list", access: "documents" },
+  { test: /^\/documents\/internal-audit-schedule$/, kind: "list", access: "documents" },
   { test: /^\/documents\/development-log$/, kind: "list", access: "documents" },
   { test: /^\/documents\/nonconformance-log$/, kind: "list", access: "documents" },
   { test: /^\/calibration\/master-list$/, kind: "list", access: "calibration" },

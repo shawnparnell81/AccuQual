@@ -24,11 +24,12 @@ import {
 } from "../../lib/controlledListMath";
 import "./controlledList.css";
 
-export type ControlledListKey = "lst-eqp-001" | "lst-gen-001" | "lst-gen-003" | "lst-dev-001" | "lst-ncr-001";
+export type ControlledListKey = "lst-eqp-001" | "lst-gen-001" | "lst-gen-002" | "lst-gen-003" | "lst-dev-001" | "lst-ncr-001";
 
 const LIST_ROUTES: Record<ControlledListKey, string> = {
   "lst-eqp-001": "/calibration/master-list",
   "lst-gen-001": "/documents/master-list",
+  "lst-gen-002": "/documents/internal-audit-schedule",
   "lst-gen-003": "/documents/laboratory-scope",
   "lst-dev-001": "/documents/development-log",
   "lst-ncr-001": "/documents/nonconformance-log",
@@ -54,6 +55,7 @@ interface CellPatch {
 const DATA_START: Record<ControlledListKey, Record<string, number>> = {
   "lst-eqp-001": { "LST-EQP-001 - Master Equipment ": 6 },
   "lst-gen-001": { "Internal Documents": 4, "External Documents": 3 },
+  "lst-gen-002": { "LST-GEN-002 - Internal Audit Sc": 6 },
   "lst-gen-003": { "LST-GEN-003 - Scope of Laborato": 6 },
   "lst-dev-001": { "Test Reports": 5, "Validation Report": 5 },
   "lst-ncr-001": { "LST-NCR-001 - NCR": 5, "LST-NCR-001 - QTN": 5, "LST-NCR-001 - CAR": 5, "LST-NCR-001 - RPN": 5 },

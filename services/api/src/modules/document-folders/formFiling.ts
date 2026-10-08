@@ -11,9 +11,10 @@
  * A filled record stays in `subjectRoute`. Opening a blank starts a new record
  * with `start` and does not change the template.
  *
- * Master Document List (LST-GEN-001), Master Equipment List (LST-EQP-001), and
- * Scope of Laboratory Activities (LST-GEN-003) are living documents. They stay
- * out of Blank Forms Templates. A separate change removes those blanks.
+ * Master Document List (LST-GEN-001), Master Equipment List (LST-EQP-001),
+ * Internal Audit Schedule (LST-GEN-002), and Scope of Laboratory Activities
+ * (LST-GEN-003) are living documents. They stay out of Blank Forms Templates.
+ * A separate change removes those blanks.
  */
 export const FILE_NAME_PATTERN = "{formId}_{recordNumber}_{date}";
 
@@ -50,9 +51,9 @@ export function blankTemplateLabel(formId: string, title: string): string {
   return id ? `${id} ${title}` : title;
 }
 
-const LIVING_DOCUMENT_KEYS = new Set(["lst-eqp-001", "lst-gen-001", "lst-gen-003"]);
-const LIVING_DOCUMENT_IDS = new Set(["LST-EQP-001", "LST-GEN-001", "LST-GEN-003"]);
-const LIVING_DOCUMENT_TITLES = new Set(["master equipment list", "master document list", "scope of laboratory activities"]);
+const LIVING_DOCUMENT_KEYS = new Set(["lst-eqp-001", "lst-gen-001", "lst-gen-002", "lst-gen-003"]);
+const LIVING_DOCUMENT_IDS = new Set(["LST-EQP-001", "LST-GEN-001", "LST-GEN-002", "LST-GEN-003"]);
+const LIVING_DOCUMENT_TITLES = new Set(["master equipment list", "master document list", "scope of laboratory activities", "internal audit schedule", "lst-gen-002"]);
 
 /**
  * Living in-app documents, not blank templates.
