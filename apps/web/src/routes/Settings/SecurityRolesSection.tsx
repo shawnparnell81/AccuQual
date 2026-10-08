@@ -524,7 +524,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ name: "", description: "" });
   const [editing, setEditing] = useState<AppRole | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", description: "", hierarchyLevel: "80", canImport: false });
+  const [editForm, setEditForm] = useState({ name: "", description: "", hierarchyLevel: "80", canImport: false, canBuildForms: false });
   const [replacing, setReplacing] = useState<AppRole | null>(null);
   const [replacementId, setReplacementId] = useState("");
 
@@ -586,6 +586,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
                       description: r.description ?? "",
                       hierarchyLevel: String(r.hierarchyLevel ?? 80),
                       canImport: (r.permissions ?? []).includes("import_data"),
+                      canBuildForms: (r.permissions ?? []).includes("form_builder"),
                     });
                   }}
                   className="text-primary hover:underline"
@@ -649,6 +650,8 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
             const permissions = new Set(editing.permissions ?? []);
             if (editForm.canImport) permissions.add("import_data");
             else permissions.delete("import_data");
+            if (editForm.canBuildForms) permissions.add("form_builder");
+            else permissions.delete("form_builder");
             updateRole.mutate(
               {
                 id: editing.id,
@@ -677,6 +680,11 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
             Can import data
           </label>
           <p className="text-xs text-muted-foreground">Owner and Administrator can always import, even if this is turned off.</p>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={editForm.canBuildForms} onChange={(e) => setEditForm({ ...editForm, canBuildForms: e.target.checked })} />
+            Can build forms
+          </label>
+          <p className="text-xs text-muted-foreground">Creating a form and editing its structure. Filling a published copy does not use this. Owner and Administrator can always build forms.</p>
           <button type="submit" disabled={updateRole.isPending} className="w-fit rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-60">
             {updateRole.isPending ? "Saving…" : "Save"}
           </button>

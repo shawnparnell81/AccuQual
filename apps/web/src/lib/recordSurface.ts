@@ -46,6 +46,9 @@ const RULES: SurfaceRule[] = [
   { test: /^\/management-system\/management-review$/, kind: "form", access: "management_review" },
   { test: /^\/management-system\/context$/, kind: "form", access: "context_of_org" },
   { test: /^\/pareto$/, kind: "form", access: "any" },
+  { test: /^\/form-builder\/\d+$/, kind: "form", access: "form_builder" },
+  { test: /^\/form-builder\/fills\/\d+$/, kind: "form", access: "documents" },
+  { test: /^\/form-builder\/template\/\d+$/, kind: "form", access: "documents" },
 ];
 
 export function recordSurface(pathname: string): RecordSurface | null {

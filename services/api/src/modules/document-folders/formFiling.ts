@@ -37,8 +37,11 @@ export function blankTemplateStartPath(formKey: string): string {
   return `${BLANK_TEMPLATE_START_PREFIX}${formKey}`;
 }
 
+/** A form built in the app. Opening it starts a fresh copy, the same as a seeded blank. */
+export const BUILT_FORM_TEMPLATE_PREFIX = "/form-builder/template/";
+
 export function isBlankTemplateStartPath(linkedPath: string | null | undefined): boolean {
-  return typeof linkedPath === "string" && linkedPath.startsWith(BLANK_TEMPLATE_START_PREFIX);
+  return typeof linkedPath === "string" && (linkedPath.startsWith(BLANK_TEMPLATE_START_PREFIX) || linkedPath.startsWith(BUILT_FORM_TEMPLATE_PREFIX));
 }
 
 /** Folder label: form number and title when the blank has a number, otherwise the title. */

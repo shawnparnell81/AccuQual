@@ -1,4 +1,4 @@
-import { IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, isFullAccessRole } from "./roleAccess.js";
+import { FORM_BUILDER_PERMISSION, IMPORT_DATA_PERMISSION, RESTORE_ARCHIVED_DOCUMENTS, isFullAccessRole } from "./roleAccess.js";
 
 /**
  * Organizational ladder. A smaller number is higher and is listed first.
@@ -48,7 +48,7 @@ export const ROLE_SEEDS: RoleSeed[] = [
   { name: "president", description: "President — can view the quality system and approve work", hierarchyLevel: 20, isProtected: true, permissions: [] },
   { name: "vice_president", description: "Vice President — can view the quality system and approve work", hierarchyLevel: 30, isProtected: true, permissions: [] },
   { name: "director", description: "Director — can view the quality system and approve work", hierarchyLevel: 40, isProtected: true, permissions: [] },
-  { name: "quality_manager", description: "Manages NCR/CAPA/Audits/Suppliers", hierarchyLevel: 50, isProtected: true, permissions: [] },
+  { name: "quality_manager", description: "Manages NCR/CAPA/Audits/Suppliers", hierarchyLevel: 50, isProtected: true, permissions: [FORM_BUILDER_PERMISSION] },
   { name: "lead", description: "Lead — supervises day-to-day work", hierarchyLevel: 60, isProtected: true, permissions: [] },
   { name: "operator", description: "Shop-floor / production user", hierarchyLevel: 80, isProtected: true, permissions: [] },
   { name: "staff", description: "Staff — day-to-day work", hierarchyLevel: 80, isProtected: true, permissions: [] },
