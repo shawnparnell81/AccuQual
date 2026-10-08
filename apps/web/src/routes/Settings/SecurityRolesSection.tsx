@@ -693,7 +693,7 @@ function RolesPanel({ isAdmin }: { isAdmin: boolean }) {
             <input type="checkbox" checked={editForm.canBuildForms} onChange={(e) => setEditForm({ ...editForm, canBuildForms: e.target.checked })} />
             Can build forms
           </label>
-          <p className="text-xs text-muted-foreground">Creating a form and editing its structure. Filling a published copy does not use this. Owner and Administrator can always build forms.</p>
+          <p className="text-xs text-muted-foreground">Creating a form and editing its structure, including adding, renaming, or removing columns on a living controlled list. Filling a published copy does not use this. Owner and Administrator can always build forms.</p>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={editForm.canRenameFolders} onChange={(e) => setEditForm({ ...editForm, canRenameFolders: e.target.checked })} />
             Can rename folders

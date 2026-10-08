@@ -290,11 +290,10 @@ export function deleteSheetRow(sheet: StoredSheet, deletedRow: number): StoredSh
   };
 }
 
-/** Give a newly appended row the dropdowns used on the rows above it, without widening older ranges. */
-export function coverNewRow(sheet: StoredSheet): StoredSheet {
+/** Give one row the dropdowns used on the rows above it, without widening older ranges. */
+export function coverRow(sheet: StoredSheet, row: number): StoredSheet {
   if (!sheet.lists?.length) return sheet;
   const lists = sheet.lists.map((list) => ({ ...list, options: [...list.options] }));
-  const row = sheet.maxRow;
   const added: SheetList[] = [];
   for (let col = 1; col <= sheet.maxCol; col += 1) {
     const letter = columnLetter(col);
@@ -309,6 +308,11 @@ export function coverNewRow(sheet: StoredSheet): StoredSheet {
     added.push({ c1: letter, c2: letter, r1: row, r2: row, options: [...best.options] });
   }
   return added.length === 0 ? sheet : { ...sheet, lists: [...lists, ...added] };
+}
+
+/** Give a newly appended row the dropdowns used on the rows above it, without widening older ranges. */
+export function coverNewRow(sheet: StoredSheet): StoredSheet {
+  return coverRow(sheet, sheet.maxRow);
 }
 
 function singleRowMerges(sheet: StoredSheet, row: number): string[] {
@@ -348,6 +352,191 @@ export function nextDataRow(sheet: StoredSheet, dataStart: number, columns: stri
     if (rowUsed(sheet, row, columns)) last = row;
   }
   return last + 1;
+}
+
+function shiftFormulaInsert(formula: string, atRow: number): string {
+  return formula.replace(/(\$?)([A-Z]+)(\$?)(\d+)/g, (all, absCol: string, col: string, absRow: string, rowText: string) => {
+    const row = Number(rowText);
+    if (absRow === "$" || row < atRow) return all;
+    return `${absCol}${col}${absRow}${row + 1}`;
+  });
+}
+
+function shiftMergeInsert(merge: string, atRow: number): string {
+  const [start, end] = merge.split(":");
+  if (!start || !end) return merge;
+  const a = parseAddr(start);
+  const b = parseAddr(end);
+  const r1 = a.row >= atRow ? a.row + 1 : a.row;
+  const r2 = b.row >= atRow ? b.row + 1 : b.row;
+  return `${a.col}${r1}:${b.col}${r2}`;
+}
+
+function shiftSpanInsert<T extends { c1: string; c2: string; r1: number; r2: number }>(span: T, atRow: number): T {
+  const next = shiftMergeInsert(`${span.c1}${span.r1}:${span.c2}${span.r2}`, atRow);
+  const [start, end] = next.split(":");
+  if (!start || !end) return span;
+  const a = parseAddr(start);
+  const b = parseAddr(end);
+  return { ...span, c1: a.col, r1: a.row, c2: b.col, r2: b.row };
+}
+
+/** Insert a blank row at `atRow` and move everything at or below it down. Formulas follow the cells. */
+export function insertSheetRow(sheet: StoredSheet, atRow: number): StoredSheet {
+  const cells: Record<string, StoredCell> = {};
+  for (const [addr, cell] of Object.entries(sheet.cells)) {
+    const { col, row } = parseAddr(addr);
+    const nextRow = row >= atRow ? row + 1 : row;
+    const moved: StoredCell = cell.f ? { ...cell, f: shiftFormulaInsert(cell.f, atRow) } : { ...cell };
+    cells[cellAddr(col, nextRow)] = moved;
+  }
+  const rowHeights: Record<string, number> = {};
+  for (const [key, height] of Object.entries(sheet.rowHeights)) {
+    const row = Number(key);
+    rowHeights[String(row >= atRow ? row + 1 : row)] = height;
+  }
+  const boxes: Record<string, string> = {};
+  for (const [addr, box] of Object.entries(sheet.boxes ?? {})) {
+    const { col, row } = parseAddr(addr);
+    boxes[cellAddr(col, row >= atRow ? row + 1 : row)] = box;
+  }
+  return {
+    ...sheet,
+    maxRow: sheet.maxRow + 1,
+    cells,
+    rowHeights,
+    merges: sheet.merges.map((merge) => shiftMergeInsert(merge, atRow)),
+    lists: sheet.lists?.map((list) => shiftSpanInsert(list, atRow)),
+    tones: sheet.tones?.map((tone) => shiftSpanInsert(tone, atRow)),
+    boxes: sheet.boxes ? boxes : undefined,
+  };
+}
+
+function shiftFormulaCol(formula: string, atCol: number, delta: 1 | -1): string {
+  return formula.replace(/(\$?)([A-Z]+)(\$?)(\d+)/g, (all, absCol: string, col: string, absRow: string, rowText: string) => {
+    if (absCol === "$") return all;
+    const index = columnIndex(col);
+    if (delta < 0 && index === atCol) return "#REF!";
+    if (index >= atCol) return `${absCol}${columnLetter(index + delta)}${absRow}${rowText}`;
+    return all;
+  });
+}
+
+function mapCol(index: number, atCol: number, delta: 1 | -1): number | null {
+  if (delta < 0 && index === atCol) return null;
+  if (index > atCol || (delta > 0 && index >= atCol)) return index + delta;
+  return index;
+}
+
+function shiftMergeCol(merge: string, atCol: number, delta: 1 | -1): string | null {
+  const [start, end] = merge.split(":");
+  if (!start || !end) return merge;
+  const a = parseAddr(start);
+  const b = parseAddr(end);
+  const c1 = columnIndex(a.col);
+  const c2 = columnIndex(b.col);
+  if (delta < 0 && c1 === atCol && c2 === atCol) return null;
+  let n1 = c1;
+  let n2 = c2;
+  if (delta > 0) {
+    if (c1 >= atCol) n1 = c1 + 1;
+    if (c2 >= atCol) n2 = c2 + 1;
+  } else {
+    if (c1 > atCol) n1 = c1 - 1;
+    if (c2 > atCol) n2 = c2 - 1;
+    else if (c2 === atCol) n2 = c2 - 1;
+    if (n2 < n1) return null;
+  }
+  return `${columnLetter(n1)}${a.row}:${columnLetter(n2)}${b.row}`;
+}
+
+function shiftSpanCol<T extends { c1: string; c2: string; r1: number; r2: number }>(span: T, atCol: number, delta: 1 | -1): T | null {
+  const next = shiftMergeCol(`${span.c1}${span.r1}:${span.c2}${span.r2}`, atCol, delta);
+  if (!next) return null;
+  const [start, end] = next.split(":");
+  if (!start || !end) return span;
+  const a = parseAddr(start);
+  const b = parseAddr(end);
+  return { ...span, c1: a.col, r1: a.row, c2: b.col, r2: b.row };
+}
+
+function widenTrailingMerges(merges: string[], oldMax: number): string[] {
+  const end = columnLetter(oldMax);
+  const next = columnLetter(oldMax + 1);
+  return merges.map((merge) => {
+    const [start, endAddr] = merge.split(":");
+    if (!start || !endAddr) return merge;
+    const b = parseAddr(endAddr);
+    if (b.col !== end) return merge;
+    return `${start}:${next}${b.row}`;
+  });
+}
+
+/** Insert a blank column at `atCol` (1-based). Appending widens merges that already ran to the last column. */
+export function insertSheetColumn(sheet: StoredSheet, atCol: number): StoredSheet {
+  const appending = atCol === sheet.maxCol + 1;
+  const cells: Record<string, StoredCell> = {};
+  for (const [addr, cell] of Object.entries(sheet.cells)) {
+    const { col, row } = parseAddr(addr);
+    const index = columnIndex(col);
+    const next = mapCol(index, atCol, 1);
+    if (next == null) continue;
+    const moved: StoredCell = cell.f ? { ...cell, f: shiftFormulaCol(cell.f, atCol, 1) } : { ...cell };
+    cells[cellAddr(columnLetter(next), row)] = moved;
+  }
+  const colWidths = sheet.colWidths.slice();
+  const width = colWidths[Math.min(atCol, colWidths.length) - 1] ?? 14;
+  colWidths.splice(Math.max(0, atCol - 1), 0, width);
+  const boxes: Record<string, string> = {};
+  for (const [addr, box] of Object.entries(sheet.boxes ?? {})) {
+    const { col, row } = parseAddr(addr);
+    const next = mapCol(columnIndex(col), atCol, 1);
+    if (next == null) continue;
+    boxes[cellAddr(columnLetter(next), row)] = box;
+  }
+  let merges = sheet.merges.map((merge) => shiftMergeCol(merge, atCol, 1)).filter((merge): merge is string => Boolean(merge));
+  if (appending) merges = widenTrailingMerges(merges, sheet.maxCol);
+  return {
+    ...sheet,
+    maxCol: sheet.maxCol + 1,
+    colWidths,
+    cells,
+    merges,
+    lists: sheet.lists?.map((list) => shiftSpanCol(list, atCol, 1)).filter((list): list is SheetList => Boolean(list)),
+    tones: sheet.tones?.map((tone) => shiftSpanCol(tone, atCol, 1)).filter((tone): tone is SheetTone => Boolean(tone)),
+    boxes: sheet.boxes ? boxes : undefined,
+  };
+}
+
+/** Remove one column and close the gap. A formula that pointed at it becomes #REF!. */
+export function deleteSheetColumn(sheet: StoredSheet, atCol: number): StoredSheet {
+  const cells: Record<string, StoredCell> = {};
+  for (const [addr, cell] of Object.entries(sheet.cells)) {
+    const { col, row } = parseAddr(addr);
+    const next = mapCol(columnIndex(col), atCol, -1);
+    if (next == null) continue;
+    const moved: StoredCell = cell.f ? { ...cell, f: shiftFormulaCol(cell.f, atCol, -1) } : { ...cell };
+    cells[cellAddr(columnLetter(next), row)] = moved;
+  }
+  const colWidths = sheet.colWidths.slice();
+  colWidths.splice(atCol - 1, 1);
+  const boxes: Record<string, string> = {};
+  for (const [addr, box] of Object.entries(sheet.boxes ?? {})) {
+    const { col, row } = parseAddr(addr);
+    const next = mapCol(columnIndex(col), atCol, -1);
+    if (next == null) continue;
+    boxes[cellAddr(columnLetter(next), row)] = box;
+  }
+  return {
+    ...sheet,
+    maxCol: Math.max(1, sheet.maxCol - 1),
+    colWidths,
+    cells,
+    merges: sheet.merges.map((merge) => shiftMergeCol(merge, atCol, -1)).filter((merge): merge is string => Boolean(merge)),
+    lists: sheet.lists?.map((list) => shiftSpanCol(list, atCol, -1)).filter((list): list is SheetList => Boolean(list)),
+    tones: sheet.tones?.map((tone) => shiftSpanCol(tone, atCol, -1)).filter((tone): tone is SheetTone => Boolean(tone)),
+    boxes: sheet.boxes ? boxes : undefined,
+  };
 }
 
 export function parseEdited(text: string, nf?: string): string | number | null {

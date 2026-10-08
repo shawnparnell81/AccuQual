@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { isAxiosError } from "axios";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
@@ -6,8 +6,10 @@ import { RecordFrame } from "../../components/records/RecordFrame";
 import { RecordReferences } from "../../components/records/WorkflowStepLinks";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
 import { useItemFolderPath } from "../../components/documents/ItemFolderPath";
+import { useConfirm } from "../../components/shared/ConfirmDialog";
 import { useCanEditSurface } from "../../components/shared/RecordEditBar";
 import { useToast } from "../../components/shared/ToastProvider";
+import { headerBandEnd, moveAddr, type GridMove } from "../../lib/controlledListGrid";
 import { isLocationLine } from "../../lib/folderPath";
 import { inkOnFill } from "../../lib/formGrid";
 import { recordSurface } from "../../lib/recordSurface";
@@ -47,6 +49,8 @@ interface ControlledListView {
   landscape: boolean;
   resource: "documents" | "calibration";
   statuses: string[];
+  dataStart?: Record<string, number>;
+  canEditStructure?: boolean;
   sheets: StoredSheet[];
 }
 
@@ -124,25 +128,44 @@ function coveredCells(merges: string[]): Set<string> {
 function SheetGrid({
   sheet,
   listKey,
+  fromRow,
+  toRow,
+  band,
   canEdit,
+  canEditStructure,
+  dataStart,
   statuses,
+  activeAddr,
+  selectedRows,
+  editing,
+  onOpen,
+  onPick,
   onChange,
-  onDeleteRow,
+  onRename,
 }: {
   sheet: StoredSheet;
   listKey: ControlledListKey;
+  fromRow: number;
+  toRow: number;
+  band: boolean;
   canEdit: boolean;
+  canEditStructure: boolean;
+  dataStart: number;
   statuses: string[];
+  activeAddr: string | null;
+  selectedRows: number[];
+  editing: string | null;
+  onOpen: (addr: string) => void;
+  onPick: (row: number, addr: string, extend: boolean) => void;
   onChange: (addr: string, value: string | number | null) => void;
-  onDeleteRow: (row: number) => void;
+  onRename: (col: string, name: string) => void;
 }) {
-  const start = DATA_START[listKey][sheet.name] ?? sheet.maxRow + 1;
   const origins = mergeOrigin(sheet.merges);
   const covered = coveredCells(sheet.merges);
-  const long = sheet.maxRow > 200;
-  const [editing, setEditing] = useState<string | null>(null);
+  const long = !band && sheet.maxRow > 200;
+  const headerRow = Math.max(1, dataStart - 1);
   const cells = [];
-  for (let row = 1; row <= sheet.maxRow; row += 1) {
+  for (let row = fromRow; row <= toRow; row += 1) {
     for (let col = 1; col <= sheet.maxCol; col += 1) {
       const addr = `${columnLetter(col)}${row}`;
       if (covered.has(addr)) continue;
@@ -153,21 +176,35 @@ function SheetGrid({
       const legacyFill = fill === "FFFF0000" || fill === "FFB8DCAB";
       const toneHex = fill && !legacyFill ? `#${fill.slice(-6)}` : undefined;
       const toneInk = toneHex ? inkOnFill(toneHex) : undefined;
-      const editable = canEdit && (cell?.kind === "input" || (!cell && row >= start));
-      const choices = editable ? (listKey === "lst-eqp-001" && columnLetter(col) === "J" && row >= start ? statuses : listOptions(sheet, addr)) : null;
-      const date = Boolean(editable && cell?.nf && (cell.nf.includes("yy") || cell.nf.includes("mmm")) && !choices);
+      const formula = cell?.kind === "formula" || Boolean(cell?.f);
+      const columnTitle = row === headerRow;
+      const editable = canEdit && !formula && (columnTitle ? canEditStructure : true);
+      const choices = editable && !columnTitle ? (listKey === "lst-eqp-001" && columnLetter(col) === "J" && row >= dataStart ? statuses : listOptions(sheet, addr)) : null;
+      const date = Boolean(editable && !columnTitle && cell?.nf && (cell.nf.includes("yy") || cell.nf.includes("mmm")) && !choices);
+      const rowSpan = Math.min(span?.rows ?? 1, toRow - row + 1);
       cells.push(
         <div
           key={addr}
           className={shown.tone ? `controlled-list-cell tone-${shown.tone}` : "controlled-list-cell"}
           data-addr={addr}
-          data-header={row <= 3 ? "true" : undefined}
+          data-header={row < dataStart ? "true" : undefined}
+          data-active={activeAddr === addr ? "true" : undefined}
+          data-row-selected={selectedRows.includes(row) ? "true" : undefined}
           data-fill={fill === "FFFF0000" ? "open" : fill === "FFB8DCAB" ? "closed" : fill ? "tone" : undefined}
           data-size={cell?.size ?? undefined}
-          title={cell?.comment}
+          title={cell?.comment ?? (formula ? "Calculated from a formula" : undefined)}
+          onMouseDown={(event) => onPick(row, addr, event.shiftKey)}
           style={{
-            gridColumn: `${col} / span ${span?.cols ?? 1}`,
-            gridRow: `${row} / span ${span?.rows ?? 1}`,
+            ...(band
+              ? {
+                  flex: (span?.cols ?? 1) >= sheet.maxCol ? "1 1 100%" : `${Math.max(span?.cols ?? 1, 1)} 1 11rem`,
+                  minWidth: (span?.cols ?? 1) >= sheet.maxCol ? "100%" : "11rem",
+                  maxWidth: "100%",
+                }
+              : {
+                  gridColumn: `${col} / span ${span?.cols ?? 1}`,
+                  gridRow: `${row - fromRow + 1} / span ${rowSpan}`,
+                }),
             fontFamily: cell?.font,
             fontWeight: cell?.bold ? 700 : undefined,
             fontSize: cell?.size ? `${cell.size}px` : "11px",
@@ -176,38 +213,46 @@ function SheetGrid({
             ["--cell-ink" as string]: toneInk,
             justifyContent: cell?.align === "center" ? "center" : cell?.align === "right" ? "flex-end" : "flex-start",
             textAlign: cell?.align === "center" ? "center" : cell?.align === "right" ? "right" : "left",
-            whiteSpace: cell?.wrap ? "pre-wrap" : "nowrap",
+            whiteSpace: band || cell?.wrap ? "pre-wrap" : "nowrap",
           }}
         >
-          {canEdit && col === 1 && row >= start && (
-            <button type="button" className="controlled-list-row-delete no-print" title={`Delete row ${row}`} onClick={() => onDeleteRow(row)}>
-              ×
-            </button>
+          {formula ? (
+            <span className="controlled-list-formula">{shown.text}</span>
+          ) : (
+            <CellBody
+              addr={addr}
+              column={columnLetter(col)}
+              cell={cell}
+              text={shown.text}
+              editable={editable}
+              columnTitle={columnTitle}
+              choices={choices}
+              date={date}
+              wrap={band}
+              quiet={long && editing !== addr}
+              onOpen={() => onOpen(addr)}
+              onChange={onChange}
+              onRename={onRename}
+            />
           )}
-          <CellBody
-            addr={addr}
-            cell={cell}
-            text={shown.text}
-            editable={editable}
-            choices={choices}
-            date={date}
-            quiet={long && editing !== addr}
-            onOpen={() => setEditing(addr)}
-            onChange={onChange}
-          />
         </div>,
       );
     }
   }
+  const rowCount = Math.max(0, toRow - fromRow + 1);
   return (
     <div
-      className={long ? "controlled-list-sheet controlled-list-long" : "controlled-list-sheet"}
-      data-testid={`controlled-list-${sheet.name.trim()}`}
+      className={band ? "controlled-list-sheet controlled-list-header-band" : long ? "controlled-list-sheet controlled-list-long" : "controlled-list-sheet"}
+      data-testid={band ? `controlled-list-header-${sheet.name.trim()}` : `controlled-list-${sheet.name.trim()}`}
+      data-paste-grid=""
       role="grid"
-      aria-label={sheet.name.trim()}
+      aria-label={band ? `${sheet.name.trim()} header` : sheet.name.trim()}
       style={{
-        gridTemplateColumns: sheet.colWidths.map((width) => `${width * 8}px`).join(" "),
-        gridTemplateRows: Array.from({ length: sheet.maxRow }, (_, index) => `${((sheet.rowHeights[String(index + 1)] ?? 15) * 1.33).toFixed(1)}px`).join(" "),
+        gridTemplateColumns: band ? sheet.colWidths.map((width) => `minmax(0, ${width}fr)`).join(" ") : sheet.colWidths.map((width) => `${width * 8}px`).join(" "),
+        gridTemplateRows: Array.from({ length: rowCount }, (_, index) => {
+          const height = ((sheet.rowHeights[String(fromRow + index)] ?? (band ? 18 : 15)) * 1.33).toFixed(1);
+          return band ? `minmax(${height}px, auto)` : `${height}px`;
+        }).join(" "),
         ["--print-cols" as string]: sheet.colWidths.map((width) => `${width}fr`).join(" "),
       }}
     >
@@ -218,25 +263,43 @@ function SheetGrid({
 
 function CellBody({
   addr,
+  column,
   cell,
   text,
   editable,
+  columnTitle,
   choices,
   date,
+  wrap,
   quiet,
   onOpen,
   onChange,
+  onRename,
 }: {
   addr: string;
+  column: string;
   cell: StoredCell | undefined;
   text: string;
   editable: boolean;
+  columnTitle: boolean;
   choices: string[] | null;
   date: boolean;
+  wrap: boolean;
   quiet: boolean;
   onOpen: () => void;
   onChange: (addr: string, value: string | number | null) => void;
+  onRename: (col: string, name: string) => void;
 }) {
+  const stored = typeof cell?.v === "string" || typeof cell?.v === "number" ? String(cell.v) : "";
+  const [draft, setDraft] = useState(columnTitle || (wrap && date) ? (columnTitle ? stored : text) : stored);
+  const area = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => setDraft(columnTitle ? stored : wrap && date ? text : stored), [stored, text, columnTitle, wrap, date]);
+  useEffect(() => {
+    const el = area.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  });
   if (!editable || quiet) {
     if (!editable) return <span className="controlled-list-screen-value">{text}</span>;
     return (
@@ -250,7 +313,18 @@ function CellBody({
   return (
     <>
       <span className="controlled-list-print-value">{text}</span>
-      {choices ? (
+      {columnTitle ? (
+        <input
+          className="controlled-list-editor"
+          aria-label={`${addr} column title`}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => {
+            const next = draft.trim();
+            if (next && next !== stored) onRename(column, next);
+          }}
+        />
+      ) : choices ? (
         <select className="controlled-list-editor" aria-label={addr} value={current === "" ? "" : String(current)} onChange={(event) => onChange(addr, event.target.value || null)}>
           <option value="" />
           {options.map((option) => (
@@ -259,8 +333,26 @@ function CellBody({
             </option>
           ))}
         </select>
-      ) : date ? (
-        <input className="controlled-list-editor" aria-label={addr} type="date" value={dateInputValue(cell?.v)} onChange={(event) => onChange(addr, event.target.value || null)} />
+      ) : date && !wrap ? (
+        <input className="controlled-list-editor" aria-label={addr} type="date" data-value-kind="date" value={dateInputValue(cell?.v)} onChange={(event) => onChange(addr, event.target.value || null)} />
+      ) : wrap ? (
+        <textarea
+          ref={area}
+          className="controlled-list-editor"
+          aria-label={addr}
+          rows={1}
+          value={date ? draft : current === null ? "" : String(current)}
+          onChange={(event) => {
+            if (date) setDraft(event.target.value);
+            else onChange(addr, parseEdited(event.target.value, cell?.nf));
+          }}
+          onBlur={() => {
+            if (!date) return;
+            const next = parseEdited(draft, cell?.nf);
+            const previous = cell?.v ?? null;
+            if (next !== previous) onChange(addr, next);
+          }}
+        />
       ) : (
         <input
           className="controlled-list-editor"
@@ -273,8 +365,38 @@ function CellBody({
   );
 }
 
+function visibleField(root: ParentNode, addr: string): HTMLElement | null {
+  const nodes = root.querySelectorAll(`[data-addr="${addr}"]`);
+  for (const node of nodes) {
+    if (!(node instanceof HTMLElement) || node.closest(".controlled-list-inactive")) continue;
+    const field = node.querySelector("input, textarea, select, button");
+    if (field instanceof HTMLElement) return field;
+  }
+  return null;
+}
+
+function leaveField(target: EventTarget | null, key: string): boolean {
+  if (target instanceof HTMLSelectElement) return key === "Enter";
+  if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement)) return true;
+  if (target instanceof HTMLInputElement && target.type === "date") return true;
+  if (key === "ArrowUp" || key === "ArrowDown" || key === "Enter") return true;
+  const start = target.selectionStart ?? 0;
+  const end = target.selectionEnd ?? 0;
+  if (start !== end) return false;
+  if (key === "ArrowLeft") return start === 0;
+  if (key === "ArrowRight") return start === target.value.length;
+  return false;
+}
+
+interface UndoStep {
+  sheet: string;
+  addr: string;
+  prev: string | number | null;
+}
+
 export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const folderPath = useItemFolderPath();
   const queryClient = useQueryClient();
   const surface = recordSurface(LIST_ROUTES[listKey]);
@@ -287,7 +409,14 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
   const [sheetName, setSheetName] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [active, setActive] = useState<{ sheet: string; addr: string; row: number } | null>(null);
+  const [selectedRows, setSelectedRows] = useState<number[]>([]);
   const pending = useRef(new Map<string, Record<string, CellPatch>>());
+  const undoStack = useRef<UndoStep[]>([]);
+  const undoing = useRef(false);
+  const anchorRow = useRef<number | null>(null);
+  const focusAddr = useRef<string | null>(null);
   const timer = useRef<number | null>(null);
   const saveSeq = useRef(0);
   const viewRef = useRef<ControlledListView | null>(null);
@@ -340,6 +469,13 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
   }
 
   function edit(name: string, addr: string, value: string | number | null) {
+    const existing = viewRef.current?.sheets.find((sheet) => sheet.name === name)?.cells[addr];
+    if (existing?.f || existing?.kind === "formula") return;
+    const prev = existing?.v ?? null;
+    if (!undoing.current && prev !== value) {
+      undoStack.current.push({ sheet: name, addr, prev: prev === undefined ? null : prev });
+      if (undoStack.current.length > 100) undoStack.current.shift();
+    }
     setSaved(false);
     setView((current) => {
       if (!current) return current;
@@ -347,27 +483,71 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
         ...current,
         sheets: current.sheets.map((sheet) => {
           if (sheet.name !== name) return sheet;
-          const existing = sheet.cells[addr];
-          if (existing && existing.kind !== "input") return sheet;
-          return { ...sheet, cells: { ...sheet.cells, [addr]: { ...existing, v: value, kind: "input", nf: existing?.nf } } };
+          const cell = sheet.cells[addr];
+          if (cell?.f || cell?.kind === "formula") return sheet;
+          const kind = cell?.kind ?? "input";
+          return { ...sheet, cells: { ...sheet.cells, [addr]: { ...cell, v: value, kind, nf: cell?.nf } } };
         }),
       };
     });
     queue(name, addr, value);
   }
 
-  async function changeRows(op: "add" | "delete", row?: number) {
+  function undo() {
+    const step = undoStack.current.pop();
+    if (!step) return;
+    undoing.current = true;
+    edit(step.sheet, step.addr, step.prev);
+    undoing.current = false;
+  }
+
+  function remember(next: ControlledListView) {
+    setView(next);
+    void queryClient.setQueryData(["controlled-list", listKey], next);
+    setSaved(true);
+  }
+
+  async function changeRows(body: { op: "add" | "delete" | "insert"; row?: number; rows?: number[]; place?: "above" | "below" }) {
     if (!view || !sheetName) return;
     if (timer.current != null) window.clearTimeout(timer.current);
     await flush();
     try {
-      const next = (await apiClient.post<ControlledListView>(`/controlled-lists/${listKey}/rows`, { sheet: sheetName, op, row })).data;
-      setView(next);
-      void queryClient.setQueryData(["controlled-list", listKey], next);
-      setSaved(true);
+      const next = (await apiClient.post<ControlledListView>(`/controlled-lists/${listKey}/rows`, { sheet: sheetName, ...body })).data;
+      remember(next);
     } catch (err) {
       toast.error(errorMessage(err));
     }
+  }
+
+  async function changeColumn(body: { op: "add" | "rename" | "remove"; col?: string; name?: string }) {
+    if (!view || !sheetName) return;
+    if (timer.current != null) window.clearTimeout(timer.current);
+    await flush();
+    try {
+      const next = (await apiClient.post<ControlledListView>(`/controlled-lists/${listKey}/columns`, { sheet: sheetName, ...body })).data;
+      remember(next);
+      if (next.revision !== view.revision) toast.success(`Revision is now ${next.revision}.`);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
+  }
+
+  async function deleteRows(rows: number[]) {
+    const current = viewRef.current?.sheets.find((item) => item.name === sheetName);
+    if (!current || rows.length === 0) return;
+    const labels = rows.map((row) => {
+      const label = current.cells[`A${row}`]?.v;
+      return label == null || label === "" ? `row ${row}` : String(label);
+    });
+    const ok = await confirm({
+      title: rows.length === 1 ? "Delete this row?" : `Delete ${rows.length} rows?`,
+      message: `Delete ${labels.join(", ")} from ${current.name.trim()}? The audit trail records who deleted them and the values that were removed.`,
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
+    setSelectedRows([]);
+    await changeRows({ op: "delete", rows });
   }
 
   async function insertPath() {
@@ -405,6 +585,64 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
 
   const sheet = view?.sheets.find((item) => item.name === sheetName) ?? view?.sheets[0];
   const home = listKey === "lst-eqp-001" ? { label: "Calibration", to: "/calibration" } : { label: "Documents", to: "/documents" };
+  const dataStart = sheet ? (view?.dataStart?.[sheet.name] ?? DATA_START[listKey][sheet.name] ?? sheet.maxRow + 1) : 1;
+  const activeRow = active && active.sheet === sheet?.name ? active.row : null;
+  const rowsToDelete = (selectedRows.length > 0 ? selectedRows : activeRow != null ? [activeRow] : []).filter((row) => row >= dataStart);
+
+  useEffect(() => {
+    const addr = focusAddr.current;
+    if (!addr) return;
+    const field = visibleField(document, addr);
+    if (field instanceof HTMLElement) {
+      field.focus();
+      focusAddr.current = null;
+    }
+  }, [editing, view]);
+
+  function pick(name: string, row: number, addr: string, extend: boolean) {
+    if (extend && anchorRow.current != null && active?.sheet === name) {
+      const start = Math.min(anchorRow.current, row);
+      const end = Math.max(anchorRow.current, row);
+      setSelectedRows(Array.from({ length: end - start + 1 }, (_, index) => start + index).filter((line) => line >= dataStart));
+    } else {
+      anchorRow.current = row;
+      setSelectedRows(row >= dataStart ? [row] : []);
+    }
+    setActive({ sheet: name, addr, row });
+  }
+
+  function onGridKey(event: KeyboardEvent<HTMLDivElement>) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z" && !event.shiftKey) {
+      event.preventDefault();
+      undo();
+      return;
+    }
+    if (!sheet) return;
+    const key = event.key;
+    if (key !== "ArrowUp" && key !== "ArrowDown" && key !== "ArrowLeft" && key !== "ArrowRight" && key !== "Enter") return;
+    if (!leaveField(event.target, key)) return;
+    const host = event.target instanceof Element ? event.target.closest("[data-addr]") : null;
+    const addr = host?.getAttribute("data-addr");
+    if (!addr) return;
+    const move: GridMove = key === "Enter" ? (event.shiftKey ? "ArrowUp" : "ArrowDown") : key;
+    let next = addr;
+    for (let step = 0; step < sheet.maxRow + sheet.maxCol; step += 1) {
+      const moved = moveAddr(next, move, { minRow: 1, maxRow: sheet.maxRow, maxCol: sheet.maxCol });
+      if (!moved) return;
+      next = moved;
+      const field = visibleField(event.currentTarget, next);
+      if (!(field instanceof HTMLElement)) continue;
+      event.preventDefault();
+      const row = Number(next.replace(/^[A-Z]+/i, ""));
+      pick(sheet.name, row, next, false);
+      if (field instanceof HTMLButtonElement) {
+        focusAddr.current = next;
+        setEditing(next);
+      }
+      field.focus();
+      return;
+    }
+  }
 
   return (
     <RecordFrame
@@ -443,7 +681,7 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
     >
       {list.isError && <p className="text-sm text-destructive">{errorMessage(list.error)}</p>}
       {view && sheet && (
-        <div className={`controlled-list-print aq-print-sheet min-w-0 ${view.landscape ? "controlled-list-landscape aq-print-wide" : "controlled-list-portrait"}`}>
+        <div className={`controlled-list-print aq-print-sheet min-w-0 ${view.landscape ? "controlled-list-landscape aq-print-wide" : "controlled-list-portrait"}`} onKeyDown={onGridKey}>
           <div className="controlled-list-print-banner">
             {view.docId} · Rev {view.revision}
           </div>
@@ -464,31 +702,78 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
             </div>
           )}
           {view.sheets.map((item) => {
-            const active = item.name === sheet.name;
+            const shown = item.name === sheet.name;
+            const start = view.dataStart?.[item.name] ?? DATA_START[listKey][item.name] ?? item.maxRow + 1;
+            const bandEnd = headerBandEnd(start);
+            const gridProps = {
+              sheet: item,
+              listKey,
+              canEdit: canEdit && shown,
+              canEditStructure: Boolean(view.canEditStructure) && shown,
+              dataStart: start,
+              statuses: view.statuses,
+              activeAddr: active && active.sheet === item.name ? active.addr : null,
+              selectedRows: active && active.sheet === item.name ? selectedRows : [],
+              editing,
+              onOpen: (addr: string) => setEditing(addr),
+              onPick: (row: number, addr: string, extend: boolean) => pick(item.name, row, addr, extend),
+              onChange: (addr: string, value: string | number | null) => edit(item.name, addr, value),
+              onRename: (col: string, name: string) => void changeColumn({ op: "rename", col, name }),
+            };
             return (
-              <div key={item.name} className={active ? "mb-2" : "controlled-list-inactive"}>
+              <div key={item.name} className={shown ? "mb-2" : "controlled-list-inactive"}>
                 {view.sheets.length > 1 && <h2 className="controlled-list-sheet-title">{item.name.trim()}</h2>}
+                {bandEnd > 1 && <SheetGrid {...gridProps} fromRow={1} toRow={bandEnd - 1} band />}
                 <div className="overflow-x-auto">
-                  <SheetGrid
-                    sheet={item}
-                    listKey={listKey}
-                    canEdit={canEdit && active}
-                    statuses={view.statuses}
-                    onChange={(addr, value) => edit(item.name, addr, value)}
-                    onDeleteRow={(row) => {
-                      const label = item.cells[`A${row}`]?.v;
-                      const name = label == null || label === "" ? `row ${row}` : String(label);
-                      if (window.confirm(`Delete ${name} from ${item.name.trim()}?`)) void changeRows("delete", row);
-                    }}
-                  />
+                  <SheetGrid {...gridProps} fromRow={bandEnd} toRow={item.maxRow} band={false} />
                 </div>
               </div>
             );
           })}
           {canEdit && (
-            <button type="button" className="controlled-list-tools mt-3 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted" onClick={() => void changeRows("add")}>
-              Add row
-            </button>
+            <div className="controlled-list-tools mt-3 flex flex-wrap gap-2">
+              <button type="button" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-40" disabled={activeRow == null || activeRow < dataStart} onClick={() => void changeRows({ op: "insert", row: activeRow ?? undefined, place: "above" })}>
+                Insert above
+              </button>
+              <button type="button" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-40" disabled={activeRow == null || activeRow < dataStart} onClick={() => void changeRows({ op: "insert", row: activeRow ?? undefined, place: "below" })}>
+                Insert below
+              </button>
+              <button type="button" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted" onClick={() => void changeRows({ op: "add" })}>
+                Add row
+              </button>
+              <button type="button" className="rounded-md border border-border px-3 py-2 text-sm text-destructive hover:bg-muted disabled:opacity-40" disabled={rowsToDelete.length === 0} onClick={() => void deleteRows(rowsToDelete)}>
+                Delete rows
+              </button>
+              <button type="button" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted" onClick={undo}>
+                Undo
+              </button>
+              {view.canEditStructure && (
+                <>
+                  <button type="button" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted" onClick={() => void changeColumn({ op: "add", col: active ? active.addr.replace(/\d+$/, "") : undefined })}>
+                    Add column
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-40"
+                    disabled={!active}
+                    onClick={() => {
+                      const col = active?.addr.replace(/\d+$/, "");
+                      if (!col) return;
+                      void confirm({
+                        title: "Remove this column?",
+                        message: `Remove column ${col}? The revision moves forward, and the audit trail records the change.`,
+                        confirmLabel: "Remove column",
+                        tone: "danger",
+                      }).then((ok) => {
+                        if (ok) void changeColumn({ op: "remove", col });
+                      });
+                    }}
+                  >
+                    Remove column
+                  </button>
+                </>
+              )}
+            </div>
           )}
         </div>
       )}

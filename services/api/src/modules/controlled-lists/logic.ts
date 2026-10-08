@@ -3,11 +3,18 @@ import devLog from "./seeds/lst-dev-001.json" with { type: "json" };
 import auditSchedule from "./seeds/lst-gen-002.json" with { type: "json" };
 import engLog from "./seeds/lst-eng-001.json" with { type: "json" };
 import ncrLog from "./seeds/lst-ncr-001.json" with { type: "json" };
+import { bumpRevision } from "../form-builder/revision.js";
 import {
   appendSheetRow,
   cellAddr,
+  columnIndex,
+  columnLetter,
   coverNewRow,
+  coverRow,
+  deleteSheetColumn,
   deleteSheetRow,
+  insertSheetColumn,
+  insertSheetRow,
   nextDataRow,
   parseAddr,
   textOf,
@@ -216,93 +223,87 @@ function mergeHitsHeader(merge: string): boolean {
   return parseAddr(start).row <= HEADER_DEPTH || parseAddr(end).row <= HEADER_DEPTH;
 }
 
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value && typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
-    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(",")}}`;
-  }
-  return JSON.stringify(value) ?? "null";
+/** The row of column titles. Editing it is a structure change, not a cell edit. */
+export function columnHeaderRow(dataStart: number): number {
+  return Math.max(1, dataStart - 1);
 }
 
-function sameJson(left: unknown, right: unknown): boolean {
-  return stableJson(left) === stableJson(right);
+/** A, B, Rev: A, or rev: aa. Empty when the text is not a revision letter. */
+export function revisionLetter(value: string): string | null {
+  const trimmed = value.trim();
+  const prefixed = /^rev:\s*([A-Za-z]+)$/i.exec(trimmed);
+  if (prefixed?.[1]) return prefixed[1].toUpperCase();
+  if (/^[A-Za-z]+$/.test(trimmed)) return trimmed.toUpperCase();
+  return null;
 }
 
+function replaceRevisionText(current: string, revision: string): string {
+  const trimmed = current.trim();
+  if (/^rev:\s*[A-Za-z]+$/i.test(trimmed)) return trimmed.replace(/[A-Za-z]+$/, revision);
+  return revision;
+}
+
+/** A blank document revision takes the catalog letter. A saved letter, including workbook Rev G, stays. */
+export function coalesceRevision(current: string, catalog: string): string {
+  return current.trim() || catalog;
+}
+
+export function revCells(key: ListKey): { sheet: string; addr: string }[] {
+  const spec = LISTS[key];
+  return spec.revs ?? [spec.rev];
+}
+
+/** A header cell with no text can take the workbook value. A formula, or any text someone saved, stays. */
+function headerNeedsSeed(cell: StoredCell | undefined): boolean {
+  if (cell?.f) return false;
+  return textOf(cell?.v) === "";
+}
+
+/**
+ * Fills header cells that are missing or blank: Rev, Owner, Authorized By, Date, and the title.
+ * A value someone already typed stays, even when it differs from the workbook.
+ * Column widths and an added column's wider title merge stay as saved.
+ */
 function restoreSheetHeader(sheet: StoredSheet, seed: StoredSheet | undefined): StoredSheet {
   if (!seed) return sheet;
   let changed = false;
   const cells = { ...sheet.cells };
-  for (const addr of Object.keys(cells)) {
-    if (parseAddr(addr).row <= HEADER_DEPTH && !seed.cells[addr]) {
-      delete cells[addr];
-      changed = true;
-    }
-  }
   for (const [addr, cell] of Object.entries(seed.cells)) {
     if (parseAddr(addr).row > HEADER_DEPTH) continue;
-    const current = sheet.cells[addr];
-    const desired: StoredCell =
-      current?.kind === "location"
-        ? { ...cell, v: current.v, kind: "location" }
-        : cell.kind === "input" && current?.kind === "input"
-          ? { ...cell, v: current.v }
-          : { ...cell };
-    if (!sameJson(current, desired)) {
-      cells[addr] = desired;
-      changed = true;
-    }
-  }
-  const seedHeaderMerges = seed.merges.filter(mergeHitsHeader).slice().sort();
-  const currentHeaderMerges = sheet.merges.filter(mergeHitsHeader).slice().sort();
-  let merges = sheet.merges;
-  if (!sameJson(seedHeaderMerges, currentHeaderMerges)) {
-    merges = [...sheet.merges.filter((merge) => !mergeHitsHeader(merge)), ...seed.merges.filter(mergeHitsHeader)];
+    if (!headerNeedsSeed(cells[addr])) continue;
+    if (textOf(cell?.v) === "") continue;
+    cells[addr] = { ...cell };
     changed = true;
   }
+  const origins = new Set(sheet.merges.map((merge) => merge.split(":")[0]).filter((addr): addr is string => Boolean(addr)));
+  const missingMerges = seed.merges.filter((merge) => mergeHitsHeader(merge) && !sheet.merges.includes(merge) && !origins.has(merge.split(":")[0] ?? ""));
+  const merges = missingMerges.length > 0 ? [...sheet.merges, ...missingMerges] : sheet.merges;
+  if (missingMerges.length > 0) changed = true;
   const rowHeights = { ...sheet.rowHeights };
-  for (const key of Object.keys(seed.rowHeights)) {
+  for (const [key, height] of Object.entries(seed.rowHeights)) {
     if (Number(key) > HEADER_DEPTH) continue;
-    if (rowHeights[key] !== seed.rowHeights[key]) {
-      rowHeights[key] = seed.rowHeights[key]!;
-      changed = true;
-    }
-  }
-  for (const key of Object.keys(rowHeights)) {
-    if (Number(key) <= HEADER_DEPTH && seed.rowHeights[key] == null) {
-      delete rowHeights[key];
-      changed = true;
-    }
+    if (rowHeights[key] != null) continue;
+    rowHeights[key] = height;
+    changed = true;
   }
   const boxes = { ...(sheet.boxes ?? {}) };
-  for (const addr of Object.keys(boxes)) {
-    if (parseAddr(addr).row <= HEADER_DEPTH && seed.boxes?.[addr] == null) {
-      delete boxes[addr];
-      changed = true;
-    }
-  }
+  let boxesChanged = false;
   for (const [addr, box] of Object.entries(seed.boxes ?? {})) {
     if (parseAddr(addr).row > HEADER_DEPTH) continue;
-    if (boxes[addr] !== box) {
-      boxes[addr] = box;
-      changed = true;
-    }
+    if (boxes[addr] != null) continue;
+    boxes[addr] = box;
+    boxesChanged = true;
   }
+  if (!changed && !boxesChanged) return sheet;
   const nextBoxes = Object.keys(boxes).length > 0 ? boxes : undefined;
-  if ((sheet.boxes == null) !== (nextBoxes == null) || (nextBoxes && !sameJson(sheet.boxes, nextBoxes))) changed = true;
-  let colWidths = sheet.colWidths;
-  if (seed.colWidths.length === sheet.colWidths.length && seed.colWidths.some((width, index) => width !== sheet.colWidths[index])) {
-    colWidths = [...seed.colWidths];
-    changed = true;
-  }
-  if (!changed) return sheet;
-  return { ...sheet, cells, merges, rowHeights, boxes: nextBoxes, colWidths };
+  return { ...sheet, cells, merges, rowHeights, boxes: nextBoxes };
 }
 
 /**
- * Puts rows 1–3 back to the controlled workbook: title, Doc ID, Rev, location,
- * Approved By / Authorized By / Owner, and Date. An edited name or date is kept.
- * Data rows and the document revision are left alone.
+ * Fills blank cells in rows 1–3 from the controlled workbook: title, Doc ID, Rev,
+ * location, Approved By / Authorized By / Owner, and Date.
+ * An edited name, date, or revision letter is kept. Data rows and the document revision are left alone.
+ * Per-tab letters stay as saved (LST-NCR-001 keeps Rev E / F on the tabs while the workbook revision stays G).
  */
 export function restoreHeaderBlock(key: ListKey, sheets: StoredSheet[]): { sheets: StoredSheet[]; changed: boolean } {
   const seeds = seedBook()[key].sheets;
@@ -489,6 +490,7 @@ export function insertLocationPath(
   sheetName: string,
   path: string,
 ): { sheets: StoredSheet[]; changes: CellChange[] } {
+  void key;
   const value = locationCellText(path);
   const changes: CellChange[] = [];
   let touched = false;
@@ -505,10 +507,23 @@ export function insertLocationPath(
     }
     return touched ? { ...sheet, cells } : sheet;
   });
-  return { sheets: changes.length > 0 ? lockRevision(key, next) : sheets, changes };
+  return { sheets: changes.length > 0 ? next : sheets, changes };
 }
 
-/** Copy editable values onto the stored sheet. Labels, formulas, Rev, and an inserted Location stay as they are. */
+function editedKind(addr: string, current: StoredCell | undefined, value: string | number | null): StoredCell["kind"] {
+  if (current?.kind === "rev" || current?.kind === "label") return current.kind;
+  if (current?.kind === "location" || (current != null && isLocationHeaderCell(addr, current))) {
+    return typeof value === "string" && LOCATION_LINE.test(value.trim()) ? "location" : "input";
+  }
+  return "input";
+}
+
+/**
+ * Copy edited values onto the stored sheet.
+ * Header text, dates, names, Rev, and location can change. Formula cells keep their formulas.
+ * The column-title row is left alone; renaming a column is a structure change.
+ * A data edit does not change the document revision by itself.
+ */
 export function applyInputPatch(key: ListKey, sheets: StoredSheet[], patches: Array<{ name: string; cells: Record<string, CellPatch> }>): { sheets: StoredSheet[]; changes: CellChange[] } {
   const spec = LISTS[key];
   const changes: CellChange[] = [];
@@ -517,20 +532,25 @@ export function applyInputPatch(key: ListKey, sheets: StoredSheet[], patches: Ar
     const sheet = next.find((item) => item.name === patch.name);
     if (!sheet) continue;
     const start = spec.dataStart[sheet.name] ?? 1;
+    const headerRow = columnHeaderRow(start);
     for (const [addr, incoming] of Object.entries(patch.cells)) {
-      const { row } = parseAddr(addr);
+      const { col, row } = parseAddr(addr);
+      if (row < 1 || columnIndex(col) > sheet.maxCol) continue;
+      if (row === headerRow) continue;
       const current = sheet.cells[addr];
-      if (current && current.kind !== "input") continue;
-      if (!current && row < start) continue;
-      const value = incoming.v === "" ? null : incoming.v ?? null;
+      if (current?.kind === "formula" || current?.f) continue;
+      const value = incoming.v === "" ? null : (incoming.v ?? null);
       const before = shownRaw(current);
       const after = value == null ? "" : String(value);
       if (before === after) continue;
-      sheet.cells[addr] = { ...current, v: value, kind: "input", nf: current?.nf };
+      sheet.cells[addr] = { ...current, v: value, kind: editedKind(addr, current, value), nf: current?.nf };
       changes.push({ sheet: sheet.name, addr, old: before || "blank", next: after || "blank" });
     }
   }
-  return { sheets: lockRevision(key, next.map((sheet) => (key === "lst-gen-001" && sheet.name === "Internal Documents" ? stripOmitted(sheet, spec.dataStart[sheet.name] ?? 4, "A") : sheet))), changes };
+  return {
+    sheets: next.map((sheet) => (key === "lst-gen-001" && sheet.name === "Internal Documents" ? stripOmitted(sheet, spec.dataStart[sheet.name] ?? 4, "A") : sheet)),
+    changes,
+  };
 }
 
 export function addDataRow(key: ListKey, sheets: StoredSheet[], sheetName: string): { sheets: StoredSheet[]; row: number } | null {
@@ -556,32 +576,201 @@ export function addDataRow(key: ListKey, sheets: StoredSheet[], sheetName: strin
   } else if (formula && !sheet.cells[cellAddr(formula.column, row)]?.f) {
     sheet.cells[cellAddr(formula.column, row)] = { f: formula.build(row), nf: formula.nf, kind: "formula" };
   }
-  return { sheets: lockRevision(key, next), row };
+  return { sheets: next, row };
+}
+
+/** Insert a blank row above or below a data row. Nothing in the new row is numbered. */
+export function insertDataRow(key: ListKey, sheets: StoredSheet[], sheetName: string, atRow: number): { sheets: StoredSheet[]; row: number } | null {
+  const spec = LISTS[key];
+  const start = spec.dataStart[sheetName];
+  if (start == null || atRow < start) return null;
+  const formula = spec.formula?.sheet === sheetName ? spec.formula : undefined;
+  let placed = false;
+  const next = sheets.map((sheet) => {
+    if (sheet.name !== sheetName) return sheet;
+    if (atRow > sheet.maxRow + 1) return sheet;
+    placed = true;
+    let grown = insertSheetRow(sheet, atRow);
+    if (formula) {
+      grown = {
+        ...grown,
+        cells: {
+          ...grown.cells,
+          [cellAddr(formula.column, atRow)]: { f: formula.build(atRow), nf: formula.nf, kind: "formula" },
+        },
+      };
+    }
+    return coverRow(grown, atRow);
+  });
+  if (!placed) return null;
+  return { sheets: next, row: atRow };
 }
 
 export function removeDataRow(key: ListKey, sheets: StoredSheet[], sheetName: string, row: number): StoredSheet[] | null {
+  return removeDataRows(key, sheets, sheetName, [row]);
+}
+
+/** Delete data rows from the bottom up so each index still points at the row the person chose. */
+export function removeDataRows(key: ListKey, sheets: StoredSheet[], sheetName: string, rows: number[]): StoredSheet[] | null {
   const spec = LISTS[key];
   const start = spec.dataStart[sheetName];
-  if (start == null || row < start) return null;
-  const next = sheets.map((sheet) => (sheet.name === sheetName ? deleteSheetRow(sheet, row) : sheet));
-  return lockRevision(key, next);
+  const sheet = sheets.find((item) => item.name === sheetName);
+  if (start == null || !sheet) return null;
+  const unique = [...new Set(rows)].filter((row) => Number.isInteger(row));
+  if (unique.length === 0 || unique.some((row) => row < start || row > sheet.maxRow)) return null;
+  let current = sheets;
+  for (const row of unique.sort((a, b) => b - a)) {
+    current = current.map((item) => (item.name === sheetName ? deleteSheetRow(item, row) : item));
+  }
+  return current;
+}
+
+export function rowValueList(sheet: StoredSheet, row: number): string {
+  const parts: string[] = [];
+  for (let col = 1; col <= sheet.maxCol; col += 1) {
+    const addr = cellAddr(columnLetter(col), row);
+    const cell = sheet.cells[addr];
+    if (!cell || cell.f) continue;
+    const text = textOf(cell.v);
+    if (!text) continue;
+    parts.push(`${addr} ${quote(text)}`);
+    if (parts.length >= 8) break;
+  }
+  return parts.join(", ");
+}
+
+export interface ColumnEdit {
+  sheets: StoredSheet[];
+  revision: string;
+  bumped: boolean;
+  detail: string;
+}
+
+function withSheet(sheets: StoredSheet[], sheetName: string, sheet: StoredSheet): StoredSheet[] {
+  return sheets.map((item) => (item.name === sheetName ? sheet : item));
+}
+
+function bumpSheetRevision(key: ListKey, sheets: StoredSheet[], sheetName: string, revision: string): { sheets: StoredSheet[]; revision: string } {
+  const nextRevision = bumpRevision(revision);
+  const locks = revCells(key).filter((item) => item.sheet === sheetName);
+  return {
+    revision: nextRevision,
+    sheets: sheets.map((sheet) => {
+      if (sheet.name !== sheetName) return sheet;
+      const cells = { ...sheet.cells };
+      for (const lock of locks) {
+        const current = cells[lock.addr];
+        if (!current) continue;
+        cells[lock.addr] = { ...current, v: replaceRevisionText(textOf(current.v), nextRevision), kind: "rev" };
+      }
+      return { ...sheet, cells };
+    }),
+  };
+}
+
+/** Rename the column title. This is a structure change and moves the revision forward. */
+export function renameListColumn(key: ListKey, sheets: StoredSheet[], revision: string, sheetName: string, col: string, name: string): ColumnEdit | null {
+  const spec = LISTS[key];
+  const start = spec.dataStart[sheetName];
+  const sheet = sheets.find((item) => item.name === sheetName);
+  const letter = col.trim().toUpperCase();
+  const title = name.trim();
+  if (start == null || !sheet || !title) return null;
+  const index = columnIndex(letter);
+  if (index < 1 || index > sheet.maxCol) return null;
+  const addr = cellAddr(letter, columnHeaderRow(start));
+  const before = textOf(sheet.cells[addr]?.v);
+  if (before === title) return { sheets, revision, bumped: false, detail: "" };
+  const renamed = withSheet(sheets, sheetName, {
+    ...sheet,
+    cells: { ...sheet.cells, [addr]: { ...sheet.cells[addr], v: title, kind: "label" } },
+  });
+  const bumped = bumpSheetRevision(key, renamed, sheetName, revision);
+  return {
+    sheets: bumped.sheets,
+    revision: bumped.revision,
+    bumped: true,
+    detail: `renamed column ${letter} on ${sheetName.trim()} from ${quote(before || "blank")} to ${quote(title)}`,
+  };
+}
+
+/** Add a blank column. `after` is the column it sits to the right of. Omit it to add one at the end. */
+export function addListColumn(key: ListKey, sheets: StoredSheet[], revision: string, sheetName: string, after: string | null): ColumnEdit | null {
+  const spec = LISTS[key];
+  const start = spec.dataStart[sheetName];
+  const sheet = sheets.find((item) => item.name === sheetName);
+  if (start == null || !sheet) return null;
+  const afterIndex = after ? columnIndex(after.trim().toUpperCase()) : sheet.maxCol;
+  if (after && (afterIndex < 1 || afterIndex > sheet.maxCol)) return null;
+  const at = afterIndex + 1;
+  let grown = insertSheetColumn(sheet, at);
+  const header = cellAddr(columnLetter(at), columnHeaderRow(start));
+  grown = { ...grown, cells: { ...grown.cells, [header]: { ...grown.cells[header], v: null, kind: "label" } } };
+  const bumped = bumpSheetRevision(key, withSheet(sheets, sheetName, grown), sheetName, revision);
+  const place = after ? `after ${after.trim().toUpperCase()}` : "at the end";
+  return {
+    sheets: bumped.sheets,
+    revision: bumped.revision,
+    bumped: true,
+    detail: `added a blank column ${columnLetter(at)} ${place} on ${sheetName.trim()}`,
+  };
+}
+
+/** Remove one column and the values in it. */
+export function removeListColumn(key: ListKey, sheets: StoredSheet[], revision: string, sheetName: string, col: string): ColumnEdit | null {
+  const spec = LISTS[key];
+  const start = spec.dataStart[sheetName];
+  const sheet = sheets.find((item) => item.name === sheetName);
+  const letter = col.trim().toUpperCase();
+  if (start == null || !sheet || sheet.maxCol <= 1) return null;
+  const index = columnIndex(letter);
+  if (index < 1 || index > sheet.maxCol) return null;
+  const title = textOf(sheet.cells[cellAddr(letter, columnHeaderRow(start))]?.v);
+  const grown = deleteSheetColumn(sheet, index);
+  const bumped = bumpSheetRevision(key, withSheet(sheets, sheetName, grown), sheetName, revision);
+  return {
+    sheets: bumped.sheets,
+    revision: bumped.revision,
+    bumped: true,
+    detail: `removed column ${letter}${title ? ` (${title})` : ""} on ${sheetName.trim()}`,
+  };
 }
 
 function quote(value: string): string {
   return value === "blank" ? "blank" : `"${value}"`;
 }
 
-export function changeSummary(who: string, changes: CellChange[]): string {
+export function changeSummary(who: string, changes: CellChange[], when?: string): string {
   if (changes.length === 0) return "";
   const lines = changes.slice(0, 12).map((change) => `${change.addr} on ${change.sheet} from ${quote(change.old)} to ${quote(change.next)}`);
   const more = changes.length > 12 ? ` and ${changes.length - 12} more cells` : "";
   const noun = changes.length === 1 ? "cell" : "cells";
-  return `${who} changed ${changes.length} ${noun}. ${lines.join(". ")}${more}.`;
+  const dated = when ? ` on ${when}` : "";
+  return `${who} changed ${changes.length} ${noun}${dated}. ${lines.join(". ")}${more}.`;
 }
 
-export function rowSummary(who: string, action: "added" | "deleted", sheet: string, row: number, label?: string): string {
+export function rowSummary(who: string, action: "added" | "inserted" | "deleted", sheet: string, row: number, label?: string, when?: string): string {
   const what = label ? ` (${label})` : "";
-  return action === "added" ? `${who} added a row at row ${row} on ${sheet}.` : `${who} deleted row ${row} on ${sheet}${what}.`;
+  const dated = when ? ` on ${when}` : "";
+  if (action === "inserted") return `${who} inserted a blank row at row ${row} on ${sheet}${dated}.`;
+  if (action === "added") return `${who} added a blank row at row ${row} on ${sheet}${dated}.`;
+  return `${who} deleted row ${row} on ${sheet}${what}${dated}.`;
+}
+
+export function rowsDeletedSummary(who: string, sheet: string, rows: Array<{ row: number; label?: string; values?: string }>, when?: string): string {
+  const dated = when ? ` on ${when}` : "";
+  const lines = rows.map((row) => {
+    const label = row.label ? ` (${row.label})` : "";
+    const values = row.values ? `: ${row.values}` : "";
+    return `row ${row.row}${label}${values}`;
+  });
+  const noun = rows.length === 1 ? "row" : "rows";
+  return `${who} deleted ${rows.length} ${noun} on ${sheet.trim()}${dated}. ${lines.join(". ")}.`;
+}
+
+export function structureSummary(who: string, detail: string, fromRevision: string, toRevision: string, when?: string): string {
+  const dated = when ? ` on ${when}` : "";
+  return `${who} ${detail}${dated}. Revision moved from ${fromRevision} to ${toRevision}.`;
 }
 
 export const RETIRED_LIST_TITLES = new Set(["master equipment list", "master document list", "scope of laboratory activities"]);

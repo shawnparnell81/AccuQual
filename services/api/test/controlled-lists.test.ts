@@ -4,15 +4,23 @@ import { formulaSerial, listOptions, shownCell, toneFill } from "../src/modules/
 import {
   LISTS,
   addDataRow,
+  addListColumn,
   appendDocuments,
   appendEquipment,
   applyInputPatch,
   changeSummary,
   freshSheets,
+  insertDataRow,
   insertLocationPath,
   planListCleanup,
   removeDataRow,
+  removeDataRows,
+  removeListColumn,
+  renameListColumn,
+  coalesceRevision,
   restoreHeaderBlock,
+  revisionLetter,
+  rowsDeletedSummary,
 } from "../src/modules/controlled-lists/logic.js";
 import { workbookFileName } from "../src/modules/controlled-lists/workbook.js";
 import parity from "../src/modules/controlled-lists/seeds/formula-parity.json" with { type: "json" };
@@ -51,11 +59,14 @@ describe("living controlled lists", () => {
     expect(internal.cells.A4?.v).toBe("FRM-CAR-001");
     expect(Object.values(internal.cells).some((cell) => cell.v === "FRM-TST-001" || cell.v === "FRM-TST-002")).toBe(false);
     expect(Object.values(internal.cells).some((cell) => cell.v === "FRM-VAL-001")).toBe(true);
-    const edited = applyInputPatch("lst-gen-001", sheets, [{ name: "Internal Documents", cells: { B4: { v: "Supplier CAR" }, D2: { v: "Z" } } }]);
+    const edited = applyInputPatch("lst-gen-001", sheets, [{ name: "Internal Documents", cells: { B4: { v: "Supplier CAR" }, D2: { v: "Z" }, A3: { v: "Record No." } } }]);
     expect(edited.sheets[0]?.cells.B4?.v).toBe("Supplier CAR");
-    expect(edited.sheets[0]?.cells.D2?.v).toBe("B");
-    expect(edited.changes).toEqual([{ sheet: "Internal Documents", addr: "B4", old: expect.any(String), next: "Supplier CAR" }]);
-    expect(changeSummary("Shawn", edited.changes)).toContain('B4 on Internal Documents');
+    expect(edited.sheets[0]?.cells.D2?.v).toBe("Z");
+    expect(edited.sheets[0]?.cells.A3?.v).toBe("Document ID");
+    expect(edited.changes.map((change) => change.addr).sort()).toEqual(["B4", "D2"]);
+    expect(changeSummary("Shawn", edited.changes)).toContain("B4 on Internal Documents");
+    expect(changeSummary("Shawn", edited.changes, "Oct 8, 2026, 9:00 AM")).toContain("on Oct 8, 2026, 9:00 AM");
+    expect(changeSummary("Shawn", edited.changes)).toContain('from "');
   });
 
   it("loads the laboratory scope and appends missing register and equipment rows", () => {
@@ -246,15 +257,15 @@ describe("living controlled lists", () => {
       { name: "Test Reports", cells: { C5: { v: "FCS Shock" }, B2: { v: "Rev: Z" }, C2: { v: "somewhere else" }, F2: { v: "Shawn Parnell" }, H2: { v: "Date: 8/1/26" } } },
     ]);
     expect(edited.sheets[0]?.cells.C5?.v).toBe("FCS Shock");
-    expect(edited.sheets[0]?.cells.B2?.v).toBe("Rev: B");
-    expect(edited.sheets[0]?.cells.C2?.v).toBe(location);
+    expect(edited.sheets[0]?.cells.B2?.v).toBe("Rev: Z");
+    expect(edited.sheets[0]?.cells.C2?.v).toBe("somewhere else");
     expect(edited.sheets[0]?.cells.F2?.v).toBe("Shawn Parnell");
     expect(edited.sheets[0]?.cells.H2?.v).toBe("Date: 8/1/26");
     expect(edited.sheets[0]?.cells.F2?.kind).toBe("input");
     expect(edited.sheets[1]?.cells.B2?.v).toBe("Rev: B");
     expect(edited.sheets[1]?.cells.F2?.v).toBe("Maxwell Tollefson");
     expect(LISTS["lst-dev-001"].revision).toBe("B");
-    expect(edited.changes.map((change) => change.addr).sort()).toEqual(["C5", "F2", "H2"]);
+    expect(edited.changes.map((change) => change.addr).sort()).toEqual(["B2", "C2", "C5", "F2", "H2"]);
 
     const added = addDataRow("lst-dev-001", sheets, "Test Reports");
     expect(added?.row).toBe(472);
@@ -330,17 +341,18 @@ describe("living controlled lists", () => {
     expect(listOptions(ncr, "F5")).toEqual(["Use-As-Is", " Scrap", " Rework"]);
 
     const edited = applyInputPatch("lst-ncr-001", sheets, [
-      { name: "LST-NCR-001 - NCR", cells: { K5: { v: "Open" }, B2: { v: "Rev: G" }, C2: { v: "moved" }, E2: { v: "Shawn Parnell" }, G2: { v: "2026-08-01" } } },
+      { name: "LST-NCR-001 - NCR", cells: { K5: { v: "Open" }, B2: { v: "Rev: G" }, C2: { v: "moved" }, E2: { v: "Shawn Parnell" }, G2: { v: "2026-08-01" }, A4: { v: "Record Number" } } },
     ]);
     expect(edited.sheets[0]?.cells.K5?.v).toBe("Open");
-    expect(edited.sheets[0]?.cells.B2?.v).toBe("Rev: E");
-    expect(edited.sheets[0]?.cells.C2?.v).toBe("Location: X:\\ISO Compliance Documents\\07_Quality_Logs");
+    expect(edited.sheets[0]?.cells.B2?.v).toBe("Rev: G");
+    expect(edited.sheets[0]?.cells.C2?.v).toBe("moved");
     expect(edited.sheets[0]?.cells.E2?.v).toBe("Shawn Parnell");
     expect(edited.sheets[0]?.cells.G2?.v).toBe("2026-08-01");
+    expect(edited.sheets[0]?.cells.A4?.v).toBe("NCR Number");
     expect(edited.sheets[1]?.cells.B2?.v).toBe("Rev: F");
     expect(edited.sheets[1]?.cells.E2?.v).toBe("Maxwell Tollefson");
     expect(LISTS["lst-ncr-001"].revision).toBe("G");
-    expect(edited.changes.map((change) => change.addr).sort()).toEqual(["E2", "G2", "K5"]);
+    expect(edited.changes.map((change) => change.addr).sort()).toEqual(["B2", "C2", "E2", "G2", "K5"]);
 
     const body = await buildListWorkbook("lst-ncr-001", sheets);
     const book = new ExcelJS.Workbook();
@@ -442,16 +454,17 @@ describe("living controlled lists", () => {
     expect(listOptions(sheet, "E6")).toBeNull();
 
     const edited = applyInputPatch("lst-gen-002", sheets, [
-      { name: sheetName, cells: { E6: { v: "Complete" }, D2: { v: "B" }, A1: { v: "CHANGED" }, F3: { v: "Shawn Parnell" }, B3: { v: "2026-08-01" } } },
+      { name: sheetName, cells: { E6: { v: "Complete" }, D2: { v: "B" }, A1: { v: "CHANGED" }, F3: { v: "Shawn Parnell" }, B3: { v: "2026-08-01" }, A5: { v: "Period" } } },
     ]);
     expect(edited.sheets[0]?.cells.E6?.v).toBe("Complete");
     expect(edited.sheets[0]?.cells.F3?.v).toBe("Shawn Parnell");
     expect(edited.sheets[0]?.cells.B3?.v).toBe("2026-08-01");
-    expect(edited.sheets[0]?.cells.D2?.v).toBe("A");
-    expect(edited.sheets[0]?.cells.A1?.v).toBe("INTERNAL AUDIT SCHEDULE");
+    expect(edited.sheets[0]?.cells.D2?.v).toBe("B");
+    expect(edited.sheets[0]?.cells.A1?.v).toBe("CHANGED");
+    expect(edited.sheets[0]?.cells.A5?.v).toBe("Audit Period");
     expect(edited.sheets[0]?.cells.A6?.v).toBe("H1 - 2027");
     expect(LISTS["lst-gen-002"].revision).toBe("A");
-    expect(edited.changes.map((change) => change.addr).sort()).toEqual(["B3", "E6", "F3"]);
+    expect(edited.changes.map((change) => change.addr).sort()).toEqual(["A1", "B3", "D2", "E6", "F3"]);
 
     const added = addDataRow("lst-gen-002", sheets, sheetName);
     expect(added?.row).toBe(10);
@@ -515,9 +528,9 @@ describe("living controlled lists", () => {
     const path = "ISO Compliance Documents\\Quality Logs\\LST-NCR-001";
     const sheets = freshSheets("lst-ncr-001");
     expect(sheets[0]?.cells.C2?.v).toBe("Location: X:\\ISO Compliance Documents\\07_Quality_Logs");
-    const ignored = applyInputPatch("lst-ncr-001", sheets, [{ name: "LST-NCR-001 - NCR", cells: { C2: { v: `Location: ${path}` } } }]);
-    expect(ignored.sheets[0]?.cells.C2?.v).toBe("Location: X:\\ISO Compliance Documents\\07_Quality_Logs");
-    expect(ignored.changes).toEqual([]);
+    const typed = applyInputPatch("lst-ncr-001", sheets, [{ name: "LST-NCR-001 - NCR", cells: { C2: { v: `Location: ${path}` } } }]);
+    expect(typed.sheets[0]?.cells.C2?.v).toBe(`Location: ${path}`);
+    expect(typed.changes.map((change) => change.addr)).toEqual(["C2"]);
 
     const inserted = insertLocationPath("lst-ncr-001", sheets, "LST-NCR-001 - NCR", path);
     expect(inserted.changes.map((change) => change.addr)).toEqual(["C2"]);
@@ -531,7 +544,7 @@ describe("living controlled lists", () => {
     expect(restored.sheets[0]?.cells.C2).toMatchObject({ v: `Location: ${path}`, kind: "location" });
     expect(restored.sheets[0]?.cells.B2?.v).toBe("Rev: E");
     const patched = applyInputPatch("lst-ncr-001", restored.sheets, [{ name: "LST-NCR-001 - NCR", cells: { C2: { v: "somewhere else" } } }]);
-    expect(patched.sheets[0]?.cells.C2?.v).toBe(`Location: ${path}`);
+    expect(patched.sheets[0]?.cells.C2?.v).toBe("somewhere else");
 
     const devPath = "ISO Compliance Documents\\Test Data Projects\\LST-DEV-001";
     const dev = insertLocationPath("lst-dev-001", freshSheets("lst-dev-001"), "Test Reports", devPath);
@@ -583,12 +596,13 @@ describe("living controlled lists", () => {
       { name: sheetName, cells: { A6: { v: "ECR-2026-099" }, D2: { v: "B" }, E2: { v: "moved" }, H2: { v: "Shawn Parnell" }, K2: { v: "2026-08-01" } } },
     ]);
     expect(edited.sheets[0]?.cells.A6?.v).toBe("ECR-2026-099");
-    expect(edited.sheets[0]?.cells.D2?.v).toBe("A");
-    expect(edited.sheets[0]?.cells.E2?.v).toBe(location);
+    expect(edited.sheets[0]?.cells.D2?.v).toBe("B");
+    expect(edited.sheets[0]?.cells.E2?.v).toBe("moved");
     expect(edited.sheets[0]?.cells.H2?.v).toBe("Shawn Parnell");
     expect(edited.sheets[0]?.cells.K2?.v).toBe("2026-08-01");
+    expect(edited.sheets[0]?.cells.I6?.f).toBeUndefined();
     expect(LISTS["lst-eng-001"].revision).toBe("A");
-    expect(edited.changes.map((change) => change.addr).sort()).toEqual(["A6", "H2", "K2"]);
+    expect(edited.changes.map((change) => change.addr).sort()).toEqual(["A6", "D2", "E2", "H2", "K2"]);
 
     const added = addDataRow("lst-eng-001", sheets, sheetName);
     expect(added?.row).toBe(56);
@@ -680,5 +694,142 @@ describe("living controlled lists", () => {
     expect(validations).toContain("Pending");
     expect(validations).toContain("Yes");
     expect(validations).toContain("Closed");
+  });
+
+  it("edits seeded rows, inserts and deletes without numbering, and bumps revision only for columns", () => {
+    const engName = "LST-ENG-001 - ECR Tracker - Rev";
+    const eng = freshSheets("lst-eng-001");
+    expect(eng[0]?.cells.H2?.v).toBe("Maxwell Tollefson");
+    expect(eng[0]?.cells.K2?.v).toBe("2026-07-02");
+    expect(eng[0]?.cells.B2?.v).toBe("LST-ENG-001");
+    const gen2 = freshSheets("lst-gen-002")[0]!;
+    expect(gen2.cells.F3?.v).toBe("Ron Wertz & Maxwell Tollefson");
+    expect(gen2.cells.B3?.v).toBe("2026-07-14");
+    expect(gen2.cells.F2?.v).toBe("Internal Audit Schedule");
+    const ncr = freshSheets("lst-ncr-001")[0]!;
+    expect(ncr.cells.E2?.v).toBe("Maxwell Tollefson");
+    expect(ncr.cells.D2?.v).toBe("Approved By:");
+    expect(ncr.cells.G2?.v).toBe("2026-07-14");
+    expect(revisionLetter("Rev: E")).toBe("E");
+    expect(revisionLetter("A")).toBe("A");
+    expect(revisionLetter("Maxwell Tollefson")).toBeNull();
+
+    const inserted = insertDataRow("lst-eng-001", eng, engName, 6);
+    expect(inserted?.row).toBe(6);
+    expect(inserted?.sheets[0]?.cells.A6).toBeUndefined();
+    expect(inserted?.sheets[0]?.cells.A7?.v).toBe("ECR-2026-001");
+    expect(Object.values(inserted?.sheets[0]?.cells ?? {}).some((cell) => cell.v === "ECR-2026-051")).toBe(false);
+    expect(listOptions(inserted!.sheets[0]!, "E6")).toContain("SENSEN");
+
+    const below = insertDataRow("lst-eng-001", eng, engName, 7);
+    expect(below?.sheets[0]?.cells.A6?.v).toBe("ECR-2026-001");
+    expect(below?.sheets[0]?.cells.A7).toBeUndefined();
+    expect(below?.sheets[0]?.cells.A8?.v).toBe("ECR-2026-002");
+
+    const removed = removeDataRows("lst-eng-001", eng, engName, [6, 8]);
+    expect(removed?.[0]?.cells.A6?.v).toBe("ECR-2026-002");
+    expect(removed?.[0]?.cells.A7?.v).toBe("ECR-2026-004");
+    expect(rowsDeletedSummary("Shawn", engName, [{ row: 6, label: "ECR-2026-001", values: 'A6 "ECR-2026-001"' }], "Oct 8, 2026")).toContain("ECR-2026-001");
+    expect(rowsDeletedSummary("Shawn", engName, [{ row: 6, label: "ECR-2026-001" }], "Oct 8, 2026")).toContain("on Oct 8, 2026");
+
+    const equipmentName = "LST-EQP-001 - Master Equipment ";
+    const equipment = freshSheets("lst-eqp-001");
+    const shifted = insertDataRow("lst-eqp-001", equipment, equipmentName, 6);
+    expect(shifted?.sheets[0]?.cells.I6?.f).toBe("H6+(G6*30)");
+    expect(shifted?.sheets[0]?.cells.I7?.f).toBe("H7+(G7*30)");
+    expect(shifted?.sheets[0]?.cells.A6).toBeUndefined();
+    const patched = applyInputPatch("lst-eqp-001", equipment, [{ name: equipmentName, cells: { G6: { v: 99 }, I6: { v: 99 } } }]);
+    expect(patched.sheets[0]?.cells.I6?.f).toBe("H6+(G6*30)");
+    expect(patched.sheets[0]?.cells.G6?.v).toBe(99);
+    expect(formulaSerial(patched.sheets[0]!, patched.sheets[0]?.cells.I6?.f ?? "")).not.toBe(formulaSerial(equipment[0]!, equipment[0]?.cells.I6?.f ?? ""));
+
+    const renamed = renameListColumn("lst-eng-001", eng, "A", engName, "A", "Request");
+    expect(renamed?.bumped).toBe(true);
+    expect(renamed?.revision).toBe("B");
+    expect(renamed?.sheets[0]?.cells.A5?.v).toBe("Request");
+    expect(renamed?.sheets[0]?.cells.D2?.v).toBe("B");
+    expect(renamed?.sheets[0]?.cells.A6?.v).toBe("ECR-2026-001");
+    const same = renameListColumn("lst-eng-001", renamed!.sheets, renamed!.revision, engName, "A", "Request");
+    expect(same?.bumped).toBe(false);
+    const added = addListColumn("lst-eng-001", eng, "A", engName, "K");
+    expect(added?.revision).toBe("B");
+    expect(added?.sheets[0]?.maxCol).toBe(12);
+    expect(added?.sheets[0]?.cells.L5?.v ?? null).toBeNull();
+    expect(added?.sheets[0]?.cells.A6?.v).toBe("ECR-2026-001");
+    expect(added?.sheets[0]?.merges).toEqual(expect.arrayContaining(["A1:L1"]));
+    const dropped = removeListColumn("lst-eng-001", added!.sheets, added!.revision, engName, "L");
+    expect(dropped?.revision).toBe("C");
+    expect(dropped?.sheets[0]?.maxCol).toBe(11);
+    expect(dropped?.sheets[0]?.cells.A5?.v).toBe("ECR Number");
+
+    const schedule = renameListColumn("lst-gen-002", freshSheets("lst-gen-002"), "A", "LST-GEN-002 - Internal Audit Sc", "H", "Findings");
+    expect(schedule?.sheets[0]?.cells.H5?.v).toBe("Findings");
+    expect(schedule?.sheets[0]?.cells.D2?.v).toBe("B");
+    expect(schedule?.sheets[0]?.cells.F3?.v).toBe("Ron Wertz & Maxwell Tollefson");
+    const ncrColumn = renameListColumn("lst-ncr-001", freshSheets("lst-ncr-001"), "G", "LST-NCR-001 - NCR", "A", "NCR No.");
+    expect(ncrColumn?.revision).toBe("H");
+    expect(ncrColumn?.sheets[0]?.cells.B2?.v).toBe("Rev: H");
+    expect(ncrColumn?.sheets[0]?.cells.A5?.v).toBe("NCR-2026-001");
+    expect(restoreHeaderBlock("lst-eng-001", added!.sheets).sheets[0]?.maxCol).toBe(12);
+    expect(restoreHeaderBlock("lst-eng-001", added!.sheets).sheets[0]?.cells.H2?.v).toBe("Maxwell Tollefson");
+  });
+
+  it("fills blank header values from the workbook and keeps a value someone already saved", () => {
+    const labName = "LST-GEN-003 - Scope of Laborato";
+    const lab = freshSheets("lst-gen-003");
+    expect(lab[0]?.name).toBe(labName);
+    expect(lab[0]?.cells.D2?.v).toBe("A");
+    expect(lab[0]?.cells.D3?.v).toBe("Maxwell Tollefson");
+    expect(lab[0]?.cells.B3?.v).toBe("2026-07-14");
+    const blankLab = lab.map((sheet) => ({
+      ...sheet,
+      cells: {
+        ...sheet.cells,
+        D2: { ...sheet.cells.D2!, v: "" },
+        D3: { ...sheet.cells.D3!, v: null },
+        B3: { ...sheet.cells.B3!, v: "2026-08-01" },
+      },
+    }));
+    const labFixed = restoreHeaderBlock("lst-gen-003", blankLab);
+    expect(labFixed.changed).toBe(true);
+    expect(labFixed.sheets[0]?.cells.D2?.v).toBe("A");
+    expect(labFixed.sheets[0]?.cells.D3?.v).toBe("Maxwell Tollefson");
+    expect(labFixed.sheets[0]?.cells.B3?.v).toBe("2026-08-01");
+    expect(labFixed.sheets[0]?.cells.A6?.v).toBe(lab[0]?.cells.A6?.v);
+    expect(coalesceRevision("", "A")).toBe("A");
+    expect(coalesceRevision("B", "A")).toBe("B");
+
+    const equipmentName = "LST-EQP-001 - Master Equipment ";
+    const equipment = freshSheets("lst-eqp-001");
+    expect(equipment[0]?.cells.B2?.v).toBe("Rev: A");
+    expect(equipment[0]?.cells.D2?.v).toBe("2026-01-26");
+    expect(equipment[0]?.cells.F2?.v).toBe("Maxwell Tollefson");
+    const blankEquipment = equipment.map((sheet) => ({
+      ...sheet,
+      cells: {
+        ...sheet.cells,
+        B2: { ...sheet.cells.B2!, v: "   " },
+        D2: { ...sheet.cells.D2!, v: null },
+        F2: { ...sheet.cells.F2!, v: "Shawn Parnell" },
+      },
+    }));
+    const equipmentFixed = restoreHeaderBlock("lst-eqp-001", blankEquipment);
+    expect(equipmentFixed.sheets[0]?.name).toBe(equipmentName);
+    expect(equipmentFixed.sheets[0]?.cells.B2?.v).toBe("Rev: A");
+    expect(equipmentFixed.sheets[0]?.cells.D2?.v).toBe("2026-01-26");
+    expect(equipmentFixed.sheets[0]?.cells.F2?.v).toBe("Shawn Parnell");
+    expect(equipmentFixed.sheets[0]?.cells.A6?.v).toBe("DMA-001");
+
+    const ncr = freshSheets("lst-ncr-001");
+    const blankNcr = ncr.map((sheet) => {
+      if (sheet.name !== "LST-NCR-001 - NCR" && sheet.name !== "LST-NCR-001 - QTN") return sheet;
+      return { ...sheet, cells: { ...sheet.cells, B2: { ...sheet.cells.B2!, v: "" } } };
+    });
+    const ncrFixed = restoreHeaderBlock("lst-ncr-001", blankNcr);
+    expect(ncrFixed.sheets[0]?.cells.B2?.v).toBe("Rev: E");
+    expect(ncrFixed.sheets.find((sheet) => sheet.name.endsWith("QTN"))?.cells.B2?.v).toBe("Rev: F");
+    expect(ncrFixed.sheets.find((sheet) => sheet.name.endsWith("CAR"))?.cells.B2?.v).toBe("Rev: E");
+    expect(LISTS["lst-ncr-001"].revision).toBe("G");
+    expect(coalesceRevision("G", "E")).toBe("G");
   });
 });

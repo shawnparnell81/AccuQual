@@ -6,6 +6,8 @@ import ExcelJS from "exceljs";
 import { createApp } from "../../src/app.js";
 import { db } from "../../src/db/index.js";
 import { users } from "../../src/drizzle/schema/users.js";
+import { roles } from "../../src/drizzle/schema/roles.js";
+import { departmentPermissions } from "../../src/drizzle/schema/permissions.js";
 import { documents } from "../../src/drizzle/schema/documents.js";
 import { documentFolders } from "../../src/drizzle/schema/documentFolders.js";
 import { controlledFormTemplates } from "../../src/drizzle/schema/controlledForms.js";
@@ -44,7 +46,7 @@ describe("living controlled lists API", () => {
     const saved = await request(app)
       .put("/controlled-lists/lst-gen-001")
       .set("Authorization", `Bearer ${token}`)
-      .send({ sheets: [{ name: "Internal Documents", cells: { B4: { v: `Supplier CAR ${suffix}` }, D2: { v: "Z" } } }] });
+      .send({ sheets: [{ name: "Internal Documents", cells: { B4: { v: `Supplier CAR ${suffix}` } } }] });
     expect(saved.status).toBe(200);
     expect(saved.body.revision).toBe("B");
     expect(saved.body.sheets[0].cells.B4.v).toBe(`Supplier CAR ${suffix}`);
@@ -296,7 +298,7 @@ describe("living controlled lists API", () => {
     const saved = await request(app)
       .put("/controlled-lists/lst-gen-002")
       .set("Authorization", `Bearer ${token}`)
-      .send({ sheets: [{ name: "LST-GEN-002 - Internal Audit Sc", cells: { E6: { v: `Complete ${suffix}` }, D2: { v: "Z" } } }] });
+      .send({ sheets: [{ name: "LST-GEN-002 - Internal Audit Sc", cells: { E6: { v: `Complete ${suffix}` } } }] });
     expect(saved.status).toBe(200);
     expect(saved.body.revision).toBe("A");
     expect(saved.body.sheets[0].cells.E6.v).toBe(`Complete ${suffix}`);
@@ -338,5 +340,145 @@ describe("living controlled lists API", () => {
     expect((ws?.getCell("B3").value as Date).toISOString().slice(0, 10)).toBe("2026-07-14");
     expect(ws?.pageSetup.orientation).toBe("portrait");
     expect(ws?.model.merges ?? []).toEqual(expect.arrayContaining(["A1:H1"]));
+  });
+
+  it("edits, inserts, and deletes seeded rows, and treats columns as a structure change", async () => {
+    const engName = "LST-ENG-001 - ECR Tracker - Rev";
+    const opened = await request(app).get("/controlled-lists/lst-eng-001").set("Authorization", `Bearer ${token}`);
+    expect(opened.status).toBe(200);
+    // Quality's department grant for form_builder is edit, same rule as Form Builder.
+    expect(opened.body.canEditStructure).toBe(true);
+    expect(opened.body.dataStart[engName]).toBe(6);
+    expect(opened.body.sheets[0].cells.H2.v).toBe("Maxwell Tollefson");
+    expect(opened.body.revision).toBe("A");
+
+    const saved = await request(app)
+      .put("/controlled-lists/lst-eng-001")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ sheets: [{ name: engName, cells: { F6: { v: `Height ${suffix}` }, H2: { v: `Ada ${suffix}` }, A1: { v: "ENGINEERING REQUEST CHANGE LOG" } } }] });
+    expect(saved.status).toBe(200);
+    expect(saved.body.revision).toBe("A");
+    expect(saved.body.sheets[0].cells.F6.v).toBe(`Height ${suffix}`);
+    expect(saved.body.sheets[0].cells.H2.v).toBe(`Ada ${suffix}`);
+    expect(saved.body.sheets[0].cells.A6.v).toBe("ECR-2026-001");
+    expect(saved.body.sheets[0].cells.D2.v).toBe("A");
+
+    const inserted = await request(app)
+      .post("/controlled-lists/lst-eng-001/rows")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ sheet: engName, op: "insert", row: 6, place: "above" });
+    expect(inserted.status).toBe(200);
+    expect(inserted.body.revision).toBe("A");
+    expect(inserted.body.sheets[0].cells.A6).toBeUndefined();
+    expect(inserted.body.sheets[0].cells.A7.v).toBe("ECR-2026-001");
+    expect(inserted.body.sheets[0].cells.F7.v).toBe(`Height ${suffix}`);
+    expect(JSON.stringify(inserted.body.sheets[0].cells)).not.toContain("ECR-2026-051");
+
+    const removed = await request(app)
+      .post("/controlled-lists/lst-eng-001/rows")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ sheet: engName, op: "delete", rows: [6] });
+    expect(removed.status).toBe(200);
+    expect(removed.body.sheets[0].cells.A6.v).toBe("ECR-2026-001");
+    expect(removed.body.sheets[0].cells.F6.v).toBe(`Height ${suffix}`);
+
+    const audits = await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "ControlledList"), eq(auditTrail.entityId, opened.body.id)));
+    const editAudit = audits.find((row) => String((row.changes as { summary?: string } | null)?.summary ?? "").includes(`Ada ${suffix}`));
+    expect(String((editAudit?.changes as { summary?: string } | null)?.summary ?? "")).toContain("Maxwell Tollefson");
+    expect(String((editAudit?.changes as { summary?: string } | null)?.summary ?? "")).toContain("changed");
+    const deleteAudit = audits.find((row) => String((row.changes as { summary?: string } | null)?.summary ?? "").includes("deleted"));
+    expect(String((deleteAudit?.changes as { summary?: string } | null)?.summary ?? "")).toContain("row 6");
+
+    const file = await request(app)
+      .get("/controlled-lists/lst-eng-001/xlsx")
+      .set("Authorization", `Bearer ${token}`)
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => callback(null, Buffer.concat(chunks)));
+      });
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(file.body as Buffer);
+    const ws = book.getWorksheet(engName);
+    expect(ws?.getCell("H2").value).toBe(`Ada ${suffix}`);
+    expect(ws?.getCell("F6").value).toBe(`Height ${suffix}`);
+    expect(ws?.getCell("A6").value).toBe("ECR-2026-001");
+
+    const schedule = await request(app)
+      .put("/controlled-lists/lst-gen-002")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ sheets: [{ name: "LST-GEN-002 - Internal Audit Sc", cells: { F3: { v: `Owner ${suffix}` }, A1: { v: "INTERNAL AUDIT SCHEDULE" } } }] });
+    expect(schedule.status).toBe(200);
+    expect(schedule.body.revision).toBe("A");
+    expect(schedule.body.sheets[0].cells.F3.v).toBe(`Owner ${suffix}`);
+    expect(schedule.body.sheets[0].cells.D2.v).toBe("A");
+
+    const ncr = await request(app)
+      .put("/controlled-lists/lst-ncr-001")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ sheets: [{ name: "LST-NCR-001 - NCR", cells: { D5: { v: `Defect ${suffix}` } } }] });
+    expect(ncr.status).toBe(200);
+    expect(ncr.body.revision).toBe("G");
+    expect(ncr.body.sheets[0].cells.D5.v).toBe(`Defect ${suffix}`);
+    expect(ncr.body.sheets[0].cells.A5.v).toBe("NCR-2026-001");
+    expect(ncr.body.sheets[0].cells.B2.v).toBe("Rev: E");
+    const ncrInsert = await request(app)
+      .post("/controlled-lists/lst-ncr-001/rows")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ sheet: "LST-NCR-001 - NCR", op: "insert", row: 5, place: "below" });
+    expect(ncrInsert.status).toBe(200);
+    expect(ncrInsert.body.sheets[0].cells.A5.v).toBe("NCR-2026-001");
+    expect(ncrInsert.body.sheets[0].cells.A6).toBeUndefined();
+    const ncrDelete = await request(app)
+      .post("/controlled-lists/lst-ncr-001/rows")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ sheet: "LST-NCR-001 - NCR", op: "delete", rows: [6] });
+    expect(ncrDelete.status).toBe(200);
+    expect(ncrDelete.body.sheets[0].cells.A5.v).toBe("NCR-2026-001");
+    expect(ncrDelete.body.sheets[0].cells.D5.v).toBe(`Defect ${suffix}`);
+
+    await db.insert(roles).values({ name: `list-reader-${suffix}`, description: "No structure edits", hierarchyLevel: 80, isProtected: false, permissions: [] });
+    const [reader] = await db.insert(users).values({ email: `list-reader-${suffix}@test.local`, name: "List Reader", passwordHash: "unused" }).returning();
+    const readerToken = signAccessToken({ sub: String(reader!.id), roleId: null, roleName: `list-reader-${suffix}`, department: "production" });
+    const readerView = await request(app).get("/controlled-lists/lst-eng-001").set("Authorization", `Bearer ${readerToken}`);
+    expect(readerView.status).toBe(200);
+    expect(readerView.body.canEditStructure).toBe(false);
+    const denied = await request(app)
+      .post("/controlled-lists/lst-eng-001/columns")
+      .set("Authorization", `Bearer ${readerToken}`)
+      .send({ sheet: engName, op: "rename", col: "A", name: "Request" });
+    expect(denied.status).toBe(403);
+    expect((await request(app).get("/controlled-lists/lst-eng-001").set("Authorization", `Bearer ${token}`)).body.sheets[0].cells.A5.v).toBe("ECR Number");
+
+    await db
+      .update(departmentPermissions)
+      .set({ accessLevel: "none" })
+      .where(and(eq(departmentPermissions.departmentName, "quality"), eq(departmentPermissions.moduleName, "form_builder")));
+    const qualityDenied = await request(app)
+      .post("/controlled-lists/lst-eng-001/columns")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ sheet: engName, op: "rename", col: "A", name: "Request" });
+    expect(qualityDenied.status).toBe(403);
+    expect((await request(app).get("/controlled-lists/lst-eng-001").set("Authorization", `Bearer ${token}`)).body.canEditStructure).toBe(false);
+
+    await db.insert(roles).values({ name: `list-builder-${suffix}`, description: "Builds forms", hierarchyLevel: 70, isProtected: false, permissions: ["form_builder"] });
+    const [builder] = await db.insert(users).values({ email: `list-builder-${suffix}@test.local`, name: "List Builder", passwordHash: "unused" }).returning();
+    const builderToken = signAccessToken({ sub: String(builder!.id), roleId: null, roleName: `list-builder-${suffix}`, department: "quality" });
+    const renamed = await request(app)
+      .post("/controlled-lists/lst-eng-001/columns")
+      .set("Authorization", `Bearer ${builderToken}`)
+      .send({ sheet: engName, op: "rename", col: "A", name: `Request ${suffix}` });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.canEditStructure).toBe(true);
+    expect(renamed.body.revision).toBe("B");
+    expect(renamed.body.sheets[0].cells.A5.v).toBe(`Request ${suffix}`);
+    expect(renamed.body.sheets[0].cells.D2.v).toBe("B");
+    expect(renamed.body.sheets[0].cells.A6.v).toBe("ECR-2026-001");
+    expect(renamed.body.sheets[0].cells.H2.v).toBe(`Ada ${suffix}`);
+    const structureAudit = (await db.select().from(auditTrail).where(and(eq(auditTrail.entityType, "ControlledList"), eq(auditTrail.entityId, opened.body.id)))).find((row) =>
+      String((row.changes as { summary?: string } | null)?.summary ?? "").includes(`Request ${suffix}`),
+    );
+    expect(String((structureAudit?.changes as { summary?: string } | null)?.summary ?? "")).toContain("Revision moved from A to B");
   });
 });
