@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { isListKey, type CellPatch } from "./logic.js";
-import { changeControlledListRows, downloadControlledList, openControlledList, saveControlledList } from "./service.js";
+import { changeControlledListRows, downloadControlledList, insertControlledListLocation, openControlledList, saveControlledList } from "./service.js";
 
 function keyFrom(req: Request) {
   const key = String(req.params.key ?? "");
@@ -28,6 +28,13 @@ export const rowsControlledListHandler = asyncHandler(async (req: Request, res: 
   if (body.op !== "add" && body.op !== "delete") throw AppError.badRequest("Choose add or delete.");
   if (!body.sheet) throw AppError.badRequest("Choose a sheet.");
   res.json(await changeControlledListRows(req, keyFrom(req), body.sheet, body.op, body.row));
+});
+
+export const locationControlledListHandler = asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body as { sheet?: string; path?: string };
+  if (!body.sheet) throw AppError.badRequest("Choose a sheet.");
+  if (typeof body.path !== "string") throw AppError.badRequest("The folder path is empty.");
+  res.json(await insertControlledListLocation(req, keyFrom(req), body.sheet, body.path));
 });
 
 export const downloadControlledListHandler = asyncHandler(async (req: Request, res: Response) => {

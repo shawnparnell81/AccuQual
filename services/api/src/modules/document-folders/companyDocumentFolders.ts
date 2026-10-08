@@ -40,7 +40,7 @@ import {
   planDuplicateFolderMerges,
   type BlankTopicRename,
 } from "./duplicateFolders.js";
-import { ensureMainIsoFolders, folderLocationLabel, folderRenameAudit, MAIN_ISO_FOLDER_NAMES } from "./mainIsoFolders.js";
+import { ensureMainIsoFolders, folderLocationLabel, folderRenameAudit, itemFolderPath, MAIN_ISO_FOLDER_NAMES } from "./mainIsoFolders.js";
 import { retireNamedDocumentFolders } from "./retiredFolderCleanup.js";
 
 /** Blank shelves only. ISO itself is not a shelf: every real folder sits under it. */
@@ -587,8 +587,8 @@ async function returnMisfiledBlanks(db: Db, list: FolderRow[], shelfId: number, 
     for (const item of items) {
       const shortcut = current.find((folder) => folder.id === item.shortcutId);
       if (!shortcut || shortcut.parentId === home.id) continue;
-      const fromLabel = folderLocationLabel(current, shortcut.parentId);
-      const toLabel = `${folderLocationLabel(current, shelfId)} / ${home.name}`;
+      const fromPath = itemFolderPath(current, shortcut.parentId, shortcut.name);
+      const toPath = itemFolderPath(current, home.id, shortcut.name);
       await db.update(documentFolders).set({ parentId: home.id, updatedAt: new Date() }).where(eq(documentFolders.id, shortcut.id));
       await db.update(controlledFormTemplates).set({ folderId: home.id }).where(eq(controlledFormTemplates.formKey, item.formKey));
       current = current.map((folder) => (folder.id === shortcut.id ? { ...folder, parentId: home!.id } : folder));
@@ -599,10 +599,12 @@ async function returnMisfiledBlanks(db: Db, list: FolderRow[], shelfId: number, 
         performedBy,
         changes: {
           event: "moved",
-          summary: `Moved the blank form template "${shortcut.name}" from ${fromLabel} → ${toLabel}.`,
+          summary: `Moved the blank form template "${shortcut.name}" from ${fromPath} → ${toPath}.`,
           name: shortcut.name,
-          from: fromLabel,
-          to: toLabel,
+          from: fromPath,
+          to: toPath,
+          fromPath,
+          toPath,
           fromParentId: shortcut.parentId,
           toParentId: home.id,
         },

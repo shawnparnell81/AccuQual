@@ -328,7 +328,9 @@ describe("one folder in one place, and library pool moves", () => {
     }
     const moveHistory = await request(app).get(`/audit-trail/DocumentFolder/${movedOut[0]!.id}`).set("Authorization", `Bearer ${qualityToken}`);
     const moveLine = (moveHistory.body as { changes?: { summary?: string; event?: string } }[]).find((row) => row.changes?.event === "moved" && row.changes.summary?.includes("blank form template"));
-    expect(moveLine?.changes?.summary).toMatch(/Moved the blank form template ".+" from ISO Compliance Documents \/ Engineering → ISO Compliance Documents \/ Blank Forms Templates \/ Engineering Forms\./);
+    expect(moveLine?.changes?.summary).toMatch(/Moved the blank form template ".+" from ISO Compliance Documents\\Engineering\\.+ → ISO Compliance Documents\\Blank Forms Templates\\Engineering Forms\\/);
+    expect((moveLine?.changes as { fromPath?: string; toPath?: string } | undefined)?.fromPath).toMatch(/^ISO Compliance Documents\\Engineering\\/);
+    expect((moveLine?.changes as { toPath?: string } | undefined)?.toPath).toMatch(/^ISO Compliance Documents\\Blank Forms Templates\\Engineering Forms\\/);
 
     const logs = restored.find((folder) => folder.name === "Quality Logs")!;
     await db.update(documentFolders).set({ parentId: logs.id }).where(eq(documentFolders.id, movedOut[0]!.id));

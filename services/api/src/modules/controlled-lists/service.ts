@@ -26,6 +26,7 @@ import {
   applyInputPatch,
   changeSummary,
   freshSheets,
+  insertLocationPath,
   isLivingListPath,
   planListCleanup,
   removeDataRow,
@@ -375,6 +376,36 @@ export async function saveControlledList(req: Request, key: ListKey, patches: Ar
     action: "update",
     performedBy: req.user!.id,
     changes: { summary: changeSummary(who, applied.changes), cells: applied.changes, revision: row.revision },
+  });
+  return viewOf({ ...updated, revision: row.revision }, key);
+}
+
+/** Puts the list's current folder path into Location cells. Does nothing until this is called. */
+export async function insertControlledListLocation(req: Request, key: ListKey, sheetName: string, path: string): Promise<ControlledListView> {
+  await requireLevel(req, key, "edit");
+  const trimmed = path.trim();
+  if (!trimmed) throw AppError.badRequest("The folder path is empty.");
+  if (trimmed.length > 500) throw AppError.badRequest("That path is too long.");
+  await ensureLivingControlledLists(req);
+  const row = await loadRow(req.db!, key);
+  if (!row) throw AppError.notFound(LISTS[key].title);
+  const sheet = row.sheets.find((item) => item.name === sheetName);
+  if (!sheet) throw AppError.badRequest("Choose a sheet.");
+  const applied = insertLocationPath(key, row.sheets, sheetName, trimmed);
+  if (applied.changes.length === 0) return viewOf(row, key);
+  const [updated] = await req.db!.update(controlledLists).set({ sheets: applied.sheets, updatedAt: new Date() }).where(eq(controlledLists.id, row.id)).returning();
+  if (!updated) throw AppError.notFound(LISTS[key].title);
+  const who = await personName(req.db!, req.user!.id);
+  await recordAuditTrail(req.db!, {
+    entityType: "ControlledList",
+    entityId: row.id,
+    action: "update",
+    performedBy: req.user!.id,
+    changes: {
+      summary: `${who} inserted the folder path into Location on ${sheetName}. Revision stayed ${row.revision}.`,
+      cells: applied.changes,
+      revision: row.revision,
+    },
   });
   return viewOf({ ...updated, revision: row.revision }, key);
 }

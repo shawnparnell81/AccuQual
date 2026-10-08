@@ -65,6 +65,8 @@ export interface FormCell {
   colSpan: number;
   /** Paint Passed green and Failed red, the same colors as the validation sheets. */
   conditional?: boolean;
+  /** Shows the form's current folder path. The text is not stored, so a move updates it. */
+  folderPath?: boolean;
   style: FormCellStyle;
 }
 
@@ -80,6 +82,13 @@ export interface GridFormStructure {
   sheets: FormSheet[];
 }
 
+export interface DocumentChromeField {
+  id: string;
+  place: "header" | "footer";
+  kind: "folderPath";
+  label: string;
+}
+
 export interface DocumentFormStructure {
   kind: "document";
   html: string;
@@ -87,9 +96,10 @@ export interface DocumentFormStructure {
   showPageNumbers: boolean;
   header?: DocumentBand | null;
   footer?: DocumentBand | null;
+  chrome?: DocumentChromeField[];
 }
 
-export type FieldType = "text" | "multiline" | "number" | "date" | "dropdown" | "checkbox" | "yesno" | "table" | "signature" | "photo";
+export type FieldType = "text" | "multiline" | "number" | "date" | "dropdown" | "checkbox" | "yesno" | "table" | "signature" | "photo" | "folderPath";
 
 export interface FormField {
   id: string;
@@ -160,7 +170,8 @@ export function evaluatedSheet(sheet: FormSheet, answers?: Record<string, string
   return evaluateCells(formulaInputs(sheet, answers, sheetKey));
 }
 
-export function shownCell(cell: FormCell, calculated: Record<string, FormulaValue>, col: number, row: number, answer?: string): string {
+export function shownCell(cell: FormCell, calculated: Record<string, FormulaValue>, col: number, row: number, answer?: string, folderPath?: string): string {
+  if (cell.folderPath) return folderPath ?? "";
   if (cell.formula) return displayFormulaValue(calculated[addressOf(col, row)]);
   if (!cell.locked && answer != null) return answer;
   return cell.value;
@@ -235,7 +246,7 @@ function borderOf(edge: string | undefined): { style: "thin"; color: { argb: str
 }
 
 /** Writes the grid with the same formulas, merges, and fills the editor shows. */
-export async function downloadGridWorkbook(structure: GridFormStructure, filename: string): Promise<void> {
+export async function downloadGridWorkbook(structure: GridFormStructure, filename: string, folderPath = ""): Promise<void> {
   const ExcelJS = (await import("exceljs")) as typeof import("exceljs") & { default?: typeof import("exceljs") };
   const lib = ExcelJS.default ?? ExcelJS;
   const workbook = new lib.Workbook();
@@ -249,7 +260,8 @@ export async function downloadGridWorkbook(structure: GridFormStructure, filenam
       row.forEach((cell, colIndex) => {
         if (!cell) return;
         const target = ws.getCell(rowIndex + 1, colIndex + 1);
-        if (cell.formula) target.value = { formula: cell.formula.replace(/^=/, "") };
+        if (cell.folderPath) target.value = folderPath;
+        else if (cell.formula) target.value = { formula: cell.formula.replace(/^=/, "") };
         else if (cell.value !== "") {
           const numeric = /^-?\d+(\.\d+)?$/.test(cell.value) ? Number(cell.value) : null;
           target.value = numeric ?? cell.value;

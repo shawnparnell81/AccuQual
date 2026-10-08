@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../api/client";
+import { useItemFolderPath } from "../../components/documents/ItemFolderPath";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import { BLANK_FORMS_TEMPLATES_FOLDER, type BrowseFolder } from "../../lib/folderBrowse";
@@ -45,6 +46,7 @@ export function FormBuilderEditorPage() {
   const formId = Number(id);
   const navigate = useNavigate();
   const toast = useToast();
+  const folderPath = useItemFolderPath();
   const queryClient = useQueryClient();
   const form = useQuery({
     queryKey: ["form-builder", formId],
@@ -199,7 +201,7 @@ export function FormBuilderEditorPage() {
               if (file) void onImport(file);
             }} />
           </label>
-          <button type="button" className="rounded border border-border px-2 py-1 text-sm" onClick={() => void downloadGridWorkbook(asGrid(structure), `${title || "form"}.xlsx`)}>Download .xlsx</button>
+          <button type="button" className="rounded border border-border px-2 py-1 text-sm" onClick={() => void downloadGridWorkbook(asGrid(structure), `${title || "form"}.xlsx`, folderPath)}>Download .xlsx</button>
         </div>
       )}
       {form.data.kind === "document" && !preview && (

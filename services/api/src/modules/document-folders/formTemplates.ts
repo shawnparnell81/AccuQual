@@ -21,7 +21,7 @@ import {
 } from "./formFiling.js";
 import { ensureCompanyDocumentFolders } from "./companyDocumentFolders.js";
 import { blankTopicFolderName, namesOutsideBlankDrawers } from "./duplicateFolders.js";
-import { folderLocationLabel } from "./mainIsoFolders.js";
+import { folderPathParts, itemFolderPath, joinFolderPath } from "./mainIsoFolders.js";
 
 const PREVIOUS_ISO_ROOT = "ISO Compliance";
 const PREVIOUS_NUMBERED_BLANK_FOLDER = "03_Blank_Forms_Templates";
@@ -318,17 +318,19 @@ export async function ensureFormTemplates(db: Db, performedBy?: number): Promise
   }
 
   if (!ready && markReady && home) {
-    const fromLabel = legacy ? folderLocationLabel(all, legacy.id) : "Blank Forms";
-    const toLabel = folderLocationLabel(all, home.id);
+    const fromPath = legacy ? joinFolderPath(folderPathParts(all, legacy.id)) : "Blank Forms";
+    const toPath = joinFolderPath(folderPathParts(all, home.id));
     await recordAuditTrail(db, {
       entityType: FOLDER_AUDIT,
       entityId: home.id,
       action: "update",
       changes: {
         event: "moved",
-        summary: `Moved the blank form templates from ${fromLabel} into ${toLabel}. Each blank opens a fresh copy. Saving a filled form does not change the blank.`,
-        from: fromLabel,
-        to: toLabel,
+        summary: `Moved the blank form templates from ${fromPath} into ${toPath}. Each blank opens a fresh copy. Saving a filled form does not change the blank.`,
+        from: fromPath,
+        to: toPath,
+        fromPath,
+        toPath,
       },
       performedBy,
     });
@@ -343,9 +345,10 @@ export async function ensureFormTemplates(db: Db, performedBy?: number): Promise
         action: "create",
         changes: {
           event: "moved",
-          summary: `Added the blank template "${leaf.name}" under ${folderLocationLabel(all, leaf.parentId)}.`,
+          summary: `Added the blank template "${leaf.name}" under ${itemFolderPath(all, leaf.parentId, leaf.name)}.`,
           name: leaf.name,
-          to: folderLocationLabel(all, leaf.parentId),
+          to: itemFolderPath(all, leaf.parentId, leaf.name),
+          toPath: itemFolderPath(all, leaf.parentId, leaf.name),
         },
         performedBy,
       });

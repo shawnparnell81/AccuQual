@@ -22,7 +22,7 @@ import { onlyOfficeSettings } from "../onlyoffice/settings.js";
 import { signOfficeToken } from "../onlyoffice/token.js";
 import { contentKey, officeViewer, viewOfficeSession } from "../onlyoffice/viewSession.js";
 import { ensureCompanyDocumentFolders, FILING_DRAWER_NAMES, mergeDuplicateFoldersOnce, rehomeStrayBlankShortcuts } from "./companyDocumentFolders.js";
-import { documentNodeKind, folderLocationLabel, folderMoveAudit, folderRenameAudit } from "./mainIsoFolders.js";
+import { documentNodeKind, folderMoveAudit, folderRenameAudit, itemFolderPath } from "./mainIsoFolders.js";
 import { FORM_TEMPLATES, MASTER_DOCUMENT_LIST_PATH, isBlankTemplateStartPath, keptOutOfBlankFormsTemplates, retargetRetiredRegisterLink } from "./formFiling.js";
 import { LIST_KEYS } from "../controlled-lists/logic.js";
 import { ensureLivingControlledLists } from "../controlled-lists/service.js";
@@ -503,13 +503,14 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
   let changes: Record<string, unknown>;
   if (parentChanging) {
     nodes = nodes ?? (await loadFolderNodes(db));
+    const nextName = nameChanged && name ? name : current.name;
     changes = folderMoveAudit({
       name: current.name,
       kind: documentNodeKind(current, nodes),
       fromParentId: current.parentId,
       toParentId: parentId ?? null,
-      fromLabel: folderLocationLabel(nodes, current.parentId),
-      toLabel: folderLocationLabel(nodes, parentId ?? null),
+      fromLabel: itemFolderPath(nodes, current.parentId, current.name),
+      toLabel: itemFolderPath(nodes, parentId ?? null, nextName),
       renamedTo: nameChanged ? name : undefined,
     });
   } else if (nameChanged && name) {

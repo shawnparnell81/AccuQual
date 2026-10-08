@@ -5,8 +5,10 @@ import { apiClient } from "../../api/client";
 import { RecordFrame } from "../../components/records/RecordFrame";
 import { RecordReferences } from "../../components/records/WorkflowStepLinks";
 import { RecordCrumbs } from "../../components/records/RecordStatus";
+import { useItemFolderPath } from "../../components/documents/ItemFolderPath";
 import { useCanEditSurface } from "../../components/shared/RecordEditBar";
 import { useToast } from "../../components/shared/ToastProvider";
+import { isLocationLine } from "../../lib/folderPath";
 import { recordSurface } from "../../lib/recordSurface";
 import {
   columnIndex,
@@ -56,6 +58,15 @@ const DATA_START: Record<ControlledListKey, Record<string, number>> = {
   "lst-dev-001": { "Test Reports": 5, "Validation Report": 5 },
   "lst-ncr-001": { "LST-NCR-001 - NCR": 5, "LST-NCR-001 - QTN": 5, "LST-NCR-001 - CAR": 5, "LST-NCR-001 - RPN": 5 },
 };
+
+function sheetHasLocation(sheet: StoredSheet | undefined): boolean {
+  if (!sheet) return false;
+  return Object.entries(sheet.cells).some(([addr, cell]) => {
+    const row = Number(addr.replace(/^[A-Z]+/i, ""));
+    if (!Number.isFinite(row) || row > 3) return false;
+    return cell?.kind === "location" || (typeof cell?.v === "string" && isLocationLine(cell.v));
+  });
+}
 
 function errorMessage(err: unknown): string {
   if (isAxiosError(err)) {
@@ -254,6 +265,7 @@ function CellBody({
 
 export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) {
   const toast = useToast();
+  const folderPath = useItemFolderPath();
   const queryClient = useQueryClient();
   const surface = recordSurface(LIST_ROUTES[listKey]);
   const canEdit = useCanEditSurface(surface);
@@ -348,6 +360,21 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
     }
   }
 
+  async function insertPath() {
+    if (!view || !sheetName || !folderPath) return;
+    if (timer.current != null) window.clearTimeout(timer.current);
+    await flush();
+    try {
+      const next = (await apiClient.post<ControlledListView>(`/controlled-lists/${listKey}/location`, { sheet: sheetName, path: folderPath })).data;
+      setView(next);
+      void queryClient.setQueryData(["controlled-list", listKey], next);
+      setSaved(true);
+      toast.success("Location updated.");
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
+  }
+
   async function download() {
     try {
       if (timer.current != null) window.clearTimeout(timer.current);
@@ -387,6 +414,11 @@ export function ControlledListPage({ listKey }: { listKey: ControlledListKey }) 
               <button type="button" onClick={() => void download()} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">
                 Download
               </button>
+              {canEdit && sheetHasLocation(sheet) && (
+                <button type="button" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-40" disabled={!folderPath} onClick={() => void insertPath()}>
+                  Insert current path
+                </button>
+              )}
             </div>
           </div>
         </div>

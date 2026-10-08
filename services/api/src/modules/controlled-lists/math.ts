@@ -3,7 +3,7 @@
  * Keep the same rules in apps/web/src/lib/controlledListMath.ts.
  */
 
-export type CellKind = "label" | "input" | "formula" | "rev";
+export type CellKind = "label" | "input" | "formula" | "rev" | "location";
 
 export interface StoredCell {
   v?: string | number | null;

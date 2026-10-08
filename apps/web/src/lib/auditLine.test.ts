@@ -263,7 +263,7 @@ test("a folder move names who moved it and the path it left and joined", () => {
     performedByName: "Shawn Parnell",
     changes: {
       event: "moved",
-      summary: 'Moved the folder "Quality" from ISO Compliance Documents → ISO Compliance Documents / Quality Logs.',
+      summary: 'Moved the folder "Quality" from ISO Compliance Documents\\Quality → ISO Compliance Documents\\Quality Logs\\Quality.',
       fromParentId: 1,
       toParentId: 8,
     },
@@ -271,6 +271,6 @@ test("a folder move names who moved it and the path it left and joined", () => {
 
   assert.equal(line.who, "Shawn Parnell");
   assert.equal(line.what, "Moved");
-  assert.equal(line.description, 'Moved the folder "Quality" from ISO Compliance Documents → ISO Compliance Documents / Quality Logs.');
+  assert.equal(line.description, 'Moved the folder "Quality" from ISO Compliance Documents\\Quality → ISO Compliance Documents\\Quality Logs\\Quality.');
   assert.doesNotMatch(line.description, /fromParentId|toParentId/);
 });

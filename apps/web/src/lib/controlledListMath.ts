@@ -3,7 +3,7 @@
  * Keep this file in sync with services/api/src/modules/controlled-lists/math.ts.
  */
 
-export type CellKind = "label" | "input" | "formula" | "rev";
+export type CellKind = "label" | "input" | "formula" | "rev" | "location";
 
 export interface StoredCell {
   v?: string | number | null;

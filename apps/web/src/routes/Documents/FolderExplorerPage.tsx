@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode, t
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { blankFormsFolderHref, contentRoot, departmentForFolder, FAI_VALIDATION_FOLDER_NAME, folderChain, folderDepth, folderIdByName, folderTreeOpen, isBlankTemplateLink, isFolderEntry, leftHandFolders, listFolder, openTarget, treeOpenForTarget, visibleExplorerFolders } from "../../lib/folderBrowse";
+import { joinFolderPath } from "../../lib/folderPath";
 import { ValidationReportsPanel } from "../ValidationReports/ValidationReportsPanel";
 import { ChevronDown, ChevronLeft, ChevronRight, Paperclip, FileText, Download, X, Inbox, UploadCloud, GripVertical, Folder, FolderOpen, MessageSquare } from "lucide-react";
 import { canGoBack, canGoForward, explorerCrumbs, initialExplorerHistory, pushExplorerPlace, stepExplorerHistory, virtualRange, type ExplorerHistory, type ExplorerPlace } from "../../lib/explorerNav";
@@ -17,6 +18,7 @@ import { paneScrollDelta } from "../../lib/dragAutoScroll";
 import { applyFolderPlacements, folderMoveIsBlocked, libraryPoolDeleteConfirm, planNest, planSiblingGap, planSiblingReorder, unlistFromLibraryPool, type NodePlacement } from "../../lib/folderMove";
 import { dropPosition, reorderDropClass, type DropPosition } from "../../lib/listReorder";
 import { Modal } from "../../components/modals/Modal";
+import { CopyPathButton, FolderPathBar } from "../../components/documents/FolderPathBar";
 import { DocumentCommentThread } from "../../components/documents/DocumentCommentThread";
 import { MoveToFolderDialog } from "../../components/documents/MoveToFolderDialog";
 import { useEffectivePermissions } from "../../hooks/useEffectivePermissions";
@@ -1870,6 +1872,7 @@ function FolderBrowser({
     setRename(folder.name);
   }, [folder.id, folder.name]);
   const chain = folderChain(folders, folder.id);
+  const selectedPath = joinFolderPath(chain.map((crumb) => crumb.name));
   const listing = listFolder(folders, folder.id);
   const parent = chain.length > 1 ? chain[chain.length - 2] : undefined;
   const subfolders = listing.folders.filter((row) => !query || row.name.toLowerCase().includes(query));
@@ -1889,6 +1892,7 @@ function FolderBrowser({
         onUp={() => (parent ? onOpenFolder(parent.id) : onBackToDepartments())}
         onCrumb={(id) => (id == null ? onBackToDepartments() : onOpenFolder(id))}
       />
+      <FolderPathBar path={selectedPath} />
 
       <div className="flex items-center gap-2">
         <FolderOpen size={18} className="shrink-0 text-primary" />
@@ -2011,9 +2015,10 @@ function FolderBrowser({
           >
             <GripVertical size={14} className="text-muted-foreground" />
             <Folder size={15} className="shrink-0 text-primary" />
-            <button type="button" onClick={() => onOpenFolder(row.id)} className="flex-1 text-left text-sm font-medium" data-testid="folder-title">
+            <button type="button" onClick={() => onOpenFolder(row.id)} className="flex-1 text-left text-sm font-medium" data-testid="folder-title" title={joinFolderPath([...chain.map((crumb) => crumb.name), row.name])}>
               {row.name}
             </button>
+            <CopyPathButton path={joinFolderPath([...chain.map((crumb) => crumb.name), row.name])} compact />
             {canManage && (
               <button
                 type="button"
@@ -2079,9 +2084,10 @@ function FolderBrowser({
                   className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
                 >
                   <FileText size={14} className="text-primary" />
-                  <span className="flex-1 text-primary">{file.name}</span>
+                  <span className="flex-1 text-primary" title={joinFolderPath([...chain.map((crumb) => crumb.name), file.name])}>{file.name}</span>
                   <span className="text-xs text-muted-foreground">Open</span>
                 </Link>
+                <CopyPathButton path={joinFolderPath([...chain.map((crumb) => crumb.name), file.name])} compact />
                 {canManage && (
                   <button type="button" data-testid="move-to" className="shrink-0 px-2 text-xs text-primary hover:underline" aria-label={`Move ${file.name} to another folder`} onClick={() => onMove(file.id)}>
                     Move to…
@@ -2101,16 +2107,19 @@ function FolderBrowser({
                 )}
                 </div>
               ) : (
-                <div data-testid="file-row" className="px-2 py-1">
-                  <DocPill
-                    doc={file}
-                    onDragStart={(event) => onBeginDrag(event, file.id, "doc")}
-                    onDragEnd={onEndDrag}
-                    onSendToLibrary={() => onSendToLibrary(file.id)}
-                    onAttach={() => onAttach(file.id)}
-                    onRemoveAttachment={() => onRemoveAttachment(file.id)}
-                    onMove={canManage ? () => onMove(file.id) : undefined}
-                  />
+                <div data-testid="file-row" className="flex items-center gap-2 px-2 py-1" title={joinFolderPath([...chain.map((crumb) => crumb.name), file.name])}>
+                  <div className="min-w-0 flex-1">
+                    <DocPill
+                      doc={file}
+                      onDragStart={(event) => onBeginDrag(event, file.id, "doc")}
+                      onDragEnd={onEndDrag}
+                      onSendToLibrary={() => onSendToLibrary(file.id)}
+                      onAttach={() => onAttach(file.id)}
+                      onRemoveAttachment={() => onRemoveAttachment(file.id)}
+                      onMove={canManage ? () => onMove(file.id) : undefined}
+                    />
+                  </div>
+                  <CopyPathButton path={joinFolderPath([...chain.map((crumb) => crumb.name), file.name])} compact />
                 </div>
               )}
             </div>

@@ -84,6 +84,11 @@
   padding: 4px 6px;
   color: inherit;
 }
+.fb-folder-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #1a1a1a;
+  user-select: text;
+}
 .fb-inline-field {
   display: inline-block;
   min-width: 8rem;
