@@ -619,7 +619,6 @@ export function titleMatchesAuditSchedule(name: string): boolean {
 export function titleMatchesEngLog(name: string): boolean {
   return ENG_LOG_TITLES.has(normalizeListTitle(name));
 }
-}
 
 export interface CleanupFolder {
   id: number;
