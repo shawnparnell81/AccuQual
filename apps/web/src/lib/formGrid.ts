@@ -3,6 +3,43 @@ import { displayFormulaValue, evaluateCells, passFailFill, type FormulaValue } f
 import { loadEditableSpreadsheet, type EditableImportSheet } from "./spreadsheetPreview";
 import type { DocumentBand } from "./documentBands";
 
+/** Near-black, matching the validation grids' ink on a light status fill. */
+const INK_DARK = "#111111";
+/** White ink for a dark fill such as the DMA Blue header. */
+const INK_LIGHT = "#ffffff";
+
+function channel(value: number): number {
+  const v = value / 255;
+  return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+}
+
+function hexLuminance(hex: string): number | null {
+  const match = /^#([0-9a-fA-F]{6})$/.exec(hex.trim());
+  if (!match?.[1]) return null;
+  const n = Number.parseInt(match[1], 16);
+  return 0.2126 * channel((n >> 16) & 255) + 0.7152 * channel((n >> 8) & 255) + 0.0722 * channel(n & 255);
+}
+
+function contrastRatio(a: number, b: number): number {
+  const lighter = Math.max(a, b);
+  const darker = Math.min(a, b);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/**
+ * Whichever of near-black or white actually contrasts with a fill.
+ * The validation sheets use #111 on a light Pass/Fail fill. A dark fill
+ * such as DMA Blue needs white, or the label disappears.
+ */
+export function inkOnFill(background: string): string | undefined {
+  const lum = hexLuminance(background);
+  const dark = hexLuminance(INK_DARK);
+  if (lum == null || dark == null) return undefined;
+  const onLight = contrastRatio(lum, 1);
+  const onDark = contrastRatio(lum, dark);
+  return onLight >= onDark ? INK_LIGHT : INK_DARK;
+}
+
 export interface FormCellStyle {
   bold?: boolean;
   italic?: boolean;
@@ -140,12 +177,33 @@ export function shownCell(cell: FormCell, calculated: Record<string, FormulaValu
   return cell.value;
 }
 
+/**
+ * Colors to paint a cell. Stored fills and font colors are not rewritten.
+ * A fill with no font color gets an automatic contrasting ink. A cell with
+ * neither uses the theme (the caller leaves color and background unset).
+ */
 export function cellPaint(cell: FormCell, text: string): { background?: string; color?: string } {
   if (cell.conditional || cell.formula) {
     const fill = passFailFill(text);
-    if (fill) return fill;
+    if (fill) return { background: fill.background, color: cell.style.color || inkOnFill(fill.background) };
   }
-  return { background: cell.style.background, color: cell.style.color };
+  const background = cell.style.background;
+  if (cell.style.color) return { background, color: cell.style.color };
+  if (background) return { background, color: inkOnFill(background) };
+  return {};
+}
+
+/** Display colors for one theme. Default cells use that theme's own ink and paper. */
+export function screenCellColors(
+  cell: FormCell,
+  text: string,
+  theme: { background: string; foreground: string },
+): { background: string; color: string } {
+  const paint = cellPaint(cell, text);
+  return {
+    background: paint.background ?? theme.background,
+    color: paint.color ?? theme.foreground,
+  };
 }
 
 export function gridFromImport(sheets: EditableImportSheet[]): GridFormStructure {

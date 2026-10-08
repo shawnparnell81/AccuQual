@@ -1,25 +1,34 @@
+.fb-sheet {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+}
+
 .fb-grid {
   border-collapse: collapse;
-  background: #fff;
-  color: #1a1a1a;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
   font-size: 12px;
 }
 .fb-grid th,
 .fb-grid td {
-  border: 1px solid #d0d5dd;
+  border: 1px solid hsl(var(--border));
   padding: 0;
   position: relative;
+  background: transparent;
+  color: inherit;
 }
 .fb-grid th {
-  background: #f2f4f7;
-  color: #475467;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
   font-weight: 600;
   text-align: center;
   height: 22px;
   font-size: 11px;
 }
 .fb-grid td.fb-selected {
-  outline: 2px solid #0a3c7b;
+  outline: 2px solid hsl(var(--ring));
   outline-offset: -2px;
   z-index: 1;
 }
@@ -30,6 +39,7 @@
   border: 0;
   background: transparent;
   color: inherit;
+  caret-color: currentColor;
   font: inherit;
   padding: 2px 4px;
   resize: none;
@@ -39,20 +49,26 @@
   min-height: 100%;
   padding: 2px 4px;
   white-space: pre-wrap;
+  color: inherit;
 }
 .fb-doc {
   min-height: 640px;
   outline: none;
+  background: transparent;
+  color: inherit;
+  caret-color: hsl(var(--foreground));
 }
 .fb-doc h1 {
   font-size: 22px;
   font-weight: 700;
   margin: 0 0 8px;
+  color: inherit;
 }
 .fb-doc h2 {
   font-size: 16px;
   font-weight: 700;
   margin: 12px 0 6px;
+  color: inherit;
 }
 .fb-doc p {
   margin: 0 0 8px;
@@ -64,8 +80,9 @@
 }
 .fb-doc td,
 .fb-doc th {
-  border: 1px solid #1a1a1a;
+  border: 1px solid hsl(var(--border));
   padding: 4px 6px;
+  color: inherit;
 }
 .fb-folder-path {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -75,12 +92,13 @@
 .fb-inline-field {
   display: inline-block;
   min-width: 8rem;
-  border-bottom: 1px solid #0a3c7b;
+  border-bottom: 1px solid var(--form-heading, hsl(var(--foreground)));
   padding: 0 4px;
-  color: #0a3c7b;
+  color: var(--form-heading, hsl(var(--foreground)));
+  background: transparent;
 }
 .aq-page-break {
-  border-top: 1px dashed #98a2b3;
+  border-top: 1px dashed hsl(var(--border));
   margin: 16px 0;
   break-after: page;
   page-break-after: always;
@@ -89,6 +107,7 @@
   width: 100%;
   border-collapse: collapse;
   background: transparent;
+  color: inherit;
 }
 .fb-print-flow > thead > tr > td,
 .fb-print-flow > tbody > tr > td,
@@ -96,23 +115,27 @@
   border: 0;
   padding: 0;
   vertical-align: top;
-}
-.fb-band {
-  color: #1a1a1a;
   background: transparent;
+  color: inherit;
+}
+.fb-band,
+.fb-band-body {
+  color: hsl(var(--foreground));
+  background: transparent;
+  caret-color: hsl(var(--foreground));
 }
 .fb-band-header {
-  border-bottom: 1px solid #1a1a1a;
+  border-bottom: 1px solid hsl(var(--border));
   margin-bottom: 12px;
   padding-bottom: 8px;
 }
 .fb-band-footer {
-  border-top: 1px solid #1a1a1a;
+  border-top: 1px solid hsl(var(--border));
   margin-top: 12px;
   padding-top: 8px;
 }
 .fb-band-empty {
-  border: 1px dashed #d0d5dd;
+  border: 1px dashed hsl(var(--border));
   border-radius: 4px;
   padding: 8px;
   margin: 8px 0;
@@ -124,7 +147,12 @@
   align-items: center;
   margin-bottom: 4px;
   font-size: 11px;
-  color: #667085;
+  color: hsl(var(--muted-foreground));
+}
+.fb-sheet .fb-band-bar select {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
 }
 .fb-band-bar input {
   margin-right: 4px;
@@ -152,16 +180,18 @@
 .fb-band th,
 .fb-print-page-header td,
 .fb-print-page-footer td {
-  border: 1px solid #1a1a1a;
+  border: 1px solid hsl(var(--border));
   padding: 4px 6px;
+  color: inherit;
+  background: transparent;
 }
 .fb-doc-field {
   display: inline-block;
-  border: 1px solid #0a3c7b;
+  border: 1px solid hsl(var(--border));
   border-radius: 3px;
   padding: 0 4px;
-  color: #0a3c7b;
-  background: #eef3f9;
+  color: hsl(var(--form-label-foreground));
+  background: hsl(var(--form-label));
   font-size: 11px;
   line-height: 1.4;
   white-space: nowrap;
@@ -169,12 +199,12 @@
 .fb-note {
   margin-top: 0;
   font-size: 12px;
-  color: rgba(26, 26, 26, 0.7);
+  color: hsl(var(--muted-foreground));
 }
 .fb-field {
-  border: 1px solid #d0d5dd;
-  background: #fff;
-  color: #1a1a1a;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
   border-radius: 4px;
   padding: 8px;
 }
@@ -182,9 +212,71 @@
 .fb-field textarea,
 .fb-field select {
   width: 100%;
-  border: 1px solid #d0d5dd;
+  border: 1px solid hsl(var(--border));
   border-radius: 4px;
   padding: 4px 6px;
-  background: #fff;
-  color: #1a1a1a;
+  background: hsl(var(--form-input));
+  color: hsl(var(--form-input-foreground));
+  caret-color: hsl(var(--form-input-foreground));
+}
+.fb-field input:disabled,
+.fb-field textarea:disabled,
+.fb-field select:disabled {
+  color: hsl(var(--form-input-foreground));
+  -webkit-text-fill-color: hsl(var(--form-input-foreground));
+  opacity: 1;
+}
+.fb-field input.fb-plain,
+.fb-sheet .fb-plain {
+  border-radius: 0;
+  background: transparent;
+  color: hsl(var(--foreground));
+  caret-color: hsl(var(--foreground));
+  -webkit-text-fill-color: hsl(var(--foreground));
+}
+.fb-field input.fb-plain {
+  width: auto;
+  border: 0;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.fb-sheet .fb-formula,
+.fb-sheet .fb-control {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  caret-color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+}
+.fb-sheet .fb-color {
+  width: 2.25rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 2px solid hsl(var(--foreground));
+  border-radius: 4px;
+  background: hsl(var(--background));
+  cursor: pointer;
+}
+
+@media print {
+  .fb-sheet,
+  .fb-grid,
+  .fb-doc,
+  .fb-field,
+  .fb-note,
+  .fb-band,
+  .fb-band-body {
+    background: #fff;
+    color: #1a1a1a;
+  }
+  .fb-grid th {
+    background: #f2f4f7;
+    color: #475467;
+  }
+  .fb-field input,
+  .fb-field textarea,
+  .fb-field select,
+  .fb-inline-field,
+  .fb-doc-field {
+    background: #fff;
+    color: #1a1a1a;
+  }
 }
