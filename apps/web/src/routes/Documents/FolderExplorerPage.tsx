@@ -14,7 +14,7 @@ import { extractErrorMessageAsync } from "../../hooks/useWorkflowAction";
 import { InAppFilePreview, type PreviewRequest } from "../../components/shared/InAppFilePreview";
 import { onlyOfficeFile, previewKind, saveBytes } from "../../lib/filePreview";
 import { paneScrollDelta } from "../../lib/dragAutoScroll";
-import { applyFolderPlacements, folderMoveIsBlocked, omitFolders, planNest, planSiblingGap, planSiblingReorder, type NodePlacement } from "../../lib/folderMove";
+import { applyFolderPlacements, folderMoveIsBlocked, libraryPoolDeleteConfirm, planNest, planSiblingGap, planSiblingReorder, unlistFromLibraryPool, type NodePlacement } from "../../lib/folderMove";
 import { dropPosition, reorderDropClass, type DropPosition } from "../../lib/listReorder";
 import { Modal } from "../../components/modals/Modal";
 import { DocumentCommentThread } from "../../components/documents/DocumentCommentThread";
@@ -77,6 +77,7 @@ interface DocumentFolder {
   /** Only present when documentId is set — joined server-side, see document-folders.controller.ts's withLinkedDocumentInfo. */
   documentStatus?: "draft" | "in_review" | "approved" | "obsolete";
   documentExpirationStatus?: "expired" | "expiring_soon" | null;
+  removedFromLibraryPool?: boolean;
 }
 
 const LIBRARY_POOL_NAME = "Library Pool";
@@ -744,33 +745,22 @@ export function FolderExplorerPage() {
   function sendToLibrary(docId: number) {
     if (poolFolder) void commitPlacements(planNest(folders, docId, poolFolder.id));
   }
-  function poolItemLivesElsewhere(doc: DocumentFolder): boolean {
-    return doc.documentId != null || (doc.linkedPath != null && doc.linkedPath !== "");
-  }
   async function removePoolItems(ids: number[]) {
     const rows = poolItems.filter((item) => ids.includes(item.id));
     if (!canManageFolders || rows.length === 0 || poolDeleteLock.current) return;
-    const message =
-      rows.length === 1
-        ? poolItemLivesElsewhere(rows[0]!)
-          ? `Delete "${rows[0]!.name}" from the Library Pool? The record stays in AccuQual.`
-          : rows[0]!.pdfPath
-            ? `Delete "${rows[0]!.name}"? This file is only in the Library Pool and will be removed.`
-            : `Delete "${rows[0]!.name}" from the Library Pool?`
-        : `Delete ${rows.length} items from the Library Pool? A record that also lives in AccuQual stays. An uploaded file that exists only here is deleted.`;
-    if (!confirm(message)) return;
+    if (!confirm(libraryPoolDeleteConfirm(rows.map((row) => row.name)))) return;
     poolDeleteLock.current = true;
     setPoolDeletePending(true);
     const snapshot = qc.getQueryData<DocumentFolder[]>(["document-folders"]);
     const removing = rows.map((row) => row.id);
-    if (snapshot) qc.setQueryData<DocumentFolder[]>(["document-folders"], omitFolders(snapshot, removing));
+    if (snapshot) qc.setQueryData<DocumentFolder[]>(["document-folders"], unlistFromLibraryPool(snapshot, removing));
     setPoolSelection((current) => current.filter((id) => !removing.includes(id)));
     try {
       await Promise.all(removing.map((id) => apiClient.delete(`/document-folders/${id}/pool`)));
-      toast.success(removing.length === 1 ? "Deleted from the Library Pool." : `Deleted ${removing.length} items from the Library Pool.`);
+      toast.success(removing.length === 1 ? "Removed from the Library Pool." : `Removed ${removing.length} items from the Library Pool.`);
     } catch (err) {
       if (snapshot) qc.setQueryData(["document-folders"], snapshot);
-      toast.error(`${await extractErrorMessageAsync(err, "Couldn't delete that from the Library Pool")} It's back in the Library Pool.`);
+      toast.error(`${await extractErrorMessageAsync(err, "Couldn't remove that from the Library Pool")} It's back in the Library Pool.`);
     } finally {
       poolDeleteLock.current = false;
       setPoolDeletePending(false);
@@ -998,6 +988,14 @@ export function FolderExplorerPage() {
                 Back to departments
               </button>
             </div>
+          ) : openFolder?.removedFromLibraryPool ? (
+            <KeptPoolFile
+              doc={openFolder}
+              onMove={canManageFolders ? () => openMove(openFolder.id) : undefined}
+              moveDisabled={movePending}
+              onAttach={() => requestUpload(openFolder.id)}
+              onRemoveAttachment={() => removeTemplate.mutate(openFolder.id)}
+            />
           ) : openFolder ? (
             <FolderBrowser
               folder={openFolder}
@@ -1542,6 +1540,50 @@ export function FolderExplorerPage() {
       )}
       {movingFolder && (
         <MoveToFolderDialog folders={visibleFolders} moving={movingFolder} pending={movePending} onClose={() => { if (!movePending) setMovingId(null); }} onMove={(parentId) => void moveInto(parentId)} />
+      )}
+    </div>
+  );
+}
+
+/** A pool item after Delete. The file and the record stay, and this page is their direct link. */
+function KeptPoolFile({
+  doc,
+  onMove,
+  moveDisabled,
+  onAttach,
+  onRemoveAttachment,
+}: {
+  doc: DocumentFolder;
+  onMove?: () => void;
+  moveDisabled: boolean;
+  onAttach: () => void;
+  onRemoveAttachment: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3" data-testid="kept-file">
+      <h2 className="text-lg font-semibold">{doc.name}</h2>
+      <p className="text-sm text-muted-foreground">Removed from the Library Pool. Nothing was deleted from AccuQual.</p>
+      <div>
+        <DocPill
+          doc={doc}
+          fill
+          moveDisabled={moveDisabled}
+          onDragStart={() => undefined}
+          onDragEnd={() => undefined}
+          onAttach={onAttach}
+          onRemoveAttachment={onRemoveAttachment}
+          onMove={onMove}
+        />
+      </div>
+      {doc.documentId != null && (
+        <Link to={`/documents/${doc.documentId}`} className="w-fit text-sm text-primary hover:underline">
+          Open the record
+        </Link>
+      )}
+      {doc.linkedPath && (
+        <Link to={doc.linkedPath} className="w-fit text-sm text-primary hover:underline">
+          Open the record
+        </Link>
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { documentFolders, LIBRARY_POOL_NAME } from "../../drizzle/schema/documentFolders.js";
 import { company } from "../../drizzle/schema/company.js";
 import { controlledFormTemplates } from "../../drizzle/schema/controlledForms.js";
@@ -302,6 +302,77 @@ async function settledFolderProfile(db: Db) {
   return profile;
 }
 
+/** Ids already taken off the Library Pool. A later load must not put them back. */
+async function libraryPoolRemovedIds(db: Db): Promise<Set<number>> {
+  const [row] = await db.select({ profile: company.profile }).from(company).limit(1);
+  return new Set(row?.profile?.libraryPoolRemovedIds ?? []);
+}
+
+/** Records one id. A second delete in the same moment cannot drop the first id. */
+async function rememberRemovedFromLibraryPool(db: Db, id: number): Promise<void> {
+  const encoded = JSON.stringify([id]);
+  await db.execute(sql`
+    UPDATE company
+    SET profile = jsonb_set(
+      COALESCE(profile, '{}'::jsonb),
+      '{libraryPoolRemovedIds}',
+      CASE
+        WHEN COALESCE(profile->'libraryPoolRemovedIds', '[]'::jsonb) @> ${encoded}::jsonb
+        THEN COALESCE(profile->'libraryPoolRemovedIds', '[]'::jsonb)
+        ELSE COALESCE(profile->'libraryPoolRemovedIds', '[]'::jsonb) || ${encoded}::jsonb
+      END
+    )
+  `);
+}
+
+/** A person moved it on purpose. Leave that place alone, including a move back into the pool. */
+async function forgetRemovedFromLibraryPool(db: Db, id: number): Promise<void> {
+  await db.execute(sql`
+    UPDATE company
+    SET profile = jsonb_set(
+      COALESCE(profile, '{}'::jsonb),
+      '{libraryPoolRemovedIds}',
+      COALESCE(
+        (
+          SELECT jsonb_agg(value)
+          FROM jsonb_array_elements(COALESCE(profile->'libraryPoolRemovedIds', '[]'::jsonb)) AS value
+          WHERE value <> to_jsonb(${id}::int)
+        ),
+        '[]'::jsonb
+      )
+    )
+  `);
+}
+
+/**
+ * Items taken off the pool stay out of it. Filing that puts the same row
+ * back under Library Pool is undone here. The row itself is not deleted.
+ */
+async function detachRemovedFromPool<T extends { id: number; name: string; parentId: number | null }>(db: Db, folders: T[]): Promise<Set<number>> {
+  const removed = await libraryPoolRemovedIds(db);
+  const pool = folders.find((folder) => folder.parentId === null && folder.name === LIBRARY_POOL_NAME);
+  if (!pool || removed.size === 0) return removed;
+  const back = folders.filter((folder) => removed.has(folder.id) && folder.parentId === pool.id);
+  if (back.length === 0) return removed;
+  await db
+    .update(documentFolders)
+    .set({ parentId: null, updatedAt: new Date() })
+    .where(inArray(documentFolders.id, back.map((folder) => folder.id)));
+  for (const folder of back) folder.parentId = null;
+  return removed;
+}
+
+function markRemovedFromLibraryPool<T extends { id: number }>(folders: T[], removed: Set<number>): T[] {
+  if (removed.size === 0) return folders;
+  return folders.map((folder) => (removed.has(folder.id) ? { ...folder, removedFromLibraryPool: true } : folder));
+}
+
+async function folderListResponse(db: Db, folders: (typeof documentFolders.$inferSelect)[]) {
+  const removed = await detachRemovedFromPool(db, folders);
+  const presented = await withLinkedDocumentInfo(db, presentDocumentFolders(folders));
+  return markRemovedFromLibraryPool(presented, removed);
+}
+
 /** Full flat folder list for the company, seeding the default department tree on first use. */
 export const list = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
@@ -318,7 +389,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     await ensureLivingControlledLists(req);
     const fresh = await db.select().from(documentFolders);
     const merged = await mergeDuplicateFoldersOnce(db, fresh, req.user?.id);
-    return res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(merged)));
+    return res.json(await folderListResponse(db, merged));
   }
 
   // Move to… used to wait on this refetch. The filing work below is a hundred
@@ -331,7 +402,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
     const withPool = existing.some((folder) => folder.id === pool.id) ? existing : [...existing, pool];
     await linkKnownForms(db, withPool);
     const filed = await rehomeStrayBlankShortcuts(db, withPool, settled.blankFormsTemplatesFolderId, req.user?.id);
-    return res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(filed)));
+    return res.json(await folderListResponse(db, filed));
   }
 
   const pool = await ensureLibraryPool(db, existing);
@@ -344,7 +415,7 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
   await ensureLivingControlledLists(req);
   const fresh = await db.select().from(documentFolders);
   const merged = await mergeDuplicateFoldersOnce(db, fresh, req.user?.id);
-  res.json(await withLinkedDocumentInfo(db, presentDocumentFolders(merged)));
+  res.json(await folderListResponse(db, merged));
 });
 
 export const create = asyncHandler(async (req: Request, res: Response) => {
@@ -426,6 +497,7 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
     .where(and(eq(documentFolders.id, id)))
     .returning();
   if (!updated) throw AppError.notFound("Document folder");
+  if (parentChanging) await forgetRemovedFromLibraryPool(db, id);
 
   const nameChanged = name !== undefined && name !== current.name;
   let changes: Record<string, unknown>;
@@ -457,11 +529,10 @@ export const update = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
- * Takes one row out of the Library Pool.
- * A controlled document, filled form, or module link lives somewhere else:
- * the pool row goes away and that record stays.
- * An uploaded file with no other link is deleted, file and row, the same
- * way an empty folder is removed. A pool row that still has children stays.
+ * Takes one row off the Library Pool listing. The folder row, its uploaded
+ * file, and any record it points at all stay. A later folder load will not
+ * put this row back under the pool. A pool row that still has children stays
+ * listed until those children are moved.
  */
 export const removeFromLibraryPool = asyncHandler(async (req: Request, res: Response) => {
   const db = req.db!;
@@ -471,26 +542,18 @@ export const removeFromLibraryPool = asyncHandler(async (req: Request, res: Resp
   const [parent] = current.parentId == null ? [] : await db.select().from(documentFolders).where(eq(documentFolders.id, current.parentId));
   if (!parent || parent.name !== LIBRARY_POOL_NAME) throw AppError.badRequest("That item is not in the Library Pool.");
   const children = await db.select({ id: documentFolders.id }).from(documentFolders).where(eq(documentFolders.parentId, id));
-  if (children.length > 0) throw AppError.badRequest("Move or delete this folder's contents before deleting it from the Library Pool.");
+  if (children.length > 0) throw AppError.badRequest("Move this folder's contents before removing it from the Library Pool.");
 
-  const [filing] = await db.select({ id: formFilings.id }).from(formFilings).where(eq(formFilings.folderNodeId, id)).limit(1);
-  const livesElsewhere = current.documentId != null || (current.linkedPath != null && current.linkedPath !== "") || filing != null;
-  if (current.pdfPath && existsSync(current.pdfPath)) {
-    await unlink(current.pdfPath).catch((err) => logger.warn(`Could not remove library pool file ${current.pdfPath}`, err));
-  }
-  const [deleted] = await db.delete(documentFolders).where(eq(documentFolders.id, id)).returning();
-  if (!deleted) throw AppError.notFound("Document folder");
+  const [updated] = await db.update(documentFolders).set({ parentId: null, updatedAt: new Date() }).where(eq(documentFolders.id, id)).returning();
+  if (!updated) throw AppError.notFound("Document folder");
+  await rememberRemovedFromLibraryPool(db, id);
 
-  const summary = livesElsewhere
-    ? `Deleted "${deleted.name}" from the Library Pool. The record was left in place.`
-    : deleted.pdfPath
-      ? `Deleted the uploaded file "${deleted.name}" from the Library Pool.`
-      : `Deleted "${deleted.name}" from the Library Pool.`;
+  const summary = `Removed "${updated.name}" from the Library Pool.`;
   await recordAuditTrail(db, {
     entityType: AUDIT_ENTITY_TYPE,
     entityId: id,
-    action: "delete",
-    changes: { summary, name: deleted.name, libraryPool: true, keptRecord: livesElsewhere },
+    action: "update",
+    changes: { summary, name: updated.name, libraryPool: true, keptRecord: true },
     performedBy: req.user?.id,
   });
   res.status(204).send();

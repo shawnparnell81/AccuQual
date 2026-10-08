@@ -11,6 +11,8 @@ export interface BrowseFolder {
   linkedPath?: string | null;
   pdfPath?: string | null;
   documentId?: number | null;
+  /** Taken off the Library Pool. The row stays, and it is not a department. */
+  removedFromLibraryPool?: boolean;
 }
 
 export interface FiledLocation {
@@ -72,7 +74,7 @@ export function contentRoot<T extends BrowseFolder>(folders: T[]): T | undefined
 export function leftHandFolders<T extends BrowseFolder>(folders: T[]): T[] {
   const iso = contentRoot(folders);
   const nested = iso ? folders.filter((folder) => folder.parentId === iso.id && folder.name !== BLANK_FORM_TEMPLATES_FOLDER) : [];
-  const stray = folders.filter((folder) => folder.parentId == null && folder.id !== iso?.id && folder.name !== LIBRARY_POOL_NAME);
+  const stray = folders.filter((folder) => folder.parentId == null && folder.id !== iso?.id && folder.name !== LIBRARY_POOL_NAME && !folder.removedFromLibraryPool);
   return [...nested, ...stray].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 }
 
@@ -232,7 +234,7 @@ export function templateLibraryIds<T extends BrowseFolder>(folders: T[]): Set<nu
 export function saveAsFolders<T extends BrowseFolder>(folders: T[]): T[] {
   const hidden = explorerHiddenIds(folders);
   const library = templateLibraryIds(folders);
-  return folders.filter((folder) => !hidden.has(folder.id) && !library.has(folder.id) && isFolderEntry(folders, folder));
+  return folders.filter((folder) => !hidden.has(folder.id) && !library.has(folder.id) && !folder.removedFromLibraryPool && isFolderEntry(folders, folder));
 }
 
 /** A row you can open as a folder. A saved form, upload, or controlled document is a file. A shortcut to a blank module stays a folder. */

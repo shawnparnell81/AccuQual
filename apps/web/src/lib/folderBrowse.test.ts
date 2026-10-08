@@ -198,6 +198,7 @@ describe("folder browse", () => {
       { id: 12, name: "Policies", parentId: 11, sortOrder: 0 },
       { id: 13, name: "Procedures", parentId: 11, sortOrder: 1 },
       { id: 14, name: "Library Pool", parentId: null, sortOrder: 1 },
+      { id: 16, name: "Shop traveler.pdf", parentId: null, sortOrder: 2, removedFromLibraryPool: true },
       { id: 15, name: "CSA", parentId: 2, sortOrder: 0 },
     ];
     assert.deepEqual(

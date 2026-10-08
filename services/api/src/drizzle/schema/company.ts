@@ -243,6 +243,12 @@ export const company = pgTable("company", {
      * object. No new column.
      */
     folderNamesUnified?: boolean;
+    /**
+     * document_folders ids taken off the Library Pool. The row and its file
+     * stay. Documents reads this so a later load does not put that item back
+     * in the pool. Company Settings spreads this object. No new column.
+     */
+    libraryPoolRemovedIds?: number[];
   }>().default({}),
   // First-run guided checklist (see db/defaultOnboardingChecklist.ts) for the company's first admin.
   // `dismissed: true` for every company that existed before this shipped (backfillOnboardingChecklist.ts) — an
