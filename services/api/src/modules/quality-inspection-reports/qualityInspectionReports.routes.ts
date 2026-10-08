@@ -17,7 +17,7 @@ import {
 } from "./qualityInspectionReports.controller.js";
 
 export const qualityInspectionReportsRouter = Router();
-// Phase 8 — previously ungated ("same convention as the rest of this
+// previously ungated ("same convention as the rest of this
 // batch"); a real gap, not a deliberate design (see defaultPermissions.ts's
 // own comment on the new "quality_inspection" ResourceKey this now uses).
 qualityInspectionReportsRouter.use(requireAuth, withDb, requireDepartmentAccess("quality_inspection"));

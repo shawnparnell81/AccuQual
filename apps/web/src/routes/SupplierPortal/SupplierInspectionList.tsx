@@ -6,7 +6,7 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import type { QualityInspectionReport } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
-/** Phase 8 task 3 — "supplier-facing visibility: inspection notes." A real, direct supplierId FK join (added this phase), unlike NCR/CAPA's derived-link pattern. */
+/** "supplier-facing visibility: inspection notes." A real, direct supplierId FK join (added this phase), unlike NCR/CAPA's derived-link pattern. */
 export function SupplierInspectionList({ supplierId }: { supplierId?: number }) {
   const currentUser = useCurrentUser();
   const canOpen = currentUser?.roleName !== "supplier";

@@ -29,14 +29,7 @@ interface InspectionNotesSuggestion {
   confidence: number;
 }
 
-/**
- * Quality Inspection Report — built from a real supplied HTML mockup,
- * styled to the app's own theme (see accuqual-qms-forms-batch memory)
- * rather than the mockup's own blue accent colors. Not on the generic QMS
- * Simple Form engine: its header fields don't match that engine's shape —
- * though its "Inspection Checklist" section IS a real freely-addable
- * table, same reasoning DocumentChangeRequest's own child tables use.
- */
+/** Own header fields. Checklist rows are a child table. */
 export function QualityInspectionReportDetailPage() {
   const { id } = useParams();
   const reportId = Number(id);

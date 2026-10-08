@@ -48,7 +48,7 @@ export interface MovementInput {
   /** Caller-supplied — auto-generated instead when unset and settings say to (see generateTrackingNumber below). */
   lotNumber?: string;
   serialNumber?: string;
-  /** Phase 8 — ties this movement to a real inventory_lots row; see inventoryLots.service.ts. */
+  /** ties this movement to a real inventory_lots row; see inventoryLots.service.ts. */
   lotId?: number;
 }
 
@@ -154,7 +154,7 @@ export async function applyMovement(db: Db, itemId: number, input: MovementInput
     })
     .returning();
 
-  // Phase 8 — decrement the real per-lot ledger on any outbound movement
+  // decrement the real per-lot ledger on any outbound movement
   // against a tracked lot (transfer moves between locations, not out of
   // inventory at all, so it's excluded — see inventoryLots.service.ts's
   // own comment on why this never goes negative on its own).

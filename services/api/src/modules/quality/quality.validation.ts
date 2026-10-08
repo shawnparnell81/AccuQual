@@ -8,13 +8,7 @@ export const createDiscrepancySchema = z.object({
   severity: z.enum(["minor", "major", "critical"]).optional(),
 });
 
-/**
- * `status` is deliberately NOT editable here — it moves only through the
- * dedicated /investigate, /dispose and /close endpoints (see
- * quality.controller.ts), the same fix the Sprint 2 pass applied to Document
- * Control/CAPA/Audits: a free `status` on the generic PATCH let anyone jump
- * straight to "closed", skipping the sequence checks.
- */
+/** Status moves only through /investigate, /dispose, and /close. */
 export const updateDiscrepancySchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().optional(),

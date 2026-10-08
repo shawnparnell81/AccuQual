@@ -53,7 +53,7 @@ export const updateWorkflowSchema = z.object({
 
 export const runWorkflowSchema = z.object({
   context: z.record(z.string(), z.unknown()).default({}),
-  // Phase 9 task 9 — Simulation Mode: walks the same graph/condition logic
+  // Simulation Mode: walks the same graph/condition logic
   // but every action handler skips its real side effect (see
   // workflowActions.ts's own dryRun handling).
   simulate: z.boolean().default(false),

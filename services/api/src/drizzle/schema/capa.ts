@@ -17,7 +17,7 @@ export const capa = pgTable("capa", {
   ownerId: integer("owner_id").references(() => users.id),
   verifiedBy: integer("verified_by").references(() => users.id),
   verifiedAt: timestamp("verified_at"),
-  // Phase 8 — set when this CAPA was auto-created by receivingAutomation.ts's
+  // set when this CAPA was auto-created by receivingAutomation.ts's
   // recurrence check (see erp/receivingAutomation.ts's own comment), rather
   // than created by hand. Null for every ordinary CAPA. Not an enum at the
   // DB level — today's only real value is "receiving_recurrence", but this

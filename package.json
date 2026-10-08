@@ -2,7 +2,7 @@
   "name": "accuqual",
   "version": "0.1.0",
   "private": true,
-  "description": "AccuQual - Next-generation Quality Management System",
+  "description": "AccuQual quality management system",
   "workspaces": [
     "services/*",
     "apps/*",

@@ -14,7 +14,7 @@ function useCompanyProfile() {
 }
 
 /**
- * Phase 10 — a real, editable "Company Settings" (name/logo/timezone/contact
+ * a real, editable "Company Settings" (name/logo/timezone/contact
  * info), genuinely new: before this, Settings' own "Company Settings" tab was
  * read-only and pointed admins at Platform Administration for edits, but
  * that page has no branding/name editor at all (it's cross-company

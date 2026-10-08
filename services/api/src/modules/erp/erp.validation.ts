@@ -30,7 +30,7 @@ const receivingLineItemInput = z.object({
   poLineItemId: z.coerce.number().int(),
   quantityReceived: z.coerce.number().int().positive(),
   notes: z.string().optional(),
-  // Phase 8 — captured at the moment of physical receipt; mirrored onto a
+  // captured at the moment of physical receipt; mirrored onto a
   // real inventory_lots row (see erp.service.ts's createReceivingDocument).
   lotNumber: z.string().max(100).optional(),
   serialNumber: z.string().max(100).optional(),

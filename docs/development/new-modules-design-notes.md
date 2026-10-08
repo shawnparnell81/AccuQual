@@ -1,9 +1,6 @@
 # Design notes: the versioning engine, quarantine, calibration, and training
 
-Written after shipping all four (document versioning: PR #76; equipment &
-calibration, quarantine, training & competency: PR #77). This is *why*
-each is built the way it is, for whoever touches them next — not a
-restatement of the API (see OpenAPI for that).
+Document versioning shipped in PR #76. Equipment and calibration, quarantine, and training and competency shipped in PR #77. This file is why each is built this way. The API shape is in OpenAPI.
 
 ## The shared document-versioning engine
 

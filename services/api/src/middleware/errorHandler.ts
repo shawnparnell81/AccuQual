@@ -81,7 +81,7 @@ function inferFailedTransitionTarget(req: Request): { entityType: string; entity
  * silently skipped rather than guessed at. Never awaited by the caller and
  * never throws, so it can't delay or break the real error response.
  *
- * Phase 9 task 2 — "Add audit trail: 'Permission denied for workflow
+ * "Add audit trail: 'Permission denied for workflow
  * transition.'" Before this phase, only 2 of ~15 modules (CRAR, RMA-Log)
  * ever logged a real `action: "permission_denied"` entry, each with its
  * own hand-written call site. Since EVERY state-changing request already

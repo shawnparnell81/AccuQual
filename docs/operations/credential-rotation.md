@@ -6,15 +6,13 @@ document, or anywhere else outside its intended storage — GitHub Secrets,
 shouldn't have been" as compromised even if nothing bad has happened yet;
 rotate on that basis alone, don't wait for evidence of misuse.
 
-**Golden rule for every rotation below: generate the new value from the
-provider's own "generate" button, or `openssl rand`, never by hand-typing
-a variant of the old one.** Appending a character to an old, exposed
-password produces a new value that still contains the exposed one as a
-substring — not a real rotation.
+Generate the new value from the provider's generate button, or
+`openssl rand`. Do not type a variant of the old one. Appending a character
+to an exposed password leaves the exposed value as a substring.
 
-**Secrets never go in chat.** Put the new value in a password manager, or
-in a local file that is not committed to this repo. Apply it to the places
-listed below, confirm it works, then delete any temporary copy.
+Do not paste the new value into chat, a ticket, or a commit. Put it in a
+password manager, or in a local file that is not in this repo. Apply it,
+confirm it works, then delete the temporary copy.
 
 ## Where each credential lives
 

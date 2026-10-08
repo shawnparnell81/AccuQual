@@ -1,26 +1,15 @@
-# AccuQual Workers
+# Workers
 
-Three background processes, each consuming its own Redis Stream (see
-`services/api/src/lib/eventBus.ts`):
+Three processes, each on its own Redis stream (`services/api/src/lib/eventBus.ts`):
 
-| Worker | Stream | Responsibility |
+| Worker | Stream | Job |
 | --- | --- | --- |
-| `workflow-worker` | `accuqual:workflow-events` | Runs the drag-and-drop workflow engine when NCR/CAPA/audit lifecycle events fire |
-| `ai-worker` | `accuqual:ai-jobs` | Generates and stores pgvector embeddings for newly created records |
-| `digital-twin-worker` | `accuqual:digital-twin-jobs` | Watches live IoT readings for process drift |
+| `workflow-worker` | `accuqual:workflow-events` | Runs Workflow Builder graphs when a module publishes a lifecycle event |
+| `ai-worker` | `accuqual:ai-jobs` | Writes pgvector embeddings for new records |
+| `digital-twin-worker` | `accuqual:digital-twin-jobs` | Watches IoT readings for process drift |
 
-Each worker is its own npm workspace with its own `package.json`/Dockerfile,
-but intentionally has **no shared `packages/*` dependency yet** — at this
-size, three workers importing `services/api/src/**` by relative path (schema,
-the workflow engine, the embedding engine) is simpler than standing up and
-versioning a shared package. Each worker also keeps its own ~25-line
-`redis-consumer.ts` rather than importing one, for the same reason.
+Each worker is its own npm workspace and Dockerfile. There is no `packages/*` shared library. The three workers import `services/api/src/**` by relative path (schema, workflow engine, embedding engine). Each also keeps its own short `redis-consumer.ts`.
 
-**When to extract a shared `packages/core`:** once a worker needs logic that
-isn't a pure, env-independent module (the workflow/simulation engines and
-schema files qualify today because they don't read `process.env`), or once
-a fourth consumer of the same code shows up. Track that as a TODO rather
-than doing it preemptively.
+Extract a `packages/core` when a worker needs code that reads `process.env`, or when a fourth consumer needs the same module. The workflow and simulation engines and the schema files do not read `process.env` today, so they can stay as relative imports.
 
-Run locally: `npm run dev --workspace workers/workflow-worker` (etc.), with
-`DATABASE_URL` and `REDIS_URL` set the same as the API (see root `.env.example`).
+Local run: `npm run dev --workspace workers/workflow-worker` (and the same for the other two). `DATABASE_URL` and `REDIS_URL` match the API. See the root `.env.example`.

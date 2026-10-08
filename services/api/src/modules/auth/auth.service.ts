@@ -170,7 +170,7 @@ async function completeLogin(
   mfaGraceEndsAt: Date | null = null,
   audit?: { method: "password" | "mfa" | "trusted_device"; client?: SignInClient },
 ) {
-  // Phase 7 — Supplier Portal health indicators ("last supplier login")
+  // Supplier Portal health indicators ("last supplier login")
   // read this; best-effort, never blocks a successful login on its own
   // failure.
   await db.update(users).set({ lastLoginAt: new Date(), failedLoginCount: 0, firstFailedLoginAt: null, lockedUntil: null }).where(eq(users.id, user.id)).catch(() => undefined);

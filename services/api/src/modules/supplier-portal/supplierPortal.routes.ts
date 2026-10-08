@@ -104,7 +104,7 @@ supplierPortalRouter.get("/performance", performanceHandler);
 supplierPortalRouter.get("/ncr/list", supplierNcrListHandler);
 supplierPortalRouter.get("/capa/list", supplierCapaListHandler);
 
-// Phase 7 — RMA/Warranty/SCAR visibility (real supplierId FK on each — see
+// RMA/Warranty/SCAR visibility (real supplierId FK on each — see
 // the controller's own comment on why these still need a wrapper endpoint
 // rather than reusing /rma, /warranty, /scar-forms directly), KPIs/health,
 // and the read-only Quality Risk Score + scorecard export.
@@ -115,7 +115,7 @@ supplierPortalRouter.get("/kpis", supplierKpisHandler);
 supplierPortalRouter.get("/risk-score", supplierRiskScoreHandler);
 supplierPortalRouter.get("/scorecard/export", supplierScorecardExportHandler);
 
-// Phase 8 — inspection reports (real supplierId FK) + lots (accepted/rejected shipments) visibility.
+// inspection reports (real supplierId FK) + lots (accepted/rejected shipments) visibility.
 supplierPortalRouter.get("/inspections/list", supplierInspectionListHandler);
 supplierPortalRouter.get("/lots/list", supplierLotListHandler);
 

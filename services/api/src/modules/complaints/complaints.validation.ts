@@ -8,13 +8,7 @@ export const createComplaintSchema = z.object({
   linkedNcrId: z.number().int().optional(),
 });
 
-/**
- * `status` is deliberately NOT editable here — it moves only through the
- * dedicated /investigate, /resolve and /close endpoints (see
- * complaints.controller.ts), the same fix Sprint 2 applied to Document
- * Control/CAPA/Audits. `linkedNcrId`/`assignedTo` are nullable so a link or
- * assignment can be cleared, not just set.
- */
+/** Status moves only through /investigate, /resolve, and /close. Nullable ids clear a link or assignment. */
 export const updateComplaintSchema = createComplaintSchema.partial().extend({
   linkedNcrId: z.number().int().nullable().optional(),
   assignedTo: z.number().int().nullable().optional(),

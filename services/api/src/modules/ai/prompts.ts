@@ -112,7 +112,7 @@ Respond as strict JSON: { "severity": number, "probability": number, "rationale"
 Risk context:
 ${wrapUntrustedData(input, "risk_context")}`;
 
-/** Phase 4 — NCR triage. A suggestion only: the quality engineer reviews and applies it manually via the NCR's own normal severity field / department assignment, never auto-applied. */
+/** NCR triage. A suggestion only: the quality engineer reviews and applies it manually via the NCR's own normal severity field / department assignment, never auto-applied. */
 export const ncrTriagePrompt = (input: unknown) => `You are AccuQual's NCR triage assistant. Given a newly-reported nonconformance's title and description, suggest the most likely severity and which department should own investigating it. If any similar past NCRs are given, use them to judge whether this looks like a recurring issue.
 
 Respond as strict JSON: { "suggestedSeverity": "low" | "medium" | "high" | "critical", "suggestedDepartment": string, "rationale": string, "similarPastNcrs": string[] }
@@ -120,7 +120,7 @@ Respond as strict JSON: { "suggestedSeverity": "low" | "medium" | "high" | "crit
 NCR:
 ${wrapUntrustedData(input, "ncr_triage_input")}`;
 
-/** Phase 4 — Supplier communication drafting. Always a draft for a human to review/edit before sending — supplier-portal.controller.ts's messaging endpoint is a separate, explicit user action, never called automatically from here. */
+/** Supplier communication drafting. Always a draft for a human to review/edit before sending — supplier-portal.controller.ts's messaging endpoint is a separate, explicit user action, never called automatically from here. */
 export const supplierMessageDraftPrompt = (input: unknown) => `You are AccuQual's supplier relations assistant. Draft a professional message to a supplier based on the given context (e.g. a quality issue, a corrective-action request, an overdue delivery, or a scorecard concern). Keep it factual and specific to the data given — never invent a defect, date, or part number not present in the context.
 
 Respond as strict JSON: { "subject": string, "body": string, "tone": "informational" | "corrective_action_request" | "escalation" }
@@ -149,7 +149,7 @@ Data:
 ${wrapUntrustedData(input, "report_data")}`;
 
 /**
- * Phase 9 — Workflow Actions' generic "ai_suggestion" action kind. A
+ * Workflow Actions' generic "ai_suggestion" action kind. A
  * workflow definition can attach this to ANY trigger/condition path (NCR
  * closed, receiving rejected, CAPA escalated, ...), so the prompt is
  * deliberately generic across every real event context this app's
@@ -167,7 +167,7 @@ Event context:
 ${wrapUntrustedData(input, "workflow_event_context")}`;
 
 /**
- * Phase 8 — "AI-assisted inspection notes." Given a Quality Inspection
+ * "AI-assisted inspection notes." Given a Quality Inspection
  * Report's own checklist rows (parameter/spec/actual/pass-fail, and the
  * new numeric measurement fields), drafts a plain-language summary for the
  * report's Notes/Remarks field — a suggestion only: the inspector still
@@ -182,7 +182,7 @@ Respond as strict JSON: { "summary": string, "suggestedDefectCategory": string |
 Checklist:
 ${wrapUntrustedData(input, "inspection_checklist")}`;
 
-/** Phase 4 — Warranty triage. A suggestion only: the disposition is still recorded through the claim's own normal quality-review workflow (warranty.controller.ts), never auto-applied. */
+/** Warranty triage. A suggestion only: the disposition is still recorded through the claim's own normal quality-review workflow (warranty.controller.ts), never auto-applied. */
 export const warrantyTriagePrompt = (input: unknown) => `You are AccuQual's warranty claims assistant. Given a warranty claim's failure description, product/part, and time-in-service, suggest a likely disposition and, if there's enough information, a rough repair/replacement cost estimate. Base this strictly on the data given.
 
 Respond as strict JSON: { "suggestedDisposition": "approve" | "deny" | "needs_inspection", "estimatedCost": number | null, "rationale": string }

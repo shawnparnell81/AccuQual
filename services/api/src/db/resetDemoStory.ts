@@ -26,7 +26,7 @@ const HEALTHY_SUPPLIER_NAME = "Meridian Fasteners LLC";
 const DEMO_CUSTOMER_NAME = "Northfield Industries";
 
 /**
- * Phase 11 task 13 — "backend support for resetting demo data." Deletes
+ * "backend support for resetting demo data." Deletes
  * exactly the rows seedDemoStory.ts creates (identified by the two
  * recognizable supplier names it seeds, walked outward through their real
  * FK relationships, children before parents) and nothing else — never

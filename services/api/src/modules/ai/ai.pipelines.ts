@@ -80,16 +80,16 @@ export const runSupplierMessageDraftPipeline = (input: unknown, options: LlmCall
 export const runWarrantyTriagePipeline = (input: unknown, options: LlmCallOptions = {}) =>
   run(warrantyTriagePrompt(input), "You are AccuQual's warranty claims assistant.", schemas.warrantyTriageOutputSchema, options);
 
-// Phase 6 — AI-assisted report summaries (quality trends, supplier risk
+// AI-assisted report summaries (quality trends, supplier risk
 // changes, warranty patterns, production deviations), always a
 // non-authoritative note over already-real, already-aggregated data.
 export const runReportSummaryPipeline = (kind: string, input: unknown, options: LlmCallOptions = {}) =>
   run(reportSummaryPrompt(kind, input), "You are AccuQual's reporting analyst.", schemas.reportSummaryOutputSchema, options);
 
-// Phase 8 — "AI-assisted inspection notes" (task 1's Phase 5 dependency).
+// "AI-assisted inspection notes" (task 1's Phase 5 dependency).
 export const runInspectionNotesPipeline = (input: unknown, options: LlmCallOptions = {}) =>
   run(inspectionNotesPrompt(input), "You are AccuQual's quality inspection assistant.", schemas.inspectionNotesOutputSchema, options);
 
-// Phase 9 — Workflow Actions' generic "ai_suggestion" action kind.
+// Workflow Actions' generic "ai_suggestion" action kind.
 export const runWorkflowAiNotePipeline = (input: unknown, options: LlmCallOptions = {}) =>
   run(workflowAiNotePrompt(input), "You are AccuQual's workflow assistant.", schemas.workflowAiNoteOutputSchema, options);

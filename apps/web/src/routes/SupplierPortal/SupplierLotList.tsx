@@ -9,7 +9,7 @@ interface SupplierLot extends InventoryLot {
   receivingStatus: string | null;
 }
 
-/** Phase 8 task 3 — "supplier-facing visibility: accepted lots, rejected lots." */
+/** "supplier-facing visibility: accepted lots, rejected lots." */
 export function SupplierLotList({ supplierId }: { supplierId?: number }) {
   const { data: rows = [], isLoading } = useQuery<SupplierLot[]>({
     queryKey: ["supplier-portal/lots/list", supplierId ?? "self"],

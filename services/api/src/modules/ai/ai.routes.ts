@@ -52,17 +52,17 @@ aiRouter.post("/analysis", validate(analysisSchema), analysis);
 aiRouter.post("/forms/suggest", validate(formSuggestSchema), formSuggest);
 aiRouter.post("/forms/autofill", validate(formAutofillSchema), formAutofill);
 
-// Phase 4 — new module-level integration points, same no-department-gate
+// new module-level integration points, same no-department-gate
 // convention every other /ai/* endpoint already uses.
 aiRouter.post("/ncr-triage", validate(ncrTriageSchema), ncrTriage);
 aiRouter.post("/supplier-message-draft", validate(supplierMessageDraftSchema), supplierMessageDraft);
 aiRouter.post("/warranty-triage", validate(warrantyTriageSchema), warrantyTriage);
-// Phase 8 — "AI-assisted inspection notes."
+// "AI-assisted inspection notes."
 aiRouter.post("/inspection-notes", validate(inspectionNotesSchema), inspectionNotes);
 
 // Real browsable AI suggestion history — admin-only, same gate as
 // GET /company/ai-usage (the page this feeds — see AdminAiUsagePage.tsx).
 aiRouter.get("/suggestions", requireRole("admin"), listSuggestions);
 
-// Phase 5 — explicit accept/reject on an already-generated suggestion.
+// explicit accept/reject on an already-generated suggestion.
 aiRouter.post("/suggestions/:id/decision", validate(suggestionDecisionSchema), recordSuggestionDecision);

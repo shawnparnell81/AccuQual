@@ -59,7 +59,7 @@ export interface WorkflowDefinition {
 }
 
 /**
- * Phase 9 — `dryRun` is how Simulation Mode (task 9) reaches every
+ * `dryRun` is how Simulation Mode (task 9) reaches every
  * registered action handler without a special "simulated" copy of each
  * one: a real handler with a real side effect (send an email, insert an
  * NCR) checks `dryRun` itself and, when true, records what it WOULD have
@@ -90,7 +90,7 @@ export function getRegisteredActionKinds(): string[] {
 }
 
 /**
- * Phase 9 task 5 — real condition operators beyond the original
+ * real condition operators beyond the original
  * equals/greaterThan pair, covering condition list
  * (defect category → equals/in, supplier → equals, recurrence →
  * greaterThan/greaterOrEqual, severity → equals/in, inspection results →

@@ -199,10 +199,6 @@ export function CrarDetailPage() {
         <AttachmentsPanel entityType="crar" entityId={crarId} title="Evidence, Photos & Supporting Documents" />
       </div>
 
-      {/* Sprint 3 (accuqual-implementation-sequencing.md) — swapped from the
-          generic EntityAuditTrailPanel to the shared WorkflowHistoryPanel
-          every other module's detail page uses, now that workflow.controller.ts's
-          MODULE_ENTITY_TYPES map supports "crar" (Phase 9). */}
       <div className="print:hidden">
         <WorkflowHistoryPanel moduleName="crar" recordId={crarId} />
       </div>

@@ -157,14 +157,14 @@ export const warrantyTriageOutputSchema = z.object({
   rationale: z.string(),
 });
 
-/** Phase 8 — "AI-assisted inspection notes." confidence mirrors every other structured-suggestion pipeline's own 0-1 field (see AiStructuredSuggestion.tsx's shared confidence-bar rendering). */
+/** "AI-assisted inspection notes." confidence mirrors every other structured-suggestion pipeline's own 0-1 field (see AiStructuredSuggestion.tsx's shared confidence-bar rendering). */
 export const inspectionNotesOutputSchema = z.object({
   summary: z.string(),
   suggestedDefectCategory: z.string().nullable(),
   confidence: z.number(),
 });
 
-/** Phase 9 — Workflow Actions' generic "ai_suggestion" action kind (see prompts.ts's workflowAiNotePrompt). */
+/** Workflow Actions' generic "ai_suggestion" action kind (see prompts.ts's workflowAiNotePrompt). */
 export const workflowAiNoteOutputSchema = z.object({
   note: z.string(),
   suggestedNextStep: z.string(),

@@ -1,17 +1,8 @@
 import { pgTable, serial, integer, text, timestamp, jsonb, unique } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 
-// Worker Runtime (the last of the four "Workforce & Operations Layer"
-// modules — see accuqual-workforce-operations-layer.md): deliberately
-// small, and built ON TOP of `users` rather than duplicating it. This
-// table holds only what `users` doesn't already have (job title, shift,
-// hire date, notes, a lightweight tags field) — department, role, and
-// account status all already live on `users` itself. Assignment/activity
-// is NOT stored here: it's a read-side aggregation over the same
-// per-module `assignedTo`/`ownerId` columns the existing self-service
-// Calendar (`modules/calendar`) already reads, reused rather than
-// duplicated — see `modules/worker/worker.controller.ts`'s
-// `getWorkerActivity`.
+// Extra fields `users` does not have. Department, role, and account status stay on `users`.
+// Assignments are read from each module's assignee column, same as the calendar. See getWorkerActivity.
 
 export const EMPLOYMENT_STATUSES = ["active", "on_leave", "terminated"] as const;
 export type EmploymentStatus = (typeof EMPLOYMENT_STATUSES)[number];

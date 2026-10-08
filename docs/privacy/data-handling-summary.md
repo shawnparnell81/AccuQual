@@ -94,7 +94,7 @@ roles are locked out of every table. This is covered by automated tests that run
 
 See [subprocessors.md](subprocessors.md).
 
-## Known gaps (stated plainly)
+## Known gaps
 
 1. Restore from the database host's own backups is untested, and the uploaded-files folder is not part of the nightly backup (above).
 2. Permanent deletion of the company's data is manual.

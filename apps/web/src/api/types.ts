@@ -89,9 +89,9 @@ export interface Ncr {
   closedAt: string | null;
   /** Process fields, including published documents linked on a step. */
   processData?: Record<string, unknown> | null;
-  /** Phase 8 — real, direct supplier link (previously derived only indirectly via RMA/warranty/supplier-portal links). */
+  /** real, direct supplier link (previously derived only indirectly via RMA/warranty/supplier-portal links). */
   supplierId: number | null;
-  /** Phase 8 — set when auto-created from a rejected/quarantined receiving inspection; not a real FK (see ncr.ts's own schema comment). */
+  /** set when auto-created from a rejected/quarantined receiving inspection; not a real FK (see ncr.ts's own schema comment). */
   receivingLineItemId: number | null;
   /** Plant this issue belongs to. Lists default to the current plant. */
   siteId?: number | null;
@@ -111,7 +111,7 @@ export interface Capa {
   dueDate: string | null;
   /** Real column (capa.ts), same reason as Ncr.closedAt above. */
   closedAt: string | null;
-  /** Phase 8 — set to "receiving_recurrence" when auto-created by receiving's supplier-recurrence escalation; null for every ordinary CAPA. */
+  /** set to "receiving_recurrence" when auto-created by receiving's supplier-recurrence escalation; null for every ordinary CAPA. */
   escalationSource: string | null;
   supplierId: number | null;
   /** Plant this fix belongs to. */
@@ -298,11 +298,11 @@ export interface InventoryMovement {
   /** Caller-supplied, or auto-generated from inventorySettings.lotNumberFormat/serialNumberFormat on receive/produce. */
   lotNumber: string | null;
   serialNumber: string | null;
-  /** Phase 8 — links to a real inventory_lots row when one exists for this item+lot. */
+  /** links to a real inventory_lots row when one exists for this item+lot. */
   lotId: number | null;
 }
 
-/** Phase 8 — the real per-lot/serial ledger (inventoryLots.ts). */
+/** the real per-lot/serial ledger (inventoryLots.ts). */
 export interface InventoryLot {
   id: number;
   itemId: number;
@@ -445,7 +445,7 @@ export interface ErpReceivingLineItem {
   poLineItemId: number;
   quantityReceived: number;
   notes: string | null;
-  /** Phase 8 — the structured receiving workflow state (see erp.ts's schema comment). */
+  /** the structured receiving workflow state (see erp.ts's schema comment). */
   status: ReceivingLineItemStatus;
   lotNumber: string | null;
   serialNumber: string | null;
@@ -630,9 +630,9 @@ export interface CompanyAiConfig {
   hasApiKey: boolean;
   maskedApiKey?: string | null;
   assistantName: string | null;
-  /** Phase 4 — "standard" runs every AI pipeline as normal; "strict" refuses to save any output that fails its own schema check (see ai.guardrails.ts) instead of showing a degraded/malformed result. */
+  /** "standard" runs every AI pipeline as normal; "strict" refuses to save any output that fails its own schema check (see ai.guardrails.ts) instead of showing a degraded/malformed result. */
   safetyMode: "standard" | "strict";
-  /** Phase 4 — "ready" when this company's own key or the platform default is present; "missing" otherwise. There's no "invalid" value: a bad key is rejected at save time (a 400 on PATCH), never stored. */
+  /** "ready" when this company's own key or the platform default is present; "missing" otherwise. There's no "invalid" value: a bad key is rejected at save time (a 400 on PATCH), never stored. */
   keyStatus: "ready" | "missing";
   // BYOK usage limit — see company.aiMonthlyLimit's schema comment for why
   // enforcement itself is computed live from audit trail history, not a
@@ -768,7 +768,7 @@ export interface WorkflowEdge {
   label?: string;
 }
 
-/** Phase 9 — version/versionHistory added for real edit versioning (see workflow.ts's schema comment). */
+/** version/versionHistory added for real edit versioning (see workflow.ts's schema comment). */
 export interface WorkflowDefinition {
   id: number;
   name: string;
@@ -1030,7 +1030,7 @@ export interface QualityInspectionItem {
   result: InspectionItemResult | null;
   createdAt: string;
   updatedAt: string | null;
-  /** Phase 8 — real numeric measurement fields alongside the free-text specification/actualFinding above. */
+  /** real numeric measurement fields alongside the free-text specification/actualFinding above. */
   specMin: string | null;
   specMax: string | null;
   actualValue: string | null;
@@ -1045,7 +1045,7 @@ export interface QualityInspectionReport {
   partMaterialNo: string | null;
   poJobNo: string | null;
   supplierVendor: string | null;
-  /** Phase 8 — real FK/structured fields alongside the free-text ones above (see qualityInspectionReports.ts's schema comment). */
+  /** real FK/structured fields alongside the free-text ones above (see qualityInspectionReports.ts's schema comment). */
   supplierId: number | null;
   receivingLineItemId: number | null;
   defectCategory: DefectCategory | null;
@@ -1708,7 +1708,7 @@ export interface SupplierPortalPerformance {
   ppapApprovalRate: number | null;
 }
 
-/** Phase 7 — GET /supplier-portal/kpis and /suppliers/:id/kpis share this shape. */
+/** GET /supplier-portal/kpis and /suppliers/:id/kpis share this shape. */
 export interface SupplierQualityFactors {
   supplierId: number;
   ncrCount: number;
@@ -1771,7 +1771,7 @@ export interface SupplierRiskSettings {
   responsiveness?: number;
 }
 
-/** Phase 8 — Settings → Receiving; read by erp/receivingAutomation.ts. */
+/** Settings → Receiving; read by erp/receivingAutomation.ts. */
 export interface ReceivingSettings {
   autoCreateNcrOnRejection?: boolean;
   autoCreateNcrOnQuarantine?: boolean;

@@ -87,7 +87,7 @@ Liability under this addendum is subject to the limits in the Agreement **[confi
 and the Agreement conflict about Customer Data, this addendum applies.
 
 ## Annex A — Security measures
-See `data-handling-summary.md`, sections "Separation between customers", "Sign-in and access", "Protection of secrets",
+See `data-handling-summary.md`, sections "One company per installation", "Sign-in and access", "Protection of secrets",
 "Records integrity and audit trail", "Data in transit and at rest", and "Logging and monitoring".
 
 ## Annex B — Subprocessors

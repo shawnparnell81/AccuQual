@@ -4,15 +4,8 @@ import { suppliers } from "./supplier.js";
 import { erpReceivingLineItems } from "./erp.js";
 
 /**
- * Quality Inspection Report — the second of the two forms reported as real
- * gaps in the "ACCUQUAL Forms" batch review (see accuqual-qms-forms-batch
- * memory's "Inspection Forms" gap), now supplied as a real HTML mockup.
- * Built bespoke rather than on the generic QMS Simple Form engine for the
- * same reason as ScarForm — its header fields don't match that engine's
- * fixed shape — but its "Inspection Checklist & Measured Results" section
- * IS a real freely-addable table (unlike SCAR's fixed-row sections), so it
- * gets a real child table (qualityInspectionItems), the same pattern
- * DocumentChangeRequest's own child tables use.
+ * Header fields do not match the simple-form engine, so this table is its own.
+ * The checklist is addable, so rows live in `qualityInspectionItems`.
  */
 export const qualityInspectionReports = pgTable("quality_inspection_reports", {
   id: serial("id").primaryKey(),
@@ -26,7 +19,7 @@ export const qualityInspectionReports = pgTable("quality_inspection_reports", {
   totalQuantity: text("total_quantity"),
   sampleSize: text("sample_size"),
   finalStatus: text("final_status"), // accepted | rejected | rework_required | accepted_via_deviation
-  // Phase 8 — real FK/structured fields added ALONGSIDE the free-text ones
+  // real FK/structured fields added ALONGSIDE the free-text ones
   // above (supplierVendor/poJobNo/batchLotNo stay as-is, never repurposed,
   // for backward compatibility with every report entered before this
   // phase): supplierId/receivingLineItemId let a receiving inspection
@@ -57,7 +50,7 @@ export const qualityInspectionItems = pgTable("quality_inspection_items", {
   specification: text("specification"),
   actualFinding: text("actual_finding"),
   result: text("result"), // pass | fail
-  // Phase 8 — real numeric measurement fields alongside the free-text
+  // real numeric measurement fields alongside the free-text
   // specification/actualFinding above (kept as-is: a spec is often prose,
   // e.g. "per drawing rev C", not always a numeric range) — filled in only
   // when the checklist row actually has a measurable numeric result.

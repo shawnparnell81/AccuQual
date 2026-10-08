@@ -95,14 +95,8 @@ export interface NavLeaf {
   /** Sheet's Notes column, shown as a hover tooltip. */
   notes: string;
   /**
-   * Phase 1 System-menu cleanup (buyer evaluation: "admin config buried
-   * inside the everyday System menu"). Only meaningful for the System
-   * catch-all group (department: null) — every department-owned leaf stays
-   * in one flat dropdown as before. "advanced" items are seeded hidden by
-   * default for every company (see db/defaultNavPreferences.ts /
-   * backfillNavPreferences.ts) — an administrator can still turn any of them
-   * back on from Settings > Navigation, same toggle every other nav item
-   * already uses.
+   * System group only. "advanced" items start hidden (defaultNavPreferences.ts).
+   * An admin can show them under Settings > Navigation.
    */
   section?: "admin" | "quality" | "advanced";
 }
@@ -332,17 +326,8 @@ export const PRODUCTION_LOG: NavLeaf = {
   notes: "Read-only in Production; editable in Customer Service",
 };
 
-// PPAP and APQP are two distinct rows in the sheet, but the app currently
-// ships one combined page for both — see ASSUMPTIONS. Phase 1 cleanup
-// (buyer evaluation finding "Unnecessary features"): these used to be two
-// separate nav entries both pointing at the exact same /ppap route, reading
-// as a duplicate-menu-item bug rather than two real destinations. Nothing
-// in the actual PPAP route or page ever checks the separate "apqp"
-// ResourceKey (confirmed by reading both) — it's a real, distinct
-// permission an administrator could still grant in Roles & Permissions, but
-// there's no second page for it to gate — so merging the nav down to one
-// leaf loses no real access, just the redundant menu row. Revert this back
-// to two leaves the moment a dedicated APQP page actually exists.
+// One page for both. The sheet lists them separately, and `apqp` is still a
+// permission, but nothing on /ppap checks it. Split the nav when APQP has its own page.
 const PPAP: NavLeaf = {
   key: "ppap",
   label: "PPAP / APQP",
@@ -588,7 +573,7 @@ export const NAV_STRUCTURE: NavGroup[] = [
         notes: "Not in the department sheet — visible to every department, same as AI Insights/Workflow Builder; POST /onboarding/ai-generate has no department gate either",
         section: "quality",
       },
-      // Phase 10 — these 6 separate leaves (Company Branding/Templates/AI
+      // these 6 separate leaves (Company Branding/Templates/AI
       // Config/AI Usage/Digital Twin Setup/Roles & Permissions) collapsed
       // into ONE "Admin Console" entry: the pages themselves are unchanged
       // (each still has its own AdminOnlyGuard + real requireRole("admin")

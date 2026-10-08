@@ -67,7 +67,7 @@ export const movementSchema = z
     // inventory.service.ts's applyMovement.
     lotNumber: z.string().max(100).optional(),
     serialNumber: z.string().max(100).optional(),
-    // Phase 8 — ties this movement to a real inventory_lots row (see that
+    // ties this movement to a real inventory_lots row (see that
     // schema's own comment); optional, since most items still aren't
     // lot-tracked.
     lotId: z.coerce.number().int().optional(),

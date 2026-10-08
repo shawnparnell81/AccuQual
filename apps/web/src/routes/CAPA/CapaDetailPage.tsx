@@ -39,23 +39,13 @@ export function CapaDetailPage() {
   const { data: capa, isLoading, isError } = capaHooks.useOne(capaId);
   useSetAssistantContext("capa", capaId, `CAPA #${capaId}`);
   const updateCapa = capaHooks.useUpdate();
-  // Sprint 2 fix — Open -> In Progress now has a real dedicated, guarded
-  // endpoint (POST /capa/:id/start), same as verify/close below, instead of
-  // the generic PATCH this used to go through.
   const startAction = useWorkflowAction("capa", "start", { successMessage: "CAPA started.", invalidateKeys: historyKey });
   const verifyAction = useWorkflowAction("capa", "verify", { successMessage: "Verification recorded.", invalidateKeys: historyKey });
   const closeAction = useWorkflowAction("capa", "close", { successMessage: "CAPA closed.", invalidateKeys: historyKey });
   const [verification, setVerification] = useState("");
   const [verificationTouched, setVerificationTouched] = useState(false);
-  // Phase 11 bug fix — this field was write-only local draft state with no
-  // hydration from the record at all: a CAPA already verified (status
-  // "verifying" or "closed") showed an empty box here forever, even though
-  // capa.verification really does hold the submitted text (confirmed live —
-  // every other field on this page binds directly to the record; this was
-  // the one exception). Kept as separate local state rather than switching
-  // to the direct capa.X-binding pattern those other fields use, since
-  // verification submits through its own /capa/:id/verify transition
-  // endpoint, not a plain PATCH-on-every-keystroke.
+  // Local draft because verify posts to /capa/:id/verify, not a field PATCH.
+  // Seed it from the saved note so a verifying or closed CAPA is not a blank box.
   useEffect(() => {
     if (capa?.verification) setVerification(capa.verification);
   }, [capa?.verification]);

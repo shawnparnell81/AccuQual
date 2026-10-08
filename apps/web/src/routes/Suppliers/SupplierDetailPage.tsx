@@ -125,7 +125,7 @@ export function SupplierDetailPage() {
   const costing = useSupplierCosting(supplierId);
   const historyKey: unknown[][] = [["workflow-history", "suppliers", supplierId]];
 
-  // Phase 7 — Supplier Quality Risk Score + KPIs (see supplier.qualityRisk.ts).
+  // Supplier Quality Risk Score + KPIs (see supplier.qualityRisk.ts).
   const riskQueryKey = ["suppliers", supplierId, "risk-score"];
   const { data: riskScore, isLoading: riskLoading } = useQuery<SupplierRiskScoreWithTrend>({
     queryKey: riskQueryKey,

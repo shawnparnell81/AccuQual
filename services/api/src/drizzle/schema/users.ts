@@ -32,7 +32,7 @@ export const users = pgTable("users", {
   supplierId: integer("supplier_id").references(() => suppliers.id),
   tokenVersion: integer("token_version").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
-  // Phase 7 — Supplier Portal health indicators ("last supplier login").
+  // Supplier Portal health indicators ("last supplier login").
   // Stamped by auth.service.ts's login() on every successful login, any
   // role — not supplier-specific at the column level, but the only
   // consumer today is the Supplier Portal / internal Supplier health-

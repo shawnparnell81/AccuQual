@@ -1,4 +1,4 @@
-// Phase 1 task 2: remove the leftover manual/exploratory test SKUs found in
+// Remove leftover manual test SKUs found in
 // the real demo company's Inventory list (TEST-CHANGED-COUNT, REORDER-TEST,
 // FALLBACK-TEST, PERF-TEST — id 6/7/8/9). Unlike the 26 automated-test
 // companies (scripts/cleanup-test-companies.ts), these live inside the ONE real

@@ -1,5 +1,5 @@
 /**
- * Phase 11 — a shared date-formatting convention. Before this, ~51 files
+ * a shared date-formatting convention. Before this, ~51 files
  * called `toLocaleDateString()`/`toLocaleString()` directly with no shared
  * options, producing genuinely different formats across the app (bare
  * digit-only "9/16/2026" on most list pages vs. a full locale timestamp on

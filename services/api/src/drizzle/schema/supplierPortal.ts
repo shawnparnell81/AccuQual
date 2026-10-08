@@ -160,7 +160,7 @@ export const supplierMessages = pgTable("supplier_messages", {
   senderUserId: integer("sender_user_id").references(() => users.id),
   body: text("body").notNull(),
   attachment: jsonb("attachment").$type<StoredFile | null>(),
-  // Phase 7 — one lightweight tag on top of the plain chat-thread shape
+  // one lightweight tag on top of the plain chat-thread shape
   // above: `category` groups a message as a follow-up/request/response
   // (default "message" — an ordinary chat line, not one of those three);
   // `aiDrafted` is a client-asserted flag (only the composer knows whether

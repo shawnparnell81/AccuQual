@@ -5,7 +5,7 @@ import { consumeStream } from "./redis-consumer.js";
 import { startHeartbeat } from "./heartbeat.js";
 import { db, workflowDefinitions, workflowRuns } from "./db.js";
 import { executeWorkflow, WorkflowNodeError, type WorkflowDefinition } from "../../../services/api/src/modules/workflow/workflow-engine.js";
-// Phase 9 — registers the real action handlers (send_email, create_ncr,
+// registers the real action handlers (send_email, create_ncr,
 // escalate_capa, ai_suggestion, ...) for THIS process. The API process and
 // this worker are separate Node processes with separate module-level
 // actionRegistry singletons (see workflow-engine.ts) — each must import
@@ -55,7 +55,7 @@ async function handleEvent(fields: Record<string, string>) {
       .returning();
     if (!run) continue;
 
-    // Phase 9 — real action handlers need DB/actor context (see
+    // real action handlers need DB/actor context (see
     // workflowActions.ts's own comment on this __-prefixed convention).
     // This worker has no human actor — a real system-triggered run, not a
     // user's own request — so __performedBy stays undefined (audit trail's

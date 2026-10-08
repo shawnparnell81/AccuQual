@@ -220,7 +220,7 @@ function WarrantyOverview() {
 // ---------------------------------------------------------------------------
 function ProductionReceivingOverview() {
   const { data } = useQuery<ReceivingTrends>({ queryKey: ["reporting", "receiving-trends"], queryFn: async () => (await apiClient.get("/reporting/receiving-trends")).data });
-  // Phase 8 task 9 — previously had a real backend route with no frontend
+  // previously had a real backend route with no frontend
   // widget at all (see reporting.service.ts's own comment); wired in here.
   const { data: inventoryQuality } = useQuery<InventoryQualityTrends>({
     queryKey: ["reporting", "inventory-quality-trends"],
@@ -484,7 +484,7 @@ function ScheduleRecipients({ schedule, people }: { schedule: ReportSchedule; pe
 
 // ---------------------------------------------------------------------------
 // Main page — tab visibility mirrors backend RBAC exactly (same ResourceKey
-// each tab's own data is gated by), per Phase 6 task 5's "permission-based
+// each tab's own data is gated by), per "permission-based
 // visibility for dashboards".
 // ---------------------------------------------------------------------------
 const TABS = [

@@ -3,30 +3,18 @@ import { users } from "./users.js";
 import { suppliers } from "./supplier.js";
 
 /**
- * Supplier Corrective Action Request (SCAR) — one of the two forms reported
- * as real gaps in the "ACCUQUAL Forms" batch review (see
- * accuqual-qms-forms-batch memory), now supplied as a real HTML mockup and
- * built bespoke rather than on the generic QMS Simple Form engine: its
- * header fields (SCAR Number/Date Issued/Supplier Name/etc.) don't match
- * that engine's fixed Form No./Revision/Prepared By shape, its Root Cause
- * section is 5 single fields (not a table), and its CAPA/Sign-off sections
- * are FIXED-label rows (3 and 2 respectively, never user-addable) — so
- * they're flattened into plain columns here rather than a child table,
- * same reasoning DocumentChangeRequest used a real child table only where
- * the source document actually had a freely-addable table.
- *
- * status is NOT one of the source mockup's own fields (it has no
- * draft/active/obsolete concept) — added anyway (open/closed) as a small,
- * defensible interpretation call, matching every other real module in this
- * app having a real status to filter/list by; flagged to the user rather
- * than silently assumed away.
+ * Internal SCAR sheet. Not the generic simple-form engine: the header does not
+ * match Form No. / Revision / Prepared By, root cause is five fields, and the
+ * CAPA and sign-off rows are fixed labels (3 and 2), so they are columns.
+ * A child table is only used where the source sheet has a freely addable table.
+ * `status` (`open` / `closed`) is not on the source sheet. The list filters on it.
  */
 export const scarForms = pgTable("scar_forms", {
   id: serial("id").primaryKey(),
   scarNumber: text("scar_number"),
   dateIssued: timestamp("date_issued"),
   supplierName: text("supplier_name"),
-  // Phase 7 — the free-text supplierName above predates any real link to
+  // the free-text supplierName above predates any real link to
   // this app's own suppliers table; this nullable FK is added alongside it
   // (not a replacement) so existing SCARs and any future one still typed in
   // free-text both keep working, while a real supplier link lets the

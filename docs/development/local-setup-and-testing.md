@@ -5,7 +5,7 @@ This is the guide for working on AccuQual on a development machine — which
 deploying to Render/Supabase, see `DEPLOY.md`. For rotating a credential
 that's already in use, see `docs/operations/credential-rotation.md`.
 
-## The three `.env` files — the gotcha that costs the most time
+## The three `.env` files
 
 There are three separate `.env` files, and it is easy to run a script
 against the wrong database without any error telling you so.
@@ -16,11 +16,10 @@ against the wrong database without any error telling you so.
 | `services/api/.env` | Any script run directly with `npx tsx ...` or `npm run ...` **from inside `services/api`** (dotenv loads the nearest `.env` to the working directory) | **Local Docker Postgres**, `localhost:5433/accuqual` |
 | `apps/web/.env` | Vite dev server / build | `VITE_API_BASE_URL=http://localhost:3000` — just where the frontend calls the API |
 
-The trap: `cd services/api && npx tsx src/db/someScript.ts` silently uses
-the **local** database, not Supabase, because `dotenv/config` loads
-whichever `.env` is nearest. If you meant to run something against
-Supabase (the database the running containers actually use), you have to
-override it explicitly:
+`cd services/api && npx tsx src/db/someScript.ts` uses the local
+database, not Supabase, because `dotenv/config` loads whichever `.env` is
+nearest. To run the same script against Supabase (the database the
+containers use), override it:
 
 ```bash
 # from the repo root
@@ -28,10 +27,10 @@ export DATABASE_URL="$(grep -E '^DATABASE_URL=' .env | cut -d= -f2-)"
 cd services/api && npx tsx some-script.mts
 ```
 
-**Always print the masked host before running anything that writes** —
-`echo $DATABASE_URL | sed -E 's#://[^@]*@#://***@#'` — and confirm it says
+Print the masked host before anything that writes:
+`echo $DATABASE_URL | sed -E 's#://[^@]*@#://***@#'`. Confirm it says
 `aws-0-us-east-1.pooler.supabase.com` (Supabase) or `localhost:5433`
-(local), whichever you meant.
+(local).
 
 ## Running the app
 
@@ -42,8 +41,8 @@ docker compose ps             # everything should show "Up"
 
 - Web: http://localhost:5183
 - API: http://localhost:3000 (health check: `/health`)
-- The containers use the **root** `.env`, i.e. Supabase — there is no
-  "fully offline" local mode. See the note at the end of this file.
+- The containers use the root `.env`, which points at Supabase. There is
+  no fully offline local mode. See the end of this file.
 
 To rebuild after a code change:
 

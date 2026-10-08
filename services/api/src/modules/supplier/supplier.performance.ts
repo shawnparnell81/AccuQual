@@ -20,7 +20,7 @@ export interface SupplierPerformance {
   belowMinAlertCount: number;
   riskScore: "low" | "medium" | "high" | "no_data";
   riskPoints: number;
-  // Phase 7 — % of matched sent-request/receive pairs that arrived at or
+  // % of matched sent-request/receive pairs that arrived at or
   // under OVERDUE_PENDING_THRESHOLD_DAYS; null with the same "no matched
   // pairs yet" meaning as deliveryTimeliness.avgDays being null. Feeds the
   // Supplier Quality Risk Score's delivery factor and the Supplier Portal's
