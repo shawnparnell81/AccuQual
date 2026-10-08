@@ -335,4 +335,8 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   fai: { quality: "edit", engineering: "edit" },
   // Nobody receives this until an administrator assigns it on Roles & Permissions.
   legal_hold: {},
+  // Form Builder. Quality and Engineering can create forms and edit their
+  // structure. An administrator can change either department, or grant the
+  // same module on a custom role. Filling a published copy follows Documents.
+  form_builder: { quality: "edit", engineering: "edit" },
 };

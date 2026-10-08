@@ -4,12 +4,15 @@ export interface RecordSurface {
   kind: RecordSurfaceKind;
   /** Permission module. "any" means every signed-in user can already edit this page. */
   access: string;
+  /** The page-level Edit button. A form can still print when this is false. */
+  edit?: boolean;
 }
 
 interface SurfaceRule {
   test: RegExp;
   kind: RecordSurfaceKind;
   access: string;
+  edit?: boolean;
 }
 
 const RULES: SurfaceRule[] = [
@@ -46,11 +49,13 @@ const RULES: SurfaceRule[] = [
   { test: /^\/management-system\/management-review$/, kind: "form", access: "management_review" },
   { test: /^\/management-system\/context$/, kind: "form", access: "context_of_org" },
   { test: /^\/pareto$/, kind: "form", access: "any" },
+  { test: /^\/form-builder\/fills\/\d+$/, kind: "form", access: "documents", edit: false },
+  { test: /^\/form-builder\/template\/\d+$/, kind: "form", access: "documents", edit: false },
 ];
 
 export function recordSurface(pathname: string): RecordSurface | null {
   const path = pathname.split("?")[0] ?? pathname;
   const rule = RULES.find((item) => item.test.test(path));
   if (!rule) return null;
-  return { kind: rule.kind, access: rule.access };
+  return { kind: rule.kind, access: rule.access, ...(rule.edit === false ? { edit: false as const } : {}) };
 }

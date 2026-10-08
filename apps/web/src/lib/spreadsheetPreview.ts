@@ -239,6 +239,101 @@ function readCsv(data: ArrayBuffer, fileName: string): SpreadsheetBook {
   return { sheets: [gridFromRows(title, parseCsv(text))] };
 }
 
+export interface EditableImportCell {
+  text: string;
+  formula?: string;
+  rowSpan: number;
+  colSpan: number;
+  style: CellStyle;
+}
+
+export interface EditableImportSheet {
+  name: string;
+  rows: Array<Array<EditableImportCell | null>>;
+  colWidths: number[];
+  rowHeights: number[];
+}
+
+function formulaText(value: ExcelJS.CellValue): string | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  if ("formula" in value && typeof value.formula === "string" && value.formula) return value.formula;
+  if ("sharedFormula" in value && typeof value.sharedFormula === "string" && value.sharedFormula) return value.sharedFormula;
+  return undefined;
+}
+
+function editableFromWorksheet(ws: ExcelJS.Worksheet): EditableImportSheet {
+  let bottom = Math.max(ws.actualRowCount, ws.rowCount, 1);
+  let right = Math.max(ws.actualColumnCount, ws.columnCount, 1);
+  const merges = (ws.model?.merges ?? []).map(parseMerge).filter((span): span is NonNullable<typeof span> => span !== null);
+  for (const merge of merges) {
+    bottom = Math.max(bottom, merge.bottom);
+    right = Math.max(right, merge.right);
+  }
+  bottom = Math.min(bottom, MAX_PREVIEW_ROWS);
+  right = Math.min(right, 30);
+  const covered = new Set<string>();
+  const spans = new Map<string, Span>();
+  for (const merge of merges) {
+    if (merge.top > bottom || merge.left > right) continue;
+    const rowSpan = Math.min(merge.bottom, bottom) - merge.top + 1;
+    const colSpan = Math.min(merge.right, right) - merge.left + 1;
+    spans.set(`${merge.top},${merge.left}`, { row: merge.top, col: merge.left, rowSpan, colSpan });
+    for (let r = merge.top; r <= Math.min(merge.bottom, bottom); r += 1) {
+      for (let c = merge.left; c <= Math.min(merge.right, right); c += 1) {
+        if (r === merge.top && c === merge.left) continue;
+        covered.add(`${r},${c}`);
+      }
+    }
+  }
+  const rows: Array<Array<EditableImportCell | null>> = [];
+  const rowHeights: number[] = [];
+  for (let r = 1; r <= bottom; r += 1) {
+    const height = ws.getRow(r).height;
+    rowHeights.push(Math.round((height && height > 0 ? height : 15) * 1.33));
+    const line: Array<EditableImportCell | null> = [];
+    for (let c = 1; c <= right; c += 1) {
+      if (covered.has(`${r},${c}`)) {
+        line.push(null);
+        continue;
+      }
+      const cell = ws.getCell(r, c);
+      const span = spans.get(`${r},${c}`);
+      const formula = formulaText(cell.value);
+      line.push({
+        text: formula ? plainValue(cell.value, cell.numFmt) : plainValue(cell.value, cell.numFmt),
+        formula,
+        rowSpan: span?.rowSpan ?? 1,
+        colSpan: span?.colSpan ?? 1,
+        style: cellStyle(cell),
+      });
+    }
+    rows.push(line);
+  }
+  const colWidths: number[] = [];
+  for (let c = 1; c <= right; c += 1) colWidths.push(columnWidthPx(ws.getColumn(c).width));
+  return { name: ws.name || "Sheet", rows, colWidths, rowHeights };
+}
+
+/** Same workbook reader as the preview, keeping formulas so a built form can recalculate them. */
+export async function loadEditableSpreadsheet(data: ArrayBuffer, fileName: string): Promise<EditableImportSheet[]> {
+  const name = fileName.toLowerCase();
+  if (name.endsWith(".csv") || name.endsWith(".xls")) {
+    const book = await loadSpreadsheet(data, fileName);
+    return book.sheets.map((sheet) => ({
+      name: sheet.name,
+      colWidths: sheet.colWidths,
+      rowHeights: sheet.rows.map(() => 22),
+      rows: sheet.rows.map((row) => row.map((cell) => (cell ? { text: cell.text, rowSpan: cell.rowSpan, colSpan: cell.colSpan, style: cell.style } : null))),
+    }));
+  }
+  const ExcelJS = await excelModule();
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(data as never);
+  const sheets = workbook.worksheets.filter((sheet) => sheet.state !== "veryHidden").map(editableFromWorksheet);
+  if (sheets.length === 0) throw new Error("This spreadsheet has no sheets to show.");
+  return sheets;
+}
+
 /** Reads `.xlsx`, legacy `.xls`, or `.csv` into a grid the preview can draw. */
 export async function loadSpreadsheet(data: ArrayBuffer, fileName: string): Promise<SpreadsheetBook> {
   const name = fileName.toLowerCase();

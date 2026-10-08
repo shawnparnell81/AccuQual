@@ -54,7 +54,7 @@ describe("sidebar hierarchy", () => {
     assert.equal(folderLinks.length, 2);
     assert.deepEqual(
       quality.children.map((child) => child.label),
-      [...QUALITY_LABELS, "PPAP Packet", "Risk dashboard", "Process Change", "Engineering Planner", "Workflow Builder", "AI Insights"],
+      [...QUALITY_LABELS, "PPAP Packet", "Risk dashboard", "Process Change", "Engineering Planner", "Workflow Builder", "Form Builder", "AI Insights"],
     );
     for (const label of QUALITY_LABELS) {
       assert.equal(control.children.some((child) => child.label === label), false, label);

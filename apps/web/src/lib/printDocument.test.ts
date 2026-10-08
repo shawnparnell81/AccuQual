@@ -65,6 +65,12 @@ describe("print document", () => {
     assert.equal(offersScreenPrint("/calibration/master-list"), true);
     assert.equal(offersScreenPrint("/blank-forms"), false);
     assert.equal(offersScreenPrint("/documents/folders"), false);
+    assert.equal(offersScreenPrint("/form-builder/1"), false);
+    assert.equal(offersScreenPrint("/form-builder"), false);
+    assert.equal(offersScreenPrint("/form-builder/fills/1"), true);
+    assert.equal(offersScreenPrint("/form-builder/template/4"), true);
+    assert.equal(offersScreenPrint("/ncr/9"), true);
+    assert.equal(offersScreenPrint("/workflow"), false);
   });
 
   it("prints a PDF or image upload, and an Office file only when a PDF rendition exists", () => {

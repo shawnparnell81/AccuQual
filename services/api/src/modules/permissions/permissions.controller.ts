@@ -19,7 +19,7 @@ import {
   type ResourceKey,
 } from "../../middleware/departmentAccess.js";
 import { hierarchyLevelForRoleName, moveRank } from "../roles/roleHierarchy.js";
-import { isFullAccessRole } from "../roles/roleAccess.js";
+import { FORM_BUILDER_PERMISSION, isFullAccessRole } from "../roles/roleAccess.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { AppError } from "../../utils/appError.js";
 import { recordAuditTrail } from "../audit-trail/audit-trail.service.js";
@@ -43,8 +43,16 @@ export const getMyEffectivePermissionsHandler = asyncHandler(async (req: Request
   // Not a grantable module. The Admin menu row reads this so it does not keep its own role list.
   // Roles & Permissions still lists only VISIBLE_RESOURCE_KEYS.
   const adminConsole = isFullAccessRole(user.roleName) ? "edit" : "none";
-  res.json({ ...Object.fromEntries(entries), admin_console: adminConsole });
+  const effective = Object.fromEntries(entries) as Record<string, AccessLevel>;
+  if (await roleHasFormBuilderPermission(db, user.roleName)) effective.form_builder = "edit";
+  res.json({ ...effective, admin_console: adminConsole });
 });
+
+async function roleHasFormBuilderPermission(db: Db, roleName: string | null): Promise<boolean> {
+  if (!roleName) return false;
+  const [role] = await db.select({ permissions: roles.permissions }).from(roles).where(eq(roles.name, roleName));
+  return (role?.permissions ?? []).includes(FORM_BUILDER_PERMISSION);
+}
 
 // ---------------------------------------------------------------------------
 // Department Access grid — admin only
@@ -326,7 +334,8 @@ export const getUserEffectivePermissionsHandler = asyncHandler(async (req: Reque
         getUserAccessLevel(db, targetUser, moduleName),
         getDepartmentAccessLevel(db, targetUser.department as Department | null, moduleName),
       ]);
-      return { moduleName, label: MODULE_LABELS[moduleName], departmentLevel, effectiveLevel };
+      const withRole = moduleName === "form_builder" && (await roleHasFormBuilderPermission(db, targetUser.roleName)) ? "edit" : effectiveLevel;
+      return { moduleName, label: MODULE_LABELS[moduleName], departmentLevel, effectiveLevel: withRole };
     })
   );
   res.json({ userId: targetUser.id, email: targetUser.email, department: targetUser.department, roleName: targetUser.roleName, breakdown });

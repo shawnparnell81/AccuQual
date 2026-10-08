@@ -1,0 +1,104 @@
+.fb-grid {
+  border-collapse: collapse;
+  background: #fff;
+  color: #1a1a1a;
+  font-size: 12px;
+}
+.fb-grid th,
+.fb-grid td {
+  border: 1px solid #d0d5dd;
+  padding: 0;
+  position: relative;
+}
+.fb-grid th {
+  background: #f2f4f7;
+  color: #475467;
+  font-weight: 600;
+  text-align: center;
+  height: 22px;
+  font-size: 11px;
+}
+.fb-grid td.fb-selected {
+  outline: 2px solid #0a3c7b;
+  outline-offset: -2px;
+  z-index: 1;
+}
+.fb-grid input,
+.fb-grid textarea {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 2px 4px;
+  resize: none;
+}
+.fb-grid .fb-read {
+  display: block;
+  min-height: 100%;
+  padding: 2px 4px;
+  white-space: pre-wrap;
+}
+.fb-doc {
+  min-height: 640px;
+  outline: none;
+}
+.fb-doc h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+.fb-doc h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 12px 0 6px;
+}
+.fb-doc p {
+  margin: 0 0 8px;
+}
+.fb-doc table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+}
+.fb-doc td,
+.fb-doc th {
+  border: 1px solid #1a1a1a;
+  padding: 4px 6px;
+}
+.fb-inline-field {
+  display: inline-block;
+  min-width: 8rem;
+  border-bottom: 1px solid #0a3c7b;
+  padding: 0 4px;
+  color: #0a3c7b;
+}
+.aq-page-break {
+  border-top: 1px dashed #98a2b3;
+  margin: 16px 0;
+  break-after: page;
+  page-break-after: always;
+}
+.fb-note {
+  margin-top: 0;
+  font-size: 12px;
+  color: rgba(26, 26, 26, 0.7);
+}
+.fb-field {
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  color: #1a1a1a;
+  border-radius: 4px;
+  padding: 8px;
+}
+.fb-field input,
+.fb-field textarea,
+.fb-field select {
+  width: 100%;
+  border: 1px solid #d0d5dd;
+  border-radius: 4px;
+  padding: 4px 6px;
+  background: #fff;
+  color: #1a1a1a;
+}

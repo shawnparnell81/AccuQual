@@ -145,8 +145,11 @@ export const BLANK_FORMS_TEMPLATES_FOLDER = "Blank Forms Templates";
 /** Explorer shortcut that starts a fresh copy of one blank. */
 export const BLANK_TEMPLATE_START_PREFIX = "/blank-forms/start/";
 
+/** A form built in the app. Opening it starts a fresh copy and does not change the template. */
+export const BUILT_FORM_TEMPLATE_PREFIX = "/form-builder/template/";
+
 export function isBlankTemplateLink(linkedPath: string | null | undefined): boolean {
-  return typeof linkedPath === "string" && linkedPath.startsWith(BLANK_TEMPLATE_START_PREFIX);
+  return typeof linkedPath === "string" && (linkedPath.startsWith(BLANK_TEMPLATE_START_PREFIX) || linkedPath.startsWith(BUILT_FORM_TEMPLATE_PREFIX));
 }
 
 /** Folder Explorer opened on Blank Forms Templates. */

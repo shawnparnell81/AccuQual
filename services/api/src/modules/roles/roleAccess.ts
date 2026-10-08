@@ -2,6 +2,9 @@
 
 export const IMPORT_DATA_PERMISSION = "import_data";
 
+/** Create forms and edit their structure. Filling a copy does not use this. Owner and Administrator are not listed; they already have full access. */
+export const FORM_BUILDER_PERMISSION = "form_builder";
+
 /** Lets an Owner or Administrator return a document from Obsolete / Archive. Other roles never can. */
 export const RESTORE_ARCHIVED_DOCUMENTS = "restore_archived_documents";
 

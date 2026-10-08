@@ -57,6 +57,7 @@ export const ENTITY_TYPE_TO_RESOURCE: Record<string, ResourceKey> = {
   NCR: "ncr",
   "ISO form": "documents",
   "Validation Report": "documents",
+  BuiltForm: "form_builder",
   "PPAP package": "ppap",
   PurchaseOrder: "erp",
   PurchaseRequisition: "purchase_requisitions",
