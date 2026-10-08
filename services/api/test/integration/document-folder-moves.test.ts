@@ -230,4 +230,38 @@ describe("ISO main folders and moving what is already filed", () => {
     const [marked] = await db.select({ profile: company.profile }).from(company);
     expect(marked?.profile?.isoMainFoldersReady).toBe(true);
   });
+
+  it("does not rebuild the tree on a later load, and moves a folder in one quick request", async () => {
+    const first = await request(app).get("/document-folders").set("Authorization", `Bearer ${qualityToken}`);
+    expect(first.status).toBe(200);
+    const before = (first.body as FolderRow[]).map((folder) => folder.id).sort((a, b) => a - b);
+    const listStarted = performance.now();
+    const second = await request(app).get("/document-folders").set("Authorization", `Bearer ${qualityToken}`);
+    const listMs = performance.now() - listStarted;
+    expect(second.status).toBe(200);
+    expect((second.body as FolderRow[]).map((folder) => folder.id).sort((a, b) => a - b)).toEqual(before);
+    expect(listMs).toBeLessThan(300);
+
+    const folders = second.body as FolderRow[];
+    const iso = folders.find((folder) => folder.parentId === null && folder.name === "ISO Compliance Documents")!;
+    const manual = childNamed(folders, iso.id, "Quality Manual")!;
+    const procedures = folders.find((folder) => folder.name === "Procedures" && folder.parentId !== manual.id);
+    expect(procedures).toBeTruthy();
+    const moveStarted = performance.now();
+    const moved = await request(app).patch(`/document-folders/${procedures!.id}`).set("Authorization", `Bearer ${qualityToken}`).send({ parentId: manual.id });
+    const moveMs = performance.now() - moveStarted;
+    expect(moved.status).toBe(200);
+    expect(moved.body.parentId).toBe(manual.id);
+    expect(moveMs).toBeLessThan(300);
+
+    const history = await request(app).get(`/audit-trail/DocumentFolder/${procedures!.id}`).set("Authorization", `Bearer ${qualityToken}`);
+    const line = (history.body as { performedByName?: string; changes?: { summary?: string; event?: string } }[]).find((row) => row.changes?.event === "moved");
+    expect(line?.performedByName).toContain("Shawn Parnell");
+    expect(line?.changes?.summary).toMatch(/Moved the folder "Procedures" from .+ → .+Quality Manual/);
+
+    const after = await request(app).get("/document-folders").set("Authorization", `Bearer ${qualityToken}`);
+    const afterIds = (after.body as FolderRow[]).map((folder) => folder.id).sort((a, b) => a - b);
+    expect(afterIds).toEqual(before);
+    expect((after.body as FolderRow[]).find((folder) => folder.id === procedures!.id)?.parentId).toBe(manual.id);
+  });
 });

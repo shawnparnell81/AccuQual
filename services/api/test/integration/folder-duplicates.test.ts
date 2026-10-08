@@ -1,5 +1,5 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ensureTestCompany } from "../helpers/company.js";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -10,8 +10,10 @@ import { db } from "../../src/db/index.js";
 import { users } from "../../src/drizzle/schema/users.js";
 import { company } from "../../src/drizzle/schema/company.js";
 import { documentFolders } from "../../src/drizzle/schema/documentFolders.js";
+import { documents } from "../../src/drizzle/schema/documents.js";
 import { controlledFormTemplates } from "../../src/drizzle/schema/controlledForms.js";
 import { signAccessToken } from "../../src/utils/jwt.js";
+import { env } from "../../src/config/env.js";
 import { seedDefaultPermissions } from "../helpers/seedDefaults.js";
 
 const app = createApp();
@@ -25,6 +27,7 @@ interface FolderRow {
   linkedPath: string | null;
   pdfPath: string | null;
   documentId: number | null;
+  removedFromLibraryPool?: boolean;
 }
 
 let qualityToken: string;
@@ -168,32 +171,76 @@ describe("one folder in one place, and library pool moves", () => {
     expect(after.find((folder) => folder.id === logs.id)?.parentId).toBe(manual.id);
   });
 
-  it("removes a linked pool item without deleting the record, and deletes an upload that exists only in the pool", async () => {
+  it("takes a pool item off the shelf and keeps the file and the record", async () => {
     const folders = await tree();
     const pool = folders.find((folder) => folder.parentId === null && folder.name === "Library Pool")!;
     const [linked] = await db.insert(documentFolders).values({ name: "Linked report", parentId: pool.id, linkedPath: "/validation-reports/88", sortOrder: 1 }).returning();
-    const dir = await mkdtemp(path.join(tmpdir(), "accuqual-pool-"));
+    const storage = path.resolve(env.STORAGE_LOCAL_PATH);
+    await mkdir(storage, { recursive: true });
+    const dir = await mkdtemp(path.join(storage, "pool-keep-"));
     const filePath = path.join(dir, "orphan.pdf");
-    await writeFile(filePath, "%PDF-1.4 orphan");
-    const [orphan] = await db.insert(documentFolders).values({ name: "Orphan upload", parentId: pool.id, pdfPath: filePath, pdfMimeType: "application/pdf", sortOrder: 2 }).returning();
+    const bytes = Buffer.from("%PDF-1.4 orphan");
+    await writeFile(filePath, bytes);
+    const [record] = await db.insert(documents).values({ title: `Pool record ${suffix}` }).returning();
+    const [orphan] = await db
+      .insert(documentFolders)
+      .values({ name: "Orphan upload", parentId: pool.id, pdfPath: filePath, pdfMimeType: "application/pdf", documentId: record!.id, sortOrder: 2 })
+      .returning();
 
     const denied = await request(app).delete(`/document-folders/${linked!.id}/pool`).set("Authorization", `Bearer ${productionToken}`);
     expect(denied.status).toBe(403);
 
     const unassigned = await request(app).delete(`/document-folders/${linked!.id}/pool`).set("Authorization", `Bearer ${qualityToken}`);
     expect(unassigned.status).toBe(204);
-    const deletedUpload = await request(app).delete(`/document-folders/${orphan!.id}/pool`).set("Authorization", `Bearer ${qualityToken}`);
-    expect(deletedUpload.status).toBe(204);
+    const keptUpload = await request(app).delete(`/document-folders/${orphan!.id}/pool`).set("Authorization", `Bearer ${qualityToken}`);
+    expect(keptUpload.status).toBe(204);
 
     const after = await tree();
-    expect(after.some((folder) => folder.id === linked!.id || folder.id === orphan!.id)).toBe(false);
+    const linkedRow = after.find((folder) => folder.id === linked!.id);
+    const uploadRow = after.find((folder) => folder.id === orphan!.id);
+    expect(linkedRow?.parentId).not.toBe(pool.id);
+    expect(linkedRow?.linkedPath).toBe("/validation-reports/88");
+    expect(linkedRow?.removedFromLibraryPool).toBe(true);
+    expect(uploadRow?.parentId).not.toBe(pool.id);
+    expect(uploadRow?.pdfPath).toBe(filePath);
+    expect(uploadRow?.documentId).toBe(record!.id);
+    expect(uploadRow?.removedFromLibraryPool).toBe(true);
+    expect(after.some((folder) => folder.parentId === pool.id && (folder.id === linked!.id || folder.id === orphan!.id))).toBe(false);
+
+    expect(existsSync(filePath)).toBe(true);
+    expect(await readFile(filePath)).toEqual(bytes);
+    const [stillThere] = await db.select().from(documents).where(eq(documents.id, record!.id));
+    expect(stillThere?.isDeleted).toBe(false);
+    expect(stillThere?.title).toBe(`Pool record ${suffix}`);
+    const download = await request(app).get(`/document-folders/${orphan!.id}/template`).set("Authorization", `Bearer ${qualityToken}`).buffer(true);
+    expect(download.status).toBe(200);
+    expect(Number(download.headers["content-length"])).toBe(bytes.length);
+    expect(Buffer.isBuffer(download.body) ? download.body.equals(bytes) : Buffer.from(download.body).equals(bytes)).toBe(true);
+
+    const byFile = await request(app).get("/search").query({ q: "Orphan upload" }).set("Authorization", `Bearer ${qualityToken}`);
+    expect(byFile.status).toBe(200);
+    expect((byFile.body as { results: { path: string }[] }).results.some((row) => row.path === `/documents/folders?folder=${orphan!.id}`)).toBe(true);
+    const byRecord = await request(app).get("/search").query({ q: `Pool record ${suffix}` }).set("Authorization", `Bearer ${qualityToken}`);
+    expect(byRecord.status).toBe(200);
+    expect((byRecord.body as { results: { path: string }[] }).results.some((row) => row.path === `/documents/${record!.id}`)).toBe(true);
+
+    await db.update(documentFolders).set({ parentId: pool.id }).where(eq(documentFolders.id, orphan!.id));
+    const reloaded = await tree();
+    expect(reloaded.find((folder) => folder.id === orphan!.id)?.parentId).not.toBe(pool.id);
+    const again = await tree();
+    expect(again.some((folder) => folder.parentId === pool.id && folder.id === orphan!.id)).toBe(false);
+    expect(existsSync(filePath)).toBe(true);
+    const [recordAfter] = await db.select().from(documents).where(eq(documents.id, record!.id));
+    expect(recordAfter?.isDeleted).toBe(false);
 
     const linkedHistory = await request(app).get(`/audit-trail/DocumentFolder/${linked!.id}`).set("Authorization", `Bearer ${qualityToken}`);
-    const linkedLine = (linkedHistory.body as { changes?: { summary?: string; keptRecord?: boolean } }[]).find((row) => row.changes?.keptRecord === true);
-    expect(linkedLine?.changes?.summary).toMatch(/left in place/);
+    const linkedLine = (linkedHistory.body as { performedByName?: string; changes?: { summary?: string } }[]).find((row) => row.changes?.summary?.includes("Linked report"));
+    expect(linkedLine?.performedByName).toContain("Shawn Parnell");
+    expect(linkedLine?.changes?.summary).toMatch(/^Removed "Linked report" from the Library Pool\./);
     const orphanHistory = await request(app).get(`/audit-trail/DocumentFolder/${orphan!.id}`).set("Authorization", `Bearer ${qualityToken}`);
-    const orphanLine = (orphanHistory.body as { changes?: { summary?: string; keptRecord?: boolean } }[]).find((row) => row.changes?.keptRecord === false);
-    expect(orphanLine?.changes?.summary).toMatch(/uploaded file/);
+    const orphanLine = (orphanHistory.body as { performedByName?: string; changes?: { summary?: string } }[]).find((row) => row.changes?.summary?.includes("Orphan upload"));
+    expect(orphanLine?.performedByName).toContain("Shawn Parnell");
+    expect(orphanLine?.changes?.summary).toMatch(/^Removed "Orphan upload" from the Library Pool\./);
   });
 
   it("does not recreate a deleted main folder, and folds a second nested copy into the one that is left", async () => {

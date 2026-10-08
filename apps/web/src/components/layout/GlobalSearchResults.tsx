@@ -52,7 +52,7 @@ export function GlobalSearchResults({ query, onSelect }: { query: string; onSele
       </p>
       {results.map((r) => (
         <button
-          key={`${r.type}-${r.id}`}
+          key={`${r.type}-${r.id}-${r.path}`}
           onClick={() => {
             rememberRecord({ path: r.path, title: r.label, type: r.type }, user?.id);
             openTab({ path: r.path, title: r.label, icon: TYPE_TO_ICON[r.type] });

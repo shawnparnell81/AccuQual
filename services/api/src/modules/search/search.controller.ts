@@ -10,6 +10,8 @@ import { equipment } from "../../drizzle/schema/calibration.js";
 import { rma } from "../../drizzle/schema/rma.js";
 import { eightD } from "../../drizzle/schema/eightD.js";
 import { documents } from "../../drizzle/schema/documents.js";
+import { documentFolders } from "../../drizzle/schema/documentFolders.js";
+import { company } from "../../drizzle/schema/company.js";
 import { changeRequests } from "../../drizzle/schema/change.js";
 import { riskAssessments } from "../../drizzle/schema/risk.js";
 import { ppapPackages } from "../../drizzle/schema/ppap.js";
@@ -21,6 +23,26 @@ import type { Db } from "../../lib/requestDb.js";
 import { wantsRecordType, type SearchTypeName } from "./searchFilters.js";
 
 const RESULTS_PER_TYPE = 5;
+
+/** A Library Pool item that was taken off the shelf. The file and the record stay searchable. */
+async function searchRemovedPoolFiles(db: Db, q: string): Promise<SearchResult[]> {
+  const needle = q.trim();
+  if (!needle) return [];
+  const [row] = await db.select({ profile: company.profile }).from(company).limit(1);
+  const ids = row?.profile?.libraryPoolRemovedIds ?? [];
+  if (ids.length === 0) return [];
+  const matches = await db
+    .select({ id: documentFolders.id, name: documentFolders.name })
+    .from(documentFolders)
+    .where(and(inArray(documentFolders.id, ids), ilike(documentFolders.name, contains(needle))))
+    .limit(RESULTS_PER_TYPE);
+  return matches.map((match) => ({
+    type: "Document" as const,
+    id: match.id,
+    label: match.name,
+    path: `/documents/folders?folder=${match.id}`,
+  }));
+}
 
 export interface SearchResult {
   type: SearchTypeName;
@@ -314,6 +336,7 @@ export const searchHandler = asyncHandler(async (req: Request, res: Response) =>
           }),
         ),
     );
+    jobs.push(searchRemovedPoolFiles(db, q));
   }
 
   if (includeModule("Training", "company", false, true, false)) {
