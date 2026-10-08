@@ -2,10 +2,13 @@ import { inflateRawSync } from "node:zlib";
 
 /**
  * A usable .docx subset: headings, paragraphs, bold, italic, underline,
- * lists, simple tables, and page breaks. Images, text boxes, comments, and
- * the Word header/footer part are not round-tripped. The app draws its own
- * header (logo, Doc ID, Rev) and page numbers when the form is printed.
+ * lists, simple tables, and page breaks. Header and footer parts round-trip
+ * (text, tables, images, page fields, and first/odd/even variants). The body
+ * still does not carry text boxes or comments. A document with no header or
+ * footer of its own keeps the app header and footer at print time.
  */
+
+import { type DocumentBand, filesForBands, readBands } from "./docxBands.js";
 
 interface HtmlNode {
   tag: string;
@@ -142,7 +145,7 @@ function blockXml(node: HtmlNode | string): string {
   return node.children.map((child) => blockXml(child)).join("");
 }
 
-export function htmlToDocumentXml(html: string, identity?: { docId?: string | null; rev?: string | null }): string {
+export function htmlToDocumentXml(html: string, identity?: { docId?: string | null; rev?: string | null }, sectInner = ""): string {
   const tree = parseHtml(html);
   const head: string[] = [];
   const docId = identity?.docId?.trim();
@@ -150,8 +153,8 @@ export function htmlToDocumentXml(html: string, identity?: { docId?: string | nu
   if (docId || rev) head.push(paragraphXml([{ text: [docId ? `Doc ID: ${docId}` : "", rev ? `Rev: ${rev}` : ""].filter(Boolean).join("    "), bold: true }]));
   const body = tree.children.map((child) => blockXml(child)).join("") || paragraphXml([{ text: "" }]);
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>${head.join("")}${body}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr></w:body>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>${head.join("")}${body}<w:sectPr>${sectInner}<w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr></w:body>
 </w:document>`;
 }
 
@@ -221,11 +224,23 @@ function readZip(buffer: Buffer): Map<string, Buffer> {
   return files;
 }
 
-export function htmlFromDocx(buffer: Buffer): string {
+export interface ImportedDocx {
+  html: string;
+  header: DocumentBand | null;
+  footer: DocumentBand | null;
+}
+
+export function htmlFromDocx(buffer: Buffer): ImportedDocx {
   const files = readZip(buffer);
   const document = files.get("word/document.xml");
   if (!document) throw new Error("That Word file has no document to read.");
-  return documentXmlToHtml(document.toString("utf8"));
+  const bands = readBands(files);
+  return { html: documentXmlToHtml(document.toString("utf8")), header: bands.header, footer: bands.footer };
+}
+
+/** Stored zip. Tests build a Word package the importer can read. */
+export function officePackage(files: { name: string; data: Buffer }[]): Buffer {
+  return zipStore(files);
 }
 
 function crc32(data: Buffer): number {
@@ -277,21 +292,34 @@ function zipStore(files: { name: string; data: Buffer }[]): Buffer {
   return Buffer.concat([...parts, centralBuf, end]);
 }
 
-export async function docxFromHtml(html: string, identity?: { docId?: string | null; rev?: string | null }): Promise<Buffer> {
-  const document = htmlToDocumentXml(html, identity);
+export async function docxFromHtml(
+  html: string,
+  identity?: { docId?: string | null; rev?: string | null },
+  bands?: { header?: DocumentBand | null; footer?: DocumentBand | null },
+): Promise<Buffer> {
+  const extra = filesForBands({ header: bands?.header ?? null, footer: bands?.footer ?? null });
+  const document = htmlToDocumentXml(html, identity, extra.sectInner);
   const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
+  ${extra.contentDefaults}
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  ${extra.contentOverrides}
 </Types>`;
   const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`;
+  const documentRels = extra.relationships
+    ? `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${extra.relationships}</Relationships>`
+    : "";
   return zipStore([
     { name: "[Content_Types].xml", data: Buffer.from(contentTypes) },
     { name: "_rels/.rels", data: Buffer.from(rels) },
     { name: "word/document.xml", data: Buffer.from(document) },
+    ...(documentRels ? [{ name: "word/_rels/document.xml.rels", data: Buffer.from(documentRels) }] : []),
+    ...extra.files,
   ]);
 }

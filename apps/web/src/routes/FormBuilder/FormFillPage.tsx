@@ -6,6 +6,7 @@ import { SaveAsFolderDialog } from "../../components/forms/SaveAsFolderDialog";
 import { useToast } from "../../components/shared/ToastProvider";
 import { extractErrorMessage } from "../../hooks/useWorkflowAction";
 import type { BrowseFolder } from "../../lib/folderBrowse";
+import { bandHasContent } from "../../lib/documentBands";
 import { blankDocument, blankFields, blankGrid, type BuiltStructure, type DocumentFormStructure, type FieldFormStructure, type GridFormStructure } from "../../lib/formGrid";
 import { DocumentFormEditor } from "./DocumentFormEditor";
 import { FieldsFormEditor } from "./FieldsFormEditor";
@@ -82,8 +83,14 @@ export function FormFillPage() {
         <p className="text-sm text-muted-foreground">This is a new copy of revision {fill.data.templateRevision}. The blank template is not changed.</p>
         <button type="button" className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground" onClick={() => setSaveAs(true)}>Save as</button>
       </div>
-      <Paper wide={structure.kind === "grid"}>
-        <FormMasthead formNumber={fill.data.templateFormNumber} revision={fill.data.templateRevision} title={fill.data.title} />
+      <Paper
+        wide={structure.kind === "grid"}
+        docId={structure.kind === "document" ? fill.data.templateFormNumber : undefined}
+        rev={structure.kind === "document" ? fill.data.templateRevision : undefined}
+      >
+        {structure.kind === "document" && bandHasContent(document.header) ? null : (
+          <FormMasthead formNumber={fill.data.templateFormNumber} revision={fill.data.templateRevision} title={fill.data.title} />
+        )}
         {structure.kind === "grid" && (
           <GridFormEditor
             structure={grid}

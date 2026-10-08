@@ -1,6 +1,7 @@
 import { columnLetter } from "./spreadsheetFormat";
 import { displayFormulaValue, evaluateCells, passFailFill, type FormulaValue } from "./excelFormulas";
 import { loadEditableSpreadsheet, type EditableImportSheet } from "./spreadsheetPreview";
+import type { DocumentBand } from "./documentBands";
 
 export interface FormCellStyle {
   bold?: boolean;
@@ -47,6 +48,8 @@ export interface DocumentFormStructure {
   html: string;
   showLogo: boolean;
   showPageNumbers: boolean;
+  header?: DocumentBand | null;
+  footer?: DocumentBand | null;
 }
 
 export type FieldType = "text" | "multiline" | "number" | "date" | "dropdown" | "checkbox" | "yesno" | "table" | "signature" | "photo";
@@ -88,7 +91,7 @@ export function blankGrid(): GridFormStructure {
 }
 
 export function blankDocument(): DocumentFormStructure {
-  return { kind: "document", html: "<h1></h1><p></p>", showLogo: true, showPageNumbers: true };
+  return { kind: "document", html: "<h1></h1><p></p>", showLogo: true, showPageNumbers: true, header: null, footer: null };
 }
 
 export function blankFields(): FieldFormStructure {

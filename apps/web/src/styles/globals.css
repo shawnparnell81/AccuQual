@@ -1898,6 +1898,89 @@ body.side-collapsed .aq-nav-folder-link {
   html.aq-print-landscape {
     page: wide-sheet;
   }
+  @page fb-own-footer {
+    margin: 0.5in;
+    @bottom-right {
+      content: none;
+    }
+  }
+  @page fb-own-both {
+    margin: 0.5in;
+    @bottom-right {
+      content: none;
+    }
+  }
+  html.aq-print-custom-footer {
+    page: fb-own-footer;
+  }
+  html.aq-print-custom-header.aq-print-custom-footer {
+    page: fb-own-both;
+  }
+  html.aq-print-custom-header .aq-doc-head {
+    display: none !important;
+  }
+  html.aq-print-custom-footer .aq-print-footer {
+    display: none !important;
+  }
+  html.aq-print-custom-header .aq-print-sheet,
+  html.aq-print-custom-footer .aq-print-sheet {
+    width: 7.5in !important;
+    max-width: 7.5in !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  .fb-print-flow > thead {
+    display: table-header-group !important;
+  }
+  .fb-print-flow > tfoot {
+    display: table-footer-group !important;
+  }
+  .fb-band-empty,
+  .fb-flow-suppressed {
+    display: none !important;
+  }
+  .fb-page-num::after {
+    content: counter(page);
+  }
+  .fb-page-count::after {
+    content: counter(pages);
+  }
+  .fb-print-page {
+    display: flex;
+    flex-direction: column;
+    width: 7.5in;
+    max-width: 100%;
+    box-sizing: border-box;
+    min-height: 9.2in;
+    break-after: page;
+    page-break-after: always;
+    background: #fff !important;
+    color: #111 !important;
+  }
+  .fb-print-page .fb-doc {
+    min-height: 0;
+  }
+  .fb-print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  .fb-print-page-header,
+  .fb-print-page-footer,
+  .fb-band {
+    color: #111 !important;
+    background: #fff !important;
+  }
+  .fb-print-page-header {
+    border-bottom: 1px solid #111;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+  }
+  .fb-print-page-footer {
+    margin-top: auto;
+    border-top: 1px solid #111;
+    padding-top: 8px;
+  }
 }
 
 .aq-print-footer {

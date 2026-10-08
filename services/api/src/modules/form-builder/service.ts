@@ -15,6 +15,7 @@ import { formatSignatureStamp } from "../signatures/signaturePin.js";
 import { verifySignaturePin } from "../signatures/signaturePin.service.js";
 import { formatUserLabel } from "../users/userDisplay.js";
 import { canEditFormBuilder, canFillBuiltForm, canReadFormBuilder, type FormBuilderAccessInput, type ModuleLevel } from "./access.js";
+import { cleanBand } from "./docxBands.js";
 import { docxFromHtml, htmlFromDocx, sanitizeDocumentHtml } from "./docx.js";
 import { openFillCopy, saveFillAnswers } from "./fillCopy.js";
 import { decideStructureSave, type SaveMode } from "./revision.js";
@@ -94,7 +95,12 @@ function assertStructure(kind: FormKind, structure: unknown) {
   if (!structure || typeof structure !== "object" || Array.isArray(structure)) throw AppError.badRequest("The form structure is missing.");
   const record = structure as { kind?: unknown; html?: unknown };
   if (record.kind !== kind) throw AppError.badRequest("The form structure does not match this form.");
-  if (kind === "document" && typeof record.html === "string") record.html = sanitizeDocumentHtml(record.html);
+  if (kind === "document") {
+    if (typeof record.html === "string") record.html = sanitizeDocumentHtml(record.html);
+    const document = record as { header?: unknown; footer?: unknown };
+    document.header = cleanBand(document.header, sanitizeDocumentHtml);
+    document.footer = cleanBand(document.footer, sanitizeDocumentHtml);
+  }
   const text = JSON.stringify(structure);
   if (text.length > MAX_STRUCTURE) throw AppError.badRequest("That form is too large to save.");
 }
@@ -114,7 +120,7 @@ function blankStructure(kind: FormKind): unknown {
     };
   }
   if (kind === "document") {
-    return { kind: "document", html: "<h1></h1><p></p>", showLogo: true, showPageNumbers: true };
+    return { kind: "document", html: "<h1></h1><p></p>", showLogo: true, showPageNumbers: true, header: null, footer: null };
   }
   return { kind: "fields", sections: [{ id: "general", title: "General" }], fields: [] };
 }
@@ -482,7 +488,12 @@ export async function signBuiltFill(db: Db, actor: Actor, id: number, input: { f
 export async function importDocx(db: Db, actor: Actor, file: Buffer) {
   await requireEditor(db, actor);
   try {
-    return { html: htmlFromDocx(file) };
+    const imported = htmlFromDocx(file);
+    return {
+      html: sanitizeDocumentHtml(imported.html),
+      header: cleanBand(imported.header, sanitizeDocumentHtml),
+      footer: cleanBand(imported.footer, sanitizeDocumentHtml),
+    };
   } catch {
     throw AppError.badRequest("Couldn't read that Word file. A .docx with headings and paragraphs can be imported. Older .doc files cannot.");
   }
@@ -493,8 +504,11 @@ export async function exportDocx(db: Db, actor: Actor, id: number) {
   const [form] = await db.select().from(builtForms).where(eq(builtForms.id, id));
   if (!form) throw AppError.notFound("Form");
   if (form.kind !== "document") throw AppError.badRequest("Only a Word-style document can be downloaded as .docx.");
-  const structure = form.structure as { html?: string };
+  const structure = form.structure as { html?: string; header?: unknown; footer?: unknown };
   const html = typeof structure.html === "string" ? structure.html : "";
-  const bytes = await docxFromHtml(html, { docId: form.formNumber, rev: form.revision });
+  const bytes = await docxFromHtml(html, { docId: form.formNumber, rev: form.revision }, {
+    header: cleanBand(structure.header, sanitizeDocumentHtml),
+    footer: cleanBand(structure.footer, sanitizeDocumentHtml),
+  });
   return { filename: `${form.title || "document"}.docx`, bytes };
 }
