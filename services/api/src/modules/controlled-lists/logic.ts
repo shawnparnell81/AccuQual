@@ -243,14 +243,25 @@ function replaceRevisionText(current: string, revision: string): string {
   return revision;
 }
 
+/** A blank document revision takes the catalog letter. A saved letter, including workbook Rev G, stays. */
+export function coalesceRevision(current: string, catalog: string): string {
+  return current.trim() || catalog;
+}
+
 export function revCells(key: ListKey): { sheet: string; addr: string }[] {
   const spec = LISTS[key];
   return spec.revs ?? [spec.rev];
 }
 
+/** A header cell with no text can take the workbook value. A formula, or any text someone saved, stays. */
+function headerNeedsSeed(cell: StoredCell | undefined): boolean {
+  if (cell?.f) return false;
+  return textOf(cell?.v) === "";
+}
+
 /**
- * Fills header cells that are missing. Cells that are already there stay,
- * including a title, Rev, name, date, or location someone edited.
+ * Fills header cells that are missing or blank: Rev, Owner, Authorized By, Date, and the title.
+ * A value someone already typed stays, even when it differs from the workbook.
  * Column widths and an added column's wider title merge stay as saved.
  */
 function restoreSheetHeader(sheet: StoredSheet, seed: StoredSheet | undefined): StoredSheet {
@@ -259,7 +270,8 @@ function restoreSheetHeader(sheet: StoredSheet, seed: StoredSheet | undefined): 
   const cells = { ...sheet.cells };
   for (const [addr, cell] of Object.entries(seed.cells)) {
     if (parseAddr(addr).row > HEADER_DEPTH) continue;
-    if (cells[addr]) continue;
+    if (!headerNeedsSeed(cells[addr])) continue;
+    if (textOf(cell?.v) === "") continue;
     cells[addr] = { ...cell };
     changed = true;
   }
@@ -288,9 +300,10 @@ function restoreSheetHeader(sheet: StoredSheet, seed: StoredSheet | undefined): 
 }
 
 /**
- * Puts rows 1–3 back to the controlled workbook: title, Doc ID, Rev, location,
- * Approved By / Authorized By / Owner, and Date. An edited name or date is kept.
- * Data rows and the document revision are left alone.
+ * Fills blank cells in rows 1–3 from the controlled workbook: title, Doc ID, Rev,
+ * location, Approved By / Authorized By / Owner, and Date.
+ * An edited name, date, or revision letter is kept. Data rows and the document revision are left alone.
+ * Per-tab letters stay as saved (LST-NCR-001 keeps Rev E / F on the tabs while the workbook revision stays G).
  */
 export function restoreHeaderBlock(key: ListKey, sheets: StoredSheet[]): { sheets: StoredSheet[]; changed: boolean } {
   const seeds = seedBook()[key].sheets;

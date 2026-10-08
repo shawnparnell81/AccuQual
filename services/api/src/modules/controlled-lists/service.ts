@@ -37,6 +37,7 @@ import {
   removeDataRows,
   removeListColumn,
   renameListColumn,
+  coalesceRevision,
   restoreHeaderBlock,
   revCells,
   revisionLetter,
@@ -132,20 +133,25 @@ async function loadRow(db: Db, key: ListKey) {
 
 async function repairStoredHeader(db: Db, key: ListKey, row: { id: number; revision: string; sheets: StoredSheet[] }, userId: number) {
   const restored = restoreHeaderBlock(key, row.sheets);
-  if (!restored.changed) return row;
-  await db.update(controlledLists).set({ sheets: restored.sheets, updatedAt: new Date() }).where(eq(controlledLists.id, row.id));
+  const revision = coalesceRevision(row.revision, LISTS[key].revision);
+  if (!restored.changed && revision === row.revision) return row;
+  await db
+    .update(controlledLists)
+    .set({ sheets: restored.sheets, revision, updatedAt: new Date() })
+    .where(eq(controlledLists.id, row.id));
   const who = await personName(db, userId);
   const spec = LISTS[key];
+  const revisionNote = revision === row.revision ? `Revision stayed ${revision}` : `Revision was blank and is now ${revision}`;
   await recordAuditTrail(db, {
     entityType: "ControlledList",
     entityId: row.id,
     action: "update",
     performedBy: userId,
     changes: {
-      summary: `${who} restored the top header rows on ${spec.docId} from the controlled workbook. Revision stayed ${row.revision}.`,
+      summary: `${who} filled blank header cells on ${spec.docId} from the controlled workbook. Edited header values were left as saved. ${revisionNote}.`,
     },
   });
-  return { ...row, sheets: restored.sheets };
+  return { ...row, sheets: restored.sheets, revision };
 }
 
 async function ensureRow(db: Db, key: ListKey) {

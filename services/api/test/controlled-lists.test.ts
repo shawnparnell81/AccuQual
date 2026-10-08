@@ -17,6 +17,7 @@ import {
   removeDataRows,
   removeListColumn,
   renameListColumn,
+  coalesceRevision,
   restoreHeaderBlock,
   revisionLetter,
   rowsDeletedSummary,
@@ -771,5 +772,64 @@ describe("living controlled lists", () => {
     expect(ncrColumn?.sheets[0]?.cells.A5?.v).toBe("NCR-2026-001");
     expect(restoreHeaderBlock("lst-eng-001", added!.sheets).sheets[0]?.maxCol).toBe(12);
     expect(restoreHeaderBlock("lst-eng-001", added!.sheets).sheets[0]?.cells.H2?.v).toBe("Maxwell Tollefson");
+  });
+
+  it("fills blank header values from the workbook and keeps a value someone already saved", () => {
+    const labName = "LST-GEN-003 - Scope of Laborato";
+    const lab = freshSheets("lst-gen-003");
+    expect(lab[0]?.name).toBe(labName);
+    expect(lab[0]?.cells.D2?.v).toBe("A");
+    expect(lab[0]?.cells.D3?.v).toBe("Maxwell Tollefson");
+    expect(lab[0]?.cells.B3?.v).toBe("2026-07-14");
+    const blankLab = lab.map((sheet) => ({
+      ...sheet,
+      cells: {
+        ...sheet.cells,
+        D2: { ...sheet.cells.D2!, v: "" },
+        D3: { ...sheet.cells.D3!, v: null },
+        B3: { ...sheet.cells.B3!, v: "2026-08-01" },
+      },
+    }));
+    const labFixed = restoreHeaderBlock("lst-gen-003", blankLab);
+    expect(labFixed.changed).toBe(true);
+    expect(labFixed.sheets[0]?.cells.D2?.v).toBe("A");
+    expect(labFixed.sheets[0]?.cells.D3?.v).toBe("Maxwell Tollefson");
+    expect(labFixed.sheets[0]?.cells.B3?.v).toBe("2026-08-01");
+    expect(labFixed.sheets[0]?.cells.A6?.v).toBe(lab[0]?.cells.A6?.v);
+    expect(coalesceRevision("", "A")).toBe("A");
+    expect(coalesceRevision("B", "A")).toBe("B");
+
+    const equipmentName = "LST-EQP-001 - Master Equipment ";
+    const equipment = freshSheets("lst-eqp-001");
+    expect(equipment[0]?.cells.B2?.v).toBe("Rev: A");
+    expect(equipment[0]?.cells.D2?.v).toBe("2026-01-26");
+    expect(equipment[0]?.cells.F2?.v).toBe("Maxwell Tollefson");
+    const blankEquipment = equipment.map((sheet) => ({
+      ...sheet,
+      cells: {
+        ...sheet.cells,
+        B2: { ...sheet.cells.B2!, v: "   " },
+        D2: { ...sheet.cells.D2!, v: null },
+        F2: { ...sheet.cells.F2!, v: "Shawn Parnell" },
+      },
+    }));
+    const equipmentFixed = restoreHeaderBlock("lst-eqp-001", blankEquipment);
+    expect(equipmentFixed.sheets[0]?.name).toBe(equipmentName);
+    expect(equipmentFixed.sheets[0]?.cells.B2?.v).toBe("Rev: A");
+    expect(equipmentFixed.sheets[0]?.cells.D2?.v).toBe("2026-01-26");
+    expect(equipmentFixed.sheets[0]?.cells.F2?.v).toBe("Shawn Parnell");
+    expect(equipmentFixed.sheets[0]?.cells.A6?.v).toBe("DMA-001");
+
+    const ncr = freshSheets("lst-ncr-001");
+    const blankNcr = ncr.map((sheet) => {
+      if (sheet.name !== "LST-NCR-001 - NCR" && sheet.name !== "LST-NCR-001 - QTN") return sheet;
+      return { ...sheet, cells: { ...sheet.cells, B2: { ...sheet.cells.B2!, v: "" } } };
+    });
+    const ncrFixed = restoreHeaderBlock("lst-ncr-001", blankNcr);
+    expect(ncrFixed.sheets[0]?.cells.B2?.v).toBe("Rev: E");
+    expect(ncrFixed.sheets.find((sheet) => sheet.name.endsWith("QTN"))?.cells.B2?.v).toBe("Rev: F");
+    expect(ncrFixed.sheets.find((sheet) => sheet.name.endsWith("CAR"))?.cells.B2?.v).toBe("Rev: E");
+    expect(LISTS["lst-ncr-001"].revision).toBe("G");
+    expect(coalesceRevision("G", "E")).toBe("G");
   });
 });
