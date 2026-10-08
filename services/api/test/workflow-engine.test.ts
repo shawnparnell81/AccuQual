@@ -2,7 +2,7 @@ import { describe, expect, it, beforeAll } from "vitest";
 import { runWorkflow, registerActionHandler, type WorkflowDefinition } from "../src/modules/workflow/workflow-engine.js";
 
 describe("workflow-engine", () => {
-  // Phase 9 — the engine itself ships with NO built-in action handlers
+  // the engine itself ships with NO built-in action handlers
   // (real ones live in workflowActions.ts, registered once at API/worker
   // startup); a pure engine unit test registers its own minimal test
   // double, same as it would for any other handler kind.

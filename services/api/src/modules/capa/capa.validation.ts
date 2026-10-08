@@ -27,25 +27,14 @@ export const createCapaSchema = z.object({
   dueDate: z.coerce.date().nullable().optional(),
 });
 
-// Sprint 2 fix (accuqual-implementation-sequencing.md) — deliberately
-// excludes `status`, same reasoning/pattern as risk.validation.ts's
-// updateRiskSchema: status only ever changes through the dedicated
-// transition endpoints (/start, /verify, /close), each with its own
-// ALLOWED_NEXT guard in capa.controller.ts.
+// Status changes only through /start, /verify, and /close.
 export const updateCapaSchema = createCapaSchema.partial();
 
 /**
- * Phase 2 CAPA fix ("validate CAPA effectiveness fields"): `verification`
- * is the one real, stored effectiveness field this app has — the dashboard's
- * "CAPA Effectiveness" tile and the CAPA detail page's "AI Effectiveness
- * Score" panel are both just derived/ephemeral (a closure-rate calculation
- * and a non-persisted AI opinion respectively, see the buyer evaluation —
- * neither is a real field to validate). `.min(1)` let a single-character
- * "x" close out an ISO/IATF effectiveness check; `.min(10)` still allows
- * genuinely short-but-real notes ("No recurrence in 90 days.") while
- * catching placeholder garbage, and the same AI-stub guard every other
- * CAPA free-text field already has closes the same insertable-stub risk
- * here too.
+ * `verification` is the stored effectiveness note. The dashboard tile and the
+ * on-screen score are derived and are not validated here. Ten characters still
+ * allows a short real note and rejects a one-character placeholder. The stub
+ * guard is the same one the other free-text fields use.
  */
 export const verifyCapaSchema = z.object({
   verification: z

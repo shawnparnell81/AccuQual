@@ -1,27 +1,23 @@
 # Deploying AccuQual
 
-Everything in this file has been proven against the real infrastructure it
-describes — a real Supabase project, and the real Docker images this repo
-already builds — not written from theory. The private Render blueprint
-(`render.yaml`) is two services on the free Hobby workspace: a Docker API
-and a static web site, about **$7.25/month** (API starter $7, 1 GB disk
-$0.25, workspace and static site $0). URLs are pasted in the dashboard
-rather than wired with `fromService`. Redis and the three workers are not
-in that blueprint; their definitions are kept in `render.workers.yaml` and
-have not been applied to a live Render account (the worker images
-themselves do build in CI). Docker Compose still builds `apps/web/Dockerfile`
-and proxies `/api/` with nginx; Render does not.
+The private Render blueprint (`render.yaml`) is two services on the Hobby
+workspace: a Docker API and a static web site, about $7.25/month (API
+starter $7, 1 GB disk $0.25, workspace and static site $0). URLs are pasted
+in the dashboard rather than wired with `fromService`. Redis and the three
+workers are not in that blueprint. Their definitions are in
+`render.workers.yaml` and have not been applied to a live Render account.
+The worker images do build in CI. Docker Compose still builds
+`apps/web/Dockerfile` and proxies `/api/` with nginx. Render does not.
 
-## The one gotcha that will bite you if you skip this section
+## Database connection
 
-**Supabase's "Direct connection" string will not work from most hosting
-platforms, including Render.** It resolves to an IPv6-only address, and
-most container platforms (this one's local Docker included) don't route
-IPv6 egress. Symptom: `connect ENETUNREACH <ipv6 address>:5432`.
+Supabase's direct connection string does not work from Render, or from
+local Docker. It resolves to an IPv6-only address, and those platforms do
+not route IPv6 egress. Symptom: `connect ENETUNREACH <ipv6 address>:5432`.
 
-**Fix: use the Session Pooler connection string, not Direct connection.**
-In Supabase → your project → Connect → Direct Connection string tab →
-Connection Method → **Session pooler**. It looks like:
+Use the session pooler string. In Supabase → your project → Connect →
+Direct Connection string tab → Connection Method → Session pooler. It looks
+like:
 
 ```
 postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
@@ -32,7 +28,7 @@ transaction that does `SET LOCAL ROLE accuqual_app` (see
 `src/lib/requestDb.ts`), which Session pooler supports and Transaction
 pooler is not guaranteed to. Only Session pooler is recommended.
 
-## What's already proven, live, against the real Supabase project
+## Checked against the Supabase project
 
 - Full schema + the restricted database role (`accuqual_app`) + pgvector + all
   indexes deploy cleanly via the existing `npm run db:migrate`.
@@ -95,7 +91,7 @@ pressing Enter. `npm test` has always used a separate throwaway `accuqual_test` 
 
 ### 1. Get your Supabase Session Pooler connection string
 
-See "the one gotcha" above. Keep it somewhere safe — you'll paste it into
+See the database connection section above. Keep it somewhere safe. Paste it into
 Render's dashboard, not into any file in this repo.
 
 ### 2. Run migrations against production
@@ -231,7 +227,7 @@ openssl s_client -starttls postgres -connect HOST:5432 -showcerts </dev/null
 4. Redeploy, or let the env change restart the service. Confirm `/health` is ok and a signed-in save still works.
 5. Internal URL (same region, private network): the certificate is self-signed, and Render does not support `verify-full` on internal connections. Run the same `openssl` command from the **accuqual-api Shell** (the internal host is not reachable from your laptop) and paste that PEM into `DATABASE_SSL_CA`. Production still verifies it. Do not leave the variable empty.
 
-**Supabase.** Project Settings → Database → SSL configuration → download the CA certificate. Paste that PEM into `DATABASE_SSL_CA`. Use the Session Pooler URL (see the gotcha at the top of this file).
+**Supabase.** Project Settings → Database → SSL configuration → download the CA certificate. Paste that PEM into `DATABASE_SSL_CA`. Use the Session Pooler URL (see Database connection at the top of this file).
 
 ### Application role
 
@@ -505,8 +501,7 @@ network errors, 429s and 5xx are retried up to 3 times.
 
 ### SMTP fallback
 
-`notification.service.ts` degrades to an honest log-only stub (every
-"email" is recorded but never actually sent) until all of
+`notification.service.ts` records the message and does not send it until all of
 `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD` are set — the same
 opt-in pattern as the AI BYOK key and the alert webhook above. Verified
 working end-to-end against a real Zoho Mail business account:
@@ -528,7 +523,7 @@ directly, never into this repo. Note port 465 needs SSL — `SmtpTransport`
 already sets that automatically whenever the port is 465, no code change
 needed regardless of which port your provider gives you.
 
-## What's still not set up (honest gaps, not this file's job to fix)
+## Not in this deploy
 
 - No self-serve signup — this installation belongs to one company and its
   administrator creates every account.

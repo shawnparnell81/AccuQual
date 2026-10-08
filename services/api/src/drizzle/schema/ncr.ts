@@ -19,7 +19,7 @@ export const ncr = pgTable("ncr", {
   correctiveAction: text("corrective_action"),
   assignedTo: integer("assigned_to").references(() => users.id),
   createdBy: integer("created_by").references(() => users.id),
-  // Phase 8 — a real, direct supplier link (previously NCR had none at
+  // a real, direct supplier link (previously NCR had none at
   // all — every prior "which NCRs belong to this supplier" query had to
   // derive it indirectly via RMA/warranty/supplier-portal CAR/8D links, see
   // supplier-portal/supplierLinkage.ts). Set automatically when an NCR is

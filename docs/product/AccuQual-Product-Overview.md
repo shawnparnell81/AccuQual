@@ -1,6 +1,4 @@
-# AccuQual Product Overview
-
-Living product notes for AccuQual QMS. Keep this current until the app build is nearly complete.
+# AccuQual product overview
 
 AccuQual is a quality management system for one company. People work in the modules on the sidebar (Engineering, Quality, and the rest). Records stay in the app. Document Control is where the company's folders and controlled documents live.
 

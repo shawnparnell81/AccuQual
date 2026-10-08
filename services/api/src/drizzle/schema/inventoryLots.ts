@@ -4,7 +4,7 @@ import { suppliers } from "./supplier.js";
 import { erpPurchaseOrders, erpReceivingLineItems } from "./erp.js";
 
 /**
- * Phase 8 — the real per-lot/serial ledger this app didn't have before:
+ * the real per-lot/serial ledger this app didn't have before:
  * `inventory_movements.lotNumber`/`serialNumber` (added in an earlier
  * phase's Settings → Inventory expansion) were always just free-text tags
  * stamped onto each transaction row, with no way to answer "how much of

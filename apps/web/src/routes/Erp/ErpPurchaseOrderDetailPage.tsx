@@ -34,7 +34,7 @@ function LogReceiptModal({ po, isOpen, onClose }: { po: ErpPurchaseOrder; isOpen
   const lineItems = po.lineItems ?? [];
   const remaining = lineItems.map((li) => li.quantity - li.quantityReceived);
   const [quantities, setQuantities] = useState<string[]>(remaining.map((r) => String(Math.max(r, 0))));
-  // Phase 8 — lot/serial/revision/expiration captured at the moment of
+  // lot/serial/revision/expiration captured at the moment of
   // physical receipt, mirrored onto a real inventory_lots row server-side
   // (see erp.service.ts's createReceivingDocument).
   const [lotNumbers, setLotNumbers] = useState<string[]>(lineItems.map(() => ""));
@@ -142,7 +142,7 @@ function LogReceiptModal({ po, isOpen, onClose }: { po: ErpPurchaseOrder; isOpen
   );
 }
 
-// Phase 8 — mirrors receivingWorkflow.ts's RECEIVING_TRANSITIONS exactly
+// mirrors receivingWorkflow.ts's RECEIVING_TRANSITIONS exactly
 // (server is still the real gate; this is only for deciding which buttons
 // to show).
 const RECEIVING_TRANSITIONS: Record<ReceivingLineItemStatus, ReceivingLineItemStatus[]> = {
@@ -164,7 +164,7 @@ const TRANSITION_LABELS: Record<ReceivingLineItemStatus, string> = {
   disposition_required: "Flag for Disposition",
 };
 
-/** Phase 8 — one receiving line item's structured status + the disposition transition buttons the current user's department can take, plus a shortcut into a real Quality Inspection Report pre-linked to this line/supplier. */
+/** one receiving line item's structured status + the disposition transition buttons the current user's department can take, plus a shortcut into a real Quality Inspection Report pre-linked to this line/supplier. */
 function ReceivingLineItemRow({ lineItem, po }: { lineItem: ErpReceivingLineItem; po: ErpPurchaseOrder }) {
   const toast = useToast();
   const navigate = useNavigate();

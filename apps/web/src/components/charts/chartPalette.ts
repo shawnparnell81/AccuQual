@@ -1,5 +1,5 @@
 /**
- * Phase 11 — the six-plus-one semantic colors every dashboard chart file
+ * the six-plus-one semantic colors every dashboard chart file
  * already hand-copied by convention (SeverityChart/CapaEffectivenessChart/
  * InventoryStateChart/MovementTrendsChart/ScrapDistributionChart/
  * SupplierCostChart/ConsumptionVsReceivingChart each defined their own

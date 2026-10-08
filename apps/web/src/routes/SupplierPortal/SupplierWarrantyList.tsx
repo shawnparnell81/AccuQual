@@ -6,7 +6,7 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import type { WarrantyClaim } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
-/** Phase 7 task 1 — warrantyClaims carries a real (nullable, set once the claim moves to the supplier) supplierId FK, same direct-list shape as SupplierRmaList. */
+/** warrantyClaims carries a real (nullable, set once the claim moves to the supplier) supplierId FK, same direct-list shape as SupplierRmaList. */
 export function SupplierWarrantyList({ supplierId }: { supplierId?: number }) {
   const currentUser = useCurrentUser();
   const canOpen = currentUser?.roleName !== "supplier";

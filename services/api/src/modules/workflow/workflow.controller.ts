@@ -62,7 +62,7 @@ async function loadDefinition(req: Request, id: number): Promise<WorkflowDefinit
 }
 
 /**
- * PATCH /workflow/:id — Phase 9 task 7's "versioning for workflow changes."
+ * PATCH /workflow/:id — "versioning for workflow changes."
  * Only bumps `version`/appends to `versionHistory` when `definition` itself
  * actually changes (a rename or isActive toggle isn't a new "version" of
  * the graph) — capped at VERSION_HISTORY_CAP entries, oldest dropped first,
@@ -107,7 +107,7 @@ export const deleteHandler = asyncHandler(async (req: Request, res: Response) =>
 });
 
 /**
- * POST /workflow/:id/run — Phase 9 task 9's Simulation Mode: `simulate:
+ * POST /workflow/:id/run — Simulation Mode: `simulate:
  * true` walks the exact same graph/condition logic (so reachability and
  * condition outcomes are genuinely exercised) but every action handler
  * skips its real side effect (see workflowActions.ts's own dryRun
@@ -190,7 +190,7 @@ export const MODULE_ENTITY_TYPES: Record<string, string> = {
   qms_forms: "QmsForm",
   scar_forms: "ScarForm",
   quality_inspection_reports: "QualityInspectionReport",
-  // Phase 9 — added for completeness alongside this phase's own real
+  // added for completeness alongside this phase's own real
   // audit/event fixes to eight_d/documents; warranty/crar/rma_log already
   // had real, correctly-cased audit trails but were never added here since
   // each uses its own bespoke history panel today (not a bug — this just
@@ -221,7 +221,7 @@ export const historyHandler = asyncHandler(async (req: Request, res: Response) =
   res.json(await labelPersonFields(req.db! as Db, withFields));
 });
 
-/** GET /workflow/templates — Phase 9 task 6's starter templates (real, static graphs mirroring each module's own real states/events — see workflow.templates.ts). Loading one into the builder still requires an explicit Save; nothing here has any side effect. */
+/** GET /workflow/templates — starter templates (real, static graphs mirroring each module's own real states/events — see workflow.templates.ts). Loading one into the builder still requires an explicit Save; nothing here has any side effect. */
 export const templatesHandler = asyncHandler(async (_req: Request, res: Response) => {
   res.json(WORKFLOW_TEMPLATES);
 });
@@ -244,8 +244,7 @@ interface DefinitionHealth {
 }
 
 /**
- * GET /workflow/health — Phase 9 task 8, genuinely new (confirmed absent
- * anywhere in the app before this phase). Per-definition: last successful
+ * GET /workflow/health. Per definition: last successful
  * / last failed REAL run (simulated runs excluded — a simulation succeeding
  * or failing says nothing about the live system), plus real structural
  * diagnostics: an action node whose kind has no registered handler

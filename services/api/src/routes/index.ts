@@ -29,7 +29,7 @@ import { calibrationRouter } from "../modules/calibration/calibration.routes.js"
 import { quarantineRouter } from "../modules/quarantine/quarantine.routes.js";
 import { complaintsRouter } from "../modules/complaints/complaints.routes.js";
 import { workflowRouter } from "../modules/workflow/workflow.routes.js";
-// Phase 9 — registers the real workflow action handlers (send_email,
+// registers the real workflow action handlers (send_email,
 // create_ncr, escalate_capa, ai_suggestion, ...) into workflow-engine.ts's
 // registry via its module-level registerActionHandler() side effects.
 // Imported for that side effect alone (no exports used) — must load

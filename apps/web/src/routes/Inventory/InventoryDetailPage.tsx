@@ -40,7 +40,7 @@ function useItemCosting(itemId: number | undefined) {
   });
 }
 
-/** Phase 8 — the real per-lot/serial ledger for this item (inventoryLots.ts). */
+/** the real per-lot/serial ledger for this item (inventoryLots.ts). */
 function useItemLots(itemId: number | undefined) {
   return useQuery<InventoryLot[]>({
     queryKey: ["inventory/lots", itemId],

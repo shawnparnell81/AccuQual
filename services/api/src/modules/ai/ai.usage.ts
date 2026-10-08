@@ -19,7 +19,7 @@ import type { PipelineRun } from "./ai.pipelines.js";
  * plus "AI-error" for the one real failure case those 4 didn't name (a
  * provider call that threw after retries, not a bad response).
  *
- * `okVerb` is a free string (not a narrow union) as of Phase 5 — the AI
+ * `okVerb` is a free string (not a narrow union) as of the AI
  * Feature Rollout phase specifies an exact literal phrase per module
  * ("AI-assisted triage", "AI-drafted CAPA content", "AI-drafted supplier
  * communication", "AI-assisted warranty triage", "AI-generated audit

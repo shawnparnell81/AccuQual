@@ -77,19 +77,7 @@ function assertReviewer(req: Request) {
   }
 }
 
-/**
- * Sprint 2 fix (accuqual-implementation-sequencing.md) — review8dHandler and
- * reviewCorrectiveActionHandler previously wrote `status` straight through
- * with no fetch-and-compare against the current value at all, so a reviewer
- * could "review" the same submission twice, flip an already-accepted
- * response straight to rejected, etc. The real, live UI (Supplier8DForm.tsx/
- * SupplierCARForm.tsx) only ever shows Accept/Reject buttons while a
- * submission is "submitted" or "under_review" — once it's "accepted" or
- * "rejected" it's terminal — so this mirrors that real behavior server-side
- * instead of inventing a stricter one-way sequence the actual product
- * doesn't have (PPAP's own review flow, which does use a distinct
- * "under_review" action, is a separate, out-of-scope handler).
- */
+/** Accept and reject are terminal, matching the portal buttons. PPAP review is a separate handler. */
 const RESPONSE_TERMINAL_STATUSES = new Set(["accepted", "rejected"]);
 function assertReviewTransition(currentStatus: string, nextStatus: string) {
   if (RESPONSE_TERMINAL_STATUSES.has(currentStatus)) {
@@ -319,7 +307,7 @@ export const reviewCorrectiveActionHandler = asyncHandler(async (req: Request, r
   if (!updated) throw AppError.notFound("SupplierCorrectiveAction");
 
   await recordAuditTrail(req.db!, { entityType: "SupplierCorrectiveAction", entityId: id, action: "status_change", changes: { status, reviewNotes }, performedBy: req.user?.id });
-  // Phase 9 — the Supplier Corrective Action review had no workflow event
+  // the Supplier Corrective Action review had no workflow event
   // at all before this (confirmed absent), so no workflow definition could
   // react to it. Additive only — the review logic above is unchanged.
   await publishEvent(WORKFLOW_STREAM, { module: "supplier_car", event: status, entityId: id, supplierId: updated!.supplierId });
@@ -401,7 +389,7 @@ export const sendMessageHandler = asyncHandler(async (req: Request, res: Respons
 });
 
 /**
- * Phase 5 — "Ensure email templates integrate with Phase 1 email
+ * "Ensure email templates integrate with Phase 1 email
  * infrastructure": internal-staff-only (a supplier login has no reason to
  * email itself). Sends a REAL email via notification.service.ts's
  * sendEmail() — the same transport company onboarding/password reset use —
@@ -545,7 +533,7 @@ export const supplierCapaListHandler = asyncHandler(async (req: Request, res: Re
 });
 
 // ---------------------------------------------------------------------------
-// Phase 7 — RMA / Warranty / SCAR visibility. Unlike NCR/CAPA above, these
+// RMA / Warranty / SCAR visibility. Unlike NCR/CAPA above, these
 // three DO carry a real supplierId FK, so no join-derivation is needed — but
 // their own routers (rma/warranty/scar-forms) are gated by
 // requireDepartmentAccess, which a "supplier" login (department: null) can
@@ -573,7 +561,7 @@ export const supplierScarListHandler = asyncHandler(async (req: Request, res: Re
 });
 
 /**
- * GET /supplier-portal/inspections/list — Phase 8 task 3's "supplier-facing
+ * GET /supplier-portal/inspections/list — "supplier-facing
  * visibility: ... inspection notes". Reads the real supplierId FK added
  * this phase directly (a real join, unlike NCR/CAPA's derived-link
  * pattern — an inspection report either names this supplier or it
@@ -586,7 +574,7 @@ export const supplierInspectionListHandler = asyncHandler(async (req: Request, r
 });
 
 /**
- * GET /supplier-portal/lots/list — Phase 8 task 3's "supplier-facing
+ * GET /supplier-portal/lots/list — "supplier-facing
  * visibility: accepted lots, rejected lots". Reads real inventory_lots
  * rows for this supplier, joined live to the originating receiving line
  * item's own disposition status (a lot has no disposition of its own — the
@@ -603,7 +591,7 @@ export const supplierLotListHandler = asyncHandler(async (req: Request, res: Res
 });
 
 /**
- * GET /supplier-portal/kpis — Phase 7 task 1's KPI strip (NCR count, CAPA
+ * GET /supplier-portal/kpis — KPI strip (NCR count, CAPA
  * count, on-time delivery %, defect rate, open corrective actions), and
  * task 8's health indicators (last login / last upload / last
  * communication / open action count) in one call, so the portal dashboard
@@ -620,7 +608,7 @@ export const supplierKpisHandler = asyncHandler(async (req: Request, res: Respon
 });
 
 // ---------------------------------------------------------------------------
-// Phase 7 — Supplier Quality Risk Score (read-only passthrough; the
+// Supplier Quality Risk Score (read-only passthrough; the
 // internal-only recompute/write path lives on the `suppliers` module — see
 // supplier.controller.ts's recomputeSupplierRiskScoreHandler. A supplier
 // login may only ever read its own latest score + trend, never trigger a

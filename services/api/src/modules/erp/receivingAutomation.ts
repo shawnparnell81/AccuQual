@@ -14,7 +14,7 @@ const DEFAULT_CAPA_THRESHOLD = 3;
 const DEFAULT_CAPA_WINDOW_DAYS = 90;
 
 /**
- * Phase 8 task 6 — "rejected receiving inspection can auto-create NCR."
+ * "rejected receiving inspection can auto-create NCR."
  * Reads Settings → Receiving (companies.receivingSettings) to decide whether
  * this specific disposition qualifies: the rejection/quarantine toggle for
  * that disposition must be on, AND (if the company configured a defect
@@ -74,7 +74,7 @@ export async function maybeAutoCreateNcr(
 }
 
 /**
- * Phase 8 task 7 — "repeated receiving defects can escalate to CAPA."
+ * "repeated receiving defects can escalate to CAPA."
  * Reuses the exact recurrence-detection SHAPE Phase 7's
  * supplier.qualityRisk.ts already established (a real count of qualifying
  * events for one supplier within a rolling window, compared against a

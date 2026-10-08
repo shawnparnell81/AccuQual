@@ -19,14 +19,7 @@ import { BrandMark } from "../../components/brand/DmaLogo";
 
 const scarHooks = createResourceHooks<ScarForm>("scar-forms");
 
-/**
- * Supplier Corrective Action Request — built from a real supplied HTML
- * mockup, styled to the app's own theme (see accuqual-qms-forms-batch
- * memory) rather than the mockup's own blue accent colors. Not on the
- * generic QMS Simple Form engine: its header fields, 5-Why single fields,
- * and fixed 3-row CAPA / 2-row sign-off blocks don't match that engine's
- * shape — see scarForms.ts's schema comment.
- */
+/** Fixed header, five root-cause fields, and fixed CAPA and sign-off rows. See scarForms.ts. */
 export function ScarFormDetailPage() {
   const { id } = useParams();
   const scarId = Number(id);
@@ -35,7 +28,7 @@ export function ScarFormDetailPage() {
   const logoUrl = useAuthStore((s) => s.company?.branding?.logoUrl);
   const { data: scar, isLoading, isError } = scarHooks.useOne(scarId);
   const queryClient = useQueryClient();
-  // Phase 7 — a real supplier link (supplierId), added alongside the
+  // a real supplier link (supplierId), added alongside the
   // pre-existing free-text supplierName field so a SCAR can actually
   // surface in that supplier's Supplier Portal / Quality Risk Score
   // factors — see scarForms.ts's own schema comment.

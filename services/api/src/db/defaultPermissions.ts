@@ -193,23 +193,9 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   rma_log: { quality: "edit", customer_service: "edit", engineering: "read", purchasing: "read", material_management: "read" },
   rma_log_status: { quality: "edit", customer_service: "edit" },
   rma_log_linkage: { quality: "edit", customer_service: "edit" },
-  // Phase 8 — Quality Inspection Reports had NO RBAC gate at all before
-  // this (a real, ungated-since-creation gap, not a deliberate design —
-  // see qualityInspectionReports.routes.ts's own old comment). Mirrors the
-  // "erp" resource's own split exactly (Quality owns inspection outcomes;
-  // Purchasing/Material Management need read visibility since a rejected
-  // receiving inspection is their supplier/goods-movement concern too),
-  // since incoming inspection is functionally the quality half of the same
-  // receiving event erp's own resource key gates the paperwork half of.
+  // Quality owns inspection outcomes. Purchasing and material management can read a rejected receipt.
   quality_inspection: { quality: "edit", purchasing: "read", material_management: "read" },
-  // Phase 9 — the Workflow Builder (`/workflow`) previously had NO RBAC gate
-  // at all beyond requireAuth: any authenticated user of any department
-  // could create/run a workflow definition that fires real actions
-  // (send an email, auto-create an NCR/CAPA) against this company's data.
-  // Quality owns editing (same "quality owns process/workflow config"
-  // reasoning as every other module's disposition-authority role);
-  // Engineering gets read visibility since several templates target
-  // engineering-relevant modules (8D, document revision).
+  // A definition can send mail or open an NCR, so editing stays with Quality. Engineering can read.
   workflow: { quality: "edit", engineering: "read" },
   // Management Review and Context of the Organization are ISO-style controlled
   // documents (see modules/versioning): every department needs to read the
@@ -217,18 +203,7 @@ export const INITIAL_DEFAULT_PERMISSIONS: Record<ResourceKey, Partial<Record<Dep
   // reviewer role (admin / quality manager), enforced in the versioning router.
   management_review: { quality: "edit", engineering: "read", production: "read", customer_service: "read", purchasing: "read", material_management: "read" },
   context_of_org: { quality: "edit", engineering: "read", production: "read", customer_service: "read", purchasing: "read", material_management: "read" },
-  // Sprint 1 fix (accuqual-implementation-sequencing.md) — Document Control
-  // previously had NO RBAC gate at all (documents.routes.ts's own old
-  // comment explains why: "read-by-everyone, write-by-few," and copying the
-  // quality-edit-only pattern other modules use would have blocked every
-  // non-quality employee from viewing released documents). Solved without a
-  // controller-narrowing workaround: every department gets at least "read"
-  // here (nobody loses visibility into released documents — the exact
-  // regression the old comment was avoiding), while only the two real
-  // document-owning departments (Quality: QMS/SOP content via
-  // sop_generator; Engineering: technical/training material) get "edit",
-  // so requireDepartmentAccess's existing read-vs-edit split alone already
-  // enforces "write-by-few" with zero new controller logic.
+  // Every department can read a released document. Quality and Engineering edit.
   documents: {
     quality: "edit",
     engineering: "edit",

@@ -58,21 +58,7 @@ export const openRepeatCapaHandler = asyncHandler(async (req: Request, res: Resp
   res.status(result.created ? 201 : 200).json(result.capa);
 });
 
-/**
- * Sprint 2 fix (accuqual-implementation-sequencing.md) — matches the same
- * ALLOWED_NEXT/transition() shape risk.controller.ts already uses. Two of
- * these three hops (in_progress -> verifying -> closed) were already
- * individually guarded by ad hoc inline `if` checks in verifyHandler/
- * closeHandler below; the real gap was open -> in_progress, which had NO
- * dedicated endpoint at all (the live "Start CAPA" button on
- * CapaDetailPage.tsx called the generic, unguarded PATCH via useWorkflowUpdate
- * — see that hook's own comment: "used where a transition has no dedicated
- * endpoint yet"). Consolidating all three into one map + helper here, and
- * updating the frontend to call the new dedicated /start endpoint below via
- * useWorkflowAction like verify/close already do, closes both the missing
- * endpoint AND the underlying free-PATCH bypass (updateCapaSchema no longer
- * accepts a raw `status` field at all — see capa.validation.ts).
- */
+/** Status changes only through these hops. PATCH does not accept `status`. */
 const ALLOWED_NEXT: Record<string, string> = {
   open: "in_progress",
   in_progress: "verifying",

@@ -23,7 +23,7 @@ interface ScorecardEntry {
 }
 
 /**
- * Phase 7 task 6 — the consolidated Supplier Scorecard: the Quality Risk
+ * the consolidated Supplier Scorecard: the Quality Risk
  * Score + its trend + KPIs + open actions + health indicators (all from
  * supplier.qualityRisk.ts) alongside the pre-existing manually-entered
  * supplierScorecards table below — two genuinely different things kept

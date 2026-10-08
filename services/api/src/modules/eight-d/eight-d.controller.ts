@@ -42,7 +42,7 @@ const STEP_KEYS = [
 ] as const;
 
 /**
- * Phase 9 — previously the one live, genuinely working transition endpoint
+ * previously the one live, genuinely working transition endpoint
  * in the whole app with ZERO audit trail / workflow event calls (confirmed
  * by the Phase 9 workflow-engine research), so a completed 8D step was
  * invisible to the record's own History tab and to any workflow definition

@@ -1,8 +1,6 @@
-# AccuQual UI / UX
+# Documents filing
 
-Living notes for what a person can do in the app. Keep this current until the app build is nearly complete.
-
-This page describes the Documents filing cabinet and how a filled form is saved and found again. Other modules keep their own screens. NCR, CAPA, and 8D are unchanged.
+How a filled form is saved and found again. Other modules keep their own screens. NCR, CAPA, and 8D are unchanged.
 
 ## Folder Explorer
 

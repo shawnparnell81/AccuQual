@@ -8,7 +8,7 @@ import type { SupplierDocument } from "../../api/types";
 import { FileDropZone } from "../../components/shared/FileDropZone";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
-// Phase 7 task 2 — explicit categories listed here (certificates,
+// explicit categories listed here (certificates,
 // corrective action evidence) alongside the pre-existing free-text
 // convention; "Other" still lets a supplier type anything not listed, so
 // this is additive, not a new restriction on what category can be.

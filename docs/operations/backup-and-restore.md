@@ -212,7 +212,7 @@ Source: the live Supabase database (demo data). Target: a new `pgvector/pgvector
 Two problems the drill found and this file now prevents: the first dump left out the `drizzle` schema (migrations
 failed on the restored copy), and the verifier's own privilege check could error once the `drizzle` schema was present.
 
-### Recovery time and data loss, honestly
+### Recovery time and data loss
 
 - **Restore time.** About 20 seconds of work for this dataset (~1,600 rows, 600 KB). That is a *floor*, not a
   promise: a production database with years of records and thousands of attachments will take proportionally longer

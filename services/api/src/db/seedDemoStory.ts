@@ -25,7 +25,7 @@ import { closeEventBusClient } from "../lib/eventBus.js";
 import type { Db } from "../lib/requestDb.js";
 
 /**
- * Phase 11 task 3/13 — demo-friendly seed data telling ONE coherent story
+ * Demo data for one story
  * (a recurring supplier quality problem that flows through receiving → NCR
  * → CAPA escalation → 8D → warranty → RMA → a real, computed supplier risk
  * score) plus a second, healthy supplier for visual contrast on dashboards

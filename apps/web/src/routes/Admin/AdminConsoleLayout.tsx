@@ -40,18 +40,8 @@ const SECTIONS: ConsoleSection[] = [
 export { SECTIONS as ADMIN_CONSOLE_SECTIONS };
 
 /**
- * Phase 10 — the "Platform Admin Console" the roadmap asks for. Deliberately
- * NOT the same thing as the pre-existing /platform page (that's a different,
- * SaaS-operator tool — company provisioning + a AI
- * overview, gated to the special platform_admin role). This shell is for a
- * COMPANY's own admin configuring their own company, unifying navigation only:
- * each section below reuses its already-built, already-RBAC'd component
- * as-is (Roles & Permissions, the Supplier/Quality/Receiving-Inventory
- * settings panels, the AI config/usage pages, ...) — this layout imposes NO
- * blanket role gate of its own, because those real gates differ per section
- * (e.g. Receiving & Inventory writes are Production/Purchasing, not admin —
- * see settings.routes.ts) and a console-level gate would silently break
- * departments that already have real, correct write access today.
+ * Company admin navigation. Not the old /platform operator page.
+ * Sections keep their own access checks (settings.routes.ts). A gate on this layout would block departments that can already write.
  */
 function readCollapsed(): boolean {
   try {

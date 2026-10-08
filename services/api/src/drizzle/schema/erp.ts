@@ -48,7 +48,7 @@ export const erpReceivingDocuments = pgTable("erp_receiving_documents", {
  * "partially_received" to "received" by actually comparing received vs.
  * ordered quantity per line, instead of guessing from a bare item count.
  *
- * Phase 8 — a receiving line item now carries a real structured
+ * a receiving line item now carries a real structured
  * inspection-workflow status (previously none at all: a line was just "how
  * much arrived," with no pass/fail concept), and the lot/serial captured at
  * the moment of physical receipt (mirrored onto a real inventory_lots row

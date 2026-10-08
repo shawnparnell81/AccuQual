@@ -51,15 +51,7 @@ export const retiredRevisionHandler = asyncHandler(async (_req: Request, _res: R
   throw new AppError("This endpoint has been replaced. Revise a document by starting a draft (POST /documents/:id/draft), sending it for review, and publishing it once a reviewer approves.", 410);
 });
 
-/**
- * Sprint 2 fix — the real, one-way "retire an approved document" hop that
- * had no dedicated endpoint at all before this (only ever read as a
- * precondition by decideRetention/applyRetentionHandler/archiveHandler
- * above, never written by any code path). Only "approved -> obsolete" is
- * guarded here — real QMS documents are retired/superseded after release,
- * not before; there's no evidence anywhere in this module that a draft or
- * in-review document is meant to skip straight to obsolete.
- */
+/** Only an approved document can be obsoleted. A draft or in-review revision is not retired this way. */
 export const obsoleteHandler = asyncHandler(async (req: Request, res: Response) => {
   const documentId = Number(req.params.id);
 

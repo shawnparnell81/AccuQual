@@ -3,23 +3,9 @@ import { users } from "./users.js";
 import { customers } from "./customers.js";
 
 /**
- * Rebuilt as a bespoke, fixed-structure document — same treatment as the
- * Work Order Traveler / Document Change Request / SCAR Form (see
- * [[accuqual-work-order-traveler]] and friends) — replacing the earlier
- * generic weighted-dimension-scoring engine (feasibility_scores child table,
- * a draft->submitted->under_review->approved|rejected workflow, a
- * polymorphic sourceType/sourceId link to 9 other modules). Columns match the source "Contract & Project Feasibility Review Form" (QMS-FR-001).
- *
- * The 7-row Multi-Disciplinary Feasibility Assessment and 5-row Sign-off
- * table are BOTH fixed, never user-addable — flattened to plain columns per
- * area/department rather than a child table, same convention scar_forms.ts
- * uses for its own fixed CAPA/sign-off rows.
- *
- * Scope: reachable from Engineering (its own
- * department, not a shared cross-department floor like the old version) and
- * from the Customer Onboarding packet only (customerId, nullable) — NOT from
- * Work Orders/POs/NCR/PPAP/RMA/Complaints/Change/Suppliers, which all had a
- * "Start Feasibility Review" button before this rebuild.
+ * Fixed columns for QMS-FR-001. The assessment (7 rows) and sign-off (5 rows)
+ * are not addable, so they are not a child table. Same approach as scar_forms.ts.
+ * Engineering, and the customer onboarding packet (`customerId`). Not linked from work orders, POs, NCR, PPAP, RMA, complaints, change, or suppliers.
  */
 export const feasibilityReviews = pgTable("feasibility_reviews", {
   id: serial("id").primaryKey(),

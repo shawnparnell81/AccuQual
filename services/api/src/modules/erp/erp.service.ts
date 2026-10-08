@@ -110,7 +110,7 @@ export async function cancelPurchaseOrder(db: Db, po: ErpPurchaseOrder, performe
  * if some but not all lines are fully received, received once every line
  * is.
  *
- * Phase 8 — previously did NOT touch inventory_stock or create an
+ * previously did NOT touch inventory_stock or create an
  * inventory_movement at all ("receiving here is real paperwork, not a live
  * integration" — the single biggest gap in the whole module, since it left
  * the "receiving → inventory → production → NCR → CAPA → warranty"

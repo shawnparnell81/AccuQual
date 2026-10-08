@@ -1,6 +1,6 @@
 # CSP enforcement gap (AQ-L03)
 
-**Recommendation: leave report-only.** Do not switch `Content-Security-Policy-Report-Only` to `Content-Security-Policy` until the blockers below are removed. The header is set on the Render static site in `render.yaml` (`accuqual-web`, path `/*`).
+Leave the header as `Content-Security-Policy-Report-Only`. Do not switch it to `Content-Security-Policy` until the blockers below are removed. The header is set on the Render static site in `render.yaml` (`accuqual-web`, path `/*`).
 
 ## Policy today
 
@@ -43,13 +43,13 @@ These are present on `main` and would fail the policy above.
 
 Same-origin `/api/*` rewrites to `https://api.accuqualqms.com` are browser requests to the static site's own origin, so `connect-src 'self'` does not block them.
 
-## Not changed in this pass
+## Left as they are
 
-- The header stays `Content-Security-Policy-Report-Only`. `frame-ancestors` is `'self'` so a same-origin print preview can frame the page. The policy is still not enforced.
-- Inline scripts were not rewritten to external files. Moving them is safe only after the marketing redirect and theme paint are retested on both hosts.
-- Google Fonts were not vendored.
-- ONLYOFFICE and Sentry hosts were not added to the policy. Adding them would widen the policy before the inline-script break is fixed, and would still not make enforce safe.
-- Training gates were not added. This document does not change gage or training behavior.
+- The header stays `Content-Security-Policy-Report-Only`. `frame-ancestors` is `'self'` so a same-origin print preview can frame the page. The policy is not enforced.
+- The two inline scripts in `index.html` are still inline. Moving them needs a retest of the marketing redirect and the theme paint on both hosts.
+- Welcome-page fonts still load from Google.
+- ONLYOFFICE and Sentry hosts are not in the policy. Adding them before the inline scripts are external would widen the policy and would still not make enforce safe.
+- This document does not change gage or training behavior.
 
 ## Before enforce is safe
 

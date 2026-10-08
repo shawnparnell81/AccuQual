@@ -24,16 +24,8 @@ import { registerDocumentVersionRoutes } from "./documents.versions.routes.js";
 import { deleteRecordHandler } from "../records/recordDeletion.js";
 import { createDocumentCommentHandler, listDocumentCommentsHandler } from "./documentComments.js";
 
-// Sprint 1 fix (accuqual-implementation-sequencing.md) — previously had NO
-// RBAC gate at all. Solved without blocking the "read-by-everyone,
-// write-by-few" shape this file's old comment was protecting: every
-// department gets at least "read" in defaultPermissions.ts's `documents`
-// entry, so requireDepartmentAccess's existing read-vs-edit split already
-// lets everyone view released documents (GET) while only Quality/Engineering
-// (the two real document-owning departments) can write.
-//
-// Document versioning: revisions are drafted, reviewed and published through the shared version-control engine
-// (documents.versions.routes.ts), which adds its own per-action permission gate (document.view / edit / review / publish).
+// Read is every department; edit is Quality and Engineering (defaultPermissions.ts).
+// Revisions go through documents.versions.routes.ts (document.view / edit / review / publish).
 export const documentsRouter = Router();
 documentsRouter.use(requireAuth, withDb, requireDepartmentAccess("documents"), rejectArchivedDocumentWrites);
 

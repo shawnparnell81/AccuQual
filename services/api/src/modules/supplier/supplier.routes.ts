@@ -40,7 +40,7 @@ supplierRouter.post("/", validate(createSupplierSchema), baseHandlers.create);
 supplierRouter.get("/:id", baseHandlers.getOne);
 supplierRouter.get("/:id/performance", getSupplierPerformanceHandler);
 supplierRouter.post("/:id/scorecard", validate(addScorecardSchema), addScorecardHandler);
-// Phase 7 — Supplier Quality Risk Score / KPIs / scorecard export. GET is
+// Supplier Quality Risk Score / KPIs / scorecard export. GET is
 // read-level (Purchasing/Material Mgmt/Production too, same as
 // /performance above); POST /risk-score/recompute needs edit level, which
 // only Quality/admin get from requireDepartmentAccess("suppliers")'s own

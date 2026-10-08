@@ -3,7 +3,7 @@ import { suppliers } from "./supplier.js";
 import { users } from "./users.js";
 
 /**
- * Phase 7 — the new deterministic, multi-factor "Supplier Quality Risk
+ * the new deterministic, multi-factor "Supplier Quality Risk
  * Score" (weighted formula over NCR/CAPA/RMA/warranty/delivery/
  * responsiveness data — see supplier.qualityRisk.ts). Deliberately a
  * separate concept from three other "risk" things that already exist in

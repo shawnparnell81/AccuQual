@@ -1,18 +1,6 @@
 import { ensureTestCompany } from "../helpers/company.js";
-// Real-DB integration test (see company-isolation.test.ts's header comment).
-// Covers the two forms reported as real gaps in the "ACCUQUAL Forms" batch
-// review (see accuqual-qms-forms-batch memory) — SCAR (fixed-row CAPA/
-// sign-off columns, no child table) and Quality Inspection Report (a real
-// child table for its Inspection Checklist). SCAR was originally
-// deliberately ungated but got a real RBAC gate (the new "scar"
-// ResourceKey, all-departments-edit default — see defaultPermissions.ts)
-// in a later security-audit pass, once QMS Forms' own identical "no gate"
-// convention was fixed first and left SCAR's justification stale. Quality
-// Inspection Reports got a real RBAC gate in Phase 8 (the new
-// "quality_inspection" ResourceKey — quality: edit, purchasing/
-// material_management: read) after that gap was flagged as a genuine
-// zero-enforcement issue, not a deliberate design — see
-// qualityInspectionReports.routes.ts's own comment.
+// SCAR stores fixed CAPA and sign-off rows as columns. Inspection checklist rows are a child table.
+// Access: scar is edit for every department; quality_inspection is quality edit, purchasing and material management read.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { eq, inArray } from "drizzle-orm";

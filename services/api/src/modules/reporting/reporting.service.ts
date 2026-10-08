@@ -229,7 +229,7 @@ export interface ReceivingTrends {
   acceptRate: number | null; // 0-100
   byFinalStatus: { status: string; count: number }[];
   byMonth: { month: string; count: number }[];
-  // Phase 8 task 8 — the Receiving Dashboard's remaining widgets.
+  // the Receiving Dashboard's remaining widgets.
   // inspectionBacklog: incoming inspections with no disposition decided
   // yet (finalStatus still null) — the real "how much is waiting on
   // Quality" count nothing computed before this phase.
@@ -304,7 +304,7 @@ export async function getReceivingTrends(db: Db, range?: DateRange): Promise<Rec
 export interface InventoryQualityTrends {
   currentBelowMinCount: number;
   scrapByMonth: { month: string; quantity: number }[];
-  // Phase 8 task 9 — the Inventory Dashboard's "consumption trends" widget;
+  // the Inventory Dashboard's "consumption trends" widget;
   // same monthly-aggregation shape as scrapByMonth, just a different
   // movementType, so the two can share one chart's two lines.
   consumptionByMonth: { month: string; quantity: number }[];

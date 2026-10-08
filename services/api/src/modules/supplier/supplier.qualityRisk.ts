@@ -25,7 +25,7 @@ import { toCsv, toPdf, type ExportableReport } from "../reporting/reporting.expo
 import { AppError } from "../../utils/appError.js";
 
 /**
- * Phase 7 — the new deterministic, multi-factor "Supplier Quality Risk
+ * the new deterministic, multi-factor "Supplier Quality Risk
  * Score." Deliberately NOT called "v1" in code/table names (that word is
  * already attached, in existing comments, to supplier.performance.ts's own
  * delivery-only heuristic below) and deliberately separate from the three
@@ -281,7 +281,7 @@ export async function getSupplierRiskScoreWithTrend(db: Db, supplierId: number) 
 }
 
 // ---------------------------------------------------------------------------
-// Health indicators (Phase 7 task 8)
+// Health indicators
 // ---------------------------------------------------------------------------
 
 export interface SupplierHealth {
@@ -323,7 +323,7 @@ export async function getSupplierHealth(db: Db, supplierId: number): Promise<Sup
 }
 
 // ---------------------------------------------------------------------------
-// Scorecard export (Phase 7 task 6) — reuses Phase 6's generic
+// Scorecard export. Reuses the generic
 // toCsv/toPdf(ExportableReport) rather than a third bespoke export format.
 // ---------------------------------------------------------------------------
 

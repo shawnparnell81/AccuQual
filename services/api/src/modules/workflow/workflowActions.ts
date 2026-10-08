@@ -16,7 +16,7 @@ import { triggerErpSync } from "../settings/settings.erpSync.js";
 import "../ncr/ncrProcess.apply.js";
 
 /**
- * Phase 9 task 4 — real action handlers registered into workflow-engine.ts's
+ * real action handlers registered into workflow-engine.ts's
  * registry (previously 3 stub handlers that only pushed a marker into
  * context.actionsRun, doing nothing real — see the Phase 9 research). Every
  * handler here respects `dryRun` (Simulation Mode, task 9): it always

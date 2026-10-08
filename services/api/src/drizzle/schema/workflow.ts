@@ -5,7 +5,7 @@ import { users } from "./users.js";
  * `definition` holds the drag-and-drop graph: { nodes: [...], edges: [...] }
  * Node types: trigger (ncr_created, capa_closed, ...), condition, action.
  *
- * Phase 9 — `version`/`versionHistory` added for real edit versioning (task
+ * `version`/`versionHistory` added for real edit versioning (task
  * 7): every PATCH that changes `definition` bumps `version` and appends the
  * PRIOR definition (not the new one) to `versionHistory`, so a company can
  * see exactly what a workflow looked like before each edit. Capped in
@@ -32,7 +32,7 @@ export const workflowRuns = pgTable("workflow_runs", {
   context: jsonb("context").$type<Record<string, unknown>>(),
   status: text("status").notNull().default("running"), // running, waiting_approval, completed, failed
   error: text("error"),
-  // Phase 9 task 9 — Workflow Simulation Mode. A simulated run executes the
+  // Workflow Simulation Mode. A simulated run executes the
   // exact same graph-walking logic (so conditions/RBAC/reachability are
   // genuinely exercised) but every action handler skips its real side
   // effect (see workflowActions.ts's own comment) — kept as a real,

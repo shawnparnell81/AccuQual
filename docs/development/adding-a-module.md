@@ -1,11 +1,6 @@
 # Adding a new module
 
-The checklist actually followed to add Equipment & Calibration, Quarantine,
-and Training & Competency (all merged in PR #77) and Document Versioning
-(PR #76). A "module" here means a new table (or set of
-tables) with its own routes, RBAC, and — usually — a nav entry. Skip
-whichever steps don't apply (a module with no nav entry, no audit-worthy
-writes, etc.).
+Checklist used for Equipment and Calibration, Quarantine, and Training and Competency (PR #77) and for document versioning (PR #76). A module here is a new table, or set of tables, with its own routes, access checks, and usually a nav entry. Skip steps that do not apply.
 
 Read `docs/development/local-setup-and-testing.md` first if you haven't —
 step 1 below needs the drizzle-kit workaround and the right `.env`.
@@ -132,7 +127,7 @@ view vs edit, and that customers/suppliers are always refused), and the audit tr
 ## 11. Deploy
 
 Once merged: `npm run db:migrate` (root, against Supabase — see the `.env`
-gotcha in `local-setup-and-testing.md`), then
+`.env` files section in `local-setup-and-testing.md`), then
 `npm run db:backfill-permissions --workspace services/api`, then rebuild
 and restart the `api` and `web` containers. A schema-only change needs no
 web rebuild; a route or UI change needs both.

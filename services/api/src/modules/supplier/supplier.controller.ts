@@ -131,7 +131,7 @@ export const createPortalAccountHandler = asyncHandler(async (req: Request, res:
 });
 
 // ---------------------------------------------------------------------------
-// Phase 7 — Supplier Quality Risk Score, KPIs, health indicators, scorecard
+// Supplier Quality Risk Score, KPIs, health indicators, scorecard
 // export. All internal-facing (this router's own requireDepartmentAccess
 // ("suppliers") gate — Quality edit, Purchasing/Material Mgmt/Production
 // read); the Supplier Portal's own read-only equivalents live in

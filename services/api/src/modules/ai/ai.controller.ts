@@ -205,7 +205,7 @@ export const warrantyTriage = asyncHandler(async (req: Request, res: Response) =
   res.json({ ...suggestion, output });
 });
 
-/** Phase 8 — "AI-assisted inspection notes." */
+/** "AI-assisted inspection notes." */
 export const inspectionNotes = asyncHandler(async (req: Request, res: Response) => {
   const { reportId, input } = req.body;
   const { suggestion, output } = await runPipelineAndRecord(
@@ -279,7 +279,7 @@ export const listSuggestions = asyncHandler(async (req: Request, res: Response) 
 });
 
 /**
- * Phase 5 — "users must explicitly accept or reject AI suggestions":
+ * "users must explicitly accept or reject AI suggestions":
  * generation (the handlers above) already logs that a suggestion was
  * produced ("AI-suggested"/"AI-drafted"/etc.); this is the separate,
  * later event of what the user actually did with it. Every

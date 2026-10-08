@@ -22,7 +22,7 @@ export function SupplierMessagingPanel({ supplierId }: { supplierId?: number }) 
   const [body, setBody] = useState("");
   const [draftSubject, setDraftSubject] = useState("");
   const [category, setCategory] = useState<"message" | "follow_up" | "request" | "response">("message");
-  // Phase 7 task 3 — "AI-drafted" tag: only true immediately after accepting
+  // "AI-drafted" tag: only true immediately after accepting
   // an AI draft, cleared the moment the user edits the body afterward (never
   // mislabel edited content as purely AI-generated).
   const [aiDrafted, setAiDrafted] = useState(false);
@@ -56,7 +56,7 @@ export function SupplierMessagingPanel({ supplierId }: { supplierId?: number }) 
     onError: (err) => toast.error(extractErrorMessage(err, "Couldn't send this message.")),
   });
 
-  // Phase 5 — "email templates integrate with Phase 1 email infrastructure":
+  // "email templates integrate with Phase 1 email infrastructure":
   // a real email to the supplier's own contactEmail (via
   // notification.service.ts's sendEmail), for reaching them outside the
   // portal — not just another in-app thread message.

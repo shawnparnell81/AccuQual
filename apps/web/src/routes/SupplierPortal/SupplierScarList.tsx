@@ -6,7 +6,7 @@ import { useCurrentUser } from "../../hooks/useAuth";
 import type { ScarForm } from "../../api/types";
 import { LoadingPlaceholder } from "../../components/shared/LoadingPlaceholder";
 
-/** Phase 7 task 1 — SCAR (Supplier Corrective Action Request) forms now carry a real, nullable supplierId FK added this phase (see scarForms.ts's schema comment — the pre-existing supplierName field was free text with no reliable join back to a real supplier record). Only SCARs created against a real supplier show up here; older ones typed with just a name won't until re-linked. */
+/** SCAR (Supplier Corrective Action Request) forms now carry a real, nullable supplierId FK added this phase (see scarForms.ts's schema comment — the pre-existing supplierName field was free text with no reliable join back to a real supplier record). Only SCARs created against a real supplier show up here; older ones typed with just a name won't until re-linked. */
 export function SupplierScarList({ supplierId }: { supplierId?: number }) {
   const currentUser = useCurrentUser();
   const canOpen = currentUser?.roleName !== "supplier";

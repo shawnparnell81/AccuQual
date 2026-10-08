@@ -53,13 +53,7 @@ export async function receiveIntoLot(db: Db, input: ReceiveLotInput): Promise<In
       })
       .where(eq(inventoryLots.id, existing.id))
       .returning();
-    // Sprint 3 (accuqual-implementation-sequencing.md) — Inventory
-    // Traceability had zero Layer-2 event coverage before this (the lot
-    // ledger itself never published anything a workflow definition could
-    // react to). Additive only — the receiving logic above is unchanged.
-    // Same "module: inventory" convention inventory.service.ts's own
-    // state-change events already use, new event name for the lot-specific
-    // hop.
+    // So a workflow definition can react to a lot receipt. The upsert above is unchanged.
     await publishEvent(WORKFLOW_STREAM, { module: "inventory", event: "lot-received", entityId: updated!.id });
     return updated!;
   }
@@ -103,11 +97,7 @@ export async function consumeFromLot(db: Db, lotId: number, quantity: number): P
   const nextRemaining = Math.max(Number(lot.remainingQty) - quantity, 0);
   const nextStatus = nextRemaining === 0 ? "consumed" : lot.status;
   await db.update(inventoryLots).set({ remainingQty: String(nextRemaining), status: nextStatus }).where(eq(inventoryLots.id, lotId));
-  // Sprint 3 — the movement side of the same lot-ledger event gap; fires
-  // "lot-exhausted" specifically when this consumption fully depletes the
-  // lot (its own real, distinct state change), and "lot-consumed" for every
-  // other partial draw, so a workflow definition can distinguish the two
-  // without re-deriving remainingQty itself.
+  // A definition can tell a partial draw from a lot that just hit zero.
   await publishEvent(WORKFLOW_STREAM, { module: "inventory", event: nextStatus === "consumed" ? "lot-exhausted" : "lot-consumed", entityId: lotId });
 }
 
@@ -123,7 +113,7 @@ async function loadLot(db: Db, lotId: number): Promise<InventoryLot> {
 
 /**
  * The real "receiving → inventory → production → NCR/CAPA/warranty"
- * traceability chain (Phase 8 task 4) — one call assembling the item this
+ * traceability chain. One call assembling the item this
  * lot belongs to, its full backward chain (receiving line item → PO line →
  * PO → supplier → inspection report, when each link exists), plus its
  * forward movement history. NCR/CAPA/warranty are NOT joined here: they

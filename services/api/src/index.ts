@@ -17,7 +17,7 @@ const app = createApp();
 
 app.listen(env.PORT, () => {
   logger.info(`AccuQual API listening on port ${env.PORT} [${env.NODE_ENV}]`);
-  // Phase 6 — only the real, long-lived server process polls for due
+  // only the real, long-lived server process polls for due
   // scheduled reports, never the test suite (which imports createApp()
   // directly and never reaches this file) and never a one-off script.
   startReportingScheduler();

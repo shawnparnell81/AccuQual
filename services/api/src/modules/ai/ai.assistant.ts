@@ -8,7 +8,7 @@ import { checkUsageLimit, loadCompanyLlmOptions } from "./ai.usage.js";
 import { wrapUntrustedData } from "./promptSafety.js";
 
 /**
- * Phase 5 — the same exact-phrase-per-module labeling ai.controller.ts's
+ * the same exact-phrase-per-module labeling ai.controller.ts's
  * dedicated pipelines use, applied here too: the generic Assistant
  * (AiFieldAssistant.tsx) is how CAPA's root-cause-narrative/effectiveness
  * drafting and Supplier Risk AI scoring are actually implemented (see
