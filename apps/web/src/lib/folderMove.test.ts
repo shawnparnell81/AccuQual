@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { folderMoveIsBlocked, nextSortOrder, planNest, planSiblingGap, planSiblingReorder } from "./folderMove.ts";
+import { applyFolderPlacements, folderMoveIsBlocked, libraryPoolDeleteConfirm, nextSortOrder, omitFolders, planNest, planSiblingGap, planSiblingReorder, unlistFromLibraryPool } from "./folderMove.ts";
 
 const tree = [
   { id: 1, parentId: null, sortOrder: 0 },
@@ -78,5 +78,21 @@ describe("folder moves", () => {
     assert.deepEqual(planNest(tree, 3, 4), [{ id: 3, parentId: 4, sortOrder: 0 }]);
     assert.equal(planNest(tree, 1, 3), null);
     assert.deepEqual(planNest(tree, 3, 2), []);
+  });
+
+  it("shows a move in the list immediately, and drops a deleted pool row", () => {
+    const moved = applyFolderPlacements(tree, [{ id: 3, parentId: 4, sortOrder: 0 }]);
+    assert.equal(moved.find((row) => row.id === 3)?.parentId, 4);
+    assert.equal(moved.find((row) => row.id === 2)?.parentId, 1);
+    assert.deepEqual(
+      omitFolders(tree, [2, 3]).map((row) => row.id),
+      [1, 4],
+    );
+    const unlisted = unlistFromLibraryPool(tree, [3]);
+    assert.equal(unlisted.find((row) => row.id === 3)?.parentId, null);
+    assert.equal(unlisted.find((row) => row.id === 3)?.removedFromLibraryPool, true);
+    assert.equal(unlisted.find((row) => row.id === 2)?.parentId, 1);
+    assert.equal(libraryPoolDeleteConfirm(["Shop traveler.pdf"]), 'Remove "Shop traveler.pdf" from the Library Pool? Nothing is deleted from AccuQual.');
+    assert.equal(libraryPoolDeleteConfirm(["One", "Two"]), "Remove 2 items from the Library Pool? Nothing is deleted from AccuQual.");
   });
 });

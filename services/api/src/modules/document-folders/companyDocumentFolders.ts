@@ -681,3 +681,13 @@ export async function mergeDuplicateFoldersOnce(db: Db, list: FolderRow[], perfo
   }
   return current;
 }
+
+/**
+ * A blank whose topic folder is missing goes back under Blank Forms Templates.
+ * When every topic is already there, this does not write.
+ */
+export async function rehomeStrayBlankShortcuts(db: Db, list: FolderRow[], profileShelfId: number | undefined, performedBy?: number): Promise<FolderRow[]> {
+  const shelf = resolveBlankShelf(list, profileShelfId);
+  if (!shelf) return list;
+  return returnMisfiledBlanks(db, list, shelf.id, performedBy, true);
+}

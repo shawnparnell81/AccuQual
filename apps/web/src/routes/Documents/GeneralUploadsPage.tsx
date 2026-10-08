@@ -11,6 +11,7 @@ interface DocumentFolder {
   id: number;
   name: string;
   parentId: number | null;
+  removedFromLibraryPool?: boolean;
 }
 
 const LIBRARY_POOL_NAME = "Library Pool";
@@ -19,7 +20,7 @@ const LIBRARY_POOL_NAME = "Library Pool";
 function flattenFolders(folders: DocumentFolder[]): { id: number; label: string }[] {
   const byParent = new Map<number | null, DocumentFolder[]>();
   for (const f of folders) {
-    if (f.name === LIBRARY_POOL_NAME) continue;
+    if (f.name === LIBRARY_POOL_NAME || f.removedFromLibraryPool) continue;
     byParent.set(f.parentId, [...(byParent.get(f.parentId) ?? []), f]);
   }
   const result: { id: number; label: string }[] = [];
